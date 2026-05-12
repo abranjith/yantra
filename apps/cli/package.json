@@ -1,0 +1,35 @@
+{
+  "name": "@yantra/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Yantra CLI entrypoint.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "yantra": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@yantra/agent": "workspace:*",
+    "@yantra/core": "workspace:*",
+    "@yantra/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@yantra/test-helpers": "workspace:*"
+  }
+}

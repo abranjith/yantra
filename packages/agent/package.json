@@ -1,0 +1,30 @@
+{
+  "name": "@yantra/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Yantra agent — pi-agent-core adapter behind the LLMClient interface. Must not import @yantra/core (architectural boundary).",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@yantra/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@yantra/test-helpers": "workspace:*"
+  }
+}

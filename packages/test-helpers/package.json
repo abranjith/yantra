@@ -1,0 +1,27 @@
+{
+  "name": "@yantra/test-helpers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal test helpers — @no-llm / @requires-llm tag plumbing.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "vitest": "^2.1.0"
+  }
+}

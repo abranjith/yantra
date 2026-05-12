@@ -1,0 +1,47 @@
+{
+  "version": "0.1.2",
+  "format": "v2",
+  "provider": "copilot",
+  "providers": [
+    "copilot",
+    "claude-code"
+  ],
+  "installedPrompts": [
+    "architect",
+    "brainstorm",
+    "explore",
+    "plan",
+    "plan-feature",
+    "yolo",
+    "build-data-model",
+    "devops",
+    "feature",
+    "fix",
+    "implement",
+    "memorize",
+    "plan-critic",
+    "review-code",
+    "review-performance",
+    "review-security",
+    "todo",
+    "tool-help",
+    "write-integration-tests",
+    "write-readme",
+    "write-unit-tests",
+    "help",
+    "orchestrator"
+  ],
+  "installedAt": "2026-05-05T04:30:51.698Z",
+  "updatedAt": "2026-05-05T04:30:51.699Z",
+  "projectProfile": {
+    "languages": [
+      "TypeScript"
+    ],
+    "frameworks": [],
+    "testFrameworks": [],
+    "architectures": [
+      "Monorepo"
+    ],
+    "conventions": ""
+  }
+}

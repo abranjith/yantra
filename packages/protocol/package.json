@@ -1,0 +1,27 @@
+{
+  "name": "@yantra/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Yantra Protocol — Zod schemas as the single source of truth.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@yantra/test-helpers": "workspace:*"
+  }
+}

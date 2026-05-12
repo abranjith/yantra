@@ -1,0 +1,24 @@
+{
+  "name": "@yantra/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-package end-to-end tests (golden traces, chaos, recorder/replay).",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings=0 --ignore-pattern dist --ignore-pattern node_modules",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@yantra/agent": "workspace:*",
+    "@yantra/cli": "workspace:*",
+    "@yantra/core": "workspace:*",
+    "@yantra/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@yantra/test-helpers": "workspace:*"
+  }
+}
