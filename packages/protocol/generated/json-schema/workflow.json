@@ -1,0 +1,834 @@
+{
+  "$ref": "#/definitions/WorkflowFile",
+  "definitions": {
+    "WorkflowFile": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "Workflow format major version."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "description": "Workflow slug name."
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Optional workflow description."
+        },
+        "security_class": {
+          "type": "string",
+          "enum": ["public", "read-only-data", "authenticated"],
+          "description": "Workflow security class.",
+          "default": "public"
+        },
+        "recorded_with": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "chrome_major": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "description": "Chrome major version used at recording time."
+                },
+                "yantra_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Yantra version used at recording time."
+                }
+              },
+              "required": ["chrome_major", "yantra_version"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional recording metadata."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "boolean", "date"],
+                "description": "Declared param scalar type."
+              },
+              "example": {
+                "type": ["string", "null"],
+                "default": null,
+                "description": "Optional example value."
+              },
+              "required": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether the param is required."
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false,
+            "description": "Workflow parameter declaration."
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "default": {},
+          "description": "Workflow parameter declarations."
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+          },
+          "default": [],
+          "description": "Declared workflow secret keys."
+        },
+        "cookies": {
+          "type": "string",
+          "enum": ["auto", "none"],
+          "default": "none",
+          "description": "Cookie/profile handling mode."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^s[0-9]+$",
+                    "description": "Workflow step id."
+                  },
+                  "scope": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": ["public", "read-only-data", "authenticated"],
+                        "description": "Step-level security scope."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Optional step scope override."
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "navigate",
+                    "description": "Navigate workflow step."
+                  },
+                  "url": {
+                    "type": ["string", "number", "boolean", "null"],
+                    "description": "URL value or template expression."
+                  }
+                },
+                "required": ["id", "scope", "verb", "url"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "click",
+                    "description": "Click workflow step."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Named locator key from _locators."
+                  }
+                },
+                "required": ["id", "scope", "verb", "locator"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "fill",
+                    "description": "Fill workflow step."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Named locator key from _locators."
+                  },
+                  "value": {
+                    "type": ["string", "number", "boolean", "null"],
+                    "description": "Fill value or template expression."
+                  },
+                  "submit": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether to submit after fill."
+                  }
+                },
+                "required": ["id", "scope", "verb", "locator", "value"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "extract",
+                    "description": "Extract workflow step."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Named locator key from _locators."
+                  },
+                  "extraction_schema": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "primitive",
+                            "description": "Primitive extraction schema node."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": ["string", "number", "boolean", "date", "money"],
+                            "description": "Primitive value kind."
+                          }
+                        },
+                        "required": ["type", "kind"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "array",
+                            "description": "Array extraction schema node."
+                          },
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "primitive",
+                                    "description": "Primitive extraction schema node."
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": ["string", "number", "boolean", "date", "money"],
+                                    "description": "Primitive value kind."
+                                  }
+                                },
+                                "required": ["type", "kind"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "array",
+                                    "description": "Array extraction schema node."
+                                  },
+                                  "items": {
+                                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items",
+                                    "description": "Item schema for extracted arrays."
+                                  }
+                                },
+                                "required": ["type", "items"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "object",
+                                    "description": "Object extraction schema node."
+                                  },
+                                  "fields": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                    },
+                                    "description": "Field mapping for extracted object rows."
+                                  }
+                                },
+                                "required": ["type", "fields"],
+                                "additionalProperties": false
+                              }
+                            ],
+                            "description": "Item schema for extracted arrays."
+                          }
+                        },
+                        "required": ["type", "items"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "object",
+                            "description": "Object extraction schema node."
+                          },
+                          "fields": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                            },
+                            "description": "Field mapping for extracted object rows."
+                          }
+                        },
+                        "required": ["type", "fields"],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Declared extraction schema."
+                  },
+                  "capture_as": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Capture alias for extracted data."
+                  }
+                },
+                "required": ["id", "scope", "verb", "locator", "extraction_schema", "capture_as"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "wait_for",
+                    "description": "Wait-for workflow step."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Named locator key from _locators."
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": ["visible", "hidden", "attached", "detached"],
+                    "description": "Awaited target state."
+                  },
+                  "timeout_ms": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Optional timeout override."
+                  }
+                },
+                "required": ["id", "scope", "verb", "locator", "state", "timeout_ms"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "assert",
+                    "description": "Assert workflow step."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Named locator key from _locators."
+                  },
+                  "condition": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "visible",
+                            "description": "Assert that target is visible."
+                          }
+                        },
+                        "required": ["kind"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "hidden",
+                            "description": "Assert that target is hidden."
+                          }
+                        },
+                        "required": ["kind"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "text_matches",
+                            "description": "Assert text by regex pattern."
+                          },
+                          "pattern": {
+                            "type": "string",
+                            "description": "Regular expression source."
+                          },
+                          "flags": {
+                            "type": "string",
+                            "default": "",
+                            "description": "Regex flags."
+                          }
+                        },
+                        "required": ["kind", "pattern"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "count_equals",
+                            "description": "Assert list count equals expected value."
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Expected count."
+                          }
+                        },
+                        "required": ["kind", "count"],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Assertion condition payload."
+                  }
+                },
+                "required": ["id", "scope", "verb", "locator", "condition"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "branch",
+                    "description": "Branch workflow step."
+                  },
+                  "condition": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Branch expression or symbolic condition id."
+                  },
+                  "then_step_id": {
+                    "type": "string",
+                    "pattern": "^s[0-9]+$",
+                    "description": "Step id for true branch."
+                  },
+                  "else_step_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^s[0-9]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Optional step id for false branch."
+                  }
+                },
+                "required": ["id", "scope", "verb", "condition", "then_step_id", "else_step_id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "loop",
+                    "description": "Loop workflow step."
+                  },
+                  "over": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Collection expression for loop iteration."
+                  },
+                  "as": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Loop variable alias."
+                  },
+                  "body_step_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^s[0-9]+$"
+                    },
+                    "minItems": 1,
+                    "description": "Loop body step ids."
+                  },
+                  "max_iterations": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "Maximum loop iterations."
+                  }
+                },
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "over",
+                  "as",
+                  "body_step_ids",
+                  "max_iterations"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "call_workflow",
+                    "description": "Call-workflow workflow step."
+                  },
+                  "workflow_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Workflow name to invoke."
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": ["string", "number", "boolean", "null"],
+                      "description": "Workflow value expression or scalar literal."
+                    },
+                    "default": {},
+                    "description": "Workflow call param mapping."
+                  },
+                  "capture_as": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Optional capture alias for workflow call output."
+                  }
+                },
+                "required": ["id", "scope", "verb", "workflow_name", "capture_as"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "llm_summarize",
+                    "description": "LLM summarize workflow step."
+                  },
+                  "input": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Capture expression for summarization input."
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Summarization prompt template."
+                  },
+                  "output_as": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Capture alias for summary output."
+                  }
+                },
+                "required": ["id", "scope", "verb", "input", "prompt", "output_as"],
+                "additionalProperties": false
+              }
+            ],
+            "description": "Workflow-friendly step union mirroring protocol step verbs."
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "description": "Ordered workflow steps."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "Workflow output key."
+              },
+              "from": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Template expression sourcing output value."
+              }
+            },
+            "required": ["name", "from"],
+            "additionalProperties": false,
+            "description": "Workflow output binding."
+          },
+          "default": [],
+          "description": "Workflow output declarations."
+        },
+        "outputs_unredacted": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether outputs bypass redaction safeguards."
+        },
+        "_unrecorded_frames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Cross-origin frames not instrumented at record time."
+        },
+        "_locators": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "role",
+                      "description": "ARIA role candidate."
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
+                      ],
+                      "description": "ARIA role name."
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "pattern": {
+                              "type": "string",
+                              "description": "Regex source pattern."
+                            },
+                            "flags": {
+                              "type": "string",
+                              "default": "",
+                              "description": "Regex flags string."
+                            }
+                          },
+                          "required": ["pattern"],
+                          "additionalProperties": false,
+                          "description": "Regex descriptor for workflow locator names."
+                        }
+                      ],
+                      "description": "Accessible name matcher."
+                    }
+                  },
+                  "required": ["kind", "role", "name"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "testid",
+                      "description": "data-testid candidate."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Test id value."
+                    }
+                  },
+                  "required": ["kind", "value"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "label",
+                      "description": "Label-text candidate."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Label text value."
+                    }
+                  },
+                  "required": ["kind", "value"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "placeholder",
+                      "description": "Placeholder candidate."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Placeholder text value."
+                    }
+                  },
+                  "required": ["kind", "value"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "css",
+                      "description": "CSS selector candidate."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "CSS selector value."
+                    }
+                  },
+                  "required": ["kind", "value"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "xpath",
+                      "description": "XPath selector candidate."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "XPath selector value."
+                    }
+                  },
+                  "required": ["kind", "value"],
+                  "additionalProperties": false
+                }
+              ],
+              "description": "Candidate locator entry in workflow _locators block."
+            }
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "default": {},
+          "description": "Named locator chains captured or authored for replay."
+        }
+      },
+      "required": ["version", "name", "description", "steps"],
+      "additionalProperties": false,
+      "description": "Workflow YAML schema source used by parser, linter, and editor integrations."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

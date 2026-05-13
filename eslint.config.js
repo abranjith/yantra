@@ -155,5 +155,18 @@ export default tseslint.config(
     },
   },
 
+  // Protocol scripts/tests/generated files are outside package tsconfig project includes.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: [
+      'packages/protocol/generated/**/*.ts',
+      'packages/protocol/scripts/**/*.ts',
+      'packages/protocol/tests/**/*.ts',
+    ],
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+
   prettierConfig,
 );

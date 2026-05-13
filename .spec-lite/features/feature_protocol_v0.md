@@ -2,7 +2,7 @@
 
 # FEAT-002: Yantra Protocol v0
 
-> **Status**: [ ] Not started
+> **Status**: [x] Complete
 > **Owner**: protocol team
 > **Depends on**: FEAT-001 (Monorepo Scaffold & CI)
 > **Unblocks**: FEAT-003 through FEAT-012 (every downstream feature consumes this contract)
@@ -17,24 +17,25 @@ Deliver `packages/protocol` — the **load-bearing abstraction** that every othe
 
 1. **TS types via `z.infer`** — consumed by `packages/core`, `packages/agent`, `apps/cli`.
 2. **JSON Schema via `zod-to-json-schema`** — used by the worker at runtime for plan validation (the agent's JSON output is validated against the emitted JSON Schema before any browser action).
-3. **Vendor-neutral `ToolCatalog`** — a typed catalog of tool definitions (name, description, input JSON Schema) derived from the `Step` discriminated union. `packages/agent` consumes the *emitted artifact*; pi-agent-core's tool-definition shape is produced by an *adapter in `packages/agent`*, NOT here. This package has **no dependency on `pi-agent-core`** (enforced by the FEAT-001 import restriction). Vendor neutrality is the swap point for any future LLM-tool-format change (MCP, OpenAI strict-mode, etc.) — the adapter, not the catalog, gets rewritten.
-4. **`workflow.schema.json`** — JSON Schema for the workflow YAML file format, emitted via the same `zod-to-json-schema` pipeline from `WorkflowFile` (defined here, §2.1.7). Workflow YAML files reference this via a `# yaml-language-server: $schema=…` header so editors (VS Code's `redhat.vscode-yaml`) give autocomplete + inline validation. FEAT-009 owns the YAML *parser/emitter*; this package owns the *schema*.
+3. **Vendor-neutral `ToolCatalog`** — a typed catalog of tool definitions (name, description, input JSON Schema) derived from the `Step` discriminated union. `packages/agent` consumes the _emitted artifact_; pi-agent-core's tool-definition shape is produced by an _adapter in `packages/agent`_, NOT here. This package has **no dependency on `pi-agent-core`** (enforced by the FEAT-001 import restriction). Vendor neutrality is the swap point for any future LLM-tool-format change (MCP, OpenAI strict-mode, etc.) — the adapter, not the catalog, gets rewritten.
+4. **`workflow.schema.json`** — JSON Schema for the workflow YAML file format, emitted via the same `zod-to-json-schema` pipeline from `WorkflowFile` (defined here, §2.1.7). Workflow YAML files reference this via a `# yaml-language-server: $schema=…` header so editors (VS Code's `redhat.vscode-yaml`) give autocomplete + inline validation. FEAT-009 owns the YAML _parser/emitter_; this package owns the _schema_.
 5. **Generated protocol-spec markdown** (`docs/protocol-spec.md`) — produced by walking the schemas and rendering inline `.describe()` annotations. The agent's system prompt embeds excerpts; humans read the same document.
 
 **Why load-bearing**: touching a step verb's signature is one edit here. Every downstream artifact regenerates atomically. CI fails if any consumer drifts. The package has zero runtime dependencies beyond `zod` and `zod-to-json-schema` — it must not pull in browser, filesystem, or LLM concerns.
 
 **Non-goals (deferred)**:
+
 - Plan execution semantics (FEAT-005).
 - Sanitizer behavior on `ValueRef.kind: "literal"` (FEAT-006).
 - pi-agent-core invocation itself (FEAT-011) — this feature emits a vendor-neutral `ToolCatalog`; pi-agent-core translation lives in `packages/agent`.
-- Workflow YAML parsing/emission (FEAT-009) — this feature defines the *schema*; FEAT-009 wires the parser and emitter against it.
+- Workflow YAML parsing/emission (FEAT-009) — this feature defines the _schema_; FEAT-009 wires the parser and emitter against it.
 - LLM reanchor `LocatorChain` variant (Phase 2 — protocol leaves an evolution slot).
 
 ---
 
 ## 2. Data Model (Granular)
 
-Yantra MVP has no relational database. **The Zod schemas in this feature *are* the data model.** This section documents each schema, its TS shape (via `z.infer`), its JSON Schema emission, its semantic-validation rules, and its on-disk projection (when applicable). A "Future DB Schema" sketch is included for the eventual Phase 2 migration.
+Yantra MVP has no relational database. **The Zod schemas in this feature _are_ the data model.** This section documents each schema, its TS shape (via `z.infer`), its JSON Schema emission, its semantic-validation rules, and its on-disk projection (when applicable). A "Future DB Schema" sketch is included for the eventual Phase 2 migration.
 
 ### 2.1 In-Memory Entities (Zod schemas)
 
@@ -44,13 +45,13 @@ All schemas live under `packages/protocol/src/schemas/` and are re-exported from
 
 These are the opaque-reference primitives that make the agent's security guarantees structural.
 
-| Schema | Zod combinator | Shape | Purpose |
-|---|---|---|---|
-| `SecretRef` | `z.object` with `z.literal('secret')` discriminator | `{ kind: 'secret', key: string }` | Reference to a credential stored in the OS keychain. The agent emits this; the worker resolves at the exact step that needs it. **The agent never sees the value.** `key` matches `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$` (namespace.name). |
-| `ParamRef` | `z.object` with `z.literal('param')` discriminator | `{ kind: 'param', key: string }` | Reference to a value supplied at run time via `--params key=val`. `key` matches `^[a-z][a-z0-9_]*$`. |
-| `CaptureRef` | `z.object` with `z.literal('capture')` discriminator | `{ kind: 'capture', step_id: string, field: string \| null }` | Reference to a value extracted by a prior `ExtractStep`. `step_id` must be a non-empty string matching `^s[0-9]+$` (semantic validator confirms it points to a prior step in the plan). `field: null` means "the whole capture"; a string indexes into a structured capture. |
-| `TemplateRef` | `z.object` with `z.literal('template')` discriminator | `{ kind: 'template', template: string, bindings: Record<string, ValueRef> }` | Templated string with `{{ name }}` placeholders resolved against `bindings`. Note: `bindings` is the *typed* binding map (one per placeholder); the legacy `{{ secret:bank.password }}` short-form in workflow YAML is a YAML-level sugar that the workflow parser (FEAT-009) desugars into this. |
-| `ValueRef` | `z.discriminatedUnion('kind', [...])` | `LiteralValue \| ParamRef \| SecretRef \| CaptureRef \| TemplateRef` | The universal "any value the agent can emit." `LiteralValue` = `{ kind: 'literal', value: string \| number \| boolean \| null }`. Semantic-validator forbids `literal` in fields the workflow marks `secret`. |
+| Schema        | Zod combinator                                        | Shape                                                                        | Purpose                                                                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SecretRef`   | `z.object` with `z.literal('secret')` discriminator   | `{ kind: 'secret', key: string }`                                            | Reference to a credential stored in the OS keychain. The agent emits this; the worker resolves at the exact step that needs it. **The agent never sees the value.** `key` matches `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$` (namespace.name).                                                          |
+| `ParamRef`    | `z.object` with `z.literal('param')` discriminator    | `{ kind: 'param', key: string }`                                             | Reference to a value supplied at run time via `--params key=val`. `key` matches `^[a-z][a-z0-9_]*$`.                                                                                                                                                                                              |
+| `CaptureRef`  | `z.object` with `z.literal('capture')` discriminator  | `{ kind: 'capture', step_id: string, field: string \| null }`                | Reference to a value extracted by a prior `ExtractStep`. `step_id` must be a non-empty string matching `^s[0-9]+$` (semantic validator confirms it points to a prior step in the plan). `field: null` means "the whole capture"; a string indexes into a structured capture.                      |
+| `TemplateRef` | `z.object` with `z.literal('template')` discriminator | `{ kind: 'template', template: string, bindings: Record<string, ValueRef> }` | Templated string with `{{ name }}` placeholders resolved against `bindings`. Note: `bindings` is the _typed_ binding map (one per placeholder); the legacy `{{ secret:bank.password }}` short-form in workflow YAML is a YAML-level sugar that the workflow parser (FEAT-009) desugars into this. |
+| `ValueRef`    | `z.discriminatedUnion('kind', [...])`                 | `LiteralValue \| ParamRef \| SecretRef \| CaptureRef \| TemplateRef`         | The universal "any value the agent can emit." `LiteralValue` = `{ kind: 'literal', value: string \| number \| boolean \| null }`. Semantic-validator forbids `literal` in fields the workflow marks `secret`.                                                                                     |
 
 **JSDoc requirement**: every schema export has `@example` with a minimal valid instance plus an `@example` showing one rejection case.
 
@@ -58,11 +59,11 @@ These are the opaque-reference primitives that make the agent's security guarant
 
 `LocatorChain` is a discriminated union over how the executor resolves a target element. The agent never invents CSS/XPath in MVP.
 
-| Variant | Discriminator | Shape | Resolved by |
-|---|---|---|---|
-| Recorded | `kind: 'recorded'` | `{ kind: 'recorded', step_index: number }` | Looks up the candidate chain captured at record time by index. Used inside recorded workflows (FEAT-008). |
-| Workflow | `kind: 'workflow'` | `{ kind: 'workflow', name: string }` | Looks up the named chain in the workflow's `_locators:` block. `name` matches `^[A-Za-z][A-Za-z0-9 _-]{0,63}$` (human-readable). |
-| Intent | `kind: 'intent'` | `{ kind: 'intent', role: RoleEnum, name_match: NameMatch \| null, near: LocatorChain \| null }` | A structured intent the *engine* converts to a locator. Used by `ask`/extract on unknown pages. `RoleEnum` covers ARIA roles (`button`, `link`, `textbox`, `table`, `heading`, `region`, `dialog`, `listitem`, `cell`, etc.). `NameMatch = { kind: 'exact', value: string } \| { kind: 'regex', pattern: string, flags: string }`. `near` allows relative anchoring with a recursive `LocatorChain` (lazy schema). |
+| Variant  | Discriminator      | Shape                                                                                           | Resolved by                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------- | ------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Recorded | `kind: 'recorded'` | `{ kind: 'recorded', step_index: number }`                                                      | Looks up the candidate chain captured at record time by index. Used inside recorded workflows (FEAT-008).                                                                                                                                                                                                                                                                                                          |
+| Workflow | `kind: 'workflow'` | `{ kind: 'workflow', name: string }`                                                            | Looks up the named chain in the workflow's `_locators:` block. `name` matches `^[A-Za-z][A-Za-z0-9 _-]{0,63}$` (human-readable).                                                                                                                                                                                                                                                                                   |
+| Intent   | `kind: 'intent'`   | `{ kind: 'intent', role: RoleEnum, name_match: NameMatch \| null, near: LocatorChain \| null }` | A structured intent the _engine_ converts to a locator. Used by `ask`/extract on unknown pages. `RoleEnum` covers ARIA roles (`button`, `link`, `textbox`, `table`, `heading`, `region`, `dialog`, `listitem`, `cell`, etc.). `NameMatch = { kind: 'exact', value: string } \| { kind: 'regex', pattern: string, flags: string }`. `near` allows relative anchoring with a recursive `LocatorChain` (lazy schema). |
 
 The schema explicitly leaves an evolution slot: a future `kind: 'llm_reanchor'` variant (Phase 2) will be additive — current code must use `z.discriminatedUnion` such that adding a variant is one schema edit and a new validator case.
 
@@ -77,18 +78,18 @@ id: z.string().regex(/^s[0-9]+$/).describe('Step identifier, unique within the p
 scope: SecurityScope.nullable().describe('Contextual scope; null inherits the plan default.')
 ```
 
-| Step type | Discriminator | Variant-specific fields |
-|---|---|---|
-| `NavigateStep` | `type: 'navigate'` | `url: ValueRef` (must resolve to a string URL) |
-| `ClickStep` | `type: 'click'` | `locator: LocatorChain`, `modifiers: ClickModifiers \| null` (alt/shift/ctrl/meta — keep small) |
-| `FillStep` | `type: 'fill'` | `locator: LocatorChain`, `value: ValueRef`, `submit: boolean` (default false, declared via `.default(false)`) |
-| `ExtractStep` | `type: 'extract'` | `locator: LocatorChain`, `extraction_schema: ExtractionSchema`, `capture_as: string` (must be `^[a-z][a-z0-9_]*$`). **The capture produced at runtime follows the `ExtractionResultEnvelope` shape (§2.1.7) — lenient-with-evidence**: failed rows are preserved as `{__error, __raw}` rather than dropped, and metadata carries `{total_rows, valid_rows, error_count}`. |
-| `WaitForStep` | `type: 'wait_for'` | `locator: LocatorChain`, `state: 'visible' \| 'hidden' \| 'attached' \| 'detached'`, `timeout_ms: number \| null` |
-| `AssertStep` | `type: 'assert'` | `locator: LocatorChain`, `condition: AssertCondition` (e.g., `{ kind: 'visible' } \| { kind: 'text_matches', pattern: string }`) |
-| `BranchStep` | `type: 'branch'` | `condition: BranchCondition`, `then_step_id: string`, `else_step_id: string \| null` — declared explicitly, **not** ReAct |
-| `LoopStep` | `type: 'loop'` | `over: CaptureRef \| ParamRef`, `as: string`, `body_step_ids: string[]`, `max_iterations: number` |
-| `CallWorkflowStep` | `type: 'call_workflow'` | `workflow_name: string`, `params: Record<string, ValueRef>`, `capture_as: string \| null` |
-| `LLMSummarizeStep` | `type: 'llm_summarize'` | `input: CaptureRef`, `prompt: string`, `output_as: string` — input is **always** a `CaptureRef` so the sanitizer/scope path is mandatory |
+| Step type          | Discriminator           | Variant-specific fields                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NavigateStep`     | `type: 'navigate'`      | `url: ValueRef` (must resolve to a string URL)                                                                                                                                                                                                                                                                                                                            |
+| `ClickStep`        | `type: 'click'`         | `locator: LocatorChain`, `modifiers: ClickModifiers \| null` (alt/shift/ctrl/meta — keep small)                                                                                                                                                                                                                                                                           |
+| `FillStep`         | `type: 'fill'`          | `locator: LocatorChain`, `value: ValueRef`, `submit: boolean` (default false, declared via `.default(false)`)                                                                                                                                                                                                                                                             |
+| `ExtractStep`      | `type: 'extract'`       | `locator: LocatorChain`, `extraction_schema: ExtractionSchema`, `capture_as: string` (must be `^[a-z][a-z0-9_]*$`). **The capture produced at runtime follows the `ExtractionResultEnvelope` shape (§2.1.7) — lenient-with-evidence**: failed rows are preserved as `{__error, __raw}` rather than dropped, and metadata carries `{total_rows, valid_rows, error_count}`. |
+| `WaitForStep`      | `type: 'wait_for'`      | `locator: LocatorChain`, `state: 'visible' \| 'hidden' \| 'attached' \| 'detached'`, `timeout_ms: number \| null`                                                                                                                                                                                                                                                         |
+| `AssertStep`       | `type: 'assert'`        | `locator: LocatorChain`, `condition: AssertCondition` (e.g., `{ kind: 'visible' } \| { kind: 'text_matches', pattern: string }`)                                                                                                                                                                                                                                          |
+| `BranchStep`       | `type: 'branch'`        | `condition: BranchCondition`, `then_step_id: string`, `else_step_id: string \| null` — declared explicitly, **not** ReAct                                                                                                                                                                                                                                                 |
+| `LoopStep`         | `type: 'loop'`          | `over: CaptureRef \| ParamRef`, `as: string`, `body_step_ids: string[]`, `max_iterations: number`                                                                                                                                                                                                                                                                         |
+| `CallWorkflowStep` | `type: 'call_workflow'` | `workflow_name: string`, `params: Record<string, ValueRef>`, `capture_as: string \| null`                                                                                                                                                                                                                                                                                 |
+| `LLMSummarizeStep` | `type: 'llm_summarize'` | `input: CaptureRef`, `prompt: string`, `output_as: string` — input is **always** a `CaptureRef` so the sanitizer/scope path is mandatory                                                                                                                                                                                                                                  |
 
 `Step = z.discriminatedUnion('type', [...])`. `ExtractionSchema` and `AssertCondition` are themselves Zod schemas (small, closed unions; defined inline in `steps.ts`).
 
@@ -124,25 +125,25 @@ BudgetSchema  = z.object({ llm_calls: z.number().int().nonneg().nullable(),
 ScalarValue   = z.union([z.string(), z.number(), z.boolean(), z.null()])
 ```
 
-**`schema_version`** is the literal `'0.1'` everywhere. The version field is parsed *first* during validation so a future bump can dispatch to the right validator without consuming an invalid payload.
+**`schema_version`** is the literal `'0.1'` everywhere. The version field is parsed _first_ during validation so a future bump can dispatch to the right validator without consuming an invalid payload.
 
 #### 2.1.5 TaskEvent Discriminated Union — `src/schemas/events.ts`
 
 The full event-stream type, mirroring plan §5 sketch. All events carry `task_id: string` and `at: string` (ISO-8601 UTC). The discriminator is `kind`.
 
-| Event kind | Variant-specific fields |
-|---|---|
-| `task_queued` | (header only) |
-| `task_started` | (header only) |
-| `step_started` | `step_id: string, step_type: Step['type']` |
-| `step_retry` | `step_id, attempt: number, reason: FailureClass` |
-| `step_completed` | `step_id, capture_keys: string[]` (empty when no extract) |
-| `checkpoint_saved` | `after_step_id: string` |
-| `human_handoff_requested` | `step_id, reason: HandoffReason` (`captcha` / `mfa` / `unexpected_state` / `other`) |
-| `task_completed` | `outputs_keys: string[]` |
-| `task_failed` | `failure_class: FailureClass, report_path: string` |
-| `validation_failed` | `path: string, message: string` — emitted when schema or semantic validation rejects a plan; surfaced so the agent's bounded re-prompt has structured context |
-| `scope_violation` | `scope: SecurityScope, attempted_verb: Step['type'], step_id: string` — emitted by the scope enforcer (FEAT-006) before run abort |
+| Event kind                | Variant-specific fields                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_queued`             | (header only)                                                                                                                                                 |
+| `task_started`            | (header only)                                                                                                                                                 |
+| `step_started`            | `step_id: string, step_type: Step['type']`                                                                                                                    |
+| `step_retry`              | `step_id, attempt: number, reason: FailureClass`                                                                                                              |
+| `step_completed`          | `step_id, capture_keys: string[]` (empty when no extract)                                                                                                     |
+| `checkpoint_saved`        | `after_step_id: string`                                                                                                                                       |
+| `human_handoff_requested` | `step_id, reason: HandoffReason` (`captcha` / `mfa` / `unexpected_state` / `other`)                                                                           |
+| `task_completed`          | `outputs_keys: string[]`                                                                                                                                      |
+| `task_failed`             | `failure_class: FailureClass, report_path: string`                                                                                                            |
+| `validation_failed`       | `path: string, message: string` — emitted when schema or semantic validation rejects a plan; surfaced so the agent's bounded re-prompt has structured context |
+| `scope_violation`         | `scope: SecurityScope, attempted_verb: Step['type'], step_id: string` — emitted by the scope enforcer (FEAT-006) before run abort                             |
 
 `TaskEvent = z.discriminatedUnion('kind', [...])`. The `validation_failed` and `scope_violation` events are required by memory.md §Logging audit-events list.
 
@@ -196,6 +197,7 @@ ExtractionResultEnvelope<T> = z.object({
 **Invariant**: `total_rows === valid_rows + error_count`. Asserted by Zod refinement + property-based test.
 
 **Consumers' contract**:
+
 - `LLMSummarizeStep` receives only the `rows` filtered to valid rows by default. The error envelope reaches the LLM **only** when the workflow's `llm_summarize.prompt` explicitly references the error count via a documented template variable (TBD in FEAT-005 / FEAT-011 — protocol just exposes the shape).
 - `JSONata` transforms (FEAT-005) see the full `rows` array; users who want to ignore errors filter them explicitly.
 - `yantra report` surfaces `metadata.error_count` as a first-class line per plan §4 Capture.
@@ -297,7 +299,7 @@ LocatorCandidate = z.discriminatedUnion('kind', [
 
 **Workflow expressions** — per plan §7, two distinct forms; the YAML-level distinction lives here:
 
-- **Opaque-reference templates** — strings matching `{{\s*(secret|param|capture):[a-z][a-z0-9_.]*\s*}}` are *not* parsed by the protocol layer; they're recognized as `TemplateRef` candidates and desugared by FEAT-009's parser. Secrets resolved only at executor boundary (FEAT-005).
+- **Opaque-reference templates** — strings matching `{{\s*(secret|param|capture):[a-z][a-z0-9_.]*\s*}}` are _not_ parsed by the protocol layer; they're recognized as `TemplateRef` candidates and desugared by FEAT-009's parser. Secrets resolved only at executor boundary (FEAT-005).
 - **JSONata transforms** — strings starting with `{{ $` are JSONata expressions, evaluated by FEAT-005 against the per-step scope (`{ param, capture, previous_step }` — **never `secret_ref`**). The protocol does not parse JSONata; FEAT-005 owns the engine.
 
 Mixing the two forms in a single expression is a lint error owned by FEAT-009.
@@ -308,19 +310,19 @@ Mixing the two forms in a single expression is a lint error owned by FEAT-009.
 
 ### 2.3 Relationships
 
-| Relationship | Cardinality | Enforced by |
-|---|---|---|
-| `Plan` → `Step` | 1:N (ordered, 1..64) | `z.array(Step).min(1).max(64)` |
-| `Step.id` → uniqueness within `Plan.steps` | unique | Semantic validator (`validators/semantic.ts`) |
-| `CaptureRef.step_id` → prior `ExtractStep.id` | many:1, must precede in `steps[]` | Semantic validator |
-| `CaptureRef.field` → `ExtractStep.extraction_schema` key | optional 1:1 | Semantic validator (if `field != null`) |
-| `LocatorChain.kind:'workflow'.name` → workflow `_locators` block | many:1 | Semantic validator (when workflow context provided) |
-| `SecretRef.key` → workflow `secrets:` declaration | many:1 | Semantic validator (when workflow context provided) |
-| `BranchStep.then_step_id / else_step_id` → existing `Step.id` | many:1 | Semantic validator |
-| `LoopStep.body_step_ids[]` → existing `Step.id`s | many:N | Semantic validator |
-| `TaskRequest.task_id` ↔ `Plan.task_id` | 1:1 | Cross-document check (executor's concern; protocol exports a helper `assertSameTask(req, plan)`) |
-| `TaskEvent.task_id` → owning `TaskRequest.task_id` | many:1 | Executor's concern; protocol exports the matching type |
-| `TaskEvent.step_id` (where present) → owning `Plan.steps[].id` | many:1 | Executor's concern |
+| Relationship                                                     | Cardinality                       | Enforced by                                                                                      |
+| ---------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Plan` → `Step`                                                  | 1:N (ordered, 1..64)              | `z.array(Step).min(1).max(64)`                                                                   |
+| `Step.id` → uniqueness within `Plan.steps`                       | unique                            | Semantic validator (`validators/semantic.ts`)                                                    |
+| `CaptureRef.step_id` → prior `ExtractStep.id`                    | many:1, must precede in `steps[]` | Semantic validator                                                                               |
+| `CaptureRef.field` → `ExtractStep.extraction_schema` key         | optional 1:1                      | Semantic validator (if `field != null`)                                                          |
+| `LocatorChain.kind:'workflow'.name` → workflow `_locators` block | many:1                            | Semantic validator (when workflow context provided)                                              |
+| `SecretRef.key` → workflow `secrets:` declaration                | many:1                            | Semantic validator (when workflow context provided)                                              |
+| `BranchStep.then_step_id / else_step_id` → existing `Step.id`    | many:1                            | Semantic validator                                                                               |
+| `LoopStep.body_step_ids[]` → existing `Step.id`s                 | many:N                            | Semantic validator                                                                               |
+| `TaskRequest.task_id` ↔ `Plan.task_id`                           | 1:1                               | Cross-document check (executor's concern; protocol exports a helper `assertSameTask(req, plan)`) |
+| `TaskEvent.task_id` → owning `TaskRequest.task_id`               | many:1                            | Executor's concern; protocol exports the matching type                                           |
+| `TaskEvent.step_id` (where present) → owning `Plan.steps[].id`   | many:1                            | Executor's concern                                                                               |
 
 The semantic validator returns a typed `Result<ValidatedPlan, ValidationError[]>` — multiple errors are collected per validation pass so the agent's bounded re-prompt receives the full set, not just the first failure.
 
@@ -464,14 +466,17 @@ packages/protocol/
 **Internal**: FEAT-001 (Monorepo Scaffold & CI) — provides pnpm workspaces, TS strict config, Vitest, fast-check, the `LLM_PROVIDER=none` CI matrix dimension, and the `tsconfig.base.json` that this package extends.
 
 **External (runtime)**:
+
 - `zod` (latest stable, ESM)
 - `zod-to-json-schema` (latest stable, ESM)
 
 **External (dev/test)**:
+
 - `vitest`, `fast-check`, `@types/node`, `typescript` (all inherited from workspace root).
 - **No `pi-agent-core` import** — explicitly forbidden by the FEAT-001 import-restriction rule. `packages/protocol` emits a **vendor-neutral `ToolCatalog`**; the translation to pi-agent-core's specific tool-definition shape happens in `packages/agent/src/tool-defs-adapter.ts`. This keeps `packages/protocol` zero-dep on LLM runtimes and decouples the protocol's source-of-truth role from any single vendor's tool-calling format.
 
 **Forbidden imports** (lint-enforced via the import-restriction config in FEAT-001):
+
 - Anything from `packages/core` (would create a cycle).
 - Anything from `packages/agent` (would create a cycle).
 - Node built-ins beyond `node:path`/`node:fs` — and those only inside `scripts/` and `emit/*` (never `schemas/*`).
@@ -553,7 +558,7 @@ packages/protocol/
   6. Every `BranchStep.then_step_id` / `else_step_id` and every `LoopStep.body_step_ids[]` refers to an existing step ID in the plan.
   7. Every step in `read-only-data` scope (declared or inherited from `default_scope`) has a `type` in the allowed-verbs table from TASK-006. **Mutating verbs in `read-only-data` scope are rejected.**
 - `ValidationError` is a custom error class extending `Error` with `path: string`, `code: string`, `message: string`.
-- Returns *all* violations as a list, not just the first — needed for the agent's bounded re-prompt.
+- Returns _all_ violations as a list, not just the first — needed for the agent's bounded re-prompt.
 - **fast-check property test (mandatory per memory.md)**: generate mixed-scope plans; assert read-only-data scope rejects mutating verbs 100% of the time across 1000+ iterations.
 - **fast-check property test**: generate malformed plans (random CaptureRef targets, random scope assignments, random secret refs); assert the validator returns either a valid plan or an actionable error list, never throws/panics.
 
@@ -572,7 +577,7 @@ packages/protocol/
 ### TASK-009 — Vendor-neutral `ToolCatalog` emitter (`emit/tool-catalog.ts`)
 
 - Implement an emitter that walks `Step`'s discriminated union and produces one `ToolDefinition` per Step variant. Tool `name` = step `type` discriminator (e.g., `navigate`, `click`); tool `description` = pulled from the schema's `.describe()`; tool `input_schema` = the variant's JSON Schema (excluding the discriminator key).
-- `ToolDefinition` is **vendor-neutral**: `{ name: string, description: string, input_schema: JSONSchema, output_schema: JSONSchema | null }`. It is *not* pi-agent-core's exact shape — pi-agent-core translation lives in `packages/agent/src/tool-defs-adapter.ts` (FEAT-011) and `packages/protocol` has zero knowledge of pi-agent-core's actual API.
+- `ToolDefinition` is **vendor-neutral**: `{ name: string, description: string, input_schema: JSONSchema, output_schema: JSONSchema | null }`. It is _not_ pi-agent-core's exact shape — pi-agent-core translation lives in `packages/agent/src/tool-defs-adapter.ts` (FEAT-011) and `packages/protocol` has zero knowledge of pi-agent-core's actual API.
 - The emitter writes both `tool-catalog.ts` (typed export `export const TOOL_CATALOG: ToolCatalog`) and `tool-catalog.json` for non-TS consumers/tests.
 - Tests: per-step round-trip (re-parsing each emitted input_schema validates a known-good Step instance); coverage assertion (every `Step['type']` has a catalog entry — exhaustiveness via `satisfies Record<Step['type'], ToolDefinition>`).
 - **Rationale recorded inline**: a comment at the top of `tool-catalog.ts` explains "this file deliberately does not target any specific LLM tool-calling format — vendors evolve faster than our protocol should; translation belongs in the agent package."
@@ -615,7 +620,7 @@ packages/protocol/
 - Define `UsageCall` and `UsageLedger` per §2.1.8.
 - `provider` enum kept narrow (`anthropic`, `ollama`, `openai`) — OpenAI listed for Phase 2 but the enum is closed in v0; adding a new provider is a `0.x → 0.2` additive change per TASK-011's policy.
 - `cost_estimate_usd` is nullable (Ollama runs locally; no cost).
-- Refinement: `totals.input_tokens === sum(calls.input_tokens)` etc.; refinement is *advisory* in the validator (warn, not reject) because runtime aggregation may produce off-by-one rounding if a future provider reports fractional tokens. Per memory.md's "trust internal code" guidance, treat the writer as authoritative.
+- Refinement: `totals.input_tokens === sum(calls.input_tokens)` etc.; refinement is _advisory_ in the validator (warn, not reject) because runtime aggregation may produce off-by-one rounding if a future provider reports fractional tokens. Per memory.md's "trust internal code" guidance, treat the writer as authoritative.
 - JSDoc + `.describe()`.
 
 **Acceptance**: a 3-call ledger round-trips; totals match the sum; the schema is consumed without issues by `yantra usage` (FEAT-012) and `agent.jsonl` writer (FEAT-005).
@@ -710,6 +715,7 @@ The emit scripts (`scripts/emit-all.ts`, `scripts/verify-generated.ts`) print hu
 - **TODO.md entries** (added by this spec):
 
   Under `## General`:
+
   ```
   - FEAT-002 follow-up: when pi-agent-core's tool-definition schema changes upstream,
     the change is absorbed by packages/agent/src/tool-defs-adapter.ts ONLY — packages/protocol
@@ -727,6 +733,7 @@ The emit scripts (`scripts/emit-all.ts`, `scripts/verify-generated.ts`) print hu
   ```
 
   Under `## Security`:
+
   ```
   - FEAT-002 follow-up: extend the CI static-analysis guard from packages/protocol
     (verify-exports.ts) so the same grep enforces "no literal credentials in test

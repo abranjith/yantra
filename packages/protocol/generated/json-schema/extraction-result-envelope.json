@@ -1,0 +1,62 @@
+{
+  "$ref": "#/definitions/ExtractionResultEnvelope",
+  "definitions": {
+    "ExtractionResultEnvelope": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {},
+              {
+                "type": "object",
+                "properties": {
+                  "__error": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Coercion failure reason for this row."
+                  },
+                  "__raw": {
+                    "description": "Original raw row payload prior to coercion."
+                  }
+                },
+                "required": ["__error"],
+                "additionalProperties": false,
+                "description": "Row-level extraction error envelope."
+              }
+            ]
+          },
+          "description": "Extracted rows including per-row error evidence."
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "total_rows": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total extracted row count."
+            },
+            "valid_rows": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Count of rows matching row schema."
+            },
+            "error_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Count of row-level coercion errors."
+            }
+          },
+          "required": ["total_rows", "valid_rows", "error_count"],
+          "additionalProperties": false,
+          "description": "Extraction aggregate metadata."
+        }
+      },
+      "required": ["rows", "metadata"],
+      "additionalProperties": false,
+      "description": "Lenient-with-evidence extraction envelope."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

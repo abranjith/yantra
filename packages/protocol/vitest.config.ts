@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     name: '@yantra/protocol',
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'tests/**/*.spec.ts'],
     globals: false,
   },
 });

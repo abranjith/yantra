@@ -1,0 +1,110 @@
+{
+  "$ref": "#/definitions/ValueRef",
+  "definitions": {
+    "ValueRef": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "literal",
+              "description": "Discriminator for literal values."
+            },
+            "value": {
+              "type": ["string", "number", "boolean", "null"],
+              "description": "Literal scalar value embedded in the plan."
+            }
+          },
+          "required": ["kind", "value"],
+          "additionalProperties": false,
+          "description": "Literal scalar value."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "param",
+              "description": "Discriminator for runtime param references."
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "Declared workflow/task param key."
+            }
+          },
+          "required": ["kind", "key"],
+          "additionalProperties": false,
+          "description": "Reference to runtime input provided by the user."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "secret",
+              "description": "Discriminator for secret references."
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+              "description": "Secret key in namespace.name format."
+            }
+          },
+          "required": ["kind", "key"],
+          "additionalProperties": false,
+          "description": "Reference to a credential stored outside the plan payload."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "capture",
+              "description": "Discriminator for capture references."
+            },
+            "step_id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Extract step id that produced the capture."
+            },
+            "field": {
+              "type": ["string", "null"],
+              "description": "Optional extracted field key. Null means the whole capture payload."
+            }
+          },
+          "required": ["kind", "step_id", "field"],
+          "additionalProperties": false,
+          "description": "Reference to values captured by a previous extract step."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "template",
+              "description": "Discriminator for template-backed values."
+            },
+            "template": {
+              "type": "string",
+              "description": "Template string with {{placeholder}} markers."
+            },
+            "bindings": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/ValueRef"
+              },
+              "description": "Typed mapping from placeholder names to value references."
+            }
+          },
+          "required": ["kind", "template", "bindings"],
+          "additionalProperties": false,
+          "description": "Templated value with explicit typed bindings."
+        }
+      ],
+      "description": "Any value reference that can flow through a plan or workflow."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

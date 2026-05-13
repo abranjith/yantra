@@ -1,0 +1,141 @@
+{
+  "$ref": "#/definitions/LocatorChain",
+  "definitions": {
+    "LocatorChain": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "recorded",
+              "description": "Recorded locator candidate index reference."
+            },
+            "step_index": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Recorded step index."
+            }
+          },
+          "required": ["kind", "step_index"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "workflow",
+              "description": "Named workflow locator chain reference."
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+              "description": "Human-readable workflow locator key."
+            }
+          },
+          "required": ["kind", "name"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "intent",
+              "description": "Semantic intent locator that engine resolves."
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "button",
+                "link",
+                "textbox",
+                "table",
+                "heading",
+                "region",
+                "dialog",
+                "listitem",
+                "cell",
+                "checkbox",
+                "radio",
+                "combobox",
+                "option",
+                "tab",
+                "tabpanel",
+                "menuitem",
+                "row",
+                "grid"
+              ],
+              "description": "Target ARIA role."
+            },
+            "name_match": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "exact",
+                          "description": "Exact match strategy."
+                        },
+                        "value": {
+                          "type": "string",
+                          "description": "Exact accessible name value."
+                        }
+                      },
+                      "required": ["kind", "value"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "regex",
+                          "description": "Regex match strategy."
+                        },
+                        "pattern": {
+                          "type": "string",
+                          "description": "Regex pattern to compile."
+                        },
+                        "flags": {
+                          "type": "string",
+                          "description": "Regex flags such as i or im."
+                        }
+                      },
+                      "required": ["kind", "pattern", "flags"],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "Accessible-name matcher for intent locators."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional accessible-name matcher."
+            },
+            "near": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/LocatorChain"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional relative anchor."
+            }
+          },
+          "required": ["kind", "role", "name_match", "near"],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Locator resolution strategy chain."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

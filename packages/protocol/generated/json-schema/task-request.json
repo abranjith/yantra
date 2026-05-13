@@ -1,0 +1,131 @@
+{
+  "$ref": "#/definitions/TaskRequest",
+  "definitions": {
+    "TaskRequest": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Task identifier in ULID format."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["ask", "run"],
+          "description": "Task type in MVP."
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "User-provided intent statement."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "null"],
+            "description": "Scalar value for task params."
+          },
+          "default": {},
+          "description": "Runtime parameters for task execution."
+        },
+        "data_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "secret",
+                "description": "Discriminator for secret references."
+              },
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                "description": "Secret key in namespace.name format."
+              }
+            },
+            "required": ["kind", "key"],
+            "additionalProperties": false,
+            "description": "Reference to a credential stored outside the plan payload."
+          },
+          "default": [],
+          "description": "Optional explicit secret references required by the task."
+        },
+        "deadline_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional overall deadline in milliseconds."
+        },
+        "budget": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "llm_calls": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional max LLM calls."
+                },
+                "fetches": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional max fetch actions."
+                }
+              },
+              "required": ["llm_calls", "fetches"],
+              "additionalProperties": false,
+              "description": "Execution budget constraints."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional execution budget constraints."
+        },
+        "security_class": {
+          "type": "string",
+          "enum": ["public", "read-only-data", "authenticated"],
+          "description": "Security class for the task."
+        },
+        "schema_version": {
+          "type": "string",
+          "const": "0.1",
+          "description": "Protocol schema version literal."
+        }
+      },
+      "required": [
+        "task_id",
+        "type",
+        "intent",
+        "deadline_ms",
+        "budget",
+        "security_class",
+        "schema_version"
+      ],
+      "additionalProperties": false,
+      "description": "Top-level task request entering the agent/executor pipeline."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

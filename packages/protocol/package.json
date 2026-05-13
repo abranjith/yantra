@@ -11,17 +11,34 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./generated/tool-catalog": {
+      "types": "./generated/tool-catalog.ts",
+      "import": "./generated/tool-catalog.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "generated"
+  ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "tsx scripts/emit-all.ts && tsc -b tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "emit": "tsx scripts/emit-all.ts",
+    "verify-generated": "tsx scripts/verify-generated.ts",
+    "verify-exports": "tsx scripts/verify-exports.ts",
+    "verify": "tsx scripts/verify-generated.ts && tsx scripts/verify-exports.ts && tsc --noEmit",
     "clean": "rimraf dist .turbo *.tsbuildinfo"
   },
+  "dependencies": {
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.24.6"
+  },
   "devDependencies": {
-    "@yantra/test-helpers": "workspace:*"
+    "@yantra/test-helpers": "workspace:*",
+    "fast-check": "^4.3.0",
+    "tsx": "^4.20.6"
   }
 }

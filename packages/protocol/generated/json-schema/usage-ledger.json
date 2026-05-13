@@ -1,0 +1,121 @@
+{
+  "$ref": "#/definitions/UsageLedger",
+  "definitions": {
+    "UsageLedger": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step_id": {
+                "type": ["string", "null"],
+                "description": "Owning step id, null for plan-generation calls."
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Model identifier."
+              },
+              "provider": {
+                "type": "string",
+                "enum": ["anthropic", "ollama", "openai"],
+                "description": "Provider identifier."
+              },
+              "input_tokens": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Input token count."
+              },
+              "output_tokens": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Output token count."
+              },
+              "cost_estimate_usd": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Nullable estimated cost in USD."
+              },
+              "latency_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Call latency in milliseconds."
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO-8601 UTC timestamp."
+              }
+            },
+            "required": [
+              "step_id",
+              "model",
+              "provider",
+              "input_tokens",
+              "output_tokens",
+              "cost_estimate_usd",
+              "latency_ms",
+              "at"
+            ],
+            "additionalProperties": false,
+            "description": "Single LLM usage call record."
+          },
+          "description": "Chronological call records."
+        },
+        "totals": {
+          "type": "object",
+          "properties": {
+            "input_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total input tokens."
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total output tokens."
+            },
+            "cost_estimate_usd": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Total estimated cost."
+            },
+            "call_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total call count."
+            }
+          },
+          "required": ["input_tokens", "output_tokens", "cost_estimate_usd", "call_count"],
+          "additionalProperties": false,
+          "description": "Aggregated usage totals."
+        }
+      },
+      "required": ["run_id", "calls", "totals"],
+      "additionalProperties": false,
+      "description": "Usage ledger persisted per run."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

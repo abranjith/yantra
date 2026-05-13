@@ -26,7 +26,7 @@ describe('@no-llm formatting and lint smoke', () => {
       'lefthook.yml',
       'README.md',
       'CONTRIBUTING.md',
-      'docs/README.md',
+      'docs/protocol-spec.md',
       'e2e/format.spec.ts',
       'e2e/docs.spec.ts',
       'packages/core/src/boundary-rules.spec.ts',

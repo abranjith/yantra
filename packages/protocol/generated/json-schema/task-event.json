@@ -1,0 +1,355 @@
+{
+  "$ref": "#/definitions/TaskEvent",
+  "definitions": {
+    "TaskEvent": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Owning task id."
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO-8601 UTC timestamp."
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_queued",
+              "description": "Task was queued."
+            }
+          },
+          "required": ["task_id", "at", "kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_started",
+              "description": "Task execution started."
+            }
+          },
+          "required": ["task_id", "at", "kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_started",
+              "description": "A step execution started."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "step_type": {
+              "type": "string",
+              "enum": [
+                "navigate",
+                "click",
+                "fill",
+                "extract",
+                "wait_for",
+                "assert",
+                "branch",
+                "loop",
+                "call_workflow",
+                "llm_summarize"
+              ],
+              "description": "Step type."
+            }
+          },
+          "required": ["task_id", "at", "kind", "step_id", "step_type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_retry",
+              "description": "A step execution retried."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "attempt": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Retry attempt count."
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "locator_not_found",
+                "navigation_timeout",
+                "rate_limited",
+                "captcha_detected",
+                "mfa_required",
+                "network_error",
+                "scope_violation",
+                "validation_error",
+                "ethics_refused",
+                "budget_exhausted",
+                "user_aborted",
+                "unexpected"
+              ],
+              "description": "Retry reason class."
+            }
+          },
+          "required": ["task_id", "at", "kind", "step_id", "attempt", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_completed",
+              "description": "A step execution completed."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "capture_keys": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Capture keys produced by the step."
+            }
+          },
+          "required": ["task_id", "at", "kind", "step_id", "capture_keys"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "checkpoint_saved",
+              "description": "Checkpoint persisted after a step."
+            },
+            "after_step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Last successful step id."
+            }
+          },
+          "required": ["task_id", "at", "kind", "after_step_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "human_handoff_requested",
+              "description": "Run paused for human handoff."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step requiring handoff."
+            },
+            "reason": {
+              "type": "string",
+              "enum": ["captcha", "mfa", "unexpected_state", "other"],
+              "description": "Reason handoff is required."
+            }
+          },
+          "required": ["task_id", "at", "kind", "step_id", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_completed",
+              "description": "Task execution completed successfully."
+            },
+            "outputs_keys": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Output keys generated by the task."
+            }
+          },
+          "required": ["task_id", "at", "kind", "outputs_keys"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_failed",
+              "description": "Task execution failed."
+            },
+            "failure_class": {
+              "type": "string",
+              "enum": [
+                "locator_not_found",
+                "navigation_timeout",
+                "rate_limited",
+                "captcha_detected",
+                "mfa_required",
+                "network_error",
+                "scope_violation",
+                "validation_error",
+                "ethics_refused",
+                "budget_exhausted",
+                "user_aborted",
+                "unexpected"
+              ],
+              "description": "Failure class."
+            },
+            "report_path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Path to generated report artifact."
+            }
+          },
+          "required": ["task_id", "at", "kind", "failure_class", "report_path"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "validation_failed",
+              "description": "Plan or workflow validation failed."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "JSON pointer path for failure."
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Validation failure message."
+            }
+          },
+          "required": ["task_id", "at", "kind", "path", "message"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "scope_violation",
+              "description": "Scope policy violation detected."
+            },
+            "scope": {
+              "type": "string",
+              "enum": ["public", "read-only-data", "authenticated"],
+              "description": "Effective scope at violation time."
+            },
+            "attempted_verb": {
+              "type": "string",
+              "enum": [
+                "navigate",
+                "click",
+                "fill",
+                "extract",
+                "wait_for",
+                "assert",
+                "branch",
+                "loop",
+                "call_workflow",
+                "llm_summarize"
+              ],
+              "description": "Attempted step type."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id causing violation."
+            }
+          },
+          "required": ["task_id", "at", "kind", "scope", "attempted_verb", "step_id"],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Discriminated union for task lifecycle events."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

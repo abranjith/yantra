@@ -29,12 +29,17 @@ pnpm test
 
 ## Packages
 
-- `@yantra/protocol`: Shared protocol contracts.
+- `@yantra/protocol`: Zod schemas as the single source of truth for the agent/engine contract; TypeScript types, JSON Schema, and tool definitions are generated from these schemas.
 - `@yantra/core`: Core runtime and execution engine surface.
 - `@yantra/agent`: Agent-side integration surface.
 - `@yantra/test-helpers`: Internal helpers for test-provider tags.
 - `@yantra/cli`: CLI entrypoint package.
 - `e2e/`: Cross-package integration and smoke tests.
+
+## Documentation
+
+- Canonical project documentation lives under `docs/`.
+- Protocol specification is generated at `docs/protocol-spec.md`.
 
 ## Continuous Integration
 
