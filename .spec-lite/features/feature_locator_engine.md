@@ -494,19 +494,19 @@ Coverage target: ≥ 90% lines on `resolver.ts`, `auto-wait.ts`, `ranking.ts`, a
 
 ## 7. State Tracking
 
-- [ ] TASK-001: InjectedScript bundle build pipeline (esbuild + size gate)
-- [ ] TASK-002: Role + accessible-name strategy (ARIA computed role/name)
-- [ ] TASK-003: Text-content + normalized-name matching strategy
-- [ ] TASK-004: Label-for + aria-labelledby strategy
-- [ ] TASK-005: Placeholder + name-attribute strategies
-- [ ] TASK-006: data-testid strategy with configurable attribute aliases
-- [ ] TASK-007: Unique-CSS generator with stable-class heuristic
-- [ ] TASK-008: Relative-anchor strategy
-- [ ] TASK-009: Absolute-XPath strategy (generator + query)
-- [ ] TASK-010: `LocatorResolver.resolve(chain)` Node-side coordinator + chain walk
-- [ ] TASK-011: Auto-wait — `resolveActionable()` with Playwright backoff
-- [ ] TASK-012: Hit-target interception (pre-click verification)
-- [ ] TASK-013: Candidate ranking algorithm (record-time emission)
-- [ ] TASK-014: Locator resolution metrics emission
+- [x] TASK-001: InjectedScript bundle build pipeline (esbuild + size gate)
+- [x] TASK-002: Role + accessible-name strategy (ARIA computed role/name)
+- [x] TASK-003: Text-content + normalized-name matching strategy
+- [x] TASK-004: Label-for + aria-labelledby strategy
+- [x] TASK-005: Placeholder + name-attribute strategies
+- [x] TASK-006: data-testid strategy with configurable attribute aliases
+- [x] TASK-007: Unique-CSS generator with stable-class heuristic
+- [x] TASK-008: Relative-anchor strategy
+- [x] TASK-009: Absolute-XPath strategy (generator + query)
+- [x] TASK-010: `LocatorResolver.resolve(chain)` Node-side coordinator + chain walk
+- [x] TASK-011: Auto-wait — `resolveActionable()` with Playwright backoff
+- [x] TASK-012: Hit-target interception (pre-click verification)
+- [x] TASK-013: Candidate ranking algorithm (record-time emission)
+- [x] TASK-014: Locator resolution metrics emission
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -168,5 +168,14 @@ export default tseslint.config(
     },
   },
 
+  // Agent tests are outside the package tsconfig project includes.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['packages/agent/tests/**/*.ts'],
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+
   prettierConfig,
 );

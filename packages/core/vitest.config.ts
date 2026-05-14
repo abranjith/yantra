@@ -4,7 +4,8 @@ export default defineConfig({
   test: {
     name: '@yantra/core',
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['tests/**/*.spec.ts'],
     globals: false,
+    setupFiles: ['./tests/setup-jsdom.ts'],
   },
 });

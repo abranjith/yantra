@@ -1,0 +1,23 @@
+Yantra — AI-Orchestrated Browser Automation Platform
+Copyright 2024 Yantra Contributors
+
+This product includes software derived from the following open-source projects:
+
+---
+
+Playwright (https://github.com/microsoft/playwright)
+Copyright (c) Microsoft Corporation
+Licensed under the Apache License, Version 2.0
+
+The following algorithms were ported from Playwright's injected-script library:
+
+  * ARIA implicit-role and computed-role resolution logic
+    Source: packages/playwright-core/src/server/injected/roleUtils.ts
+    Ported to: packages/core/src/locator/injected/role.ts
+
+  * Element actionable-state checks (visibility, enabled, receivesEvents)
+    Source: packages/playwright-core/src/server/injected/injectedScript.ts
+    Ported to: packages/core/src/locator/injected/actionable.ts
+
+A copy of the Apache License 2.0 is available at:
+https://www.apache.org/licenses/LICENSE-2.0

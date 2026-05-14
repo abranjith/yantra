@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PROTOCOL_VERSION, SCHEMA_VERSION, parseSchemaVersion } from './index.js';
+import { PROTOCOL_VERSION, SCHEMA_VERSION, parseSchemaVersion } from '../src/index.js';
 
 describe('@no-llm protocol smoke', () => {
   it('exports a PROTOCOL_VERSION constant matching the package version', () => {
@@ -18,3 +18,4 @@ describe('@no-llm protocol smoke', () => {
     expect(PROTOCOL_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
+

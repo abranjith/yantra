@@ -1,8 +1,9 @@
 import { PROTOCOL_VERSION } from '@yantra/protocol';
 
-/**
- * Sentinel that proves `@yantra/core` resolves and consumes `@yantra/protocol`
- * across the workspace boundary. Replaced with the real engine surface by the
- * features that follow FEAT-001.
- */
+export { PROTOCOL_VERSION };
+
+export * from './browser/index.js';
+export * from './locator/index.js';
+
+/** @deprecated Use PROTOCOL_VERSION directly. This re-export will be removed in a future release. */
 export const CORE_PROTOCOL_VERSION = PROTOCOL_VERSION;

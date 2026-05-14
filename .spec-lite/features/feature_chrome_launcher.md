@@ -499,16 +499,16 @@ Configuration touches (minor):
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Cross-OS Chrome discovery
-- [ ] TASK-002: `LaunchOptions` schema + path helpers
-- [ ] TASK-003: `LocalBrowserProvider.launch()` over CDP pipe
-- [ ] TASK-004: `LocalProfileStore` with refused-path guard and perms
-- [ ] TASK-005: `LocalBrowserSession` + `Page` facade
-- [ ] TASK-006: Resource hygiene — property test on launch/close cycle
-- [ ] TASK-007: `yantra doctor` v0 diagnostics
-- [ ] TASK-008: Per-OS integration test — real Chrome to `about:blank`
-- [ ] TASK-009: Connection-loss handling — Chrome crashes mid-session
-- [ ] TASK-010: Security hardening — profile-dir permissions + doctor surfacing
+- [x] TASK-001: Cross-OS Chrome discovery
+- [x] TASK-002: `LaunchOptions` schema + path helpers
+- [x] TASK-003: `LocalBrowserProvider.launch()` over CDP pipe
+- [x] TASK-004: `LocalProfileStore` with refused-path guard and perms
+- [x] TASK-005: `LocalBrowserSession` + `Page` facade
+- [x] TASK-006: Resource hygiene — property test on launch/close cycle
+- [x] TASK-007: `yantra doctor` v0 diagnostics
+- [x] TASK-008: Per-OS integration test — real Chrome to `about:blank`
+- [x] TASK-009: Connection-loss handling — Chrome crashes mid-session
+- [x] TASK-010: Security hardening — profile-dir permissions + doctor surfacing
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
 

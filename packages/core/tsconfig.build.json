@@ -8,5 +8,11 @@
   },
   "references": [{ "path": "../protocol/tsconfig.build.json" }],
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/_lint-fixtures/**/*"]
+  "exclude": [
+    "src/**/*.spec.ts",
+    "src/_lint-fixtures/**/*",
+    "src/locator/injected/**/*",
+    "src/locator/build.ts",
+    "src/locator/ranking.ts"
+  ]
 }

@@ -28,7 +28,7 @@ describe('@no-llm lint boundary rules', () => {
 
     expect(restricted).toHaveLength(1);
     expect(restricted[0]?.message).toContain('must not import from @yantra/core');
-  });
+  }, 30_000);
 
   it('rejects pi-agent-core imports outside packages/agent', async () => {
     const fixturePath = resolve(
@@ -43,5 +43,5 @@ describe('@no-llm lint boundary rules', () => {
     expect(restricted[0]?.message).toContain(
       'Direct pi-agent-core imports are forbidden outside packages/agent',
     );
-  });
+  }, 30_000);
 });

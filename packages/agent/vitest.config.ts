@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     name: '@yantra/agent',
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['tests/**/*.spec.ts'],
     globals: false,
   },
 });
