@@ -5,7 +5,7 @@
 > **Parent plan**: `.spec-lite/plan.md`
 > **Dependencies**: FEAT-001 (monorepo), FEAT-002 (protocol types: `Plan`/`Step`/`TaskEvent`/`ValueRef`/`LocatorChain`/`SecretRef`), FEAT-003 (BrowserSession), FEAT-004 (LocatorResolver + auto-wait + hit-target). Soft dependency on FEAT-006 (sanitizer, `SecretResolver`, audit log writer) — stub `SecretResolver` interface if FEAT-006 is implemented in parallel.
 > **Downstream consumers**: FEAT-007 (`ask` pipeline composes Plans and runs them via this executor), FEAT-010 (workflow replay drives the same executor with YAML-derived plans), FEAT-011 (agent integration produces Plans the executor consumes).
-> **Status**: [ ] Not started
+> **Status**: [x] Complete
 
 ---
 
@@ -664,7 +664,7 @@ Assert for each: the run terminates cleanly (no hung promises, no orphan Chrome 
 
 ## 7. State Tracking
 
-- **Status**: [ ] Not started — to be updated by the `implement` skill at execution time.
+- **Status**: [x] Complete — all 18 tasks implemented and tested.
 - **Task count**: 18 (TASK-001 through TASK-018).
 - **Deviations from plan**: none. Every architectural decision in this feature comes directly from plan §5 (Plan/TaskEvent shapes), §6 (contextual scopes), §7 (engine ownership of locator resolution; ethics gate non-bypassable), and §10 (mandatory audit events). The plan said "FEAT-006 may be implemented in parallel" implicitly via the ordering note; this spec makes that explicit by pinning `SecretResolver` and `Sanitizer` as TypeScript interfaces consumable as stubs.
 - **TODO.md entries to add** (these belong in `.spec-lite/TODO.md` after this feature is approved):

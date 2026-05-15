@@ -27,6 +27,7 @@ export {
   TemplateRef,
   ValueRef,
 } from './schemas/refs.js';
+export type { IntentLocatorChain } from './schemas/refs.js';
 export {
   ALLOWED_VERBS_BY_SCOPE,
   FailureClass,
@@ -34,8 +35,10 @@ export {
   SecurityClass,
   SecurityScope,
 } from './schemas/security.js';
+export type { StepVerb } from './schemas/security.js';
 export {
   AssertCondition,
+  AssertStep,
   BranchCondition,
   BranchStep,
   CallWorkflowStep,

@@ -17,7 +17,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -37,11 +41,19 @@
                       "description": "Discriminator for literal values."
                     },
                     "value": {
-                      "type": ["string", "number", "boolean", "null"],
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
                       "description": "Literal scalar value embedded in the plan."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false,
                   "description": "Literal scalar value."
                 },
@@ -59,7 +71,10 @@
                       "description": "Declared workflow/task param key."
                     }
                   },
-                  "required": ["kind", "key"],
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to runtime input provided by the user."
                 },
@@ -77,7 +92,10 @@
                       "description": "Secret key in namespace.name format."
                     }
                   },
-                  "required": ["kind", "key"],
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to a credential stored outside the plan payload."
                 },
@@ -95,11 +113,18 @@
                       "description": "Extract step id that produced the capture."
                     },
                     "field": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Optional extracted field key. Null means the whole capture payload."
                     }
                   },
-                  "required": ["kind", "step_id", "field"],
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to values captured by a previous extract step."
                 },
@@ -140,7 +165,11 @@
                       "description": "Typed mapping from placeholder names to value references."
                     }
                   },
-                  "required": ["kind", "template", "bindings"],
+                  "required": [
+                    "kind",
+                    "template",
+                    "bindings"
+                  ],
                   "additionalProperties": false,
                   "description": "Templated value with explicit typed bindings."
                 }
@@ -148,7 +177,11 @@
               "description": "Target URL as a value reference."
             }
           },
-          "required": ["id", "scope", "url"],
+          "required": [
+            "id",
+            "scope",
+            "url"
+          ],
           "additionalProperties": false,
           "description": "Navigate browser to a URL."
         }
@@ -175,7 +208,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -200,7 +237,10 @@
                       "description": "Recorded step index."
                     }
                   },
-                  "required": ["kind", "step_index"],
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -217,7 +257,10 @@
                       "description": "Human-readable workflow locator key."
                     }
                   },
-                  "required": ["kind", "name"],
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -269,7 +312,10 @@
                                   "description": "Exact accessible name value."
                                 }
                               },
-                              "required": ["kind", "value"],
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -289,7 +335,11 @@
                                   "description": "Regex flags such as i or im."
                                 }
                               },
-                              "required": ["kind", "pattern", "flags"],
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -319,7 +369,10 @@
                                   "description": "Recorded step index."
                                 }
                               },
-                              "required": ["kind", "step_index"],
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -336,7 +389,10 @@
                                   "description": "Human-readable workflow locator key."
                                 }
                               },
-                              "required": ["kind", "name"],
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -394,7 +450,12 @@
                                   "description": "Optional relative anchor."
                                 }
                               },
-                              "required": ["kind", "role", "name_match", "near"],
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -407,7 +468,12 @@
                       "description": "Optional relative anchor."
                     }
                   },
-                  "required": ["kind", "role", "name_match", "near"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -449,7 +515,12 @@
               "description": "Optional click modifier keys."
             }
           },
-          "required": ["id", "scope", "locator", "modifiers"],
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "modifiers"
+          ],
           "additionalProperties": false,
           "description": "Click on a resolved locator target."
         }
@@ -476,7 +547,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -501,7 +576,10 @@
                       "description": "Recorded step index."
                     }
                   },
-                  "required": ["kind", "step_index"],
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -518,7 +596,10 @@
                       "description": "Human-readable workflow locator key."
                     }
                   },
-                  "required": ["kind", "name"],
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -570,7 +651,10 @@
                                   "description": "Exact accessible name value."
                                 }
                               },
-                              "required": ["kind", "value"],
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -590,7 +674,11 @@
                                   "description": "Regex flags such as i or im."
                                 }
                               },
-                              "required": ["kind", "pattern", "flags"],
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -620,7 +708,10 @@
                                   "description": "Recorded step index."
                                 }
                               },
-                              "required": ["kind", "step_index"],
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -637,7 +728,10 @@
                                   "description": "Human-readable workflow locator key."
                                 }
                               },
-                              "required": ["kind", "name"],
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -695,7 +789,12 @@
                                   "description": "Optional relative anchor."
                                 }
                               },
-                              "required": ["kind", "role", "name_match", "near"],
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -708,7 +807,12 @@
                       "description": "Optional relative anchor."
                     }
                   },
-                  "required": ["kind", "role", "name_match", "near"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -725,11 +829,19 @@
                       "description": "Discriminator for literal values."
                     },
                     "value": {
-                      "type": ["string", "number", "boolean", "null"],
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
                       "description": "Literal scalar value embedded in the plan."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false,
                   "description": "Literal scalar value."
                 },
@@ -747,7 +859,10 @@
                       "description": "Declared workflow/task param key."
                     }
                   },
-                  "required": ["kind", "key"],
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to runtime input provided by the user."
                 },
@@ -765,7 +880,10 @@
                       "description": "Secret key in namespace.name format."
                     }
                   },
-                  "required": ["kind", "key"],
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to a credential stored outside the plan payload."
                 },
@@ -783,11 +901,18 @@
                       "description": "Extract step id that produced the capture."
                     },
                     "field": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Optional extracted field key. Null means the whole capture payload."
                     }
                   },
-                  "required": ["kind", "step_id", "field"],
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to values captured by a previous extract step."
                 },
@@ -828,7 +953,11 @@
                       "description": "Typed mapping from placeholder names to value references."
                     }
                   },
-                  "required": ["kind", "template", "bindings"],
+                  "required": [
+                    "kind",
+                    "template",
+                    "bindings"
+                  ],
                   "additionalProperties": false,
                   "description": "Templated value with explicit typed bindings."
                 }
@@ -841,7 +970,12 @@
               "description": "Whether to submit after filling."
             }
           },
-          "required": ["id", "scope", "locator", "value"],
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "value"
+          ],
           "additionalProperties": false,
           "description": "Fill an input-like field."
         }
@@ -868,7 +1002,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -893,7 +1031,10 @@
                       "description": "Recorded step index."
                     }
                   },
-                  "required": ["kind", "step_index"],
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -910,7 +1051,10 @@
                       "description": "Human-readable workflow locator key."
                     }
                   },
-                  "required": ["kind", "name"],
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -962,7 +1106,10 @@
                                   "description": "Exact accessible name value."
                                 }
                               },
-                              "required": ["kind", "value"],
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -982,7 +1129,11 @@
                                   "description": "Regex flags such as i or im."
                                 }
                               },
-                              "required": ["kind", "pattern", "flags"],
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1012,7 +1163,10 @@
                                   "description": "Recorded step index."
                                 }
                               },
-                              "required": ["kind", "step_index"],
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1029,7 +1183,10 @@
                                   "description": "Human-readable workflow locator key."
                                 }
                               },
-                              "required": ["kind", "name"],
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1087,7 +1244,12 @@
                                   "description": "Optional relative anchor."
                                 }
                               },
-                              "required": ["kind", "role", "name_match", "near"],
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1100,7 +1262,12 @@
                       "description": "Optional relative anchor."
                     }
                   },
-                  "required": ["kind", "role", "name_match", "near"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -1118,11 +1285,20 @@
                     },
                     "kind": {
                       "type": "string",
-                      "enum": ["string", "number", "boolean", "date", "money"],
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "date",
+                        "money"
+                      ],
                       "description": "Primitive value kind."
                     }
                   },
-                  "required": ["type", "kind"],
+                  "required": [
+                    "type",
+                    "kind"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1145,11 +1321,20 @@
                             },
                             "kind": {
                               "type": "string",
-                              "enum": ["string", "number", "boolean", "date", "money"],
+                              "enum": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "date",
+                                "money"
+                              ],
                               "description": "Primitive value kind."
                             }
                           },
-                          "required": ["type", "kind"],
+                          "required": [
+                            "type",
+                            "kind"
+                          ],
                           "additionalProperties": false
                         },
                         {
@@ -1165,7 +1350,10 @@
                               "description": "Item schema for extracted arrays."
                             }
                           },
-                          "required": ["type", "items"],
+                          "required": [
+                            "type",
+                            "items"
+                          ],
                           "additionalProperties": false
                         },
                         {
@@ -1184,14 +1372,20 @@
                               "description": "Field mapping for extracted object rows."
                             }
                           },
-                          "required": ["type", "fields"],
+                          "required": [
+                            "type",
+                            "fields"
+                          ],
                           "additionalProperties": false
                         }
                       ],
                       "description": "Item schema for extracted arrays."
                     }
                   },
-                  "required": ["type", "items"],
+                  "required": [
+                    "type",
+                    "items"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1210,7 +1404,10 @@
                       "description": "Field mapping for extracted object rows."
                     }
                   },
-                  "required": ["type", "fields"],
+                  "required": [
+                    "type",
+                    "fields"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -1222,7 +1419,13 @@
               "description": "Capture alias for downstream references."
             }
           },
-          "required": ["id", "scope", "locator", "extraction_schema", "capture_as"],
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "extraction_schema",
+            "capture_as"
+          ],
           "additionalProperties": false,
           "description": "Extract data from the page using a declared schema."
         }
@@ -1249,7 +1452,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -1274,7 +1481,10 @@
                       "description": "Recorded step index."
                     }
                   },
-                  "required": ["kind", "step_index"],
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1291,7 +1501,10 @@
                       "description": "Human-readable workflow locator key."
                     }
                   },
-                  "required": ["kind", "name"],
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1343,7 +1556,10 @@
                                   "description": "Exact accessible name value."
                                 }
                               },
-                              "required": ["kind", "value"],
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1363,7 +1579,11 @@
                                   "description": "Regex flags such as i or im."
                                 }
                               },
-                              "required": ["kind", "pattern", "flags"],
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1393,7 +1613,10 @@
                                   "description": "Recorded step index."
                                 }
                               },
-                              "required": ["kind", "step_index"],
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1410,7 +1633,10 @@
                                   "description": "Human-readable workflow locator key."
                                 }
                               },
-                              "required": ["kind", "name"],
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1468,7 +1694,12 @@
                                   "description": "Optional relative anchor."
                                 }
                               },
-                              "required": ["kind", "role", "name_match", "near"],
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1481,7 +1712,12 @@
                       "description": "Optional relative anchor."
                     }
                   },
-                  "required": ["kind", "role", "name_match", "near"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -1489,7 +1725,12 @@
             },
             "state": {
               "type": "string",
-              "enum": ["visible", "hidden", "attached", "detached"],
+              "enum": [
+                "visible",
+                "hidden",
+                "attached",
+                "detached"
+              ],
               "description": "Target state to wait for."
             },
             "timeout_ms": {
@@ -1505,7 +1746,13 @@
               "description": "Optional timeout override."
             }
           },
-          "required": ["id", "scope", "locator", "state", "timeout_ms"],
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "state",
+            "timeout_ms"
+          ],
           "additionalProperties": false,
           "description": "Wait for target element state transitions."
         }
@@ -1532,7 +1779,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -1557,7 +1808,10 @@
                       "description": "Recorded step index."
                     }
                   },
-                  "required": ["kind", "step_index"],
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1574,7 +1828,10 @@
                       "description": "Human-readable workflow locator key."
                     }
                   },
-                  "required": ["kind", "name"],
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1626,7 +1883,10 @@
                                   "description": "Exact accessible name value."
                                 }
                               },
-                              "required": ["kind", "value"],
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1646,7 +1906,11 @@
                                   "description": "Regex flags such as i or im."
                                 }
                               },
-                              "required": ["kind", "pattern", "flags"],
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1676,7 +1940,10 @@
                                   "description": "Recorded step index."
                                 }
                               },
-                              "required": ["kind", "step_index"],
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1693,7 +1960,10 @@
                                   "description": "Human-readable workflow locator key."
                                 }
                               },
-                              "required": ["kind", "name"],
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
                               "additionalProperties": false
                             },
                             {
@@ -1751,7 +2021,12 @@
                                   "description": "Optional relative anchor."
                                 }
                               },
-                              "required": ["kind", "role", "name_match", "near"],
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
                               "additionalProperties": false
                             }
                           ],
@@ -1764,7 +2039,12 @@
                       "description": "Optional relative anchor."
                     }
                   },
-                  "required": ["kind", "role", "name_match", "near"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -1781,7 +2061,9 @@
                       "description": "Assert that target is visible."
                     }
                   },
-                  "required": ["kind"],
+                  "required": [
+                    "kind"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1793,7 +2075,9 @@
                       "description": "Assert that target is hidden."
                     }
                   },
-                  "required": ["kind"],
+                  "required": [
+                    "kind"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1814,7 +2098,10 @@
                       "description": "Regex flags."
                     }
                   },
-                  "required": ["kind", "pattern"],
+                  "required": [
+                    "kind",
+                    "pattern"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1831,14 +2118,22 @@
                       "description": "Expected count."
                     }
                   },
-                  "required": ["kind", "count"],
+                  "required": [
+                    "kind",
+                    "count"
+                  ],
                   "additionalProperties": false
                 }
               ],
               "description": "Assertion condition payload."
             }
           },
-          "required": ["id", "scope", "locator", "condition"],
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "condition"
+          ],
           "additionalProperties": false,
           "description": "Assert state against the current page."
         }
@@ -1865,7 +2160,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -1885,7 +2184,9 @@
                       "description": "Always branch to then_step_id."
                     }
                   },
-                  "required": ["kind"],
+                  "required": [
+                    "kind"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -1910,16 +2211,26 @@
                           "description": "Extract step id that produced the capture."
                         },
                         "field": {
-                          "type": ["string", "null"],
+                          "type": [
+                            "string",
+                            "null"
+                          ],
                           "description": "Optional extracted field key. Null means the whole capture payload."
                         }
                       },
-                      "required": ["kind", "step_id", "field"],
+                      "required": [
+                        "kind",
+                        "step_id",
+                        "field"
+                      ],
                       "additionalProperties": false,
                       "description": "Capture checked for branch decision."
                     }
                   },
-                  "required": ["kind", "capture"],
+                  "required": [
+                    "kind",
+                    "capture"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -1943,7 +2254,13 @@
               "description": "Optional step id for false branch."
             }
           },
-          "required": ["id", "scope", "condition", "then_step_id", "else_step_id"],
+          "required": [
+            "id",
+            "scope",
+            "condition",
+            "then_step_id",
+            "else_step_id"
+          ],
           "additionalProperties": false,
           "description": "Explicit branch to another step id."
         }
@@ -1970,7 +2287,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -1995,11 +2316,18 @@
                       "description": "Extract step id that produced the capture."
                     },
                     "field": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Optional extracted field key. Null means the whole capture payload."
                     }
                   },
-                  "required": ["kind", "step_id", "field"],
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to values captured by a previous extract step."
                 },
@@ -2017,7 +2345,10 @@
                       "description": "Declared workflow/task param key."
                     }
                   },
-                  "required": ["kind", "key"],
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
                   "additionalProperties": false,
                   "description": "Reference to runtime input provided by the user."
                 }
@@ -2044,7 +2375,14 @@
               "description": "Hard cap for loop iterations at runtime."
             }
           },
-          "required": ["id", "scope", "over", "as", "body_step_ids", "max_iterations"],
+          "required": [
+            "id",
+            "scope",
+            "over",
+            "as",
+            "body_step_ids",
+            "max_iterations"
+          ],
           "additionalProperties": false,
           "description": "Iterate over collection values."
         }
@@ -2071,7 +2409,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -2098,11 +2440,19 @@
                         "description": "Discriminator for literal values."
                       },
                       "value": {
-                        "type": ["string", "number", "boolean", "null"],
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean",
+                          "null"
+                        ],
                         "description": "Literal scalar value embedded in the plan."
                       }
                     },
-                    "required": ["kind", "value"],
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
                     "additionalProperties": false,
                     "description": "Literal scalar value."
                   },
@@ -2120,7 +2470,10 @@
                         "description": "Declared workflow/task param key."
                       }
                     },
-                    "required": ["kind", "key"],
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
                     "additionalProperties": false,
                     "description": "Reference to runtime input provided by the user."
                   },
@@ -2138,7 +2491,10 @@
                         "description": "Secret key in namespace.name format."
                       }
                     },
-                    "required": ["kind", "key"],
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
                     "additionalProperties": false,
                     "description": "Reference to a credential stored outside the plan payload."
                   },
@@ -2156,11 +2512,18 @@
                         "description": "Extract step id that produced the capture."
                       },
                       "field": {
-                        "type": ["string", "null"],
+                        "type": [
+                          "string",
+                          "null"
+                        ],
                         "description": "Optional extracted field key. Null means the whole capture payload."
                       }
                     },
-                    "required": ["kind", "step_id", "field"],
+                    "required": [
+                      "kind",
+                      "step_id",
+                      "field"
+                    ],
                     "additionalProperties": false,
                     "description": "Reference to values captured by a previous extract step."
                   },
@@ -2184,7 +2547,11 @@
                         "description": "Typed mapping from placeholder names to value references."
                       }
                     },
-                    "required": ["kind", "template", "bindings"],
+                    "required": [
+                      "kind",
+                      "template",
+                      "bindings"
+                    ],
                     "additionalProperties": false,
                     "description": "Templated value with explicit typed bindings."
                   }
@@ -2207,7 +2574,12 @@
               "description": "Optional capture alias for workflow output."
             }
           },
-          "required": ["id", "scope", "workflow_name", "capture_as"],
+          "required": [
+            "id",
+            "scope",
+            "workflow_name",
+            "capture_as"
+          ],
           "additionalProperties": false,
           "description": "Invoke another workflow from the current plan."
         }
@@ -2234,7 +2606,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["public", "read-only-data", "authenticated"],
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
                   "description": "Step-level security scope."
                 },
                 {
@@ -2257,11 +2633,18 @@
                   "description": "Extract step id that produced the capture."
                 },
                 "field": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "description": "Optional extracted field key. Null means the whole capture payload."
                 }
               },
-              "required": ["kind", "step_id", "field"],
+              "required": [
+                "kind",
+                "step_id",
+                "field"
+              ],
               "additionalProperties": false,
               "description": "Capture reference fed to summarization."
             },
@@ -2276,7 +2659,13 @@
               "description": "Capture alias for summarization output."
             }
           },
-          "required": ["id", "scope", "input", "prompt", "output_as"],
+          "required": [
+            "id",
+            "scope",
+            "input",
+            "prompt",
+            "output_as"
+          ],
           "additionalProperties": false,
           "description": "Summarize extracted captures with an LLM."
         }

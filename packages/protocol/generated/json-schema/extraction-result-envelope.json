@@ -21,7 +21,9 @@
                     "description": "Original raw row payload prior to coercion."
                   }
                 },
-                "required": ["__error"],
+                "required": [
+                  "__error"
+                ],
                 "additionalProperties": false,
                 "description": "Row-level extraction error envelope."
               }
@@ -48,12 +50,19 @@
               "description": "Count of row-level coercion errors."
             }
           },
-          "required": ["total_rows", "valid_rows", "error_count"],
+          "required": [
+            "total_rows",
+            "valid_rows",
+            "error_count"
+          ],
           "additionalProperties": false,
           "description": "Extraction aggregate metadata."
         }
       },
-      "required": ["rows", "metadata"],
+      "required": [
+        "rows",
+        "metadata"
+      ],
       "additionalProperties": false,
       "description": "Lenient-with-evidence extraction envelope."
     }

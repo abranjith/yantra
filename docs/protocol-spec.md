@@ -2,262 +2,6 @@
 
 > DO NOT EDIT - regenerated from packages/protocol
 
-## TaskEvent
-
-Discriminated union for task lifecycle events.
-
-Example:
-
-```json
-"<value>"
-```
-
-## HandoffReason
-
-Reason human intervention is required.
-
-Example:
-
-```json
-"captcha"
-```
-
-## ExtractionErrorRow
-
-Row-level extraction error envelope.
-
-| Field     | Description                                 |
-| --------- | ------------------------------------------- |
-| \_\_error | Coercion failure reason for this row.       |
-| \_\_raw   | Original raw row payload prior to coercion. |
-
-Example:
-
-```json
-{
-  "__error": "<__error>",
-  "__raw": "<__raw>"
-}
-```
-
-## ExtractionResultEnvelopeUnknown
-
-Lenient-with-evidence extraction envelope.
-
-Example:
-
-```json
-"<value>"
-```
-
-## OutputBinding
-
-Named output mapping from a capture reference.
-
-| Field | Description                                |
-| ----- | ------------------------------------------ |
-| name  | Output binding name.                       |
-| from  | Capture reference used to populate output. |
-
-Example:
-
-```json
-{
-  "name": "<name>",
-  "from": "<from>"
-}
-```
-
-## PlanSchema
-
-Validated execution plan produced by the agent.
-
-| Field          | Description                                    |
-| -------------- | ---------------------------------------------- |
-| task_id        | Owning task id.                                |
-| plan_id        | Unique plan id.                                |
-| schema_version | Protocol schema version literal.               |
-| default_scope  | Default scope applied when step scope is null. |
-| steps          | Ordered finite list of plan steps.             |
-| outputs        | Optional plan outputs.                         |
-
-Example:
-
-```json
-{
-  "task_id": "<task_id>",
-  "plan_id": "<plan_id>",
-  "schema_version": "<schema_version>",
-  "default_scope": "<default_scope>",
-  "steps": "<steps>",
-  "outputs": "<outputs>"
-}
-```
-
-## CaptureRef
-
-Reference to values captured by a previous extract step.
-
-| Field   | Description                                                         |
-| ------- | ------------------------------------------------------------------- |
-| kind    | Discriminator for capture references.                               |
-| step_id | Extract step id that produced the capture.                          |
-| field   | Optional extracted field key. Null means the whole capture payload. |
-
-Example:
-
-```json
-{
-  "kind": "<kind>",
-  "step_id": "<step_id>",
-  "field": "<field>"
-}
-```
-
-## LiteralValue
-
-Literal scalar value.
-
-| Field | Description                                |
-| ----- | ------------------------------------------ |
-| kind  | Discriminator for literal values.          |
-| value | Literal scalar value embedded in the plan. |
-
-Example:
-
-```json
-{
-  "kind": "<kind>",
-  "value": "<value>"
-}
-```
-
-## LocatorChain
-
-No description provided.
-
-Example:
-
-```json
-"<value>"
-```
-
-## NameMatch
-
-Accessible-name matcher for intent locators.
-
-Example:
-
-```json
-"<value>"
-```
-
-## ParamRef
-
-Reference to runtime input provided by the user.
-
-| Field | Description                                 |
-| ----- | ------------------------------------------- |
-| kind  | Discriminator for runtime param references. |
-| key   | Declared workflow/task param key.           |
-
-Example:
-
-```json
-{
-  "kind": "<kind>",
-  "key": "<key>"
-}
-```
-
-## RoleEnum
-
-Supported ARIA role intents.
-
-Example:
-
-```json
-"button"
-```
-
-## SecretRef
-
-Reference to a credential stored outside the plan payload.
-
-| Field | Description                          |
-| ----- | ------------------------------------ |
-| kind  | Discriminator for secret references. |
-| key   | Secret key in namespace.name format. |
-
-Example:
-
-```json
-{
-  "kind": "<kind>",
-  "key": "<key>"
-}
-```
-
-## TemplateRef
-
-Templated value with explicit typed bindings.
-
-| Field    | Description                                               |
-| -------- | --------------------------------------------------------- |
-| kind     | Discriminator for template-backed values.                 |
-| template | Template string with {{placeholder}} markers.             |
-| bindings | Typed mapping from placeholder names to value references. |
-
-Example:
-
-```json
-{
-  "kind": "<kind>",
-  "template": "<template>",
-  "bindings": "<bindings>"
-}
-```
-
-## ValueRef
-
-No description provided.
-
-Example:
-
-```json
-"<value>"
-```
-
-## FailureClass
-
-Failure category emitted in task_failed and retry events.
-
-Example:
-
-```json
-"locator_not_found"
-```
-
-## SecurityClass
-
-Top-level security class used by tasks and workflows.
-
-Example:
-
-```json
-"public"
-```
-
-## SecurityScope
-
-Step-level security scope.
-
-Example:
-
-```json
-"public"
-```
-
 ## AssertCondition
 
 Assertion condition payload.
@@ -266,6 +10,30 @@ Example:
 
 ```json
 "<value>"
+```
+
+## AssertStep
+
+Assert state against the current page.
+
+| Field     | Description                                 |
+| --------- | ------------------------------------------- |
+| id        | Step identifier, unique within the plan.    |
+| scope     | Step scope; null inherits the plan default. |
+| type      | Assert step discriminator.                  |
+| locator   | Locator chain for assertion target.         |
+| condition | Assertion condition payload.                |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "scope": "<scope>",
+  "type": "<type>",
+  "locator": "<locator>",
+  "condition": "<condition>"
+}
 ```
 
 ## BranchCondition
@@ -304,6 +72,24 @@ Example:
 }
 ```
 
+## BudgetSchema
+
+Execution budget constraints.
+
+| Field     | Description                 |
+| --------- | --------------------------- |
+| llm_calls | Optional max LLM calls.     |
+| fetches   | Optional max fetch actions. |
+
+Example:
+
+```json
+{
+  "llm_calls": "<llm_calls>",
+  "fetches": "<fetches>"
+}
+```
+
 ## CallWorkflowStep
 
 Invoke another workflow from the current plan.
@@ -327,6 +113,26 @@ Example:
   "workflow_name": "<workflow_name>",
   "params": "<params>",
   "capture_as": "<capture_as>"
+}
+```
+
+## CaptureRef
+
+Reference to values captured by a previous extract step.
+
+| Field   | Description                                                         |
+| ------- | ------------------------------------------------------------------- |
+| kind    | Discriminator for capture references.                               |
+| step_id | Extract step id that produced the capture.                          |
+| field   | Optional extracted field key. Null means the whole capture payload. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "step_id": "<step_id>",
+  "field": "<field>"
 }
 ```
 
@@ -402,6 +208,34 @@ Example:
 }
 ```
 
+## ExtractionErrorRow
+
+Row-level extraction error envelope.
+
+| Field     | Description                                 |
+| --------- | ------------------------------------------- |
+| \_\_error | Coercion failure reason for this row.       |
+| \_\_raw   | Original raw row payload prior to coercion. |
+
+Example:
+
+```json
+{
+  "__error": "<__error>",
+  "__raw": "<__raw>"
+}
+```
+
+## ExtractionResultEnvelopeUnknown
+
+Lenient-with-evidence extraction envelope.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ExtractionSchema
 
 No description provided.
@@ -410,6 +244,16 @@ Example:
 
 ```json
 "<value>"
+```
+
+## FailureClass
+
+Failure category emitted in task_failed and retry events.
+
+Example:
+
+```json
+"locator_not_found"
 ```
 
 ## FillStep
@@ -438,6 +282,16 @@ Example:
 }
 ```
 
+## HandoffReason
+
+Reason human intervention is required.
+
+Example:
+
+```json
+"captcha"
+```
+
 ## LLMSummarizeStep
 
 Summarize extracted captures with an LLM.
@@ -462,6 +316,44 @@ Example:
   "prompt": "<prompt>",
   "output_as": "<output_as>"
 }
+```
+
+## LiteralValue
+
+Literal scalar value.
+
+| Field | Description                                |
+| ----- | ------------------------------------------ |
+| kind  | Discriminator for literal values.          |
+| value | Literal scalar value embedded in the plan. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "value": "<value>"
+}
+```
+
+## LocatorCandidate
+
+Candidate locator entry in workflow \_locators block.
+
+Example:
+
+```json
+"<value>"
+```
+
+## LocatorChain
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## LoopStep
@@ -492,6 +384,16 @@ Example:
 }
 ```
 
+## NameMatch
+
+Accessible-name matcher for intent locators.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## NavigateStep
 
 Navigate browser to a URL.
@@ -514,6 +416,164 @@ Example:
 }
 ```
 
+## OutputBinding
+
+Named output mapping from a capture reference.
+
+| Field | Description                                |
+| ----- | ------------------------------------------ |
+| name  | Output binding name.                       |
+| from  | Capture reference used to populate output. |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "from": "<from>"
+}
+```
+
+## ParamDeclaration
+
+Workflow parameter declaration.
+
+| Field    | Description                    |
+| -------- | ------------------------------ |
+| type     | Declared param scalar type.    |
+| example  | Optional example value.        |
+| required | Whether the param is required. |
+
+Example:
+
+```json
+{
+  "type": "<type>",
+  "example": "<example>",
+  "required": "<required>"
+}
+```
+
+## ParamRef
+
+Reference to runtime input provided by the user.
+
+| Field | Description                                 |
+| ----- | ------------------------------------------- |
+| kind  | Discriminator for runtime param references. |
+| key   | Declared workflow/task param key.           |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "key": "<key>"
+}
+```
+
+## PlanSchema
+
+Validated execution plan produced by the agent.
+
+| Field          | Description                                    |
+| -------------- | ---------------------------------------------- |
+| task_id        | Owning task id.                                |
+| plan_id        | Unique plan id.                                |
+| schema_version | Protocol schema version literal.               |
+| default_scope  | Default scope applied when step scope is null. |
+| steps          | Ordered finite list of plan steps.             |
+| outputs        | Optional plan outputs.                         |
+
+Example:
+
+```json
+{
+  "task_id": "<task_id>",
+  "plan_id": "<plan_id>",
+  "schema_version": "<schema_version>",
+  "default_scope": "<default_scope>",
+  "steps": "<steps>",
+  "outputs": "<outputs>"
+}
+```
+
+## RegexShape
+
+Regex descriptor for workflow locator names.
+
+| Field   | Description           |
+| ------- | --------------------- |
+| pattern | Regex source pattern. |
+| flags   | Regex flags string.   |
+
+Example:
+
+```json
+{
+  "pattern": "<pattern>",
+  "flags": "<flags>"
+}
+```
+
+## RoleEnum
+
+Supported ARIA role intents.
+
+Example:
+
+```json
+"button"
+```
+
+## ScalarValue
+
+Scalar value for task params.
+
+Example:
+
+```json
+"<value>"
+```
+
+## SecretRef
+
+Reference to a credential stored outside the plan payload.
+
+| Field | Description                          |
+| ----- | ------------------------------------ |
+| kind  | Discriminator for secret references. |
+| key   | Secret key in namespace.name format. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "key": "<key>"
+}
+```
+
+## SecurityClass
+
+Top-level security class used by tasks and workflows.
+
+Example:
+
+```json
+"public"
+```
+
+## SecurityScope
+
+Step-level security scope.
+
+Example:
+
+```json
+"public"
+```
+
 ## Step
 
 Single executable unit in a validated plan.
@@ -524,53 +584,9 @@ Example:
 "<value>"
 ```
 
-## WaitForStep
+## TaskEvent
 
-Wait for target element state transitions.
-
-| Field      | Description                                 |
-| ---------- | ------------------------------------------- |
-| id         | Step identifier, unique within the plan.    |
-| scope      | Step scope; null inherits the plan default. |
-| type       | Wait-for step discriminator.                |
-| locator    | Locator chain for awaited target.           |
-| state      | Target state to wait for.                   |
-| timeout_ms | Optional timeout override.                  |
-
-Example:
-
-```json
-{
-  "id": "<id>",
-  "scope": "<scope>",
-  "type": "<type>",
-  "locator": "<locator>",
-  "state": "<state>",
-  "timeout_ms": "<timeout_ms>"
-}
-```
-
-## BudgetSchema
-
-Execution budget constraints.
-
-| Field     | Description                 |
-| --------- | --------------------------- |
-| llm_calls | Optional max LLM calls.     |
-| fetches   | Optional max fetch actions. |
-
-Example:
-
-```json
-{
-  "llm_calls": "<llm_calls>",
-  "fetches": "<fetches>"
-}
-```
-
-## ScalarValue
-
-Scalar value for task params.
+Discriminated union for task lifecycle events.
 
 Example:
 
@@ -607,6 +623,26 @@ Example:
   "budget": "<budget>",
   "security_class": "<security_class>",
   "schema_version": "<schema_version>"
+}
+```
+
+## TemplateRef
+
+Templated value with explicit typed bindings.
+
+| Field    | Description                                               |
+| -------- | --------------------------------------------------------- |
+| kind     | Discriminator for template-backed values.                 |
+| template | Template string with {{placeholder}} markers.             |
+| bindings | Typed mapping from placeholder names to value references. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "template": "<template>",
+  "bindings": "<bindings>"
 }
 ```
 
@@ -670,9 +706,9 @@ Example:
 "anthropic"
 ```
 
-## LocatorCandidate
+## ValueRef
 
-Candidate locator entry in workflow \_locators block.
+No description provided.
 
 Example:
 
@@ -680,41 +716,29 @@ Example:
 "<value>"
 ```
 
-## ParamDeclaration
+## WaitForStep
 
-Workflow parameter declaration.
+Wait for target element state transitions.
 
-| Field    | Description                    |
-| -------- | ------------------------------ |
-| type     | Declared param scalar type.    |
-| example  | Optional example value.        |
-| required | Whether the param is required. |
+| Field      | Description                                 |
+| ---------- | ------------------------------------------- |
+| id         | Step identifier, unique within the plan.    |
+| scope      | Step scope; null inherits the plan default. |
+| type       | Wait-for step discriminator.                |
+| locator    | Locator chain for awaited target.           |
+| state      | Target state to wait for.                   |
+| timeout_ms | Optional timeout override.                  |
 
 Example:
 
 ```json
 {
+  "id": "<id>",
+  "scope": "<scope>",
   "type": "<type>",
-  "example": "<example>",
-  "required": "<required>"
-}
-```
-
-## RegexShape
-
-Regex descriptor for workflow locator names.
-
-| Field   | Description           |
-| ------- | --------------------- |
-| pattern | Regex source pattern. |
-| flags   | Regex flags string.   |
-
-Example:
-
-```json
-{
-  "pattern": "<pattern>",
-  "flags": "<flags>"
+  "locator": "<locator>",
+  "state": "<state>",
+  "timeout_ms": "<timeout_ms>"
 }
 ```
 

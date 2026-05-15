@@ -4,6 +4,20 @@ Current-state reference for all implemented features. Updated by the Implement s
 
 ---
 
+## Plan Executor
+
+### Plan Executor & Step Verbs (FEAT-005)
+
+The `Executor` class drives a `Plan.steps` array to completion, maintaining an `ExecutionContext` that carries all mutable state for one run: captures, retry budgets, an event bus, a checkpoint store, and an ethics gate. Each step is dispatched through a `STEP_DISPATCH` map (navigate, click, fill, extract, wait_for, assert, branch, loop, call_workflow, llm_summarize). Step results are a discriminated union — `completed`, `retried`, `failed`, `handoff_requested`, `ethics_refused`, or `jump` (for branch goto semantics). The executor enforces a `MAX_TOTAL_STEP_EXECUTIONS` guard to prevent infinite loops.
+
+**Retry budgets** are three independent token counters (`locatorAttempts`, `stepAttempts`, `workflowAttempts`). `consume()` throws `BudgetExhaustedError` past zero. `snapshot()/clone()` support checkpoint-based resume. **Captures** (`InMemoryCaptureStore`) accumulate `extract` step output under `step_id` keys; values >64 KB are represented as sidecar references in snapshots. **Scope enforcement** (`checkScopeViolations`) preflights the entire plan before execution using `ALLOWED_VERBS_BY_SCOPE` from protocol; scope violations abort before step 1 runs.
+
+**Checkpointing** (`FilesystemCheckpointStore`) writes atomically via `.tmp` + `fs.rename` after each successful step. Resume (`resumeFrom`) restores capture state from the snapshot and re-enters the step loop from the checkpoint's `after_step_idx + 1`. **Events** (`JsonlEventBus`) buffer in memory and flush to `events.jsonl` every 200 ms (debounced), with a synchronous `flush()` forced before checkpoint writes. **Reports** (`writeReport`) produce a Markdown call-log at `report.md`.
+
+**Ethics gate** (`EthicsGateImpl`) is NON-BYPASSABLE: blocklist check first (synchronous), robots.txt second (24h per-host LRU cache, fail-open for 404 per RFC 9309, fail-closed for timeouts/5xx), rate-limiter last (in-process per-host token bucket, injectable `Clock` for tests). `handleNavigate` calls the gate before any `page.goto`. **Value resolution** (`ValueResolver`) handles `literal`, `param`, `capture`, and `template` refs; secrets use a separate `resolveSecret()` path that returns a `{plaintext, zero}` pair — secrets are never returned by `resolve()` and never appear in step_completed event payloads.
+
+The `FileUsageWriter` batches `UsageCall` records and persists them as a `UsageLedger` at `usage.json`. Stub handlers for `call_workflow` (FEAT-010) and `llm_summarize` (FEAT-011) return structured failures pointing to those features.
+
 ## Browser Engine
 
 ### Locator Engine & Auto-Wait (FEAT-004)

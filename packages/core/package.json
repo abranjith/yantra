@@ -32,6 +32,8 @@
     "@yantra/protocol": "workspace:*",
     "keytar": "^7.9.0",
     "puppeteer-core": "^24.43.1",
+    "robots-parser": "^3.0.1",
+    "yaml": "^2.7.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

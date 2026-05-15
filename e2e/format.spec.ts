@@ -5,14 +5,29 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
-const run = (args: string[]) =>
-  spawnSync(pnpmCommand, args, {
+const escapeCmdArg = (value: string): string => {
+  if (!/[\s"&|<>^()]/.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/"/g, '""')}"`;
+};
+
+const run = (args: string[]) => {
+  if (process.platform === 'win32') {
+    const command = ['pnpm', ...args].map(escapeCmdArg).join(' ');
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', command], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+  }
+
+  return spawnSync('pnpm', args, {
     cwd: repoRoot,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
   });
+};
 
 describe('@no-llm formatting and lint smoke', () => {
   it('passes prettier --check for the repository', () => {

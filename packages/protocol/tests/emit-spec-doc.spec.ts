@@ -6,21 +6,35 @@ import { describe, expect, it } from 'vitest';
 
 import { emitProtocolSpecDoc } from '../src/index.js';
 
+const escapeCmdArg = (value: string): string => {
+  if (!/[\s"&|<>^()]/.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/"/g, '""')}"`;
+};
+
+const runPnpm = (args: string[], cwd: string) => {
+  if (process.platform === 'win32') {
+    const command = ['pnpm', ...args].map(escapeCmdArg).join(' ');
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', command], {
+      cwd,
+      encoding: 'utf8',
+    });
+  }
+
+  return spawnSync('pnpm', args, {
+    cwd,
+    encoding: 'utf8',
+  });
+};
+
 describe('@no-llm protocol spec doc emitter', () => {
   it('includes all major public schemas in generated doc', async () => {
     const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..');
     await emitProtocolSpecDoc(repoRoot);
 
-    const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const prettier = spawnSync(
-      pnpmCommand,
-      ['exec', 'prettier', '--write', 'docs/protocol-spec.md'],
-      {
-        cwd: repoRoot,
-        encoding: 'utf8',
-        shell: process.platform === 'win32',
-      },
-    );
+    const prettier = runPnpm(['exec', 'prettier', '--write', 'docs/protocol-spec.md'], repoRoot);
 
     expect(prettier.status).toBe(0);
 
