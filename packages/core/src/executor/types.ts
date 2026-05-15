@@ -1,7 +1,6 @@
-import type { ElementHandle } from 'puppeteer-core';
-
 import type {
   CaptureRef,
+  ExtractionSchema,
   ExtractionResultEnvelopeUnknown,
   FailureClass,
   HandoffReason,
@@ -12,6 +11,7 @@ import type {
   TaskEvent,
   UsageCall,
 } from '@yantra/protocol';
+import type { ElementHandle } from 'puppeteer-core';
 
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
@@ -72,7 +72,7 @@ export interface CaptureSnapshot {
 }
 
 export interface CaptureStore {
-  get(name: string): unknown | undefined;
+  get(name: string): unknown;
   set(name: string, value: unknown): void;
   has(name: string): boolean;
   keys(): string[];
@@ -149,7 +149,12 @@ export type StepResult =
   | { readonly kind: 'retried'; readonly attempt: number; readonly reason: string }
   | { readonly kind: 'failed'; readonly failureClass: FailureClass; readonly error: Error }
   | { readonly kind: 'handoff_requested'; readonly reason: HandoffReason }
-  | { readonly kind: 'ethics_refused'; readonly host: string; readonly rule: string; readonly reason: string }
+  | {
+      readonly kind: 'ethics_refused';
+      readonly host: string;
+      readonly rule: string;
+      readonly reason: string;
+    }
   | { readonly kind: 'jump'; readonly toStepId: string };
 
 // ---------------------------------------------------------------------------
@@ -214,10 +219,7 @@ export interface EthicsGate {
 // ---------------------------------------------------------------------------
 
 export interface DomExtractor {
-  extract(
-    elementHandle: ElementHandle,
-    schema: import('@yantra/protocol').ExtractionSchema,
-  ): Promise<unknown>;
+  extract(elementHandle: ElementHandle, schema: ExtractionSchema): Promise<unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,11 +235,25 @@ export interface UsageWriter {
 // ValueRef resolution result
 // ---------------------------------------------------------------------------
 
-export type ResolvedValue = string | number | boolean | null | unknown;
-export type ResolvedSecret = { readonly plaintext: string; readonly zero: () => void };
+export type ResolvedValue = unknown;
+export interface ResolvedSecret {
+  readonly plaintext: string;
+  readonly zero: () => void;
+}
 
 // ---------------------------------------------------------------------------
 // Re-exports for convenience
 // ---------------------------------------------------------------------------
 
-export type { CaptureRef, ExtractionResultEnvelopeUnknown, FailureClass, HandoffReason, Plan, SecurityScope, SecretRef, Step, TaskEvent, UsageCall };
+export type {
+  CaptureRef,
+  ExtractionResultEnvelopeUnknown,
+  FailureClass,
+  HandoffReason,
+  Plan,
+  SecurityScope,
+  SecretRef,
+  Step,
+  TaskEvent,
+  UsageCall,
+};

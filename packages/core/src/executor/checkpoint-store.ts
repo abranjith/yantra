@@ -26,7 +26,7 @@ export class FilesystemCheckpointStore implements CheckpointStore {
       await rename(tmpPath, finalPath);
     } catch (err) {
       // Best-effort cleanup of the .tmp on rename failure
-      await writeFile(tmpPath + '.dead', '', 'utf8').catch(() => {});
+      await writeFile(tmpPath + '.dead', '', 'utf8').catch(() => undefined);
       throw err;
     }
   }

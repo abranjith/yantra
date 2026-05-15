@@ -1,6 +1,5 @@
+import type { IntentLocatorChain, LocatorChain, NameMatch } from '@yantra/protocol';
 import type { ElementHandle } from 'puppeteer-core';
-
-import type { LocatorChain, NameMatch, RoleEnum } from '@yantra/protocol';
 
 import { resolveActionable } from '../../locator/auto-wait.js';
 import type { AriaRole, EngineLocatorCandidate, EngineLocatorChain } from '../../locator/types.js';
@@ -70,7 +69,9 @@ function buildEngineChain(
         intent: {
           kind: 'role',
           role: locator.role as AriaRole,
-          ...(locator.name_match !== null ? { name: nameMatchToLocatorName(locator.name_match) } : {}),
+          ...(locator.name_match !== null
+            ? { name: nameMatchToLocatorName(locator.name_match) }
+            : {}),
         },
         source: 'authored',
       },
@@ -94,7 +95,7 @@ function nameMatchToLocatorName(match: NameMatch): string | RegExp {
   return new RegExp(match.pattern, match.flags);
 }
 
-function intentDisplayName(locator: import('@yantra/protocol').IntentLocatorChain): string {
+function intentDisplayName(locator: IntentLocatorChain): string {
   const rolePart = locator.role;
   const namePart =
     locator.name_match !== null

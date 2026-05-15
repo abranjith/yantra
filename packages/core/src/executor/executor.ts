@@ -1,14 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { FailureClass, Plan, SecurityScope, TaskEvent } from '@yantra/protocol';
+import type { FailureClass, Step, TaskEvent } from '@yantra/protocol';
 
-import type { BrowserSession } from '../browser/types.js';
-
+import type { ScopeViolationError } from './errors.js';
+import { writeReport } from './report-writer.js';
 import { checkScopeViolations } from './scope-enforcer.js';
 import { STEP_DISPATCH } from './step-handlers/index.js';
 import type { Checkpoint, ExecutionContext, RunOutcome, StepResult } from './types.js';
-import { writeReport } from './report-writer.js';
 
 /** Maximum total step executions across all jumps/loops to prevent infinite loops. */
 const MAX_TOTAL_STEP_EXECUTIONS = 1000;
@@ -88,9 +87,15 @@ export class Executor {
 
     while (i < steps.length) {
       if (++totalExecutions > MAX_TOTAL_STEP_EXECUTIONS) {
-        const reportPath = await this.emitFailure(ctx, 'budget_exhausted', completedStepIds, null, [
-          `Total step execution count exceeded ${MAX_TOTAL_STEP_EXECUTIONS} — possible infinite loop via branch jumps.`,
-        ].join('\n'));
+        const reportPath = await this.emitFailure(
+          ctx,
+          'budget_exhausted',
+          completedStepIds,
+          null,
+          [
+            `Total step execution count exceeded ${MAX_TOTAL_STEP_EXECUTIONS} — possible infinite loop via branch jumps.`,
+          ].join('\n'),
+        );
         return { status: 'failed', failureClass: 'budget_exhausted', reportPath };
       }
 
@@ -107,18 +112,21 @@ export class Executor {
 
       const handler = STEP_DISPATCH.get(step.type);
       if (!handler) {
-        const reportPath = await this.emitFailure(ctx, 'unexpected', completedStepIds, step.id,
-          `No handler registered for step type "${step.type}".`);
+        const reportPath = await this.emitFailure(
+          ctx,
+          'unexpected',
+          completedStepIds,
+          step.id,
+          `No handler registered for step type "${step.type}".`,
+        );
         return { status: 'failed', failureClass: 'unexpected', reportPath };
       }
 
       let result: StepResult;
       let stepAttempt = 0;
-      const maxStepAttempts = ctx.budgets.initial.stepAttempts;
 
       while (true) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result = await handler(step as any, ctx);
+        result = await handler(step, ctx);
 
         if (result.kind === 'retried') {
           stepAttempt++;
@@ -139,7 +147,10 @@ export class Executor {
             reason: result.reason as FailureClass,
             at: now(),
           });
-          ctx.logger.warn({ stepId: step.id, attempt: stepAttempt, reason: result.reason }, 'step retry');
+          ctx.logger.warn(
+            { stepId: step.id, attempt: stepAttempt, reason: result.reason },
+            'step retry',
+          );
           continue;
         }
         break;
@@ -193,8 +204,13 @@ export class Executor {
         });
         const targetIdx = stepIdxMap.get(result.toStepId);
         if (targetIdx === undefined) {
-          const reportPath = await this.emitFailure(ctx, 'unexpected', completedStepIds, step.id,
-            `Branch target step "${result.toStepId}" not found in plan.`);
+          const reportPath = await this.emitFailure(
+            ctx,
+            'unexpected',
+            completedStepIds,
+            step.id,
+            `Branch target step "${result.toStepId}" not found in plan.`,
+          );
           return { status: 'failed', failureClass: 'unexpected', reportPath };
         }
         ctx.logger.debug({ fromStepId: step.id, toStepId: result.toStepId }, 'branch jump');
@@ -206,11 +222,11 @@ export class Executor {
         ctx.events.publish({
           kind: 'scope_violation', // reuse event for ethics refusals until a dedicated kind exists
           task_id: ctx.taskId,
-          scope: (ctx.scopeChain[i] ?? ctx.plan.default_scope) as SecurityScope,
+          scope: ctx.scopeChain[i] ?? ctx.plan.default_scope,
           attempted_verb: step.type,
           step_id: step.id,
           at: now(),
-        } as TaskEvent);
+        });
         ctx.logger.warn(
           { host: result.host, rule: result.rule, reason: result.reason },
           'ethics gate refused',
@@ -266,7 +282,7 @@ export class Executor {
 
     // All steps completed — resolve outputs
     const outputKeys = resolveOutputKeys(ctx);
-    await writeOutputsJson(ctx, outputKeys);
+    await writeOutputsJson(ctx);
 
     await ctx.events.flush();
     ctx.events.publish({
@@ -319,7 +335,7 @@ export class Executor {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildStepIdxMap(steps: readonly import('@yantra/protocol').Step[]): Map<string, number> {
+function buildStepIdxMap(steps: readonly Step[]): Map<string, number> {
   const map = new Map<string, number>();
   for (let i = 0; i < steps.length; i++) {
     map.set(steps[i]!.id, i);
@@ -327,15 +343,12 @@ function buildStepIdxMap(steps: readonly import('@yantra/protocol').Step[]): Map
   return map;
 }
 
-function buildScopeViolationEvent(
-  taskId: string,
-  violation: import('./errors.js').ScopeViolationError,
-): TaskEvent {
+function buildScopeViolationEvent(taskId: string, violation: ScopeViolationError): TaskEvent {
   return {
     kind: 'scope_violation',
     task_id: taskId,
     scope: violation.scopeContext.scope,
-    attempted_verb: violation.scopeContext.attemptedVerb as import('@yantra/protocol').StepVerb,
+    attempted_verb: violation.scopeContext.attemptedVerb,
     step_id: violation.scopeContext.stepId,
     at: now(),
   };
@@ -351,16 +364,16 @@ function resolveOutputKeys(ctx: ExecutionContext): string[] {
   return keys;
 }
 
-async function writeOutputsJson(ctx: ExecutionContext, outputKeys: string[]): Promise<void> {
+async function writeOutputsJson(ctx: ExecutionContext): Promise<void> {
   const outputs: Record<string, unknown> = {};
   for (const output of ctx.plan.outputs) {
     const captureValue = ctx.captures.get(output.from.step_id);
     if (captureValue !== undefined) {
       outputs[output.name] =
         output.from.field !== null
-          ? (typeof captureValue === 'object' && captureValue !== null
-              ? (captureValue as Record<string, unknown>)[output.from.field]
-              : null)
+          ? typeof captureValue === 'object' && captureValue !== null
+            ? (captureValue as Record<string, unknown>)[output.from.field]
+            : null
           : captureValue;
     }
   }

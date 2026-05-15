@@ -15,7 +15,7 @@ import type { AriaRole } from '../types.js';
  * Per WAI-ARIA 1.2 §5 (implicit ARIA semantics).
  */
 const IMPLICIT_ROLE_MAP: ReadonlyMap<string, AriaRole> = new Map([
-  ['A', 'link'],        // only if href present — checked in getRole()
+  ['A', 'link'], // only if href present — checked in getRole()
   ['AREA', 'link'],
   ['ARTICLE', 'article'],
   ['ASIDE', 'complementary'],
@@ -87,16 +87,76 @@ const INPUT_TYPE_ROLE_MAP: ReadonlyMap<string, AriaRole> = new Map([
 ]);
 
 const VALID_ARIA_ROLES = new Set<string>([
-  'alert', 'alertdialog', 'application', 'article', 'banner', 'button',
-  'cell', 'checkbox', 'columnheader', 'combobox', 'complementary', 'contentinfo',
-  'definition', 'dialog', 'directory', 'document', 'feed', 'figure', 'form',
-  'grid', 'gridcell', 'group', 'heading', 'img', 'link', 'list', 'listbox',
-  'listitem', 'log', 'main', 'marquee', 'math', 'menu', 'menubar', 'menuitem',
-  'menuitemcheckbox', 'menuitemradio', 'navigation', 'none', 'note', 'option',
-  'paragraph', 'presentation', 'progressbar', 'radio', 'radiogroup', 'region',
-  'row', 'rowgroup', 'rowheader', 'scrollbar', 'search', 'searchbox', 'separator',
-  'slider', 'spinbutton', 'status', 'switch', 'tab', 'table', 'tablist', 'tabpanel',
-  'term', 'textbox', 'timer', 'toolbar', 'tooltip', 'tree', 'treegrid', 'treeitem',
+  'alert',
+  'alertdialog',
+  'application',
+  'article',
+  'banner',
+  'button',
+  'cell',
+  'checkbox',
+  'columnheader',
+  'combobox',
+  'complementary',
+  'contentinfo',
+  'definition',
+  'dialog',
+  'directory',
+  'document',
+  'feed',
+  'figure',
+  'form',
+  'grid',
+  'gridcell',
+  'group',
+  'heading',
+  'img',
+  'link',
+  'list',
+  'listbox',
+  'listitem',
+  'log',
+  'main',
+  'marquee',
+  'math',
+  'menu',
+  'menubar',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'navigation',
+  'none',
+  'note',
+  'option',
+  'paragraph',
+  'presentation',
+  'progressbar',
+  'radio',
+  'radiogroup',
+  'region',
+  'row',
+  'rowgroup',
+  'rowheader',
+  'scrollbar',
+  'search',
+  'searchbox',
+  'separator',
+  'slider',
+  'spinbutton',
+  'status',
+  'switch',
+  'tab',
+  'table',
+  'tablist',
+  'tabpanel',
+  'term',
+  'textbox',
+  'timer',
+  'toolbar',
+  'tooltip',
+  'tree',
+  'treegrid',
+  'treeitem',
 ]);
 
 /**
@@ -124,7 +184,7 @@ export function getRole(el: Element): AriaRole | null {
   if (tag === 'INPUT') {
     const inputType = (el.getAttribute('type') ?? 'text').toLowerCase();
     if (inputType === 'hidden') return null;
-    return (INPUT_TYPE_ROLE_MAP.get(inputType) as AriaRole | undefined) ?? 'textbox';
+    return INPUT_TYPE_ROLE_MAP.get(inputType) ?? 'textbox';
   }
 
   // <section> is only "region" when it has an accessible name
@@ -133,7 +193,7 @@ export function getRole(el: Element): AriaRole | null {
     return name ? 'region' : null;
   }
 
-  return (IMPLICIT_ROLE_MAP.get(tag) as AriaRole | undefined) ?? null;
+  return IMPLICIT_ROLE_MAP.get(tag) ?? null;
 }
 
 /**
@@ -179,7 +239,13 @@ export function getAccessibleName(el: Element): string {
 
   // For buttons, headings, links — inner text content
   const role = getRole(el);
-  if (role === 'button' || role === 'link' || role === 'heading' || role === 'tab' || role === 'menuitem') {
+  if (
+    role === 'button' ||
+    role === 'link' ||
+    role === 'heading' ||
+    role === 'tab' ||
+    role === 'menuitem'
+  ) {
     return (el.textContent ?? '').trim();
   }
 

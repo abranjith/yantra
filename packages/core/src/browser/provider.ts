@@ -1,7 +1,7 @@
 import { detectChrome } from './chrome-discovery.js';
 import { ChromeNotFoundError, ChromeVersionUnsupportedError } from './errors.js';
-import { launchChrome } from './launcher.js';
 import { MIN_SUPPORTED_CHROME_MAJOR, parseLaunchOptions } from './launch-options.js';
+import { launchChrome } from './launcher.js';
 import { LocalBrowserSession } from './session.js';
 import type {
   BrowserProvider,
@@ -34,11 +34,7 @@ export class LocalBrowserProvider implements BrowserProvider {
   private readonly logger: Logger;
   private readonly clock: () => Date;
 
-  constructor(deps: {
-    profileStore: ProfileStore;
-    logger?: Logger;
-    clock?: () => Date;
-  }) {
+  constructor(deps: { profileStore: ProfileStore; logger?: Logger; clock?: () => Date }) {
     this.profileStore = deps.profileStore;
     this.logger = deps.logger ?? noopLogger;
     this.clock = deps.clock ?? (() => new Date());

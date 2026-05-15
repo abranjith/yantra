@@ -57,16 +57,16 @@ export class RobotsCacheImpl {
     }
 
     const robotsUrl = `https://${host}/robots.txt`;
-    const parser = await this.fetchRobots(robotsUrl, url);
+    const parser = await this.fetchRobots(robotsUrl);
     if (parser !== null) {
       this.cache.set(host, { parser, expiresAt: now + ROBOTS_TTL_MS, fetchedAt: now });
     }
     return parser;
   }
 
-  private async fetchRobots(robotsUrl: string, originalUrl: string): Promise<RobotsParser | null> {
+  private async fetchRobots(robotsUrl: string): Promise<RobotsParser | null> {
     let content: string;
-    let status = 0;
+    let status: number;
 
     try {
       const result = await fetchWithTimeout(robotsUrl, FETCH_TIMEOUT_MS);
@@ -108,7 +108,10 @@ export class RobotsCacheImpl {
 async function parseRobots(url: string, content: string): Promise<RobotsParser> {
   try {
     const mod = await import('robots-parser');
-    const factory = (mod.default ?? mod) as unknown as (url: string, content: string) => RobotsParser;
+    const factory = (mod.default ?? mod) as unknown as (
+      url: string,
+      content: string,
+    ) => RobotsParser;
     return factory(url, content);
   } catch {
     // Fallback: allow everything if the package isn't available

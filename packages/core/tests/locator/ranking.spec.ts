@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { rankCandidates } from '../../src/locator/ranking.js';
 
@@ -11,7 +11,8 @@ describe('@no-llm rankCandidates', () => {
   });
 
   it('testid candidate is ranked first when data-testid is present', () => {
-    document.body.innerHTML = '<button data-testid="submit-btn" aria-label="Submit form">Submit</button>';
+    document.body.innerHTML =
+      '<button data-testid="submit-btn" aria-label="Submit form">Submit</button>';
     const el = document.querySelector('button')!;
     const ranking = rankCandidates(el);
     expect(ranking.candidates[0]?.intent.kind).toBe('testid');
@@ -77,7 +78,9 @@ describe('@no-llm rankCandidates', () => {
     const el = document.querySelector('button')!;
     const r1 = rankCandidates(el);
     const r2 = rankCandidates(el);
-    expect(r1.candidates.map((c) => c.intent.kind)).toEqual(r2.candidates.map((c) => c.intent.kind));
+    expect(r1.candidates.map((c) => c.intent.kind)).toEqual(
+      r2.candidates.map((c) => c.intent.kind),
+    );
   });
 
   it('priority invariant: testid score >= role score >= label score', () => {

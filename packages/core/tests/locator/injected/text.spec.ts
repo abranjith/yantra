@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 import { matchText, normalizeText } from '../../../src/locator/injected/text.js';
 

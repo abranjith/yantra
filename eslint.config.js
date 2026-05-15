@@ -62,6 +62,8 @@ export default tseslint.config(
     plugins: { vitest: vitestPlugin },
     rules: {
       ...vitestPlugin.configs.recommended.rules,
+      // Property-based tests often assert via fc.assert(...) without direct expect() calls.
+      'vitest/expect-expect': 'off',
     },
   },
 
@@ -172,6 +174,15 @@ export default tseslint.config(
   {
     ...tseslint.configs.disableTypeChecked,
     files: ['packages/agent/tests/**/*.ts'],
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+
+  // Core tests are outside package tsconfig includes.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['packages/core/tests/**/*.ts'],
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
     },

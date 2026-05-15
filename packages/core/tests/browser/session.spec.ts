@@ -1,16 +1,21 @@
 import { EventEmitter } from 'node:events';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BrowserCrashedError } from '../../src/browser/errors.js';
 import { LocalBrowserSession } from '../../src/browser/session.js';
-import type { ChromeInstall, Logger, ProfileStore, ResolvedProfile } from '../../src/browser/types.js';
+import type {
+  ChromeInstall,
+  Logger,
+  ProfileStore,
+  ResolvedProfile,
+} from '../../src/browser/types.js';
 
 function makeLogger(): Logger {
   return { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
 }
 
-function makeProfileStore(kind: 'ephemeral' | 'workflow' = 'ephemeral'): ProfileStore {
+function makeProfileStore(_kind: 'ephemeral' | 'workflow' = 'ephemeral'): ProfileStore {
   return {
     resolve: vi.fn(),
     listWorkflowProfiles: vi.fn().mockResolvedValue([]),
@@ -20,7 +25,13 @@ function makeProfileStore(kind: 'ephemeral' | 'workflow' = 'ephemeral'): Profile
 }
 
 function makeChrome(): ChromeInstall {
-  return { path: '/usr/bin/chrome', version: '124.0.0.0', majorVersion: 124, channel: 'stable', source: 'system' };
+  return {
+    path: '/usr/bin/chrome',
+    version: '124.0.0.0',
+    majorVersion: 124,
+    channel: 'stable',
+    source: 'system',
+  };
 }
 
 function makeProfile(kind: 'ephemeral' | 'workflow' = 'ephemeral'): ResolvedProfile {
@@ -139,7 +150,7 @@ describe('@no-llm LocalBrowserSession', () => {
     it('kills process when puppeteer close times out (after mocked slow close)', async () => {
       // Simulate puppeteer.close never resolving
       const { session, child } = makeSession({
-        browserClose: () => new Promise(() => {}), // never resolves
+        browserClose: () => new Promise(() => undefined), // never resolves
       });
 
       // We can't easily test the 5s timeout in unit tests without fake timers,
@@ -194,7 +205,7 @@ describe('@no-llm LocalBrowserSession', () => {
     });
 
     it('cleans ephemeral profile on crash', async () => {
-      const { session, child, profileStore } = makeSession({ kind: 'ephemeral' });
+      const { child, profileStore } = makeSession({ kind: 'ephemeral' });
       (child as unknown as EventEmitter).emit('exit', 139, null);
 
       // Allow micro-task for async cleanup
@@ -204,7 +215,7 @@ describe('@no-llm LocalBrowserSession', () => {
     });
 
     it('does NOT clean workflow profile on crash', async () => {
-      const { session, child, profileStore } = makeSession({ kind: 'workflow' });
+      const { child, profileStore } = makeSession({ kind: 'workflow' });
       (child as unknown as EventEmitter).emit('exit', 139, null);
       await new Promise<void>((r) => setTimeout(r, 10));
 
@@ -214,8 +225,8 @@ describe('@no-llm LocalBrowserSession', () => {
     it('close() is still idempotent after a crash', async () => {
       const { session, child } = makeSession();
       (child as unknown as EventEmitter).emit('exit', 1, null);
-      await session.close();
-      await session.close(); // Should not throw
+      await expect(session.close()).resolves.toBeUndefined();
+      await expect(session.close()).resolves.toBeUndefined();
     });
   });
 
@@ -238,5 +249,3 @@ describe('@no-llm LocalBrowserSession', () => {
     });
   });
 });
-
-

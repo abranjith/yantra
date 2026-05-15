@@ -5,15 +5,21 @@ vi.mock('../../../src/executor/step-handlers/locator-helpers.js', () => ({
   resolveLocatorChain: vi.fn(),
 }));
 
+import { InMemoryCaptureStore } from '../../../src/executor/capture-store.js';
 import { handleAssert } from '../../../src/executor/step-handlers/assert.js';
 import { resolveLocatorChain } from '../../../src/executor/step-handlers/locator-helpers.js';
-import { InMemoryCaptureStore } from '../../../src/executor/capture-store.js';
 import type { ExecutionContext } from '../../../src/executor/types.js';
 
 const makeCtx = (overrides: Partial<ExecutionContext> = {}): ExecutionContext => ({
   runId: 'run-1',
   taskId: 'task-1',
-  plan: { schema_version: '0.1', plan_id: 'p1', task_id: 'task-1', default_scope: 'public', steps: [] },
+  plan: {
+    schema_version: '0.1',
+    plan_id: 'p1',
+    task_id: 'task-1',
+    default_scope: 'public',
+    steps: [],
+  },
   currentStepIdx: 0,
   captures: new InMemoryCaptureStore(),
   secrets: null,
@@ -23,8 +29,20 @@ const makeCtx = (overrides: Partial<ExecutionContext> = {}): ExecutionContext =>
   browser: null,
   page: {} as never,
   locatorHost: {} as never, // provided so assert doesn't short-circuit
-  events: { publish: vi.fn(), flush: vi.fn().mockResolvedValue(undefined), persistedAt: vi.fn().mockReturnValue(null), close: vi.fn().mockResolvedValue(undefined) },
-  budgets: { canRetry: vi.fn(), consume: vi.fn(), initial: vi.fn(), remaining: vi.fn(), snapshot: vi.fn(), clone: vi.fn() },
+  events: {
+    publish: vi.fn(),
+    flush: vi.fn().mockResolvedValue(undefined),
+    persistedAt: vi.fn().mockReturnValue(null),
+    close: vi.fn().mockResolvedValue(undefined),
+  },
+  budgets: {
+    canRetry: vi.fn(),
+    consume: vi.fn(),
+    initial: vi.fn(),
+    remaining: vi.fn(),
+    snapshot: vi.fn(),
+    clone: vi.fn(),
+  },
   ethics: { check: vi.fn().mockResolvedValue(undefined) },
   checkpoints: { save: vi.fn(), load: vi.fn(), list: vi.fn(), loadLast: vi.fn() },
   scopeChain: ['public'],
@@ -55,19 +73,28 @@ describe('@no-llm handleAssert', () => {
   describe('visible condition', () => {
     it('returns completed when element is found', async () => {
       mockResolve.mockResolvedValue({ kind: 'found', elementHandle: {} as never, chainName: 'c' });
-      const result = await handleAssert({ ...baseAssert, condition: { kind: 'visible' } }, makeCtx());
+      const result = await handleAssert(
+        { ...baseAssert, condition: { kind: 'visible' } },
+        makeCtx(),
+      );
       expect(result.kind).toBe('completed');
     });
 
     it('returns failed when element is not found', async () => {
       mockResolve.mockResolvedValue({ kind: 'not_found', chainName: 'c', candidatesCount: 0 });
-      const result = await handleAssert({ ...baseAssert, condition: { kind: 'visible' } }, makeCtx());
+      const result = await handleAssert(
+        { ...baseAssert, condition: { kind: 'visible' } },
+        makeCtx(),
+      );
       expect(result.kind).toBe('failed');
     });
 
     it('returns failed on resolution error', async () => {
       mockResolve.mockResolvedValue({ kind: 'error', error: new Error('browser crash') });
-      const result = await handleAssert({ ...baseAssert, condition: { kind: 'visible' } }, makeCtx());
+      const result = await handleAssert(
+        { ...baseAssert, condition: { kind: 'visible' } },
+        makeCtx(),
+      );
       expect(result.kind).toBe('failed');
     });
   });
@@ -75,13 +102,19 @@ describe('@no-llm handleAssert', () => {
   describe('hidden condition', () => {
     it('returns completed when element is not found', async () => {
       mockResolve.mockResolvedValue({ kind: 'not_found', chainName: 'c', candidatesCount: 0 });
-      const result = await handleAssert({ ...baseAssert, condition: { kind: 'hidden' } }, makeCtx());
+      const result = await handleAssert(
+        { ...baseAssert, condition: { kind: 'hidden' } },
+        makeCtx(),
+      );
       expect(result.kind).toBe('completed');
     });
 
     it('returns failed when element is visible', async () => {
       mockResolve.mockResolvedValue({ kind: 'found', elementHandle: {} as never, chainName: 'c' });
-      const result = await handleAssert({ ...baseAssert, condition: { kind: 'hidden' } }, makeCtx());
+      const result = await handleAssert(
+        { ...baseAssert, condition: { kind: 'hidden' } },
+        makeCtx(),
+      );
       expect(result.kind).toBe('failed');
     });
   });

@@ -1,4 +1,4 @@
-import type { FailureClass, SecurityScope } from '@yantra/protocol';
+import type { FailureClass, SecurityScope, StepVerb } from '@yantra/protocol';
 
 /** Base class for all executor errors — carries structured run context. */
 export class ExecutorError extends Error {
@@ -64,7 +64,7 @@ export class ScopeViolationError extends ExecutorError {
   constructor(
     public readonly scopeContext: {
       readonly scope: SecurityScope;
-      readonly attemptedVerb: string;
+      readonly attemptedVerb: StepVerb;
       readonly stepId: string;
     },
     base: { readonly taskId: string; readonly runId: string; readonly stepId: string },
@@ -109,10 +109,7 @@ export class RemoteRefusedError extends ExecutorError {
     },
     base: { readonly taskId: string; readonly runId: string; readonly stepId: string },
   ) {
-    super(
-      `Remote refused with HTTP ${remoteContext.status} at "${remoteContext.host}".`,
-      base,
-    );
+    super(`Remote refused with HTTP ${remoteContext.status} at "${remoteContext.host}".`, base);
   }
 }
 
@@ -128,10 +125,7 @@ export class NavigationTimeoutError extends ExecutorError {
     },
     base: { readonly taskId: string; readonly runId: string; readonly stepId: string },
   ) {
-    super(
-      `Navigation to "${navContext.url}" timed out after ${navContext.timeoutMs}ms.`,
-      base,
-    );
+    super(`Navigation to "${navContext.url}" timed out after ${navContext.timeoutMs}ms.`, base);
   }
 }
 

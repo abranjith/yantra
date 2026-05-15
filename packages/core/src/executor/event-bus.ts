@@ -45,7 +45,7 @@ export class JsonlEventBus implements EventBus {
     if (this.closed) return;
     this.closed = true;
     await this.flush();
-    await this.fileHandle?.close().catch(() => {});
+    await this.fileHandle?.close().catch(() => undefined);
     this.fileHandle = null;
   }
 

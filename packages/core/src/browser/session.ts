@@ -31,7 +31,7 @@ function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
     },
     on(event, handler) {
       if (event === 'framenavigated') {
-        puppeteerPage.on('framenavigated', handler as (frame: unknown) => void);
+        puppeteerPage.on('framenavigated', handler);
       }
     },
   };
@@ -87,9 +87,7 @@ export class LocalBrowserSession implements BrowserSession {
     // Buffer stderr for crash diagnostics
     this.child.stderr?.on('data', (chunk: Buffer | string) => {
       const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      this.stderrBuffer = (this.stderrBuffer + text).slice(
-        -LocalBrowserSession.MAX_STDERR_BYTES,
-      );
+      this.stderrBuffer = (this.stderrBuffer + text).slice(-LocalBrowserSession.MAX_STDERR_BYTES);
     });
 
     // Chrome exited without us calling close()

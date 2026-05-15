@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const DEFAULT_USER_AGENT = 'YantraBot/0.1 (+https://yantra.dev)';
 const DEFAULT_TOKENS_PER_SECOND = 1;
@@ -39,14 +39,14 @@ export async function loadEthicsConfig(): Promise<EthicsConfig> {
 function parseEthicsConfig(raw: Record<string, unknown> | undefined): EthicsConfig {
   if (!raw) return defaultEthicsConfig;
 
-  const userAgent = typeof raw['user_agent'] === 'string' ? raw['user_agent'] : DEFAULT_USER_AGENT;
+  const userAgent = typeof raw.user_agent === 'string' ? raw.user_agent : DEFAULT_USER_AGENT;
 
-  const rateLimit = raw['rate_limit'] as Record<string, unknown> | undefined;
-  const rateLimitDefault = parseHostRateLimit(
-    rateLimit?.['default'] as Record<string, unknown> | undefined,
-  ) ?? defaultEthicsConfig.rateLimitDefault;
+  const rateLimit = raw.rate_limit as Record<string, unknown> | undefined;
+  const rateLimitDefault =
+    parseHostRateLimit(rateLimit?.default as Record<string, unknown> | undefined) ??
+    defaultEthicsConfig.rateLimitDefault;
 
-  const overridesRaw = rateLimit?.['overrides'] as Record<string, unknown> | undefined;
+  const overridesRaw = rateLimit?.overrides as Record<string, unknown> | undefined;
   const rateLimitOverrides = new Map<string, HostRateLimit>();
   if (overridesRaw) {
     for (const [host, override] of Object.entries(overridesRaw)) {
@@ -61,7 +61,7 @@ function parseEthicsConfig(raw: Record<string, unknown> | undefined): EthicsConf
 function parseHostRateLimit(raw: Record<string, unknown> | undefined): HostRateLimit | null {
   if (!raw) return null;
   const tokensPerSecond =
-    typeof raw['tokens_per_second'] === 'number' ? raw['tokens_per_second'] : DEFAULT_TOKENS_PER_SECOND;
-  const burst = typeof raw['burst'] === 'number' ? raw['burst'] : DEFAULT_BURST;
+    typeof raw.tokens_per_second === 'number' ? raw.tokens_per_second : DEFAULT_TOKENS_PER_SECOND;
+  const burst = typeof raw.burst === 'number' ? raw.burst : DEFAULT_BURST;
   return { tokensPerSecond, burst };
 }

@@ -56,7 +56,7 @@ export function generateAbsoluteXpath(el: Element): string {
   const segments: string[] = [];
   let current: Node | null = el;
 
-  while (current && current.nodeType === Node.ELEMENT_NODE) {
+  while (current?.nodeType === Node.ELEMENT_NODE) {
     const elem = current as Element;
     const tag = elem.tagName.toLowerCase();
     const index = getSiblingIndex(elem);

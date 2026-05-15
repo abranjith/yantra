@@ -9,7 +9,7 @@ import type { StepHandler, StepResult } from '../types.js';
  * `jump` result pointing the executor to the correct target step ID.
  * The executor loop handles the actual cursor move.
  */
-export const handleBranch: StepHandler<BranchStep> = async (step, ctx): Promise<StepResult> => {
+export const handleBranch: StepHandler<BranchStep> = (step, ctx): Promise<StepResult> => {
   const condition = step.condition;
 
   let branchTaken: boolean;
@@ -18,26 +18,28 @@ export const handleBranch: StepHandler<BranchStep> = async (step, ctx): Promise<
     branchTaken = true;
   } else if (condition.kind === 'capture_exists') {
     const captureRef = condition.capture;
-    branchTaken = ctx.captures.has(captureRef.step_id) &&
-      (captureRef.field === null || isCaptureFieldPresent(ctx.captures.get(captureRef.step_id), captureRef.field));
+    branchTaken =
+      ctx.captures.has(captureRef.step_id) &&
+      (captureRef.field === null ||
+        isCaptureFieldPresent(ctx.captures.get(captureRef.step_id), captureRef.field));
   } else {
-    return {
+    return Promise.resolve({
       kind: 'failed',
       failureClass: 'unexpected',
       error: new Error(`Unknown branch condition kind: ${(condition as { kind: string }).kind}`),
-    };
+    });
   }
 
   if (branchTaken) {
-    return { kind: 'jump', toStepId: step.then_step_id };
+    return Promise.resolve({ kind: 'jump', toStepId: step.then_step_id });
   }
 
   if (step.else_step_id !== null) {
-    return { kind: 'jump', toStepId: step.else_step_id };
+    return Promise.resolve({ kind: 'jump', toStepId: step.else_step_id });
   }
 
   // No else branch — continue to the next step in the plan
-  return { kind: 'completed' };
+  return Promise.resolve({ kind: 'completed' });
 };
 
 function isCaptureFieldPresent(capture: unknown, field: string): boolean {

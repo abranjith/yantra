@@ -67,12 +67,9 @@ export const LaunchOptionsSchema = z.object({
   extraArgs: z
     .array(z.string())
     .default([])
-    .refine(
-      (args) => !args.some((a) => FORBIDDEN_EXTRA_ARGS.some((f) => a.startsWith(f))),
-      {
-        message: `extraArgs must not contain: ${FORBIDDEN_EXTRA_ARGS.join(', ')} — managed by Yantra`,
-      },
-    )
+    .refine((args) => !args.some((a) => FORBIDDEN_EXTRA_ARGS.some((f) => a.startsWith(f))), {
+      message: `extraArgs must not contain: ${FORBIDDEN_EXTRA_ARGS.join(', ')} — managed by Yantra`,
+    })
     .transform((args) => args as readonly string[]),
   env: z.record(z.string(), z.string()).default({}),
   startupTimeoutMs: z.number().int().positive().default(DEFAULT_STARTUP_TIMEOUT_MS),
@@ -106,5 +103,5 @@ export function parseLaunchOptions(input: unknown): LaunchOptions {
       ],
     });
   }
-  return result.data as unknown as LaunchOptions;
+  return result.data;
 }

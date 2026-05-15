@@ -1,9 +1,5 @@
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { readdir } from 'node:fs/promises';
-
 import * as fc from 'fast-check';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import type { Logger } from '../../src/browser/types.js';
@@ -65,20 +61,17 @@ describe('@no-llm launcher property tests', () => {
 
     it('fast-check: ephemeral cleanup always removes the created path', () =>
       fc.assert(
-        fc.asyncProperty(
-          fc.constant(undefined),
-          async () => {
-            mockMkdir.mockResolvedValue(undefined as unknown as string);
-            mockRm.mockResolvedValue(undefined);
+        fc.asyncProperty(fc.constant(undefined), async () => {
+          mockMkdir.mockResolvedValue(undefined as unknown as string);
+          mockRm.mockResolvedValue(undefined);
 
-            const store = new LocalProfileStore({ logger: silentLogger });
-            const profile = await store.resolve({ kind: 'ephemeral' });
-            await store.cleanupEphemeral(profile.absolutePath);
+          const store = new LocalProfileStore({ logger: silentLogger });
+          const profile = await store.resolve({ kind: 'ephemeral' });
+          await store.cleanupEphemeral(profile.absolutePath);
 
-            const calledPaths = mockRm.mock.calls.map((c) => c[0] as string);
-            expect(calledPaths).toContain(profile.absolutePath);
-          },
-        ),
+          const calledPaths = mockRm.mock.calls.map((c) => c[0] as string);
+          expect(calledPaths).toContain(profile.absolutePath);
+        }),
         { numRuns: 50 },
       ));
   });
@@ -99,9 +92,7 @@ describe('@no-llm launcher property tests', () => {
 
             const store = new LocalProfileStore({ logger: silentLogger });
             // Must never throw regardless of error code
-            await expect(
-              store.cleanupEphemeral('/tmp/yantra-test-path'),
-            ).resolves.toBeUndefined();
+            await expect(store.cleanupEphemeral('/tmp/yantra-test-path')).resolves.toBeUndefined();
           },
         ),
         { numRuns: 30 },
@@ -116,7 +107,9 @@ describe('@no-llm launcher property tests', () => {
             .string({ minLength: 1, maxLength: 20 })
             .filter((s) => /^[a-z0-9][a-z0-9_-]{0,63}$/.test(s)),
           async (workflowName) => {
-            vi.mocked(await import('node:fs/promises').then((m) => m.access)).mockRejectedValueOnce(new Error('ENOENT'));
+            vi.mocked(await import('node:fs/promises').then((m) => m.access)).mockRejectedValueOnce(
+              new Error('ENOENT'),
+            );
             const store = new LocalProfileStore({ logger: silentLogger });
             const result = await store.resolve({ kind: 'workflow', workflowName });
             expect(result.kind).toBe('workflow');
@@ -144,5 +137,3 @@ describe('@no-llm launcher property tests', () => {
       ));
   });
 });
-
-

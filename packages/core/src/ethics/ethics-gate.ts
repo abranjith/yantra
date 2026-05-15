@@ -1,8 +1,9 @@
-import type { EthicsGate } from '../executor/types.js';
 import { EthicsRefusedError } from '../executor/errors.js';
+import type { EthicsGate } from '../executor/types.js';
+
 import type { BlocklistImpl } from './blocklist.js';
-import type { RobotsCacheImpl } from './robots.js';
 import type { RateLimiterImpl } from './rate-limiter.js';
+import type { RobotsCacheImpl } from './robots.js';
 
 /**
  * Composite ethics gate: blocklist → robots.txt → rate-limiter.

@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { BrowserLaunchError } from '../../src/browser/errors.js';
+import {
+  DEFAULT_STARTUP_TIMEOUT_MS,
+  DEFAULT_VIEWPORT,
+  parseLaunchOptions,
+} from '../../src/browser/launch-options.js';
 import { buildLaunchArgs } from '../../src/browser/launcher.js';
-import { DEFAULT_STARTUP_TIMEOUT_MS, DEFAULT_VIEWPORT, parseLaunchOptions } from '../../src/browser/launch-options.js';
 import type { ChromeInstall, ResolvedProfile } from '../../src/browser/types.js';
 
 // We snapshot the args list produced by buildLaunchArgs.
@@ -94,5 +98,3 @@ describe('@no-llm BrowserLaunchError', () => {
     expect(err.name).toBe('BrowserLaunchError');
   });
 });
-
-

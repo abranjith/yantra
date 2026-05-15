@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { ValueResolver } from '../../src/executor/value-resolver.js';
 import { InMemoryCaptureStore } from '../../src/executor/capture-store.js';
 import type { SecretResolver } from '../../src/executor/types.js';
+import { ValueResolver } from '../../src/executor/value-resolver.js';
 
 const makeCaptures = (entries: Record<string, unknown> = {}) => {
   const store = new InMemoryCaptureStore();
@@ -75,14 +75,18 @@ describe('@no-llm ValueResolver', () => {
 
     it('throws when capture step_id is missing', async () => {
       const r = new ValueResolver(makeCaptures(), {}, makeSecrets());
-      await expect(r.resolve({ kind: 'capture', step_id: 's99', field: null })).rejects.toThrow('s99');
+      await expect(r.resolve({ kind: 'capture', step_id: 's99', field: null })).rejects.toThrow(
+        's99',
+      );
     });
 
     it('throws when capture field is missing', async () => {
       const store = makeCaptures();
       store.set('s1', { a: 1 });
       const r = new ValueResolver(store, {}, makeSecrets());
-      await expect(r.resolve({ kind: 'capture', step_id: 's1', field: 'missing' })).rejects.toThrow();
+      await expect(
+        r.resolve({ kind: 'capture', step_id: 's1', field: 'missing' }),
+      ).rejects.toThrow();
     });
   });
 

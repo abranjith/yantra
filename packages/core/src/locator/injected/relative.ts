@@ -11,6 +11,7 @@
  */
 
 import type { AriaRole, RelativeRelation } from '../types.js';
+
 import { getRole } from './role.js';
 
 /**

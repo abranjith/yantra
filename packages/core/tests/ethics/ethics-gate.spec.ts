@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
-import { EthicsGateImpl } from '../../src/ethics/ethics-gate.js';
 import { BlocklistImpl } from '../../src/ethics/blocklist.js';
-import { RobotsCacheImpl } from '../../src/ethics/robots.ts';
+import { EthicsGateImpl } from '../../src/ethics/ethics-gate.js';
 import { RateLimiterImpl } from '../../src/ethics/rate-limiter.js';
+import { RobotsCacheImpl } from '../../src/ethics/robots.ts';
 import { EthicsRefusedError } from '../../src/executor/errors.js';
 import type { Clock } from '../../src/executor/types.js';
 
@@ -11,11 +11,11 @@ const fakeCtx = { taskId: 'task-1', runId: 'run-1', stepId: 'step-1' };
 
 const fakeClock: Clock = {
   now: () => 0,
-  setTimeout: (fn, ms) => {
+  setTimeout: (fn, _ms) => {
     fn();
     return 0 as unknown as ReturnType<typeof globalThis.setTimeout>;
   },
-  clearTimeout: () => {},
+  clearTimeout: () => undefined,
 };
 
 describe('@no-llm EthicsGateImpl', () => {
@@ -48,14 +48,16 @@ describe('@no-llm EthicsGateImpl', () => {
 
   it('passes for a clean URL with no restrictions', async () => {
     const gate = await makeGate();
-    await expect(gate.check('https://example.com/page', 'navigate', fakeCtx)).resolves.toBeUndefined();
+    await expect(
+      gate.check('https://example.com/page', 'navigate', fakeCtx),
+    ).resolves.toBeUndefined();
   });
 
   it('throws EthicsRefusedError for a blocklisted host', async () => {
     const gate = await makeGate();
-    await expect(
-      gate.check('https://doubleclick.net/ad', 'navigate', fakeCtx),
-    ).rejects.toThrow(EthicsRefusedError);
+    await expect(gate.check('https://doubleclick.net/ad', 'navigate', fakeCtx)).rejects.toThrow(
+      EthicsRefusedError,
+    );
   });
 
   it('blocklist error has source=blocklist', async () => {
@@ -101,13 +103,15 @@ describe('@no-llm EthicsGateImpl', () => {
 
   it('does not throw for a 404 robots.txt (fail-open per RFC 9309)', async () => {
     const gate = await makeGate(404, '');
-    await expect(gate.check('https://example.com/page', 'navigate', fakeCtx)).resolves.toBeUndefined();
+    await expect(
+      gate.check('https://example.com/page', 'navigate', fakeCtx),
+    ).resolves.toBeUndefined();
   });
 
   it('throws for a 500 robots.txt (fail-closed)', async () => {
     const gate = await makeGate(500, '');
-    await expect(
-      gate.check('https://example.com/page', 'navigate', fakeCtx),
-    ).rejects.toThrow(EthicsRefusedError);
+    await expect(gate.check('https://example.com/page', 'navigate', fakeCtx)).rejects.toThrow(
+      EthicsRefusedError,
+    );
   });
 });

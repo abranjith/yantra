@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 import { decodeIntent, encodeIntent } from '../../src/locator/intent-codec.js';
 import type { LocatorIntent } from '../../src/locator/types.js';

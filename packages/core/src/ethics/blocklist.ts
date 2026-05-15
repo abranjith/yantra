@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_BLOCKLIST_PATH = join(__dirname, 'blocklist.default.yaml');
@@ -20,12 +20,11 @@ interface BlocklistFile {
  * Hot-reloads from disk via `reload()`.
  */
 export class BlocklistImpl {
-  private rules: Array<{ label: string; pattern: (host: string) => boolean }> = [];
+  private rules: { label: string; pattern: (host: string) => boolean }[] = [];
   private userRulesPath: string;
 
   constructor(userRulesPath?: string) {
-    this.userRulesPath =
-      userRulesPath ?? join(homedir(), '.config', 'yantra', 'blocklist.yaml');
+    this.userRulesPath = userRulesPath ?? join(homedir(), '.config', 'yantra', 'blocklist.yaml');
   }
 
   /** Returns the category label if the host is blocked, null otherwise. */
@@ -56,10 +55,8 @@ export class BlocklistImpl {
   }
 }
 
-function buildRules(
-  data: BlocklistFile,
-): Array<{ label: string; pattern: (host: string) => boolean }> {
-  const rules: Array<{ label: string; pattern: (host: string) => boolean }> = [];
+function buildRules(data: BlocklistFile): { label: string; pattern: (host: string) => boolean }[] {
+  const rules: { label: string; pattern: (host: string) => boolean }[] = [];
 
   for (const [category, hosts] of Object.entries(data.categories ?? {})) {
     for (const host of hosts) {

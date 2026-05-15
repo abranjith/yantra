@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { handleBranch } from '../../../src/executor/step-handlers/branch.js';
 import { InMemoryCaptureStore } from '../../../src/executor/capture-store.js';
+import { handleBranch } from '../../../src/executor/step-handlers/branch.js';
 import type { ExecutionContext } from '../../../src/executor/types.js';
 
 const makeCtx = (captures: Record<string, unknown> = {}): ExecutionContext => {
@@ -10,7 +10,13 @@ const makeCtx = (captures: Record<string, unknown> = {}): ExecutionContext => {
   return {
     runId: 'run-1',
     taskId: 'task-1',
-    plan: { schema_version: '0.1', plan_id: 'p1', task_id: 'task-1', default_scope: 'public', steps: [] },
+    plan: {
+      schema_version: '0.1',
+      plan_id: 'p1',
+      task_id: 'task-1',
+      default_scope: 'public',
+      steps: [],
+    },
     currentStepIdx: 0,
     captures: store,
     secrets: null,
@@ -20,8 +26,20 @@ const makeCtx = (captures: Record<string, unknown> = {}): ExecutionContext => {
     browser: null,
     page: null,
     locatorHost: null,
-    events: { publish: vi.fn(), flush: vi.fn().mockResolvedValue(undefined), persistedAt: vi.fn().mockReturnValue(null), close: vi.fn().mockResolvedValue(undefined) },
-    budgets: { canRetry: vi.fn(), consume: vi.fn(), initial: vi.fn(), remaining: vi.fn(), snapshot: vi.fn(), clone: vi.fn() },
+    events: {
+      publish: vi.fn(),
+      flush: vi.fn().mockResolvedValue(undefined),
+      persistedAt: vi.fn().mockReturnValue(null),
+      close: vi.fn().mockResolvedValue(undefined),
+    },
+    budgets: {
+      canRetry: vi.fn(),
+      consume: vi.fn(),
+      initial: vi.fn(),
+      remaining: vi.fn(),
+      snapshot: vi.fn(),
+      clone: vi.fn(),
+    },
     ethics: { check: vi.fn().mockResolvedValue(undefined) },
     checkpoints: { save: vi.fn(), load: vi.fn(), list: vi.fn(), loadLast: vi.fn() },
     scopeChain: ['public'],

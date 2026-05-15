@@ -10,12 +10,6 @@ function makeElement(html: string): Element {
   return container.firstElementChild!;
 }
 
-function appendToBody(html: string): Element {
-  const el = makeElement(html);
-  document.body.appendChild(el);
-  return el;
-}
-
 describe('@no-llm getRole', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -115,25 +109,29 @@ describe('@no-llm getAccessibleName', () => {
   });
 
   it('returns aria-labelledby text', () => {
-    document.body.innerHTML = '<span id="lbl">Save</span><div role="button" aria-labelledby="lbl">ignored</div>';
+    document.body.innerHTML =
+      '<span id="lbl">Save</span><div role="button" aria-labelledby="lbl">ignored</div>';
     const btn = document.querySelector('[role="button"]')!;
     expect(getAccessibleName(btn)).toBe('Save');
   });
 
   it('aria-labelledby wins over aria-label', () => {
-    document.body.innerHTML = '<span id="lbl">From labelledby</span><button aria-labelledby="lbl" aria-label="From aria-label">X</button>';
+    document.body.innerHTML =
+      '<span id="lbl">From labelledby</span><button aria-labelledby="lbl" aria-label="From aria-label">X</button>';
     const btn = document.querySelector('button')!;
     expect(getAccessibleName(btn)).toBe('From labelledby');
   });
 
   it('aria-label wins over native label', () => {
-    document.body.innerHTML = '<label for="inp">Native label</label><input id="inp" aria-label="Override label">';
+    document.body.innerHTML =
+      '<label for="inp">Native label</label><input id="inp" aria-label="Override label">';
     const inp = document.querySelector('input')!;
     expect(getAccessibleName(inp)).toBe('Override label');
   });
 
   it('returns native label text via for/id association', () => {
-    document.body.innerHTML = '<label for="email">Email address</label><input id="email" type="text">';
+    document.body.innerHTML =
+      '<label for="email">Email address</label><input id="email" type="text">';
     const inp = document.querySelector('input')!;
     expect(getAccessibleName(inp)).toBe('Email address');
   });
@@ -144,7 +142,8 @@ describe('@no-llm getAccessibleName', () => {
   });
 
   it('concatenates multiple aria-labelledby ids', () => {
-    document.body.innerHTML = '<span id="a">First</span><span id="b">Last</span><input aria-labelledby="a b">';
+    document.body.innerHTML =
+      '<span id="a">First</span><span id="b">Last</span><input aria-labelledby="a b">';
     const inp = document.querySelector('input')!;
     expect(getAccessibleName(inp)).toBe('First Last');
   });

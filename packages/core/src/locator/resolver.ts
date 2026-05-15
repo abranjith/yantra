@@ -1,3 +1,4 @@
+import { type FrameDetachedError } from './errors.js';
 import { encodeIntent } from './intent-codec.js';
 import type {
   CandidateAttempt,
@@ -8,7 +9,6 @@ import type {
   ResolveOptions,
   ResolveResult,
 } from './types.js';
-import { FrameDetachedError } from './errors.js';
 
 const DEFAULT_CANDIDATE_TIMEOUT_MS = 5000;
 const DEFAULT_FRAME_ID = 'main';
@@ -59,19 +59,21 @@ export class LocatorResolverImpl {
       const candidateStart = Date.now();
 
       let matchCount = 0;
-      let outcome: CandidateAttempt['outcome'] = 'no_match';
+      let outcome: CandidateAttempt['outcome'];
       let errorMessage: string | undefined;
 
       try {
         const encodedIntent = encodeIntent(candidate.intent);
 
         const resolution = await Promise.race([
-          this.host.call<{ count: number; slotKey?: string }>(
-            frameId,
-            'resolveCandidate',
-            [encodedIntent, chain.strict],
+          this.host.call<{ count: number; slotKey?: string }>(frameId, 'resolveCandidate', [
+            encodedIntent,
+            chain.strict,
+          ]),
+          this.timeoutReject(
+            candidateTimeoutMs,
+            `candidate [${i}] timed out after ${candidateTimeoutMs}ms`,
           ),
-          this.timeoutReject(candidateTimeoutMs, `candidate [${i}] timed out after ${candidateTimeoutMs}ms`),
         ]);
 
         matchCount = resolution.count;
@@ -95,7 +97,7 @@ export class LocatorResolverImpl {
           );
 
           // Clear the slot
-          await this.host.call(frameId, 'clearSlot', []).catch(() => {});
+          await this.host.call(frameId, 'clearSlot', []).catch(() => undefined);
 
           const durationMs = Date.now() - startTime;
           this.emitEvent(chain, i, 'success', candidatesTried, durationMs, frameId);

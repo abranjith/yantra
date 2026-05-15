@@ -1,5 +1,4 @@
 /// <reference lib="dom" />
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 /**
  * Record-time candidate ranking algorithm.
@@ -18,10 +17,10 @@
  *   7. absolute XPath weight=0.10
  */
 
-import { generateAbsoluteXpath } from './injected/xpath.js';
 import { generateUniqueCss, isStableClassName } from './injected/css.js';
 import { getAccessibleName, getRole } from './injected/role.js';
-import type { AriaRole, CandidateRanking, LocatorIntent, RankedCandidate, RankingOptions } from './types.js';
+import { generateAbsoluteXpath } from './injected/xpath.js';
+import type { CandidateRanking, LocatorIntent, RankedCandidate, RankingOptions } from './types.js';
 
 const DEFAULT_TESTID_ATTRIBUTES = ['data-testid', 'data-test-id', 'data-qa', 'data-test'] as const;
 const DEFAULT_TOP_N = 5;
@@ -66,13 +65,13 @@ export function rankCandidates(element: Element, options: RankingOptions = {}): 
       // Exact name match scores slightly higher than regex
       candidates.push({
         intent: { kind: 'role', role, name: accessibleName, exact: true },
-        score: 0.90 * 1.05,
+        score: 0.9 * 1.05,
         rationale: `role=${role} with exact name "${accessibleName}"`,
       });
     } else {
       candidates.push({
         intent: { kind: 'role', role },
-        score: 0.90,
+        score: 0.9,
         rationale: `role=${role} without name constraint`,
       });
     }
@@ -93,7 +92,7 @@ export function rankCandidates(element: Element, options: RankingOptions = {}): 
   if (placeholder) {
     candidates.push({
       intent: { kind: 'placeholder', text: placeholder, exact: true },
-      score: 0.60,
+      score: 0.6,
       rationale: `placeholder="${placeholder}"`,
     });
   }
@@ -103,7 +102,7 @@ export function rankCandidates(element: Element, options: RankingOptions = {}): 
   if (css !== null) {
     // Score boost for selectors with multiple stable classes
     const classCount = countStableClasses(element);
-    const multiplier = classCount >= 2 ? 1.10 : 1.0;
+    const multiplier = classCount >= 2 ? 1.1 : 1.0;
     candidates.push({
       intent: { kind: 'css', selector: css },
       score: 0.45 * multiplier,
@@ -116,7 +115,7 @@ export function rankCandidates(element: Element, options: RankingOptions = {}): 
   if (relativeIntent) {
     candidates.push({
       intent: relativeIntent,
-      score: 0.30,
+      score: 0.3,
       rationale: 'relative anchor (labeled-by or sibling relationship)',
     });
   }
@@ -125,7 +124,7 @@ export function rankCandidates(element: Element, options: RankingOptions = {}): 
   const xpath = generateAbsoluteXpath(element);
   candidates.push({
     intent: { kind: 'xpath', expression: xpath },
-    score: 0.10,
+    score: 0.1,
     rationale: 'absolute XPath (last resort)',
   });
 
@@ -201,7 +200,7 @@ function buildRelativeIntent(el: Element): LocatorIntent | null {
   if (parent) {
     const labelText = (parent.textContent ?? '').trim();
     if (labelText) {
-      const anchorRole = getRole(parent) as AriaRole | null;
+      const anchorRole = getRole(parent);
       return {
         kind: 'relative',
         anchor: { kind: 'role', role: anchorRole ?? 'button', name: labelText, exact: true },

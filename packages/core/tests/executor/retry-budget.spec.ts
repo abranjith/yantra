@@ -1,15 +1,18 @@
-import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
-import { RetryBudgetImpl } from '../../src/executor/retry-budget.js';
 import { BudgetExhaustedError } from '../../src/executor/errors.js';
+import { RetryBudgetImpl } from '../../src/executor/retry-budget.js';
 
 const BASE = { taskId: 'task-1', runId: 'run-1' };
 
 describe('@no-llm RetryBudgetImpl', () => {
   describe('construction', () => {
     it('remaining equals initial on creation', () => {
-      const b = new RetryBudgetImpl({ locatorAttempts: 3, stepAttempts: 2, workflowAttempts: 1 }, BASE);
+      const b = new RetryBudgetImpl(
+        { locatorAttempts: 3, stepAttempts: 2, workflowAttempts: 1 },
+        BASE,
+      );
       expect(b.remaining.locatorAttempts).toBe(3);
       expect(b.remaining.stepAttempts).toBe(2);
       expect(b.remaining.workflowAttempts).toBe(1);
@@ -29,7 +32,10 @@ describe('@no-llm RetryBudgetImpl', () => {
     });
 
     it('canRetry returns false when tokens are zero', () => {
-      const b = new RetryBudgetImpl({ locatorAttempts: 0, stepAttempts: 0, workflowAttempts: 0 }, BASE);
+      const b = new RetryBudgetImpl(
+        { locatorAttempts: 0, stepAttempts: 0, workflowAttempts: 0 },
+        BASE,
+      );
       expect(b.canRetry('locator')).toBe(false);
     });
 
@@ -40,13 +46,19 @@ describe('@no-llm RetryBudgetImpl', () => {
     });
 
     it('consume throws BudgetExhaustedError when already at zero', () => {
-      const b = new RetryBudgetImpl({ locatorAttempts: 1, stepAttempts: 0, workflowAttempts: 0 }, BASE);
+      const b = new RetryBudgetImpl(
+        { locatorAttempts: 1, stepAttempts: 0, workflowAttempts: 0 },
+        BASE,
+      );
       b.consume('locator');
       expect(() => b.consume('locator')).toThrow(BudgetExhaustedError);
     });
 
     it('consume on one level does not affect other levels', () => {
-      const b = new RetryBudgetImpl({ locatorAttempts: 3, stepAttempts: 3, workflowAttempts: 3 }, BASE);
+      const b = new RetryBudgetImpl(
+        { locatorAttempts: 3, stepAttempts: 3, workflowAttempts: 3 },
+        BASE,
+      );
       b.consume('locator');
       expect(b.remaining.stepAttempts).toBe(3);
       expect(b.remaining.workflowAttempts).toBe(3);
@@ -55,7 +67,10 @@ describe('@no-llm RetryBudgetImpl', () => {
 
   describe('snapshot / restore', () => {
     it('snapshot captures current remaining counts', () => {
-      const b = new RetryBudgetImpl({ locatorAttempts: 3, stepAttempts: 2, workflowAttempts: 1 }, BASE);
+      const b = new RetryBudgetImpl(
+        { locatorAttempts: 3, stepAttempts: 2, workflowAttempts: 1 },
+        BASE,
+      );
       b.consume('locator');
       const snap = b.snapshot();
       expect(snap.locator).toBe(2);
@@ -78,7 +93,10 @@ describe('@no-llm RetryBudgetImpl', () => {
           fc.integer({ min: 1, max: 20 }),
           fc.integer({ min: 0, max: 20 }),
           (initial, consumes) => {
-            const b = new RetryBudgetImpl({ locatorAttempts: initial, stepAttempts: 0, workflowAttempts: 0 }, BASE);
+            const b = new RetryBudgetImpl(
+              { locatorAttempts: initial, stepAttempts: 0, workflowAttempts: 0 },
+              BASE,
+            );
             const actualConsumes = Math.min(consumes, initial);
             for (let i = 0; i < actualConsumes; i++) b.consume('locator');
             return b.remaining.locatorAttempts === initial - actualConsumes;

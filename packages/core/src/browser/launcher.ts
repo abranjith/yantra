@@ -43,7 +43,7 @@ export async function launchChrome(
       pipe: true,
       headless: opts.headless,
       userDataDir: profile.absolutePath,
-      env: { ...process.env, ...opts.env } as Record<string, string>,
+      env: { ...process.env, ...opts.env },
       dumpio: false,
       defaultViewport: opts.viewport,
     })

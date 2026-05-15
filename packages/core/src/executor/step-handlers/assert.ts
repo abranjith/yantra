@@ -1,7 +1,8 @@
 import type { AssertStep } from '@yantra/protocol';
 
-import { AssertFailedError, ExecutorLocatorNotFoundError } from '../errors.js';
+import { AssertFailedError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
+
 import { resolveLocatorChain } from './locator-helpers.js';
 
 /**

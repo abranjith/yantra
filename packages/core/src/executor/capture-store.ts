@@ -11,7 +11,7 @@ const DEFAULT_INLINE_LIMIT_BYTES = 64 * 1024; // 64 KB
 export class InMemoryCaptureStore implements CaptureStore {
   private readonly store = new Map<string, unknown>();
 
-  get(name: string): unknown | undefined {
+  get(name: string): unknown {
     return this.store.get(name);
   }
 
@@ -52,7 +52,7 @@ export class InMemoryCaptureStore implements CaptureStore {
         typeof value === 'object' &&
         value !== null &&
         '$ref' in value &&
-        typeof (value as Record<string, unknown>)['$ref'] === 'string'
+        typeof (value as Record<string, unknown>).$ref === 'string'
       ) {
         // Sidecar reference — skip inline restore (sidecar loader not needed here)
         continue;

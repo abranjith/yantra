@@ -23,9 +23,9 @@ function errorCheck(id: DoctorCheck['id'], e: unknown): DoctorCheck {
   return buildCheck(id, 'error', message, { stack });
 }
 
-async function checkChromeDetected(): Promise<DoctorCheck> {
+function checkChromeDetected(): DoctorCheck {
   try {
-    const chrome = await detectChrome();
+    const chrome = detectChrome();
     if (!chrome) {
       return buildCheck(
         'chrome.detected',
@@ -44,7 +44,7 @@ async function checkChromeDetected(): Promise<DoctorCheck> {
   }
 }
 
-async function checkChromeVersionMin(detectedCheck: DoctorCheck): Promise<DoctorCheck> {
+function checkChromeVersionMin(detectedCheck: DoctorCheck): DoctorCheck {
   try {
     if (detectedCheck.status === 'error') {
       return buildCheck(
@@ -54,9 +54,14 @@ async function checkChromeVersionMin(detectedCheck: DoctorCheck): Promise<Doctor
         {},
       );
     }
-    const chrome = await detectChrome();
+    const chrome = detectChrome();
     if (!chrome) {
-      return buildCheck('chrome.version_min', 'warn', 'Chrome not available for version check.', {});
+      return buildCheck(
+        'chrome.version_min',
+        'warn',
+        'Chrome not available for version check.',
+        {},
+      );
     }
     if (chrome.majorVersion < MIN_SUPPORTED_CHROME_MAJOR) {
       return buildCheck(
@@ -67,10 +72,15 @@ async function checkChromeVersionMin(detectedCheck: DoctorCheck): Promise<Doctor
         `Update Chrome to version ${MIN_SUPPORTED_CHROME_MAJOR} or newer.`,
       );
     }
-    return buildCheck('chrome.version_min', 'ok', `Chrome ${chrome.majorVersion} meets minimum version ${MIN_SUPPORTED_CHROME_MAJOR}.`, {
-      found: chrome.majorVersion,
-      required: MIN_SUPPORTED_CHROME_MAJOR,
-    });
+    return buildCheck(
+      'chrome.version_min',
+      'ok',
+      `Chrome ${chrome.majorVersion} meets minimum version ${MIN_SUPPORTED_CHROME_MAJOR}.`,
+      {
+        found: chrome.majorVersion,
+        required: MIN_SUPPORTED_CHROME_MAJOR,
+      },
+    );
   } catch (e) {
     return errorCheck('chrome.version_min', e);
   }
@@ -87,7 +97,9 @@ async function checkDirWritable(id: DoctorCheck['id'], dirPath: string): Promise
     }
     return buildCheck(id, 'ok', `${dirPath} is writable.`, { path: dirPath });
   } catch (e) {
-    return buildCheck(id, 'error', `${dirPath} is not writable: ${(e as Error).message}`, { path: dirPath });
+    return buildCheck(id, 'error', `${dirPath} is not writable: ${(e as Error).message}`, {
+      path: dirPath,
+    });
   }
 }
 
@@ -156,11 +168,11 @@ async function checkKeychainReachable(): Promise<DoctorCheck> {
   const probeAccount = 'probe';
   const probeValue = 'ok';
 
-  type KeytarApi = {
+  interface KeytarApi {
     setPassword(svc: string, acct: string, pass: string): Promise<void>;
     getPassword(svc: string, acct: string): Promise<string | null>;
     deletePassword(svc: string, acct: string): Promise<boolean>;
-  };
+  }
 
   try {
     // Dynamic import so that keytar unavailability returns an error check, not a crash
@@ -176,7 +188,7 @@ async function checkKeychainReachable(): Promise<DoctorCheck> {
     }
 
     // keytar is a CJS module; ESM dynamic import wraps module.exports under .default
-    const keytar = ((mod as { default?: KeytarApi }).default ?? mod) as KeytarApi;
+    const keytar = (mod as { default?: KeytarApi }).default ?? mod;
 
     await keytar.setPassword(probeService, probeAccount, probeValue);
     const readBack = await keytar.getPassword(probeService, probeAccount);
@@ -191,7 +203,12 @@ async function checkKeychainReachable(): Promise<DoctorCheck> {
       );
     }
 
-    return buildCheck('keychain.reachable', 'ok', 'Keychain is reachable (probe round-trip succeeded).', {});
+    return buildCheck(
+      'keychain.reachable',
+      'ok',
+      'Keychain is reachable (probe round-trip succeeded).',
+      {},
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return buildCheck(
@@ -211,8 +228,8 @@ function rollupOverall(checks: readonly DoctorCheck[]): DoctorReport['overall'] 
 }
 
 async function runAllChecks(): Promise<readonly DoctorCheck[]> {
-  const chromeCheck = await checkChromeDetected();
-  const versionCheck = await checkChromeVersionMin(chromeCheck);
+  const chromeCheck = checkChromeDetected();
+  const versionCheck = checkChromeVersionMin(chromeCheck);
   const dataDirCheck = await checkDirWritable('datadir.writable', dataDir());
   const dataPermsCheck = await checkDataDirPermissions();
   const cacheDirCheck = await checkDirWritable('cachedir.writable', cacheDir());

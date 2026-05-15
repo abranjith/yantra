@@ -1,12 +1,19 @@
-import type { ExtractionSchema, ExtractStep } from '@yantra/protocol';
-import { filterValidExtractionRows } from '@yantra/protocol';
+import type {
+  ExtractionResultEnvelopeUnknown,
+  ExtractionSchema,
+  ExtractStep,
+} from '@yantra/protocol';
 
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
+
 import { resolveLocatorChain } from './locator-helpers.js';
 
 export type ExtractionRow = Record<string, unknown>;
-export type ExtractionErrorRow = { __error: string; __raw: unknown };
+export interface ExtractionErrorRow {
+  __error: string;
+  __raw: unknown;
+}
 
 /**
  * Extract step handler.
@@ -46,7 +53,8 @@ export const handleExtract: StepHandler<ExtractStep> = async (step, ctx): Promis
 
   let rawData: unknown;
   try {
-    rawData = await elementHandle.evaluate(extractFromDom, step.extraction_schema);
+    const evaluated = await elementHandle.evaluate(extractFromDom, step.extraction_schema);
+    rawData = toUnknown(evaluated);
   } catch (err) {
     return {
       kind: 'failed',
@@ -92,7 +100,9 @@ function extractFromDom(el: DomEl, schema: ExtractionSchema): unknown {
   if (schema.type === 'object') {
     const obj: Record<string, unknown> = {};
     for (const [key, fieldSchema] of Object.entries(schema.fields)) {
-      const fieldEl = el.querySelector(`[data-field="${key}"], td:nth-child(${Object.keys(schema.fields).indexOf(key) + 1}), [class*="${key}"]`);
+      const fieldEl = el.querySelector(
+        `[data-field="${key}"], td:nth-child(${Object.keys(schema.fields).indexOf(key) + 1}), [class*="${key}"]`,
+      );
       obj[key] = fieldEl ? extractFromDom(fieldEl, fieldSchema) : null;
     }
     return obj;
@@ -117,11 +127,11 @@ function buildEnvelope(
   raw: unknown,
   schema: ExtractionSchema,
   captureKey: string,
-): { envelope: import('@yantra/protocol').ExtractionResultEnvelopeUnknown; captureKey: string } {
-  const rows: (unknown | ExtractionErrorRow)[] = [];
+): { envelope: ExtractionResultEnvelopeUnknown; captureKey: string } {
+  const rows: unknown[] = [];
 
   if (schema.type === 'array') {
-    const arr = Array.isArray(raw) ? raw : [raw];
+    const arr: unknown[] = Array.isArray(raw) ? raw : [raw];
     for (const item of arr) {
       if (item === null || item === undefined) {
         rows.push({ __error: 'Null or undefined row', __raw: item });
@@ -134,14 +144,11 @@ function buildEnvelope(
   }
 
   const validRows = rows.filter(
-    (r) =>
-      typeof r !== 'object' ||
-      r === null ||
-      !('__error' in (r as Record<string, unknown>)),
+    (r) => typeof r !== 'object' || r === null || !('__error' in (r as Record<string, unknown>)),
   );
   const errorCount = rows.length - validRows.length;
 
-  const envelope: import('@yantra/protocol').ExtractionResultEnvelopeUnknown = {
+  const envelope: ExtractionResultEnvelopeUnknown = {
     rows,
     metadata: {
       total_rows: rows.length,
@@ -151,4 +158,8 @@ function buildEnvelope(
   };
 
   return { envelope, captureKey };
+}
+
+function toUnknown(value: unknown): unknown {
+  return value;
 }

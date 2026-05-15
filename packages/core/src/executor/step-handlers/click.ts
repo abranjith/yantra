@@ -2,6 +2,7 @@ import type { ClickStep } from '@yantra/protocol';
 
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
+
 import { resolveLocatorChain } from './locator-helpers.js';
 
 /**
@@ -28,7 +29,11 @@ export const handleClick: StepHandler<ClickStep> = async (step, ctx): Promise<St
       { taskId: ctx.taskId, runId: ctx.runId, stepId: step.id },
     );
     if (ctx.budgets.canRetry('step')) {
-      return { kind: 'retried', attempt: 1, reason: 'Locator chain exhausted — DOM may have re-rendered' };
+      return {
+        kind: 'retried',
+        attempt: 1,
+        reason: 'Locator chain exhausted — DOM may have re-rendered',
+      };
     }
     return { kind: 'failed', failureClass: 'locator_not_found', error: locErr };
   }

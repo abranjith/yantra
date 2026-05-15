@@ -1,5 +1,5 @@
-import type { LLMSummarizeStep, UsageCall } from '@yantra/protocol';
-import { filterValidExtractionRows, isExtractionErrorRow } from '@yantra/protocol';
+import type { LLMSummarizeStep } from '@yantra/protocol';
+import { isExtractionErrorRow } from '@yantra/protocol';
 
 import type { StepHandler, StepResult } from '../types.js';
 
@@ -23,7 +23,7 @@ export const handleLlmSummarize: StepHandler<LLMSummarizeStep> = async (
       failureClass: 'unexpected',
       error: new Error(
         `llm_summarize step "${step.id}" requires FEAT-006 (Sanitizer) + FEAT-011 (LLMClient). ` +
-        'Set LLM_PROVIDER=none to use the rule-based path.',
+          'Set LLM_PROVIDER=none to use the rule-based path.',
       ),
     };
   }
@@ -34,7 +34,9 @@ export const handleLlmSummarize: StepHandler<LLMSummarizeStep> = async (
     return {
       kind: 'failed',
       failureClass: 'unexpected',
-      error: new Error(`llm_summarize step "${step.id}": capture "${step.input.step_id}" not found.`),
+      error: new Error(
+        `llm_summarize step "${step.id}": capture "${step.input.step_id}" not found.`,
+      ),
     };
   }
 
@@ -55,7 +57,6 @@ export const handleLlmSummarize: StepHandler<LLMSummarizeStep> = async (
   const sanitized = ctx.sanitizer.sanitize(inputPayload, effectiveScope);
 
   // Call LLM
-  const callStart = ctx.clock.now();
   let llmResult: Awaited<ReturnType<NonNullable<typeof ctx.llmClient>['summarize']>>;
   try {
     llmResult = await ctx.llmClient.summarize(sanitized, step.prompt);
@@ -66,8 +67,6 @@ export const handleLlmSummarize: StepHandler<LLMSummarizeStep> = async (
       error: err instanceof Error ? err : new Error(String(err)),
     };
   }
-  const latencyMs = ctx.clock.now() - callStart;
-
   // Store the summarized text
   ctx.captures.set(step.output_as, llmResult.text);
 

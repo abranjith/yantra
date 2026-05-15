@@ -52,10 +52,8 @@ export const handleLoop: StepHandler<LoopStep> = async (step, ctx): Promise<Step
     if (!stepIdxMap.has(bodyStepId)) {
       return {
         kind: 'failed',
-        failureClass: 'validation_error' as import('@yantra/protocol').FailureClass,
-        error: new Error(
-          `Loop step "${step.id}": body step ID "${bodyStepId}" not found in plan.`,
-        ),
+        failureClass: 'validation_error',
+        error: new Error(`Loop step "${step.id}": body step ID "${bodyStepId}" not found in plan.`),
       };
     }
   }
@@ -82,8 +80,7 @@ export const handleLoop: StepHandler<LoopStep> = async (step, ctx): Promise<Step
         };
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await handler(bodyStep as any, ctx);
+      const result = await handler(bodyStep, ctx);
       if (result.kind !== 'completed') {
         return result; // Propagate failure/handoff/jump out of loop
       }
@@ -93,10 +90,7 @@ export const handleLoop: StepHandler<LoopStep> = async (step, ctx): Promise<Step
   return { kind: 'completed' };
 };
 
-function resolveCollection(
-  over: LoopStep['over'],
-  ctx: ExecutionContext,
-): unknown {
+function resolveCollection(over: LoopStep['over'], ctx: ExecutionContext): unknown {
   if (over.kind === 'capture') {
     const raw = ctx.captures.get(over.step_id);
     if (raw === undefined) {

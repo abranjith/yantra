@@ -1,8 +1,9 @@
-import type { FillStep, SecretRef } from '@yantra/protocol';
+import type { FillStep } from '@yantra/protocol';
 
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
+
 import { resolveLocatorChain } from './locator-helpers.js';
 
 /**
@@ -28,7 +29,11 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
       { taskId: ctx.taskId, runId: ctx.runId, stepId: step.id },
     );
     if (ctx.budgets.canRetry('step')) {
-      return { kind: 'retried', attempt: 1, reason: 'Locator chain exhausted — DOM may have re-rendered' };
+      return {
+        kind: 'retried',
+        attempt: 1,
+        reason: 'Locator chain exhausted — DOM may have re-rendered',
+      };
     }
     return { kind: 'failed', failureClass: 'locator_not_found', error: locErr };
   }
@@ -44,7 +49,7 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
   try {
     if (step.value.kind === 'secret') {
       const resolved = await new ValueResolver(ctx.captures, {}, ctx.secrets).resolveSecret(
-        step.value as SecretRef,
+        step.value,
       );
       plaintext = resolved.plaintext;
       zeroSecret = resolved.zero;
@@ -77,8 +82,6 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
   } finally {
     // Zero the secret reference immediately after use (best-effort)
     zeroSecret?.();
-    // Ensure plaintext goes out of scope
-    plaintext = '';
   }
 
   // Return completed with no value in the event — type system enforces this

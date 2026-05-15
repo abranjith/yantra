@@ -1,4 +1,5 @@
 import type { ElementHandle } from 'puppeteer-core';
+
 import { HitTargetInterceptedError } from './errors.js';
 import type { HitTargetCheckResult, InjectedScriptHost } from './types.js';
 

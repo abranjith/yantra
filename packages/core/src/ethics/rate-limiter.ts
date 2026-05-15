@@ -1,4 +1,5 @@
 import type { Clock } from '../executor/types.js';
+
 import type { HostRateLimit } from './config.js';
 
 /**
@@ -76,8 +77,8 @@ class TokenBucket {
 function sleep(ms: number, clock: Clock): Promise<void> {
   return new Promise((resolve) => {
     const handle = clock.setTimeout(resolve, ms);
-    if (typeof (handle as NodeJS.Timeout).unref === 'function') {
-      (handle as NodeJS.Timeout).unref();
+    if (typeof handle.unref === 'function') {
+      handle.unref();
     }
   });
 }

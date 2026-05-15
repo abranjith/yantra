@@ -1,5 +1,5 @@
-import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 
 import type { Plan } from '@yantra/protocol';
 
@@ -11,6 +11,7 @@ import { JsonlEventBus } from './event-bus.js';
 import { RetryBudgetImpl } from './retry-budget.js';
 import { buildScopeChain } from './scope-enforcer.js';
 import type {
+  CaptureSnapshot,
   CaptureStore,
   CheckpointStore,
   Clock,
@@ -108,7 +109,7 @@ export function restoreExecutionContext(
   base: ExecutionContext,
   snapshot: {
     readonly after_step_idx: number;
-    readonly captures: import('./types.js').CaptureSnapshot;
+    readonly captures: CaptureSnapshot;
     readonly budgets: { locator: number; step: number; workflow: number };
   },
 ): ExecutionContext {

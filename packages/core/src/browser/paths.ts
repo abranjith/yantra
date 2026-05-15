@@ -9,10 +9,10 @@ import { join } from 'node:path';
  */
 export function dataDir(): string {
   if (process.platform === 'win32') {
-    const base = process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local');
+    const base = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
     return join(base, 'yantra');
   }
-  const xdg = process.env['XDG_DATA_HOME'];
+  const xdg = process.env.XDG_DATA_HOME;
   if (xdg) return join(xdg, 'yantra');
   return join(homedir(), '.local', 'share', 'yantra');
 }
@@ -25,10 +25,10 @@ export function dataDir(): string {
  */
 export function cacheDir(): string {
   if (process.platform === 'win32') {
-    const base = process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local');
+    const base = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
     return join(base, 'yantra', 'Cache');
   }
-  const xdg = process.env['XDG_CACHE_HOME'];
+  const xdg = process.env.XDG_CACHE_HOME;
   if (xdg) return join(xdg, 'yantra');
   return join(homedir(), '.cache', 'yantra');
 }

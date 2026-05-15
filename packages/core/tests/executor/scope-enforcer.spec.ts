@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import fc from 'fast-check';
-
-import { checkScopeViolations, buildScopeChain } from '../../src/executor/scope-enforcer.js';
-import { ScopeViolationError } from '../../src/executor/errors.js';
 import type { Plan } from '@yantra/protocol';
 import { ALLOWED_VERBS_BY_SCOPE } from '@yantra/protocol';
+import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
+import { ScopeViolationError } from '../../src/executor/errors.js';
+import { checkScopeViolations, buildScopeChain } from '../../src/executor/scope-enforcer.js';
 
 const BASE_PLAN: Plan = {
   schema_version: '0.1',
@@ -14,14 +14,20 @@ const BASE_PLAN: Plan = {
   steps: [],
 };
 
-const makeNavigateStep = (id: string, scope: 'public' | 'read-only-data' | 'authenticated' = 'public') => ({
+const makeNavigateStep = (
+  id: string,
+  scope: 'public' | 'read-only-data' | 'authenticated' = 'public',
+) => ({
   type: 'navigate' as const,
   id,
   url: { kind: 'literal' as const, value: 'https://example.com' },
   scope,
 });
 
-const makeClickStep = (id: string, scope: 'public' | 'read-only-data' | 'authenticated' = 'authenticated') => ({
+const makeClickStep = (
+  id: string,
+  scope: 'public' | 'read-only-data' | 'authenticated' = 'authenticated',
+) => ({
   type: 'click' as const,
   id,
   locator: { kind: 'recorded' as const, step_index: 0 },
@@ -102,10 +108,7 @@ describe('@no-llm buildScopeChain', () => {
   it('each chain entry matches the corresponding step scope', () => {
     const plan: Plan = {
       ...BASE_PLAN,
-      steps: [
-        makeNavigateStep('s1', 'public'),
-        makeClickStep('s2', 'authenticated'),
-      ],
+      steps: [makeNavigateStep('s1', 'public'), makeClickStep('s2', 'authenticated')],
     };
     const chain = buildScopeChain(plan);
     expect(chain[0]).toBe('public');

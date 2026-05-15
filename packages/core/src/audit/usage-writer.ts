@@ -1,5 +1,5 @@
-import { appendFile, mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import type { UsageCall, UsageLedger } from '@yantra/protocol';
 
@@ -21,10 +21,11 @@ export class FileUsageWriter implements UsageWriter {
 
   constructor(private readonly runDir: string) {}
 
-  async append(call: UsageCall): Promise<void> {
-    if (this.closed) return;
+  append(call: UsageCall): Promise<void> {
+    if (this.closed) return Promise.resolve();
     this.calls.push(call);
     this.scheduleFlush();
+    return Promise.resolve();
   }
 
   async close(): Promise<void> {
@@ -71,9 +72,8 @@ function computeTotals(calls: UsageCall[]): UsageLedger['totals'] {
   const call_count = calls.length;
 
   const costValues = calls.map((c) => c.cost_estimate_usd).filter((v): v is number => v !== null);
-  const cost_estimate_usd = costValues.length === calls.length
-    ? costValues.reduce((sum, v) => sum + v, 0)
-    : null;
+  const cost_estimate_usd =
+    costValues.length === calls.length ? costValues.reduce((sum, v) => sum + v, 0) : null;
 
   return { input_tokens, output_tokens, cost_estimate_usd, call_count };
 }

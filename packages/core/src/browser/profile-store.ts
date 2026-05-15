@@ -1,7 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { access, chmod, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
 
 import { ProfilePathRefusedError } from './errors.js';
 import { dataDir, ephemeralRoot } from './paths.js';
@@ -31,13 +31,10 @@ function forbiddenProfileRoots(): readonly string[] {
     join(home, '.config', 'chromium'),
   ];
 
-  const localAppData = process.env['LOCALAPPDATA'];
+  const localAppData = process.env.LOCALAPPDATA;
   if (localAppData || process.platform === 'win32') {
     const base = localAppData ?? join(home, 'AppData', 'Local');
-    roots.push(
-      join(base, 'Google', 'Chrome', 'User Data'),
-      join(base, 'Chromium', 'User Data'),
-    );
+    roots.push(join(base, 'Google', 'Chrome', 'User Data'), join(base, 'Chromium', 'User Data'));
   }
 
   return roots;
@@ -50,7 +47,11 @@ function assertNotInsideRealChromeProfile(p: string): void {
   const resolved = resolve(p);
   for (const root of forbiddenProfileRoots()) {
     const resolvedRoot = resolve(root);
-    if (resolved === resolvedRoot || resolved.startsWith(resolvedRoot + '/') || resolved.startsWith(resolvedRoot + '\\')) {
+    if (
+      resolved === resolvedRoot ||
+      resolved.startsWith(resolvedRoot + '/') ||
+      resolved.startsWith(resolvedRoot + '\\')
+    ) {
       throw new ProfilePathRefusedError({
         path: p,
         reason: `Path is inside a real Chrome profile dir (${root}). Yantra refuses to write there to protect your browser data.`,
@@ -131,7 +132,10 @@ export class LocalProfileStore implements ProfileStore {
         await access(targetPath);
         const info = await stat(targetPath);
         if (!info.isDirectory()) {
-          throw new ProfilePathRefusedError({ path: targetPath, reason: 'Path is not a directory' });
+          throw new ProfilePathRefusedError({
+            path: targetPath,
+            reason: 'Path is not a directory',
+          });
         }
 
         if (process.platform !== 'win32') {

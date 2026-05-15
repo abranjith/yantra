@@ -2,10 +2,15 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as chromeDiscovery from '../../src/browser/chrome-discovery.js';
 import { ChromeNotFoundError, ChromeVersionUnsupportedError } from '../../src/browser/errors.js';
-import * as launcher from '../../src/browser/launcher.js';
 import { MIN_SUPPORTED_CHROME_MAJOR } from '../../src/browser/launch-options.js';
+import * as launcher from '../../src/browser/launcher.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
-import type { ChromeInstall, Logger, ProfileStore, ResolvedProfile } from '../../src/browser/types.js';
+import type {
+  ChromeInstall,
+  Logger,
+  ProfileStore,
+  ResolvedProfile,
+} from '../../src/browser/types.js';
 
 vi.mock('../../src/browser/chrome-discovery.js', () => ({
   detectChrome: vi.fn(),
@@ -75,18 +80,18 @@ describe('@no-llm LocalBrowserProvider', () => {
     mockDetectChrome.mockResolvedValue(null);
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
 
-    await expect(
-      provider.launch({ profile: { kind: 'ephemeral' } }),
-    ).rejects.toThrow(ChromeNotFoundError);
+    await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toThrow(
+      ChromeNotFoundError,
+    );
   });
 
   it('throws ChromeVersionUnsupportedError when Chrome version is too old', async () => {
     mockDetectChrome.mockResolvedValue(makeChrome(MIN_SUPPORTED_CHROME_MAJOR - 1));
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
 
-    await expect(
-      provider.launch({ profile: { kind: 'ephemeral' } }),
-    ).rejects.toThrow(ChromeVersionUnsupportedError);
+    await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toThrow(
+      ChromeVersionUnsupportedError,
+    );
   });
 
   it('throws ChromeVersionUnsupportedError with correct found/required context', async () => {
@@ -117,7 +122,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('does not log full args at info level', async () => {
-    const logs: Array<{ level: string; msg: string }> = [];
+    const logs: { level: string; msg: string }[] = [];
     const testLogger: Logger = {
       info: (_, msg) => logs.push({ level: 'info', msg: msg ?? '' }),
       warn: (_, msg) => logs.push({ level: 'warn', msg: msg ?? '' }),
@@ -197,5 +202,3 @@ describe('@no-llm LocalBrowserProvider', () => {
     expect(mockDetectChrome as Mock).toHaveBeenCalledWith({ override: undefined });
   });
 });
-
-

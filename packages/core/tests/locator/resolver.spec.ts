@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { ElementHandle } from 'puppeteer-core';
+import { describe, expect, it, vi } from 'vitest';
 
 import { LocatorResolverImpl } from '../../src/locator/resolver.js';
 import type {
@@ -29,9 +29,7 @@ function makeCssCandidate(selector = 'button'): EngineLocatorCandidate {
   return { intent: { kind: 'css', selector }, source: 'authored' };
 }
 
-function makeHost(
-  overrides: Partial<InjectedScriptHost> = {},
-): InjectedScriptHost {
+function makeHost(overrides: Partial<InjectedScriptHost> = {}): InjectedScriptHost {
   return {
     ensureInjected: vi.fn().mockResolvedValue(undefined),
     call: vi.fn().mockResolvedValue({ count: 0 }),
@@ -64,10 +62,11 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
 
   it('falls through to candidate 1 when candidate 0 has no match', async () => {
     const handle = makeFakeHandle();
-    const callMock = vi.fn()
-      .mockResolvedValueOnce({ count: 0 })   // candidate 0 misses
-      .mockResolvedValueOnce({ count: 1, slotKey: 'default' })  // candidate 1 wins
-      .mockResolvedValue(undefined);  // clearSlot
+    const callMock = vi
+      .fn()
+      .mockResolvedValueOnce({ count: 0 }) // candidate 0 misses
+      .mockResolvedValueOnce({ count: 1, slotKey: 'default' }) // candidate 1 wins
+      .mockResolvedValue(undefined); // clearSlot
 
     const host = makeHost({
       call: callMock,
@@ -75,10 +74,7 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
     });
 
     const resolver = new LocatorResolverImpl(host);
-    const chain = makeChain([
-      makeCssCandidate('.nonexistent'),
-      makeCssCandidate('button'),
-    ]);
+    const chain = makeChain([makeCssCandidate('.nonexistent'), makeCssCandidate('button')]);
 
     const result = await resolver.resolve(chain);
 
@@ -97,10 +93,7 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
     });
 
     const resolver = new LocatorResolverImpl(host);
-    const chain = makeChain([
-      makeCssCandidate('.miss1'),
-      makeCssCandidate('.miss2'),
-    ]);
+    const chain = makeChain([makeCssCandidate('.miss1'), makeCssCandidate('.miss2')]);
 
     const result = await resolver.resolve(chain);
 
@@ -112,15 +105,14 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
   });
 
   it('returns ambiguous when strict mode and count > 1, and stops walking', async () => {
-    const callMock = vi.fn()
-      .mockResolvedValueOnce({ count: 3 });  // first candidate returns 3 matches
+    const callMock = vi.fn().mockResolvedValueOnce({ count: 3 }); // first candidate returns 3 matches
 
     const host = makeHost({ call: callMock });
     const resolver = new LocatorResolverImpl(host);
-    const chain = makeChain([
-      makeCssCandidate('.ambiguous'),
-      makeCssCandidate('.would-not-be-tried'),
-    ], { strict: true });
+    const chain = makeChain(
+      [makeCssCandidate('.ambiguous'), makeCssCandidate('.would-not-be-tried')],
+      { strict: true },
+    );
 
     const result = await resolver.resolve(chain);
 
@@ -158,9 +150,10 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
     const handle = makeFakeHandle();
     // First candidate takes longer than timeout (we'll not actually wait — mock rejection)
     const timeoutError = new Error('candidate [0] timed out after 5000ms');
-    const callMock = vi.fn()
-      .mockRejectedValueOnce(timeoutError)     // candidate 0 times out
-      .mockResolvedValueOnce({ count: 1, slotKey: 'default' })  // candidate 1 succeeds
+    const callMock = vi
+      .fn()
+      .mockRejectedValueOnce(timeoutError) // candidate 0 times out
+      .mockResolvedValueOnce({ count: 1, slotKey: 'default' }) // candidate 1 succeeds
       .mockResolvedValue(undefined);
 
     const host = makeHost({

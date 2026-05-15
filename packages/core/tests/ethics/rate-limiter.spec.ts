@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { RateLimiterImpl } from '../../src/ethics/rate-limiter.js';
 import type { Clock } from '../../src/executor/types.js';
 
 function makeClock(startMs = 0): { clock: Clock; advance: (ms: number) => void } {
   let now = startMs;
-  const timers: Map<number, { fn: () => void; fireAt: number }> = new Map();
+  const timers = new Map<number, { fn: () => void; fireAt: number }>();
   let idCounter = 1;
 
   const advance = (ms: number) => {
@@ -36,11 +36,7 @@ function makeClock(startMs = 0): { clock: Clock; advance: (ms: number) => void }
 describe('@no-llm RateLimiterImpl', () => {
   it('returns a wait of 0 when burst tokens are available', async () => {
     const { clock } = makeClock();
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 2 },
-      new Map(),
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 2 }, new Map(), clock);
 
     const wait = await limiter.acquire('example.com');
     expect(wait).toBe(0);
@@ -48,11 +44,7 @@ describe('@no-llm RateLimiterImpl', () => {
 
   it('drains burst tokens without waiting', async () => {
     const { clock } = makeClock();
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 2 },
-      new Map(),
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 2 }, new Map(), clock);
 
     const w1 = await limiter.acquire('example.com');
     const w2 = await limiter.acquire('example.com');
@@ -62,11 +54,7 @@ describe('@no-llm RateLimiterImpl', () => {
 
   it('waits after burst is exhausted and token refills', async () => {
     const { clock, advance } = makeClock();
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 1 },
-      new Map(),
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 1 }, new Map(), clock);
 
     // Consume the 1 burst token immediately
     await limiter.acquire('example.com');
@@ -81,11 +69,7 @@ describe('@no-llm RateLimiterImpl', () => {
   it('uses per-host override budget', async () => {
     const { clock } = makeClock();
     const overrides = new Map([['fast.com', { tokensPerSecond: 10, burst: 5 }]]);
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 1 },
-      overrides,
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 1 }, overrides, clock);
 
     expect(limiter.budgetFor('fast.com')).toEqual({ tokensPerSecond: 10, burst: 5 });
     expect(limiter.budgetFor('slow.com')).toEqual({ tokensPerSecond: 1, burst: 1 });
@@ -93,11 +77,7 @@ describe('@no-llm RateLimiterImpl', () => {
 
   it('maintains separate buckets per host', async () => {
     const { clock } = makeClock();
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 1 },
-      new Map(),
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 1 }, new Map(), clock);
 
     // Exhaust host A's bucket
     await limiter.acquire('a.com');
@@ -109,11 +89,7 @@ describe('@no-llm RateLimiterImpl', () => {
 
   it('does not refill beyond burst capacity', async () => {
     const { clock, advance } = makeClock();
-    const limiter = new RateLimiterImpl(
-      { tokensPerSecond: 1, burst: 2 },
-      new Map(),
-      clock,
-    );
+    const limiter = new RateLimiterImpl({ tokensPerSecond: 1, burst: 2 }, new Map(), clock);
 
     // Wait a very long time — tokens should cap at burst=2
     advance(10_000);

@@ -1,7 +1,7 @@
-import type { NavigateStep } from '@yantra/protocol';
+import type { FailureClass, NavigateStep } from '@yantra/protocol';
 
 import { EthicsRefusedError, NavigationTimeoutError, RemoteRefusedError } from '../errors.js';
-import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
+import type { StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
 
 const DEFAULT_NAV_TIMEOUT_MS = 30_000;
@@ -14,18 +14,22 @@ const DEFAULT_NAV_TIMEOUT_MS = 30_000;
  * Redirect checking is enforced when `allow_redirect` is not set.
  */
 export const handleNavigate: StepHandler<NavigateStep> = async (step, ctx): Promise<StepResult> => {
-  const resolver = new ValueResolver(ctx.captures, getParams(ctx), ctx.secrets);
+  const resolver = new ValueResolver(ctx.captures, getParams(), ctx.secrets);
 
   let resolvedUrl: string;
   try {
     resolvedUrl = await resolver.resolveToString(step.url);
   } catch (err) {
-    return fail(ctx, 'unexpected', err);
+    return fail('unexpected', err);
   }
 
   // Ethics gate — non-bypassable, always first
   try {
-    await ctx.ethics.check(resolvedUrl, 'navigate', { taskId: ctx.taskId, runId: ctx.runId, stepId: step.id });
+    await ctx.ethics.check(resolvedUrl, 'navigate', {
+      taskId: ctx.taskId,
+      runId: ctx.runId,
+      stepId: step.id,
+    });
   } catch (err) {
     if (err instanceof EthicsRefusedError) {
       return {
@@ -35,11 +39,11 @@ export const handleNavigate: StepHandler<NavigateStep> = async (step, ctx): Prom
         reason: err.ethicsContext.reason,
       };
     }
-    return fail(ctx, 'ethics_refused', err);
+    return fail('ethics_refused', err);
   }
 
   if (!ctx.page) {
-    return fail(ctx, 'unexpected', new Error('No active page in ExecutionContext.'));
+    return fail('unexpected', new Error('No active page in ExecutionContext.'));
   }
 
   const host = extractHost(resolvedUrl);
@@ -53,13 +57,20 @@ export const handleNavigate: StepHandler<NavigateStep> = async (step, ctx): Prom
       const status = (response as { status(): number }).status();
       if (status === 429 || status === 403 || status === 451) {
         const retryAfterMs = extractRetryAfter(response);
-        const remoteContext: { readonly status: number; readonly host: string; readonly url: string; readonly retryAfterMs?: number } = retryAfterMs !== undefined
-          ? { status, host, url: resolvedUrl, retryAfterMs }
-          : { status, host, url: resolvedUrl };
-        const remoteErr = new RemoteRefusedError(
-          remoteContext,
-          { taskId: ctx.taskId, runId: ctx.runId, stepId: step.id },
-        );
+        const remoteContext: {
+          readonly status: number;
+          readonly host: string;
+          readonly url: string;
+          readonly retryAfterMs?: number;
+        } =
+          retryAfterMs !== undefined
+            ? { status, host, url: resolvedUrl, retryAfterMs }
+            : { status, host, url: resolvedUrl };
+        const remoteErr = new RemoteRefusedError(remoteContext, {
+          taskId: ctx.taskId,
+          runId: ctx.runId,
+          stepId: step.id,
+        });
         if (status === 429 && retryAfterMs !== undefined) {
           return { kind: 'retried', attempt: 1, reason: `HTTP 429 Retry-After: ${retryAfterMs}ms` };
         }
@@ -74,22 +85,18 @@ export const handleNavigate: StepHandler<NavigateStep> = async (step, ctx): Prom
       );
       return { kind: 'failed', failureClass: navErr.failureClass, error: navErr };
     }
-    return fail(ctx, 'unexpected', err);
+    return fail('unexpected', err);
   }
 
   return { kind: 'completed' };
 };
 
-function fail(
-  ctx: ExecutionContext,
-  failureClass: import('@yantra/protocol').FailureClass,
-  err: unknown,
-): StepResult {
+function fail(failureClass: FailureClass, err: unknown): StepResult {
   const error = err instanceof Error ? err : new Error(String(err));
   return { kind: 'failed', failureClass, error };
 }
 
-function getParams(ctx: ExecutionContext): Record<string, unknown> {
+function getParams(): Record<string, unknown> {
   // Params are embedded in plan metadata — for MVP, use empty params
   // FEAT-010 / FEAT-012 will wire actual task params via ExecutionContext
   return {};

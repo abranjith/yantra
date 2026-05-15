@@ -1,4 +1,11 @@
-import type { CaptureRef, LiteralValue, ParamRef, SecretRef, TemplateRef, ValueRef } from '@yantra/protocol';
+import type {
+  CaptureRef,
+  LiteralValue,
+  ParamRef,
+  SecretRef,
+  TemplateRef,
+  ValueRef,
+} from '@yantra/protocol';
 
 import type { CaptureStore, ResolvedSecret, SecretResolver } from './types.js';
 
@@ -45,7 +52,7 @@ export class ValueResolver {
     if (!this.secretResolver) {
       throw new Error(
         `SecretResolver is not configured. Cannot resolve secret "${ref.key}". ` +
-        'Wire FEAT-006 SecretResolver to enable secret resolution.',
+          'Wire FEAT-006 SecretResolver to enable secret resolution.',
       );
     }
     const plaintext = await this.secretResolver.resolve(ref);
@@ -70,11 +77,11 @@ export class ValueResolver {
     if (ref.kind === 'secret') {
       throw new Error(
         'Secret references cannot be coerced to strings via resolveToString(). ' +
-        'Use resolveSecret() at fill step boundaries only.',
+          'Use resolveSecret() at fill step boundaries only.',
       );
     }
     const value = await this.resolve(ref);
-    return String(value ?? '');
+    return valueToString(value);
   }
 
   private async resolveTemplate(ref: TemplateRef): Promise<string> {
@@ -83,15 +90,28 @@ export class ValueResolver {
       if (bindingRef.kind === 'secret') {
         throw new Error(
           `Secret bindings ("${placeholder}") are not allowed in template refs. ` +
-          'Secrets may only appear as direct step values in fill steps.',
+            'Secrets may only appear as direct step values in fill steps.',
         );
       }
       const value = await this.resolve(bindingRef);
-      result = result.replaceAll(`{{${placeholder}}}`, String(value ?? ''));
+      result = result.replaceAll(`{{${placeholder}}}`, valueToString(value));
     }
     // Resolve any remaining literal-style {{placeholder}} patterns that weren't in bindings
     result = result.replace(TEMPLATE_PLACEHOLDER_RE, '');
     return result;
+  }
+}
+
+function valueToString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (value === null || value === undefined) return '';
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return '';
   }
 }
 
@@ -115,7 +135,9 @@ function resolveCapture(ref: CaptureRef, captures: CaptureStore): unknown {
     return envelope;
   }
   if (typeof envelope !== 'object' || envelope === null) {
-    throw new Error(`Capture step "${ref.step_id}" is not an object; cannot access field "${ref.field}".`);
+    throw new Error(
+      `Capture step "${ref.step_id}" is not an object; cannot access field "${ref.field}".`,
+    );
   }
   const record = envelope as Record<string, unknown>;
   if (!(ref.field in record)) {

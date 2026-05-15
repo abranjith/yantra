@@ -2,6 +2,7 @@ import type { WaitForStep } from '@yantra/protocol';
 
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
+
 import { resolveLocatorChain } from './locator-helpers.js';
 
 /**
@@ -61,7 +62,10 @@ export const handleWaitFor: StepHandler<WaitForStep> = async (step, ctx): Promis
   };
 };
 
-function sleep(ms: number, clock: { setTimeout: (fn: () => void, ms: number) => unknown }): Promise<void> {
+function sleep(
+  ms: number,
+  clock: { setTimeout: (fn: () => void, ms: number) => unknown },
+): Promise<void> {
   return new Promise((resolve) => {
     const handle = clock.setTimeout(resolve, ms);
     if (typeof (handle as NodeJS.Timeout).unref === 'function') {

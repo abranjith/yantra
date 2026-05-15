@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { ElementHandle } from 'puppeteer-core';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { resolveActionable } from '../../src/locator/auto-wait.js';
 import {
@@ -37,11 +37,13 @@ function makeActionableState(overrides: Partial<ActionableState> = {}): Actionab
 }
 
 /** Creates a host that returns a successful resolve after `afterCallN` calls. */
-function makeHost(opts: {
-  resolveResults?: Array<{ count: number; slotKey?: string }>;
-  actionableStates?: ActionableState[];
-  handle?: ElementHandle | null;
-} = {}): InjectedScriptHost {
+function makeHost(
+  opts: {
+    resolveResults?: { count: number; slotKey?: string }[];
+    actionableStates?: ActionableState[];
+    handle?: ElementHandle | null;
+  } = {},
+): InjectedScriptHost {
   const resolveResults = opts.resolveResults ?? [{ count: 1, slotKey: 'default' }];
   const actionableStates = opts.actionableStates ?? [makeActionableState()];
   const handle = opts.handle ?? makeFakeHandle();
@@ -58,7 +60,8 @@ function makeHost(opts: {
         return result;
       }
       if (fn === 'checkActionableState') {
-        const state = actionableStates[actionableIdx] ?? actionableStates.at(-1) ?? makeActionableState();
+        const state =
+          actionableStates[actionableIdx] ?? actionableStates.at(-1) ?? makeActionableState();
         actionableIdx++;
         return state;
       }
@@ -99,14 +102,14 @@ describe('@no-llm resolveActionable', () => {
 
   it('throws LocatorAmbiguousError immediately when candidate is ambiguous', async () => {
     const host = makeHost({
-      resolveResults: [{ count: 3 }],  // ambiguous
+      resolveResults: [{ count: 3 }], // ambiguous
     });
     const chain = makeChain();
 
     const resultPromise = resolveActionable(chain, host, { timeoutMs: 5000 });
     // Suppress the unhandled-rejection warning that Node.js emits while timers run
     // before we attach the .rejects handler below.
-    void resultPromise.catch(() => {});
+    void resultPromise.catch(() => undefined);
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).rejects.toThrow(LocatorAmbiguousError);
@@ -124,7 +127,7 @@ describe('@no-llm resolveActionable', () => {
     const chain = makeChain();
 
     const resultPromise = resolveActionable(chain, host, { timeoutMs: 5000 });
-    void resultPromise.catch(() => {});
+    void resultPromise.catch(() => undefined);
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).rejects.toThrow(FrameDetachedError);
@@ -139,7 +142,7 @@ describe('@no-llm resolveActionable', () => {
     const chain = makeChain();
 
     const resultPromise = resolveActionable(chain, host, { timeoutMs: 100 });
-    void resultPromise.catch(() => {});
+    void resultPromise.catch(() => undefined);
 
     // Advance time past the deadline
     await vi.advanceTimersByTimeAsync(200);
@@ -150,11 +153,7 @@ describe('@no-llm resolveActionable', () => {
   it('polls until element becomes actionable', async () => {
     // First two polls: not found; third poll: found and actionable
     const host = makeHost({
-      resolveResults: [
-        { count: 0 },
-        { count: 0 },
-        { count: 1, slotKey: 'default' },
-      ],
+      resolveResults: [{ count: 0 }, { count: 0 }, { count: 1, slotKey: 'default' }],
       actionableStates: [makeActionableState()],
     });
     const chain = makeChain();

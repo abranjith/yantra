@@ -15,7 +15,12 @@ import type {
  */
 const BACKOFF_SEQUENCE = [0, 20, 50, 100, 100, 500, 500, 500] as const;
 
-type BoundingRect = { readonly top: number; readonly left: number; readonly width: number; readonly height: number };
+interface BoundingRect {
+  readonly top: number;
+  readonly left: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const STABILITY_WINDOW_MS = 100;
@@ -69,7 +74,8 @@ export async function resolveActionable(
         throw new LocatorAmbiguousError({
           chainName: chain.name,
           candidateIndex: result.candidatesTried.findIndex((a) => a.outcome === 'ambiguous'),
-          matchCount: result.candidatesTried.find((a) => a.outcome === 'ambiguous')?.matchCount ?? 2,
+          matchCount:
+            result.candidatesTried.find((a) => a.outcome === 'ambiguous')?.matchCount ?? 2,
           candidatesTried: result.candidatesTried,
         });
       }
@@ -106,7 +112,7 @@ export async function resolveActionable(
       // Rect stable — check events
       if (state.receivesEvents) {
         // All conditions met — element is actionable
-        return result as SuccessResolveResult;
+        return result;
       }
     }
     prevRect = currentRect;
@@ -138,8 +144,8 @@ function getNextDelay(index: number): number {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
-    if (typeof (timer as NodeJS.Timeout).unref === 'function') {
-      (timer as NodeJS.Timeout).unref();
+    if (typeof timer.unref === 'function') {
+      timer.unref();
     }
   });
 }

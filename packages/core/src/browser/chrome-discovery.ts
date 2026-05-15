@@ -13,7 +13,7 @@ function tryParseVersion(stdout: string): {
 } | null {
   const trimmed = stdout.trim();
   const match = /(\d+\.\d+\.\d+\.\d+|\d+\.\d+\.\d+)/.exec(trimmed);
-  if (!match || !match[1]) return null;
+  if (!match?.[1]) return null;
   const version = match[1];
   const majorStr = version.split('.')[0];
   const majorVersion = majorStr !== undefined ? parseInt(majorStr, 10) : 0;
@@ -69,7 +69,7 @@ function isExecutable(filePath: string): boolean {
 
 /** Walk PATH for a binary name (POSIX). Returns absolute path or null. */
 function whichSync(binary: string): string | null {
-  const PATH = process.env['PATH'] ?? '';
+  const PATH = process.env.PATH ?? '';
   for (const dir of PATH.split(':')) {
     if (!dir) continue;
     const candidate = join(dir, binary);
@@ -82,7 +82,7 @@ function whichSync(binary: string): string | null {
 
 function discoverOnMacOS(): ChromeInstall | null {
   const home = homedir();
-  const candidates: Array<{ path: string; channel: ChromeInstall['channel'] }> = [
+  const candidates: { path: string; channel: ChromeInstall['channel'] }[] = [
     {
       path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       channel: 'stable',
@@ -124,12 +124,7 @@ function discoverOnMacOS(): ChromeInstall | null {
 
 function discoverOnLinux(): ChromeInstall | null {
   // PATH-first, then standard paths
-  const pathBinaries = [
-    'google-chrome',
-    'google-chrome-stable',
-    'chromium',
-    'chromium-browser',
-  ];
+  const pathBinaries = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
   for (const bin of pathBinaries) {
     const found = whichSync(bin);
     if (found) {
@@ -138,7 +133,7 @@ function discoverOnLinux(): ChromeInstall | null {
     }
   }
 
-  const standardPaths: Array<{ path: string; channel: ChromeInstall['channel'] }> = [
+  const standardPaths: { path: string; channel: ChromeInstall['channel'] }[] = [
     { path: '/usr/bin/google-chrome', channel: 'stable' },
     { path: '/usr/bin/google-chrome-stable', channel: 'stable' },
     { path: '/usr/local/bin/google-chrome', channel: 'stable' },
@@ -180,11 +175,11 @@ function discoverOnWindows(): ChromeInstall | null {
   }
 
   // Fallback standard paths
-  const localAppData = process.env['LOCALAPPDATA'] ?? '';
-  const programFiles = process.env['ProgramFiles'] ?? 'C:\\Program Files';
+  const localAppData = process.env.LOCALAPPDATA ?? '';
+  const programFiles = process.env.ProgramFiles ?? 'C:\\Program Files';
   const programFilesX86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
 
-  const standardPaths: Array<{ path: string; channel: ChromeInstall['channel'] }> = [
+  const standardPaths: { path: string; channel: ChromeInstall['channel'] }[] = [
     {
       path: `${programFiles}\\Google\\Chrome\\Application\\chrome.exe`,
       channel: 'stable',
@@ -225,9 +220,7 @@ function discoverOnWindows(): ChromeInstall | null {
  *   console.log(`Found Chrome ${chrome.majorVersion} at ${chrome.path}`);
  * }
  */
-export function detectChrome(opts?: {
-  readonly override?: string;
-}): ChromeInstall | null {
+export function detectChrome(opts?: { readonly override?: string }): ChromeInstall | null {
   if (opts?.override) {
     const result = probeVersion(opts.override);
     if (!result) return null;
