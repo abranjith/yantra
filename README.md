@@ -27,6 +27,35 @@ pnpm test
 | `pnpm format`      | Format repository files            |
 | `pnpm clean`       | Clean build outputs                |
 
+## Ask Pipeline (FEAT-007)
+
+The CLI now supports an end-to-end `ask` flow:
+
+```bash
+yantra ask "today's top news on AI"
+```
+
+Pipeline stages are `search -> fetch -> extract -> summarize -> render`.
+
+- Search provider selection: `auto` (default), `tavily`, `brave`, or `browser`
+- Summarization default: deterministic rule-based mode
+- Agent-optional mode: use `--no-llm` or set `LLM_PROVIDER=none`
+- Cache behavior: 24h cache in `~/.cache/yantra/ask` (disable with `--no-cache`)
+- Output modes: terminal cards (default) or JSON via `--json`
+
+Helpful flags:
+
+- `--search-provider <auto|tavily|brave|browser>`
+- `--limit <count>`
+- `--fetch-timeout <ms>`
+- `--budget-ms <ms>`
+- `--budget <calls>`
+- `--no-cache`
+- `--no-llm`
+- `--json`
+
+Run artifacts are written under `~/.local/share/yantra/runs/<run-id>/` (manifest, events, outputs, cards, fetched pages, report).
+
 ## Packages
 
 - `@yantra/protocol`: Zod schemas as the single source of truth for the agent/engine contract; TypeScript types, JSON Schema, and tool definitions are generated from these schemas.

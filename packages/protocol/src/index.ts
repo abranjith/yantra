@@ -69,6 +69,32 @@ export {
   WorkflowStep,
   WorkflowValueExpression,
 } from './schemas/workflow.js';
+export {
+  CapturedActionSchema,
+  ClickActionSchema,
+  ElementDescriptorSchema,
+  FillActionSchema,
+  InputTypeHintSchema,
+  NavigateActionSchema,
+  RankedCandidateSchema,
+  RecordingDraftSchema,
+  RecordingMetadataSchema,
+  StopReasonSchema,
+  WaitActionSchema,
+  type CapturedAction,
+  type ClickAction,
+  type ElementDescriptor,
+  type FillAction,
+  type InputTypeHint,
+  type NavigateAction,
+  type RankedCandidate,
+  type RawCapturedActionInput,
+  type RawFillAction,
+  type RecordingDraft,
+  type RecordingMetadata,
+  type StopReason,
+  type WaitAction,
+} from './schemas/recording-draft.js';
 export { err, ok, type Result } from './utils/result.js';
 export {
   ValidationError,

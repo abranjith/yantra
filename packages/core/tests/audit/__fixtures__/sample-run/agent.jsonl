@@ -1,0 +1,2 @@
+{"ts":"2026-05-11T14:22:03.118Z","task_id":"task-1","step_id":"s1","direction":"request","model":"claude-opus-4-5","prompt_sanitized":"payload","response":null,"latency_ms":null,"cost_usd":null,"sanitizer_profile":"authenticated","transformations_applied":["form-value-strip","pii-email-redact"]}
+{"ts":"2026-05-11T14:22:03.918Z","task_id":"task-1","step_id":"s1","direction":"response","model":"claude-opus-4-5","prompt_sanitized":null,"response":"ok","latency_ms":800,"cost_usd":0.02,"sanitizer_profile":"authenticated","transformations_applied":["truncate"]}

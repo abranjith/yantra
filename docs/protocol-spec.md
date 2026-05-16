@@ -136,6 +136,42 @@ Example:
 }
 ```
 
+## CapturedActionSchema
+
+One captured user action during recording
+
+Example:
+
+```json
+"<value>"
+```
+
+## ClickActionSchema
+
+A user click event
+
+| Field              | Description                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| kind               |                                                                    |
+| element_descriptor | Sanitized structural fingerprint of a captured DOM element         |
+| candidate_chain    | Top-5 ranked locator candidates                                    |
+| ts                 | ISO-8601 timestamp (page clock via performance.now() + timeOrigin) |
+| url_before         | Page URL at the time of the action                                 |
+| url_after          | Page URL after the action, null if no navigation within 500ms      |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "element_descriptor": "<element_descriptor>",
+  "candidate_chain": "<candidate_chain>",
+  "ts": "<ts>",
+  "url_before": "<url_before>",
+  "url_after": "<url_after>"
+}
+```
+
 ## ClickModifiers
 
 Optional keyboard modifiers for click steps.
@@ -179,6 +215,36 @@ Example:
   "type": "<type>",
   "locator": "<locator>",
   "modifiers": "<modifiers>"
+}
+```
+
+## ElementDescriptorSchema
+
+Sanitized structural fingerprint of a captured DOM element
+
+| Field           | Description                                                                      |
+| --------------- | -------------------------------------------------------------------------------- |
+| tag             | Lowercase tag name, e.g. "button"                                                |
+| role            | ARIA computed role, or null if not applicable                                    |
+| accessible_name | ARIA accessible name, truncated to 200 chars                                     |
+| visible_text    | innerText truncated to 200 chars with normalized whitespace                      |
+| attrs_sample    | Sampled subset of element attributes — only whitelisted keys, max 100 chars each |
+| bounding_rect   | Element bounding rectangle in page coordinates                                   |
+| in_iframe       | True if the element lives inside an iframe                                       |
+| xpath_for_debug | Absolute XPath, shown only with --debug, never used for replay                   |
+
+Example:
+
+```json
+{
+  "tag": "<tag>",
+  "role": "<role>",
+  "accessible_name": "<accessible_name>",
+  "visible_text": "<visible_text>",
+  "attrs_sample": "<attrs_sample>",
+  "bounding_rect": "<bounding_rect>",
+  "in_iframe": "<in_iframe>",
+  "xpath_for_debug": "<xpath_for_debug>"
 }
 ```
 
@@ -256,6 +322,38 @@ Example:
 "locator_not_found"
 ```
 
+## FillActionSchema
+
+A form fill event — value is always redacted
+
+| Field              | Description                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| kind               |                                                                    |
+| element_descriptor | Sanitized structural fingerprint of a captured DOM element         |
+| candidate_chain    | Top-5 ranked locator candidates                                    |
+| ts                 | ISO-8601 timestamp (page clock via performance.now() + timeOrigin) |
+| url_before         | Page URL at the time of the action                                 |
+| url_after          | Page URL after the action, null if no navigation within 500ms      |
+| raw_value          | Always the literal string "<redacted>" — type system enforces this |
+| value_length       | Number of code points the user typed (not PII)                     |
+| input_type         | Input type from the DOM — purely structural, no value content      |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "element_descriptor": "<element_descriptor>",
+  "candidate_chain": "<candidate_chain>",
+  "ts": "<ts>",
+  "url_before": "<url_before>",
+  "url_after": "<url_after>",
+  "raw_value": "<raw_value>",
+  "value_length": "<value_length>",
+  "input_type": "<input_type>"
+}
+```
+
 ## FillStep
 
 Fill an input-like field.
@@ -290,6 +388,16 @@ Example:
 
 ```json
 "captcha"
+```
+
+## InputTypeHintSchema
+
+Input type from the DOM — purely structural, no value content
+
+Example:
+
+```json
+"text"
 ```
 
 ## LLMSummarizeStep
@@ -392,6 +500,32 @@ Example:
 
 ```json
 "<value>"
+```
+
+## NavigateActionSchema
+
+A page navigation event
+
+| Field                     | Description                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| kind                      |                                                                                          |
+| ts                        |                                                                                          |
+| url_before                |                                                                                          |
+| url_after                 |                                                                                          |
+| navigation_kind           | How the navigation was triggered                                                         |
+| triggered_by_action_index | Index of the click action that triggered this navigation, null for non-click navigations |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "ts": "<ts>",
+  "url_before": "<url_before>",
+  "url_after": "<url_after>",
+  "navigation_kind": "<navigation_kind>",
+  "triggered_by_action_index": "<triggered_by_action_index>"
+}
 ```
 
 ## NavigateStep
@@ -498,6 +632,92 @@ Example:
 }
 ```
 
+## RankedCandidateSchema
+
+One entry in the ranked locator candidate chain
+
+| Field       | Description                                                          |
+| ----------- | -------------------------------------------------------------------- |
+| candidate   | The locator intent for this candidate                                |
+| score       | Ranking score from 0..1 (may be slightly > 1 for boosted candidates) |
+| rank_reason | Short human label explaining the score                               |
+
+Example:
+
+```json
+{
+  "candidate": "<candidate>",
+  "score": "<score>",
+  "rank_reason": "<rank_reason>"
+}
+```
+
+## RecordingDraftSchema
+
+The complete recording draft artifact produced by the recorder (FEAT-008)
+
+| Field              | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| schema_version     | Schema version for forward-compatibility checks                            |
+| recording_id       | ULID-formatted recording identifier                                        |
+| workflow_name_hint | Workflow name hint from RecordingSession.start()                           |
+| started_at         | ISO-8601 session start timestamp                                           |
+| stopped_at         | ISO-8601 session stop timestamp                                            |
+| stop_reason        | Reason the recording ended                                                 |
+| actions            | Ordered list of captured actions                                           |
+| metadata           | Session-level metadata written to metadata.json and embedded in draft.json |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "recording_id": "<recording_id>",
+  "workflow_name_hint": "<workflow_name_hint>",
+  "started_at": "<started_at>",
+  "stopped_at": "<stopped_at>",
+  "stop_reason": "<stop_reason>",
+  "actions": "<actions>",
+  "metadata": "<metadata>"
+}
+```
+
+## RecordingMetadataSchema
+
+Session-level metadata written to metadata.json and embedded in draft.json
+
+| Field                    | Description                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| start_ts                 | ISO-8601 recording start timestamp                                        |
+| end_ts                   | ISO-8601 recording end timestamp, null until stop/abort                   |
+| os                       |                                                                           |
+| chrome_version           | Full Chrome version string, e.g. "124.0.6367.91"                          |
+| chrome_major             | Chrome major version, parsed from chrome_version                          |
+| yantra_version           | yantra CLI version from package.json                                      |
+| initial_url              | First navigation URL captured during the session                          |
+| capture_count            | Total number of captured actions                                          |
+| dwell_per_page           | Time spent on each page URL during recording                              |
+| stop_reason              | Why the recording ended                                                   |
+| unrecorded_frame_origins | Cross-origin iframe origins detected but not instrumented — see TASK-006a |
+
+Example:
+
+```json
+{
+  "start_ts": "<start_ts>",
+  "end_ts": "<end_ts>",
+  "os": "<os>",
+  "chrome_version": "<chrome_version>",
+  "chrome_major": "<chrome_major>",
+  "yantra_version": "<yantra_version>",
+  "initial_url": "<initial_url>",
+  "capture_count": "<capture_count>",
+  "dwell_per_page": "<dwell_per_page>",
+  "stop_reason": "<stop_reason>",
+  "unrecorded_frame_origins": "<unrecorded_frame_origins>"
+}
+```
+
 ## RegexShape
 
 Regex descriptor for workflow locator names.
@@ -582,6 +802,16 @@ Example:
 
 ```json
 "<value>"
+```
+
+## StopReasonSchema
+
+No description provided.
+
+Example:
+
+```json
+"user"
 ```
 
 ## TaskEvent
@@ -714,6 +944,30 @@ Example:
 
 ```json
 "<value>"
+```
+
+## WaitActionSchema
+
+A wait/dwell event between user actions
+
+| Field       | Description                      |
+| ----------- | -------------------------------- |
+| kind        |                                  |
+| ts          |                                  |
+| reason      |                                  |
+| duration_ms | Dwell duration in milliseconds   |
+| url         | URL of the page during the dwell |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "ts": "<ts>",
+  "reason": "<reason>",
+  "duration_ms": "<duration_ms>",
+  "url": "<url>"
+}
 ```
 
 ## WaitForStep

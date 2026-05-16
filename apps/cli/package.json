@@ -27,7 +27,8 @@
   "dependencies": {
     "@yantra/agent": "workspace:*",
     "@yantra/core": "workspace:*",
-    "@yantra/protocol": "workspace:*"
+    "@yantra/protocol": "workspace:*",
+    "commander": "^14.0.2"
   },
   "devDependencies": {
     "@yantra/test-helpers": "workspace:*"

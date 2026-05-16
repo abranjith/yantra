@@ -2,7 +2,7 @@
 
 # FEAT-008: Recorder (Phase 1)
 
-> **Status**: [ ] Not started
+> **Status**: [/] In progress
 > **Owner**: workflow team
 > **Depends on**: FEAT-001 (Monorepo Scaffold & CI), FEAT-002 (Protocol — `LocatorChain`, `CapturedAction` shape), FEAT-003 (BrowserProvider — visible session, ephemeral profile), FEAT-004 (Locator engine — candidate ranking algorithm)
 > **Unblocks**: FEAT-009 (Annotate UI & Workflow YAML), FEAT-010 (Workflow Replay)

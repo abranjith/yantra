@@ -1,0 +1,95 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@no-llm extraction/card > renders markdown report sections 1`] = `
+"# Ask Report
+
+## 1. Card One
+
+- Source: example.com
+- URL: https://example.com/one
+- Fetched: 2026-05-11T10:14:00.000Z
+- Published: 2026-05-11T09:00:00.000Z
+- Summary kind: rule-based
+
+This is the first summary sentence. This is the second sentence.
+
+> First quoted snippet.
+
+## 2. Card Two
+
+- Source: example.com
+- URL: https://example.com/two
+- Fetched: 2026-05-11T10:14:01.000Z
+- Published: n/a
+- Summary kind: fallback-lede
+
+
+
+> Second quoted snippet.
+
+**Notice:** fetch timed out
+"
+`;
+
+exports[`@no-llm extraction/card > renders stable json output 1`] = `
+{
+  "cards": [
+    {
+      "fetchedAt": "2026-05-11T10:14:00.000Z",
+      "notice": null,
+      "publishedAt": "2026-05-11T09:00:00.000Z",
+      "quotedSnippet": "First quoted snippet.",
+      "source": "example.com",
+      "summary": "This is the first summary sentence. This is the second sentence.",
+      "summaryKind": "rule-based",
+      "tags": [
+        "ai",
+        "news",
+      ],
+      "title": "Card One",
+      "url": "https://example.com/one",
+    },
+    {
+      "fetchedAt": "2026-05-11T10:14:01.000Z",
+      "notice": "fetch timed out",
+      "publishedAt": null,
+      "quotedSnippet": "Second quoted snippet.",
+      "source": "example.com",
+      "summary": "",
+      "summaryKind": "fallback-lede",
+      "tags": [
+        "ai",
+      ],
+      "title": "Card Two",
+      "url": "https://example.com/two",
+    },
+  ],
+}
+`;
+
+exports[`@no-llm extraction/card > renders terminal output as bordered cards 1`] = `
+"+--------------------------------------------------------------------+
+| Card One                                                           |
+| example.com • fetched 2026-05-11T10:14:00.000Z                     |
+| published 2026-05-11T09:00:00.000Z                                 |
+|                                                                    |
+| This is the first summary sentence. This is the second sentence.   |
+|                                                                    |
+| > First quoted snippet.                                            |
+|                                                                    |
+| https://example.com/one                                            |
++--------------------------------------------------------------------+
+
++--------------------------------------------------------------------+
+| Card Two                                                           |
+| example.com • fetched 2026-05-11T10:14:01.000Z                     |
+|                                                                    |
+|                                                                    |
+|                                                                    |
+| > Second quoted snippet.                                           |
+|                                                                    |
+| fetch timed out                                                    |
+|                                                                    |
+| https://example.com/two                                            |
++--------------------------------------------------------------------+"
+`;

@@ -1,5 +1,9 @@
-import type { Plan, SecurityScope } from '@yantra/protocol';
-import { ALLOWED_VERBS_BY_SCOPE } from '@yantra/protocol';
+import type { Plan, SecurityScope, StepVerb } from '@yantra/protocol';
+
+import {
+  buildScopeChain as buildSecurityScopeChain,
+  validateScopeViolations,
+} from '../secrets/scope-enforcer.js';
 
 import { ScopeViolationError } from './errors.js';
 
@@ -17,26 +21,17 @@ export function checkScopeViolations(
   plan: Plan,
   context: { taskId: string; runId: string },
 ): ScopeViolationError[] {
-  const readOnlyAllowed = new Set<string>(ALLOWED_VERBS_BY_SCOPE['read-only-data']);
-  const violations: ScopeViolationError[] = [];
-
-  for (const step of plan.steps) {
-    const effectiveScope: SecurityScope = step.scope ?? plan.default_scope;
-    if (effectiveScope === 'read-only-data' && !readOnlyAllowed.has(step.type)) {
-      violations.push(
-        new ScopeViolationError(
-          {
-            scope: effectiveScope,
-            attemptedVerb: step.type,
-            stepId: step.id,
-          },
-          { ...context, stepId: step.id },
-        ),
-      );
-    }
-  }
-
-  return violations;
+  return validateScopeViolations(plan).map(
+    (violation) =>
+      new ScopeViolationError(
+        {
+          scope: violation.declaredScope,
+          attemptedVerb: violation.stepType as StepVerb,
+          stepId: violation.stepId,
+        },
+        { ...context, stepId: violation.stepId },
+      ),
+  );
 }
 
 /**
@@ -44,5 +39,5 @@ export function checkScopeViolations(
  * Each element is the effective `SecurityScope` for the step at that index.
  */
 export function buildScopeChain(plan: Plan): readonly SecurityScope[] {
-  return plan.steps.map((step) => step.scope ?? plan.default_scope);
+  return buildSecurityScopeChain(plan);
 }

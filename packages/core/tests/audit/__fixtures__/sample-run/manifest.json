@@ -1,0 +1,10 @@
+{
+  "run_id": "sample-run",
+  "task_id": "task-1",
+  "scope_summary": {
+    "public": 1,
+    "read-only-data": 1,
+    "authenticated": 0,
+    "scope_violations_rejected": 0
+  }
+}

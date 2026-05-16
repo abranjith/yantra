@@ -59,7 +59,7 @@ export const handleLlmSummarize: StepHandler<LLMSummarizeStep> = async (
   // Call LLM
   let llmResult: Awaited<ReturnType<NonNullable<typeof ctx.llmClient>['summarize']>>;
   try {
-    llmResult = await ctx.llmClient.summarize(sanitized, step.prompt);
+    llmResult = await ctx.llmClient.summarize(sanitized.text, step.prompt);
   } catch (err) {
     return {
       kind: 'failed',

@@ -1,0 +1,5 @@
+{"kind":"task_started","task_id":"task-1","at":"2026-05-11T14:22:00.000Z"}
+{"kind":"step_started","task_id":"task-1","step_id":"s1","step_type":"extract","at":"2026-05-11T14:22:01.000Z"}
+{"kind":"step_retry","task_id":"task-1","step_id":"s1","attempt":1,"reason":"locator_not_found","at":"2026-05-11T14:22:01.500Z"}
+{"kind":"step_completed","task_id":"task-1","step_id":"s1","capture_keys":["transactions"],"at":"2026-05-11T14:22:03.000Z"}
+{"kind":"task_completed","task_id":"task-1","outputs_keys":["summary"],"at":"2026-05-11T14:22:05.000Z"}

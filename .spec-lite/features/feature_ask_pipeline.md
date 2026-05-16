@@ -550,20 +550,20 @@ Custom error classes (extend `Error`, per memory §Error Handling):
 
 | Task ID  | Task Description                                                | Implementation | Unit Tests | Doc Update |
 | -------- | --------------------------------------------------------------- | -------------- | ---------- | ---------- |
-| TASK-001 | `SearchProvider` interface + `TavilySearchProvider`             | [ ]            | [ ]        | [ ]        |
-| TASK-002 | `BraveSearchProvider`                                           | [ ]            | [ ]        | [ ]        |
-| TASK-003 | `BrowserSearchProvider` (DuckDuckGo HTML)                       | [ ]            | [ ]        | [ ]        |
-| TASK-004 | Provider selector + config plumbing                             | [ ]            | [ ]        | [ ]        |
-| TASK-005 | `HttpFetcher` + `HybridContentFetcher` with browser fallback    | [ ]            | [ ]        | [ ]        |
-| TASK-006 | Readability extractor with Cheerio pre-clean                    | [ ]            | [ ]        | [ ]        |
-| TASK-007 | Rule-based summarizer (first-N-sentences + heuristic ranking)   | [ ]            | [ ]        | [ ]        |
-| TASK-008 | LLM-summarizer seam (stub for FEAT-011)                         | [ ]            | [ ]        | [ ]        |
-| TASK-009 | `AskCard` renderers (terminal, JSON, markdown)                  | [ ]            | [ ]        | [ ]        |
-| TASK-010 | `FileSystemAskCache` (sha256 keying, 24h TTL, size cap)         | [ ]            | [ ]        | [ ]        |
-| TASK-011 | `AskPipeline.run(query, opts)` orchestrator                     | [ ]            | [ ]        | [ ]        |
-| TASK-012 | `--no-llm` switch end-to-end (headline agent-optional E2E)      | [ ]            | [ ]        | [ ]        |
-| TASK-013 | Ethics gate integration (non-bypassable, per-fetch + search URL) | [ ]            | [ ]        | [ ]        |
-| TASK-014 | Latency budgets (per-fetch + pipeline-wide) + observability      | [ ]            | [ ]        | [ ]        |
+| TASK-001 | `SearchProvider` interface + `TavilySearchProvider`             | [x]            | [x]        | [x]        |
+| TASK-002 | `BraveSearchProvider`                                           | [x]            | [x]        | [x]        |
+| TASK-003 | `BrowserSearchProvider` (DuckDuckGo HTML)                       | [x]            | [x]        | [x]        |
+| TASK-004 | Provider selector + config plumbing                             | [x]            | [x]        | [x]        |
+| TASK-005 | `HttpFetcher` + `HybridContentFetcher` with browser fallback    | [x]            | [x]        | [x]        |
+| TASK-006 | Readability extractor with Cheerio pre-clean                    | [x]            | [x]        | [x]        |
+| TASK-007 | Rule-based summarizer (first-N-sentences + heuristic ranking)   | [x]            | [x]        | [x]        |
+| TASK-008 | LLM-summarizer seam (stub for FEAT-011)                         | [x]            | [x]        | [x]        |
+| TASK-009 | `AskCard` renderers (terminal, JSON, markdown)                  | [x]            | [x]        | [x]        |
+| TASK-010 | `FileSystemAskCache` (sha256 keying, 24h TTL, size cap)         | [x]            | [x]        | [x]        |
+| TASK-011 | `AskPipeline.run(query, opts)` orchestrator                     | [x]            | [x]        | [x]        |
+| TASK-012 | `--no-llm` switch end-to-end (headline agent-optional E2E)      | [x]            | [x]        | [x]        |
+| TASK-013 | Ethics gate integration (non-bypassable, per-fetch + search URL) | [x]            | [x]        | [x]        |
+| TASK-014 | Latency budgets (per-fetch + pipeline-wide) + observability      | [x]            | [x]        | [x]        |
 
 > Status legend: `[ ]` not started · `[/]` in progress · `[x]` complete.
 > Owned exclusively by the **Implement** skill — do not edit by hand during planning.

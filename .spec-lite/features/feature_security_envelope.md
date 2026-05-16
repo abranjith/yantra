@@ -2,6 +2,8 @@
 
 # Feature: Security Envelope
 
+> **Status**: [x] Complete
+
 ## 1. Feature Goal
 
 **ID**: FEAT-006
@@ -587,6 +589,20 @@ This feature **is** the security envelope. Memory §Security's three structural 
 - **Dogfood acceptance test**: at feature completion, the implementer runs `tsx scripts/ci-static-check.ts` against the entire monorepo (which by then contains real call sites from FEAT-005 stubs) and confirms zero violations.
 
 ## 7. State Tracking
+
+- **Status**: [x] Complete — all 14 tasks implemented and verified.
+- **Task count**: 14 (TASK-001 through TASK-014).
+- **Verification snapshot**:
+  - `pnpm lint` (pass)
+  - `pnpm typecheck` (pass)
+  - `pnpm security:static-check` (pass)
+  - `pnpm --filter @yantra/core build` (pass)
+  - FEAT-006 targeted tests: 12 files, 48 tests (pass)
+- **Residual out-of-scope test failures (pre-existing/non-FEAT-006)**:
+  - `packages/core/tests/browser/chrome-discovery.spec.ts`
+  - `packages/core/tests/browser/doctor.spec.ts`
+  - `packages/core/tests/browser/provider.spec.ts`
+  - `e2e/format.spec.ts` (prettier include path mismatch)
 
 **Source plan**: `.spec-lite/plan.md` row FEAT-006 — keep `Spec File` populated; **do not** touch the `Status` column (owned exclusively by the Implement skill per Memory).
 

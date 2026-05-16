@@ -15,6 +15,7 @@ import type { ElementHandle } from 'puppeteer-core';
 
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
+import type { SanitizedPayload } from '../sanitizer/index.js';
 
 // ---------------------------------------------------------------------------
 // Clock abstraction for testability
@@ -43,7 +44,7 @@ export interface SecretResolver {
 
 /** Sanitizes payloads before LLM submission. Implemented in FEAT-006. */
 export interface Sanitizer {
-  sanitize(payload: unknown, securityClass: SecurityScope): unknown;
+  sanitize(payload: unknown, securityClass: SecurityScope, hostHint?: string): SanitizedPayload;
 }
 
 /** Sends content to the LLM. Implemented in FEAT-011. */
