@@ -1,4 +1,5 @@
 <!-- spec-lite:start -->
+
 ## spec-lite Agents & Skills
 
 This project uses [spec-lite](https://github.com/abranjith/spec-lite) agent and skill prompts
@@ -63,4 +64,5 @@ The following specialist agents and skills are available:
 
 To invoke an agent, select it from the agents dropdown, reference a prompt file with `#file`,
 or describe the task and Copilot will auto-discover the right skill.
+
 <!-- spec-lite:end -->

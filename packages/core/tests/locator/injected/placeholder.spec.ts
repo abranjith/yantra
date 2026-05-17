@@ -2,7 +2,10 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { findByPlaceholder, findByNameAttribute } from '../../../src/locator/injected/placeholder.js';
+import {
+  findByPlaceholder,
+  findByNameAttribute,
+} from '../../../src/locator/injected/placeholder.js';
 
 describe('@no-llm findByPlaceholder', () => {
   beforeEach(() => {

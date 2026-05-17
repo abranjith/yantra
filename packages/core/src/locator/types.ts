@@ -66,14 +66,29 @@ export type RelativeRelation =
  * corresponds to one resolution strategy in the injected bundle.
  */
 export type LocatorIntent =
-  | { readonly kind: 'role'; readonly role: AriaRole; readonly name?: string | RegExp; readonly exact?: boolean }
+  | {
+      readonly kind: 'role';
+      readonly role: AriaRole;
+      readonly name?: string | RegExp;
+      readonly exact?: boolean;
+    }
   | { readonly kind: 'testid'; readonly attribute?: string; readonly value: string }
   | { readonly kind: 'label'; readonly text: string | RegExp; readonly exact?: boolean }
   | { readonly kind: 'placeholder'; readonly text: string | RegExp; readonly exact?: boolean }
-  | { readonly kind: 'text'; readonly text: string | RegExp; readonly exact?: boolean; readonly normalize?: boolean }
+  | {
+      readonly kind: 'text';
+      readonly text: string | RegExp;
+      readonly exact?: boolean;
+      readonly normalize?: boolean;
+    }
   | { readonly kind: 'css'; readonly selector: string }
   | { readonly kind: 'xpath'; readonly expression: string }
-  | { readonly kind: 'relative'; readonly anchor: LocatorIntent; readonly relation: RelativeRelation; readonly targetRole?: AriaRole };
+  | {
+      readonly kind: 'relative';
+      readonly anchor: LocatorIntent;
+      readonly relation: RelativeRelation;
+      readonly targetRole?: AriaRole;
+    };
 
 /** One candidate in the ordered chain. */
 export interface EngineLocatorCandidate {
@@ -113,7 +128,12 @@ export type ResolveResult =
     }
   | {
       readonly kind: 'failure';
-      readonly reason: 'not_found' | 'ambiguous' | 'hit_intercepted' | 'not_actionable' | 'frame_detached';
+      readonly reason:
+        | 'not_found'
+        | 'ambiguous'
+        | 'hit_intercepted'
+        | 'not_actionable'
+        | 'frame_detached';
       readonly candidatesTried: readonly CandidateAttempt[];
       readonly lastError?: Error;
       readonly durationMs: number;
@@ -141,10 +161,17 @@ export type HitTargetCheckResult =
   | { readonly kind: 'ok'; readonly coordinates: { readonly x: number; readonly y: number } }
   | {
       readonly kind: 'intercepted';
-      readonly interceptor: { readonly tagName: string; readonly accessibleName?: string; readonly testid?: string };
+      readonly interceptor: {
+        readonly tagName: string;
+        readonly accessibleName?: string;
+        readonly testid?: string;
+      };
       readonly coordinates: { readonly x: number; readonly y: number };
     }
-  | { readonly kind: 'outside_viewport'; readonly coordinates: { readonly x: number; readonly y: number } };
+  | {
+      readonly kind: 'outside_viewport';
+      readonly coordinates: { readonly x: number; readonly y: number };
+    };
 
 /** Options for LocatorResolver.resolve. */
 export interface ResolveOptions {
@@ -187,7 +214,13 @@ export interface LocatorResolutionEvent {
   readonly chain_name: string;
   readonly candidates_tried: number;
   readonly winning_index: number | null;
-  readonly outcome: 'success' | 'not_found' | 'ambiguous' | 'hit_intercepted' | 'not_actionable' | 'frame_detached';
+  readonly outcome:
+    | 'success'
+    | 'not_found'
+    | 'ambiguous'
+    | 'hit_intercepted'
+    | 'not_actionable'
+    | 'frame_detached';
   readonly duration_ms: number;
   readonly frame_id: string;
 }
@@ -225,14 +258,29 @@ export interface InjectedAPI {
 
 /** JSON-safe form of LocatorIntent (RegExp → { __isRegExp, pattern, flags }). */
 export type JsonLocatorIntent =
-  | { readonly kind: 'role'; readonly role: AriaRole; readonly name?: string | JsonRegex; readonly exact?: boolean }
+  | {
+      readonly kind: 'role';
+      readonly role: AriaRole;
+      readonly name?: string | JsonRegex;
+      readonly exact?: boolean;
+    }
   | { readonly kind: 'testid'; readonly attribute?: string; readonly value: string }
   | { readonly kind: 'label'; readonly text: string | JsonRegex; readonly exact?: boolean }
   | { readonly kind: 'placeholder'; readonly text: string | JsonRegex; readonly exact?: boolean }
-  | { readonly kind: 'text'; readonly text: string | JsonRegex; readonly exact?: boolean; readonly normalize?: boolean }
+  | {
+      readonly kind: 'text';
+      readonly text: string | JsonRegex;
+      readonly exact?: boolean;
+      readonly normalize?: boolean;
+    }
   | { readonly kind: 'css'; readonly selector: string }
   | { readonly kind: 'xpath'; readonly expression: string }
-  | { readonly kind: 'relative'; readonly anchor: JsonLocatorIntent; readonly relation: RelativeRelation; readonly targetRole?: AriaRole };
+  | {
+      readonly kind: 'relative';
+      readonly anchor: JsonLocatorIntent;
+      readonly relation: RelativeRelation;
+      readonly targetRole?: AriaRole;
+    };
 
 export interface JsonRegex {
   readonly __isRegExp: true;

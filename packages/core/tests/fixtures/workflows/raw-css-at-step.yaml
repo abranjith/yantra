@@ -1,0 +1,14 @@
+version: 1
+name: raw-css-test
+description: null
+security_class: public
+steps:
+  - id: s1
+    verb: navigate
+    url: https://example.com
+    scope: null
+  - id: s2
+    verb: click
+    locator: '.btn-primary'
+    scope: null
+_locators: {}

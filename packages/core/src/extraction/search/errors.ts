@@ -17,21 +17,30 @@ export class SearchProviderError extends Error {
 }
 
 export class TavilyAuthError extends SearchProviderError {
-  public constructor(message: string, context: ConstructorParameters<typeof SearchProviderError>[1]) {
+  public constructor(
+    message: string,
+    context: ConstructorParameters<typeof SearchProviderError>[1],
+  ) {
     super(message, context);
     this.name = 'TavilyAuthError';
   }
 }
 
 export class RateLimitError extends SearchProviderError {
-  public constructor(message: string, context: ConstructorParameters<typeof SearchProviderError>[1]) {
+  public constructor(
+    message: string,
+    context: ConstructorParameters<typeof SearchProviderError>[1],
+  ) {
     super(message, context);
     this.name = 'RateLimitError';
   }
 }
 
 export class BrowserSearchError extends SearchProviderError {
-  public constructor(message: string, context: ConstructorParameters<typeof SearchProviderError>[1]) {
+  public constructor(
+    message: string,
+    context: ConstructorParameters<typeof SearchProviderError>[1],
+  ) {
     super(message, context);
     this.name = 'BrowserSearchError';
   }

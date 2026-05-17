@@ -1,0 +1,19 @@
+version: 1
+name: invalid-jsonata-test
+description: null
+security_class: public
+steps:
+  - id: s1
+    verb: navigate
+    url: https://example.com
+    scope: null
+  - id: s2
+    verb: fill
+    locator: Amount field
+    value: '{{ $invalidSyntax(x y z }}'
+    submit: false
+    scope: null
+_locators:
+  Amount field:
+    - kind: label
+      value: Amount

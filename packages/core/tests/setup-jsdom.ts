@@ -77,10 +77,9 @@ if (typeof document !== 'undefined') {
   // it is not configurable, which prevents vi.spyOn from replacing it.
   // Re-define it as a configurable stub so tests can mock it freely.
   try {
-    const desc = Object.getOwnPropertyDescriptor(
-      Object.getPrototypeOf(document),
-      'elementFromPoint',
-    ) ?? Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+    const desc =
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(document), 'elementFromPoint') ??
+      Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
 
     if (!desc || !desc.configurable) {
       Object.defineProperty(document, 'elementFromPoint', {

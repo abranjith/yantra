@@ -7,7 +7,11 @@ import {
 } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { RateLimitError, SearchProviderError, TavilyAuthError } from '../../../src/extraction/search/errors.js';
+import {
+  RateLimitError,
+  SearchProviderError,
+  TavilyAuthError,
+} from '../../../src/extraction/search/errors.js';
 import { TavilySearchProvider } from '../../../src/extraction/search/tavily.js';
 import type { KeychainProvider } from '../../../src/secrets/keychain.js';
 
@@ -57,8 +61,13 @@ describe('@no-llm extraction/search/tavily', () => {
         ],
       });
 
-    const provider = new TavilySearchProvider({ keychain: keychainWith({ 'tavily.api_key': 'k' }) });
-    const rows = await provider.search('ai news', { limit: 3, signal: new AbortController().signal });
+    const provider = new TavilySearchProvider({
+      keychain: keychainWith({ 'tavily.api_key': 'k' }),
+    });
+    const rows = await provider.search('ai news', {
+      limit: 3,
+      signal: new AbortController().signal,
+    });
 
     expect(rows).toHaveLength(2);
     expect(rows[0]?.source).toBe('tavily');
@@ -71,7 +80,9 @@ describe('@no-llm extraction/search/tavily', () => {
       .intercept({ path: '/search', method: 'POST' })
       .reply(401, { error: 'unauthorized' });
 
-    const provider = new TavilySearchProvider({ keychain: keychainWith({ 'tavily.api_key': 'k' }) });
+    const provider = new TavilySearchProvider({
+      keychain: keychainWith({ 'tavily.api_key': 'k' }),
+    });
 
     await expect(
       provider.search('ai news', { limit: 3, signal: new AbortController().signal }),
@@ -84,7 +95,9 @@ describe('@no-llm extraction/search/tavily', () => {
       .intercept({ path: '/search', method: 'POST' })
       .reply(429, { error: 'rate_limited' });
 
-    const provider = new TavilySearchProvider({ keychain: keychainWith({ 'tavily.api_key': 'k' }) });
+    const provider = new TavilySearchProvider({
+      keychain: keychainWith({ 'tavily.api_key': 'k' }),
+    });
 
     await expect(
       provider.search('ai news', { limit: 3, signal: new AbortController().signal }),
@@ -97,7 +110,9 @@ describe('@no-llm extraction/search/tavily', () => {
       .intercept({ path: '/search', method: 'POST' })
       .reply(200, '{not-json');
 
-    const provider = new TavilySearchProvider({ keychain: keychainWith({ 'tavily.api_key': 'k' }) });
+    const provider = new TavilySearchProvider({
+      keychain: keychainWith({ 'tavily.api_key': 'k' }),
+    });
 
     await expect(
       provider.search('ai news', { limit: 3, signal: new AbortController().signal }),

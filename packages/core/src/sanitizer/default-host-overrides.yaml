@@ -1,18 +1,18 @@
 version: 1
 hosts:
-  "*.chase.com":
+  '*.chase.com':
     inherits: authenticated
     extra_redactors:
       - currency_usd
-  "*.bankofamerica.com":
+  '*.bankofamerica.com':
     inherits: authenticated
     extra_redactors:
       - currency_usd
-  "*.mychart.com":
+  '*.mychart.com':
     inherits: authenticated
     extra_redactors:
       - date_of_birth
-  "*.uscis.gov":
+  '*.uscis.gov':
     inherits: authenticated
     extra_redactors:
       - case_number

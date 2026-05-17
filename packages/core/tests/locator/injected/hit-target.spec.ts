@@ -17,8 +17,14 @@ describe('@no-llm checkHitTarget', () => {
 
     // Simulate element at center
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
-      top: 10, left: 10, width: 100, height: 40,
-      right: 110, bottom: 50, x: 10, y: 10,
+      top: 10,
+      left: 10,
+      width: 100,
+      height: 40,
+      right: 110,
+      bottom: 50,
+      x: 10,
+      y: 10,
       toJSON: () => ({}),
     } as DOMRect);
 
@@ -36,8 +42,14 @@ describe('@no-llm checkHitTarget', () => {
     document.body.appendChild(btn);
 
     vi.spyOn(btn, 'getBoundingClientRect').mockReturnValue({
-      top: 10, left: 10, width: 100, height: 40,
-      right: 110, bottom: 50, x: 10, y: 10,
+      top: 10,
+      left: 10,
+      width: 100,
+      height: 40,
+      right: 110,
+      bottom: 50,
+      x: 10,
+      y: 10,
       toJSON: () => ({}),
     } as DOMRect);
 
@@ -57,8 +69,14 @@ describe('@no-llm checkHitTarget', () => {
     document.body.appendChild(overlay);
 
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
-      top: 10, left: 10, width: 100, height: 40,
-      right: 110, bottom: 50, x: 10, y: 10,
+      top: 10,
+      left: 10,
+      width: 100,
+      height: 40,
+      right: 110,
+      bottom: 50,
+      x: 10,
+      y: 10,
       toJSON: () => ({}),
     } as DOMRect);
 
@@ -77,8 +95,14 @@ describe('@no-llm checkHitTarget', () => {
     document.body.appendChild(el);
 
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
-      top: -100, left: -200, width: 50, height: 20,
-      right: -150, bottom: -80, x: -200, y: -100,
+      top: -100,
+      left: -200,
+      width: 50,
+      height: 20,
+      right: -150,
+      bottom: -80,
+      x: -200,
+      y: -100,
       toJSON: () => ({}),
     } as DOMRect);
 
@@ -91,8 +115,14 @@ describe('@no-llm checkHitTarget', () => {
     document.body.appendChild(el);
 
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
-      top: 100, left: 200, width: 60, height: 30,
-      right: 260, bottom: 130, x: 200, y: 100,
+      top: 100,
+      left: 200,
+      width: 60,
+      height: 30,
+      right: 260,
+      bottom: 130,
+      x: 200,
+      y: 100,
       toJSON: () => ({}),
     } as DOMRect);
 

@@ -44,4 +44,5 @@ await build({
   },
 });
 
+// eslint-disable-next-line no-console -- build-time script; intentional status message
 console.log('recorder-overlay.iife.js built successfully');

@@ -1,0 +1,16 @@
+version: 1
+name: orphan-locator-test
+description: null
+security_class: public
+steps:
+  - id: s1
+    verb: navigate
+    url: https://example.com
+    scope: null
+_locators:
+  Orphaned button:
+    - kind: role
+      role: button
+      name:
+        pattern: orphaned
+        flags: i

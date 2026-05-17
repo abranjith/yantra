@@ -11,7 +11,13 @@ import { FetchError, type ContentFetcher } from '../../src/extraction/fetcher.js
 import type { Extractor } from '../../src/extraction/readability.js';
 import type { SearchProvider } from '../../src/extraction/search/provider.js';
 import type { Summarizer } from '../../src/extraction/summarizer.js';
-import type { AskCard, AskQuery, ExtractedArticle, FetchedDoc, SearchResult } from '../../src/extraction/types.js';
+import type {
+  AskCard,
+  AskQuery,
+  ExtractedArticle,
+  FetchedDoc,
+  SearchResult,
+} from '../../src/extraction/types.js';
 
 class InMemoryAskCache implements AskCache {
   private readonly store = new Map<string, readonly AskCard[]>();
@@ -117,7 +123,11 @@ async function makeRunDir(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0, tempDirs.length).map(async (dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs
+      .splice(0, tempDirs.length)
+      .map(async (dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('@no-llm extraction/ask-pipeline', () => {

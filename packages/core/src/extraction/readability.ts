@@ -22,7 +22,11 @@ export class ReadabilityExtractor implements Extractor {
       const cleanedHtml = $.html();
       const window = new JSDOM(cleanedHtml, { url: doc.finalUrl }).window;
       const parsed = new Readability(window.document).parse();
-      if (!parsed || typeof parsed.textContent !== 'string' || parsed.textContent.trim().length === 0) {
+      if (
+        !parsed ||
+        typeof parsed.textContent !== 'string' ||
+        parsed.textContent.trim().length === 0
+      ) {
         return Promise.resolve(null);
       }
 

@@ -19,6 +19,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/*.tsbuildinfo',
       '**/_lint-fixtures/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,
@@ -139,7 +140,11 @@ export default tseslint.config(
   // Config files: turn off type-checked rules; they aren't part of a TS project.
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['**/*.config.{js,cjs,mjs,ts}', '**/*.config.*.{js,cjs,mjs,ts}', 'scripts/**/*.{js,mjs,ts}'],
+    files: [
+      '**/*.config.{js,cjs,mjs,ts}',
+      '**/*.config.*.{js,cjs,mjs,ts}',
+      'scripts/**/*.{js,mjs,ts}',
+    ],
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
       'import/no-default-export': 'off',

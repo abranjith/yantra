@@ -56,7 +56,9 @@ The **AskCache** lives outside the run directory at `~/.cache/yantra/ask/<sha256
   "utc_day": "2026-05-11",
   "created_at": "2026-05-11T10:14:00.000Z",
   "ttl_seconds": 86400,
-  "cards": [ /* AskCard[] */ ]
+  "cards": [
+    /* AskCard[] */
+  ],
 }
 ```
 
@@ -72,36 +74,36 @@ Defined in `packages/core/src/extraction/types.ts` (single file owns the shared 
 ```ts
 // AskQuery — the parsed user request flowing through the pipeline.
 export interface AskQuery {
-  readonly raw: string;                       // verbatim user input
-  readonly normalized: string;                // trimmed, single-spaced, lowercase for cache key
-  readonly limit: number;                     // top-K cards to return (default 3, max 10)
+  readonly raw: string; // verbatim user input
+  readonly normalized: string; // trimmed, single-spaced, lowercase for cache key
+  readonly limit: number; // top-K cards to return (default 3, max 10)
   readonly noCache: boolean;
-  readonly noLlm: boolean;                    // honors --no-llm flag AND LLM_PROVIDER=none env
-  readonly budgetCalls: number | null;        // null = unbounded; otherwise hard cap on fetches
+  readonly noLlm: boolean; // honors --no-llm flag AND LLM_PROVIDER=none env
+  readonly budgetCalls: number | null; // null = unbounded; otherwise hard cap on fetches
   readonly searchProvider: SearchProviderName | null; // null = auto-select
-  readonly perFetchTimeoutMs: number;         // default 8_000
-  readonly pipelineBudgetMs: number;          // default 30_000
+  readonly perFetchTimeoutMs: number; // default 8_000
+  readonly pipelineBudgetMs: number; // default 30_000
 }
 
 // SearchResult — one row returned by a SearchProvider, before fetch.
 export interface SearchResult {
-  readonly url: string;                       // canonical (https where possible)
-  readonly title: string | null;              // null when provider doesn't supply
-  readonly snippet: string | null;            // provider-supplied excerpt; may be untrusted (sanitized for any LLM use)
-  readonly source: SearchProviderName;        // for provenance in audit log
-  readonly rank: number;                      // 0-indexed position from provider
-  readonly publishedAt: string | null;        // ISO-8601 when provider supplies
+  readonly url: string; // canonical (https where possible)
+  readonly title: string | null; // null when provider doesn't supply
+  readonly snippet: string | null; // provider-supplied excerpt; may be untrusted (sanitized for any LLM use)
+  readonly source: SearchProviderName; // for provenance in audit log
+  readonly rank: number; // 0-indexed position from provider
+  readonly publishedAt: string | null; // ISO-8601 when provider supplies
 }
 
 // FetchedDoc — the raw bytes from a URL plus metadata; the input to the extractor.
 export interface FetchedDoc {
   readonly url: string;
-  readonly finalUrl: string;                  // after redirects
-  readonly fetchedAt: string;                 // ISO-8601 UTC
-  readonly contentType: string | null;        // e.g., "text/html; charset=utf-8"
-  readonly html: string;                      // never the raw Buffer — decoded to UTF-8 here
+  readonly finalUrl: string; // after redirects
+  readonly fetchedAt: string; // ISO-8601 UTC
+  readonly contentType: string | null; // e.g., "text/html; charset=utf-8"
+  readonly html: string; // never the raw Buffer — decoded to UTF-8 here
   readonly statusCode: number;
-  readonly fetchMode: "http" | "browser";     // which fetcher path served it
+  readonly fetchMode: 'http' | 'browser'; // which fetcher path served it
   readonly elapsedMs: number;
 }
 
@@ -110,30 +112,30 @@ export interface ExtractedArticle {
   readonly url: string;
   readonly title: string | null;
   readonly byline: string | null;
-  readonly publishedAt: string | null;        // best-effort parse from <time>, <meta>, JSON-LD
+  readonly publishedAt: string | null; // best-effort parse from <time>, <meta>, JSON-LD
   readonly siteName: string | null;
-  readonly contentText: string;               // plain text (Readability `textContent`)
-  readonly contentHtml: string;               // cleaned HTML (Readability `content`); never sent to LLM raw
-  readonly excerpt: string | null;            // Readability `excerpt`
+  readonly contentText: string; // plain text (Readability `textContent`)
+  readonly contentHtml: string; // cleaned HTML (Readability `content`); never sent to LLM raw
+  readonly excerpt: string | null; // Readability `excerpt`
   readonly lengthChars: number;
 }
 
 // AskCard — the renderable artifact, one per source.
 export interface AskCard {
-  readonly url: string;                       // canonical link to source
-  readonly title: string;                     // article title or fallback to host + path
-  readonly source: string;                    // host portion of url
-  readonly fetchedAt: string;                 // ISO-8601 — auditable "as of"
+  readonly url: string; // canonical link to source
+  readonly title: string; // article title or fallback to host + path
+  readonly source: string; // host portion of url
+  readonly fetchedAt: string; // ISO-8601 — auditable "as of"
   readonly publishedAt: string | null;
-  readonly summary: string;                   // rule-based: first-N-sentences (default 3); LLM-enhanced when lit up
-  readonly summaryKind: "rule-based" | "llm-enhanced" | "fallback-lede";
-  readonly quotedSnippet: string;             // a verbatim ≤ 280-char excerpt for user verification
-  readonly tags: readonly string[];           // ["news", "ai"] — heuristic, lowercase
-  readonly notice: string | null;             // user-visible disclaimer (e.g., "LLM synthesis unavailable", "fetch timed out", "source skipped: robots")
+  readonly summary: string; // rule-based: first-N-sentences (default 3); LLM-enhanced when lit up
+  readonly summaryKind: 'rule-based' | 'llm-enhanced' | 'fallback-lede';
+  readonly quotedSnippet: string; // a verbatim ≤ 280-char excerpt for user verification
+  readonly tags: readonly string[]; // ["news", "ai"] — heuristic, lowercase
+  readonly notice: string | null; // user-visible disclaimer (e.g., "LLM synthesis unavailable", "fetch timed out", "source skipped: robots")
 }
 
 // SearchProviderName — closed enum for audit + config selection.
-export type SearchProviderName = "tavily" | "brave" | "browser";
+export type SearchProviderName = 'tavily' | 'brave' | 'browser';
 ```
 
 ### Repository-Style Interfaces
@@ -144,7 +146,10 @@ All four interfaces are pure abstractions; concrete impls are constructor-inject
 // packages/core/src/extraction/search/provider.ts
 export interface SearchProvider {
   readonly name: SearchProviderName;
-  search(query: string, opts: { limit: number; signal: AbortSignal }): Promise<readonly SearchResult[]>;
+  search(
+    query: string,
+    opts: { limit: number; signal: AbortSignal },
+  ): Promise<readonly SearchResult[]>;
 }
 
 // packages/core/src/extraction/fetcher.ts
@@ -154,7 +159,7 @@ export interface ContentFetcher {
 
 // packages/core/src/extraction/readability.ts
 export interface Extractor {
-  extract(doc: FetchedDoc): Promise<ExtractedArticle | null>;  // null = unrecoverable parse failure
+  extract(doc: FetchedDoc): Promise<ExtractedArticle | null>; // null = unrecoverable parse failure
 }
 
 // packages/core/src/extraction/cache.ts
@@ -166,7 +171,10 @@ export interface AskCache {
 
 // packages/core/src/extraction/summarizer.ts
 export interface Summarizer {
-  summarize(article: ExtractedArticle, query: AskQuery): Promise<{ summary: string; kind: AskCard["summaryKind"] }>;
+  summarize(
+    article: ExtractedArticle,
+    query: AskQuery,
+  ): Promise<{ summary: string; kind: AskCard['summaryKind'] }>;
 }
 ```
 
@@ -396,10 +404,16 @@ Each task is a vertical slice with implementation, unit tests, and a documentati
 
 - [ ] **Implementation**: `llm-summarizer.ts`. Export:
   ```ts
-  export interface LlmSummarizer extends Summarizer { /* same shape */ }
-  export function createLlmSummarizer(
-    deps: { llmClient: LlmClient | null; sanitizer: Sanitizer; featureGate: { llmSummarize: boolean } }
-  ): LlmSummarizer | null { /* returns null in MVP */ }
+  export interface LlmSummarizer extends Summarizer {
+    /* same shape */
+  }
+  export function createLlmSummarizer(deps: {
+    llmClient: LlmClient | null;
+    sanitizer: Sanitizer;
+    featureGate: { llmSummarize: boolean };
+  }): LlmSummarizer | null {
+    /* returns null in MVP */
+  }
   ```
   Returns `null` if `llmClient` is `null` OR `process.env.LLM_PROVIDER === 'none'` OR `featureGate.llmSummarize !== true`. A `// FEAT-011:` block-comment marks the spot where the real `summarize(article, query)` implementation lands (with sanitizer chokepoint flow). The pipeline's summarizer-selection code (TASK-011) does `llmSummarizer ?? ruleBasedSummarizer` — adding the LLM path is a one-flag change in FEAT-011.
 - [ ] **Unit Tests**: `llm-summarizer.spec.ts` covers all three "off" branches. `@no-llm`. A placeholder `it.skip('synthesizes via LLM when lit up — FEAT-011', ...)` documents the contract.
@@ -444,6 +458,7 @@ Each task is a vertical slice with implementation, unit tests, and a documentati
   8. `events.emit('task_completed', ...)`. Return cards.
 
   Top-level `AbortController` with `query.pipelineBudgetMs` timeout aborts everything in flight; any in-flight results that haven't produced a card yet get a `notice: "pipeline budget exceeded"`.
+
 - [ ] **Unit Tests**: `ask-pipeline.spec.ts` with full fake collaborators (no network, no browser). Scenarios:
   - happy path: 3 cards, sorted by rank, all summaries `rule-based`
   - cache hit: returns immediately, no search/fetch invoked
@@ -452,7 +467,7 @@ Each task is a vertical slice with implementation, unit tests, and a documentati
   - 1 fetch timeout: timeout card + 2 ok
   - pipeline budget exceeded mid-fetch: partial deck with notice on missing rows
   - LLM summarizer present + `noLlm: true` query: rule-based wins (proves the seam respects the flag)
-  All `@no-llm`.
+    All `@no-llm`.
 - [ ] **Documentation Update**: README adds a sequence diagram (ASCII) of the pipeline stages.
 - **Verify**: All 7 scenarios pass; `pnpm --filter @yantra/core test -- ask-pipeline` clean.
 
@@ -548,20 +563,20 @@ Custom error classes (extend `Error`, per memory §Error Handling):
 
 ## 7. State Tracking
 
-| Task ID  | Task Description                                                | Implementation | Unit Tests | Doc Update |
-| -------- | --------------------------------------------------------------- | -------------- | ---------- | ---------- |
-| TASK-001 | `SearchProvider` interface + `TavilySearchProvider`             | [x]            | [x]        | [x]        |
-| TASK-002 | `BraveSearchProvider`                                           | [x]            | [x]        | [x]        |
-| TASK-003 | `BrowserSearchProvider` (DuckDuckGo HTML)                       | [x]            | [x]        | [x]        |
-| TASK-004 | Provider selector + config plumbing                             | [x]            | [x]        | [x]        |
-| TASK-005 | `HttpFetcher` + `HybridContentFetcher` with browser fallback    | [x]            | [x]        | [x]        |
-| TASK-006 | Readability extractor with Cheerio pre-clean                    | [x]            | [x]        | [x]        |
-| TASK-007 | Rule-based summarizer (first-N-sentences + heuristic ranking)   | [x]            | [x]        | [x]        |
-| TASK-008 | LLM-summarizer seam (stub for FEAT-011)                         | [x]            | [x]        | [x]        |
-| TASK-009 | `AskCard` renderers (terminal, JSON, markdown)                  | [x]            | [x]        | [x]        |
-| TASK-010 | `FileSystemAskCache` (sha256 keying, 24h TTL, size cap)         | [x]            | [x]        | [x]        |
-| TASK-011 | `AskPipeline.run(query, opts)` orchestrator                     | [x]            | [x]        | [x]        |
-| TASK-012 | `--no-llm` switch end-to-end (headline agent-optional E2E)      | [x]            | [x]        | [x]        |
+| Task ID  | Task Description                                                 | Implementation | Unit Tests | Doc Update |
+| -------- | ---------------------------------------------------------------- | -------------- | ---------- | ---------- |
+| TASK-001 | `SearchProvider` interface + `TavilySearchProvider`              | [x]            | [x]        | [x]        |
+| TASK-002 | `BraveSearchProvider`                                            | [x]            | [x]        | [x]        |
+| TASK-003 | `BrowserSearchProvider` (DuckDuckGo HTML)                        | [x]            | [x]        | [x]        |
+| TASK-004 | Provider selector + config plumbing                              | [x]            | [x]        | [x]        |
+| TASK-005 | `HttpFetcher` + `HybridContentFetcher` with browser fallback     | [x]            | [x]        | [x]        |
+| TASK-006 | Readability extractor with Cheerio pre-clean                     | [x]            | [x]        | [x]        |
+| TASK-007 | Rule-based summarizer (first-N-sentences + heuristic ranking)    | [x]            | [x]        | [x]        |
+| TASK-008 | LLM-summarizer seam (stub for FEAT-011)                          | [x]            | [x]        | [x]        |
+| TASK-009 | `AskCard` renderers (terminal, JSON, markdown)                   | [x]            | [x]        | [x]        |
+| TASK-010 | `FileSystemAskCache` (sha256 keying, 24h TTL, size cap)          | [x]            | [x]        | [x]        |
+| TASK-011 | `AskPipeline.run(query, opts)` orchestrator                      | [x]            | [x]        | [x]        |
+| TASK-012 | `--no-llm` switch end-to-end (headline agent-optional E2E)       | [x]            | [x]        | [x]        |
 | TASK-013 | Ethics gate integration (non-bypassable, per-fetch + search URL) | [x]            | [x]        | [x]        |
 | TASK-014 | Latency budgets (per-fetch + pipeline-wide) + observability      | [x]            | [x]        | [x]        |
 

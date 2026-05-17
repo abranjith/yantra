@@ -209,7 +209,7 @@ Each task is a vertical slice: one task delivers something committable and CI-ve
   - `packages/test-helpers` (`private: true`) → no runtime deps; placeholder `requiresLlm()` export (filled in TASK-007).
   - `apps/cli` → depends on `@yantra/protocol`, `@yantra/core`, `@yantra/agent`; declares `bin: { yantra: "./dist/bin.js" }`; `src/bin.ts` is a shebang script (`#!/usr/bin/env node`) that does `await import('./index.js')`.
   - `e2e` (`private: true`) → depends on all four publishable workspaces; single `smoke.spec.ts` that imports each package's named export.
-  Each package gets a single `@no-llm` smoke test. Append all packages to root `tsconfig.json` `references`.
+    Each package gets a single `@no-llm` smoke test. Append all packages to root `tsconfig.json` `references`.
 - [ ] **Unit Tests**: One `@no-llm` smoke test per package asserting the named export exists.
 - [ ] **Documentation Update**: Add a "Packages" section to `README.md` listing the five workspaces + `e2e/` with a one-line role description each.
 - **Verify**: `pnpm install` reconciles all `workspace:*` links; `pnpm -r build` builds every package; `pnpm -r test` runs and passes every smoke test; `pnpm --filter @yantra/agent why @yantra/core` reports the package is not depended on (a small script asserting this is fine — see TASK-006 for the lint-enforced version).
@@ -218,8 +218,8 @@ Each task is a vertical slice: one task delivers something committable and CI-ve
 
 - [ ] **Implementation**: Install ESLint 9 flat config (`eslint`, `typescript-eslint`, `eslint-plugin-import`, `eslint-plugin-vitest`, `eslint-config-prettier`). Decision: if flat config tooling is mature for all plugins, use `eslint.config.js`; otherwise use `.eslintrc.cjs` — record the choice in CONTRIBUTING.md. Apply rules:
   - **Global**: `@typescript-eslint/recommended-type-checked`, `import/no-default-export` (named exports only per memory), `import/order`, `prettier` config.
-  - **Override for `packages/agent/**`**: `no-restricted-imports` blocks any import whose path matches `@yantra/core`, `@yantra/core/*`, or relative paths reaching into `packages/core/`. Error message: `"@yantra/agent must not import from @yantra/core (architectural boundary, see CLAUDE.md / plan §7)"`.
-  - **Override for `!(packages/agent)/**`**: `no-restricted-imports` blocks imports from `pi-agent-core` and `pi-agent-core/*`. Error message: `"Direct pi-agent-core imports are forbidden outside packages/agent. Use the LLMClient interface."`
+  - **Override for `packages/agent/**`**: `no-restricted-imports`blocks any import whose path matches`@yantra/core`, `@yantra/core/\*`, or relative paths reaching into `packages/core/`. Error message: `"@yantra/agent must not import from @yantra/core (architectural boundary, see CLAUDE.md / plan §7)"`.
+  - **Override for `!(packages/agent)/**`**: `no-restricted-imports`blocks imports from`pi-agent-core`and`pi-agent-core/\*`. Error message: `"Direct pi-agent-core imports are forbidden outside packages/agent. Use the LLMClient interface."`
   - **Override for `packages/protocol/**`** and `**/packages/agent/**`: forbid `any` (`@typescript-eslint/no-explicit-any: 'error'`). Elsewhere allow with `warn` plus a justification comment (memory §Coding Standards).
   - Root `package.json` adds `scripts.lint` → `eslint . --max-warnings=0`. Each package's `lint` script narrows to `eslint src --max-warnings=0`.
   - Add two negative-test fixture files (under `packages/agent/src/_lint-fixtures/` and `packages/core/src/_lint-fixtures/`) that intentionally violate the rule and are excluded from build via `tsconfig.json`'s `exclude`, then a Vitest spec runs ESLint programmatically on those files and asserts the rule fires. This is the verification slice: the lint rule itself is tested.

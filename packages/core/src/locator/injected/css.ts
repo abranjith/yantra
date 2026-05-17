@@ -21,7 +21,7 @@ const UNSTABLE_PATTERNS = [
   // (e.g. "abc1d", "f8a3e"). Purely alphabetic strings like "header" are kept.
   /^(?=[a-z0-9]*\d)[a-z0-9]{5,}$/i,
   /-\d{4,}$/,
-  /^[a-z]+-\d+$/i,  // e.g. item-123
+  /^[a-z]+-\d+$/i, // e.g. item-123
 ] as const;
 
 const DEFAULT_DEPTH_CAP = 8;
@@ -133,6 +133,9 @@ function getNthOfType(el: Element): number {
 }
 
 /** Returns whether a class name is considered stable (not hash-like). */
-export function isStableClassName(cls: string, patterns: readonly RegExp[] = UNSTABLE_PATTERNS): boolean {
+export function isStableClassName(
+  cls: string,
+  patterns: readonly RegExp[] = UNSTABLE_PATTERNS,
+): boolean {
   return !patterns.some((p) => p.test(cls));
 }

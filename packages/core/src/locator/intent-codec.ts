@@ -11,7 +11,9 @@ function decodeRegex(jr: JsonRegex): RegExp {
 }
 
 function isJsonRegex(v: unknown): v is JsonRegex {
-  return typeof v === 'object' && v !== null && '__isRegExp' in v && (v as JsonRegex).__isRegExp === true;
+  return (
+    typeof v === 'object' && v !== null && '__isRegExp' in v && (v as JsonRegex).__isRegExp === true
+  );
 }
 
 /**
@@ -27,34 +29,39 @@ export function encodeIntent(intent: LocatorIntent): JsonLocatorIntent {
     case 'role': {
       const name = intent.name instanceof RegExp ? encodeRegex(intent.name) : intent.name;
       return {
-        kind: 'role', role: intent.role,
+        kind: 'role',
+        role: intent.role,
         ...(name !== undefined ? { name } : {}),
         ...(intent.exact !== undefined ? { exact: intent.exact } : {}),
       };
     }
     case 'testid':
       return {
-        kind: 'testid', value: intent.value,
+        kind: 'testid',
+        value: intent.value,
         ...(intent.attribute !== undefined ? { attribute: intent.attribute } : {}),
       };
     case 'label': {
       const text = intent.text instanceof RegExp ? encodeRegex(intent.text) : intent.text;
       return {
-        kind: 'label', text,
+        kind: 'label',
+        text,
         ...(intent.exact !== undefined ? { exact: intent.exact } : {}),
       };
     }
     case 'placeholder': {
       const text = intent.text instanceof RegExp ? encodeRegex(intent.text) : intent.text;
       return {
-        kind: 'placeholder', text,
+        kind: 'placeholder',
+        text,
         ...(intent.exact !== undefined ? { exact: intent.exact } : {}),
       };
     }
     case 'text': {
       const text = intent.text instanceof RegExp ? encodeRegex(intent.text) : intent.text;
       return {
-        kind: 'text', text,
+        kind: 'text',
+        text,
         ...(intent.exact !== undefined ? { exact: intent.exact } : {}),
         ...(intent.normalize !== undefined ? { normalize: intent.normalize } : {}),
       };
@@ -86,34 +93,39 @@ export function decodeIntent(encoded: JsonLocatorIntent): LocatorIntent {
     case 'role': {
       const name = isJsonRegex(encoded.name) ? decodeRegex(encoded.name) : encoded.name;
       return {
-        kind: 'role', role: encoded.role,
+        kind: 'role',
+        role: encoded.role,
         ...(name !== undefined ? { name } : {}),
         ...(encoded.exact !== undefined ? { exact: encoded.exact } : {}),
       };
     }
     case 'testid':
       return {
-        kind: 'testid', value: encoded.value,
+        kind: 'testid',
+        value: encoded.value,
         ...(encoded.attribute !== undefined ? { attribute: encoded.attribute } : {}),
       };
     case 'label': {
       const text = isJsonRegex(encoded.text) ? decodeRegex(encoded.text) : encoded.text;
       return {
-        kind: 'label', text,
+        kind: 'label',
+        text,
         ...(encoded.exact !== undefined ? { exact: encoded.exact } : {}),
       };
     }
     case 'placeholder': {
       const text = isJsonRegex(encoded.text) ? decodeRegex(encoded.text) : encoded.text;
       return {
-        kind: 'placeholder', text,
+        kind: 'placeholder',
+        text,
         ...(encoded.exact !== undefined ? { exact: encoded.exact } : {}),
       };
     }
     case 'text': {
       const text = isJsonRegex(encoded.text) ? decodeRegex(encoded.text) : encoded.text;
       return {
-        kind: 'text', text,
+        kind: 'text',
+        text,
         ...(encoded.exact !== undefined ? { exact: encoded.exact } : {}),
         ...(encoded.normalize !== undefined ? { normalize: encoded.normalize } : {}),
       };

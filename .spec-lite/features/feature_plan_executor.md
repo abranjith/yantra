@@ -13,7 +13,7 @@
 
 **What this feature does**: turns a validated `Plan` into a sequence of browser actions, handles every failure cleanly (retry / fallback / checkpoint / human-handoff / abort-with-report), emits a structured `TaskEvent` stream, and enforces the ethics gate (robots.txt, blocklist, per-host rate limit) before any side-effecting action. The executor is the heart of the deterministic engine — the layer that makes "agent-emits-finite-Plan, engine-executes-deterministically" actually work.
 
-**Why this feature exists**: plan §7 mandates a strict separation between *what* (agent) and *how* (engine). The executor is the *how*. It is the chokepoint that makes three plan invariants real at run time:
+**Why this feature exists**: plan §7 mandates a strict separation between _what_ (agent) and _how_ (engine). The executor is the _how_. It is the chokepoint that makes three plan invariants real at run time:
 
 1. Plans are finite (no ReAct mid-execution) — the executor walks `Plan.steps` linearly and emits a structured failure if a step fails terminally.
 2. Locator resolution is the engine's job, not the agent's — the executor calls `LocatorResolver` (FEAT-004) for any step that references a workflow locator name.
@@ -58,19 +58,27 @@ Per-run directory layout (subset owned by this feature; the rest is FEAT-006/FEA
   "ts": "2026-05-11T09:12:34.567Z",
   "page_url": "https://mybank.example/dashboard",
   "captures": {
-    "transactions": { "$type": "array", "$len": 42, "$sha256": "<digest>", "$inline": [/* truncated if > 64 KB */] }
+    "transactions": {
+      "$type": "array",
+      "$len": 42,
+      "$sha256": "<digest>",
+      "$inline": [
+        /* truncated if > 64 KB */
+      ],
+    },
   },
   "scope_chain": ["public", "public", "read-only-data"],
   "cookies_ref": { "kind": "profile", "profile_name": "bank-statement" },
   "budgets": {
     "locator_remaining": 3,
     "step_remaining": 2,
-    "workflow_remaining": 1
-  }
+    "workflow_remaining": 1,
+  },
 }
 ```
 
 Notes:
+
 - **Secrets are never serialized** into a checkpoint. The capture map holds extracted DOM data only.
 - **Captures over 64 KB** are written to a sibling `checkpoints/<step-id>.captures/<name>.json` and referenced by `{ "$ref": "<name>.json" }` to keep the main checkpoint file scannable.
 - **Atomic write**: write to `checkpoints/<step-id>.json.tmp`, then `fs.rename` — `rename` is atomic on POSIX and on NTFS (when same volume). On rename failure, the `.tmp` is cleaned up best-effort.
@@ -89,46 +97,46 @@ One `TaskEvent` per line, encoded JSON, no trailing comma, terminated by `\n`. F
 interface ExecutionContext {
   readonly runId: string;
   readonly taskId: string;
-  readonly plan: Plan;                    // from packages/protocol
-  currentStepIdx: number;                 // mutable cursor
+  readonly plan: Plan; // from packages/protocol
+  currentStepIdx: number; // mutable cursor
   readonly captures: CaptureStore;
-  readonly secrets: SecretResolver;       // injected; from FEAT-006 or stubbed
-  readonly browser: BrowserSession;       // from FEAT-003; null for resume until rehydrated
+  readonly secrets: SecretResolver; // injected; from FEAT-006 or stubbed
+  readonly browser: BrowserSession; // from FEAT-003; null for resume until rehydrated
   readonly events: EventBus;
   readonly budgets: RetryBudget;
   readonly ethics: EthicsGate;
   readonly checkpoints: CheckpointStore;
-  readonly scopeChain: readonly Scope[];  // parallel to plan.steps; computed at ctx construction
-  readonly logger: Logger;                // pino child with { runId, taskId }
-  readonly clock: Clock;                  // injected for tests; defaults to Date.now / setTimeout
+  readonly scopeChain: readonly Scope[]; // parallel to plan.steps; computed at ctx construction
+  readonly logger: Logger; // pino child with { runId, taskId }
+  readonly clock: Clock; // injected for tests; defaults to Date.now / setTimeout
 }
 
 /** Three-level decrement-as-consumed budget. */
 interface RetryBudget {
   readonly initial: { locatorAttempts: number; stepAttempts: number; workflowAttempts: number };
   readonly remaining: { locatorAttempts: number; stepAttempts: number; workflowAttempts: number };
-  canRetry(level: "locator" | "step" | "workflow"): boolean;
-  consume(level: "locator" | "step" | "workflow"): void;
+  canRetry(level: 'locator' | 'step' | 'workflow'): boolean;
+  consume(level: 'locator' | 'step' | 'workflow'): void;
   snapshot(): { locator: number; step: number; workflow: number };
 }
 
 /** The discriminated-union return shape every step handler produces. */
 type StepResult =
-  | { kind: "completed"; captureKeys?: string[] }                       // emit step_completed + checkpoint
-  | { kind: "retried"; attempt: number; reason: string }                // emit step_retry; executor decides next move
-  | { kind: "failed"; class: FailureClass; error: ExecutorError }       // emit task_failed; abort
-  | { kind: "handoff_requested"; reason: string }                       // emit human_handoff_requested; abort
-  | { kind: "ethics_refused"; host: string; rule: string; reason: string }; // emit ethics_refused; abort
+  | { kind: 'completed'; captureKeys?: string[] } // emit step_completed + checkpoint
+  | { kind: 'retried'; attempt: number; reason: string } // emit step_retry; executor decides next move
+  | { kind: 'failed'; class: FailureClass; error: ExecutorError } // emit task_failed; abort
+  | { kind: 'handoff_requested'; reason: string } // emit human_handoff_requested; abort
+  | { kind: 'ethics_refused'; host: string; rule: string; reason: string }; // emit ethics_refused; abort
 
 type FailureClass =
-  | "locator_exhausted"
-  | "ethics_refused"
-  | "scope_violation"
-  | "budget_exhausted"
-  | "remote_refused"        // 403/429/451
-  | "navigation_timeout"
-  | "assert_failed"
-  | "internal_error";       // unexpected throw inside a handler
+  | 'locator_exhausted'
+  | 'ethics_refused'
+  | 'scope_violation'
+  | 'budget_exhausted'
+  | 'remote_refused' // 403/429/451
+  | 'navigation_timeout'
+  | 'assert_failed'
+  | 'internal_error'; // unexpected throw inside a handler
 
 /** What every step-verb handler exports. */
 type StepHandler<S extends Step> = (step: S, ctx: ExecutionContext) => Promise<StepResult>;
@@ -150,9 +158,9 @@ export const handleWaitFor: StepHandler<WaitForStep>;
 // step-handlers/assert.ts
 export const handleAssert: StepHandler<AssertStep>;
 // step-handlers/branch.ts
-export const handleBranch: StepHandler<BranchStep>;        // recurses via Executor.runSubPlan
+export const handleBranch: StepHandler<BranchStep>; // recurses via Executor.runSubPlan
 // step-handlers/loop.ts
-export const handleLoop: StepHandler<LoopStep>;            // bounded iteration; recurses
+export const handleLoop: StepHandler<LoopStep>; // bounded iteration; recurses
 // step-handlers/call_workflow.ts
 export const handleCallWorkflow: StepHandler<CallWorkflowStep>;
 // step-handlers/llm_summarize.ts
@@ -165,14 +173,15 @@ A `StepDispatch` lookup table (`Map<Step["type"], StepHandler<Step>>`) routes by
 
 ```ts
 interface StepVerbDescriptor<S extends Step> {
-  verb: S["type"];                                  // discriminator
-  handler: StepHandler<S>;                          // execution
-  scopeAllowlist: readonly SecurityScope[];         // which scopes permit this verb (plan §6 contextual scopes)
-  semanticChecks: (step: S, ctx: SemanticContext) => ValidationError[];  // verb-specific cross-reference checks
+  verb: S['type']; // discriminator
+  handler: StepHandler<S>; // execution
+  scopeAllowlist: readonly SecurityScope[]; // which scopes permit this verb (plan §6 contextual scopes)
+  semanticChecks: (step: S, ctx: SemanticContext) => ValidationError[]; // verb-specific cross-reference checks
 }
 ```
 
 `step-handlers/index.ts` assembles a single `STEP_VERB_REGISTRY: ReadonlyMap<Step["type"], StepVerbDescriptor<Step>>` consumed by:
+
 - The executor (`StepDispatch = new Map([...registry].map(([k, d]) => [k, d.handler]))`).
 - The semantic validator in `packages/protocol` (imports the registry via a re-export, calls each descriptor's `semanticChecks`) — keeps verb-specific knowledge co-located with the verb, removes the monolithic `switch (step.type)` from `validators/semantic.ts`.
 - The contextual-scope enforcer (`packages/core/src/executor/scope-enforcer.ts`) reads `scopeAllowlist` rather than carrying its own table.
@@ -200,10 +209,10 @@ interface CaptureStore {
 ```ts
 interface EventBus {
   publish(event: TaskEvent): void;
-  subscribe(): AsyncIterable<TaskEvent>;          // multi-subscriber; backpressure via per-subscriber buffer
-  flush(): Promise<void>;                          // forces JSONL write of any buffered events
-  persistedAt(): string;                           // absolute path to events.jsonl
-  close(): Promise<void>;                          // final flush + close file handle
+  subscribe(): AsyncIterable<TaskEvent>; // multi-subscriber; backpressure via per-subscriber buffer
+  flush(): Promise<void>; // forces JSONL write of any buffered events
+  persistedAt(): string; // absolute path to events.jsonl
+  close(): Promise<void>; // final flush + close file handle
 }
 ```
 
@@ -211,15 +220,19 @@ interface EventBus {
 
 ```ts
 interface CheckpointStore {
-  save(checkpoint: Checkpoint): Promise<void>;     // atomic; write-then-rename
+  save(checkpoint: Checkpoint): Promise<void>; // atomic; write-then-rename
   load(stepId: string): Promise<Checkpoint | null>;
-  list(): Promise<CheckpointSummary[]>;            // {step_id, ts, after_step_idx}
-  loadLast(): Promise<Checkpoint | null>;          // by after_step_idx desc
+  list(): Promise<CheckpointSummary[]>; // {step_id, ts, after_step_idx}
+  loadLast(): Promise<Checkpoint | null>; // by after_step_idx desc
 }
 
 interface EthicsGate {
   /** Composite check: robots + blocklist + rate-limit. Throws EthicsRefusedError on disallow. */
-  check(url: string, action: "navigate" | "fetch", ctx: { taskId: string; stepId: string }): Promise<void>;
+  check(
+    url: string,
+    action: 'navigate' | 'fetch',
+    ctx: { taskId: string; stepId: string },
+  ): Promise<void>;
 }
 
 interface RobotsCache {
@@ -230,7 +243,7 @@ interface RobotsCache {
 interface Blocklist {
   /** Returns the matching rule label if host is blocked, null otherwise. */
   match(host: string): string | null;
-  reload(): Promise<void>;                         // hot-reloads from disk
+  reload(): Promise<void>; // hot-reloads from disk
 }
 
 interface RateLimiter {
@@ -287,63 +300,63 @@ The in-memory `EventBus`, `CheckpointStore`, and `Captures` map intentionally mi
 
 ### Production code
 
-| File | Purpose |
-|---|---|
-| `packages/core/src/executor/executor.ts` | `Executor` class; `run(plan)`, `runSubPlan(steps, ctx)`, `resumeFrom(checkpoint)`; owns the step-dispatch loop and the layered retry strategy |
-| `packages/core/src/executor/execution-context.ts` | `ExecutionContext` factory; assembles ctx from `TaskRequest` + `Plan` + `BrowserSession` + budgets + bus |
-| `packages/core/src/executor/retry-budget.ts` | `RetryBudget` class with `consume` / `canRetry` / `snapshot` |
-| `packages/core/src/executor/step-dispatch.ts` | `StepDispatch` map: `Step["type"] -> StepHandler<Step>` |
-| `packages/core/src/executor/step-handlers/navigate.ts` | Navigate handler (calls `EthicsGate.check` first) |
-| `packages/core/src/executor/step-handlers/click.ts` | Click handler (resolves `LocatorChain` via `LocatorResolver`; auto-wait owned by FEAT-004) |
-| `packages/core/src/executor/step-handlers/fill.ts` | Fill handler (resolves `ValueRef` via `SecretResolver`; secret zeroed post-use) |
-| `packages/core/src/executor/step-handlers/extract.ts` | Extract handler (structured extraction per Zod schema in step; stores in `CaptureStore`) |
-| `packages/core/src/executor/step-handlers/wait_for.ts` | WaitFor handler (URL match / locator visible / network-idle) |
-| `packages/core/src/executor/step-handlers/assert.ts` | Assert handler (hard-abort on failure) |
-| `packages/core/src/executor/step-handlers/branch.ts` | Branch handler (evaluates condition via JSONata on capture scope; recurses) |
-| `packages/core/src/executor/step-handlers/loop.ts` | Loop handler (bounded iteration over capture/param collection; recurses) |
-| `packages/core/src/executor/step-handlers/call_workflow.ts` | CallWorkflow handler (sub-plan in nested ctx; stubbed if FEAT-010 not built) |
-| `packages/core/src/executor/step-handlers/llm_summarize.ts` | LLMSummarize handler (coordinates sanitizer + `LLMClient`; stubbed if FEAT-006/011 not built) |
-| `packages/core/src/executor/step-handlers/index.ts` | Re-exports + assembles `StepDispatch` |
-| `packages/core/src/executor/checkpoint-store.ts` | `FilesystemCheckpointStore` impl: write-then-rename atomic save |
-| `packages/core/src/executor/capture-store.ts` | `InMemoryCaptureStore` impl: get/set/keys + snapshot/restore for checkpointing |
-| `packages/core/src/executor/event-bus.ts` | `JsonlEventBus` impl: in-process pub/sub + debounced flush to `events.jsonl` |
-| `packages/core/src/executor/scope-enforcer.ts` | Defense-in-depth re-check of `read-only-data` scope before execution starts |
-| `packages/core/src/executor/errors.ts` | `LocatorNotFoundError`, `EthicsRefusedError`, `ScopeViolationError`, `BudgetExhaustedError`, `RemoteRefusedError`, `NavigationTimeoutError`, `AssertFailedError` — all extending a common `ExecutorError` base with structured context |
-| `packages/core/src/executor/value-resolver.ts` | Resolves `ValueRef` discriminated union to concrete value at step boundary (param / capture / secret / template); secrets routed through `SecretResolver` |
-| `packages/core/src/executor/report-writer.ts` | Builds `report.md` on `task_failed` / `task_completed` (call-log style per brainstorm §7.6); includes Chrome-version-drift advisory line if FEAT-010 passes one in; includes extraction `metadata.error_count` per Capture; includes token-usage totals from `UsageLedger` |
-| `packages/core/src/audit/usage-writer.ts` | `UsageWriter` interface + filesystem impl: appends `UsageCall` records to `runs/<run-id>/usage.json` atomically; consumed by `llm_summarize` handler and (in FEAT-011) by `LLMClient.generatePlan` |
-| `packages/core/src/ethics/ethics-gate.ts` | Composite `EthicsGate` impl: robots + blocklist + rate-limiter |
-| `packages/core/src/ethics/robots.ts` | `RobotsCache` impl: fetch + parse via `robots-parser`; 24 h TTL; per-host LRU |
-| `packages/core/src/ethics/blocklist.ts` | `Blocklist` impl: loads YAML from `~/.config/yantra/blocklist.yaml`; preseeded categories (ads, trackers, social-buttons) |
-| `packages/core/src/ethics/rate-limiter.ts` | `RateLimiter` impl: per-host token bucket; configurable; default 1 req/sec |
-| `packages/core/src/ethics/config.ts` | Loads `~/.config/yantra/config.yaml` ethics-section (user-agent, per-host overrides) |
+| File                                                        | Purpose                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/executor/executor.ts`                    | `Executor` class; `run(plan)`, `runSubPlan(steps, ctx)`, `resumeFrom(checkpoint)`; owns the step-dispatch loop and the layered retry strategy                                                                                                                              |
+| `packages/core/src/executor/execution-context.ts`           | `ExecutionContext` factory; assembles ctx from `TaskRequest` + `Plan` + `BrowserSession` + budgets + bus                                                                                                                                                                   |
+| `packages/core/src/executor/retry-budget.ts`                | `RetryBudget` class with `consume` / `canRetry` / `snapshot`                                                                                                                                                                                                               |
+| `packages/core/src/executor/step-dispatch.ts`               | `StepDispatch` map: `Step["type"] -> StepHandler<Step>`                                                                                                                                                                                                                    |
+| `packages/core/src/executor/step-handlers/navigate.ts`      | Navigate handler (calls `EthicsGate.check` first)                                                                                                                                                                                                                          |
+| `packages/core/src/executor/step-handlers/click.ts`         | Click handler (resolves `LocatorChain` via `LocatorResolver`; auto-wait owned by FEAT-004)                                                                                                                                                                                 |
+| `packages/core/src/executor/step-handlers/fill.ts`          | Fill handler (resolves `ValueRef` via `SecretResolver`; secret zeroed post-use)                                                                                                                                                                                            |
+| `packages/core/src/executor/step-handlers/extract.ts`       | Extract handler (structured extraction per Zod schema in step; stores in `CaptureStore`)                                                                                                                                                                                   |
+| `packages/core/src/executor/step-handlers/wait_for.ts`      | WaitFor handler (URL match / locator visible / network-idle)                                                                                                                                                                                                               |
+| `packages/core/src/executor/step-handlers/assert.ts`        | Assert handler (hard-abort on failure)                                                                                                                                                                                                                                     |
+| `packages/core/src/executor/step-handlers/branch.ts`        | Branch handler (evaluates condition via JSONata on capture scope; recurses)                                                                                                                                                                                                |
+| `packages/core/src/executor/step-handlers/loop.ts`          | Loop handler (bounded iteration over capture/param collection; recurses)                                                                                                                                                                                                   |
+| `packages/core/src/executor/step-handlers/call_workflow.ts` | CallWorkflow handler (sub-plan in nested ctx; stubbed if FEAT-010 not built)                                                                                                                                                                                               |
+| `packages/core/src/executor/step-handlers/llm_summarize.ts` | LLMSummarize handler (coordinates sanitizer + `LLMClient`; stubbed if FEAT-006/011 not built)                                                                                                                                                                              |
+| `packages/core/src/executor/step-handlers/index.ts`         | Re-exports + assembles `StepDispatch`                                                                                                                                                                                                                                      |
+| `packages/core/src/executor/checkpoint-store.ts`            | `FilesystemCheckpointStore` impl: write-then-rename atomic save                                                                                                                                                                                                            |
+| `packages/core/src/executor/capture-store.ts`               | `InMemoryCaptureStore` impl: get/set/keys + snapshot/restore for checkpointing                                                                                                                                                                                             |
+| `packages/core/src/executor/event-bus.ts`                   | `JsonlEventBus` impl: in-process pub/sub + debounced flush to `events.jsonl`                                                                                                                                                                                               |
+| `packages/core/src/executor/scope-enforcer.ts`              | Defense-in-depth re-check of `read-only-data` scope before execution starts                                                                                                                                                                                                |
+| `packages/core/src/executor/errors.ts`                      | `LocatorNotFoundError`, `EthicsRefusedError`, `ScopeViolationError`, `BudgetExhaustedError`, `RemoteRefusedError`, `NavigationTimeoutError`, `AssertFailedError` — all extending a common `ExecutorError` base with structured context                                     |
+| `packages/core/src/executor/value-resolver.ts`              | Resolves `ValueRef` discriminated union to concrete value at step boundary (param / capture / secret / template); secrets routed through `SecretResolver`                                                                                                                  |
+| `packages/core/src/executor/report-writer.ts`               | Builds `report.md` on `task_failed` / `task_completed` (call-log style per brainstorm §7.6); includes Chrome-version-drift advisory line if FEAT-010 passes one in; includes extraction `metadata.error_count` per Capture; includes token-usage totals from `UsageLedger` |
+| `packages/core/src/audit/usage-writer.ts`                   | `UsageWriter` interface + filesystem impl: appends `UsageCall` records to `runs/<run-id>/usage.json` atomically; consumed by `llm_summarize` handler and (in FEAT-011) by `LLMClient.generatePlan`                                                                         |
+| `packages/core/src/ethics/ethics-gate.ts`                   | Composite `EthicsGate` impl: robots + blocklist + rate-limiter                                                                                                                                                                                                             |
+| `packages/core/src/ethics/robots.ts`                        | `RobotsCache` impl: fetch + parse via `robots-parser`; 24 h TTL; per-host LRU                                                                                                                                                                                              |
+| `packages/core/src/ethics/blocklist.ts`                     | `Blocklist` impl: loads YAML from `~/.config/yantra/blocklist.yaml`; preseeded categories (ads, trackers, social-buttons)                                                                                                                                                  |
+| `packages/core/src/ethics/rate-limiter.ts`                  | `RateLimiter` impl: per-host token bucket; configurable; default 1 req/sec                                                                                                                                                                                                 |
+| `packages/core/src/ethics/config.ts`                        | Loads `~/.config/yantra/config.yaml` ethics-section (user-agent, per-host overrides)                                                                                                                                                                                       |
 
 ### Test code (mirrored)
 
-| File | Type |
-|---|---|
-| `packages/core/src/executor/executor.spec.ts` | Unit (`@no-llm`) — end-to-end plan walks for each verb |
-| `packages/core/src/executor/retry-budget.spec.ts` | Unit (`@no-llm`) + property test for budget invariants |
-| `packages/core/src/executor/scope-enforcer.spec.ts` | Unit + property (`@no-llm`) — fast-check generated mixed-scope plans |
-| `packages/core/src/executor/checkpoint-store.spec.ts` | Unit (`@no-llm`) — atomic write semantics, crash-mid-write recovery |
-| `packages/core/src/executor/capture-store.spec.ts` | Unit (`@no-llm`) — snapshot/restore round-trip incl. sidecar threshold |
-| `packages/core/src/executor/event-bus.spec.ts` | Unit (`@no-llm`) — multi-subscriber, debounced flush, sync-before-checkpoint |
-| `packages/core/src/executor/value-resolver.spec.ts` | Unit (`@no-llm`) — secret never echoed to events; zeroed after |
-| `packages/core/src/executor/step-handlers/navigate.spec.ts` | Unit (`@no-llm`) — ethics gate called first; redirect chain handling |
-| `packages/core/src/executor/step-handlers/click.spec.ts` | Unit (`@no-llm`) — locator chain exhaustion produces `LocatorNotFoundError` |
-| `packages/core/src/executor/step-handlers/fill.spec.ts` | Unit (`@no-llm`) — secret value never in `step_completed` event |
-| `packages/core/src/executor/step-handlers/extract.spec.ts` | Unit (`@no-llm`) — Zod-schema-validated capture; capture_keys emitted, values not |
-| `packages/core/src/executor/step-handlers/wait_for.spec.ts` | Unit (`@no-llm`) |
-| `packages/core/src/executor/step-handlers/assert.spec.ts` | Unit (`@no-llm`) — assertion failure is hard abort |
-| `packages/core/src/executor/step-handlers/branch.spec.ts` | Unit (`@no-llm`) — JSONata condition eval; sub-plan recursion |
-| `packages/core/src/executor/step-handlers/loop.spec.ts` | Unit (`@no-llm`) — bounded iteration; max-iterations cap respected |
-| `packages/core/src/executor/step-handlers/call_workflow.spec.ts` | Unit (`@no-llm`) — sub-plan with nested ctx |
-| `packages/core/src/executor/step-handlers/llm_summarize.spec.ts` | Unit (`@requires-llm`) — only test in this feature tagged @requires-llm |
-| `packages/core/src/ethics/robots.spec.ts` | Unit (`@no-llm`) — cache TTL, parse via fixture robots.txt files |
-| `packages/core/src/ethics/blocklist.spec.ts` | Unit (`@no-llm`) — YAML load, hot-reload, category preseed |
-| `packages/core/src/ethics/rate-limiter.spec.ts` | Unit (`@no-llm`) — token-bucket math; per-host isolation; injected clock |
-| `packages/core/src/ethics/ethics-gate.spec.ts` | Unit (`@no-llm`) — composite refusal precedence (blocklist > robots > rate-limit) |
-| `e2e/chaos/executor-chaos.spec.ts` | E2E (`@no-llm`) — chaos suite: inject each `FailureClass`; assert clean termination + `report.md` 100% of runs |
+| File                                                             | Type                                                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/executor/executor.spec.ts`                    | Unit (`@no-llm`) — end-to-end plan walks for each verb                                                         |
+| `packages/core/src/executor/retry-budget.spec.ts`                | Unit (`@no-llm`) + property test for budget invariants                                                         |
+| `packages/core/src/executor/scope-enforcer.spec.ts`              | Unit + property (`@no-llm`) — fast-check generated mixed-scope plans                                           |
+| `packages/core/src/executor/checkpoint-store.spec.ts`            | Unit (`@no-llm`) — atomic write semantics, crash-mid-write recovery                                            |
+| `packages/core/src/executor/capture-store.spec.ts`               | Unit (`@no-llm`) — snapshot/restore round-trip incl. sidecar threshold                                         |
+| `packages/core/src/executor/event-bus.spec.ts`                   | Unit (`@no-llm`) — multi-subscriber, debounced flush, sync-before-checkpoint                                   |
+| `packages/core/src/executor/value-resolver.spec.ts`              | Unit (`@no-llm`) — secret never echoed to events; zeroed after                                                 |
+| `packages/core/src/executor/step-handlers/navigate.spec.ts`      | Unit (`@no-llm`) — ethics gate called first; redirect chain handling                                           |
+| `packages/core/src/executor/step-handlers/click.spec.ts`         | Unit (`@no-llm`) — locator chain exhaustion produces `LocatorNotFoundError`                                    |
+| `packages/core/src/executor/step-handlers/fill.spec.ts`          | Unit (`@no-llm`) — secret value never in `step_completed` event                                                |
+| `packages/core/src/executor/step-handlers/extract.spec.ts`       | Unit (`@no-llm`) — Zod-schema-validated capture; capture_keys emitted, values not                              |
+| `packages/core/src/executor/step-handlers/wait_for.spec.ts`      | Unit (`@no-llm`)                                                                                               |
+| `packages/core/src/executor/step-handlers/assert.spec.ts`        | Unit (`@no-llm`) — assertion failure is hard abort                                                             |
+| `packages/core/src/executor/step-handlers/branch.spec.ts`        | Unit (`@no-llm`) — JSONata condition eval; sub-plan recursion                                                  |
+| `packages/core/src/executor/step-handlers/loop.spec.ts`          | Unit (`@no-llm`) — bounded iteration; max-iterations cap respected                                             |
+| `packages/core/src/executor/step-handlers/call_workflow.spec.ts` | Unit (`@no-llm`) — sub-plan with nested ctx                                                                    |
+| `packages/core/src/executor/step-handlers/llm_summarize.spec.ts` | Unit (`@requires-llm`) — only test in this feature tagged @requires-llm                                        |
+| `packages/core/src/ethics/robots.spec.ts`                        | Unit (`@no-llm`) — cache TTL, parse via fixture robots.txt files                                               |
+| `packages/core/src/ethics/blocklist.spec.ts`                     | Unit (`@no-llm`) — YAML load, hot-reload, category preseed                                                     |
+| `packages/core/src/ethics/rate-limiter.spec.ts`                  | Unit (`@no-llm`) — token-bucket math; per-host isolation; injected clock                                       |
+| `packages/core/src/ethics/ethics-gate.spec.ts`                   | Unit (`@no-llm`) — composite refusal precedence (blocklist > robots > rate-limit)                              |
+| `e2e/chaos/executor-chaos.spec.ts`                               | E2E (`@no-llm`) — chaos suite: inject each `FailureClass`; assert clean termination + `report.md` 100% of runs |
 
 ---
 
@@ -416,7 +429,7 @@ Implement `Executor.run(plan: Plan): Promise<RunOutcome>` in `executor.ts`. The 
 4. emit task_completed; return { status:"completed", outputs }
 ```
 
-`Executor.runSubPlan(steps, ctx)` is the same loop with the outer `task_started`/`task_completed` skipped — used by `branch`, `loop`, `call_workflow` handlers. Workflow-level retries (the outermost layer) sit *above* `run()` in the caller (FEAT-010's replay loop); this executor exposes the budget but doesn't loop the whole run.
+`Executor.runSubPlan(steps, ctx)` is the same loop with the outer `task_started`/`task_completed` skipped — used by `branch`, `loop`, `call_workflow` handlers. Workflow-level retries (the outermost layer) sit _above_ `run()` in the caller (FEAT-010's replay loop); this executor exposes the budget but doesn't loop the whole run.
 
 ### TASK-005 — NavigateStep handler
 
@@ -457,14 +470,15 @@ Tests assert: (a) `step_completed` event payload, when JSON-stringified, never c
 `step-handlers/extract.ts`. **Produces an `ExtractionResultEnvelope` (FEAT-002 §2.1.7) — lenient-with-evidence per plan §4 Capture.** Steps:
 
 1. Resolve locator. Run the structured extraction routine — for an element matching the locator, walk `step.extraction_schema` and pull values from the DOM. The extraction routine itself lives in `packages/core/src/extraction/` and is called from here.
-2. For *each row* in a tabular extract: `safeParse` against `extraction_schema`. **On per-row failure, build an error row** `{__error: <zod issue message>, __raw: <pre-coerce row>}` rather than dropping it. Tally `valid_rows` and `error_count`.
+2. For _each row_ in a tabular extract: `safeParse` against `extraction_schema`. **On per-row failure, build an error row** `{__error: <zod issue message>, __raw: <pre-coerce row>}` rather than dropping it. Tally `valid_rows` and `error_count`.
 3. For non-tabular (scalar/object) extracts, the envelope contains `rows: [singleValue]` with `total_rows: 1` and `error_count: 0` or `1` accordingly — the shape is uniform so consumers don't branch.
 4. Assemble `ExtractionResultEnvelope = { rows, metadata: { total_rows, valid_rows, error_count } }` and assert the protocol invariant `total = valid + error`.
 5. `ctx.captures.set(step.capture_as, envelope)`.
 6. Return `{kind:"completed", captureKeys: [step.capture_as]}`. Emit `step_completed` payload includes `capture_keys` and `metadata` (counts only — never row values).
-7. **Hard-extract failure** (the locator resolved but the extraction routine threw — e.g., the DOM region returned no rows when the schema expected at least one) returns `{kind:"failed", class:"internal_error"}` with the error captured in `report.md`. Empty extracts (`total_rows: 0`) are *not* failures unless the workflow asserts otherwise via a following `AssertStep`.
+7. **Hard-extract failure** (the locator resolved but the extraction routine threw — e.g., the DOM region returned no rows when the schema expected at least one) returns `{kind:"failed", class:"internal_error"}` with the error captured in `report.md`. Empty extracts (`total_rows: 0`) are _not_ failures unless the workflow asserts otherwise via a following `AssertStep`.
 
 **Test additions**:
+
 - Fixture page with a 10-row table where rows 3 and 7 have malformed data → envelope contains 10 rows, 8 typed + 2 `__error` envelopes, `metadata.error_count === 2`.
 - Empty-table extract → `{rows: [], metadata: {0, 0, 0}}`, no failure.
 - The `step_completed` event JSON-stringified must not contain row values; assert via grep against the fixture page's known content.
@@ -474,6 +488,7 @@ Per plan §5 scope rules: extract is allowed in all three scopes (`public`, `rea
 ### TASK-009 — WaitForStep + AssertStep handlers
 
 `step-handlers/wait_for.ts`: supports three wait modes (the protocol enumerates them):
+
 - `wait_for: locator` — uses `LocatorResolver` with auto-wait until visible; honors step timeout
 - `wait_for: url_match` — `page.waitForURL(regex, { timeout })`
 - `wait_for: network_idle` — `page.waitForLoadState("networkidle", { timeout })`
@@ -513,7 +528,7 @@ Per plan §5 scope rules: extract is allowed in all three scopes (`public`, `rea
 
 If `Sanitizer` + `LLMClient` are not wired (parallel-development phase): return `{kind:"failed", class:"internal_error", error: new Error("llm_summarize requires FEAT-006 + FEAT-011")}`. Test is the only `@requires-llm`-tagged test in this feature.
 
-Plan-generation calls (the pre-execution LLM call that produces a `Plan` from a `TaskRequest`) are *not* this handler's concern — they're owned by FEAT-011's `LLMClient.generatePlan`. That call also emits a `UsageCall` (with `step_id: null`) to the same writer.
+Plan-generation calls (the pre-execution LLM call that produces a `Plan` from a `TaskRequest`) are _not_ this handler's concern — they're owned by FEAT-011's `LLMClient.generatePlan`. That call also emits a `UsageCall` (with `step_id: null`) to the same writer.
 
 ### TASK-014 — Scope enforcer (defense-in-depth)
 
@@ -546,10 +561,10 @@ The `yantra resume <run-id>` CLI command (FEAT-012 scope) is the user surface; t
 ```yaml
 version: 1
 categories:
-  ads:       [doubleclick.net, googlesyndication.com, ...]
-  trackers:  [google-analytics.com, segment.io, ...]
-  social:    [connect.facebook.net, platform.twitter.com, ...]
-user_rules:  [example.com]   # user-added via §7.4 option 4
+  ads: [doubleclick.net, googlesyndication.com, ...]
+  trackers: [google-analytics.com, segment.io, ...]
+  social: [connect.facebook.net, platform.twitter.com, ...]
+user_rules: [example.com] # user-added via §7.4 option 4
 ```
 
 The MVP ships a curated default file (committed in `packages/core/src/ethics/blocklist.default.yaml`) that's copied to `~/.config/yantra/blocklist.yaml` on first `yantra doctor --fix` or first run if absent. Hot-reload on SIGHUP (Linux/macOS) and on explicit `reload()` call (always). Subdomain wildcards (`*.doubleclick.net`) supported via the parser.
@@ -566,7 +581,7 @@ ethics:
 
 The `acquire(host)` method awaits a token; tests inject a fake `Clock` to avoid sleeping in unit tests. The composite `EthicsGate.check` calls blocklist first, robots second, rate-limit third (blocklist refusal is loudest; rate-limit acquire is the slow one).
 
-> Two sequential `yantra run`s against the same host within seconds will each start with a full bucket — *intentionally*. The state-persistence design is in TODO.md under Performance; it's a Phase 2 concern when concurrency makes it matter.
+> Two sequential `yantra run`s against the same host within seconds will each start with a full bucket — _intentionally_. The state-persistence design is in TODO.md under Performance; it's a Phase 2 concern when concurrency makes it matter.
 
 ---
 
@@ -590,26 +605,27 @@ N/A at the executor layer. Authentication is workflow-level state: a workflow us
 
 **Failure resolution policy** (memory rule + brainstorm §7.1): every failure must resolve to exactly one of `{retry, fallback, checkpoint, human-handoff, abort-with-report}`. The dispatch table in `executor.ts`:
 
-| FailureClass | Within step budget? | Within workflow budget? | Resolution |
-|---|---|---|---|
-| `locator_exhausted` | Yes | — | retry step |
-| `locator_exhausted` | No | Yes | abort step → workflow-level reanchor (Phase 2; MVP fails) |
-| `locator_exhausted` | No | No | abort + report |
-| `navigation_timeout` | Yes | — | retry step |
-| `navigation_timeout` | No | — | abort + report |
-| `remote_refused` (429) | Honor `Retry-After` if ≤ remaining wall-clock budget | — | retry step after wait |
-| `remote_refused` (403/451) | — | — | abort + report (no retry — site said no) |
-| `ethics_refused` | — | — | abort + report (non-retriable by design) |
-| `scope_violation` | — | — | abort + report (programming error) |
-| `assert_failed` | — | — | abort + report (determinism check failed) |
-| `internal_error` | — | — | abort + report (LOUDLY — never retry our own bugs) |
-| any (CAPTCHA detected) | — | — | `human_handoff_requested` (escalation handler lives at the CLI layer per plan §5; this feature only emits the event and stops cleanly) |
+| FailureClass               | Within step budget?                                  | Within workflow budget? | Resolution                                                                                                                             |
+| -------------------------- | ---------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `locator_exhausted`        | Yes                                                  | —                       | retry step                                                                                                                             |
+| `locator_exhausted`        | No                                                   | Yes                     | abort step → workflow-level reanchor (Phase 2; MVP fails)                                                                              |
+| `locator_exhausted`        | No                                                   | No                      | abort + report                                                                                                                         |
+| `navigation_timeout`       | Yes                                                  | —                       | retry step                                                                                                                             |
+| `navigation_timeout`       | No                                                   | —                       | abort + report                                                                                                                         |
+| `remote_refused` (429)     | Honor `Retry-After` if ≤ remaining wall-clock budget | —                       | retry step after wait                                                                                                                  |
+| `remote_refused` (403/451) | —                                                    | —                       | abort + report (no retry — site said no)                                                                                               |
+| `ethics_refused`           | —                                                    | —                       | abort + report (non-retriable by design)                                                                                               |
+| `scope_violation`          | —                                                    | —                       | abort + report (programming error)                                                                                                     |
+| `assert_failed`            | —                                                    | —                       | abort + report (determinism check failed)                                                                                              |
+| `internal_error`           | —                                                    | —                       | abort + report (LOUDLY — never retry our own bugs)                                                                                     |
+| any (CAPTCHA detected)     | —                                                    | —                       | `human_handoff_requested` (escalation handler lives at the CLI layer per plan §5; this feature only emits the event and stops cleanly) |
 
 Every `task_failed` event is paired with a `report.md` written by `report-writer.ts` (call-log style per brainstorm §7.6).
 
 ### 6.3 Logging
 
 **Pino levels** (from memory):
+
 - `info` — step start/complete; task start/complete; ethics gate refusals (with reason).
 - `warn` — step retry (with attempt, reason, remaining budget); `Retry-After` waits.
 - `error` — task aborts; internal errors; checkpoint write failures.
@@ -618,6 +634,7 @@ Every `task_failed` event is paired with a `report.md` written by `report-writer
 **JSONL persistence** (events.jsonl) is the durable record; logs are commentary. The order of operations on every state change is: emit `TaskEvent` → write to events.jsonl (debounced) → write pino log line. Tests inspect events, not log lines.
 
 **Mandatory audit events** (from memory) emitted by this feature:
+
 - `step_started`, `step_retry`, `step_completed`, `checkpoint_saved` — every step.
 - `scope_violation { scope, attempted_verb, step_id }` — pre-execution check.
 - `ethics_refused { host, rule, reason }` — every `EthicsGate.check` refusal.
@@ -635,9 +652,11 @@ Every `task_failed` event is paired with a `report.md` written by `report-writer
 ### 6.5 Testing
 
 **Tag policy**:
+
 - Every test in this feature is `@no-llm` except `step-handlers/llm_summarize.spec.ts` which is `@requires-llm`. The CI matrix runs `@no-llm` in both `anthropic` and `none` modes, `@requires-llm` only in `anthropic`.
 
 **Chaos suite** (mandatory, per memory + plan §9): `e2e/chaos/executor-chaos.spec.ts`. Inject each `FailureClass`:
+
 - Locator miss (fixture page with locator that disappears after first paint)
 - Navigation timeout (slow-route fixture)
 - 429 with `Retry-After` (fixture server)
@@ -652,6 +671,7 @@ Every `task_failed` event is paired with a `report.md` written by `report-writer
 Assert for each: the run terminates cleanly (no hung promises, no orphan Chrome processes), a `report.md` is written, the event log contains the appropriate `failure_class` or refusal event, and exit code (from caller perspective) matches the plan §5 mapping.
 
 **Property tests** (mandatory):
+
 - `retry-budget.spec.ts`: budget invariants under any consume/canRetry sequence.
 - `scope-enforcer.spec.ts`: generated mixed-scope plans; 100% rejection of mutating verbs in read-only-data.
 - `value-resolver.spec.ts`: for any plan containing a `SecretRef`, no event payload in events.jsonl contains the resolved value (use a sentinel like `"SECRET_SENTINEL_DO_NOT_LEAK"` in the fake `SecretResolver`).

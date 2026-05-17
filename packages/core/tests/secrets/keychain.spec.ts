@@ -11,7 +11,8 @@ describe('@no-llm keychain provider', () => {
     const store = new Map<string, string>();
 
     const provider = await createKeychainProvider(async () => ({
-      getPassword: async (service: string, account: string) => store.get(`${service}:${account}`) ?? null,
+      getPassword: async (service: string, account: string) =>
+        store.get(`${service}:${account}`) ?? null,
       setPassword: async (service: string, account: string, value: string) => {
         store.set(`${service}:${account}`, value);
       },

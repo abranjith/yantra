@@ -8,10 +8,7 @@
  * @param fn Callback that consumes the secret.
  * @returns Callback return value.
  */
-export async function withSecret<T>(
-  value: string,
-  fn: (v: string) => T | Promise<T>,
-): Promise<T> {
+export async function withSecret<T>(value: string, fn: (v: string) => T | Promise<T>): Promise<T> {
   const buffer = Buffer.from(value, 'utf8');
 
   try {

@@ -3,7 +3,13 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheDir, dataDir, doctorCachePath, ephemeralRoot, profilesRoot } from '../../src/browser/paths.js';
+import {
+  cacheDir,
+  dataDir,
+  doctorCachePath,
+  ephemeralRoot,
+  profilesRoot,
+} from '../../src/browser/paths.js';
 
 vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),
@@ -119,5 +125,3 @@ describe('@no-llm paths', () => {
     expect(mockTmpdir()).toBe('/tmp');
   });
 });
-
-

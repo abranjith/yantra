@@ -5,11 +5,13 @@
  * Tagged @no-llm — must pass with LLM_PROVIDER=none.
  */
 
+import type { CapturedAction, RecordingMetadata } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import type { CapturedAction, RecordingMetadata } from '@yantra/protocol';
-
-import { assembleDraft, computeDwellPerPage } from '../../../src/workflow/recorder/draft-builder.js';
+import {
+  assembleDraft,
+  computeDwellPerPage,
+} from '../../../src/workflow/recorder/draft-builder.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

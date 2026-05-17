@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BrowserProvider, BrowserSession, ChromeInstall, Page } from '../../../src/browser/types.js';
+import type {
+  BrowserProvider,
+  BrowserSession,
+  ChromeInstall,
+  Page,
+} from '../../../src/browser/types.js';
 import { selectSearchProvider } from '../../../src/extraction/search/provider.js';
 import type { KeychainProvider } from '../../../src/secrets/keychain.js';
 

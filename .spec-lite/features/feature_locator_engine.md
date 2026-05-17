@@ -16,9 +16,10 @@ Concretely, this feature delivers:
 3. **Hit-target interception** — before any synthesized click, verify `elementFromPoint(cx, cy)` lands on the locator's element. If an overlay/modal/banner intercepts, fail fast with `HitTargetInterceptedError` (carrying the intercepting element's tag + accessible name) so the executor's layer-2 retry can attempt a different scroll alignment or surface the failure cleanly.
 4. **Candidate ranking algorithm for record time** — given a captured DOM target, generate the top-N candidates ranked by stability + specificity. This is the algorithm FEAT-008's recorder will call to populate each named locator's chain. Ranking matches the plan/memory ordering: `data-testid > role+name > label-for > placeholder > unique CSS > relative anchor > absolute XPath`.
 
-**Why this is the reliability bet**: `puppeteer-core` gives us CDP transport, targets, and `Runtime.evaluate`. It gives us nothing about *reliable element interaction*. Auto-wait, strict mode, hit-target verification, ARIA computed-role/name — every reliability property that makes Playwright workflows survive real-world DOM churn lives in this feature. Without it, FEAT-008 (recorder) and FEAT-010 (replay) regress to selector-roulette and the project's central value proposition collapses.
+**Why this is the reliability bet**: `puppeteer-core` gives us CDP transport, targets, and `Runtime.evaluate`. It gives us nothing about _reliable element interaction_. Auto-wait, strict mode, hit-target verification, ARIA computed-role/name — every reliability property that makes Playwright workflows survive real-world DOM churn lives in this feature. Without it, FEAT-008 (recorder) and FEAT-010 (replay) regress to selector-roulette and the project's central value proposition collapses.
 
 **Out of scope for this feature** (deferred to later features or Phase 2):
+
 - LLM reanchor on chain exhaustion — Phase 2; MVP fails fast with a structured report.
 - Composable selector syntax with `>>` pipe and engines like `internal:and`, `internal:or` — brainstorm §6.1 mentions these; this feature implements per-strategy resolution as discrete `LocatorCandidate` kinds, not a composed string DSL. The discriminated union is more strongly typed and aligns with the protocol's structured `LocatorChain`.
 - Shadow DOM piercing, multi-frame `>>>` traversal, full ARIA tree snapshotting — explicitly skipped per brainstorm §6.5.
@@ -34,41 +35,76 @@ Concretely, this feature delivers:
 
 ```ts
 type LocatorIntent =
-  | { kind: "role"; role: AriaRole; name?: string | RegExp; exact?: boolean }
-  | { kind: "testid"; attribute?: string; value: string }   // default attribute: 'data-testid'
-  | { kind: "label"; text: string | RegExp; exact?: boolean }   // <label for=…> / aria-labelledby / aria-label
-  | { kind: "placeholder"; text: string | RegExp; exact?: boolean }
-  | { kind: "text"; text: string | RegExp; exact?: boolean; normalize?: boolean }
-  | { kind: "css"; selector: string }
-  | { kind: "xpath"; expression: string }
-  | { kind: "relative"; anchor: LocatorIntent; relation: RelativeRelation; targetRole?: AriaRole }
+  | { kind: 'role'; role: AriaRole; name?: string | RegExp; exact?: boolean }
+  | { kind: 'testid'; attribute?: string; value: string } // default attribute: 'data-testid'
+  | { kind: 'label'; text: string | RegExp; exact?: boolean } // <label for=…> / aria-labelledby / aria-label
+  | { kind: 'placeholder'; text: string | RegExp; exact?: boolean }
+  | { kind: 'text'; text: string | RegExp; exact?: boolean; normalize?: boolean }
+  | { kind: 'css'; selector: string }
+  | { kind: 'xpath'; expression: string }
+  | { kind: 'relative'; anchor: LocatorIntent; relation: RelativeRelation; targetRole?: AriaRole };
 
 type RelativeRelation =
-  | "next-sibling" | "previous-sibling"
-  | "following" | "preceding"     // anywhere after / before in document order
-  | "ancestor" | "descendant"
-  | "labeled-by"                  // shorthand for label-for / aria-labelledby
+  | 'next-sibling'
+  | 'previous-sibling'
+  | 'following'
+  | 'preceding' // anywhere after / before in document order
+  | 'ancestor'
+  | 'descendant'
+  | 'labeled-by'; // shorthand for label-for / aria-labelledby
 
 type AriaRole =
-  | "button" | "link" | "textbox" | "checkbox" | "radio" | "combobox"
-  | "listbox" | "option" | "tab" | "tabpanel" | "dialog" | "alert"
-  | "heading" | "img" | "table" | "row" | "cell" | "columnheader"
-  | "rowheader" | "list" | "listitem" | "menu" | "menuitem" | "menubar"
-  | "navigation" | "main" | "banner" | "contentinfo" | "complementary"
-  | "search" | "form" | "region" | "article" | "switch" | "progressbar"
-  | "slider" | "spinbutton" | "status" | "tooltip"
-  // ARIA 1.2 core role set — the subset Yantra resolves in MVP
+  | 'button'
+  | 'link'
+  | 'textbox'
+  | 'checkbox'
+  | 'radio'
+  | 'combobox'
+  | 'listbox'
+  | 'option'
+  | 'tab'
+  | 'tabpanel'
+  | 'dialog'
+  | 'alert'
+  | 'heading'
+  | 'img'
+  | 'table'
+  | 'row'
+  | 'cell'
+  | 'columnheader'
+  | 'rowheader'
+  | 'list'
+  | 'listitem'
+  | 'menu'
+  | 'menuitem'
+  | 'menubar'
+  | 'navigation'
+  | 'main'
+  | 'banner'
+  | 'contentinfo'
+  | 'complementary'
+  | 'search'
+  | 'form'
+  | 'region'
+  | 'article'
+  | 'switch'
+  | 'progressbar'
+  | 'slider'
+  | 'spinbutton'
+  | 'status'
+  | 'tooltip';
+// ARIA 1.2 core role set — the subset Yantra resolves in MVP
 ```
 
-Cross-references: `LocatorIntent` is the *engine-side* shape. The wire-protocol form (`LocatorChain` in `packages/protocol`, owned by FEAT-002) is JSON-friendly (no `RegExp` instances — regex is `{ pattern: string, flags: string }`). FEAT-004 owns the JSON ↔ `LocatorIntent` decoder.
+Cross-references: `LocatorIntent` is the _engine-side_ shape. The wire-protocol form (`LocatorChain` in `packages/protocol`, owned by FEAT-002) is JSON-friendly (no `RegExp` instances — regex is `{ pattern: string, flags: string }`). FEAT-004 owns the JSON ↔ `LocatorIntent` decoder.
 
 #### `LocatorCandidate` — one candidate in a chain
 
 ```ts
 interface LocatorCandidate {
-  readonly intent: LocatorIntent
-  readonly source: "recorded" | "authored" | "reanchored"   // reanchored = Phase 2 only
-  readonly notes?: string                                   // optional human-readable hint from annotate
+  readonly intent: LocatorIntent;
+  readonly source: 'recorded' | 'authored' | 'reanchored'; // reanchored = Phase 2 only
+  readonly notes?: string; // optional human-readable hint from annotate
 }
 ```
 
@@ -76,9 +112,9 @@ interface LocatorCandidate {
 
 ```ts
 interface LocatorChain {
-  readonly name: string                          // "Sign in button"
-  readonly candidates: readonly LocatorCandidate[]   // ordered: try [0], then [1], …
-  readonly strict: boolean                       // default true; >1 match throws
+  readonly name: string; // "Sign in button"
+  readonly candidates: readonly LocatorCandidate[]; // ordered: try [0], then [1], …
+  readonly strict: boolean; // default true; >1 match throws
 }
 ```
 
@@ -87,27 +123,27 @@ interface LocatorChain {
 ```ts
 type ResolveResult =
   | {
-      kind: "success"
-      elementHandle: ElementHandle               // puppeteer-core ElementHandle wrapping a CDP objectId
-      usedCandidateIndex: number
-      candidatesTried: readonly CandidateAttempt[]
-      durationMs: number
+      kind: 'success';
+      elementHandle: ElementHandle; // puppeteer-core ElementHandle wrapping a CDP objectId
+      usedCandidateIndex: number;
+      candidatesTried: readonly CandidateAttempt[];
+      durationMs: number;
     }
   | {
-      kind: "failure"
-      reason: "not_found" | "ambiguous" | "hit_intercepted" | "not_actionable" | "frame_detached"
-      candidatesTried: readonly CandidateAttempt[]
-      lastError?: Error
-      durationMs: number
-    }
+      kind: 'failure';
+      reason: 'not_found' | 'ambiguous' | 'hit_intercepted' | 'not_actionable' | 'frame_detached';
+      candidatesTried: readonly CandidateAttempt[];
+      lastError?: Error;
+      durationMs: number;
+    };
 
 interface CandidateAttempt {
-  readonly index: number
-  readonly intent: LocatorIntent
-  readonly matchCount: number          // 0, 1, or >1
-  readonly outcome: "matched" | "no_match" | "ambiguous" | "error"
-  readonly errorMessage?: string
-  readonly durationMs: number
+  readonly index: number;
+  readonly intent: LocatorIntent;
+  readonly matchCount: number; // 0, 1, or >1
+  readonly outcome: 'matched' | 'no_match' | 'ambiguous' | 'error';
+  readonly errorMessage?: string;
+  readonly durationMs: number;
 }
 ```
 
@@ -115,11 +151,11 @@ interface CandidateAttempt {
 
 ```ts
 interface ActionableState {
-  readonly visible: boolean             // bounding rect > 0 AND not display:none/visibility:hidden
-  readonly enabled: boolean             // no [disabled] attr, no aria-disabled="true"
-  readonly stable: boolean              // bounding rect unchanged for ≥ 100 ms
-  readonly receivesEvents: boolean      // elementFromPoint(cx,cy) === el || el.contains(eFP)
-  readonly attached: boolean            // still in document
+  readonly visible: boolean; // bounding rect > 0 AND not display:none/visibility:hidden
+  readonly enabled: boolean; // no [disabled] attr, no aria-disabled="true"
+  readonly stable: boolean; // bounding rect unchanged for ≥ 100 ms
+  readonly receivesEvents: boolean; // elementFromPoint(cx,cy) === el || el.contains(eFP)
+  readonly attached: boolean; // still in document
 }
 ```
 
@@ -127,23 +163,27 @@ interface ActionableState {
 
 ```ts
 type HitTargetCheckResult =
-  | { kind: "ok"; coordinates: { x: number; y: number } }
-  | { kind: "intercepted"; interceptor: { tagName: string; accessibleName?: string; testid?: string }; coordinates: { x: number; y: number } }
-  | { kind: "outside_viewport"; coordinates: { x: number; y: number } }
+  | { kind: 'ok'; coordinates: { x: number; y: number } }
+  | {
+      kind: 'intercepted';
+      interceptor: { tagName: string; accessibleName?: string; testid?: string };
+      coordinates: { x: number; y: number };
+    }
+  | { kind: 'outside_viewport'; coordinates: { x: number; y: number } };
 ```
 
 #### `CandidateRanking` — record-time output (consumed by FEAT-008)
 
 ```ts
 interface CandidateRanking {
-  readonly target: { tagName: string; accessibleName?: string }
-  readonly candidates: readonly RankedCandidate[]    // sorted by score descending, capped to topN
+  readonly target: { tagName: string; accessibleName?: string };
+  readonly candidates: readonly RankedCandidate[]; // sorted by score descending, capped to topN
 }
 
 interface RankedCandidate {
-  readonly intent: LocatorIntent
-  readonly score: number                  // weight * specificity * stability
-  readonly rationale: string              // short string explaining the win, e.g., "data-testid present"
+  readonly intent: LocatorIntent;
+  readonly score: number; // weight * specificity * stability
+  readonly rationale: string; // short string explaining the win, e.g., "data-testid present"
 }
 ```
 
@@ -151,24 +191,24 @@ interface RankedCandidate {
 
 The ranking algorithm in `ranking.ts` produces candidates in this **fixed priority order**, with numeric scores so ties break deterministically. Exact ordering pinned by the plan §7 architecture rules and brainstorm §8.2:
 
-| Rank | Strategy | Base weight | When it wins | Notes |
-|---|---|---|---|---|
-| 1 | `data-testid` (and configurable aliases `data-test-id`, `data-qa`, `data-test`) | **1.00** | Well-built apps with explicit test hooks | Highest stability — devs touch testids deliberately |
-| 2 | `role` + accessible name (exact, else regex `/normalize/i`) | **0.90** | Accessible sites; the cross-framework lingua franca | Implicit role (`<button>` → `button`) handled by computed-role |
-| 3 | `label-for` / `aria-labelledby` / `aria-label` | **0.75** | Forms with real `<label for=…>` pairs | Resolves the labelled element, not the label |
-| 4 | `placeholder` / `name` attribute | **0.60** | Unlabeled inputs | Last input-specific fallback |
-| 5 | Unique CSS (stable-class heuristic) | **0.45** | Class names aren't hash-randomized | Rejects `/^css-/`, `/^[a-z0-9]{5,}$/`, `/-\d{4,}$/` classes |
-| 6 | Relative anchor (label → next sibling input, heading → following table) | **0.30** | Recoverable structural patterns | Anchor is itself a `LocatorIntent` — recursive |
-| 7 | Absolute XPath | **0.10** | Truly last resort | Brittle; emitted because *something* is better than nothing |
+| Rank | Strategy                                                                        | Base weight | When it wins                                        | Notes                                                          |
+| ---- | ------------------------------------------------------------------------------- | ----------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| 1    | `data-testid` (and configurable aliases `data-test-id`, `data-qa`, `data-test`) | **1.00**    | Well-built apps with explicit test hooks            | Highest stability — devs touch testids deliberately            |
+| 2    | `role` + accessible name (exact, else regex `/normalize/i`)                     | **0.90**    | Accessible sites; the cross-framework lingua franca | Implicit role (`<button>` → `button`) handled by computed-role |
+| 3    | `label-for` / `aria-labelledby` / `aria-label`                                  | **0.75**    | Forms with real `<label for=…>` pairs               | Resolves the labelled element, not the label                   |
+| 4    | `placeholder` / `name` attribute                                                | **0.60**    | Unlabeled inputs                                    | Last input-specific fallback                                   |
+| 5    | Unique CSS (stable-class heuristic)                                             | **0.45**    | Class names aren't hash-randomized                  | Rejects `/^css-/`, `/^[a-z0-9]{5,}$/`, `/-\d{4,}$/` classes    |
+| 6    | Relative anchor (label → next sibling input, heading → following table)         | **0.30**    | Recoverable structural patterns                     | Anchor is itself a `LocatorIntent` — recursive                 |
+| 7    | Absolute XPath                                                                  | **0.10**    | Truly last resort                                   | Brittle; emitted because _something_ is better than nothing    |
 
 Specificity multipliers tune within-rank ordering — e.g., a `role+name` candidate with `exact: true` outscores the same role with regex (`× 1.05`); a CSS with two stable classes outscores one with a single class (`× 1.10`). Full multiplier table lives in `ranking.ts` and is property-tested for ordering invariants.
 
 ### On-Disk Artifacts
 
-| Path | Purpose | Owner |
-|---|---|---|
-| `packages/core/dist/injected.bundle.js` | The compiled InjectedScript IIFE. Built by esbuild from `packages/core/src/locator/injected/index.ts`. Shipped as a published artifact of `@yantra/core`. Bundle is **registered to `window.__yantra`** in the page context on first use per frame. Max size budgeted at **50 KB** (CI gate). | TASK-001 |
-| `packages/core/dist/injected.bundle.js.map` | Source map for the bundle, used only in `--debug` mode for stack-trace symbolication. Not shipped to production runs. | TASK-001 |
+| Path                                        | Purpose                                                                                                                                                                                                                                                                                       | Owner    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `packages/core/dist/injected.bundle.js`     | The compiled InjectedScript IIFE. Built by esbuild from `packages/core/src/locator/injected/index.ts`. Shipped as a published artifact of `@yantra/core`. Bundle is **registered to `window.__yantra`** in the page context on first use per frame. Max size budgeted at **50 KB** (CI gate). | TASK-001 |
+| `packages/core/dist/injected.bundle.js.map` | Source map for the bundle, used only in `--debug` mode for stack-trace symbolication. Not shipped to production runs.                                                                                                                                                                         | TASK-001 |
 
 ### Repository-Style Interfaces
 
@@ -179,23 +219,23 @@ interface LocatorResolver {
    * returns on the first that yields exactly one actionable element (strict mode),
    * or exhausts the chain and returns a structured failure.
    */
-  resolve(chain: LocatorChain, options?: ResolveOptions): Promise<ResolveResult>
+  resolve(chain: LocatorChain, options?: ResolveOptions): Promise<ResolveResult>;
 
   /** Resolve + auto-wait until actionable, returning the success result or throwing one of the typed errors. */
-  resolveActionable(chain: LocatorChain, options?: ActionableOptions): Promise<SuccessResult>
+  resolveActionable(chain: LocatorChain, options?: ActionableOptions): Promise<SuccessResult>;
 }
 
 interface HitTargetInterceptor {
   /** Verify a synthesized click at (cx, cy) will land on the intended element. */
-  check(element: ElementHandle, coords?: { x: number; y: number }): Promise<HitTargetCheckResult>
+  check(element: ElementHandle, coords?: { x: number; y: number }): Promise<HitTargetCheckResult>;
 }
 
 interface InjectedScriptHost {
   /** Ensures the injected bundle is loaded into the given frame; idempotent. */
-  ensureInjected(frameId: string): Promise<void>
+  ensureInjected(frameId: string): Promise<void>;
 
   /** Calls a named export of the injected bundle in the page context. */
-  call<T>(frameId: string, fn: keyof InjectedAPI, args: unknown[]): Promise<T>
+  call<T>(frameId: string, fn: keyof InjectedAPI, args: unknown[]): Promise<T>;
 }
 ```
 
@@ -241,7 +281,7 @@ Use cases (Phase 2+): "which candidates win most for this workflow?" (drives rec
 - `packages/core/src/locator/injected/index.ts` — InjectedScript entrypoint. Compiles to the IIFE bundle. Registers `window.__yantra = { resolve, checkState, hitTarget, … }`. **Page context only** — no Node imports.
 - `packages/core/src/locator/injected/role.ts` — ARIA computed-role + accessible-name algorithm. Ports the relevant parts of Playwright's `roleUtils` (Apache-2.0, attributed). Handles implicit roles (`<button>` → `button`, `<a href>` → `link`, `<input type=text>` → `textbox`).
 - `packages/core/src/locator/injected/text.ts` — Accessible-name normalization (trim, collapse internal whitespace, optional `toLocaleLowerCase`). Regex matching for `/pattern/flags` intent. Exact vs contains modes.
-- `packages/core/src/locator/injected/label.ts` — `<label for="x">` + `<input id="x">` pairs; `aria-labelledby` resolution; `aria-label` fallback. Resolves to the *labelled* element, not the label.
+- `packages/core/src/locator/injected/label.ts` — `<label for="x">` + `<input id="x">` pairs; `aria-labelledby` resolution; `aria-label` fallback. Resolves to the _labelled_ element, not the label.
 - `packages/core/src/locator/injected/testid.ts` — Exact attribute-value match on configurable attribute name list (default `['data-testid', 'data-test-id', 'data-qa', 'data-test']`).
 - `packages/core/src/locator/injected/css.ts` — Two responsibilities: (a) querying by an arbitrary CSS selector with strict-mode check, (b) the **generator** that walks up the tree producing the shortest selector that uniquely identifies a given element (used at record time by `ranking.ts`).
 - `packages/core/src/locator/injected/xpath.ts` — Last-resort: query by XPath via `document.evaluate(…)`; generate absolute path via DOM-parent walk.
@@ -301,7 +341,7 @@ Use cases (Phase 2+): "which candidates win most for this workflow?" (drives rec
 - **`esbuild`** (latest stable; LTS-tracked) — bundles the InjectedScript into a single IIFE. `devDependency` of `@yantra/core` only; not a runtime dep.
 - **`fast-check`** (latest stable) — already in stack baseline (memory §Testing); used here for ranking-order property tests.
 
-No new heavy runtime dependencies. Specifically **not** adding: `playwright-core` (we intentionally do *not* depend on Playwright — we port the ideas with attribution), `jsdom` as runtime (only `devDependencies` for unit tests).
+No new heavy runtime dependencies. Specifically **not** adding: `playwright-core` (we intentionally do _not_ depend on Playwright — we port the ideas with attribution), `jsdom` as runtime (only `devDependencies` for unit tests).
 
 ### Attribution (license compliance)
 
@@ -446,16 +486,17 @@ The role-resolution algorithm in `role.ts` and the actionable-state checks in `a
 
 Every failure mode in this feature has a typed error class — no generic `Error` throws. All errors extend `Error` and carry a structured `candidatesTried: readonly CandidateAttempt[]` field (or equivalent context) so the executor's failure report (FEAT-005, FEAT-010) can render the full attempt history. Errors live in `packages/core/src/locator/errors.ts`:
 
-| Error class | Thrown when | Carries |
-|---|---|---|
-| `LocatorNotFoundError` | Chain exhausted; every candidate returned 0 matches | `chainName`, `candidatesTried` |
-| `LocatorAmbiguousError` | A candidate returned >1 matches in strict mode | `chainName`, `candidateIndex`, `matchCount`, `candidatesTried` |
-| `HitTargetInterceptedError` | `elementFromPoint` returned a different element (overlay/modal covers target) | `chainName`, `interceptor: { tagName, accessibleName? }`, `coords` |
-| `LocatorNotActionableError` | Element resolved but never became visible/stable/enabled/receives-events within deadline | `chainName`, `lastActionableState: ActionableState`, `deadlineMs` |
-| `FrameDetachedError` | Frame holding the target was detached mid-resolution | `chainName`, `frameId` |
-| `LocatorInvalidSelectorError` | CSS/XPath candidate had invalid syntax | `intent`, `parseError` |
+| Error class                   | Thrown when                                                                              | Carries                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `LocatorNotFoundError`        | Chain exhausted; every candidate returned 0 matches                                      | `chainName`, `candidatesTried`                                     |
+| `LocatorAmbiguousError`       | A candidate returned >1 matches in strict mode                                           | `chainName`, `candidateIndex`, `matchCount`, `candidatesTried`     |
+| `HitTargetInterceptedError`   | `elementFromPoint` returned a different element (overlay/modal covers target)            | `chainName`, `interceptor: { tagName, accessibleName? }`, `coords` |
+| `LocatorNotActionableError`   | Element resolved but never became visible/stable/enabled/receives-events within deadline | `chainName`, `lastActionableState: ActionableState`, `deadlineMs`  |
+| `FrameDetachedError`          | Frame holding the target was detached mid-resolution                                     | `chainName`, `frameId`                                             |
+| `LocatorInvalidSelectorError` | CSS/XPath candidate had invalid syntax                                                   | `intent`, `parseError`                                             |
 
 Behavior on errors:
+
 - **Within the resolver itself**: errors are returned as `ResolveResult.failure` from `resolve()`; thrown from `resolveActionable()`.
 - **Upstream (executor)**: layer-2 retry (the step-level budget) consumes these errors; on layer-2 exhaustion, the run aborts with a `task_failed` event and a `report.md` (per memory §Error Handling).
 - **Bounded re-prompt does NOT apply here** — locator failures aren't agent-validation failures. There is no LLM in this loop in MVP.
@@ -477,7 +518,7 @@ Per memory §Logging:
    - **Property test (TASK-014 case c)**: synthesize a `resolve()` call against a page with sensitive form values; assert the event sink's emitted payload, when JSON-stringified, contains none of the sensitive strings.
 2. **No `eval` or `Function()` from Node-side input.** The InjectedScript bundle is a pre-compiled IIFE; the Node side calls **named API methods** with JSON-serialized arguments. We do **not** ship arbitrary code strings to `Runtime.evaluate`. The `build.spec.ts` (TASK-001) asserts the bundle contains no dynamic `eval` constructs.
 
-The injected layer **does** see authenticated page content (because it runs *in* the page). It just doesn't return any of it. The sanitizer (FEAT-006) is a separate layer concerned with LLM-bound payloads; this feature never crosses that boundary.
+The injected layer **does** see authenticated page content (because it runs _in_ the page). It just doesn't return any of it. The sanitizer (FEAT-006) is a separate layer concerned with LLM-bound payloads; this feature never crosses that boundary.
 
 CDP-pipe transport (owned by FEAT-003) protects against localhost-port attack surface — the locator engine inherits this from its transport dependency.
 

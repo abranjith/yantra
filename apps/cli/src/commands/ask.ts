@@ -67,12 +67,10 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     .addOption(new Option('--no-cache', 'disable cache reads/writes').default(false))
     .addOption(new Option('--budget <calls>', 'maximum sources to fetch'))
     .addOption(
-      new Option('--search-provider <provider>', 'search provider: auto|tavily|brave|browser').choices([
-        'auto',
-        'tavily',
-        'brave',
-        'browser',
-      ]),
+      new Option(
+        '--search-provider <provider>',
+        'search provider: auto|tavily|brave|browser',
+      ).choices(['auto', 'tavily', 'brave', 'browser']),
     )
     .addOption(new Option('--limit <count>', 'number of cards to return').default('3'))
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
@@ -114,11 +112,15 @@ export async function createDefaultAskPipeline(query: AskQuery): Promise<AskPipe
   const blocklist = new BlocklistImpl();
   await blocklist.reload();
   const robots = new RobotsCacheImpl(ethicsConfig.userAgent);
-  const rateLimiter = new RateLimiterImpl(ethicsConfig.rateLimitDefault, ethicsConfig.rateLimitOverrides, {
-    now: () => Date.now(),
-    setTimeout: (fn, ms) => setTimeout(fn, ms),
-    clearTimeout: (handle) => clearTimeout(handle),
-  });
+  const rateLimiter = new RateLimiterImpl(
+    ethicsConfig.rateLimitDefault,
+    ethicsConfig.rateLimitOverrides,
+    {
+      now: () => Date.now(),
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (handle) => clearTimeout(handle),
+    },
+  );
   const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent);
   const askEthicsGate = createAskEthicsAdapter(ethicsGate, {
     taskId: 'ask',

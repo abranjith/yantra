@@ -60,7 +60,9 @@ function renderReport(input: {
 
   lines.push(`# Run ${input.runId}`);
   lines.push(`Outcome: ${input.outcome}`);
-  lines.push(`Started: ${firstTs ?? 'n/a'}   Ended: ${lastTs ?? 'n/a'}   Duration: ${durationMs}ms`);
+  lines.push(
+    `Started: ${firstTs ?? 'n/a'}   Ended: ${lastTs ?? 'n/a'}   Duration: ${durationMs}ms`,
+  );
   lines.push('');
 
   lines.push('## Steps Timeline');
@@ -97,7 +99,18 @@ function renderReport(input: {
   lines.push('');
 
   lines.push('## Sanitizer');
-  lines.push(`Transformations applied: ${JSON.stringify(summarizeTransformations(input.agentEntries))}`);
+  const sanitizerCalls = input.agentEntries.filter((e) => e.direction === 'request').length;
+  lines.push(`Total sanitized payloads: ${sanitizerCalls}`);
+  lines.push('');
+
+  lines.push('## Agent Calls');
+  lines.push(
+    `Total LLM calls: ${input.agentEntries.filter((e) => e.direction === 'response').length}`,
+  );
+  const failedCalls = input.agentEntries.filter(
+    (e) => e.direction === 'response' && e.outcome !== 'ok',
+  );
+  lines.push(`Failed calls: ${failedCalls.length}`);
   lines.push('');
 
   lines.push('## Secrets Resolved');
@@ -164,18 +177,6 @@ function summarizeLocatorFallback(events: TaskEvent[]): {
     totalRetries: retries.length,
     exhaustedRetries: exhausted.length,
   };
-}
-
-function summarizeTransformations(agentEntries: AgentJsonlEntry[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-
-  for (const entry of agentEntries) {
-    for (const transformation of entry.transformations_applied) {
-      counts[transformation] = (counts[transformation] ?? 0) + 1;
-    }
-  }
-
-  return counts;
 }
 
 function computeDurationMs(startIso: string | null, endIso: string | null): number {

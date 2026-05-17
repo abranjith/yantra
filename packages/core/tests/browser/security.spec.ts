@@ -69,7 +69,12 @@ describe('@no-llm TASK-010 security hardening', () => {
     mockAccess.mockResolvedValue(undefined);
     mockChmod.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined as unknown as string);
-    mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700, size: 0, mtime: new Date() } as Awaited<ReturnType<typeof stat>>);
+    mockStat.mockResolvedValue({
+      isDirectory: () => true,
+      mode: 0o700,
+      size: 0,
+      mtime: new Date(),
+    } as Awaited<ReturnType<typeof stat>>);
     mockReaddir.mockResolvedValue([] as unknown as Awaited<ReturnType<typeof mockReaddir>>);
     mockReadFile.mockRejectedValue(new Error('ENOENT'));
     mockWriteFile.mockResolvedValue(undefined);
@@ -125,7 +130,9 @@ describe('@no-llm TASK-010 security hardening', () => {
   describe('doctor permission check walks profile subdirs', () => {
     it('warns when a workflow profile dir has 0755 mode', async () => {
       const { doctor } = await import('../../src/browser/doctor.js');
-      mockReaddir.mockResolvedValue(['my-workflow'] as unknown as Awaited<ReturnType<typeof mockReaddir>>);
+      mockReaddir.mockResolvedValue(['my-workflow'] as unknown as Awaited<
+        ReturnType<typeof mockReaddir>
+      >);
       mockStat.mockImplementation(async (p: unknown) => {
         if (String(p).includes('my-workflow')) {
           return { isDirectory: () => true, mode: 0o755 } as Awaited<ReturnType<typeof stat>>;
@@ -136,13 +143,19 @@ describe('@no-llm TASK-010 security hardening', () => {
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'datadir.permissions');
       expect(check?.status).toBe('warn');
-      expect((check?.details['offenders'] as string[]).some((o) => o.includes('my-workflow'))).toBe(true);
+      expect((check?.details['offenders'] as string[]).some((o) => o.includes('my-workflow'))).toBe(
+        true,
+      );
     });
 
     it('returns ok when all dirs are 0700', async () => {
       const { doctor } = await import('../../src/browser/doctor.js');
-      mockReaddir.mockResolvedValue(['wf-one', 'wf-two'] as unknown as Awaited<ReturnType<typeof mockReaddir>>);
-      mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<ReturnType<typeof stat>>);
+      mockReaddir.mockResolvedValue(['wf-one', 'wf-two'] as unknown as Awaited<
+        ReturnType<typeof mockReaddir>
+      >);
+      mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<
+        ReturnType<typeof stat>
+      >);
 
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'datadir.permissions');
@@ -194,5 +207,3 @@ describe('@no-llm TASK-010 security hardening', () => {
     });
   });
 });
-
-

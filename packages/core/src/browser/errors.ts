@@ -3,9 +3,7 @@
 export class ChromeNotFoundError extends Error {
   override readonly name = 'ChromeNotFoundError';
 
-  constructor(
-    readonly context: { readonly os: string; readonly probed: readonly string[] },
-  ) {
+  constructor(readonly context: { readonly os: string; readonly probed: readonly string[] }) {
     super(`Chrome not found on ${context.os}. Probed: ${context.probed.join(', ')}`);
   }
 }
@@ -13,9 +11,7 @@ export class ChromeNotFoundError extends Error {
 export class ChromeVersionUnsupportedError extends Error {
   override readonly name = 'ChromeVersionUnsupportedError';
 
-  constructor(
-    readonly context: { readonly found: number; readonly required: number },
-  ) {
+  constructor(readonly context: { readonly found: number; readonly required: number }) {
     super(
       `Chrome version ${context.found} is below the minimum required version ${context.required}. Please update Chrome.`,
     );
@@ -56,9 +52,7 @@ export class BrowserCrashedError extends Error {
 export class ProfilePathRefusedError extends Error {
   override readonly name = 'ProfilePathRefusedError';
 
-  constructor(
-    readonly context: { readonly path: string; readonly reason: string },
-  ) {
+  constructor(readonly context: { readonly path: string; readonly reason: string }) {
     super(`Profile path refused: ${context.reason} (path: ${context.path})`);
   }
 }

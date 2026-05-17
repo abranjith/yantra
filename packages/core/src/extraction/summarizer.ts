@@ -78,7 +78,10 @@ export class RuleBasedSummarizer implements Summarizer {
     }
 
     return Promise.resolve({
-      summary: picks.map((entry) => entry.sentence).join(' ').trim(),
+      summary: picks
+        .map((entry) => entry.sentence)
+        .join(' ')
+        .trim(),
       kind: 'rule-based',
     });
   }

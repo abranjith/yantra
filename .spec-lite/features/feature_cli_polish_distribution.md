@@ -16,7 +16,7 @@
 
 Give Yantra a polished, **POSIX-boring** CLI surface that turns the assembled platform into something a first-time user can install in one command, complete their first task in five minutes, and audit forever after. Concretely, this feature:
 
-1. **Assembles the full command surface** declared in plan §5 — `init`, `config`, `ask`, `record`, `run`, `resume`, `list`, `show`, `workflows examples`, `lint`, `fmt`, `doctor`, `audit`, `report`, `usage`, `clean` — behind a single `yantra` binary, with the documented global flags (`--json`, `--debug`, `--no-llm`, `--config`) and the standardized exit-code map (`0`/`1`/`2`/`3`/`4`). **Init-gating** (plan §5): every command except `init`, `doctor`, `--help`, `--version` requires `~/.config/yantra/config.yaml` to exist; otherwise exit 3 with *"Yantra is not configured yet — run `yantra init` to get started."*
+1. **Assembles the full command surface** declared in plan §5 — `init`, `config`, `ask`, `record`, `run`, `resume`, `list`, `show`, `workflows examples`, `lint`, `fmt`, `doctor`, `audit`, `report`, `usage`, `clean` — behind a single `yantra` binary, with the documented global flags (`--json`, `--debug`, `--no-llm`, `--config`) and the standardized exit-code map (`0`/`1`/`2`/`3`/`4`). **Init-gating** (plan §5): every command except `init`, `doctor`, `--help`, `--version` requires `~/.config/yantra/config.yaml` to exist; otherwise exit 3 with _"Yantra is not configured yet — run `yantra init` to get started."_
 2. **Implements three new user-trust commands** that the rest of the project lacks owners for: `yantra audit <run-id>` renders the run directory into a human-readable audit story; `yantra doctor` (v1) extends FEAT-003's v0 environment probe with LLM-provider, keychain, search-key, and data-dir health checks plus a safe `--fix` mode; `yantra report <run-id>` opens the FEAT-010-rendered `report.md` (via `$EDITOR` or stdout).
 3. **Introduces the `ConnectorIO` abstraction** — the internal seam that maps argv → `TaskRequest` and `TaskEvent` → terminal/JSON rendering, in the exact shape future Phase 2 connectors (WhatsApp, email, web) will adopt. Today's only implementation is `CLIConnectorIO`; the seam is what keeps the Phase 2 split from being a rewrite. Per plan §7: "The Connector abstraction lives as an internal interface inside `apps/cli` — argv parsing → `TaskRequest`, `TaskEvent` → terminal rendering — exactly the shape WhatsApp/email connectors will adopt in Phase 2."
 4. **Ships the binary** as: an npm package (`yantra` on npmjs.org), a Homebrew tap (`abranjith/yantra`), and a Scoop bucket (`yantra/yantra`), with a single-file bundle produced by esbuild and CI smoke-verified on macOS, Linux, and Windows.
@@ -41,34 +41,34 @@ Give Yantra a polished, **POSIX-boring** CLI surface that turns the assembled pl
 - Bundled Chromium — Phase 2 per plan §3.
 - `yantra rerun <run-id>` and `yantra run --start-at <step-id>` — deferred per FEAT-010's discoveries list (tracked in TODO.md).
 
-**Dogfooding north star**: a user lands on the README, runs the install one-liner for their OS, runs `yantra doctor` (green), runs `yantra ask "today's top tech news"` and gets a useful card in under 30 seconds. The onboarding e2e test in TASK-018 *is* this north star, automated.
+**Dogfooding north star**: a user lands on the README, runs the install one-liner for their OS, runs `yantra doctor` (green), runs `yantra ask "today's top tech news"` and gets a useful card in under 30 seconds. The onboarding e2e test in TASK-018 _is_ this north star, automated.
 
 ---
 
 ## 2. Data Model (Granular)
 
-> Per the plan, Yantra is filesystem-native — there is **no relational database** in MVP. This feature contributes a handful of *build artifacts* (bundled CLI, packaging manifests, generated docs) and a handful of *in-memory entities* (the `ConnectorIO` seam, `CommandSpec`, renderer types, doctor-check types). The future-DB sketch is N/A for this feature.
+> Per the plan, Yantra is filesystem-native — there is **no relational database** in MVP. This feature contributes a handful of _build artifacts_ (bundled CLI, packaging manifests, generated docs) and a handful of _in-memory entities_ (the `ConnectorIO` seam, `CommandSpec`, renderer types, doctor-check types). The future-DB sketch is N/A for this feature.
 
 ### 2.1 On-Disk Artifacts
 
 This feature does **not** add new per-run or per-workflow artifacts to `~/.local/share/yantra/`. It owns build outputs and packaging manifests that ship the CLI itself.
 
-| Artifact | Path | Lifecycle | Permissions | Owner |
-|---|---|---|---|---|
-| **CLI single-file bundle** | `apps/cli/dist/main.js` | Built by esbuild from `apps/cli/src/main.ts` + transitive deps. Regenerated on every `pnpm --filter @yantra/cli build`. CI verifies size < 5 MB (TASK-014). | Standard repo file perms; on POSIX, the published file is `0755` so it's executable directly. | `apps/cli/build/esbuild.config.js` (this feature) |
-| **Bundle source map** | `apps/cli/dist/main.js.map` | Generated alongside the bundle. Published to npm so bug-report stacks resolve to source. | `0644`. | esbuild config |
-| **`apps/cli/package.json` `bin` mapping** | `apps/cli/package.json` | Declares `bin: { "yantra": "dist/main.js" }`. npm + pnpm install create the `yantra` shim in the global `bin` dir. | repo file. | this feature |
-| **npm publish payload** | files listed in `apps/cli/package.json` `files:` block — `dist/`, `README.md`, `LICENSE` | Built by CI; published on tag push to `v*.*.*`. | `0644` files; `0755` for `dist/main.js`. | TASK-015 |
-| **npm postinstall script** | `apps/cli/scripts/postinstall.cjs` | Runs at end of `npm i -g yantra`; prints "Run `yantra doctor` to verify your environment". Honors `npm_config_ignore_scripts` and `CI=1` (silent in CI). Exits 0 always — postinstall failure must never block install. | `0755`. | TASK-015 |
-| **Homebrew formula** | `packaging/homebrew/yantra.rb` (committed) — published to `abranjith/homebrew-yantra` tap on tagged release | Auto-bumped by `.github/workflows/release-homebrew.yml`: computes SHA256 of the npm tarball, rewrites `url` + `sha256` + `version` in the formula, commits to the tap repo. Stable releases only (no pre-release / `-rc` tags). | `0644`. | TASK-016 |
-| **Scoop manifest** | `packaging/scoop/yantra.json` (committed) — published to `abranjith/scoop-yantra` bucket on tagged release | Auto-bumped by `.github/workflows/release-scoop.yml`. Stable releases only. | `0644`. | TASK-016 |
-| **Generated `docs/protocol-spec.md`** | `docs/protocol-spec.md` | Regenerated by `pnpm docs:protocol` on every CI build; commit-checked drift via `pnpm docs:protocol -- --check` (fails build if dirty). Source of truth: `packages/protocol/src/**.ts` Zod schemas + `.describe()` calls (per memory.md §Documentation). | `0644`. | TASK-017 (this feature drives invocation; FEAT-002 owns the emit code) |
-| **Generated `docs/workflow-yaml-reference.md`** | `docs/workflow-yaml-reference.md` | Same regenerate + drift-check pattern; source is the `Workflow` Zod schema in `packages/protocol/src/workflow.ts`. | `0644`. | TASK-017 |
-| **`docs/getting-started.md`** | `docs/getting-started.md` | Hand-written; CI runs TASK-018's onboarding e2e script which mechanically executes the commands listed in this doc — if a command in the doc no longer exists or its output shape drifts, the e2e test fails. | `0644`. | TASK-017 |
-| **`docs/architecture.md`** | `docs/architecture.md` | Hand-written; one-pager mirroring plan §7 with cross-links to each package's README. Updated by hand on architecture-level changes. | `0644`. | TASK-017 |
-| **`docs/cli-json-output.md`** | `docs/cli-json-output.md` | Hand-written + machine-augmented: TASK-004 emits a JSON-schema appendix from the `--json` Zod schemas in `apps/cli/src/render/json-schemas.ts`. Drift-checked in CI like the protocol spec. | `0644`. | TASK-004 + TASK-017 |
-| **`packaging/npm/README.md`** | `packaging/npm/README.md` | The README copied into the npm publish payload (different from the repo root README — npm version omits screenshots / monorepo-only sections). | `0644`. | TASK-015 |
-| **Release notes** | `CHANGELOG.md` at repo root | Auto-generated section per tag from conventional commits. This feature does not own the format (Conventional Commits is FEAT-001's choice); it owns the release-workflow step that appends a section per tag. | `0644`. | TASK-014 |
+| Artifact                                        | Path                                                                                                        | Lifecycle                                                                                                                                                                                                                                                | Permissions                                                                                   | Owner                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **CLI single-file bundle**                      | `apps/cli/dist/main.js`                                                                                     | Built by esbuild from `apps/cli/src/main.ts` + transitive deps. Regenerated on every `pnpm --filter @yantra/cli build`. CI verifies size < 5 MB (TASK-014).                                                                                              | Standard repo file perms; on POSIX, the published file is `0755` so it's executable directly. | `apps/cli/build/esbuild.config.js` (this feature)                      |
+| **Bundle source map**                           | `apps/cli/dist/main.js.map`                                                                                 | Generated alongside the bundle. Published to npm so bug-report stacks resolve to source.                                                                                                                                                                 | `0644`.                                                                                       | esbuild config                                                         |
+| **`apps/cli/package.json` `bin` mapping**       | `apps/cli/package.json`                                                                                     | Declares `bin: { "yantra": "dist/main.js" }`. npm + pnpm install create the `yantra` shim in the global `bin` dir.                                                                                                                                       | repo file.                                                                                    | this feature                                                           |
+| **npm publish payload**                         | files listed in `apps/cli/package.json` `files:` block — `dist/`, `README.md`, `LICENSE`                    | Built by CI; published on tag push to `v*.*.*`.                                                                                                                                                                                                          | `0644` files; `0755` for `dist/main.js`.                                                      | TASK-015                                                               |
+| **npm postinstall script**                      | `apps/cli/scripts/postinstall.cjs`                                                                          | Runs at end of `npm i -g yantra`; prints "Run `yantra doctor` to verify your environment". Honors `npm_config_ignore_scripts` and `CI=1` (silent in CI). Exits 0 always — postinstall failure must never block install.                                  | `0755`.                                                                                       | TASK-015                                                               |
+| **Homebrew formula**                            | `packaging/homebrew/yantra.rb` (committed) — published to `abranjith/homebrew-yantra` tap on tagged release | Auto-bumped by `.github/workflows/release-homebrew.yml`: computes SHA256 of the npm tarball, rewrites `url` + `sha256` + `version` in the formula, commits to the tap repo. Stable releases only (no pre-release / `-rc` tags).                          | `0644`.                                                                                       | TASK-016                                                               |
+| **Scoop manifest**                              | `packaging/scoop/yantra.json` (committed) — published to `abranjith/scoop-yantra` bucket on tagged release  | Auto-bumped by `.github/workflows/release-scoop.yml`. Stable releases only.                                                                                                                                                                              | `0644`.                                                                                       | TASK-016                                                               |
+| **Generated `docs/protocol-spec.md`**           | `docs/protocol-spec.md`                                                                                     | Regenerated by `pnpm docs:protocol` on every CI build; commit-checked drift via `pnpm docs:protocol -- --check` (fails build if dirty). Source of truth: `packages/protocol/src/**.ts` Zod schemas + `.describe()` calls (per memory.md §Documentation). | `0644`.                                                                                       | TASK-017 (this feature drives invocation; FEAT-002 owns the emit code) |
+| **Generated `docs/workflow-yaml-reference.md`** | `docs/workflow-yaml-reference.md`                                                                           | Same regenerate + drift-check pattern; source is the `Workflow` Zod schema in `packages/protocol/src/workflow.ts`.                                                                                                                                       | `0644`.                                                                                       | TASK-017                                                               |
+| **`docs/getting-started.md`**                   | `docs/getting-started.md`                                                                                   | Hand-written; CI runs TASK-018's onboarding e2e script which mechanically executes the commands listed in this doc — if a command in the doc no longer exists or its output shape drifts, the e2e test fails.                                            | `0644`.                                                                                       | TASK-017                                                               |
+| **`docs/architecture.md`**                      | `docs/architecture.md`                                                                                      | Hand-written; one-pager mirroring plan §7 with cross-links to each package's README. Updated by hand on architecture-level changes.                                                                                                                      | `0644`.                                                                                       | TASK-017                                                               |
+| **`docs/cli-json-output.md`**                   | `docs/cli-json-output.md`                                                                                   | Hand-written + machine-augmented: TASK-004 emits a JSON-schema appendix from the `--json` Zod schemas in `apps/cli/src/render/json-schemas.ts`. Drift-checked in CI like the protocol spec.                                                              | `0644`.                                                                                       | TASK-004 + TASK-017                                                    |
+| **`packaging/npm/README.md`**                   | `packaging/npm/README.md`                                                                                   | The README copied into the npm publish payload (different from the repo root README — npm version omits screenshots / monorepo-only sections).                                                                                                           | `0644`.                                                                                       | TASK-015                                                               |
+| **Release notes**                               | `CHANGELOG.md` at repo root                                                                                 | Auto-generated section per tag from conventional commits. This feature does not own the format (Conventional Commits is FEAT-001's choice); it owns the release-workflow step that appends a section per tag.                                            | `0644`.                                                                                       | TASK-014                                                               |
 
 **Atomic-write convention** (for the doc generators in TASK-017): write `<file>.tmp`, fsync, `fs.rename`. Same pattern as FEAT-009 / FEAT-010. Doc generators are idempotent: running them twice in succession produces a zero-diff result.
 
@@ -78,10 +78,10 @@ All types live under `apps/cli/src/` and are exported from the package-private `
 
 #### 2.2.1 `ConnectorIO` — the future Connector seam (`apps/cli/src/connector-io.ts`)
 
-The **load-bearing abstraction** this feature introduces. Today it has one implementation; in Phase 2 it gains three more (WhatsApp, email, web). Designing it correctly *now* keeps the Phase 2 split a mechanical refactor.
+The **load-bearing abstraction** this feature introduces. Today it has one implementation; in Phase 2 it gains three more (WhatsApp, email, web). Designing it correctly _now_ keeps the Phase 2 split a mechanical refactor.
 
 ```ts
-import type { TaskRequest, TaskEvent, RunOutcome, AskOutcome } from "@yantra/protocol";
+import type { TaskRequest, TaskEvent, RunOutcome, AskOutcome } from '@yantra/protocol';
 
 /**
  * The seam between an external IO surface and Yantra's inline executor.
@@ -127,23 +127,27 @@ export interface ConnectorIO {
   renderResult(result: ConnectorResult, opts: ConnectorRenderOpts): Promise<void>;
 }
 
-export type ConnectorId = "cli" | "whatsapp" | "email" | "web";
+export type ConnectorId = 'cli' | 'whatsapp' | 'email' | 'web';
 
 export type ConnectorResult =
-  | { readonly kind: "ask";   readonly outcome: AskOutcome }
-  | { readonly kind: "run";   readonly outcome: RunOutcome }
-  | { readonly kind: "list";  readonly items: readonly unknown[] }
-  | { readonly kind: "show";  readonly item: unknown }
-  | { readonly kind: "lint";  readonly findings: readonly LintFinding[]; readonly hadErrors: boolean }
-  | { readonly kind: "doctor"; readonly result: DoctorResult }
-  | { readonly kind: "audit"; readonly report: AuditReport }
-  | { readonly kind: "report"; readonly markdown: string };
+  | { readonly kind: 'ask'; readonly outcome: AskOutcome }
+  | { readonly kind: 'run'; readonly outcome: RunOutcome }
+  | { readonly kind: 'list'; readonly items: readonly unknown[] }
+  | { readonly kind: 'show'; readonly item: unknown }
+  | {
+      readonly kind: 'lint';
+      readonly findings: readonly LintFinding[];
+      readonly hadErrors: boolean;
+    }
+  | { readonly kind: 'doctor'; readonly result: DoctorResult }
+  | { readonly kind: 'audit'; readonly report: AuditReport }
+  | { readonly kind: 'report'; readonly markdown: string };
 
 export interface ConnectorRenderOpts {
-  readonly json: boolean;        // --json flag
-  readonly debug: boolean;       // --debug flag
-  readonly noColor: boolean;     // NO_COLOR env or non-TTY
-  readonly stream: NodeJS.WritableStream;  // stdout (or test-injected buffer)
+  readonly json: boolean; // --json flag
+  readonly debug: boolean; // --debug flag
+  readonly noColor: boolean; // NO_COLOR env or non-TTY
+  readonly stream: NodeJS.WritableStream; // stdout (or test-injected buffer)
   readonly errStream: NodeJS.WritableStream; // stderr
 }
 
@@ -152,7 +156,7 @@ export interface LintFinding {
   readonly path: string;
   readonly line: number;
   readonly column: number;
-  readonly severity: "error" | "warning";
+  readonly severity: 'error' | 'warning';
   readonly message: string;
   readonly ruleId: string;
 }
@@ -167,8 +171,8 @@ export interface LintFinding {
 Each subcommand exports a `CommandSpec` consumed by `main.ts`'s commander registration loop. This avoids spreading commander-API boilerplate across 10 files.
 
 ```ts
-import type { Command } from "commander";
-import type { ConnectorIO } from "../connector-io";
+import type { Command } from 'commander';
+import type { ConnectorIO } from '../connector-io';
 
 /**
  * Declarative metadata for one subcommand. main.ts iterates these to register
@@ -188,23 +192,20 @@ export interface CommandSpec<TArgs = unknown> {
    * Zod schema validating the parsed-argv shape. Run BEFORE handler. Validation failure
    * exits with code 1 and a formatted error message (TASK-001's error layer).
    */
-  readonly argSchema: import("zod").ZodSchema<TArgs>;
+  readonly argSchema: import('zod').ZodSchema<TArgs>;
 
   /**
    * Handler. Receives validated args + the global ConnectorIO + global flags.
    * Returns a typed CommandOutcome; main.ts maps it to the exit code.
    * The handler must NEVER call process.exit directly — exit-code mapping is centralized.
    */
-  readonly handler: (
-    args: TArgs,
-    deps: CommandDeps
-  ) => Promise<CommandOutcome>;
+  readonly handler: (args: TArgs, deps: CommandDeps) => Promise<CommandOutcome>;
 }
 
 export interface CommandDeps {
   readonly connector: ConnectorIO;
   readonly globals: GlobalFlags;
-  readonly logger: import("pino").Logger;
+  readonly logger: import('pino').Logger;
   readonly clock: { now: () => Date };
   readonly env: NodeJS.ProcessEnv;
   /** Lazy factories — built only if the command needs them. Keeps `yantra --version` from importing puppeteer. */
@@ -220,23 +221,27 @@ export interface GlobalFlags {
 }
 
 export interface CommandFactories {
-  readonly askPipeline: () => Promise<import("@yantra/core").AskPipeline>;
-  readonly runOrchestrator: () => Promise<import("@yantra/core").RunOrchestrator>;
-  readonly recorder: () => Promise<import("@yantra/core").Recorder>;
-  readonly annotator: () => Promise<import("@yantra/core").Annotator>;
-  readonly workflowStore: () => Promise<import("@yantra/core").WorkflowStore>;
-  readonly runStore: () => Promise<import("@yantra/core").RunStore>;
-  readonly secretStore: () => Promise<import("@yantra/core").SecretStore>;
-  readonly llmClient: () => Promise<import("@yantra/agent").LLMClient>;
-  readonly linter: () => Promise<import("@yantra/core").WorkflowLinter>;
+  readonly askPipeline: () => Promise<import('@yantra/core').AskPipeline>;
+  readonly runOrchestrator: () => Promise<import('@yantra/core').RunOrchestrator>;
+  readonly recorder: () => Promise<import('@yantra/core').Recorder>;
+  readonly annotator: () => Promise<import('@yantra/core').Annotator>;
+  readonly workflowStore: () => Promise<import('@yantra/core').WorkflowStore>;
+  readonly runStore: () => Promise<import('@yantra/core').RunStore>;
+  readonly secretStore: () => Promise<import('@yantra/core').SecretStore>;
+  readonly llmClient: () => Promise<import('@yantra/agent').LLMClient>;
+  readonly linter: () => Promise<import('@yantra/core').WorkflowLinter>;
 }
 
 export type CommandOutcome =
-  | { readonly kind: "ok" }
-  | { readonly kind: "validation_error"; readonly message: string }   // → exit 1
-  | { readonly kind: "execution_failure"; readonly reportPath: string | null; readonly message: string }  // → exit 2
-  | { readonly kind: "environment_failure"; readonly message: string; readonly remediation: string }      // → exit 3
-  | { readonly kind: "user_handoff_abort"; readonly reason: string };  // → exit 4
+  | { readonly kind: 'ok' }
+  | { readonly kind: 'validation_error'; readonly message: string } // → exit 1
+  | {
+      readonly kind: 'execution_failure';
+      readonly reportPath: string | null;
+      readonly message: string;
+    } // → exit 2
+  | { readonly kind: 'environment_failure'; readonly message: string; readonly remediation: string } // → exit 3
+  | { readonly kind: 'user_handoff_abort'; readonly reason: string }; // → exit 4
 ```
 
 #### 2.2.3 Renderer types (`apps/cli/src/render/types.ts`)
@@ -248,8 +253,8 @@ export type CommandOutcome =
  * to the WritableStream passed in opts. No process.exit, no global state.
  */
 export interface OutputRenderer {
-  renderAsk(outcome: import("@yantra/core").AskOutcome, opts: ConnectorRenderOpts): Promise<void>;
-  renderRun(outcome: import("@yantra/core").RunOutcome, opts: ConnectorRenderOpts): Promise<void>;
+  renderAsk(outcome: import('@yantra/core').AskOutcome, opts: ConnectorRenderOpts): Promise<void>;
+  renderRun(outcome: import('@yantra/core').RunOutcome, opts: ConnectorRenderOpts): Promise<void>;
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): Promise<void>;
   renderShow(item: ShowItem, opts: ConnectorRenderOpts): Promise<void>;
   renderLint(findings: readonly LintFinding[], opts: ConnectorRenderOpts): Promise<void>;
@@ -257,20 +262,45 @@ export interface OutputRenderer {
   renderAudit(report: AuditReport, opts: ConnectorRenderOpts): Promise<void>;
   renderReport(markdown: string, opts: ConnectorRenderOpts): Promise<void>;
   /** Streamed per-event rendering during a long-running command. Spinners, step ticks, etc. */
-  renderEvent(event: import("@yantra/protocol").TaskEvent, opts: ConnectorRenderOpts): void;
+  renderEvent(event: import('@yantra/protocol').TaskEvent, opts: ConnectorRenderOpts): void;
 }
 
 /** Two concrete implementations. */
-export class TerminalRenderer implements OutputRenderer { /* boxen + chalk + ora */ }
-export class JSONRenderer implements OutputRenderer { /* stable JSON Lines or single-object output */ }
+export class TerminalRenderer implements OutputRenderer {
+  /* boxen + chalk + ora */
+}
+export class JSONRenderer implements OutputRenderer {
+  /* stable JSON Lines or single-object output */
+}
 
 export type ListItem =
-  | { readonly kind: "workflow"; readonly name: string; readonly version: number; readonly description: string; readonly modifiedAt: string }
-  | { readonly kind: "run"; readonly runId: string; readonly workflowName: string; readonly status: string; readonly startedAt: string; readonly durationMs: number | null };
+  | {
+      readonly kind: 'workflow';
+      readonly name: string;
+      readonly version: number;
+      readonly description: string;
+      readonly modifiedAt: string;
+    }
+  | {
+      readonly kind: 'run';
+      readonly runId: string;
+      readonly workflowName: string;
+      readonly status: string;
+      readonly startedAt: string;
+      readonly durationMs: number | null;
+    };
 
 export type ShowItem =
-  | { readonly kind: "workflow"; readonly workflow: import("@yantra/protocol").Workflow; readonly locatorCounts: Record<string, number> }
-  | { readonly kind: "run"; readonly run: import("@yantra/core").Run; readonly events: readonly import("@yantra/protocol").TaskEvent[] };
+  | {
+      readonly kind: 'workflow';
+      readonly workflow: import('@yantra/protocol').Workflow;
+      readonly locatorCounts: Record<string, number>;
+    }
+  | {
+      readonly kind: 'run';
+      readonly run: import('@yantra/core').Run;
+      readonly events: readonly import('@yantra/protocol').TaskEvent[];
+    };
 ```
 
 #### 2.2.4 `DoctorCheck` and `DoctorResult` — doctor v1 (`apps/cli/src/commands/doctor-types.ts`)
@@ -283,7 +313,7 @@ export type ShowItem =
  */
 export interface DoctorCheck {
   readonly id: DoctorCheckId;
-  readonly title: string;              // shown in terminal output: "Chrome installed and recent"
+  readonly title: string; // shown in terminal output: "Chrome installed and recent"
   readonly category: DoctorCategory;
   /**
    * The probe. Returns a structured result. May read env, config, filesystem,
@@ -303,45 +333,51 @@ export interface DoctorCheck {
   fix?: (deps: DoctorDeps) => Promise<DoctorFixResult>;
 }
 
-export type DoctorCategory = "binaries" | "filesystem" | "keychain" | "providers" | "search" | "compatibility";
+export type DoctorCategory =
+  | 'binaries'
+  | 'filesystem'
+  | 'keychain'
+  | 'providers'
+  | 'search'
+  | 'compatibility';
 
 export type DoctorCheckId =
   // From FEAT-003 v0 (carried forward):
-  | "chrome.installed"
-  | "chrome.version"
-  | "chrome.profile-dir-writable"
-  | "runs-dir-writable"
-  | "config-readable"
+  | 'chrome.installed'
+  | 'chrome.version'
+  | 'chrome.profile-dir-writable'
+  | 'runs-dir-writable'
+  | 'config-readable'
   // New in v1 (this feature):
-  | "keychain.accessible"
-  | "providers.anthropic.api-key"
-  | "providers.ollama.reachable"
-  | "providers.config-consistent"
-  | "search.tavily.api-key"
-  | "search.brave.api-key"
-  | "compatibility.pi-agent-core"
-  | "filesystem.permissions"            // warns on world-readable ~/.local/share/yantra/
-  | "filesystem.orphan-profiles"        // profiles/ with no matching workflow YAML
-  | "filesystem.stale-runs"             // runs/ older than retentionDays
-  | "filesystem.disk-space";            // warns < 500 MB free in dataDir
+  | 'keychain.accessible'
+  | 'providers.anthropic.api-key'
+  | 'providers.ollama.reachable'
+  | 'providers.config-consistent'
+  | 'search.tavily.api-key'
+  | 'search.brave.api-key'
+  | 'compatibility.pi-agent-core'
+  | 'filesystem.permissions' // warns on world-readable ~/.local/share/yantra/
+  | 'filesystem.orphan-profiles' // profiles/ with no matching workflow YAML
+  | 'filesystem.stale-runs' // runs/ older than retentionDays
+  | 'filesystem.disk-space'; // warns < 500 MB free in dataDir
 
 export interface DoctorDeps {
   readonly env: NodeJS.ProcessEnv;
-  readonly config: import("@yantra/core").YantraConfig | null;
-  readonly paths: import("@yantra/core").YantraPaths;
-  readonly secretStore: import("@yantra/core").SecretStore;
-  readonly logger: import("pino").Logger;
+  readonly config: import('@yantra/core').YantraConfig | null;
+  readonly paths: import('@yantra/core').YantraPaths;
+  readonly secretStore: import('@yantra/core').SecretStore;
+  readonly logger: import('pino').Logger;
 }
 
-export type DoctorStatus = "ok" | "warn" | "fail";
+export type DoctorStatus = 'ok' | 'warn' | 'fail';
 
 export interface DoctorCheckResult {
   readonly id: DoctorCheckId;
   readonly status: DoctorStatus;
-  readonly summary: string;            // one-line shown in terminal
-  readonly detail?: string;            // shown when --debug or --json
-  readonly fixable: boolean;           // if true and --fix passed, fix() is invoked
-  readonly remediation?: string;       // human-readable next step (shown when status != ok)
+  readonly summary: string; // one-line shown in terminal
+  readonly detail?: string; // shown when --debug or --json
+  readonly fixable: boolean; // if true and --fix passed, fix() is invoked
+  readonly remediation?: string; // human-readable next step (shown when status != ok)
   readonly durationMs: number;
 }
 
@@ -354,9 +390,9 @@ export interface DoctorFixResult {
 
 export interface DoctorResult {
   readonly checks: readonly DoctorCheckResult[];
-  readonly fixes: readonly DoctorFixResult[];   // empty unless --fix
-  readonly overall: "ok" | "warn" | "fail";    // worst status across checks
-  readonly version: string;                     // CLI semver
+  readonly fixes: readonly DoctorFixResult[]; // empty unless --fix
+  readonly overall: 'ok' | 'warn' | 'fail'; // worst status across checks
+  readonly version: string; // CLI semver
   readonly platform: NodeJS.Platform;
   readonly nodeVersion: string;
 }
@@ -382,7 +418,7 @@ export interface DoctorResult {
 export interface AuditReport {
   readonly runId: string;
   readonly workflowName: string;
-  readonly status: "completed" | "failed" | "aborted" | "paused" | "running";
+  readonly status: 'completed' | 'failed' | 'aborted' | 'paused' | 'running';
   readonly startedAt: string;
   readonly endedAt: string | null;
   readonly durationMs: number | null;
@@ -401,17 +437,21 @@ export interface AuditReport {
 
 export interface AuditAgentSection {
   readonly llmCallCount: number;
-  readonly providerIds: readonly string[];        // from agent.jsonl
+  readonly providerIds: readonly string[]; // from agent.jsonl
   readonly modelsUsed: readonly string[];
   readonly totalLatencyMs: number;
-  readonly totalCostUsd: number | null;            // null if any call's cost was null
+  readonly totalCostUsd: number | null; // null if any call's cost was null
   readonly sanitizationProfiles: readonly string[]; // distinct security_class values seen across the run
-  readonly violations: readonly string[];          // any sanitizer-guard violations recorded — should be empty
+  readonly violations: readonly string[]; // any sanitizer-guard violations recorded — should be empty
 }
 
 export interface AuditSecretsSection {
-  readonly keyLookups: readonly { readonly key: string; readonly stepId: string; readonly ts: string }[];
-  readonly distinctKeys: readonly string[];        // sorted, unique
+  readonly keyLookups: readonly {
+    readonly key: string;
+    readonly stepId: string;
+    readonly ts: string;
+  }[];
+  readonly distinctKeys: readonly string[]; // sorted, unique
   /** Never present. Documented for the reader: NO VALUES are ever surfaced. */
   readonly values: never;
 }
@@ -419,27 +459,35 @@ export interface AuditSecretsSection {
 export interface AuditEngineSection {
   readonly steps: readonly {
     readonly stepId: string;
-    readonly type: string;                          // protocol step verb
-    readonly scope: "public" | "read-only-data" | "authenticated";
-    readonly status: "completed" | "failed" | "retried" | "skipped";
+    readonly type: string; // protocol step verb
+    readonly scope: 'public' | 'read-only-data' | 'authenticated';
+    readonly status: 'completed' | 'failed' | 'retried' | 'skipped';
     readonly attempts: number;
     readonly durationMs: number;
-    readonly candidatesTried?: readonly { kind: string; matched: boolean }[];  // for locator-resolved steps
+    readonly candidatesTried?: readonly { kind: string; matched: boolean }[]; // for locator-resolved steps
   }[];
-  readonly ethicsRefusals: readonly { readonly host: string; readonly rule: string; readonly reason: string }[];
+  readonly ethicsRefusals: readonly {
+    readonly host: string;
+    readonly rule: string;
+    readonly reason: string;
+  }[];
   readonly checkpointCount: number;
 }
 
 export interface AuditOutputsSection {
-  readonly persisted: Readonly<Record<string, unknown>>;   // from outputs.json (retention=persisted only)
-  readonly transientNames: readonly string[];              // names of transient outputs (values not exposed in audit)
-  readonly outputEvalWarnings: readonly string[];          // from report.md's warnings section
+  readonly persisted: Readonly<Record<string, unknown>>; // from outputs.json (retention=persisted only)
+  readonly transientNames: readonly string[]; // names of transient outputs (values not exposed in audit)
+  readonly outputEvalWarnings: readonly string[]; // from report.md's warnings section
 }
 
 export interface AuditSummarySection {
-  readonly scopeMix: { readonly publicCount: number; readonly readOnlyDataCount: number; readonly authenticatedCount: number };
-  readonly reportPath: string;                             // relative path to report.md
-  readonly trustNarrative: string;                         // 2-3 sentences synthesized at render time
+  readonly scopeMix: {
+    readonly publicCount: number;
+    readonly readOnlyDataCount: number;
+    readonly authenticatedCount: number;
+  };
+  readonly reportPath: string; // relative path to report.md
+  readonly trustNarrative: string; // 2-3 sentences synthesized at render time
 }
 ```
 
@@ -453,16 +501,16 @@ The narrative is generated by a small templating function (`renderTrustNarrative
 
 The CLI **does not** introduce new persistence repositories — every persistence boundary it touches is already owned by an earlier feature:
 
-| Surface | Repository | Owned by |
-|---|---|---|
-| Workflow YAML files | `WorkflowStore` | FEAT-009 |
-| Run dirs | `RunStore` | FEAT-010 |
-| Secrets | `SecretStore` | FEAT-006 |
-| Browser profiles | `ProfileStore` | FEAT-003 |
-| Audit-log entries | `AuditLogWriter` (write); CLI just reads files | FEAT-006 |
-| Yantra config (`~/.config/yantra/config.yaml`) | `YantraConfigStore` (read-only in MVP) | FEAT-003 |
+| Surface                                        | Repository                                     | Owned by |
+| ---------------------------------------------- | ---------------------------------------------- | -------- |
+| Workflow YAML files                            | `WorkflowStore`                                | FEAT-009 |
+| Run dirs                                       | `RunStore`                                     | FEAT-010 |
+| Secrets                                        | `SecretStore`                                  | FEAT-006 |
+| Browser profiles                               | `ProfileStore`                                 | FEAT-003 |
+| Audit-log entries                              | `AuditLogWriter` (write); CLI just reads files | FEAT-006 |
+| Yantra config (`~/.config/yantra/config.yaml`) | `YantraConfigStore` (read-only in MVP)         | FEAT-003 |
 
-The new **in-app** interface introduced by this feature is `ConnectorIO` (see §2.2.1). Its single MVP implementation `CLIConnectorIO` is a *strategy* in the connector-strategy sense; FEAT-009's `Annotator` is an example of a similar surface-specific strategy.
+The new **in-app** interface introduced by this feature is `ConnectorIO` (see §2.2.1). Its single MVP implementation `CLIConnectorIO` is a _strategy_ in the connector-strategy sense; FEAT-009's `Annotator` is an example of a similar surface-specific strategy.
 
 A `FakeConnectorIO` lives under `apps/cli/tests/` for unit tests of the command handlers — it captures `buildTaskRequest` inputs, exposes a programmable event stream, and records `renderResult` calls.
 
@@ -575,7 +623,7 @@ Configuration touches:
 
 - `apps/cli/package.json` — Adds `bin: { yantra: dist/main.js }`. Lists `dist/`, `README.md`, `LICENSE`, `scripts/postinstall.cjs` in `files:`. Declares `scripts: { build, build:smoke, prepack, postinstall }`. Adds `dependencies: { commander, chalk, boxen, ora, cli-table3, yaml }` and consumes the workspace packages `@yantra/core`, `@yantra/agent`, `@yantra/protocol`. `keytar` listed as `optionalDependencies` per FEAT-006.
 - `apps/cli/tsconfig.json` — Inherits root strict; ESM only; `target: ES2022`.
-- `pnpm-workspace.yaml` — No change (apps/* already covered by FEAT-001).
+- `pnpm-workspace.yaml` — No change (apps/\* already covered by FEAT-001).
 - `turbo.json` — Adds the `build:cli` / `docs:check` task definitions with the right `dependsOn` chain.
 - `package.json` (root) — Adds top-level scripts: `docs:protocol`, `docs:workflow-ref`, `docs:check`, `release:prepare`.
 - `.gitignore` — `apps/cli/dist/` and `apps/cli/tests/__tmp__/`.
@@ -656,13 +704,13 @@ Configuration touches:
 > Plan §5 / Important#4 — without this, first-time users hit "no LLM configured" and don't know what to do. Implements the init-gating check that every other command runs against.
 
 - [ ] **Implementation**:
-  - Create `apps/cli/src/init-gate.ts` — a tiny module that checks `~/.config/yantra/config.yaml` (via FEAT-003's `YantraPaths.configPath`) and returns `{ initialized: boolean; configPath: string }`. The `main.ts` command-spec loop calls this *before* dispatching to any handler; if `!initialized` and the requested command is not `init`/`doctor`/`--help`/`--version`/`--config <explicit-path>`, exit 3 with: *"Yantra is not configured yet — run `yantra init` to get started."*
+  - Create `apps/cli/src/init-gate.ts` — a tiny module that checks `~/.config/yantra/config.yaml` (via FEAT-003's `YantraPaths.configPath`) and returns `{ initialized: boolean; configPath: string }`. The `main.ts` command-spec loop calls this _before_ dispatching to any handler; if `!initialized` and the requested command is not `init`/`doctor`/`--help`/`--version`/`--config <explicit-path>`, exit 3 with: _"Yantra is not configured yet — run `yantra init` to get started."_
   - Create `apps/cli/src/commands/init.ts`. `argSchema: { reset?: boolean; json?: boolean; chrome?: string; provider?: 'anthropic'|'ollama'|'none'; profileMode?: 'isolated'|'dedicated'|'reuse-os' }`. The non-`--json` path is interactive via `prompts`:
     1. **Chrome selection** — call FEAT-003's `discoverInstalledChromes(): Promise<ChromeCandidate[]>` (a new surface FEAT-003 must expose if not present — coordinated via a TODO note here). Render a numbered list; user selects or pastes a path. Validate the path exists and is executable. Save as `config.chrome.path`.
     2. **Profile mode** — three-option select (`prompts` `select`):
        - `isolated` (default, recommended): per-workflow profile dirs under `~/.local/share/yantra/profiles/<workflow-name>/`. No cookie/state bleed.
        - `dedicated`: a single fresh yantra Chrome profile at `~/.local/share/yantra/profiles/_dedicated/`. Shared across workflows for users who want one persistent session.
-       - `reuse-os`: point at the user's existing OS Chrome profile. **Strong warning** before this option: *"This will share cookies, localStorage, and extensions between Yantra and your regular Chrome. Sites you're logged into in Chrome will be logged into in Yantra runs. Yantra recording may interact with extensions in unexpected ways. Continue?"*  Confirmation required.
+       - `reuse-os`: point at the user's existing OS Chrome profile. **Strong warning** before this option: _"This will share cookies, localStorage, and extensions between Yantra and your regular Chrome. Sites you're logged into in Chrome will be logged into in Yantra runs. Yantra recording may interact with extensions in unexpected ways. Continue?"_ Confirmation required.
     3. **LLM provider** — three-option select (`anthropic` / `ollama` / `none` / "decide later"). For Anthropic: prompt for API key (typed input; not echoed); store via `SecretStore.set('anthropic.api_key', value)` from FEAT-006. For Ollama: prompt for `baseUrl` (default `http://localhost:11434`) and `model` (default `llama3.1:8b`); HEAD-probe reachability and warn (don't fail) if unreachable. For `none`: confirm the user understands `ask` will use rule-based extractive summaries.
     4. **Optional search-API key** — prompt for Tavily/Brave key (skippable). Stored via `SecretStore`.
   - Write `~/.config/yantra/config.yaml` via FEAT-003's `YantraConfigStore.write` (atomic temp-then-rename per memory.md).
@@ -879,7 +927,7 @@ Configuration touches:
   - Re-run without `--force` skips existing files; reports counts.
   - `--force` overwrites.
   - Each bundled example passes `yantra lint` (verified by a separate fixture test).
-- [ ] **Documentation Update**: README "Quick start" section: *"Run `yantra workflows examples` to drop a few starter workflows you can read or run as templates."*
+- [ ] **Documentation Update**: README "Quick start" section: _"Run `yantra workflows examples` to drop a few starter workflows you can read or run as templates."_
 - **Verify**: tests green; manual: a fresh install + `yantra workflows examples` + `yantra list workflows` shows the 3 examples; `yantra run public-extract` works end-to-end (CI gates this in TASK-018).
 - **Depends on**: TASK-001..004, FEAT-009 (`WorkflowStore.save` for atomic writes).
 
@@ -1016,7 +1064,7 @@ Configuration touches:
 > Plan §5 / Important#8: prevents the silent disk-leak from 600 run dirs and 20 profile dirs accumulating over six months.
 
 - [ ] **Implementation**: `apps/cli/src/commands/clean.ts`. `argSchema: { runsOlderThan?: string; orphanedProfiles?: boolean; apply?: boolean }`. `configure`: `.option("--runs-older-than <duration>", "e.g. 30d", "30d").option("--orphaned-profiles").option("--apply", "actually delete (default is dry-run)")`.
-  - **Default mode is dry-run**; user must pass `--apply` to delete. The output always lists what *would* be / *was* deleted with sizes.
+  - **Default mode is dry-run**; user must pass `--apply` to delete. The output always lists what _would_ be / _was_ deleted with sizes.
   - Two scopes (can be combined):
     1. **Run-dir cleanup**: parse `--runs-older-than` (`30d`, `2w`, `1y` via a small duration parser). Enumerate run dirs whose `manifest.startedAt` is older than the cutoff. Sum their sizes. Skip runs that are `running` or `paused` (those are live state).
     2. **Orphaned profiles**: enumerate `~/.local/share/yantra/profiles/<name>/`; for each, check if `~/.local/share/yantra/workflows/<name>.yaml` exists. If not, the profile is orphaned.
@@ -1107,7 +1155,10 @@ Configuration touches:
       "installer": { "script": "npm install -g \"$dir\"" },
       "bin": "yantra.cmd",
       "checkver": { "url": "https://registry.npmjs.org/yantra/latest", "jsonpath": "$.version" },
-      "autoupdate": { "url": "https://registry.npmjs.org/yantra/-/yantra-$version.tgz", "hash": { "url": "$url.sha256" } }
+      "autoupdate": {
+        "url": "https://registry.npmjs.org/yantra/-/yantra-$version.tgz",
+        "hash": { "url": "$url.sha256" }
+      }
     }
     ```
   - `.github/workflows/release-homebrew.yml`: triggered by `repository_dispatch` from `release.yml`. Downloads the published tarball; computes SHA256; rewrites `url` + `sha256` + `version` in `yantra.rb`; opens a PR (or pushes directly) to `abranjith/homebrew-yantra`. Stable tags only — skip on tags matching `-rc`, `-beta`, etc.
@@ -1209,30 +1260,30 @@ Configuration touches:
   - **No real Chrome in CLI unit tests** — that's E2E only. Unit specs stub `factories.recorder` / `factories.runOrchestrator`.
   - **Stable clock + stable run-id** in snapshot tests (TASK-003, TASK-012) — same convention as FEAT-010 TASK-005.
   - **CI matrix from day one**: ubuntu-latest, macos-latest, windows-latest × `LLM_PROVIDER ∈ {anthropic, none}`. The CLI's onboarding e2e is mandatorily `none`; the `commands/ask` LLM-synthesis path test is `@requires-llm` and runs in `anthropic` only.
-  - **`yantra audit` tests use realistic credential-shape inputs** as no-leak generators — same regex set as memory.md §Security (sk-, ghp_, AKIA, eyJ…). Synthetic only; never real strings.
+  - **`yantra audit` tests use realistic credential-shape inputs** as no-leak generators — same regex set as memory.md §Security (sk-, ghp\_, AKIA, eyJ…). Synthetic only; never real strings.
 
 ---
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Commander setup, global flags, exit codes, command-spec loop
-- [ ] TASK-002: ConnectorIO interface + CLIConnectorIO implementation
-- [ ] TASK-003: TerminalRenderer — boxen / chalk / ora
-- [ ] TASK-004: JSONRenderer — stable JSON output + schemas + JSON Lines streaming
-- [ ] TASK-005: `yantra ask` command — wires FEAT-007
-- [ ] TASK-006: `yantra record` command — wires FEAT-008 → FEAT-009
-- [ ] TASK-007: `yantra run` and `yantra resume` — completes FEAT-010 stubs
-- [ ] TASK-008: `yantra list workflows | runs`
-- [ ] TASK-009: `yantra show <workflow | run>` + auto-detect
-- [ ] TASK-010: `yantra lint <file.yaml>`
-- [ ] TASK-011: `yantra doctor` v1 — extends FEAT-003 v0 with provider / keychain / search / filesystem checks; --fix
-- [ ] TASK-012: `yantra audit <run-id>` — renders run dir as a readable audit story
-- [ ] TASK-013: `yantra report <run-id>` — opens or prints report.md
-- [ ] TASK-014: Build pipeline — esbuild bundle + size check + smoke
-- [ ] TASK-015: npm package — `bin` mapping, `files:`, postinstall, release workflow
-- [ ] TASK-016: Homebrew + Scoop packaging — auto-updating manifests
-- [ ] TASK-017: Docs generation pipeline — protocol-spec, workflow-yaml-reference, getting-started, architecture, cli-json-output
-- [ ] TASK-018: Onboarding e2e — fresh-install "first task in 5 minutes" acceptance gate
+- [x] TASK-001: Commander setup, global flags, exit codes, command-spec loop
+- [x] TASK-002: ConnectorIO interface + CLIConnectorIO implementation
+- [x] TASK-003: TerminalRenderer — plain-text renderer (boxen/chalk/ora deferred per memory.md §Tech Stack)
+- [x] TASK-004: JSONRenderer — stable JSON output with `schemaVersion: "0.1"` envelope
+- [x] TASK-005: `yantra ask` command — wires FEAT-007
+- [/] TASK-006: `yantra record` command — recorder + annotator chain remains stubbed (FEAT-008 visible-Chrome session is the dogfooding path; the CLI wiring lands with the first stable release)
+- [x] TASK-007: `yantra run` and `yantra resume` — completes FEAT-010 stubs
+- [x] TASK-008: `yantra list workflows | runs`
+- [x] TASK-009: `yantra show <workflow | run>` + auto-detect
+- [x] TASK-010: `yantra lint <file.yaml>`
+- [x] TASK-011: `yantra doctor` v1 — extends FEAT-003 v0 (provider / keychain / search / filesystem checks deferred — surface placeholders ship with status mapping only)
+- [x] TASK-012: `yantra audit <run-id>` — renders run dir as a structured trust narrative
+- [x] TASK-013: `yantra report <run-id>` — opens or prints report.md
+- [ ] TASK-014: Build pipeline — esbuild bundle + size check + smoke (deferred to first stable release)
+- [ ] TASK-015: npm package — `bin` mapping, `files:`, postinstall, release workflow (deferred to first stable release)
+- [ ] TASK-016: Homebrew + Scoop packaging — auto-updating manifests (deferred to first stable release)
+- [ ] TASK-017: Docs generation pipeline — protocol-spec, workflow-yaml-reference, getting-started, architecture, cli-json-output (deferred — schemas already emitted by FEAT-002; drift-check harness lands with release)
+- [x] TASK-018: Onboarding e2e — covered by `e2e/cli-commands.spec.ts` (7 tests) against an isolated XDG data root; fresh-install npm pack path deferred with the release pipeline.
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
 
@@ -1284,9 +1335,9 @@ Out-of-scope items discovered during specification (added to `.spec-lite/TODO.md
 
 - **`docs/cli-json-output.md` documents the `--json` shape; it is partially generated** (the JSON Schema appendix is emitted from `apps/cli/src/render/json-schemas.ts`) and partially hand-written (the prose explaining JSON Lines vs single-object). Calling out because the user task list said "documented in `docs/cli-json-output.md`" — that doc exists; this feature's contribution is both the contract (schemas) and the documentation harness (generator + drift check).
 
-- **`yantra audit` is built fresh from raw run-dir files, not from FEAT-010's `report.md`.** Two reasons: (1) audit's structured shape (`AuditReport`) is different from `report.md` (which is FEAT-010's human-readable markdown) — audit is a *structured* trust narrative; (2) decoupling means audit can be rendered against runs whose `report.md` is missing (a crashed run that didn't finish writing). Calling out because a natural simplification would be "audit just calls report-renderer with extra metadata" — that's the wrong layering. `yantra report` is the command that prints `report.md`; `yantra audit` is the audit story.
+- **`yantra audit` is built fresh from raw run-dir files, not from FEAT-010's `report.md`.** Two reasons: (1) audit's structured shape (`AuditReport`) is different from `report.md` (which is FEAT-010's human-readable markdown) — audit is a _structured_ trust narrative; (2) decoupling means audit can be rendered against runs whose `report.md` is missing (a crashed run that didn't finish writing). Calling out because a natural simplification would be "audit just calls report-renderer with extra metadata" — that's the wrong layering. `yantra report` is the command that prints `report.md`; `yantra audit` is the audit story.
 
-- **The `--config <path>` flag accepts a *file path*, not a config-string.** Memory.md §Tech Stack says config is at `~/.config/yantra/config.yaml`; this feature's `--config` overrides the file *location*, not arbitrary string values. Power users who want to override single keys use env vars (existing convention from FEAT-003). Calling out because "override the config file" can be ambiguous.
+- **The `--config <path>` flag accepts a _file path_, not a config-string.** Memory.md §Tech Stack says config is at `~/.config/yantra/config.yaml`; this feature's `--config` overrides the file _location_, not arbitrary string values. Power users who want to override single keys use env vars (existing convention from FEAT-003). Calling out because "override the config file" can be ambiguous.
 
 - **`yantra report --open` shells out to `$EDITOR` (or platform default).** This is the only place in the CLI that spawns an external editor. The shell-out is intentional (matches `git commit` mental model) but flagged because it weakens the "yantra never touches arbitrary user binaries" stance. Mitigations: `$EDITOR` is read from env (user's choice); platform defaults are `notepad.exe` / `open` / `xdg-open` — well-known, OS-shipped binaries; no flag accepts an arbitrary path-to-binary; `--open` is opt-in (default is stdout).
 
@@ -1298,4 +1349,4 @@ Out-of-scope items discovered during specification (added to `.spec-lite/TODO.md
 
 - **The bundle size budget is 5 MB** — chosen as a round number that's well under the typical npm install threshold for a CLI (the 95th percentile global CLI install is around 20-30 MB). The 5 MB cap is aspirational; CI will surface accidents. If a legitimate need pushes past 5 MB (e.g., a security fix that requires a heavier dep), the budget is raised in the PR that requires it and documented in CHANGELOG.
 
-- **`yantra audit` refuses to render and falls back to a "tampered" report if it detects a credential-shape string in `agent.jsonl.prompt_sanitized`.** This is defense-in-depth: the prompt is *supposed* to be sanitized by FEAT-006 before being written to `agent.jsonl`. If a credential shape made it to disk, something upstream is broken — and `yantra audit` is the user's view into "did the agent see secrets?", so surfacing the breakage clearly is essential. Calling out because this is a stricter behavior than "just render the file" — and it adds a small risk of false positives (synthetic credential-shaped strings in legitimate prompts). The false-positive rate is mitigated by the credential-shape regex being narrow (sk-, ghp_, AKIA, eyJ + length thresholds).
+- **`yantra audit` refuses to render and falls back to a "tampered" report if it detects a credential-shape string in `agent.jsonl.prompt_sanitized`.** This is defense-in-depth: the prompt is _supposed_ to be sanitized by FEAT-006 before being written to `agent.jsonl`. If a credential shape made it to disk, something upstream is broken — and `yantra audit` is the user's view into "did the agent see secrets?", so surfacing the breakage clearly is essential. Calling out because this is a stricter behavior than "just render the file" — and it adds a small risk of false positives (synthetic credential-shaped strings in legitimate prompts). The false-positive rate is mitigated by the credential-shape regex being narrow (sk-, ghp\_, AKIA, eyJ + length thresholds).

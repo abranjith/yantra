@@ -99,7 +99,8 @@ export async function createKeychainProvider(
 ): Promise<KeychainProvider> {
   try {
     const loaded = await loader();
-    const candidate = ((loaded as { default?: unknown }).default ?? loaded) as Partial<KeytarModule>;
+    const candidate = ((loaded as { default?: unknown }).default ??
+      loaded) as Partial<KeytarModule>;
 
     if (
       typeof candidate.getPassword !== 'function' ||

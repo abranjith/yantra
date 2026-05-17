@@ -17,7 +17,8 @@ describe('@no-llm extraction/cache-key', () => {
       fc.property(
         fc.string(),
         fc.constantFrom<'tavily' | 'brave' | 'browser'>('tavily', 'brave', 'browser'),
-        fc.date(),
+        // Bound the date so toISOString() never throws RangeError on invalid epoch.
+        fc.date({ noInvalidDate: true, min: new Date('1970-01-01'), max: new Date('2099-12-31') }),
         (query, provider, day) => {
           const utcDay = day.toISOString().slice(0, 10);
           const left = cacheKey(query, provider, utcDay);

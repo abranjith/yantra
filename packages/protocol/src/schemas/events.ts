@@ -79,6 +79,25 @@ export const TaskEvent = z
       attempted_verb: StepVerbSchema.describe('Attempted step type.'),
       step_id: z.string().min(1).describe('Step id causing violation.'),
     }),
+    z.object({
+      ...TaskEventBase,
+      kind: z.literal('task_resumed').describe('A previously paused or failed run was resumed.'),
+      original_run_id: z.string().min(1).describe('The run id of the original run being resumed.'),
+      resume_step_id: z.string().min(1).describe('Step id from which execution resumes.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('chrome_drift_warning')
+        .describe('Chrome major version differs from recording.'),
+      recorded_chrome_major: z
+        .number()
+        .int()
+        .positive()
+        .describe('Chrome major at recording time.'),
+      current_chrome_major: z.number().int().positive().describe('Chrome major at run time.'),
+      drift: z.number().int().describe('Absolute difference in major versions.'),
+    }),
   ])
   .describe('Discriminated union for task lifecycle events.');
 

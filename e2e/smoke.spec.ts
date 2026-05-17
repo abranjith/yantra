@@ -1,4 +1,3 @@
-
 import { AGENT_PROTOCOL_VERSION } from '@yantra/agent';
 import { CORE_PROTOCOL_VERSION } from '@yantra/core';
 import { PROTOCOL_VERSION } from '@yantra/protocol';

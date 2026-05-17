@@ -68,7 +68,7 @@ function makeMockBrowser() {
 describe('@no-llm LocalBrowserProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const mockBrowser = makeMockBrowser();
     mockLaunchChrome.mockResolvedValue({
       browser: mockBrowser as never,
@@ -77,7 +77,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('throws ChromeNotFoundError when Chrome is not found', async () => {
-    mockDetectChrome.mockResolvedValue(null);
+    mockDetectChrome.mockReturnValue(null);
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
 
     await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toThrow(
@@ -86,7 +86,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('throws ChromeVersionUnsupportedError when Chrome version is too old', async () => {
-    mockDetectChrome.mockResolvedValue(makeChrome(MIN_SUPPORTED_CHROME_MAJOR - 1));
+    mockDetectChrome.mockReturnValue(makeChrome(MIN_SUPPORTED_CHROME_MAJOR - 1));
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
 
     await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toThrow(
@@ -96,7 +96,7 @@ describe('@no-llm LocalBrowserProvider', () => {
 
   it('throws ChromeVersionUnsupportedError with correct found/required context', async () => {
     const tooOld = MIN_SUPPORTED_CHROME_MAJOR - 5;
-    mockDetectChrome.mockResolvedValue(makeChrome(tooOld));
+    mockDetectChrome.mockReturnValue(makeChrome(tooOld));
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
 
     await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toSatisfy(
@@ -108,7 +108,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('launches successfully with a supported Chrome version', async () => {
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const mockBrowser = makeMockBrowser();
     mockLaunchChrome.mockResolvedValue({
       browser: mockBrowser as never,
@@ -130,7 +130,7 @@ describe('@no-llm LocalBrowserProvider', () => {
       debug: (_, msg) => logs.push({ level: 'debug', msg: msg ?? '' }),
     };
 
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const mockBrowser = makeMockBrowser();
     mockLaunchChrome.mockResolvedValue({
       browser: mockBrowser as never,
@@ -152,7 +152,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('uses chromeOverridePath when provided', async () => {
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const mockBrowser = makeMockBrowser();
     mockLaunchChrome.mockResolvedValue({
       browser: mockBrowser as never,
@@ -170,7 +170,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('detectChrome delegates to chrome-discovery module', async () => {
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const provider = new LocalBrowserProvider({ profileStore: makeProfileStore() });
     const result = await provider.detectChrome();
     expect(result?.majorVersion).toBe(124);
@@ -188,7 +188,7 @@ describe('@no-llm LocalBrowserProvider', () => {
   });
 
   it('accepts options with no chromeOverridePath', async () => {
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     const mockBrowser = makeMockBrowser();
     mockLaunchChrome.mockResolvedValue({
       browser: mockBrowser as never,

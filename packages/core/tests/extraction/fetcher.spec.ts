@@ -7,7 +7,12 @@ import {
 } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { BrowserProvider, BrowserSession, ChromeInstall, Page } from '../../src/browser/types.js';
+import type {
+  BrowserProvider,
+  BrowserSession,
+  ChromeInstall,
+  Page,
+} from '../../src/browser/types.js';
 import {
   BrowserFallbackFetcher,
   FetchError,
@@ -77,11 +82,14 @@ describe('@no-llm extraction/fetcher', () => {
   });
 
   it('fetches HTML over HTTP and returns metadata', async () => {
-    mockAgent.get('https://example.com').intercept({ path: '/ok', method: 'GET' }).reply(200, '<html><main><article>ok</article></main></html>', {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-      },
-    });
+    mockAgent
+      .get('https://example.com')
+      .intercept({ path: '/ok', method: 'GET' })
+      .reply(200, '<html><main><article>ok</article></main></html>', {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+        },
+      });
 
     const fetcher = new HttpFetcher();
     const doc = await fetcher.fetch('https://example.com/ok', {
@@ -95,7 +103,10 @@ describe('@no-llm extraction/fetcher', () => {
   });
 
   it('throws FetchError(kind=http-status) on non-success status', async () => {
-    mockAgent.get('https://example.com').intercept({ path: '/404', method: 'GET' }).reply(404, 'not found');
+    mockAgent
+      .get('https://example.com')
+      .intercept({ path: '/404', method: 'GET' })
+      .reply(404, 'not found');
 
     const fetcher = new HttpFetcher();
 
@@ -105,13 +116,20 @@ describe('@no-llm extraction/fetcher', () => {
         signal: new AbortController().signal,
       }),
     ).rejects.toSatisfy((error: unknown) => {
-      return error instanceof FetchError && error.context.kind === 'http-status' && error.context.statusCode === 404;
+      return (
+        error instanceof FetchError &&
+        error.context.kind === 'http-status' &&
+        error.context.statusCode === 404
+      );
     });
   });
 
   it('throws FetchError(kind=too-large) when body exceeds max bytes', async () => {
     const payload = 'x'.repeat(1024);
-    mockAgent.get('https://example.com').intercept({ path: '/big', method: 'GET' }).reply(200, payload);
+    mockAgent
+      .get('https://example.com')
+      .intercept({ path: '/big', method: 'GET' })
+      .reply(200, payload);
 
     const fetcher = new HttpFetcher({ maxBodyBytes: 128 });
 
@@ -120,18 +138,24 @@ describe('@no-llm extraction/fetcher', () => {
         timeoutMs: 8_000,
         signal: new AbortController().signal,
       }),
-    ).rejects.toSatisfy((error: unknown) => error instanceof FetchError && error.context.kind === 'too-large');
+    ).rejects.toSatisfy(
+      (error: unknown) => error instanceof FetchError && error.context.kind === 'too-large',
+    );
   });
 
   it('escalates to browser fallback for js-heavy minimal HTML', async () => {
     mockAgent
       .get('https://example.com')
       .intercept({ path: '/spa', method: 'GET' })
-      .reply(200, '<html><body><div id="root"></div><script src="/app.js"></script></body></html>', {
-        headers: {
-          'content-type': 'text/html',
+      .reply(
+        200,
+        '<html><body><div id="root"></div><script src="/app.js"></script></body></html>',
+        {
+          headers: {
+            'content-type': 'text/html',
+          },
         },
-      });
+      );
 
     const hybrid = new HybridContentFetcher({
       httpFetcher: new HttpFetcher(),

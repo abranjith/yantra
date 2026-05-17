@@ -193,13 +193,19 @@ function findSendCalls(sourceFile: ts.SourceFile): ts.CallExpression[] {
   return calls;
 }
 
-function isTrackedSendCall(expression: ts.LeftHandSideExpression, sourceFile: ts.SourceFile): boolean {
+function isTrackedSendCall(
+  expression: ts.LeftHandSideExpression,
+  sourceFile: ts.SourceFile,
+): boolean {
   if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'send') {
     const ownerText = expression.expression.getText(sourceFile);
     return ownerText === 'LLMClient' || ownerText === 'this.llm';
   }
 
-  if (ts.isElementAccessExpression(expression) && expression.argumentExpression?.getText(sourceFile) === '"send"') {
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression?.getText(sourceFile) === '"send"'
+  ) {
     const ownerText = expression.expression.getText(sourceFile);
     return ownerText === 'LLMClient' || ownerText === 'this.llm';
   }
@@ -228,7 +234,9 @@ function hasSanitizeBeforeCall(
   const targetPos = targetCall.getStart(sourceFile);
   let found = false;
 
-  const root = ts.isFunctionLike(functionScope) ? functionScope.body ?? functionScope : functionScope;
+  const root = ts.isFunctionLike(functionScope)
+    ? (functionScope.body ?? functionScope)
+    : functionScope;
 
   const visit = (node: ts.Node): void => {
     if (found) {
@@ -322,7 +330,8 @@ async function main(): Promise<void> {
 }
 
 const executedAsScript =
-  process.argv[1] !== undefined && pathToFileURL(fileURLToPath(import.meta.url)).href === pathToFileURL(process.argv[1]).href;
+  process.argv[1] !== undefined &&
+  pathToFileURL(fileURLToPath(import.meta.url)).href === pathToFileURL(process.argv[1]).href;
 
 if (executedAsScript) {
   void main();

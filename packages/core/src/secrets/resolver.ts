@@ -114,7 +114,9 @@ export class DefaultOpaqueRefResolver implements OpaqueRefResolver {
       }
 
       default:
-        throw new Error(`Unsupported ValueRef kind: ${(ref as { kind?: string }).kind ?? 'unknown'}`);
+        throw new Error(
+          `Unsupported ValueRef kind: ${(ref as { kind?: string }).kind ?? 'unknown'}`,
+        );
     }
   }
 

@@ -8,9 +8,8 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, afterEach, beforeEach, expect, it } from 'vitest';
-
 import type { CapturedAction } from '@yantra/protocol';
+import { describe, afterEach, beforeEach, expect, it } from 'vitest';
 
 import { assembleDraft } from '../../../src/workflow/recorder/draft-builder.js';
 import { FileSystemRecordingStore } from '../../../src/workflow/recorder/store.js';

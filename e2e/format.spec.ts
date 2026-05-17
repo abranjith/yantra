@@ -44,7 +44,7 @@ describe('@no-llm formatting and lint smoke', () => {
       'docs/protocol-spec.md',
       'e2e/format.spec.ts',
       'e2e/docs.spec.ts',
-      'packages/core/src/boundary-rules.spec.ts',
+      'packages/core/tests/boundary-rules.spec.ts',
       'packages/core/src/_lint-fixtures/core-imports-pi-agent-core.ts',
     ]);
 

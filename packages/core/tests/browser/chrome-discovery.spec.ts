@@ -213,7 +213,12 @@ describe('@no-llm chrome-discovery', () => {
       mockAccessSync.mockReturnValue(undefined);
       mockExecFileSync.mockImplementation((cmd: string, args: unknown) => {
         const argsArr = args as string[];
-        if (String(cmd) === 'reg' && argsArr.includes('HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe')) {
+        if (
+          String(cmd) === 'reg' &&
+          argsArr.includes(
+            'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe',
+          )
+        ) {
           return makeRegistryOutput('C:\\Program Files\\Custom\\chrome.exe');
         }
         if (String(cmd).includes('chrome.exe')) {
@@ -293,7 +298,7 @@ describe('@no-llm chrome-discovery', () => {
       throw new Error('not found');
     });
 
-    await expect(detectChrome()).resolves.toBeNull();
+    expect(detectChrome()).toBeNull();
   });
 
   // Satisfy linting — homedir is used by macOS paths
@@ -301,5 +306,3 @@ describe('@no-llm chrome-discovery', () => {
     expect(vi.mocked(homedir)()).toBe('/home/testuser');
   });
 });
-
-

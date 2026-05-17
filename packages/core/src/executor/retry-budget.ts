@@ -36,10 +36,7 @@ export class RetryBudgetImpl implements RetryBudget {
   consume(level: 'locator' | 'step' | 'workflow'): void {
     const key = levelKey(level);
     if (this._remaining[key] <= 0) {
-      throw new BudgetExhaustedError(
-        { level, initial: this.initial[key] },
-        this.errorContext,
-      );
+      throw new BudgetExhaustedError({ level, initial: this.initial[key] }, this.errorContext);
     }
     this._remaining[key]--;
   }

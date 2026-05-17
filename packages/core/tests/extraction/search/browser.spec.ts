@@ -3,7 +3,12 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import type { BrowserProvider, BrowserSession, ChromeInstall, Page } from '../../../src/browser/types.js';
+import type {
+  BrowserProvider,
+  BrowserSession,
+  ChromeInstall,
+  Page,
+} from '../../../src/browser/types.js';
 import { BrowserSearchProvider } from '../../../src/extraction/search/browser.js';
 
 const fixtureHtml = readFileSync(

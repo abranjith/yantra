@@ -46,15 +46,15 @@ This feature owns the **per-run audit artifacts** in the run directory and the *
 {
   "ts": "2026-05-11T14:22:03.118Z",
   "task_id": "01HZ...",
-  "step_id": "s4",                   // null when not tied to a step (e.g., plan generation)
-  "direction": "request",            // "request" | "response"
+  "step_id": "s4", // null when not tied to a step (e.g., plan generation)
+  "direction": "request", // "request" | "response"
   "model": "claude-opus-4-5",
-  "prompt_sanitized": "...",         // post-sanitize prompt text or tool-call payload
-  "response": null,                  // populated on "response" lines
-  "latency_ms": null,                // populated on "response" lines
-  "cost_usd": null,                  // populated on "response" lines; null if unknown
+  "prompt_sanitized": "...", // post-sanitize prompt text or tool-call payload
+  "response": null, // populated on "response" lines
+  "latency_ms": null, // populated on "response" lines
+  "cost_usd": null, // populated on "response" lines; null if unknown
   "sanitizer_profile": "authenticated",
-  "transformations_applied": ["form-value-strip", "pii-email-redact", "truncate"]
+  "transformations_applied": ["form-value-strip", "pii-email-redact", "truncate"],
 }
 ```
 
@@ -65,8 +65,8 @@ This feature owns the **per-run audit artifacts** in the run directory and the *
   "ts": "2026-05-11T14:22:05.041Z",
   "task_id": "01HZ...",
   "step_id": "s2",
-  "key": "bank.password",            // canonical keychain key
-  "outcome": "resolved"              // "resolved" | "not_found" | "error"
+  "key": "bank.password", // canonical keychain key
+  "outcome": "resolved", // "resolved" | "not_found" | "error"
 }
 ```
 
@@ -76,11 +76,11 @@ This feature owns the **per-run audit artifacts** in the run directory and the *
 {
   // ... other manifest fields owned by FEAT-005 ...
   "scope_summary": {
-    "public": 4,                     // step count per scope
+    "public": 4, // step count per scope
     "read-only-data": 2,
     "authenticated": 5,
-    "scope_violations_rejected": 0   // pre-execution rejections caught by enforcer
-  }
+    "scope_violations_rejected": 0, // pre-execution rejections caught by enforcer
+  },
 }
 ```
 
@@ -90,19 +90,19 @@ This feature owns the **per-run audit artifacts** in the run directory and the *
 version: 1
 hosts:
   # Banking — strip currency amounts in addition to standard auth profile
-  "*.chase.com":
+  '*.chase.com':
     inherits: authenticated
     extra_redactors:
       - currency_usd
-  "*.bankofamerica.com":
+  '*.bankofamerica.com':
     inherits: authenticated
     extra_redactors: [currency_usd]
   # Health — strip date-of-birth-like patterns
-  "*.mychart.com":
+  '*.mychart.com':
     inherits: authenticated
     extra_redactors: [date_of_birth]
   # Government — strip case-number patterns
-  "*.uscis.gov":
+  '*.uscis.gov':
     inherits: authenticated
     extra_redactors: [case_number]
 ```
@@ -111,23 +111,23 @@ hosts:
 
 ```ts
 // packages/core/src/sanitizer/profiles.ts
-export type SanitizationProfile = "public" | "read-only-data" | "authenticated";
+export type SanitizationProfile = 'public' | 'read-only-data' | 'authenticated';
 
 export interface SanitizationProfileDef {
   readonly name: SanitizationProfile;
-  readonly stripFormValues: boolean;        // <input value>, <textarea>, contenteditable
-  readonly stripAllQueryStrings: boolean;   // strip every query string (authenticated only)
-  readonly stripAuthQueryParams: boolean;   // strip token/api_key/session-shaped params
+  readonly stripFormValues: boolean; // <input value>, <textarea>, contenteditable
+  readonly stripAllQueryStrings: boolean; // strip every query string (authenticated only)
+  readonly stripAuthQueryParams: boolean; // strip token/api_key/session-shaped params
   readonly redactPii: {
     email: boolean;
     ssn: boolean;
-    creditCard: boolean;                    // Luhn-validated
+    creditCard: boolean; // Luhn-validated
     phone: boolean;
-    apiKeyShapes: boolean;                  // sk-, ghp_, AKIA, eyJ
+    apiKeyShapes: boolean; // sk-, ghp_, AKIA, eyJ
   };
   readonly applyPerHostOverrides: boolean;
-  readonly truncateBytes: number;           // default 20480 (20KB)
-  readonly bypassForLlmInput: boolean;      // true ONLY for read-only-data (LLM reasons over real values)
+  readonly truncateBytes: number; // default 20480 (20KB)
+  readonly bypassForLlmInput: boolean; // true ONLY for read-only-data (LLM reasons over real values)
 }
 
 // packages/core/src/sanitizer/index.ts
@@ -140,35 +140,31 @@ export interface SanitizedPayload {
 }
 
 export type TransformationTag =
-  | "form-value-strip"
-  | "query-all-strip"
-  | "query-auth-param-strip"
-  | "pii-email-redact"
-  | "pii-ssn-redact"
-  | "pii-credit-card-redact"
-  | "pii-phone-redact"
-  | "pii-apikey-redact"
-  | "host-override-currency-usd"
-  | "host-override-date-of-birth"
-  | "host-override-case-number"
-  | "truncate";
+  | 'form-value-strip'
+  | 'query-all-strip'
+  | 'query-auth-param-strip'
+  | 'pii-email-redact'
+  | 'pii-ssn-redact'
+  | 'pii-credit-card-redact'
+  | 'pii-phone-redact'
+  | 'pii-apikey-redact'
+  | 'host-override-currency-usd'
+  | 'host-override-date-of-birth'
+  | 'host-override-case-number'
+  | 'truncate';
 
 export interface Sanitizer {
-  sanitize(
-    payload: unknown,
-    profile: SanitizationProfile,
-    hostHint?: string
-  ): SanitizedPayload;
+  sanitize(payload: unknown, profile: SanitizationProfile, hostHint?: string): SanitizedPayload;
 }
 
 // packages/core/src/sanitizer/host-overrides.ts
 export interface HostOverride {
-  readonly hostPattern: string;             // e.g., "*.chase.com"
+  readonly hostPattern: string; // e.g., "*.chase.com"
   readonly inherits: SanitizationProfile;
   readonly extraRedactors: ReadonlyArray<ExtraRedactorTag>;
 }
 
-export type ExtraRedactorTag = "currency_usd" | "date_of_birth" | "case_number";
+export type ExtraRedactorTag = 'currency_usd' | 'date_of_birth' | 'case_number';
 
 export interface HostOverrideStore {
   load(path: string): Promise<ReadonlyArray<HostOverride>>;
@@ -199,25 +195,25 @@ export interface OpaqueRefResolver {
 }
 
 export interface ResolvedValue {
-  readonly value: string;                   // the resolved string
-  readonly isSecret: boolean;               // marks for buffer-zero on dispose
-  readonly source: "secret" | "param" | "capture" | "literal";
-  readonly sourceKey: string | null;        // secret key, param name, or capture name; null for literal
-  dispose(): void;                          // zeroes buffer (best-effort)
+  readonly value: string; // the resolved string
+  readonly isSecret: boolean; // marks for buffer-zero on dispose
+  readonly source: 'secret' | 'param' | 'capture' | 'literal';
+  readonly sourceKey: string | null; // secret key, param name, or capture name; null for literal
+  dispose(): void; // zeroes buffer (best-effort)
 }
 
 // packages/core/src/secrets/scope-enforcer.ts
-export type SecurityScope = "public" | "read-only-data" | "authenticated";
+export type SecurityScope = 'public' | 'read-only-data' | 'authenticated';
 
 export interface ScopeViolation {
   readonly stepId: string;
-  readonly stepType: string;                // e.g., "click", "fill", "navigate"
+  readonly stepType: string; // e.g., "click", "fill", "navigate"
   readonly declaredScope: SecurityScope;
-  readonly reason: string;                  // human-readable explanation
+  readonly reason: string; // human-readable explanation
 }
 
 export interface ScopeEnforcer {
-  validate(plan: Plan): ReadonlyArray<ScopeViolation>;  // empty = pass; non-empty = reject
+  validate(plan: Plan): ReadonlyArray<ScopeViolation>; // empty = pass; non-empty = reject
 }
 
 // packages/core/src/audit/log-writer.ts
@@ -231,7 +227,7 @@ export interface AuditLogWriter {
 
 // packages/core/src/audit/report-builder.ts
 export interface ReportBuilder {
-  build(runDir: string, outcome: "completed" | "failed", failure?: FailureContext): Promise<string>;
+  build(runDir: string, outcome: 'completed' | 'failed', failure?: FailureContext): Promise<string>;
 }
 
 // SecurityClass enum lives in packages/protocol (FEAT-002); re-exported here for convenience.
@@ -250,15 +246,15 @@ sanitize(payload: unknown, profile: SanitizationProfile, hostHint?: string): San
 
 **Profile differences (transform matrix)**:
 
-| Transform | `public` | `read-only-data` | `authenticated` |
-|---|---|---|---|
-| Form-value stripping | yes | bypassed (LLM reasons over real values) | yes |
-| Auth-token query-param stripping | yes | bypassed | yes |
-| **All** query-string stripping | no | bypassed | **yes** |
-| PII regex redaction | yes (configurable per redactor) | bypassed | yes (all redactors on) |
-| Per-host overrides applied | yes | bypassed | yes |
-| Truncation to byte budget | yes (20KB default) | yes (still bounded — 20KB) | yes |
-| **Use** | generic `ask`, public-web `extract`, navigation | `extract` → `llm_summarize` over real data in a scope that statically cannot mutate | any workflow with `security_class: authenticated`; default for authenticated sites |
+| Transform                        | `public`                                        | `read-only-data`                                                                    | `authenticated`                                                                    |
+| -------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Form-value stripping             | yes                                             | bypassed (LLM reasons over real values)                                             | yes                                                                                |
+| Auth-token query-param stripping | yes                                             | bypassed                                                                            | yes                                                                                |
+| **All** query-string stripping   | no                                              | bypassed                                                                            | **yes**                                                                            |
+| PII regex redaction              | yes (configurable per redactor)                 | bypassed                                                                            | yes (all redactors on)                                                             |
+| Per-host overrides applied       | yes                                             | bypassed                                                                            | yes                                                                                |
+| Truncation to byte budget        | yes (20KB default)                              | yes (still bounded — 20KB)                                                          | yes                                                                                |
+| **Use**                          | generic `ask`, public-web `extract`, navigation | `extract` → `llm_summarize` over real data in a scope that statically cannot mutate | any workflow with `security_class: authenticated`; default for authenticated sites |
 
 > Note: even `read-only-data` truncates — bypassing redaction does **not** mean unbounded payload size. Budget guards token cost regardless of profile.
 
@@ -323,41 +319,41 @@ CREATE TABLE secrets_metadata (
 
 ### Source files
 
-| Path | Purpose |
-|---|---|
-| `packages/core/src/sanitizer/index.ts` | The **single chokepoint** export: `sanitize(payload, profile, hostHint?)`. Re-exports the `Sanitizer` interface and types. No other file in the repo may export a function that wraps `LLMClient.send` without invoking this one first (enforced by CI static-check). |
-| `packages/core/src/sanitizer/profiles.ts` | Profile definitions for `public`, `read-only-data`, `authenticated`. Each profile is a `SanitizationProfileDef` literal — pure data, no behavior. Exports `getProfile(name): SanitizationProfileDef`. |
-| `packages/core/src/sanitizer/strippers.ts` | Pure transform functions: `stripFormValues(html)`, `stripQueryStrings(text)`, `stripAuthQueryParams(text)`, `redactEmails(text)`, `redactSsn(text)`, `redactCreditCards(text)`, `redactPhones(text)`, `redactApiKeyShapes(text)`. Each returns `{ text, hits }` so the chokepoint can record `transformationsApplied`. Credit-card redactor runs Luhn validation to suppress false positives. |
-| `packages/core/src/sanitizer/host-overrides.ts` | `HostOverrideStore` implementation: loads `~/.config/yantra/sanitizer-hosts.yaml`, parses with the `yaml` package, caches in memory, exposes `match(host)` (glob → pattern resolution via simple `*` → `.*` regex), supports `reload()`. Ships with the seeded entries for banking/health/gov via a packaged-default fallback when the user file does not exist. |
-| `packages/core/src/sanitizer/truncate.ts` | UTF-8-safe truncation to a byte budget; never truncates mid-codepoint; appends a fixed marker `\n[...truncated by yantra sanitizer]` that the agent can recognize. |
-| `packages/core/src/secrets/keychain.ts` | Keytar adapter implementing `KeychainProvider`. Service name `"yantra"`. Detects keychain unavailability (e.g., headless Linux CI without libsecret) and returns an `UnavailableKeychainProvider` that yields `null` from `get` and emits a one-shot `warn` log via pino. Exports `createKeychainProvider(): Promise<KeychainProvider>`. |
-| `packages/core/src/secrets/resolver.ts` | `OpaqueRefResolver` implementation. Switches on `ValueRef.kind`: `secret` → keychain lookup; `param` → context lookup; `capture` → context lookup; `literal` → direct (with runtime defense-in-depth check that a literal never appears in a secret-typed field — should be unreachable per FEAT-002 types). Returns `ResolvedValue` whose `dispose()` calls `withSecret` to zero the backing buffer (best-effort). |
-| `packages/core/src/secrets/scope-enforcer.ts` | `ScopeEnforcer` implementation. Walks `Plan.steps`; for each step in `read-only-data` scope, checks `step.type` against the allowed verb set `{ extract, wait_for, llm_summarize }`; otherwise emits a `ScopeViolation`. Also flags `navigate` whose target host differs from the previous step's host (host-change as mutation). Returns the full list — callers decide whether to throw. Throws `ScopeViolationError` via a thin `enforce(plan)` helper for the executor's pre-execution gate. |
-| `packages/core/src/secrets/with-secret.ts` | `withSecret<T>(value: string, fn: (v: string) => T \| Promise<T>): Promise<T>` — invokes `fn(value)`, then `Buffer.fill(0)` on the underlying buffer in `try/finally`. Documented best-effort due to V8 string interning. |
-| `packages/core/src/audit/log-writer.ts` | `AuditLogWriter` implementation. Per-run append-only JSONL writer for `agent.jsonl` and `secrets.jsonl`. Uses `fs.promises.appendFile` with `flag: "a"`; flushes on every append (the user must be able to recover state after a crash). Writes `scope_summary` into `manifest.json` via a partial-merge helper. |
-| `packages/core/src/audit/report-builder.ts` | `ReportBuilder` implementation. Reads `manifest.json`, `agent.jsonl`, `secrets.jsonl`, `events.jsonl` from the run dir; renders Markdown with sections: Summary, Outcome, Steps Timeline, Failure Class (if failed), Locator-Fallback Metrics, Sanitizer Transformation Counts, Secret Resolution Counts, Audit Trail Link. |
-| `packages/core/src/audit/index.ts` | Re-exports `AuditLogWriter` and `ReportBuilder` for consumers (FEAT-005 executor, FEAT-012 `yantra audit`). |
-| `packages/core/src/sanitizer/errors.ts` | `SanitizationProfileError extends Error` (unknown profile / malformed override file). |
-| `packages/core/src/secrets/errors.ts` | `SecretNotFoundError`, `ScopeViolationError`, `KeychainUnavailableError` — each extends `Error` and carries structured context (key, step_id, etc.). |
-| `packages/core/src/audit/errors.ts` | `AuditLogWriteError` — extends `Error`; carries `runId`, `file`, `cause`. |
-| `scripts/ci-static-check.ts` | Stand-alone Node script (run via `tsx`). Uses `ripgrep` (or a TS regex walker fallback when `rg` is unavailable) to scan all `*.ts` files under `packages/` and `apps/`. For each match of `LLMClient.send(`, walks **upward** in the same function scope (using `typescript` package's parser) and asserts that a `sanitize(` call appears before it. Emits a structured report; non-zero exit blocks CI. Also asserts that `pi-agent-core` imports appear **only** in `packages/agent/`. |
+| Path                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/core/src/sanitizer/index.ts`          | The **single chokepoint** export: `sanitize(payload, profile, hostHint?)`. Re-exports the `Sanitizer` interface and types. No other file in the repo may export a function that wraps `LLMClient.send` without invoking this one first (enforced by CI static-check).                                                                                                                                                                                                                            |
+| `packages/core/src/sanitizer/profiles.ts`       | Profile definitions for `public`, `read-only-data`, `authenticated`. Each profile is a `SanitizationProfileDef` literal — pure data, no behavior. Exports `getProfile(name): SanitizationProfileDef`.                                                                                                                                                                                                                                                                                            |
+| `packages/core/src/sanitizer/strippers.ts`      | Pure transform functions: `stripFormValues(html)`, `stripQueryStrings(text)`, `stripAuthQueryParams(text)`, `redactEmails(text)`, `redactSsn(text)`, `redactCreditCards(text)`, `redactPhones(text)`, `redactApiKeyShapes(text)`. Each returns `{ text, hits }` so the chokepoint can record `transformationsApplied`. Credit-card redactor runs Luhn validation to suppress false positives.                                                                                                    |
+| `packages/core/src/sanitizer/host-overrides.ts` | `HostOverrideStore` implementation: loads `~/.config/yantra/sanitizer-hosts.yaml`, parses with the `yaml` package, caches in memory, exposes `match(host)` (glob → pattern resolution via simple `*` → `.*` regex), supports `reload()`. Ships with the seeded entries for banking/health/gov via a packaged-default fallback when the user file does not exist.                                                                                                                                 |
+| `packages/core/src/sanitizer/truncate.ts`       | UTF-8-safe truncation to a byte budget; never truncates mid-codepoint; appends a fixed marker `\n[...truncated by yantra sanitizer]` that the agent can recognize.                                                                                                                                                                                                                                                                                                                               |
+| `packages/core/src/secrets/keychain.ts`         | Keytar adapter implementing `KeychainProvider`. Service name `"yantra"`. Detects keychain unavailability (e.g., headless Linux CI without libsecret) and returns an `UnavailableKeychainProvider` that yields `null` from `get` and emits a one-shot `warn` log via pino. Exports `createKeychainProvider(): Promise<KeychainProvider>`.                                                                                                                                                         |
+| `packages/core/src/secrets/resolver.ts`         | `OpaqueRefResolver` implementation. Switches on `ValueRef.kind`: `secret` → keychain lookup; `param` → context lookup; `capture` → context lookup; `literal` → direct (with runtime defense-in-depth check that a literal never appears in a secret-typed field — should be unreachable per FEAT-002 types). Returns `ResolvedValue` whose `dispose()` calls `withSecret` to zero the backing buffer (best-effort).                                                                              |
+| `packages/core/src/secrets/scope-enforcer.ts`   | `ScopeEnforcer` implementation. Walks `Plan.steps`; for each step in `read-only-data` scope, checks `step.type` against the allowed verb set `{ extract, wait_for, llm_summarize }`; otherwise emits a `ScopeViolation`. Also flags `navigate` whose target host differs from the previous step's host (host-change as mutation). Returns the full list — callers decide whether to throw. Throws `ScopeViolationError` via a thin `enforce(plan)` helper for the executor's pre-execution gate. |
+| `packages/core/src/secrets/with-secret.ts`      | `withSecret<T>(value: string, fn: (v: string) => T \| Promise<T>): Promise<T>` — invokes `fn(value)`, then `Buffer.fill(0)` on the underlying buffer in `try/finally`. Documented best-effort due to V8 string interning.                                                                                                                                                                                                                                                                        |
+| `packages/core/src/audit/log-writer.ts`         | `AuditLogWriter` implementation. Per-run append-only JSONL writer for `agent.jsonl` and `secrets.jsonl`. Uses `fs.promises.appendFile` with `flag: "a"`; flushes on every append (the user must be able to recover state after a crash). Writes `scope_summary` into `manifest.json` via a partial-merge helper.                                                                                                                                                                                 |
+| `packages/core/src/audit/report-builder.ts`     | `ReportBuilder` implementation. Reads `manifest.json`, `agent.jsonl`, `secrets.jsonl`, `events.jsonl` from the run dir; renders Markdown with sections: Summary, Outcome, Steps Timeline, Failure Class (if failed), Locator-Fallback Metrics, Sanitizer Transformation Counts, Secret Resolution Counts, Audit Trail Link.                                                                                                                                                                      |
+| `packages/core/src/audit/index.ts`              | Re-exports `AuditLogWriter` and `ReportBuilder` for consumers (FEAT-005 executor, FEAT-012 `yantra audit`).                                                                                                                                                                                                                                                                                                                                                                                      |
+| `packages/core/src/sanitizer/errors.ts`         | `SanitizationProfileError extends Error` (unknown profile / malformed override file).                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `packages/core/src/secrets/errors.ts`           | `SecretNotFoundError`, `ScopeViolationError`, `KeychainUnavailableError` — each extends `Error` and carries structured context (key, step_id, etc.).                                                                                                                                                                                                                                                                                                                                             |
+| `packages/core/src/audit/errors.ts`             | `AuditLogWriteError` — extends `Error`; carries `runId`, `file`, `cause`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `scripts/ci-static-check.ts`                    | Stand-alone Node script (run via `tsx`). Uses `ripgrep` (or a TS regex walker fallback when `rg` is unavailable) to scan all `*.ts` files under `packages/` and `apps/`. For each match of `LLMClient.send(`, walks **upward** in the same function scope (using `typescript` package's parser) and asserts that a `sanitize(` call appears before it. Emits a structured report; non-zero exit blocks CI. Also asserts that `pi-agent-core` imports appear **only** in `packages/agent/`.       |
 
 ### Test files (mirrored, with HEAVY property-test coverage)
 
-| Path | Purpose |
-|---|---|
-| `packages/core/src/sanitizer/index.spec.ts` | Unit + property tests for the chokepoint: idempotency, totality, profile-dispatch correctness. `@no-llm`. |
-| `packages/core/src/sanitizer/profiles.spec.ts` | Unit tests for each profile's transform matrix. `@no-llm`. |
-| `packages/core/src/sanitizer/strippers.spec.ts` | Unit + property tests per stripper. Includes Luhn-validation test corpus for credit-card redactor (real vs. invalid card numbers); synthetic email/SSN/phone/API-key corpora. `@no-llm`. |
-| `packages/core/src/sanitizer/host-overrides.spec.ts` | Unit tests for YAML load + glob match + reload semantics. `@no-llm`. |
-| `packages/core/src/sanitizer/truncate.spec.ts` | Property test: "truncation never splits a UTF-8 codepoint." `@no-llm`. |
-| `packages/core/src/secrets/keychain.spec.ts` | Unit tests against the keytar mock; OS-conditional test that exercises real keytar on each CI runner (the `@requires-keychain` tag is filtered when keychain is unavailable). `@no-llm`. |
-| `packages/core/src/secrets/resolver.spec.ts` | Unit + property tests: resolves all `ValueRef` variants; rejects literal-in-secret-field at runtime as defense-in-depth; `dispose()` zeroes the buffer. `@no-llm`. |
-| `packages/core/src/secrets/scope-enforcer.spec.ts` | Property test: "for any generated `Plan` with at least one mutating step in `read-only-data` scope, `validate()` returns a non-empty violation list." Generates plans via `fast-check` arbitraries that mix step types and scopes. `@no-llm`. |
-| `packages/core/src/secrets/with-secret.spec.ts` | Unit test: `withSecret` calls `Buffer.fill(0)` in `finally`, even on throw. `@no-llm`. |
-| `packages/core/src/audit/log-writer.spec.ts` | Unit tests: append-only, flush-per-write, JSONL well-formedness, never-writes-value invariant on `secrets.jsonl`. `@no-llm`. |
-| `packages/core/src/audit/report-builder.spec.ts` | Snapshot test on a fixture run dir; asserts report sections present and ordered. `@no-llm`. |
-| `scripts/ci-static-check.spec.ts` | Self-test: fixture project with a contrived "forgot to sanitize" call site; assert the script catches it. `@no-llm`. |
+| Path                                                 | Purpose                                                                                                                                                                                                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/sanitizer/index.spec.ts`          | Unit + property tests for the chokepoint: idempotency, totality, profile-dispatch correctness. `@no-llm`.                                                                                                                                     |
+| `packages/core/src/sanitizer/profiles.spec.ts`       | Unit tests for each profile's transform matrix. `@no-llm`.                                                                                                                                                                                    |
+| `packages/core/src/sanitizer/strippers.spec.ts`      | Unit + property tests per stripper. Includes Luhn-validation test corpus for credit-card redactor (real vs. invalid card numbers); synthetic email/SSN/phone/API-key corpora. `@no-llm`.                                                      |
+| `packages/core/src/sanitizer/host-overrides.spec.ts` | Unit tests for YAML load + glob match + reload semantics. `@no-llm`.                                                                                                                                                                          |
+| `packages/core/src/sanitizer/truncate.spec.ts`       | Property test: "truncation never splits a UTF-8 codepoint." `@no-llm`.                                                                                                                                                                        |
+| `packages/core/src/secrets/keychain.spec.ts`         | Unit tests against the keytar mock; OS-conditional test that exercises real keytar on each CI runner (the `@requires-keychain` tag is filtered when keychain is unavailable). `@no-llm`.                                                      |
+| `packages/core/src/secrets/resolver.spec.ts`         | Unit + property tests: resolves all `ValueRef` variants; rejects literal-in-secret-field at runtime as defense-in-depth; `dispose()` zeroes the buffer. `@no-llm`.                                                                            |
+| `packages/core/src/secrets/scope-enforcer.spec.ts`   | Property test: "for any generated `Plan` with at least one mutating step in `read-only-data` scope, `validate()` returns a non-empty violation list." Generates plans via `fast-check` arbitraries that mix step types and scopes. `@no-llm`. |
+| `packages/core/src/secrets/with-secret.spec.ts`      | Unit test: `withSecret` calls `Buffer.fill(0)` in `finally`, even on throw. `@no-llm`.                                                                                                                                                        |
+| `packages/core/src/audit/log-writer.spec.ts`         | Unit tests: append-only, flush-per-write, JSONL well-formedness, never-writes-value invariant on `secrets.jsonl`. `@no-llm`.                                                                                                                  |
+| `packages/core/src/audit/report-builder.spec.ts`     | Snapshot test on a fixture run dir; asserts report sections present and ordered. `@no-llm`.                                                                                                                                                   |
+| `scripts/ci-static-check.spec.ts`                    | Self-test: fixture project with a contrived "forgot to sanitize" call site; assert the script catches it. `@no-llm`.                                                                                                                          |
 
 ## 4. Dependencies
 
@@ -375,16 +371,16 @@ CREATE TABLE secrets_metadata (
 
 ### External (npm packages)
 
-| Package | Why | Notes |
-|---|---|---|
-| `keytar` | OS-keychain access | Tracked deprecation; Phase 2 migration to `node-keychain` or Tauri keyring (already in `.spec-lite/TODO.md` per Memory §Dependencies). |
-| `fast-check` | Property-based tests | Mandatory per Memory §Testing. |
-| `pino` | Audit log + warnings | Configured with a secret-shape redactor as defense-in-depth (per Memory §Logging). |
-| `yaml` (eemeli) | Parse `sanitizer-hosts.yaml` | Already in the stack (FEAT-002 / FEAT-009). |
-| `zod` | Validate the parsed `sanitizer-hosts.yaml` shape | Already in the stack. |
-| `typescript` (compiler API) | Used by `scripts/ci-static-check.ts` to walk the AST for the same-function-scope rule (regex-only would miss method boundaries). | Already a dev dep. |
-| `tsx` | Run `scripts/ci-static-check.ts` from CI | Already a dev dep. |
-| `node:fs/promises`, `node:path`, `node:crypto`, `node:url` | Filesystem + URL parsing | Std lib. |
+| Package                                                    | Why                                                                                                                              | Notes                                                                                                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `keytar`                                                   | OS-keychain access                                                                                                               | Tracked deprecation; Phase 2 migration to `node-keychain` or Tauri keyring (already in `.spec-lite/TODO.md` per Memory §Dependencies). |
+| `fast-check`                                               | Property-based tests                                                                                                             | Mandatory per Memory §Testing.                                                                                                         |
+| `pino`                                                     | Audit log + warnings                                                                                                             | Configured with a secret-shape redactor as defense-in-depth (per Memory §Logging).                                                     |
+| `yaml` (eemeli)                                            | Parse `sanitizer-hosts.yaml`                                                                                                     | Already in the stack (FEAT-002 / FEAT-009).                                                                                            |
+| `zod`                                                      | Validate the parsed `sanitizer-hosts.yaml` shape                                                                                 | Already in the stack.                                                                                                                  |
+| `typescript` (compiler API)                                | Used by `scripts/ci-static-check.ts` to walk the AST for the same-function-scope rule (regex-only would miss method boundaries). | Already a dev dep.                                                                                                                     |
+| `tsx`                                                      | Run `scripts/ci-static-check.ts` from CI                                                                                         | Already a dev dep.                                                                                                                     |
+| `node:fs/promises`, `node:path`, `node:crypto`, `node:url` | Filesystem + URL parsing                                                                                                         | Std lib.                                                                                                                               |
 
 ### CI / Tooling
 
@@ -478,6 +474,7 @@ Implement `ScopeEnforcer` in `packages/core/src/secrets/scope-enforcer.ts`. The 
 Implement `AuditLogWriter` in `packages/core/src/audit/log-writer.ts`. `open(runDir)` ensures the directory exists; on first call, creates empty `agent.jsonl` and `secrets.jsonl`. `appendAgentCall` and `appendSecretResolution` use `fs.promises.appendFile` with a per-write `fsync`-equivalent (or `writeFile` with `flag: "a"` and explicit `flush`). `writeScopeSummary` performs a read-modify-write on `manifest.json` (safe because only one writer per run). `close()` is a no-op in MVP but documented as the future place to release file handles when we move to streaming writers.
 
 **Invariants tested**:
+
 - Every line is valid JSON terminated by `\n`.
 - `secrets.jsonl` never contains a `value` field (regex-checked across the generated test corpus).
 - Crashes mid-task leave a parseable JSONL prefix.
@@ -548,13 +545,13 @@ This feature **is** the auth boundary for the agent. The agent never holds a cre
 
 ### Error Handling
 
-| Error class | Thrown by | Behavior |
-|---|---|---|
-| `SanitizationProfileError` | `getProfile`, `HostOverrideStore.load` | Run aborts before any browser action; structured `report.md` written. |
-| `SecretNotFoundError` | `OpaqueRefResolver.resolve` (kind: secret) | Step fails; retry budget consumed; if exhausted, run aborts with `task_failed` event + report. |
-| `KeychainUnavailableError` | `KeychainProvider.set` / `delete` on unavailable platforms | Surfaces in `yantra doctor`; workflow using secrets fails fast at validation time on these platforms (FEAT-010 reads this state). |
-| `ScopeViolationError` | `ScopeEnforcer.enforce(plan)` | **Always fires before any browser action.** Emits `events.jsonl` entry with `{scope, attempted_verb, step_id}`; run aborts with exit code `1` (validation error). |
-| `AuditLogWriteError` | `AuditLogWriter.append*` on `EIO`/`ENOSPC` | Log-level `error`; the executor continues if possible (audit is observability, not control flow) but emits `events.jsonl` entry; if the run dir is unwritable, the run aborts because reproducibility is the point. |
+| Error class                | Thrown by                                                  | Behavior                                                                                                                                                                                                            |
+| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SanitizationProfileError` | `getProfile`, `HostOverrideStore.load`                     | Run aborts before any browser action; structured `report.md` written.                                                                                                                                               |
+| `SecretNotFoundError`      | `OpaqueRefResolver.resolve` (kind: secret)                 | Step fails; retry budget consumed; if exhausted, run aborts with `task_failed` event + report.                                                                                                                      |
+| `KeychainUnavailableError` | `KeychainProvider.set` / `delete` on unavailable platforms | Surfaces in `yantra doctor`; workflow using secrets fails fast at validation time on these platforms (FEAT-010 reads this state).                                                                                   |
+| `ScopeViolationError`      | `ScopeEnforcer.enforce(plan)`                              | **Always fires before any browser action.** Emits `events.jsonl` entry with `{scope, attempted_verb, step_id}`; run aborts with exit code `1` (validation error).                                                   |
+| `AuditLogWriteError`       | `AuditLogWriter.append*` on `EIO`/`ENOSPC`                 | Log-level `error`; the executor continues if possible (audit is observability, not control flow) but emits `events.jsonl` entry; if the run dir is unwritable, the run aborts because reproducibility is the point. |
 
 ### Logging
 

@@ -77,7 +77,10 @@ export class FileSystemAskCache implements AskCache {
         return null;
       }
 
-      this.logger.warn({ err: serializeError(error), key }, 'ask cache read failed; treating as miss');
+      this.logger.warn(
+        { err: serializeError(error), key },
+        'ask cache read failed; treating as miss',
+      );
       return null;
     }
 
@@ -89,11 +92,7 @@ export class FileSystemAskCache implements AskCache {
     return parsed.cards;
   }
 
-  public async put(
-    key: string,
-    cards: readonly AskCard[],
-    meta?: AskCachePutMeta,
-  ): Promise<void> {
+  public async put(key: string, cards: readonly AskCard[], meta?: AskCachePutMeta): Promise<void> {
     await this.ensureReady();
 
     const now = this.clock().toISOString();
@@ -184,7 +183,9 @@ export class FileSystemAskCache implements AskCache {
 }
 
 function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === code;
+  return (
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === code
+  );
 }
 
 function serializeError(error: unknown): { message: string } {

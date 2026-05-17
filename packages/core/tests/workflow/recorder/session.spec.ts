@@ -9,9 +9,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, afterEach, beforeEach, expect, it, vi } from 'vitest';
-
 import type { CapturedAction, RecordingDraft } from '@yantra/protocol';
+import { describe, afterEach, beforeEach, expect, it } from 'vitest';
 
 import { assembleDraft } from '../../../src/workflow/recorder/draft-builder.js';
 import { DefaultCaptureRedactor } from '../../../src/workflow/recorder/redactor.js';
@@ -21,7 +20,9 @@ import { FileSystemRecordingStore } from '../../../src/workflow/recorder/store.j
 // Lightweight store stub that avoids real filesystem in unit tests
 // ---------------------------------------------------------------------------
 
-class InMemoryStore implements InstanceType<typeof FileSystemRecordingStore> {
+// Kept for reference; tests use FileSystemRecordingStore directly. The
+// underscore prefix satisfies the unused-vars convention.
+class _InMemoryStore implements InstanceType<typeof FileSystemRecordingStore> {
   private actions = new Map<string, CapturedAction[]>();
   private drafts = new Map<string, RecordingDraft>();
   private dirs = new Map<string, { recordingDir: string; profileDir: string }>();

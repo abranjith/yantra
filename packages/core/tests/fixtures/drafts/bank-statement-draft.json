@@ -1,0 +1,149 @@
+{
+  "schema_version": "0.1",
+  "recording_id": "01HXYZ1234567890ABCDEFGHIJ",
+  "workflow_name_hint": "bank-statement",
+  "started_at": "2026-04-15T09:00:00.000Z",
+  "stopped_at": "2026-04-15T09:05:00.000Z",
+  "stop_reason": "user",
+  "actions": [
+    {
+      "kind": "navigate",
+      "ts": "2026-04-15T09:00:01.000Z",
+      "url_before": "about:blank",
+      "url_after": "https://mybank.example/login",
+      "navigation_kind": "address_bar",
+      "triggered_by_action_index": null
+    },
+    {
+      "kind": "fill",
+      "ts": "2026-04-15T09:00:05.000Z",
+      "url_before": "https://mybank.example/login",
+      "url_after": null,
+      "raw_value": "<redacted>",
+      "value_length": 18,
+      "input_type": "email",
+      "element_descriptor": {
+        "tag": "input",
+        "role": "textbox",
+        "accessible_name": "Username",
+        "visible_text": null,
+        "attrs_sample": {
+          "type": "email",
+          "name": "username",
+          "placeholder": "Enter your email",
+          "aria-label": "Username"
+        },
+        "bounding_rect": { "x": 100, "y": 200, "width": 300, "height": 40 },
+        "in_iframe": false,
+        "xpath_for_debug": "//input[@name='username']"
+      },
+      "candidate_chain": [
+        {
+          "candidate": { "kind": "role", "role": "textbox", "name": "Username" },
+          "score": 0.95,
+          "rank_reason": "ARIA role + accessible name match"
+        },
+        {
+          "candidate": { "kind": "label", "value": "Username" },
+          "score": 0.9,
+          "rank_reason": "Label text match"
+        },
+        {
+          "candidate": { "kind": "placeholder", "value": "Enter your email" },
+          "score": 0.75,
+          "rank_reason": "Placeholder text match"
+        }
+      ]
+    },
+    {
+      "kind": "fill",
+      "ts": "2026-04-15T09:00:10.000Z",
+      "url_before": "https://mybank.example/login",
+      "url_after": null,
+      "raw_value": "<redacted>",
+      "value_length": 12,
+      "input_type": "password",
+      "element_descriptor": {
+        "tag": "input",
+        "role": "textbox",
+        "accessible_name": "Password",
+        "visible_text": null,
+        "attrs_sample": {
+          "type": "password",
+          "name": "password",
+          "placeholder": "Enter your password",
+          "aria-label": "Password"
+        },
+        "bounding_rect": { "x": 100, "y": 260, "width": 300, "height": 40 },
+        "in_iframe": false,
+        "xpath_for_debug": "//input[@name='password']"
+      },
+      "candidate_chain": [
+        {
+          "candidate": { "kind": "role", "role": "textbox", "name": "Password" },
+          "score": 0.95,
+          "rank_reason": "ARIA role + accessible name match"
+        },
+        {
+          "candidate": { "kind": "label", "value": "Password" },
+          "score": 0.9,
+          "rank_reason": "Label text match"
+        }
+      ]
+    },
+    {
+      "kind": "click",
+      "ts": "2026-04-15T09:00:15.000Z",
+      "url_before": "https://mybank.example/login",
+      "url_after": "https://mybank.example/dashboard",
+      "element_descriptor": {
+        "tag": "button",
+        "role": "button",
+        "accessible_name": "Sign in",
+        "visible_text": "Sign in",
+        "attrs_sample": {
+          "type": "submit",
+          "aria-label": "Sign in"
+        },
+        "bounding_rect": { "x": 100, "y": 320, "width": 120, "height": 44 },
+        "in_iframe": false,
+        "xpath_for_debug": "//button[@type='submit']"
+      },
+      "candidate_chain": [
+        {
+          "candidate": { "kind": "role", "role": "button", "name": "Sign in" },
+          "score": 0.98,
+          "rank_reason": "ARIA role + accessible name match"
+        }
+      ]
+    },
+    {
+      "kind": "navigate",
+      "ts": "2026-04-15T09:00:16.000Z",
+      "url_before": "https://mybank.example/login",
+      "url_after": "https://mybank.example/dashboard",
+      "navigation_kind": "programmatic",
+      "triggered_by_action_index": 3
+    }
+  ],
+  "metadata": {
+    "start_ts": "2026-04-15T09:00:00.000Z",
+    "end_ts": "2026-04-15T09:05:00.000Z",
+    "os": {
+      "platform": "linux",
+      "release": "5.15.0",
+      "arch": "x64"
+    },
+    "chrome_version": "124.0.6367.91",
+    "chrome_major": 124,
+    "yantra_version": "0.1.0",
+    "initial_url": "https://mybank.example/login",
+    "capture_count": 5,
+    "dwell_per_page": [
+      { "url": "https://mybank.example/login", "ms": 14000 },
+      { "url": "https://mybank.example/dashboard", "ms": 286000 }
+    ],
+    "stop_reason": "user",
+    "unrecorded_frame_origins": []
+  }
+}

@@ -2,7 +2,11 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { generateUniqueCss, isStableClassName, queryCss } from '../../../src/locator/injected/css.js';
+import {
+  generateUniqueCss,
+  isStableClassName,
+  queryCss,
+} from '../../../src/locator/injected/css.js';
 
 describe('@no-llm queryCss', () => {
   beforeEach(() => {
@@ -109,8 +113,8 @@ describe('@no-llm isStableClassName', () => {
   });
 
   it('rejects mixed-alphanumeric hashes (CSS Modules style)', () => {
-    expect(isStableClassName('abc1d')).toBe(false);   // mixed alnum, 5 chars
-    expect(isStableClassName('f8a3e')).toBe(false);   // mixed alnum, 5 chars
+    expect(isStableClassName('abc1d')).toBe(false); // mixed alnum, 5 chars
+    expect(isStableClassName('f8a3e')).toBe(false); // mixed alnum, 5 chars
   });
 
   it('rejects classes with trailing 4+ digit numeric suffix', () => {

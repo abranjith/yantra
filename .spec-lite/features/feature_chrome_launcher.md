@@ -12,6 +12,7 @@ Yantra's deterministic engine cannot do anything until a hardened Chrome session
 It also delivers `yantra doctor` v0 — the diagnostic surface a user runs when "it should work but doesn't": is Chrome installed and recent enough, is the data dir writable with owner-only perms, is the OS keychain reachable. Doctor never throws; it returns a structured `DoctorReport`.
 
 Concretely this feature unblocks:
+
 - FEAT-007 (`ask`) — needs ephemeral Chrome sessions.
 - FEAT-008 (recorder) — needs visible Chrome with per-workflow profile.
 - FEAT-010 (replay) — needs headless Chrome with per-workflow profile.
@@ -25,13 +26,13 @@ Concretely this feature unblocks:
 
 ### On-Disk Artifacts
 
-| Artifact | Path | Lifecycle | Permissions | Owner |
-|---|---|---|---|---|
-| **Per-workflow profile dir** | `~/.local/share/yantra/profiles/<workflow-name>/` | Persistent; created on first `record`/`run` of a workflow with `cookies: auto`. Survives across runs. | `0700` (Unix); ACL "owner-only" warned-on-violation (Windows). | `ProfileStore` |
-| **Ephemeral profile dir** | `<os.tmpdir()>/yantra-<uuid>/` | Created at session start, deleted on `BrowserSession.close()` (best-effort on crash). Used by `ask`, `doctor`, and any workflow with `cookies: none`. | `0700` Unix; default ACL Windows. | `ProfileStore` |
-| **Doctor cached report** | `~/.cache/yantra/doctor.json` | Written by `doctor()`; TTL 1 hour. Read-on-startup for fast checks; force-refresh via `yantra doctor --refresh`. | `0600`. | `doctor.ts` |
-| **Yantra data root** | `~/.local/share/yantra/` (Unix), `%LOCALAPPDATA%\yantra\` (Windows) | Created on first use; doctor flags world-readable. | `0700` Unix. | shared paths helper |
-| **Yantra cache root** | `~/.cache/yantra/` (Unix), `%LOCALAPPDATA%\yantra\Cache\` (Windows) | Created lazily by doctor. | `0700` Unix. | shared paths helper |
+| Artifact                     | Path                                                                | Lifecycle                                                                                                                                             | Permissions                                                    | Owner               |
+| ---------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------- |
+| **Per-workflow profile dir** | `~/.local/share/yantra/profiles/<workflow-name>/`                   | Persistent; created on first `record`/`run` of a workflow with `cookies: auto`. Survives across runs.                                                 | `0700` (Unix); ACL "owner-only" warned-on-violation (Windows). | `ProfileStore`      |
+| **Ephemeral profile dir**    | `<os.tmpdir()>/yantra-<uuid>/`                                      | Created at session start, deleted on `BrowserSession.close()` (best-effort on crash). Used by `ask`, `doctor`, and any workflow with `cookies: none`. | `0700` Unix; default ACL Windows.                              | `ProfileStore`      |
+| **Doctor cached report**     | `~/.cache/yantra/doctor.json`                                       | Written by `doctor()`; TTL 1 hour. Read-on-startup for fast checks; force-refresh via `yantra doctor --refresh`.                                      | `0600`.                                                        | `doctor.ts`         |
+| **Yantra data root**         | `~/.local/share/yantra/` (Unix), `%LOCALAPPDATA%\yantra\` (Windows) | Created on first use; doctor flags world-readable.                                                                                                    | `0700` Unix.                                                   | shared paths helper |
+| **Yantra cache root**        | `~/.cache/yantra/` (Unix), `%LOCALAPPDATA%\yantra\Cache\` (Windows) | Created lazily by doctor.                                                                                                                             | `0700` Unix.                                                   | shared paths helper |
 
 Path helpers honor `XDG_DATA_HOME` / `XDG_CACHE_HOME` on Linux when set.
 
@@ -42,29 +43,29 @@ Path helpers honor `XDG_DATA_HOME` / `XDG_CACHE_HOME` on Linux when set.
 
 /** Discovered Chrome installation. */
 interface ChromeInstall {
-  readonly path: string;          // absolute path to chrome / chrome.exe / google-chrome
-  readonly version: string;       // SemVer-ish string parsed from `--version`
-  readonly majorVersion: number;  // parsed; used by doctor for min-version check
-  readonly channel: "stable" | "beta" | "dev" | "canary" | "chromium" | "unknown";
-  readonly source: "system";      // future: "bundled" (Phase 2)
+  readonly path: string; // absolute path to chrome / chrome.exe / google-chrome
+  readonly version: string; // SemVer-ish string parsed from `--version`
+  readonly majorVersion: number; // parsed; used by doctor for min-version check
+  readonly channel: 'stable' | 'beta' | 'dev' | 'canary' | 'chromium' | 'unknown';
+  readonly source: 'system'; // future: "bundled" (Phase 2)
 }
 
 /** Options passed to BrowserProvider.launch. Zod-validated. */
 interface LaunchOptions {
   readonly profile: ProfileSpec;
-  readonly headless: boolean;     // false for record/doctor; true otherwise
+  readonly headless: boolean; // false for record/doctor; true otherwise
   readonly viewport: { width: number; height: number } | null;
-  readonly extraArgs: readonly string[];     // appended after Yantra's hardened args
+  readonly extraArgs: readonly string[]; // appended after Yantra's hardened args
   readonly env: Readonly<Record<string, string>>;
-  readonly startupTimeoutMs: number;          // default 15_000
+  readonly startupTimeoutMs: number; // default 15_000
   readonly chromeOverridePath: string | null; // for tests / power users
 }
 
 /** How profile dir is resolved. Discriminated union. */
 type ProfileSpec =
-  | { kind: "workflow"; workflowName: string } // ~/.local/share/yantra/profiles/<name>/
-  | { kind: "ephemeral" }                      // <tmp>/yantra-<uuid>/
-  | { kind: "explicit"; absolutePath: string };// power-user escape hatch; doctor validates
+  | { kind: 'workflow'; workflowName: string } // ~/.local/share/yantra/profiles/<name>/
+  | { kind: 'ephemeral' } // <tmp>/yantra-<uuid>/
+  | { kind: 'explicit'; absolutePath: string }; // power-user escape hatch; doctor validates
 
 /** Strategy interface. MVP impl: LocalBrowserProvider. Phase 3+: RemoteBrowserProvider. */
 interface BrowserProvider {
@@ -74,40 +75,40 @@ interface BrowserProvider {
 
 /** Live browser handle returned from launch. Wraps puppeteer-core but does NOT leak it. */
 interface BrowserSession {
-  readonly id: string;             // UUID for log correlation
+  readonly id: string; // UUID for log correlation
   readonly chrome: ChromeInstall;
   readonly profilePath: string;
-  newPage(): Promise<Page>;        // see locator engine feature (FEAT-004) for Page interface
-  close(): Promise<void>;          // idempotent; cleans ephemeral profile if applicable
+  newPage(): Promise<Page>; // see locator engine feature (FEAT-004) for Page interface
+  close(): Promise<void>; // idempotent; cleans ephemeral profile if applicable
   on(event: BrowserSessionEvent, handler: (...args: unknown[]) => void): void;
 }
 
 type BrowserSessionEvent =
-  | "crashed"      // pipe closed unexpectedly → BrowserCrashedError context
-  | "disconnected" // graceful disconnect
-  | "page-created" // new target attached
-  | "page-closed"; // target detached
+  | 'crashed' // pipe closed unexpectedly → BrowserCrashedError context
+  | 'disconnected' // graceful disconnect
+  | 'page-created' // new target attached
+  | 'page-closed'; // target detached
 
 /** Result of `yantra doctor`. Doctor NEVER throws — always returns this. */
 interface DoctorReport {
-  readonly generatedAt: string;             // ISO-8601
-  readonly cachedFrom: string | null;       // ISO-8601 if served from cache; null if fresh
-  readonly overall: "ok" | "warn" | "error";
+  readonly generatedAt: string; // ISO-8601
+  readonly cachedFrom: string | null; // ISO-8601 if served from cache; null if fresh
+  readonly overall: 'ok' | 'warn' | 'error';
   readonly checks: readonly DoctorCheck[];
 }
 
 interface DoctorCheck {
   readonly id:
-    | "chrome.detected"
-    | "chrome.version_min"
-    | "datadir.writable"
-    | "datadir.permissions"
-    | "cachedir.writable"
-    | "keychain.reachable";
-  readonly status: "ok" | "warn" | "error";
+    | 'chrome.detected'
+    | 'chrome.version_min'
+    | 'datadir.writable'
+    | 'datadir.permissions'
+    | 'cachedir.writable'
+    | 'keychain.reachable';
+  readonly status: 'ok' | 'warn' | 'error';
   readonly message: string;
   readonly details: Readonly<Record<string, unknown>>; // structured context for --json
-  readonly fixHint: string | null;                     // e.g., "Install Chrome from https://..."
+  readonly fixHint: string | null; // e.g., "Install Chrome from https://..."
 }
 ```
 
@@ -131,15 +132,15 @@ interface ProfileStore {
 
 interface ResolvedProfile {
   readonly absolutePath: string;
-  readonly kind: ProfileSpec["kind"];
-  readonly createdNow: boolean;        // true on first resolve
+  readonly kind: ProfileSpec['kind'];
+  readonly createdNow: boolean; // true on first resolve
 }
 
 interface WorkflowProfileEntry {
   readonly workflowName: string;
   readonly absolutePath: string;
   readonly sizeBytes: number;
-  readonly lastModified: string;       // ISO-8601
+  readonly lastModified: string; // ISO-8601
 }
 ```
 
@@ -315,7 +316,7 @@ Configuration touches (minor):
 - [ ] **Implementation**:
   - `profile-store.ts`: `LocalProfileStore implements ProfileStore`.
   - `resolve(spec)`:
-    - `workflow`: target = `paths.profilesRoot() + '/' + workflowName`. Validate `workflowName` against `/^[a-z0-9][a-z0-9_-]{0,63}$/`; reject otherwise with a clear error (no `Error` swallow — typed `ProfilePathRefusedError`). Run `assertNotInsideRealChromeProfile(target)` (refused-path guard).  `mkdir -p` with mode `0700` on Unix; on Windows `mkdir` then best-effort ACL trim (out of scope to fully solve on Windows — just create + warn via doctor). Return `{absolutePath, kind, createdNow}`.
+    - `workflow`: target = `paths.profilesRoot() + '/' + workflowName`. Validate `workflowName` against `/^[a-z0-9][a-z0-9_-]{0,63}$/`; reject otherwise with a clear error (no `Error` swallow — typed `ProfilePathRefusedError`). Run `assertNotInsideRealChromeProfile(target)` (refused-path guard). `mkdir -p` with mode `0700` on Unix; on Windows `mkdir` then best-effort ACL trim (out of scope to fully solve on Windows — just create + warn via doctor). Return `{absolutePath, kind, createdNow}`.
     - `ephemeral`: target = `paths.ephemeralRoot() + '/yantra-' + randomUUID()`. `mkdir` with mode `0700`. Return.
     - `explicit`: target = the provided absolute path. Validate exists, is a directory, is writable, mode is `0700` on Unix (warn-not-error on Windows). Run refused-path guard. Return with `createdNow:false`.
   - `assertNotInsideRealChromeProfile(p)`: refuses if `p` is at or below any of: `~/Library/Application Support/Google/Chrome`, `~/Library/Application Support/Chromium`, `%LOCALAPPDATA%\Google\Chrome\User Data`, `%LOCALAPPDATA%\Chromium\User Data`, `~/.config/google-chrome`, `~/.config/chromium`. Throws `ProfilePathRefusedError`.
@@ -370,6 +371,7 @@ Configuration touches (minor):
     ```
 
     Where `provider.launch` uses the mocked spawn from TASK-003 (real Chrome only in TASK-008's integration test).
+
 - [ ] **Unit Tests**: The task **is** the property test. Plus: a deterministic "100 sequential sessions" test that uses the mocked launcher and asserts ephemeral dirs are cleaned. Plus: a regression test that a launch failure between `mkdir` and `connect` still cleans up its ephemeral profile (TASK-003 must `try/finally` the cleanup; if missing, this test fails — drives a TASK-003 fix).
 - [ ] **Documentation Update**: README adds a "Resource hygiene" subsection explaining the property test's guarantee (no leaked temp dirs across the launch/close cycle).
 - **Verify**: `vitest run packages/core/tests/browser/launcher.property.spec.ts` completes in <10s with 100 iterations.
@@ -416,11 +418,13 @@ Configuration touches (minor):
       });
     });
     ```
+
   - CI workflow change (touch only — actual workflow lives in FEAT-001): in the matrix's "core integration" job, set `YANTRA_E2E_BROWSER=1` and install Chrome:
     - Ubuntu: `sudo apt-get install -y google-chrome-stable`.
     - macOS: `brew install --cask google-chrome`.
     - Windows: `choco install googlechrome -y`.
   - The CI step is **additive** to FEAT-001's existing workflow; document the snippet in this feature's README addition so FEAT-001's spec can pick it up at integration time.
+
 - [ ] **Unit Tests**: N/A — this task is the integration test. The unit-test-equivalent (a fully mocked happy path through provider → session → close) already lives in TASK-003 + TASK-005.
 - [ ] **Documentation Update**: README of `packages/core/` adds a "Running integration tests locally" section with the env-var instructions and Chrome install commands.
 - **Verify**: Integration test green on all 3 OS runners in CI. Local: `YANTRA_E2E_BROWSER=1 pnpm --filter @yantra/core test integration` passes on each dev's OS.

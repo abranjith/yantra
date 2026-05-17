@@ -5,7 +5,8 @@ import { sanitize } from '../../src/sanitizer/index.js';
 
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/;
-const API_KEY_RE = /\b(?:sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xoxb-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/;
+const API_KEY_RE =
+  /\b(?:sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xoxb-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/;
 const URL_QUERY_RE = /https?:\/\/[^\s"'<>]+\?[A-Za-z0-9]/i;
 
 const CARD_CANDIDATE_RE = /\b(?:\d[ -]?){13,19}\b/g;

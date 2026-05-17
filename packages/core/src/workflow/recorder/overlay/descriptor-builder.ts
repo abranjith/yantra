@@ -179,7 +179,8 @@ function labelText(label: Element): string {
 
 function sampleAttrs(el: Element): Partial<Record<string, string>> {
   const result: Partial<Record<string, string>> = {};
-  const isPassword = el.tagName.toLowerCase() === 'input' &&
+  const isPassword =
+    el.tagName.toLowerCase() === 'input' &&
     (el as HTMLInputElement).type?.toLowerCase() === 'password';
 
   for (const key of SAMPLED_ATTR_KEYS) {
@@ -206,7 +207,8 @@ function sampleAttrs(el: Element): Partial<Record<string, string>> {
 function sanitizeAttrValue(raw: string): string {
   // Truncate
   let value = raw.slice(0, MAX_ATTR_VALUE_LENGTH);
-  // Strip control characters
+  // Strip control characters (intentional: U+0000–U+001F)
+  // eslint-disable-next-line no-control-regex
   value = value.replace(/[\x00-\x1f]/g, '');
   // Defang credential patterns
   for (const pattern of CREDENTIAL_PATTERNS) {
@@ -223,33 +225,29 @@ function generateXpath(el: Element): string {
   const parts: string[] = [];
   let node: Element | null = el;
 
-  while (node && node.nodeType === Node.ELEMENT_NODE) {
-    const tag = node.tagName.toLowerCase();
-    const parent = node.parentElement;
+  while (node !== null && node.nodeType === Node.ELEMENT_NODE) {
+    const currentNode: Element = node;
+    const tag = currentNode.tagName.toLowerCase();
+    const parent: Element | null = currentNode.parentElement;
     let index = 1;
+    let sameTagSiblings = 0;
 
-    if (parent) {
-      const siblings = Array.from(parent.children).filter(
-        (c) => c.tagName.toLowerCase() === tag,
+    if (parent !== null) {
+      const matching = Array.from(parent.children).filter(
+        (c: Element) => c.tagName.toLowerCase() === tag,
       );
-      if (siblings.length > 1) {
-        index = siblings.indexOf(node) + 1;
+      sameTagSiblings = matching.length;
+      if (matching.length > 1) {
+        index = matching.indexOf(currentNode) + 1;
       }
     }
 
-    parts.unshift(siblings(node) > 1 ? `${tag}[${index}]` : tag);
+    parts.unshift(sameTagSiblings > 1 ? `${tag}[${index}]` : tag);
     node = parent;
   }
 
   const xpath = '/' + parts.join('/');
   return xpath.length > XPATH_MAX_LENGTH ? xpath.slice(0, XPATH_MAX_LENGTH) : xpath;
-}
-
-function siblings(el: Element): number {
-  const tag = el.tagName.toLowerCase();
-  return el.parentElement
-    ? Array.from(el.parentElement.children).filter((c) => c.tagName.toLowerCase() === tag).length
-    : 1;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=./.yantra-schemas/workflow.schema.json
+version: 1
+name: bank-statement
+description: Download last month's statement
+security_class: authenticated
+recorded_with:
+  chrome_major: 124
+  yantra_version: 0.1.0
+params:
+  month:
+    type: string
+    example: '2026-04'
+    required: true
+secrets:
+  - bank.username
+  - bank.password
+cookies: auto
+steps:
+  - id: s1
+    verb: navigate
+    url: https://mybank.example/login
+    scope: null
+  - id: s2
+    verb: fill
+    locator: Username field
+    value: '{{ secret:bank.username }}'
+    submit: false
+    scope: null
+  - id: s3
+    verb: fill
+    locator: Password field
+    value: '{{ secret:bank.password }}'
+    submit: false
+    scope: null
+  - id: s4
+    verb: click
+    locator: Sign in
+    scope: null
+  - id: s5
+    verb: wait_for
+    locator: Account dashboard heading
+    state: visible
+    timeout_ms: null
+    scope: null
+  - id: s6
+    verb: extract
+    locator: Transactions table
+    extraction_schema:
+      type: object
+      fields:
+        date:
+          type: primitive
+          kind: date
+        description:
+          type: primitive
+          kind: string
+        amount:
+          type: primitive
+          kind: money
+    capture_as: transactions
+    scope: read-only-data
+outputs:
+  - name: transactions
+    from: '{{ capture:transactions }}'
+# Pinned at record time
+_locators:
+  Username field:
+    - kind: role
+      role: textbox
+      name:
+        pattern: 'username|email'
+        flags: i
+    - kind: testid
+      value: login-username
+    - kind: css
+      value: "input[name='username']"
+  Password field:
+    - kind: role
+      role: textbox
+      name:
+        pattern: password
+        flags: i
+    - kind: testid
+      value: login-password
+  Sign in:
+    - kind: role
+      role: button
+      name:
+        pattern: sign in
+        flags: i
+  Account dashboard heading:
+    - kind: role
+      role: heading
+      name:
+        pattern: account dashboard
+        flags: i
+  Transactions table:
+    - kind: role
+      role: table
+      name:
+        pattern: transactions
+        flags: i

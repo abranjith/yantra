@@ -5,13 +5,8 @@
  * Nothing here is exported from the public recorder barrel.
  */
 
+import type { CapturedAction, StopReason } from '@yantra/protocol';
 import type { CDPSession } from 'puppeteer-core';
-
-import type {
-  CapturedAction,
-  RawCapturedActionInput,
-  StopReason,
-} from '@yantra/protocol';
 
 export type { CDPSession };
 
@@ -19,13 +14,7 @@ export type { CDPSession };
 // Session state machine
 // ---------------------------------------------------------------------------
 
-export type RecordingState =
-  | 'idle'
-  | 'recording'
-  | 'paused'
-  | 'stopping'
-  | 'stopped'
-  | 'aborted';
+export type RecordingState = 'idle' | 'recording' | 'paused' | 'stopping' | 'stopped' | 'aborted';
 
 // ---------------------------------------------------------------------------
 // Session events (emitted on the EventEmitter)
@@ -122,11 +111,7 @@ export type RecordingSessionEvent =
   | RecordingAbortedEvent
   | RecordingDegradedEvent;
 
-export type AbortCause =
-  | 'page_crash'
-  | 'browser_disconnected'
-  | 'disk_unwritable'
-  | 'schema_drift';
+export type AbortCause = 'page_crash' | 'browser_disconnected' | 'disk_unwritable' | 'schema_drift';
 
 // ---------------------------------------------------------------------------
 // Raw in-page payload (pre-redaction, never persisted)
@@ -144,11 +129,11 @@ export interface RawInPagePayload {
     in_iframe: boolean;
     xpath_for_debug: string;
   };
-  candidate_chain: Array<{
+  candidate_chain: {
     candidate: unknown;
     score: number;
     rank_reason: string;
-  }>;
+  }[];
   raw_value: string | null;
   value_length: number;
   input_type: string;

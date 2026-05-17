@@ -12,8 +12,14 @@ import {
 
 function makeDomRect(overrides: Partial<DOMRect> = {}): DOMRect {
   return {
-    top: 10, left: 10, bottom: 50, right: 110,
-    width: 100, height: 40, x: 10, y: 10,
+    top: 10,
+    left: 10,
+    bottom: 50,
+    right: 110,
+    width: 100,
+    height: 40,
+    x: 10,
+    y: 10,
     toJSON: () => ({}),
     ...overrides,
   } as DOMRect;
@@ -31,7 +37,9 @@ describe('@no-llm isVisible', () => {
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeDomRect());
     // JSDOM doesn't compute real styles, so mock getComputedStyle
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      visibility: 'visible', display: 'block', opacity: '1',
+      visibility: 'visible',
+      display: 'block',
+      opacity: '1',
     } as CSSStyleDeclaration);
     expect(isVisible(el)).toBe(true);
   });
@@ -48,7 +56,9 @@ describe('@no-llm isVisible', () => {
     document.body.appendChild(el);
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeDomRect());
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      visibility: 'hidden', display: 'block', opacity: '1',
+      visibility: 'hidden',
+      display: 'block',
+      opacity: '1',
     } as CSSStyleDeclaration);
     expect(isVisible(el)).toBe(false);
   });
@@ -58,7 +68,9 @@ describe('@no-llm isVisible', () => {
     document.body.appendChild(el);
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeDomRect());
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      visibility: 'visible', display: 'none', opacity: '1',
+      visibility: 'visible',
+      display: 'none',
+      opacity: '1',
     } as CSSStyleDeclaration);
     expect(isVisible(el)).toBe(false);
   });
@@ -135,9 +147,7 @@ describe('@no-llm checkActionableState', () => {
   it('returns all-false when element has zero rect', () => {
     const el = document.createElement('button');
     document.body.appendChild(el);
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
-      makeDomRect({ width: 0, height: 0 }),
-    );
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeDomRect({ width: 0, height: 0 }));
     const state = checkActionableState(el);
     expect(state.visible).toBe(false);
   });
@@ -147,7 +157,9 @@ describe('@no-llm checkActionableState', () => {
     document.body.appendChild(el);
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeDomRect());
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      visibility: 'visible', display: 'block', opacity: '1',
+      visibility: 'visible',
+      display: 'block',
+      opacity: '1',
     } as CSSStyleDeclaration);
     const state = checkActionableState(el);
     expect(state.stable).toBe(true);

@@ -8,7 +8,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { BraveSearchProvider } from '../../../src/extraction/search/brave.js';
-import { RateLimitError, SearchProviderError, TavilyAuthError } from '../../../src/extraction/search/errors.js';
+import {
+  RateLimitError,
+  SearchProviderError,
+  TavilyAuthError,
+} from '../../../src/extraction/search/errors.js';
 import type { KeychainProvider } from '../../../src/secrets/keychain.js';
 
 function keychainWith(entries: Record<string, string>): KeychainProvider {
@@ -60,7 +64,10 @@ describe('@no-llm extraction/search/brave', () => {
       });
 
     const provider = new BraveSearchProvider({ keychain: keychainWith({ 'brave.api_key': 'k' }) });
-    const rows = await provider.search('ai news', { limit: 3, signal: new AbortController().signal });
+    const rows = await provider.search('ai news', {
+      limit: 3,
+      signal: new AbortController().signal,
+    });
 
     expect(rows).toHaveLength(2);
     expect(rows[0]?.source).toBe('brave');

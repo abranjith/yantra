@@ -7,7 +7,12 @@
  * This file runs in the browser page context — no Node.js imports.
  */
 
-import type { ActionableState, CandidateResolution, HitTargetCheckResult, JsonLocatorIntent } from '../types.js';
+import type {
+  ActionableState,
+  CandidateResolution,
+  HitTargetCheckResult,
+  JsonLocatorIntent,
+} from '../types.js';
 
 import { checkActionableState, isBoundingRectStable, isAttached } from './actionable.js';
 import { queryCss } from './css.js';
@@ -125,7 +130,13 @@ function decodeTextMatcher(
 /** Checks actionable state of the element currently in the slot. */
 function checkActionableStateSlot(): ActionableState {
   if (!resolvedSlot) {
-    return { visible: false, enabled: false, stable: false, receivesEvents: false, attached: false };
+    return {
+      visible: false,
+      enabled: false,
+      stable: false,
+      receivesEvents: false,
+      attached: false,
+    };
   }
   return checkActionableState(resolvedSlot);
 }

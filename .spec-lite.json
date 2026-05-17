@@ -2,10 +2,7 @@
   "version": "0.1.2",
   "format": "v2",
   "provider": "copilot",
-  "providers": [
-    "copilot",
-    "claude-code"
-  ],
+  "providers": ["copilot", "claude-code"],
   "installedPrompts": [
     "architect",
     "brainstorm",
@@ -34,14 +31,10 @@
   "installedAt": "2026-05-05T04:30:51.698Z",
   "updatedAt": "2026-05-05T04:30:51.699Z",
   "projectProfile": {
-    "languages": [
-      "TypeScript"
-    ],
+    "languages": ["TypeScript"],
     "frameworks": [],
     "testFrameworks": [],
-    "architectures": [
-      "Monorepo"
-    ],
+    "architectures": ["Monorepo"],
     "conventions": ""
   }
 }

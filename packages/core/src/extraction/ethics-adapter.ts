@@ -4,7 +4,9 @@ import type { EthicsGate as ExecutorEthicsGate } from '../executor/types.js';
 export type BlockedReason = 'robots' | 'blocklist' | 'rate-limit';
 
 export interface AskEthicsGate {
-  checkUrl(url: string): Promise<{ ok: true } | { ok: false; reason: BlockedReason; detail: string }>;
+  checkUrl(
+    url: string,
+  ): Promise<{ ok: true } | { ok: false; reason: BlockedReason; detail: string }>;
 }
 
 export interface AskEthicsAdapterContext {
@@ -22,7 +24,9 @@ export function createAskEthicsAdapter(
   context: AskEthicsAdapterContext,
 ): AskEthicsGate {
   return {
-    async checkUrl(url: string): Promise<{ ok: true } | { ok: false; reason: BlockedReason; detail: string }> {
+    async checkUrl(
+      url: string,
+    ): Promise<{ ok: true } | { ok: false; reason: BlockedReason; detail: string }> {
       try {
         await gate.check(url, context.action, {
           taskId: context.taskId,

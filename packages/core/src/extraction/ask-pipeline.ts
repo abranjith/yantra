@@ -111,7 +111,12 @@ export class AskPipeline {
         if (cachedCards) {
           cards = [...cachedCards];
           status = cards.some((card) => card.notice !== null) ? 'partial' : 'ok';
-          emit({ kind: 'task_completed', task_id: taskId, outputs_keys: ['cards'], at: this.clock().toISOString() });
+          emit({
+            kind: 'task_completed',
+            task_id: taskId,
+            outputs_keys: ['cards'],
+            at: this.clock().toISOString(),
+          });
           await this.writeArtifacts({
             runDir,
             taskId,
@@ -154,7 +159,16 @@ export class AskPipeline {
 
       cards = (
         await Promise.all(
-          candidates.map(async (result) => this.processSearchResult(result, query, runDir, taskId, emit, pipelineController.signal)),
+          candidates.map(async (result) =>
+            this.processSearchResult(
+              result,
+              query,
+              runDir,
+              taskId,
+              emit,
+              pipelineController.signal,
+            ),
+          ),
         )
       )
         .sort((left, right) => {
@@ -182,7 +196,12 @@ export class AskPipeline {
       }
 
       status = cards.some((card) => card.notice !== null) ? 'partial' : 'ok';
-      emit({ kind: 'task_completed', task_id: taskId, outputs_keys: ['cards'], at: this.clock().toISOString() });
+      emit({
+        kind: 'task_completed',
+        task_id: taskId,
+        outputs_keys: ['cards'],
+        at: this.clock().toISOString(),
+      });
       await this.writeArtifacts({
         runDir,
         taskId,
@@ -245,7 +264,11 @@ export class AskPipeline {
     try {
       const ethics = await this.ethicsGate.checkUrl(result.url);
       if (!ethics.ok) {
-        card = noticeCard(result, null, `this source was skipped: ${ethics.reason} - ${ethics.detail}`);
+        card = noticeCard(
+          result,
+          null,
+          `this source was skipped: ${ethics.reason} - ${ethics.detail}`,
+        );
         return { rank: result.rank, notice: card.notice, card };
       }
 
@@ -262,7 +285,8 @@ export class AskPipeline {
         return { rank: result.rank, notice: card.notice, card };
       }
 
-      const summarizer = query.noLlm || this.llmSummarizer === null ? this.ruleBasedSummarizer : this.llmSummarizer;
+      const summarizer =
+        query.noLlm || this.llmSummarizer === null ? this.ruleBasedSummarizer : this.llmSummarizer;
       const summary = await summarizer.summarize(article, query);
 
       card = {
@@ -273,7 +297,9 @@ export class AskPipeline {
         publishedAt: article.publishedAt,
         summary: summary.summary,
         summaryKind: summary.kind,
-        quotedSnippet: makeQuotedSnippet(article.contentText.length > 0 ? article.contentText : (article.excerpt ?? '')),
+        quotedSnippet: makeQuotedSnippet(
+          article.contentText.length > 0 ? article.contentText : (article.excerpt ?? ''),
+        ),
         tags: inferTags(query.normalized),
         notice: null,
       };
@@ -352,7 +378,11 @@ export class AskPipeline {
 
     await Promise.all(
       input.cards.map(async (card, index) => {
-        await writeFile(join(input.runDir, 'cards', `${index}.json`), JSON.stringify(card, null, 2), 'utf8');
+        await writeFile(
+          join(input.runDir, 'cards', `${index}.json`),
+          JSON.stringify(card, null, 2),
+          'utf8',
+        );
       }),
     );
 
@@ -390,7 +420,11 @@ function classifyFailure(error: unknown): FailureClass {
   return 'unexpected';
 }
 
-function toAskPipelineError(error: unknown, failureClass: FailureClass, runDir: string): AskPipelineError {
+function toAskPipelineError(
+  error: unknown,
+  failureClass: FailureClass,
+  runDir: string,
+): AskPipelineError {
   if (error instanceof AskPipelineError) {
     return error;
   }

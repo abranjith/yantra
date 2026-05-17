@@ -29,7 +29,9 @@ vi.mock('keytar', () => ({
   },
 }));
 
-const mockDetectChrome = vi.mocked(await import('../../src/browser/chrome-discovery.js').then((m) => m.detectChrome));
+const mockDetectChrome = vi.mocked(
+  await import('../../src/browser/chrome-discovery.js').then((m) => m.detectChrome),
+);
 const fsMocks = await import('node:fs/promises');
 const mockReadFile = vi.mocked(fsMocks.readFile);
 const mockWriteFile = vi.mocked(fsMocks.writeFile);
@@ -62,12 +64,14 @@ describe('@no-llm doctor', () => {
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true });
 
     // Default: happy path
-    mockDetectChrome.mockResolvedValue(makeChrome(124));
+    mockDetectChrome.mockReturnValue(makeChrome(124));
     mockReadFile.mockRejectedValue(new Error('ENOENT')); // no cache by default
     mockWriteFile.mockResolvedValue(undefined);
     mockAccess.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined as unknown as string);
-    mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<ReturnType<typeof mockStat>>);
+    mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<
+      ReturnType<typeof mockStat>
+    >);
     keytarMocks.default.setPassword.mockResolvedValue(undefined);
     keytarMocks.default.getPassword.mockResolvedValue('ok');
     keytarMocks.default.deletePassword.mockResolvedValue(true);
@@ -103,7 +107,7 @@ describe('@no-llm doctor', () => {
     });
 
     it('returns error when Chrome is not found', async () => {
-      mockDetectChrome.mockResolvedValue(null);
+      mockDetectChrome.mockReturnValue(null);
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'chrome.detected');
       expect(check?.status).toBe('error');
@@ -111,7 +115,7 @@ describe('@no-llm doctor', () => {
     });
 
     it('sets overall=error when Chrome not found', async () => {
-      mockDetectChrome.mockResolvedValue(null);
+      mockDetectChrome.mockReturnValue(null);
       const report = await doctor({ refresh: true });
       expect(report.overall).toBe('error');
     });
@@ -125,7 +129,7 @@ describe('@no-llm doctor', () => {
     });
 
     it('returns error when Chrome version is too old', async () => {
-      mockDetectChrome.mockResolvedValue(makeChrome(100));
+      mockDetectChrome.mockReturnValue(makeChrome(100));
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'chrome.version_min');
       expect(check?.status).toBe('error');
@@ -133,8 +137,8 @@ describe('@no-llm doctor', () => {
 
     it('returns warn when Chrome was not detected', async () => {
       mockDetectChrome
-        .mockResolvedValueOnce(null) // first call: chrome.detected
-        .mockResolvedValueOnce(null); // second call: version check
+        .mockReturnValueOnce(null) // first call: chrome.detected
+        .mockReturnValueOnce(null); // second call: version check
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'chrome.version_min');
       expect(check?.status).toBe('warn');
@@ -298,14 +302,16 @@ describe('@no-llm doctor', () => {
             if (failDetect) {
               mockDetectChrome.mockRejectedValue(new Error('injected failure'));
             } else {
-              mockDetectChrome.mockResolvedValue(makeChrome(124));
+              mockDetectChrome.mockReturnValue(makeChrome(124));
             }
             if (failAccess) {
               mockAccess.mockRejectedValue(new Error('injected failure'));
             } else {
               mockAccess.mockResolvedValue(undefined);
             }
-            mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<ReturnType<typeof mockStat>>);
+            mockStat.mockResolvedValue({ isDirectory: () => true, mode: 0o700 } as Awaited<
+              ReturnType<typeof mockStat>
+            >);
             if (failKeychain) {
               keytarMocks.default.setPassword.mockRejectedValue(new Error('injected failure'));
             } else {
@@ -324,5 +330,3 @@ describe('@no-llm doctor', () => {
       ));
   });
 });
-
-

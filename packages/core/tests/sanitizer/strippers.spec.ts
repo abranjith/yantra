@@ -15,7 +15,8 @@ import {
 
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/;
-const API_KEY_RE = /\b(?:sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xoxb-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/;
+const API_KEY_RE =
+  /\b(?:sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xoxb-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/;
 
 const VALID_CARDS = [
   '4111111111111111',
@@ -42,12 +43,10 @@ describe('@no-llm sanitizer strippers', () => {
   it('property: stripFormValues removes generated input values', () => {
     fc.assert(
       fc.property(
-        fc
-          .string({ minLength: 1, maxLength: 40 })
-          .filter((value) => !/["'<>\n\r]/.test(value)),
+        fc.string({ minLength: 1, maxLength: 40 }).filter((value) => !/["'<>\n\r]/.test(value)),
         (value) => {
-        const html = `<input type="text" value="${value}">`;
-        const result = stripFormValues(html);
+          const html = `<input type="text" value="${value}">`;
+          const result = stripFormValues(html);
 
           expect(result.text.includes(`value="${value}"`)).toBe(false);
         },
@@ -123,13 +122,17 @@ describe('@no-llm sanitizer strippers', () => {
 
   it('property: redactCreditCards redacts only Luhn-valid cards', () => {
     fc.assert(
-      fc.property(fc.constantFrom(...VALID_CARDS), fc.constantFrom(...INVALID_CARDS), (valid, bad) => {
-        const mixed = `${valid} ${bad}`;
-        const result = redactCreditCards(mixed);
+      fc.property(
+        fc.constantFrom(...VALID_CARDS),
+        fc.constantFrom(...INVALID_CARDS),
+        (valid, bad) => {
+          const mixed = `${valid} ${bad}`;
+          const result = redactCreditCards(mixed);
 
-        expect(result.text.includes(valid)).toBe(false);
-        expect(result.text.includes(bad)).toBe(true);
-      }),
+          expect(result.text.includes(valid)).toBe(false);
+          expect(result.text.includes(bad)).toBe(true);
+        },
+      ),
       { numRuns: 200 },
     );
   });

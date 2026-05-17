@@ -149,7 +149,10 @@ describe('@no-llm LocalProfileStore', () => {
   describe('resolve: explicit', () => {
     it('accepts valid absolute path that exists as a directory', async () => {
       const store = new LocalProfileStore();
-      const result = await store.resolve({ kind: 'explicit', absolutePath: '/profiles/my-profile' });
+      const result = await store.resolve({
+        kind: 'explicit',
+        absolutePath: '/profiles/my-profile',
+      });
       expect(result.absolutePath).toBe('/profiles/my-profile');
       expect(result.kind).toBe('explicit');
       expect(result.createdNow).toBe(false);
@@ -163,7 +166,12 @@ describe('@no-llm LocalProfileStore', () => {
     });
 
     it('rejects path that is not a directory', async () => {
-      mockStat.mockResolvedValue({ isDirectory: () => false, size: 0, mtime: new Date(), mode: 0o600 } as Awaited<ReturnType<typeof stat>>);
+      mockStat.mockResolvedValue({
+        isDirectory: () => false,
+        size: 0,
+        mtime: new Date(),
+        mode: 0o600,
+      } as Awaited<ReturnType<typeof stat>>);
       const store = new LocalProfileStore();
       await expect(
         store.resolve({ kind: 'explicit', absolutePath: '/path/to/file.txt' }),
@@ -177,9 +185,9 @@ describe('@no-llm LocalProfileStore', () => {
       const store = new LocalProfileStore();
       const chromePath = '/Users/test/Library/Application Support/Google/Chrome/Profile 1';
 
-      await expect(
-        store.resolve({ kind: 'explicit', absolutePath: chromePath }),
-      ).rejects.toThrow(ProfilePathRefusedError);
+      await expect(store.resolve({ kind: 'explicit', absolutePath: chromePath })).rejects.toThrow(
+        ProfilePathRefusedError,
+      );
     });
 
     it('refuses Linux Chrome config dir', async () => {
@@ -187,7 +195,10 @@ describe('@no-llm LocalProfileStore', () => {
       const store = new LocalProfileStore();
 
       await expect(
-        store.resolve({ kind: 'explicit', absolutePath: '/home/user/.config/google-chrome/Default' }),
+        store.resolve({
+          kind: 'explicit',
+          absolutePath: '/home/user/.config/google-chrome/Default',
+        }),
       ).rejects.toThrow(ProfilePathRefusedError);
     });
 
@@ -197,7 +208,10 @@ describe('@no-llm LocalProfileStore', () => {
       const store = new LocalProfileStore();
 
       await expect(
-        store.resolve({ kind: 'explicit', absolutePath: 'C:\\Users\\test\\AppData\\Local\\Google\\Chrome\\User Data\\Default' }),
+        store.resolve({
+          kind: 'explicit',
+          absolutePath: 'C:\\Users\\test\\AppData\\Local\\Google\\Chrome\\User Data\\Default',
+        }),
       ).rejects.toThrow(ProfilePathRefusedError);
     });
   });
@@ -206,7 +220,10 @@ describe('@no-llm LocalProfileStore', () => {
     it('removes the directory', async () => {
       const store = new LocalProfileStore();
       await store.cleanupEphemeral('/tmp/yantra-test-uuid');
-      expect(mockRm).toHaveBeenCalledWith('/tmp/yantra-test-uuid', { recursive: true, force: true });
+      expect(mockRm).toHaveBeenCalledWith('/tmp/yantra-test-uuid', {
+        recursive: true,
+        force: true,
+      });
     });
 
     it('is idempotent — does not throw when directory does not exist', async () => {
@@ -247,5 +264,3 @@ describe('@no-llm LocalProfileStore', () => {
     });
   });
 });
-
-

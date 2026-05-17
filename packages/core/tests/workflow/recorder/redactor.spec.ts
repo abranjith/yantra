@@ -8,12 +8,14 @@
  * Tagged @no-llm — must pass with LLM_PROVIDER=none.
  */
 
+import type { ClickAction, NavigateAction, RawFillAction } from '@yantra/protocol';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import type { ClickAction, NavigateAction, RawFillAction } from '@yantra/protocol';
-
-import { DefaultCaptureRedactor, defangAttrValue } from '../../../src/workflow/recorder/redactor.js';
+import {
+  DefaultCaptureRedactor,
+  defangAttrValue,
+} from '../../../src/workflow/recorder/redactor.js';
 
 const redactor = new DefaultCaptureRedactor();
 
@@ -58,7 +60,11 @@ function makeClick(): ClickAction {
       xpath_for_debug: '/html/body/button',
     },
     candidate_chain: [
-      { candidate: { kind: 'testid', value: 'sign-in-btn' }, score: 1.0, rank_reason: 'data-testid' },
+      {
+        candidate: { kind: 'testid', value: 'sign-in-btn' },
+        score: 1.0,
+        rank_reason: 'data-testid',
+      },
     ],
     ts: new Date().toISOString(),
     url_before: 'https://example.com/login',

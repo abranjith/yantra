@@ -19,13 +19,11 @@ export interface LlmSummarizerFactoryOptions {
 }
 
 /**
- * Returns an LLM summarizer when all gates are enabled.
- *
- * In FEAT-007 this intentionally returns null even when enabled to keep
- * the ask pipeline agent-optional by default.
+ * Returns an LLM-backed summarizer when all gates are enabled, or null to fall
+ * through to the rule-based path.
  */
-export function createLlmSummarizer(_options: LlmSummarizerFactoryOptions): LlmSummarizer | null {
-  if (_options.llmClient === null) {
+export function createLlmSummarizer(options: LlmSummarizerFactoryOptions): LlmSummarizer | null {
+  if (options.llmClient === null) {
     return null;
   }
 
@@ -33,16 +31,41 @@ export function createLlmSummarizer(_options: LlmSummarizerFactoryOptions): LlmS
     return null;
   }
 
-  if (_options.noLlm === true) {
+  if (options.noLlm === true) {
     return null;
   }
 
-  if (_options.featureGate.llmSummarize !== true) {
+  if (options.featureGate.llmSummarize !== true) {
     return null;
   }
 
-  // FEAT-011: Implement LLM-backed summarization through the sanitizer chokepoint.
-  return null;
+  return new LlmBackedSummarizer(options.llmClient, options.sanitizer);
+}
+
+class LlmBackedSummarizer implements LlmSummarizer {
+  public constructor(
+    private readonly llmClient: LlmClient,
+    private readonly sanitizer: Sanitizer,
+  ) {}
+
+  public async summarize(
+    article: ExtractedArticle,
+    query: AskQuery,
+  ): Promise<{ summary: string; kind: AskCard['summaryKind'] }> {
+    const sanitized = this.sanitizer.sanitize(article.contentText, 'public');
+    const prompt = `Summarize the following content concisely, focusing on the query: "${query.raw}". Be factual and do not invent information.`;
+
+    try {
+      const result = await this.llmClient.summarize(sanitized.text, prompt);
+      return { summary: result.text.trim(), kind: 'llm-enhanced' };
+    } catch {
+      // Fall through to fallback if LLM call fails
+      return {
+        summary: article.excerpt?.slice(0, 280) ?? article.contentText.slice(0, 280),
+        kind: 'fallback-lede',
+      };
+    }
+  }
 }
 
 export class DisabledLlmSummarizer implements LlmSummarizer {

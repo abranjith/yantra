@@ -6,8 +6,8 @@ import { it } from 'vitest';
  * `--no-llm` code path is always the default in tests.
  */
 export const llmProvider = (): string => {
-	const provider = process.env.LLM_PROVIDER?.trim();
-	return provider === '' ? 'none' : (provider ?? 'none');
+  const provider = process.env.LLM_PROVIDER?.trim();
+  return provider === '' ? 'none' : (provider ?? 'none');
 };
 
 /**

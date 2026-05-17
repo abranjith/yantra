@@ -83,7 +83,9 @@ export class FrameDetachedError extends Error {
       readonly frameId: string;
     },
   ) {
-    super(`Frame "${context.frameId}" detached while resolving locator chain "${context.chainName}".`);
+    super(
+      `Frame "${context.frameId}" detached while resolving locator chain "${context.chainName}".`,
+    );
   }
 }
 

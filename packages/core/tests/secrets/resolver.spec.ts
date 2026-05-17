@@ -9,7 +9,8 @@ import { DefaultOpaqueRefResolver } from '../../src/secrets/resolver.js';
 const keychainStore = new Map<string, string>();
 
 const keychain = {
-  get: async (service: string, account: string) => keychainStore.get(`${service}:${account}`) ?? null,
+  get: async (service: string, account: string) =>
+    keychainStore.get(`${service}:${account}`) ?? null,
   set: async (service: string, account: string, value: string) => {
     keychainStore.set(`${service}:${account}`, value);
   },

@@ -145,7 +145,7 @@ const overlay: RecorderOverlay = {
   },
 
   showToast(message: string): void {
-    if (!toastEl) toastEl = document.getElementById('__yantra-recorder-toast');
+    toastEl ??= document.getElementById('__yantra-recorder-toast');
     if (!toastEl) return;
 
     toastEl.textContent = message;

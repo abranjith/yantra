@@ -20,8 +20,7 @@ describe('@no-llm buildElementDescriptor', () => {
   // ---------------------------------------------------------------------------
 
   it('produces correct tag, role, and accessible_name for a labeled button', () => {
-    document.body.innerHTML =
-      '<button data-testid="submit">Sign in</button>';
+    document.body.innerHTML = '<button data-testid="submit">Sign in</button>';
     const el = document.querySelector('button')!;
     const desc = buildElementDescriptor(el);
 
@@ -114,6 +113,7 @@ describe('@no-llm buildElementDescriptor', () => {
     const desc = buildElementDescriptor(el);
     // Control chars should be stripped from id
     if (desc.attrs_sample['id']) {
+      // eslint-disable-next-line no-control-regex
       expect(desc.attrs_sample['id']).not.toMatch(/[\x00-\x1f]/);
     }
   });

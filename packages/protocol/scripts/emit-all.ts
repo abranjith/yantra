@@ -36,7 +36,10 @@ const run = async (): Promise<void> => {
   await emitToolCatalog(path.join(packageRoot, 'generated'));
   await emitProtocolSpecDoc(repositoryRoot);
 
-  const prettier = runPnpm(['exec', 'prettier', '--write', 'docs/protocol-spec.md'], repositoryRoot);
+  const prettier = runPnpm(
+    ['exec', 'prettier', '--write', 'docs/protocol-spec.md'],
+    repositoryRoot,
+  );
 
   if (prettier.status !== 0) {
     throw new Error(prettier.stderr || prettier.stdout || 'Failed to format docs/protocol-spec.md');

@@ -36,6 +36,8 @@ export const FailureClass = z
     'budget_exhausted',
     'user_aborted',
     'unexpected',
+    'resume_drift',
+    'locator_miss_in_unrecorded_frame',
   ])
   .describe('Failure category emitted in task_failed and retry events.');
 

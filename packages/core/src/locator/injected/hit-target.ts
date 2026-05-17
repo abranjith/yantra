@@ -20,10 +20,17 @@ export type HitTargetCheckResult =
   | { readonly kind: 'ok'; readonly coordinates: { readonly x: number; readonly y: number } }
   | {
       readonly kind: 'intercepted';
-      readonly interceptor: { readonly tagName: string; readonly accessibleName?: string; readonly testid?: string };
+      readonly interceptor: {
+        readonly tagName: string;
+        readonly accessibleName?: string;
+        readonly testid?: string;
+      };
       readonly coordinates: { readonly x: number; readonly y: number };
     }
-  | { readonly kind: 'outside_viewport'; readonly coordinates: { readonly x: number; readonly y: number } };
+  | {
+      readonly kind: 'outside_viewport';
+      readonly coordinates: { readonly x: number; readonly y: number };
+    };
 
 /**
  * Checks whether a click at the center of `el` would land on `el` or a descendant.

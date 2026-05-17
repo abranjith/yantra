@@ -12,19 +12,29 @@
  * Runs entirely in the browser. No Node.js APIs.
  */
 
-import { buildElementDescriptor } from './descriptor-builder.js';
 import { rankCandidates } from '../../../locator/ranking.js';
+
+import { buildElementDescriptor } from './descriptor-builder.js';
 
 // ---------------------------------------------------------------------------
 // Types mirrored from protocol (no Node imports in browser bundle)
 // ---------------------------------------------------------------------------
 
-type InputTypeHint = 'text' | 'email' | 'password' | 'tel' | 'number' | 'url' | 'search' | 'textarea' | 'other';
+type InputTypeHint =
+  | 'text'
+  | 'email'
+  | 'password'
+  | 'tel'
+  | 'number'
+  | 'url'
+  | 'search'
+  | 'textarea'
+  | 'other';
 
 interface RawEventPayload {
   kind: 'click' | 'fill' | 'navigate' | 'keydown_enter';
   descriptor: ReturnType<typeof buildElementDescriptor>;
-  candidate_chain: Array<{ candidate: unknown; score: number; rank_reason: string }>;
+  candidate_chain: { candidate: unknown; score: number; rank_reason: string }[];
   raw_value: string | null;
   value_length: number;
   input_type: InputTypeHint;
@@ -134,7 +144,7 @@ function handleClick(event: MouseEvent): void {
   if (!(target instanceof Element)) return;
 
   // Ignore clicks on the Yantra overlay itself
-  if ((target as Element).closest('#__yantra-recorder-overlay')) return;
+  if (target.closest('#__yantra-recorder-overlay')) return;
 
   const descriptor = buildElementDescriptor(target);
   const candidate_chain = buildCandidateChain(target);
@@ -222,6 +232,7 @@ export function installEventListeners(callbacks: EventListenerCallbacks): void {
   if (installed) return;
   installed = true;
 
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- callback is invoked directly; `this` binding is not needed
   onActionCapturedCb = callbacks.onActionCaptured;
 
   document.addEventListener('click', handleClick, { capture: true });

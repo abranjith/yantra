@@ -11,10 +11,7 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "ask",
-            "run"
-          ],
+          "enum": ["ask", "run"],
           "description": "Task type in MVP."
         },
         "intent": {
@@ -25,12 +22,7 @@
         "params": {
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "string",
-              "number",
-              "boolean",
-              "null"
-            ],
+            "type": ["string", "number", "boolean", "null"],
             "description": "Scalar value for task params."
           },
           "default": {},
@@ -52,10 +44,7 @@
                 "description": "Secret key in namespace.name format."
               }
             },
-            "required": [
-              "kind",
-              "key"
-            ],
+            "required": ["kind", "key"],
             "additionalProperties": false,
             "description": "Reference to a credential stored outside the plan payload."
           },
@@ -104,10 +93,7 @@
                   "description": "Optional max fetch actions."
                 }
               },
-              "required": [
-                "llm_calls",
-                "fetches"
-              ],
+              "required": ["llm_calls", "fetches"],
               "additionalProperties": false,
               "description": "Execution budget constraints."
             },
@@ -119,11 +105,7 @@
         },
         "security_class": {
           "type": "string",
-          "enum": [
-            "public",
-            "read-only-data",
-            "authenticated"
-          ],
+          "enum": ["public", "read-only-data", "authenticated"],
           "description": "Security class for the task."
         },
         "schema_version": {

@@ -18,4 +18,3 @@ describe('@no-llm protocol smoke', () => {
     expect(PROTOCOL_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
-

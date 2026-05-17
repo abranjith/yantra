@@ -8,7 +8,10 @@ import { TavilySearchProvider } from './tavily.js';
 
 export interface SearchProvider {
   readonly name: SearchProviderName;
-  search(query: string, opts: { limit: number; signal: AbortSignal }): Promise<readonly SearchResult[]>;
+  search(
+    query: string,
+    opts: { limit: number; signal: AbortSignal },
+  ): Promise<readonly SearchResult[]>;
 }
 
 export type SearchProviderSelection = SearchProviderName | 'auto';

@@ -13,6 +13,7 @@
     "src/_lint-fixtures/**/*",
     "src/locator/injected/**/*",
     "src/locator/build.ts",
-    "src/locator/ranking.ts"
+    "src/locator/ranking.ts",
+    "src/workflow/recorder/overlay/**/*"
   ]
 }

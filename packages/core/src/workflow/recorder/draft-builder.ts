@@ -72,8 +72,8 @@ export function assembleDraft(opts: AssembleDraftOptions): RecordingDraft {
  */
 export function computeDwellPerPage(
   actions: readonly CapturedAction[],
-): Array<{ url: string; ms: number }> {
-  const result: Array<{ url: string; ms: number }> = [];
+): { url: string; ms: number }[] {
+  const result: { url: string; ms: number }[] = [];
   let currentUrl: string | null = null;
   let firstTs: number | null = null;
   let lastTs: number | null = null;

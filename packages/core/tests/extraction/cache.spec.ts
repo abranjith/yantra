@@ -71,7 +71,9 @@ describe('@no-llm extraction/cache', () => {
 
     const files = (await readdir(dir)).filter((name) => name.endsWith('.json'));
     const totalSize = (
-      await Promise.all(files.map(async (name) => stat(join(dir, name)).then((entry) => entry.size)))
+      await Promise.all(
+        files.map(async (name) => stat(join(dir, name)).then((entry) => entry.size)),
+      )
     ).reduce((acc, size) => acc + size, 0);
 
     expect(totalSize).toBeLessThanOrEqual(600);

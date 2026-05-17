@@ -11,11 +11,7 @@
  * // SECURITY: only redaction site
  */
 
-import type {
-  CapturedAction,
-  RawCapturedActionInput,
-  RawFillAction,
-} from '@yantra/protocol';
+import type { CapturedAction, RawCapturedActionInput } from '@yantra/protocol';
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -69,10 +65,10 @@ export class DefaultCaptureRedactor implements CaptureRedactor {
   // SECURITY: only redaction site — raw_value is accessed ONLY here
   redact(action: RawCapturedActionInput): CapturedAction {
     if (action.kind !== 'fill') {
-      return action as CapturedAction;
+      return action;
     }
 
-    const raw = (action as RawFillAction).raw_value;
+    const raw = action.raw_value;
 
     // Count code points (handles surrogate pairs correctly)
     const valueLength = [...raw].length;
@@ -82,7 +78,7 @@ export class DefaultCaptureRedactor implements CaptureRedactor {
     const buffer = Buffer.from(raw, 'utf8');
     buffer.fill(0);
 
-    const { raw_value: _dropped, ...rest } = action as RawFillAction;
+    const { raw_value: _dropped, ...rest } = action;
     void _dropped;
 
     return {

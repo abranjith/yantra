@@ -4,17 +4,23 @@ import { join } from 'node:path';
 import { AuditLogWriteError } from './errors.js';
 
 export interface AgentJsonlEntry {
-  readonly ts: string;
-  readonly task_id: string;
-  readonly step_id: string | null;
   readonly direction: 'request' | 'response';
+  readonly run_id: string;
+  readonly task_id: string;
+  readonly provider_id: string;
   readonly model: string;
-  readonly prompt_sanitized: string | null;
-  readonly response: string | null;
-  readonly latency_ms: number | null;
-  readonly cost_usd: number | null;
-  readonly sanitizer_profile: 'public' | 'read-only-data' | 'authenticated';
-  readonly transformations_applied: readonly string[];
+  readonly prompt_sanitized: string;
+  readonly system_prompt_hash: string;
+  readonly response: unknown;
+  readonly tool_calls: readonly { tool: string; input: unknown }[];
+  readonly latency_ms: number;
+  readonly input_tokens: number;
+  readonly output_tokens: number;
+  readonly cost_estimate_usd: number | null;
+  readonly step_id: string | null;
+  readonly attempt: number;
+  readonly outcome: 'ok' | 'validation_failed' | 'timeout' | 'provider_error';
+  readonly ts: string;
 }
 
 export interface SecretsJsonlEntry {
@@ -67,12 +73,14 @@ export class FileAuditLogWriter implements AuditLogWriter {
 
     let manifest: Record<string, unknown> = {};
     try {
-      const existing = await readFile(manifestPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
-        if (error.code === 'ENOENT') {
-          return null;
-        }
-        throw error;
-      });
+      const existing = await readFile(manifestPath, 'utf8').catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') {
+            return null;
+          }
+          throw error;
+        },
+      );
 
       if (existing !== null) {
         manifest = JSON.parse(existing) as Record<string, unknown>;
@@ -100,7 +108,10 @@ export class FileAuditLogWriter implements AuditLogWriter {
     // No persistent handles in MVP. Reserved for streaming writer upgrade.
   }
 
-  private async appendJsonLine(fileName: 'agent.jsonl' | 'secrets.jsonl', data: unknown): Promise<void> {
+  private async appendJsonLine(
+    fileName: 'agent.jsonl' | 'secrets.jsonl',
+    data: unknown,
+  ): Promise<void> {
     const line = `${JSON.stringify(data)}\n`;
     const filePath = this.pathFor(fileName);
 

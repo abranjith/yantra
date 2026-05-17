@@ -20,7 +20,7 @@ The recorder is the **trust mechanism** of Yantra. A user who recorded a workflo
 - Visible Chrome session via FEAT-003 `BrowserProvider`, launched against a fresh **ephemeral per-workflow user-data-dir** (no cookie bleed from a real profile unless `--profile` opt-in).
 - **CDP-injected overlay** (NOT a Chrome Extension — per plan §7 architectural decision) that draws a recording indicator and forwards in-page events to Node.
 - Captures `click`, `fill`, `navigate`, `wait` actions; emits **top-5 ranked locator candidates per action** using FEAT-004's ranking algorithm against the live DOM.
-- **Form values redacted at capture time** — the raw `value` of any `fill` is replaced with `<redacted>` *before* the action is persisted. The original string never leaves page memory and never touches disk.
+- **Form values redacted at capture time** — the raw `value` of any `fill` is replaced with `<redacted>` _before_ the action is persisted. The original string never leaves page memory and never touches disk.
 - Popup / new-tab handling: `window.open` and `target=_blank` produce a CDP `Target.targetCreated` event; the session attaches to the new target and continues capturing. The user is told via the terminal that recording followed the popup.
 - Auto-stop on idle (configurable, default 5 minutes) with a terminal prompt.
 - Crash safety: if the page crashes mid-recording, the draft is preserved up to the last successful capture and a `RecordingAbortedEvent` is surfaced with a clear next step.
@@ -89,17 +89,17 @@ All entities live in `packages/core/src/workflow/recorder/` and are Zod-validate
 
 The Node-side orchestrator. Owns the browser handle, the overlay binding, the redactor, and the draft builder.
 
-| Field | Type | Purpose |
-|---|---|---|
-| `recordingId` | `string (ULID)` | Identifier for the on-disk dir and `events.jsonl` entries. |
-| `workflowNameHint` | `string` | Passed to `start(name)`; carried into `draft.json` for FEAT-009. |
-| `recordingDir` | `string` | Absolute path to `~/.cache/yantra/recording-<id>/`. |
-| `browser` | `BrowserProviderHandle` (FEAT-003) | Visible Chrome session pinned to this recording's profile. |
-| `cdp` | `CDPSession` | Root CDP session used to attach to all targets and inject the overlay. |
-| `actions` | `CapturedAction[]` | Append-only ordered list; flushed to `draft.partial.json` after every push. |
-| `state` | `'idle' \| 'recording' \| 'paused' \| 'stopping' \| 'stopped' \| 'aborted'` | State machine; transitions logged to `events.jsonl`. |
-| `idleTimerHandle` | `NodeJS.Timeout \| null` | Reset on every captured action; fires the idle prompt at the configured threshold. |
-| `popupChain` | `Map<TargetID, ParentTargetID>` | Tracks `Target.targetCreated` parentage for the user-visible "we just saw a popup" message. |
+| Field              | Type                                                                        | Purpose                                                                                     |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `recordingId`      | `string (ULID)`                                                             | Identifier for the on-disk dir and `events.jsonl` entries.                                  |
+| `workflowNameHint` | `string`                                                                    | Passed to `start(name)`; carried into `draft.json` for FEAT-009.                            |
+| `recordingDir`     | `string`                                                                    | Absolute path to `~/.cache/yantra/recording-<id>/`.                                         |
+| `browser`          | `BrowserProviderHandle` (FEAT-003)                                          | Visible Chrome session pinned to this recording's profile.                                  |
+| `cdp`              | `CDPSession`                                                                | Root CDP session used to attach to all targets and inject the overlay.                      |
+| `actions`          | `CapturedAction[]`                                                          | Append-only ordered list; flushed to `draft.partial.json` after every push.                 |
+| `state`            | `'idle' \| 'recording' \| 'paused' \| 'stopping' \| 'stopped' \| 'aborted'` | State machine; transitions logged to `events.jsonl`.                                        |
+| `idleTimerHandle`  | `NodeJS.Timeout \| null`                                                    | Reset on every captured action; fires the idle prompt at the configured threshold.          |
+| `popupChain`       | `Map<TargetID, ParentTargetID>`                                             | Tracks `Target.targetCreated` parentage for the user-visible "we just saw a popup" message. |
 
 **Lifecycle methods**:
 
@@ -113,10 +113,40 @@ The single shape that flows from in-page → Node-side → `draft.json` → FEAT
 
 ```ts
 type CapturedAction =
-  | { kind: 'click';    element_descriptor: ElementDescriptor; candidate_chain: RankedCandidate[]; ts: string; url_before: string; url_after: string | null }
-  | { kind: 'fill';     element_descriptor: ElementDescriptor; candidate_chain: RankedCandidate[]; ts: string; url_before: string; url_after: string | null; raw_value: '<redacted>'; value_length: number; input_type: InputTypeHint }
-  | { kind: 'navigate'; ts: string; url_before: string; url_after: string; navigation_kind: 'user_click' | 'programmatic' | 'address_bar' | 'history' | 'popup'; triggered_by_action_index: number | null }
-  | { kind: 'wait';     ts: string; reason: 'dom_content_loaded' | 'network_idle' | 'manual_dwell'; duration_ms: number; url: string };
+  | {
+      kind: 'click';
+      element_descriptor: ElementDescriptor;
+      candidate_chain: RankedCandidate[];
+      ts: string;
+      url_before: string;
+      url_after: string | null;
+    }
+  | {
+      kind: 'fill';
+      element_descriptor: ElementDescriptor;
+      candidate_chain: RankedCandidate[];
+      ts: string;
+      url_before: string;
+      url_after: string | null;
+      raw_value: '<redacted>';
+      value_length: number;
+      input_type: InputTypeHint;
+    }
+  | {
+      kind: 'navigate';
+      ts: string;
+      url_before: string;
+      url_after: string;
+      navigation_kind: 'user_click' | 'programmatic' | 'address_bar' | 'history' | 'popup';
+      triggered_by_action_index: number | null;
+    }
+  | {
+      kind: 'wait';
+      ts: string;
+      reason: 'dom_content_loaded' | 'network_idle' | 'manual_dwell';
+      duration_ms: number;
+      url: string;
+    };
 ```
 
 Notes:
@@ -135,32 +165,45 @@ A **sanitized structural fingerprint** of the captured target element. Built **i
 
 ```ts
 interface ElementDescriptor {
-  tag: string;                                // lowercase, e.g., 'button'
-  role: string | null;                        // ARIA computed role (accname-computation lite)
-  accessible_name: string | null;             // ARIA accessible-name computation, truncated to 200 chars
-  visible_text: string | null;                // innerText truncated to 200 chars, normalized whitespace
-  attrs_sample: Partial<Record<'id' | 'name' | 'data-testid' | 'data-qa' | 'data-cy' | 'placeholder' | 'aria-label' | 'href' | 'type', string>>;
-                                              // ONLY these keys are sampled. Other attrs are dropped.
-                                              // Values are sanitized: max 100 chars, control chars stripped.
+  tag: string; // lowercase, e.g., 'button'
+  role: string | null; // ARIA computed role (accname-computation lite)
+  accessible_name: string | null; // ARIA accessible-name computation, truncated to 200 chars
+  visible_text: string | null; // innerText truncated to 200 chars, normalized whitespace
+  attrs_sample: Partial<
+    Record<
+      | 'id'
+      | 'name'
+      | 'data-testid'
+      | 'data-qa'
+      | 'data-cy'
+      | 'placeholder'
+      | 'aria-label'
+      | 'href'
+      | 'type',
+      string
+    >
+  >;
+  // ONLY these keys are sampled. Other attrs are dropped.
+  // Values are sanitized: max 100 chars, control chars stripped.
   bounding_rect: { x: number; y: number; width: number; height: number };
-  in_iframe: boolean;                         // true if the element lives in a frame; frame URL stored in candidate_chain context.
-  xpath_for_debug: string;                    // ONLY shown in --debug; not used by replay. Capped at 200 chars.
+  in_iframe: boolean; // true if the element lives in a frame; frame URL stored in candidate_chain context.
+  xpath_for_debug: string; // ONLY shown in --debug; not used by replay. Capped at 200 chars.
 }
 ```
 
 **Sanitization rules for `attrs_sample`** (enforced in-page before the descriptor leaves the page):
 
-- `value` and `checked` attributes are **never** sampled. The descriptor exists to identify the *element*, not its state.
-- For `<input type="password">`, the `placeholder` is sampled but `aria-label` and accessible name are checked against a small allowlist (`password`, `passcode`, `pin`, ...) — if the accessible name is *not* one of these and the input is type=password, we replace it with `'<password-field>'` (defense against sites that put the user's password in the aria-label). Logged at `debug`.
+- `value` and `checked` attributes are **never** sampled. The descriptor exists to identify the _element_, not its state.
+- For `<input type="password">`, the `placeholder` is sampled but `aria-label` and accessible name are checked against a small allowlist (`password`, `passcode`, `pin`, ...) — if the accessible name is _not_ one of these and the input is type=password, we replace it with `'<password-field>'` (defense against sites that put the user's password in the aria-label). Logged at `debug`.
 - All sampled string values are truncated to 100 chars, control characters (`\x00-\x1f`) stripped, and run through a single defang regex that removes common credential-shape leaks (`sk-...`, `ghp_...`, `AKIA...`, `eyJ...`). The defanged value is replaced with `'<defanged>'` and a debug event is emitted. This is **defense-in-depth** on top of the structural redaction in §2.2.2.
 
 #### 2.2.4 `RankedCandidate` (consumed from FEAT-004)
 
 ```ts
 interface RankedCandidate {
-  candidate: LocatorChain;       // Discriminated union from packages/protocol (FEAT-002 §2.1.2)
-  score: number;                 // 0..1; FEAT-004's ranking algorithm output
-  rank_reason: string;           // Short human label, e.g., "data-testid match", "role+name match", "unique-CSS fallback"
+  candidate: LocatorChain; // Discriminated union from packages/protocol (FEAT-002 §2.1.2)
+  score: number; // 0..1; FEAT-004's ranking algorithm output
+  rank_reason: string; // Short human label, e.g., "data-testid match", "role+name match", "unique-CSS fallback"
 }
 ```
 
@@ -174,7 +217,7 @@ Lives in the page's window scope under `window.__yantraRecorder`. The Node side 
 interface RecorderOverlayState {
   status: 'recording' | 'paused';
   actionCount: number;
-  lastActionAt: number;          // performance.now() of last capture
+  lastActionAt: number; // performance.now() of last capture
   toastQueue: ToastMessage[];
 }
 ```
@@ -190,7 +233,10 @@ Per memory.md §Design Patterns ("Repository-like abstractions for persistence b
 ```ts
 interface RecordingStore {
   /** Create the recording dir + profile dir; idempotent on retry. */
-  create(recordingId: string, workflowNameHint: string): Promise<{ recordingDir: string; profileDir: string }>;
+  create(
+    recordingId: string,
+    workflowNameHint: string,
+  ): Promise<{ recordingDir: string; profileDir: string }>;
 
   /** Append a captured action to the partial draft. Writes atomically. */
   appendAction(recordingId: string, action: CapturedAction): Promise<void>;
@@ -232,15 +278,15 @@ Written to `metadata.json` and embedded into `draft.json` under `metadata`. Cons
 
 ```ts
 interface RecordingMetadata {
-  start_ts: string;            // ISO-8601
-  end_ts: string | null;       // null until stop() / abort()
+  start_ts: string; // ISO-8601
+  end_ts: string | null; // null until stop() / abort()
   os: { platform: NodeJS.Platform; release: string; arch: string };
-  chrome_version: string;      // Full version string from `Browser.getVersion` CDP call (e.g., "124.0.6367.91")
-  chrome_major: number;        // Parsed from chrome_version; surfaced separately to map cleanly into
-                               // WorkflowFile.recorded_with.chrome_major (FEAT-002 §2.1.9) and to power
-                               // the FEAT-010 Chrome-drift advisory at replay (plan §6).
-  yantra_version: string;      // From package.json — also flows into WorkflowFile.recorded_with.yantra_version
-  initial_url: string;         // The first navigation captured (often about:blank → user-typed)
+  chrome_version: string; // Full version string from `Browser.getVersion` CDP call (e.g., "124.0.6367.91")
+  chrome_major: number; // Parsed from chrome_version; surfaced separately to map cleanly into
+  // WorkflowFile.recorded_with.chrome_major (FEAT-002 §2.1.9) and to power
+  // the FEAT-010 Chrome-drift advisory at replay (plan §6).
+  yantra_version: string; // From package.json — also flows into WorkflowFile.recorded_with.yantra_version
+  initial_url: string; // The first navigation captured (often about:blank → user-typed)
   capture_count: number;
   dwell_per_page: Array<{ url: string; ms: number }>;
   stop_reason: 'user' | 'idle_timeout' | 'crash' | 'page_close';
@@ -287,14 +333,14 @@ The MVP filesystem layout is forward-compatible: each `draft.json.actions[i]` ma
 
 This is the structural guarantee the security tests pin to. **Every clause is enforced by tests.**
 
-| Rule | Mechanism | Test |
-|---|---|---|
-| `CapturedAction` of kind `fill` has `raw_value: '<redacted>'` exactly | Zod `z.literal('<redacted>')`; type system rejects any other value | TASK-007 unit test |
-| The original typed value is read at most once, only by `CaptureRedactor.redact`, only to compute `value_length` | Linter rule + code review checklist: `raw_value` is referenced only inside `redactor.ts` | TASK-007 property test |
-| No `RawCapturedActionInput` leaves the recorder module boundary | Exported types from `index.ts` exclude `RawCapturedActionInput` | TS compiler |
-| No PII from `ElementDescriptor.attrs_sample` survives sanitization | In-page sanitizer truncates + defangs; descriptor passes through Zod on Node side | TASK-003 property test |
-| `draft.json` after a recording with N typed strings contains zero substrings matching any of those strings | Property test: generate random strings, type them, then `for each str ∈ typed: assert !draft.includes(str)` | TASK-007 property test (memory.md §Testing mandates this style) |
-| `events.jsonl` never contains a raw value or descriptor attribute exceeding 100 chars | Logger redactor at the pino sink layer | Snapshot test |
+| Rule                                                                                                            | Mechanism                                                                                                   | Test                                                            |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `CapturedAction` of kind `fill` has `raw_value: '<redacted>'` exactly                                           | Zod `z.literal('<redacted>')`; type system rejects any other value                                          | TASK-007 unit test                                              |
+| The original typed value is read at most once, only by `CaptureRedactor.redact`, only to compute `value_length` | Linter rule + code review checklist: `raw_value` is referenced only inside `redactor.ts`                    | TASK-007 property test                                          |
+| No `RawCapturedActionInput` leaves the recorder module boundary                                                 | Exported types from `index.ts` exclude `RawCapturedActionInput`                                             | TS compiler                                                     |
+| No PII from `ElementDescriptor.attrs_sample` survives sanitization                                              | In-page sanitizer truncates + defangs; descriptor passes through Zod on Node side                           | TASK-003 property test                                          |
+| `draft.json` after a recording with N typed strings contains zero substrings matching any of those strings      | Property test: generate random strings, type them, then `for each str ∈ typed: assert !draft.includes(str)` | TASK-007 property test (memory.md §Testing mandates this style) |
+| `events.jsonl` never contains a raw value or descriptor attribute exceeding 100 chars                           | Logger redactor at the pino sink layer                                                                      | Snapshot test                                                   |
 
 ---
 
@@ -464,7 +510,7 @@ The tasks below are vertical slices. Each ships a runnable, testable subset. A w
 - **Same-origin frames**: attach succeeds → inject overlay script via `Page.addScriptToEvaluateOnNewDocument` → captures flow normally (the existing TASK-001/002 path).
 - **Cross-origin frames**: `Page.addScriptToEvaluateOnNewDocument` succeeds technically but the script runs in the frame's origin context and cannot reliably communicate back to the recorder due to cross-origin restrictions. Detect this by comparing the frame's `url`'s origin to the main frame's origin (using `new URL(frameUrl).origin !== new URL(mainFrameUrl).origin`).
 - On detection, **do not retry instrumentation**. Instead:
-  1. Emit a single `UnrecordedFrameEvent { origin, frameId, detected_at }` on the session's event stream (FEAT-012 renders this as a *warning* tick: `⚠ recorder cannot capture inside cross-origin frame: <origin>`).
+  1. Emit a single `UnrecordedFrameEvent { origin, frameId, detected_at }` on the session's event stream (FEAT-012 renders this as a _warning_ tick: `⚠ recorder cannot capture inside cross-origin frame: <origin>`).
   2. Append the origin (deduplicated) to `RecordingMetadata.unrecorded_frame_origins: string[]` — flushed into `draft.json`.
   3. The annotate flow (FEAT-009) reads this and writes the workflow YAML's `_unrecorded_frames` array, where FEAT-010's replay reads it to produce `LOCATOR_MISS_IN_UNRECORDED_FRAME` diagnostics on locator misses against those origins.
 - **What we do NOT do**: try to bridge the cross-origin gap via `postMessage`-based heuristics, attach via debugger protocol with `--disable-web-security` flags, or rewrite the iframe's `src` attribute. Each of these is invasive, breaks legitimate site behavior, or is detectable as automation. Honest limitation > clever fragile workaround (plan §15 honesty-over-cleverness).
@@ -472,6 +518,7 @@ The tasks below are vertical slices. Each ships a runnable, testable subset. A w
 **Acceptance**: a fixture page that embeds `<iframe src="http://other-origin.example.com/login">` produces exactly one `UnrecordedFrameEvent` with `origin: "http://other-origin.example.com"`; `draft.json.metadata.unrecorded_frame_origins` contains exactly this origin; clicks inside the iframe do not appear in `draft.json.actions` (and the user is warned, not silently misled).
 
 **Test additions**:
+
 - Fixture page with both a same-origin iframe (captured) and a cross-origin iframe (skipped + flagged) — assert exactly the expected partition.
 - Fixture with three different cross-origin iframes — assert the metadata list contains all three origins, deduplicated.
 - Phase 2 marker: when the Chrome-extension recorder lands (per plan §7 TODO), this task's behavior is replaced. The test fixture for cross-origin captures should survive the migration as a regression guard.
@@ -513,7 +560,7 @@ The tasks below are vertical slices. Each ships a runnable, testable subset. A w
 
 - Add `packages/protocol/src/schemas/recording-draft.ts`.
 - Define `RecordingDraft`, `CapturedAction` (discriminated union by `kind`), `ElementDescriptor`, `RankedCandidate`, `RecordingMetadata` per §2.
-- The `fill` variant has `raw_value: z.literal('<redacted>')` — the *type system* refuses any other string.
+- The `fill` variant has `raw_value: z.literal('<redacted>')` — the _type system_ refuses any other string.
 - Re-export from `packages/protocol/src/index.ts`. Updates `verify-exports.ts` (from FEAT-002) to include the new exports.
 - Inline `.describe()` on every field per FEAT-002's doctrine — these feed the auto-generated protocol spec doc.
 - Snapshot test on the emitted JSON Schema (drift detector).

@@ -19,21 +19,26 @@ import { arch, platform, release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type {
+  CapturedAction,
+  NavigateAction,
+  RecordingMetadata,
+  StopReason,
+} from '@yantra/protocol';
 import type { Browser, CDPSession, Page as PuppeteerPage } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 
-import type { CapturedAction, RecordingMetadata, StopReason } from '@yantra/protocol';
-
-import { cacheDir } from '../../browser/paths.js';
 import { detectChrome } from '../../browser/chrome-discovery.js';
+import { cacheDir } from '../../browser/paths.js';
+
+import { normalizeCandidateChain } from './candidate-resolver.js';
 import { assembleDraft, computeDwellPerPage } from './draft-builder.js';
 import { IdleWatcher, DEFAULT_IDLE_TIMEOUT_MS } from './idle-watcher.js';
 import { PopupHandler } from './popup-handler.js';
 import { DefaultCaptureRedactor } from './redactor.js';
-import { normalizeCandidateChain } from './candidate-resolver.js';
+import type { CaptureRedactor } from './redactor.js';
 import { FileSystemRecordingStore } from './store.js';
 import type { RecordingStore } from './store.js';
-import type { CaptureRedactor } from './redactor.js';
 import type {
   AbortCause,
   RecordingSessionEvent,
@@ -134,9 +139,9 @@ export class RecordingSession {
   private unrecordedFrameOrigins = new Set<string>();
 
   // Metadata fields
-  private chromeVersion: string = 'unknown';
-  private chromeMajor: number = 0;
-  private yantraVersion: string = '0.0.0';
+  private chromeVersion = 'unknown';
+  private chromeMajor = 0;
+  private yantraVersion = '0.0.0';
 
   // Handle internals
   private eventEmitter = new EventEmitter();
@@ -163,10 +168,7 @@ export class RecordingSession {
    * @param opts - Optional configuration overrides
    * @returns A `RecordingHandle` with the event stream and done promise
    */
-  async start(
-    workflowName: string,
-    opts: RecordingStartOptions = {},
-  ): Promise<RecordingHandle> {
+  async start(workflowName: string, opts: RecordingStartOptions = {}): Promise<RecordingHandle> {
     if (this.state !== 'idle') {
       throw new Error(`RecordingSession.start() called in invalid state: ${this.state}`);
     }
@@ -221,15 +223,23 @@ export class RecordingSession {
 
     // Browser-level CDP for target lifecycle
     this.browserCDP = await this.browser.target().createCDPSession();
-    this.mainTargetId = this.browser.target().targetInfo().targetId;
 
     // Open main page
     this.mainPage = await this.browser.newPage();
     this.mainPageCDP = await this.mainPage.createCDPSession();
 
+    // Resolve the main page target ID via CDP (puppeteer-core no longer exposes
+    // `target.targetInfo()`; we ask the page's own CDP session for its target).
+    const targetInfoResp = (await this.mainPageCDP.send('Target.getTargetInfo')) as {
+      targetInfo: { targetId: string };
+    };
+    this.mainTargetId = targetInfoResp.targetInfo.targetId;
+
     // Get Chrome version via CDP
     try {
-      const versionInfo = await this.mainPageCDP.send('Browser.getVersion') as { product: string };
+      const versionInfo = (await this.mainPageCDP.send('Browser.getVersion')) as {
+        product: string;
+      };
       const match = /Chrome\/(\d+)/.exec(versionInfo.product ?? '');
       if (match?.[1]) {
         this.chromeMajor = parseInt(match[1], 10);
@@ -276,18 +286,16 @@ export class RecordingSession {
     });
 
     // Setup popup handler (TASK-006)
-    this.popupHandler = new PopupHandler(
-      this.browserCDP,
-      this.mainTargetId,
-      this.recordingId,
-      {
-        onEvent: (event) => this.emit(event),
-        onPopupSession: (session, _targetId) => this.installOverlayOnSession(session),
-        onUnrecordedOrigin: (origin) => {
-          this.unrecordedFrameOrigins.add(origin);
-        },
+    if (this.recordingId === null) {
+      throw new Error('recordingId is unexpectedly null after session start');
+    }
+    this.popupHandler = new PopupHandler(this.browserCDP, this.mainTargetId, this.recordingId, {
+      onEvent: (event) => this.emit(event),
+      onPopupSession: (session, _targetId) => this.installOverlayOnSession(session),
+      onUnrecordedOrigin: (origin) => {
+        this.unrecordedFrameOrigins.add(origin);
       },
-    );
+    });
     await this.popupHandler.install();
 
     // Setup idle watcher (TASK-012)
@@ -458,9 +466,8 @@ export class RecordingSession {
     const xpath = payload.descriptor?.xpath_for_debug ?? '/unknown';
     const candidateChain = normalizeCandidateChain(payload.candidate_chain, xpath);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- payload.descriptor crosses the CDP boundary as `any`; redact is the single trusted sanitizer */
     const descriptor = payload.descriptor as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let rawAction: any;
 
     if (payload.kind === 'click') {
@@ -493,14 +500,13 @@ export class RecordingSession {
 
     // SECURITY: redact fill values before any persistence
     const action = this.redactor.redact(rawAction);
+    /* eslint-enable */
 
     await this.store.appendAction(this.recordingId!, action);
     this.actions.push(action);
     this.idleWatcher?.ping();
 
-    if (!this.lastNavigationUrl) {
-      this.lastNavigationUrl = payload.url;
-    }
+    this.lastNavigationUrl ??= payload.url;
 
     this.emit({
       kind: 'capture_emitted',
@@ -530,7 +536,7 @@ export class RecordingSession {
     const clickAgeMs = this.lastClickTs !== null ? now - this.lastClickTs : Infinity;
     const isRecentClick = clickAgeMs < 1000;
 
-    let navigationKind: import('@yantra/protocol').NavigateAction['navigation_kind'];
+    let navigationKind: NavigateAction['navigation_kind'];
     let triggeredByActionIndex: number | null = null;
 
     if (isRecentClick && this.lastClickActionIndex !== null) {
@@ -556,28 +562,34 @@ export class RecordingSession {
     // Set the main frame origin for cross-origin detection
     this.popupHandler?.setMainFrameOrigin(urlAfter);
 
-    void this.store.appendAction(this.recordingId!, action).then(() => {
-      this.actions.push(action);
-      this.idleWatcher?.ping();
-      this.emit({
-        kind: 'navigation_captured',
-        recordingId: this.recordingId!,
-        url_before: urlBefore,
-        url_after: urlAfter,
-        navigation_kind: navigationKind,
-        ts: action.ts,
+    void this.store
+      .appendAction(this.recordingId!, action)
+      .then(() => {
+        this.actions.push(action);
+        this.idleWatcher?.ping();
+        this.emit({
+          kind: 'navigation_captured',
+          recordingId: this.recordingId!,
+          url_before: urlBefore,
+          url_after: urlAfter,
+          navigation_kind: navigationKind,
+          ts: action.ts,
+        });
+      })
+      .catch(() => {
+        /* non-fatal */
       });
-    }).catch(() => {/* non-fatal */});
   }
 
   // ---------------------------------------------------------------------------
   // Cross-origin iframe detection (TASK-006a)
   // ---------------------------------------------------------------------------
 
-  private async onFrameAttached(params: FrameAttachedParams): Promise<void> {
-    if (!params.parentFrameId) return; // main frame
+  private onFrameAttached(params: FrameAttachedParams): Promise<void> {
+    if (!params.parentFrameId) return Promise.resolve();
     // Frame URL not immediately available at attach time — check on frameNavigated
     void params;
+    return Promise.resolve();
   }
 
   // ---------------------------------------------------------------------------
@@ -606,9 +618,10 @@ export class RecordingSession {
 
   private async writeDraft(stoppedAt: string, stopReason: StopReason): Promise<string> {
     const dwellPerPage = computeDwellPerPage(this.actions);
-    const initialUrl = this.actions.find(
-      (a) => a.kind === 'navigate',
-    )?.url_after ?? this.lastNavigationUrl ?? 'about:blank';
+    const initialUrl =
+      this.actions.find((a) => a.kind === 'navigate')?.url_after ??
+      this.lastNavigationUrl ??
+      'about:blank';
 
     const metadata: RecordingMetadata = {
       start_ts: this.startedAt!,

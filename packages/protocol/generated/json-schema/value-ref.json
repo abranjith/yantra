@@ -12,19 +12,11 @@
               "description": "Discriminator for literal values."
             },
             "value": {
-              "type": [
-                "string",
-                "number",
-                "boolean",
-                "null"
-              ],
+              "type": ["string", "number", "boolean", "null"],
               "description": "Literal scalar value embedded in the plan."
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "additionalProperties": false,
           "description": "Literal scalar value."
         },
@@ -42,10 +34,7 @@
               "description": "Declared workflow/task param key."
             }
           },
-          "required": [
-            "kind",
-            "key"
-          ],
+          "required": ["kind", "key"],
           "additionalProperties": false,
           "description": "Reference to runtime input provided by the user."
         },
@@ -63,10 +52,7 @@
               "description": "Secret key in namespace.name format."
             }
           },
-          "required": [
-            "kind",
-            "key"
-          ],
+          "required": ["kind", "key"],
           "additionalProperties": false,
           "description": "Reference to a credential stored outside the plan payload."
         },
@@ -84,18 +70,11 @@
               "description": "Extract step id that produced the capture."
             },
             "field": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": ["string", "null"],
               "description": "Optional extracted field key. Null means the whole capture payload."
             }
           },
-          "required": [
-            "kind",
-            "step_id",
-            "field"
-          ],
+          "required": ["kind", "step_id", "field"],
           "additionalProperties": false,
           "description": "Reference to values captured by a previous extract step."
         },
@@ -119,11 +98,7 @@
               "description": "Typed mapping from placeholder names to value references."
             }
           },
-          "required": [
-            "kind",
-            "template",
-            "bindings"
-          ],
+          "required": ["kind", "template", "bindings"],
           "additionalProperties": false,
           "description": "Templated value with explicit typed bindings."
         }

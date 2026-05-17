@@ -26,7 +26,9 @@ function makeDoc(url: string, html: string): FetchedDoc {
 describe('@no-llm extraction/readability', () => {
   it('extracts long-form article content', async () => {
     const extractor = new ReadabilityExtractor();
-    const article = await extractor.extract(makeDoc('https://news.example/article', fixture('article.html')));
+    const article = await extractor.extract(
+      makeDoc('https://news.example/article', fixture('article.html')),
+    );
 
     expect(article).not.toBeNull();
     expect(article?.title).toBe('AI News Roundup');
@@ -36,14 +38,18 @@ describe('@no-llm extraction/readability', () => {
 
   it('returns null for js-only pages with no readable content', async () => {
     const extractor = new ReadabilityExtractor();
-    const article = await extractor.extract(makeDoc('https://spa.example', fixture('js-only-spa.html')));
+    const article = await extractor.extract(
+      makeDoc('https://spa.example', fixture('js-only-spa.html')),
+    );
 
     expect(article).toBeNull();
   });
 
   it('extracts short paywalled content', async () => {
     const extractor = new ReadabilityExtractor();
-    const article = await extractor.extract(makeDoc('https://news.example/paywall', fixture('paywall.html')));
+    const article = await extractor.extract(
+      makeDoc('https://news.example/paywall', fixture('paywall.html')),
+    );
 
     expect(article).not.toBeNull();
     expect(article?.lengthChars ?? 0).toBeLessThan(500);
@@ -51,7 +57,9 @@ describe('@no-llm extraction/readability', () => {
 
   it('handles malformed HTML without throwing', async () => {
     const extractor = new ReadabilityExtractor();
-    const article = await extractor.extract(makeDoc('https://news.example/broken', fixture('malformed.html')));
+    const article = await extractor.extract(
+      makeDoc('https://news.example/broken', fixture('malformed.html')),
+    );
 
     expect(article === null || article.title === 'Broken').toBe(true);
   });

@@ -45,11 +45,7 @@ export interface SanitizedPayload {
 }
 
 export interface Sanitizer {
-  sanitize(
-    payload: unknown,
-    profile: SanitizationProfile,
-    hostHint?: string,
-  ): SanitizedPayload;
+  sanitize(payload: unknown, profile: SanitizationProfile, hostHint?: string): SanitizedPayload;
 }
 
 interface CoercedPayload {

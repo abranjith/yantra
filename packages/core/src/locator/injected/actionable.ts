@@ -38,7 +38,7 @@ export function checkActionableState(el: Element): ActionableState {
   return {
     visible: isVisible(el),
     enabled: isEnabled(el),
-    stable: true,   // temporal stability is determined by the auto-wait loop externally
+    stable: true, // temporal stability is determined by the auto-wait loop externally
     receivesEvents: receivesPointerEvents(el),
     attached: isAttached(el),
   };

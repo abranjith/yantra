@@ -31,9 +31,10 @@ This feature owns the **`yantra run` orchestrator** — the glue between every p
 - On termination — success, failure, or human-handoff abort — it writes `outputs.json` and renders `report.md`.
 - `yantra resume <run-id>` rehydrates state from the run directory + the executor's checkpoint store and continues from the last-saved step.
 
-**Why this matters as one feature:** every responsibility above is tightly coupled to one thing — *the lifecycle of a single `Run`*. Splitting the orchestrator from the report renderer or from the resume entry point would force three features to share a half-baked notion of run state. Combined, this feature has one job: take a workflow name and produce a complete, audited run directory.
+**Why this matters as one feature:** every responsibility above is tightly coupled to one thing — _the lifecycle of a single `Run`_. Splitting the orchestrator from the report renderer or from the resume entry point would force three features to share a half-baked notion of run state. Combined, this feature has one job: take a workflow name and produce a complete, audited run directory.
 
 This feature unblocks:
+
 - **FEAT-012 (CLI Polish)** — `yantra run` and `yantra resume` are top-level commands in the final command surface; the report renderer is reused by `yantra audit <run-id>` and `yantra report <run-id>`.
 - The user-visible **record-then-replay round-trip** dogfooding milestone called out in plan §2 ("after FEAT-010 a working `record`+`run`").
 
@@ -45,36 +46,36 @@ This feature unblocks:
 
 This feature owns the mapping between the **persisted** `Workflow` (YAML) and the **in-memory** `Plan` the executor consumes. The two are mostly isomorphic by design — Workflow is a Plan with one extra indirection (named locators).
 
-| Workflow concept (FEAT-009 / FEAT-002) | Plan concept (FEAT-002, executed by FEAT-005) |
-|---|---|
-| `workflow.name`, `workflow.version` | recorded in `manifest.json`; not directly part of `Plan` |
-| `workflow.params: { month: {type, example, ...} }` (declaration) | resolved at orchestrator boundary into a `Record<string, unknown>` available to step substitution; `ParamRef` in steps refers to keys here |
-| `workflow.secrets: [ "bank.username" ]` (declaration) | unchanged — `SecretRef.key` in steps refers to these keys; resolved at execution boundary by FEAT-006 |
-| `workflow.cookies: auto \| none` | maps to `ProfileSpec` for FEAT-003 (`auto` → `{kind:"workflow", workflowName}`; `none` → `{kind:"ephemeral"}`) |
-| `workflow.steps[i]` (one of navigate / click / fill / extract / wait_for / assert / branch / loop / call_workflow / llm_summarize) | `Plan.steps[i]` — same discriminated union from `packages/protocol`. Translator assigns `step.id` deterministically (`s1`..`sN`) if not present. |
-| `workflow.steps[i].scope?: "public" \| "read-only-data" \| "authenticated"` | preserved 1:1 on `Plan.steps[i].scope` |
-| Step locator references (string key into `_locators`, e.g. `"Username field"`) | `LocatorChain` of kind `{ kind: "workflow", name: "Username field" }` — preserves the indirection; the engine (FEAT-004) walks the chain by name at execution time |
-| `workflow._locators: { "<name>": [candidate, …] }` | carried alongside the Plan as `Plan.locatorTable` (or attached to the `ExecutionContext` — see implementation note below) |
-| `workflow.outputs: [{ summary: "{{ capture:summary }}" }]` | `Plan.outputs` — declared output bindings; orchestrator evaluates these JSONata expressions at run end against accumulated captures |
+| Workflow concept (FEAT-009 / FEAT-002)                                                                                             | Plan concept (FEAT-002, executed by FEAT-005)                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workflow.name`, `workflow.version`                                                                                                | recorded in `manifest.json`; not directly part of `Plan`                                                                                                           |
+| `workflow.params: { month: {type, example, ...} }` (declaration)                                                                   | resolved at orchestrator boundary into a `Record<string, unknown>` available to step substitution; `ParamRef` in steps refers to keys here                         |
+| `workflow.secrets: [ "bank.username" ]` (declaration)                                                                              | unchanged — `SecretRef.key` in steps refers to these keys; resolved at execution boundary by FEAT-006                                                              |
+| `workflow.cookies: auto \| none`                                                                                                   | maps to `ProfileSpec` for FEAT-003 (`auto` → `{kind:"workflow", workflowName}`; `none` → `{kind:"ephemeral"}`)                                                     |
+| `workflow.steps[i]` (one of navigate / click / fill / extract / wait_for / assert / branch / loop / call_workflow / llm_summarize) | `Plan.steps[i]` — same discriminated union from `packages/protocol`. Translator assigns `step.id` deterministically (`s1`..`sN`) if not present.                   |
+| `workflow.steps[i].scope?: "public" \| "read-only-data" \| "authenticated"`                                                        | preserved 1:1 on `Plan.steps[i].scope`                                                                                                                             |
+| Step locator references (string key into `_locators`, e.g. `"Username field"`)                                                     | `LocatorChain` of kind `{ kind: "workflow", name: "Username field" }` — preserves the indirection; the engine (FEAT-004) walks the chain by name at execution time |
+| `workflow._locators: { "<name>": [candidate, …] }`                                                                                 | carried alongside the Plan as `Plan.locatorTable` (or attached to the `ExecutionContext` — see implementation note below)                                          |
+| `workflow.outputs: [{ summary: "{{ capture:summary }}" }]`                                                                         | `Plan.outputs` — declared output bindings; orchestrator evaluates these JSONata expressions at run end against accumulated captures                                |
 
-**Implementation note:** the Plan emitted by the agent in FEAT-011 doesn't carry a locator table (the agent gets locator-by-name resolution for free via the workflow). For replay, we attach the workflow's `_locators` block to the `ExecutionContext`, not to the `Plan` itself — keeping the `Plan` shape identical to what the agent produces means FEAT-005 has *one* execution path, not two. The translator's output is `{ plan: Plan, locatorTable: LocatorTable }` and both flow into the context.
+**Implementation note:** the Plan emitted by the agent in FEAT-011 doesn't carry a locator table (the agent gets locator-by-name resolution for free via the workflow). For replay, we attach the workflow's `_locators` block to the `ExecutionContext`, not to the `Plan` itself — keeping the `Plan` shape identical to what the agent produces means FEAT-005 has _one_ execution path, not two. The translator's output is `{ plan: Plan, locatorTable: LocatorTable }` and both flow into the context.
 
 ### On-Disk Artifacts
 
-Per-run directory at `~/.local/share/yantra/runs/<run-id>/`. Run-id format: `<iso8601-compact>-<workflow-name>-<short-uuid>` (e.g. `20260511T091234Z-bank-statement-a7b3` — ISO-timestamp-prefixed for natural sort; workflow name aids glob; short UUID dedupes within the same second). This feature **owns** the contents of `manifest.json`, `outputs.json`, `report.md`, and writes `events.jsonl` via the executor's emitter (FEAT-005). It does **not** own `plan.json`, `agent.jsonl`, `secrets.jsonl`, or `checkpoints/` — those are written by FEAT-002/006/005 respectively; this feature *reads* them when rendering the report.
+Per-run directory at `~/.local/share/yantra/runs/<run-id>/`. Run-id format: `<iso8601-compact>-<workflow-name>-<short-uuid>` (e.g. `20260511T091234Z-bank-statement-a7b3` — ISO-timestamp-prefixed for natural sort; workflow name aids glob; short UUID dedupes within the same second). This feature **owns** the contents of `manifest.json`, `outputs.json`, `report.md`, and writes `events.jsonl` via the executor's emitter (FEAT-005). It does **not** own `plan.json`, `agent.jsonl`, `secrets.jsonl`, or `checkpoints/` — those are written by FEAT-002/006/005 respectively; this feature _reads_ them when rendering the report.
 
-| Artifact | Path | Lifecycle | Permissions | Owner |
-|---|---|---|---|---|
-| **Run root** | `~/.local/share/yantra/runs/<run-id>/` | Created at `RunOrchestrator.run()` start; never deleted by Yantra (user-owned). | `0700` (Unix); inherit-from-parent on Windows. | `RunStore` (this feature) |
-| **`manifest.json`** | `<run-root>/manifest.json` | Written once, atomically, at run start. Re-written once at run end with `ended_at`, `status`, `duration_ms`, `failure_class?`. | `0600`. | `manifest-writer.ts` (this feature) |
-| **`plan.json`** | `<run-root>/plan.json` | Written once at run start, immediately after Workflow→Plan translation. Read by resume. | `0600`. | written by orchestrator via FEAT-002 schemas; *consumed* by report renderer. |
-| **`events.jsonl`** | `<run-root>/events.jsonl` | Append-only stream produced by FEAT-005's event bus; *consumed* by report renderer. | `0600`. | FEAT-005. |
-| **`agent.jsonl`** | `<run-root>/agent.jsonl` | Append-only; empty for replay runs (no LLM calls) unless the Plan contains an `llm_summarize` step. | `0600`. | FEAT-006. |
-| **`secrets.jsonl`** | `<run-root>/secrets.jsonl` | Append-only key-lookup log (no values). | `0600`. | FEAT-006. |
-| **`checkpoints/`** | `<run-root>/checkpoints/` | One `step-<id>.json` per successful step. | `0600`. | FEAT-005. |
-| **`outputs.json`** | `<run-root>/outputs.json` | Written once at run end (success or failure-with-partial-captures). Workflow's declared outputs evaluated through JSONata against captures; retention metadata included. | `0600`. | `manifest-writer.ts` (this feature). |
-| **`report.md`** | `<run-root>/report.md` | Written once at run end (always — success, failure, or abort). | `0600`. | `report-renderer.ts` (this feature). |
-| **Run-dir lockfile** | `<run-root>/.lock` | Created at run start with PID; removed on clean exit. Prevents accidental concurrent resume of the same run. | `0600`. | `RunStore`. |
+| Artifact             | Path                                   | Lifecycle                                                                                                                                                                | Permissions                                    | Owner                                                                        |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Run root**         | `~/.local/share/yantra/runs/<run-id>/` | Created at `RunOrchestrator.run()` start; never deleted by Yantra (user-owned).                                                                                          | `0700` (Unix); inherit-from-parent on Windows. | `RunStore` (this feature)                                                    |
+| **`manifest.json`**  | `<run-root>/manifest.json`             | Written once, atomically, at run start. Re-written once at run end with `ended_at`, `status`, `duration_ms`, `failure_class?`.                                           | `0600`.                                        | `manifest-writer.ts` (this feature)                                          |
+| **`plan.json`**      | `<run-root>/plan.json`                 | Written once at run start, immediately after Workflow→Plan translation. Read by resume.                                                                                  | `0600`.                                        | written by orchestrator via FEAT-002 schemas; _consumed_ by report renderer. |
+| **`events.jsonl`**   | `<run-root>/events.jsonl`              | Append-only stream produced by FEAT-005's event bus; _consumed_ by report renderer.                                                                                      | `0600`.                                        | FEAT-005.                                                                    |
+| **`agent.jsonl`**    | `<run-root>/agent.jsonl`               | Append-only; empty for replay runs (no LLM calls) unless the Plan contains an `llm_summarize` step.                                                                      | `0600`.                                        | FEAT-006.                                                                    |
+| **`secrets.jsonl`**  | `<run-root>/secrets.jsonl`             | Append-only key-lookup log (no values).                                                                                                                                  | `0600`.                                        | FEAT-006.                                                                    |
+| **`checkpoints/`**   | `<run-root>/checkpoints/`              | One `step-<id>.json` per successful step.                                                                                                                                | `0600`.                                        | FEAT-005.                                                                    |
+| **`outputs.json`**   | `<run-root>/outputs.json`              | Written once at run end (success or failure-with-partial-captures). Workflow's declared outputs evaluated through JSONata against captures; retention metadata included. | `0600`.                                        | `manifest-writer.ts` (this feature).                                         |
+| **`report.md`**      | `<run-root>/report.md`                 | Written once at run end (always — success, failure, or abort).                                                                                                           | `0600`.                                        | `report-renderer.ts` (this feature).                                         |
+| **Run-dir lockfile** | `<run-root>/.lock`                     | Created at run start with PID; removed on clean exit. Prevents accidental concurrent resume of the same run.                                                             | `0600`.                                        | `RunStore`.                                                                  |
 
 **Atomic-write convention** (manifest.json, outputs.json, report.md): write to `<file>.tmp`, fsync, rename — same pattern as FEAT-009's workflow YAML writes. Pino's append-only writes to `events.jsonl` etc. are not atomic per-line but never overwrite.
 
@@ -86,91 +87,96 @@ Per-run directory at `~/.local/share/yantra/runs/<run-id>/`. Run-id format: `<is
 /** Top-level request constructed by apps/cli from argv. Zod-validated. */
 interface RunRequest {
   readonly workflowName: string;
-  readonly params: Readonly<Record<string, unknown>>;     // already merged from --params + --params-file
+  readonly params: Readonly<Record<string, unknown>>; // already merged from --params + --params-file
   readonly budgets: RunBudgets;
-  readonly json: boolean;                                  // --json flag — emit structured stdout
-  readonly debug: boolean;                                 // --debug — stream events to stdout too
+  readonly json: boolean; // --json flag — emit structured stdout
+  readonly debug: boolean; // --debug — stream events to stdout too
 }
 
 interface RunBudgets {
-  readonly stepRetries: number;          // override of workflow / executor default
-  readonly wallClockMs: number;          // hard ceiling for the run
-  readonly humanWaitMs: number;          // ceiling for human-handoff interactive waits
+  readonly stepRetries: number; // override of workflow / executor default
+  readonly wallClockMs: number; // hard ceiling for the run
+  readonly humanWaitMs: number; // ceiling for human-handoff interactive waits
 }
 
 /** Live in-memory entity for one execution. Created by RunOrchestrator. */
 interface Run {
-  readonly runId: string;                                  // <iso>-<wf>-<short-uuid>
-  readonly taskId: string;                                 // ulid; distinct so resume runs can chain task_ids
+  readonly runId: string; // <iso>-<wf>-<short-uuid>
+  readonly taskId: string; // ulid; distinct so resume runs can chain task_ids
   readonly workflowName: string;
   readonly workflowVersion: number;
-  readonly type: "run";                                    // future: "resume"
-  readonly plan: Plan;                                     // from protocol; produced by translator
-  readonly ctx: ExecutionContext;                          // from FEAT-005
-  status: "queued" | "running" | "completed" | "failed" | "aborted" | "paused";
-  readonly startedAt: string;                              // ISO-8601
+  readonly type: 'run'; // future: "resume"
+  readonly plan: Plan; // from protocol; produced by translator
+  readonly ctx: ExecutionContext; // from FEAT-005
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'aborted' | 'paused';
+  readonly startedAt: string; // ISO-8601
   endedAt: string | null;
-  failureClass: FailureClass | null;                       // from FEAT-005's taxonomy
-  lastCheckpointStepId: string | null;                     // updated as checkpoints flush
+  failureClass: FailureClass | null; // from FEAT-005's taxonomy
+  lastCheckpointStepId: string | null; // updated as checkpoints flush
 }
 
 /** Returned by RunOrchestrator.run() — the CLI maps these to exit codes. */
 type RunOutcome =
-  | { kind: "success";  runId: string; outputs: Readonly<Record<string, unknown>> }
-  | { kind: "failure";  runId: string; failureClass: FailureClass; reportPath: string }
-  | { kind: "aborted";  runId: string; reason: "user-handoff" | "scope-violation" | "ethics-refused"; reportPath: string };
+  | { kind: 'success'; runId: string; outputs: Readonly<Record<string, unknown>> }
+  | { kind: 'failure'; runId: string; failureClass: FailureClass; reportPath: string }
+  | {
+      kind: 'aborted';
+      runId: string;
+      reason: 'user-handoff' | 'scope-violation' | 'ethics-refused';
+      reportPath: string;
+    };
 
 /** What `yantra resume` consumes to continue. Plan §4: checkpoint is a LOGICAL POINTER, not a browser-state snapshot. */
 interface ResumePoint {
   readonly runId: string;
   readonly lastCheckpointStepId: string;
-  readonly nextStepIndex: number;                          // index into Plan.steps to resume *from*
-  readonly captures: Readonly<Record<string, unknown>>;    // captures so far, rehydrated from checkpoint contents
-  readonly params: Readonly<Record<string, unknown>>;      // original run's params (re-resolve secrets at exec boundary)
-  readonly cookieProfilePath: string | null;               // workflow profile reuse
-  readonly originalFailureClass: FailureClass | null;      // used to gate "should you resume this?"
-  readonly originalStartedAt: string;                      // for the >24h stale-resume confirmation prompt
+  readonly nextStepIndex: number; // index into Plan.steps to resume *from*
+  readonly captures: Readonly<Record<string, unknown>>; // captures so far, rehydrated from checkpoint contents
+  readonly params: Readonly<Record<string, unknown>>; // original run's params (re-resolve secrets at exec boundary)
+  readonly cookieProfilePath: string | null; // workflow profile reuse
+  readonly originalFailureClass: FailureClass | null; // used to gate "should you resume this?"
+  readonly originalStartedAt: string; // for the >24h stale-resume confirmation prompt
 }
 
 /** Output of the Workflow → Plan translator. */
 interface TranslatedWorkflow {
-  readonly plan: Plan;                                     // from protocol
-  readonly locatorTable: LocatorTable;                     // map of name → LocatorChain[], from FEAT-002/009
-  readonly profileSpec: ProfileSpec;                       // derived from workflow.cookies
-  readonly outputBindings: readonly OutputBinding[];       // evaluated at run end
-  readonly declaredSecretKeys: readonly string[];          // pre-flight check that each secret exists in keychain
+  readonly plan: Plan; // from protocol
+  readonly locatorTable: LocatorTable; // map of name → LocatorChain[], from FEAT-002/009
+  readonly profileSpec: ProfileSpec; // derived from workflow.cookies
+  readonly outputBindings: readonly OutputBinding[]; // evaluated at run end
+  readonly declaredSecretKeys: readonly string[]; // pre-flight check that each secret exists in keychain
 }
 
 interface OutputBinding {
-  readonly name: string;                                   // e.g. "summary"
-  readonly expression: string;                             // raw JSONata, evaluated against captures + final ctx
-  readonly retention: "transient" | "persisted";           // honored by manifest writer; "transient" omitted from outputs.json
+  readonly name: string; // e.g. "summary"
+  readonly expression: string; // raw JSONata, evaluated against captures + final ctx
+  readonly retention: 'transient' | 'persisted'; // honored by manifest writer; "transient" omitted from outputs.json
 }
 
 /** What gets serialized to manifest.json. Secrets and PII never appear. */
 interface RunManifest {
-  readonly schemaVersion: "0.1";
+  readonly schemaVersion: '0.1';
   readonly runId: string;
   readonly taskId: string;
-  readonly type: "run" | "resume";
-  readonly parentRunId: string | null;                     // populated for resume runs
+  readonly type: 'run' | 'resume';
+  readonly parentRunId: string | null; // populated for resume runs
   readonly workflowName: string;
   readonly workflowVersion: number;
-  readonly params: Readonly<Record<string, unknown>>;      // resolved params with SecretRef values REDACTED to `{ kind:"secret", key }`
+  readonly params: Readonly<Record<string, unknown>>; // resolved params with SecretRef values REDACTED to `{ kind:"secret", key }`
   readonly startedAt: string;
   endedAt: string | null;
-  status: Run["status"];
+  status: Run['status'];
   durationMs: number | null;
   failureClass: FailureClass | null;
-  readonly scopeSummary: ScopeSummary;                     // counts of steps per scope
-  readonly llmProvider: "anthropic" | "ollama" | "none";   // from config at run start
-  readonly cookieMode: "auto" | "none";
-  readonly profilePath: string | null;                     // null if ephemeral
+  readonly scopeSummary: ScopeSummary; // counts of steps per scope
+  readonly llmProvider: 'anthropic' | 'ollama' | 'none'; // from config at run start
+  readonly cookieMode: 'auto' | 'none';
+  readonly profilePath: string | null; // null if ephemeral
   // Chrome version drift signal — plan §6:
-  readonly recordedWith: { chromeMajor: number; yantraVersion: string } | null;  // from Workflow.recorded_with
-  readonly chromeAtRun: { major: number; full: string };   // from FEAT-003 Browser.getVersion at run start
-  readonly chromeDriftWarning: string | null;              // populated when |chromeAtRun.major - recordedWith.chromeMajor| > 2
-  readonly unrecordedFrameOrigins: readonly string[];      // copied from Workflow._unrecorded_frames; replay uses for diagnostics
+  readonly recordedWith: { chromeMajor: number; yantraVersion: string } | null; // from Workflow.recorded_with
+  readonly chromeAtRun: { major: number; full: string }; // from FEAT-003 Browser.getVersion at run start
+  readonly chromeDriftWarning: string | null; // populated when |chromeAtRun.major - recordedWith.chromeMajor| > 2
+  readonly unrecordedFrameOrigins: readonly string[]; // copied from Workflow._unrecorded_frames; replay uses for diagnostics
 }
 
 interface ScopeSummary {
@@ -183,16 +189,16 @@ interface ScopeSummary {
 interface RunOutputs {
   readonly runId: string;
   readonly emittedAt: string;
-  readonly outputs: Readonly<Record<string, unknown>>;     // retention=persisted only
-  readonly retentionPolicy: "default" | "extended";        // pulled from workflow; defaults to "default"
+  readonly outputs: Readonly<Record<string, unknown>>; // retention=persisted only
+  readonly retentionPolicy: 'default' | 'extended'; // pulled from workflow; defaults to "default"
 }
 
 /** Structured report data used by ReportRenderer. */
 interface RunReport {
   readonly run: Run;
   readonly manifest: RunManifest;
-  readonly events: readonly TaskEvent[];                   // from events.jsonl
-  readonly checkpoints: readonly CheckpointSummary[];      // names + step ids; not full payloads
+  readonly events: readonly TaskEvent[]; // from events.jsonl
+  readonly checkpoints: readonly CheckpointSummary[]; // names + step ids; not full payloads
   readonly outputs: Readonly<Record<string, unknown>>;
   readonly failure: FailureDetail | null;
 }
@@ -201,7 +207,7 @@ interface FailureDetail {
   readonly failureClass: FailureClass;
   readonly lastAttemptedStepId: string;
   readonly candidatesTried: readonly { kind: string; matched: boolean }[];
-  readonly sanitizerSummary: string;                       // e.g. "12 form fields stripped"
+  readonly sanitizerSummary: string; // e.g. "12 form fields stripped"
   readonly scopeViolation: { scope: string; verb: string; stepId: string } | null;
 }
 ```
@@ -215,13 +221,25 @@ interface RunStore {
   createRun(request: RunRequest): Promise<{ runId: string; runDir: string }>;
 
   /** List recent runs sorted by startedAt desc; filter by workflow / status. */
-  listRuns(opts?: { workflowName?: string; status?: Run["status"]; limit?: number }): Promise<readonly RunSummary[]>;
+  listRuns(opts?: {
+    workflowName?: string;
+    status?: Run['status'];
+    limit?: number;
+  }): Promise<readonly RunSummary[]>;
 
   /** Load a run dir's manifest + minimal index. Returns null if not found. */
   getRun(runId: string): Promise<Run | null>;
 
   /** Atomic status update on manifest.json. */
-  updateRunStatus(runId: string, patch: { status: Run["status"]; endedAt?: string; failureClass?: FailureClass; lastCheckpointStepId?: string }): Promise<void>;
+  updateRunStatus(
+    runId: string,
+    patch: {
+      status: Run['status'];
+      endedAt?: string;
+      failureClass?: FailureClass;
+      lastCheckpointStepId?: string;
+    },
+  ): Promise<void>;
 
   /** Remove the .lock file. Idempotent. */
   releaseLock(runId: string): Promise<void>;
@@ -231,7 +249,7 @@ interface RunSummary {
   readonly runId: string;
   readonly workflowName: string;
   readonly workflowVersion: number;
-  readonly status: Run["status"];
+  readonly status: Run['status'];
   readonly startedAt: string;
   readonly endedAt: string | null;
   readonly durationMs: number | null;
@@ -241,13 +259,13 @@ interface RunSummary {
 /** Renders a RunReport into a markdown string. Pure function — no side effects. */
 interface ReportRenderer {
   renderRunReport(report: RunReport): string;
-  renderJsonSummary(report: RunReport): RunJsonSummary;   // --json flag path
+  renderJsonSummary(report: RunReport): RunJsonSummary; // --json flag path
 }
 
 interface RunJsonSummary {
   readonly runId: string;
   readonly workflowName: string;
-  readonly status: Run["status"];
+  readonly status: Run['status'];
   readonly durationMs: number | null;
   readonly stepsCompleted: number;
   readonly stepsTotal: number;
@@ -296,7 +314,7 @@ CREATE TABLE run_outputs (
 
 - One `Workflow` (owned by FEAT-009) → 1:N `Run`s.
 - One `Run` → 1:1 `RunManifest`, 1:1 `RunOutputs`, 1:1 `report.md`, 1:N `TaskEvent`s, 1:N checkpoints.
-- One `Run` → 0:1 `parentRunId` (for `yantra resume` continuations). A resume creates a *new* run row with a new `runId` and a `parentRunId` pointer; the original run's manifest is *not* mutated. This keeps run history append-only.
+- One `Run` → 0:1 `parentRunId` (for `yantra resume` continuations). A resume creates a _new_ run row with a new `runId` and a `parentRunId` pointer; the original run's manifest is _not_ mutated. This keeps run history append-only.
 - One `Run` ↔ 1:1 profile dir when `cookieMode === "auto"` (the same dir is shared across all runs of the workflow — owned by FEAT-003's `ProfileStore`).
 
 ### Indexes & Constraints (filesystem-level)
@@ -312,7 +330,7 @@ Source files (all new):
 
 - `packages/core/src/workflow/replay/types.ts` — All type definitions for this feature: `RunRequest`, `RunBudgets`, `Run`, `RunOutcome`, `ResumePoint`, `TranslatedWorkflow`, `OutputBinding`, `RunManifest`, `ScopeSummary`, `RunOutputs`, `RunReport`, `FailureDetail`, `RunSummary`, `RunJsonSummary`, `CheckpointSummary`. Re-exports `FailureClass` and `TaskEvent` from `packages/protocol` (type-only). Error classes barrel-exported from `errors.ts`.
 - `packages/core/src/workflow/replay/errors.ts` — Custom error classes: `WorkflowNotFoundError`, `ParamsValidationError`, `MissingRequiredParamError`, `WorkflowTranslationError`, `RunNotResumableError`, `RunDirMissingError`, `RunDirLockedError`, `OutputEvaluationError`. Each extends `Error` and carries structured context.
-- `packages/core/src/workflow/replay/params-resolver.ts` — `resolveParams(input: { cli: ParamArg[]; file?: string; workflowParams: WorkflowParamsSpec }): Promise<Record<string, unknown>>`. Reads `--params-file` YAML (using `yaml` package — same as FEAT-009), merges `--params key=val` on top (CLI wins), coerces each value to the type declared in `workflow.params` (string / number / boolean / date), validates required-ness, surfaces typed errors. Defense-in-depth: refuses values that look like secrets (sk-, ghp_, AKIA, eyJ…) — params are not secrets.
+- `packages/core/src/workflow/replay/params-resolver.ts` — `resolveParams(input: { cli: ParamArg[]; file?: string; workflowParams: WorkflowParamsSpec }): Promise<Record<string, unknown>>`. Reads `--params-file` YAML (using `yaml` package — same as FEAT-009), merges `--params key=val` on top (CLI wins), coerces each value to the type declared in `workflow.params` (string / number / boolean / date), validates required-ness, surfaces typed errors. Defense-in-depth: refuses values that look like secrets (sk-, ghp\_, AKIA, eyJ…) — params are not secrets.
 - `packages/core/src/workflow/replay/workflow-to-plan.ts` — `translate(workflow: Workflow, params: Record<string, unknown>): TranslatedWorkflow`. Pure function. Walks `workflow.steps`, assigns deterministic step ids, preserves scopes, builds the `LocatorChain` references (`{ kind: "workflow", name }`), extracts `outputBindings` from `workflow.outputs`, computes `profileSpec` from `workflow.cookies`, collects `declaredSecretKeys`. Re-runs the FEAT-002 semantic validator on the produced Plan as belt-and-suspenders.
 - `packages/core/src/workflow/replay/run-store.ts` — `LocalRunStore implements RunStore`. Filesystem repo: `createRun` builds the run dir (`paths.dataDir()/runs/<runId>/`) with `0700` perms + `.lock` file; `listRuns` does a `readdir` + parses each `manifest.json`; `getRun` reads one manifest; `updateRunStatus` atomically rewrites manifest.json; `releaseLock` removes `.lock`. Path helpers reuse FEAT-003's `paths.ts`.
 - `packages/core/src/workflow/replay/manifest-writer.ts` — `writeManifest(runDir, manifest)`, `updateManifest(runDir, patch)`, `writeOutputs(runDir, outputs)`. Atomic-write convention (tmp + rename). Includes `redactParamsForManifest(params, declaredSecretKeys)` helper that walks the params record and replaces any value matching a declared secret with `{ kind: "secret", key }`.
@@ -432,7 +450,7 @@ Configuration touches:
 - [ ] **Implementation**: Create `run-orchestrator.ts`, `run-store.ts`, `manifest-writer.ts`, `cookies-mode.ts`, `preflight.ts`, `output-evaluator.ts` (skeletons fleshed out by later tasks; this task implements the happy-path glue).
   - `LocalRunStore.createRun(request)`: build `runId` = `<isoCompact>-<workflowName>-<shortUUID>`. `mkdir -p` run dir at mode `0700`. Create `.lock` file with `process.pid` and start timestamp. Return `{ runId, runDir }`.
   - `writeManifest(runDir, manifest)`: atomic write — `<runDir>/manifest.json.tmp` → `fs.rename`. Mode `0600`.
-  - `redactParamsForManifest(params, declaredSecretKeys)`: walk param entries; if the *key* is in `declaredSecretKeys` (it shouldn't be — params are never secrets — but defense-in-depth), or the value is a `SecretRef`, replace with `{ kind: "secret", key }`. Pass plain values through.
+  - `redactParamsForManifest(params, declaredSecretKeys)`: walk param entries; if the _key_ is in `declaredSecretKeys` (it shouldn't be — params are never secrets — but defense-in-depth), or the value is a `SecretRef`, replace with `{ kind: "secret", key }`. Pass plain values through.
   - `RunOrchestrator.run(request)`:
     1. Load workflow via `workflowStore.load(request.workflowName)`. If missing → `WorkflowNotFoundError` → `RunOutcome{ kind: "failure" }` with no run dir (validation error before run starts → exit 1 in the CLI).
     2. `resolveParams({ cli, file, workflowParams: workflow.params })` → resolved params.
@@ -519,7 +537,7 @@ Configuration touches:
 
 ### TASK-007: Resume orchestrator — yantra resume <run-id>
 
-> **Plan §4 MVP scope-down**: a checkpoint is a *logical pointer*, NOT a browser-state snapshot. Resume re-launches Chrome, navigates to the last-known URL, re-enters the executor at the next step with captures rehydrated. **If the first replayed step's locator fails to resolve (i.e., the page state has drifted), the run aborts with a clear message advising the user to re-run the workflow from scratch.** MVP does not attempt aggressive state recovery — keeping resume simple is a deliberate scope choice.
+> **Plan §4 MVP scope-down**: a checkpoint is a _logical pointer_, NOT a browser-state snapshot. Resume re-launches Chrome, navigates to the last-known URL, re-enters the executor at the next step with captures rehydrated. **If the first replayed step's locator fails to resolve (i.e., the page state has drifted), the run aborts with a clear message advising the user to re-run the workflow from scratch.** MVP does not attempt aggressive state recovery — keeping resume simple is a deliberate scope choice.
 
 - [ ] **Implementation**: Create `resume.ts` and add `RunOrchestrator.resume(runId, opts)`.
   - `loadResumePoint(runStore, runId): Promise<ResumePoint>`:
@@ -535,11 +553,11 @@ Configuration touches:
     1. `loadResumePoint(runStore, runId)` → `ResumePoint`.
     2. If `requiresUserConsent(originalFailureClass)` and not `opts.confirmRiskyResume` → return `RunOutcome{ kind: "aborted", reason: "user-handoff" }` with a clear `report.md` addendum.
     3. If `originalStartedAt` is older than 24h and not `opts.confirmStaleResume` → same abort path with a "stale resume" addendum.
-    4. Create a *new* `Run` row (new `runId`, new `taskId`, `parentRunId = original runId`) — append-only. Same workflow, same params (rehydrated from `ResumePoint.params`; secrets re-resolved at execution boundary). Use the **same profileSpec** as the original (same per-workflow profile dir → same cookies).
+    4. Create a _new_ `Run` row (new `runId`, new `taskId`, `parentRunId = original runId`) — append-only. Same workflow, same params (rehydrated from `ResumePoint.params`; secrets re-resolved at execution boundary). Use the **same profileSpec** as the original (same per-workflow profile dir → same cookies).
     5. Build `ExecutionContext` with pre-populated `captures` from the resume point. Emit `task_resumed` event.
     6. Call `executor.run(plan, ctx, { startAt: nextStepIndex })`.
-    7. **Drift-abort on first replayed step**: if the first step run after resume produces a `locator_exhausted` failure, the orchestrator catches this *specifically* and aborts the run with `RunOutcome{ kind: "failure", failureClass: "resume-drift" }`. The report.md gets a dedicated section: *"This resume failed at the first step (step `<id>`, locator `<name>`) because the page state has likely changed since the original run on `<startedAt>`. Yantra MVP does not attempt to recover from state drift — please re-run the workflow from scratch (`yantra run <workflow-name>`). If this keeps happening on the same workflow, the site may have changed; re-record the workflow."*
-    8. **Drift on later steps**: a `locator_exhausted` failure on a step *after* the first replayed one falls through to the normal failure path (it's likely a real workflow issue, not state drift — the user already proved earlier steps work). Treated as `failureClass: locator_exhausted` per the normal flow.
+    7. **Drift-abort on first replayed step**: if the first step run after resume produces a `locator_exhausted` failure, the orchestrator catches this _specifically_ and aborts the run with `RunOutcome{ kind: "failure", failureClass: "resume-drift" }`. The report.md gets a dedicated section: _"This resume failed at the first step (step `<id>`, locator `<name>`) because the page state has likely changed since the original run on `<startedAt>`. Yantra MVP does not attempt to recover from state drift — please re-run the workflow from scratch (`yantra run <workflow-name>`). If this keeps happening on the same workflow, the site may have changed; re-record the workflow."_
+    8. **Drift on later steps**: a `locator_exhausted` failure on a step _after_ the first replayed one falls through to the normal failure path (it's likely a real workflow issue, not state drift — the user already proved earlier steps work). Treated as `failureClass: locator_exhausted` per the normal flow.
     9. Proceed identically to `RunOrchestrator.run` from step 10 onward (output eval → outputs.json → manifest update → report.md).
 - [ ] **`FailureClass` additions** (coordinate with FEAT-002): `"resume-drift"` joins the enum. Tracked as a discovery item.
 - [ ] **Unit Tests** (`resume.spec.ts`):
@@ -557,7 +575,7 @@ Configuration touches:
 
 ### TASK-007a: Chrome version drift advisory + LOCATOR_MISS_IN_UNRECORDED_FRAME diagnostic
 
-> Plan §6 mandates Chrome-drift visibility. Plan §7 mandates the unrecorded-frame diagnostic. Both are diagnostic-only — replay never *fails* on drift, only warns; locator misses inside unrecorded frames produce a clearer error class.
+> Plan §6 mandates Chrome-drift visibility. Plan §7 mandates the unrecorded-frame diagnostic. Both are diagnostic-only — replay never _fails_ on drift, only warns; locator misses inside unrecorded frames produce a clearer error class.
 
 - [ ] **Implementation** — Chrome drift comparison (`replay/chrome-drift.ts`):
   - On `RunOrchestrator.run` start (after browser launch, before plan walk), call `browserProvider.getVersion()` → `{ major, full }` (FEAT-003 surface).
@@ -566,7 +584,7 @@ Configuration touches:
   - Replay does **NOT** abort or skip on drift; the warning is purely diagnostic per plan §6.
 
 - [ ] **Implementation** — Unrecorded-frame diagnostic (`replay/frame-diagnostic.ts`):
-  - On each `locator_exhausted` failure raised by the executor, inspect the current page URL (passed in the `FailureDetail` from FEAT-005). If `new URL(currentUrl).origin ∈ workflow._unrecorded_frames`, *or* if the locator was being resolved against a frame whose origin is in that list, **upgrade the failure class** to `"locator-miss-in-unrecorded-frame"`. The report renderer (TASK-005) emits a dedicated section explaining the limitation and suggesting the user manually navigate / pre-authenticate via the per-workflow profile.
+  - On each `locator_exhausted` failure raised by the executor, inspect the current page URL (passed in the `FailureDetail` from FEAT-005). If `new URL(currentUrl).origin ∈ workflow._unrecorded_frames`, _or_ if the locator was being resolved against a frame whose origin is in that list, **upgrade the failure class** to `"locator-miss-in-unrecorded-frame"`. The report renderer (TASK-005) emits a dedicated section explaining the limitation and suggesting the user manually navigate / pre-authenticate via the per-workflow profile.
   - This handling lives in the orchestrator's failure-mapping path (between executor and `RunOutcome`); the executor itself remains agnostic about the workflow-level unrecorded-frames list.
 
 - [ ] **`FailureClass` additions** (coordinate with FEAT-002): `"locator-miss-in-unrecorded-frame"` joins the enum.
@@ -630,7 +648,7 @@ Configuration touches:
   - `EvaluatedOutputs = { persisted: Record<string, unknown>; transient: Record<string, unknown>; errors: readonly { name: string; error: string }[] }`.
 - [ ] **`outputs.json` redaction pass** (`output-evaluator.ts → redactOutputsForDisk`):
   - Walk `evaluated.persisted` recursively; for every string value, apply the secret-shape redactor (FEAT-006's `redactSecretShapes` — same regexes as the lint rule `secret-shaped-literal` plus a high-entropy heuristic for ≥24-char strings). Replace matches with `<redacted:secret-shape>`.
-  - **Bypass condition**: if `workflow.outputs_unredacted === true` AND the binding's source capture was extracted under `scope: read-only-data`, skip redaction for *that specific output value*. Per plan §6: read-only-data scope is the only place the bypass is legitimate. The bypass decision is recorded in `manifest.scopeSummary` as a `unredactedOutputCount` field for auditability.
+  - **Bypass condition**: if `workflow.outputs_unredacted === true` AND the binding's source capture was extracted under `scope: read-only-data`, skip redaction for _that specific output value_. Per plan §6: read-only-data scope is the only place the bypass is legitimate. The bypass decision is recorded in `manifest.scopeSummary` as a `unredactedOutputCount` field for auditability.
   - The pre-redaction `evaluated.persisted` is what `llm_summarize` consumes in-memory during the run; only the disk write goes through the redactor. Tests assert this separation.
 - [ ] **Unit Tests** (`output-evaluator.spec.ts`):
   - Simple binding `{{ capture:summary }}` → returns `captures.summary`.
@@ -675,7 +693,7 @@ Configuration touches:
     - `kind: "success"` → `0`.
     - `kind: "failure"` → `2` (the per-spec "execution failure — `report.md` written" code; `report.md` write is guaranteed by the orchestrator before this is returned).
     - `kind: "aborted"` with `reason: "user-handoff"` → `4` (CAPTCHA / MFA abort).
-    - `kind: "aborted"` with `reason: "scope-violation"` → `2` (still an execution failure that produced a report; the abort is a *kind* of failure, distinct from user-handoff which is a normal exit).
+    - `kind: "aborted"` with `reason: "scope-violation"` → `2` (still an execution failure that produced a report; the abort is a _kind_ of failure, distinct from user-handoff which is a normal exit).
     - `kind: "aborted"` with `reason: "ethics-refused"` → `2`.
   - Exit code `1` (validation error / bad YAML / missing flag) is owned by FEAT-012's CLI shell — it's pre-orchestrator (e.g. argv parser rejects `--params` without `=`). Not produced by this feature.
   - Exit code `3` (environment failure) is owned by FEAT-003's doctor — pre-orchestrator.
@@ -712,7 +730,7 @@ Configuration touches:
   - `warn` — `"workflow translation warning"` (FEAT-009 lint warnings surfaced at translate time); `"output evaluation failed"` (binding name + reason); `"run dir lock stale"` (PID dead but lock present — proceed).
   - `error` — `"run aborted"` paired with `task_failed` event; `"manifest write failed"` (disk full — falls through to a degraded report).
   - `debug` — Workflow→Plan diff; param-coercion details; preflight check results.
-  - **Never log**: the `params` map verbatim (it may contain PII even if not secret); the resolved profile path (FEAT-003 already redacts); literal capture values (PII risk — log capture *keys* only).
+  - **Never log**: the `params` map verbatim (it may contain PII even if not secret); the resolved profile path (FEAT-003 already redacts); literal capture values (PII risk — log capture _keys_ only).
   - **Events emitted** (consumed by `events.jsonl` via FEAT-005's bus; this feature is a producer for some): `task_started` (at run start), `task_resumed` (new — added to FEAT-002's `TaskEvent` union if not present; discovery item below), `task_completed`, `task_failed`. Step-level events come from FEAT-005.
 
 - **Security**:
@@ -754,8 +772,8 @@ Legend: [ ] Not started | [/] In progress | [x] Completed
 
 ## Notes for the Implementer (non-normative)
 
-- The Workflow → Plan translation is the *conceptual heart* of this feature. Resist the urge to define a separate "executable Plan" shape — the goal is for the agent (FEAT-011) and the workflow loader (this feature) to produce **the same `Plan` shape**, so the executor has one execution path. The only difference is the `LocatorTable` — agent-produced Plans get an empty one (and use a different `LocatorChain.kind` for direct selectors); workflow-produced Plans attach the workflow's `_locators`.
-- The orchestrator deliberately does **not** own retries, ethics checks, or scope enforcement — those live in FEAT-005's executor. This feature's job is *lifecycle management*: load → translate → preflight → run → report. Keep the orchestrator thin; resist scope creep.
+- The Workflow → Plan translation is the _conceptual heart_ of this feature. Resist the urge to define a separate "executable Plan" shape — the goal is for the agent (FEAT-011) and the workflow loader (this feature) to produce **the same `Plan` shape**, so the executor has one execution path. The only difference is the `LocatorTable` — agent-produced Plans get an empty one (and use a different `LocatorChain.kind` for direct selectors); workflow-produced Plans attach the workflow's `_locators`.
+- The orchestrator deliberately does **not** own retries, ethics checks, or scope enforcement — those live in FEAT-005's executor. This feature's job is _lifecycle management_: load → translate → preflight → run → report. Keep the orchestrator thin; resist scope creep.
 - The atomic-write convention (`tmp` + `rename`) for manifest.json and outputs.json is non-negotiable. A crash mid-write should leave the previous version intact, not a half-written file. Test it explicitly (TASK-004).
 - Resume of a `cookies: none` workflow is fundamentally not safe — the session state is gone. The orchestrator refuses; do not try to "rerun from step 0" as a fallback, that defeats the user's expectation that `resume` means continue.
 - The e2e test (TASK-011) uses a hand-authored workflow YAML rather than recording in CI because recording involves visible Chrome + user-event timing, which is flaky in CI. FEAT-008's e2e tests cover the recording side; this feature's e2e covers the replay side. Together they make the full round-trip — separately runnable, both gating.

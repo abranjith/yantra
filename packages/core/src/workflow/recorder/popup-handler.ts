@@ -155,8 +155,7 @@ export class PopupHandler {
 
     // Only handle popups opened from our main target or from a known popup
     const isOurPopup =
-      targetInfo.openerId === this.mainTargetId ||
-      this.popupChain.has(targetInfo.openerId ?? '');
+      targetInfo.openerId === this.mainTargetId || this.popupChain.has(targetInfo.openerId ?? '');
 
     if (!isOurPopup) return;
 
@@ -164,7 +163,7 @@ export class PopupHandler {
     const { sessionId } = await this.browserCDP.send('Target.attachToTarget', {
       targetId: targetInfo.targetId,
       flatten: true,
-    }) as { sessionId: string };
+    });
 
     // Create a CDPSession for this target
     // puppeteer-core's Connection exposes session creation via the browser's target
@@ -210,18 +209,27 @@ export class PopupHandler {
    * Create a puppeteer CDPSession from a raw sessionId.
    * In puppeteer-core v24+ the browser's connection exposes the session registry.
    */
-  private async createSessionFromId(sessionId: string): Promise<CDPSession> {
-    // Access the internal connection to get the session
-    // This uses puppeteer-core's internal _connection property
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conn = (this.browserCDP as any)._connection ?? (this.browserCDP as any).connection;
-    if (conn && typeof conn.session === 'function') {
-      const session = conn.session(sessionId) as CDPSession | null;
-      if (session) return session;
+  private createSessionFromId(sessionId: string): Promise<CDPSession> {
+    // Access the internal connection to get the session — puppeteer-core
+    // does not expose this on its public Target/Session API, so we type the
+    // narrow shape we depend on and tolerate either of the legacy property
+    // names (`_connection` in older releases, `connection` in newer ones).
+    interface ConnectionLike {
+      session(id: string): CDPSession | null;
+    }
+    interface SessionWithConnection {
+      _connection?: ConnectionLike;
+      connection?: ConnectionLike;
+    }
+    const sessionWithConn = this.browserCDP as unknown as SessionWithConnection;
+    const conn = sessionWithConn._connection ?? sessionWithConn.connection;
+    if (conn !== undefined && typeof conn.session === 'function') {
+      const session = conn.session(sessionId);
+      if (session !== null) return Promise.resolve(session);
     }
     // Fallback: the browserCDP itself is the session for flat CDP connections
-    // (pipe transport) — return it as a shared session
-    return this.browserCDP;
+    // (pipe transport) — return it as a shared session.
+    return Promise.resolve(this.browserCDP);
   }
 }
 

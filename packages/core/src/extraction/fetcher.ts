@@ -40,7 +40,10 @@ export class HttpFetcher implements ContentFetcher {
     this.maxBodyBytes = options.maxBodyBytes ?? 5 * 1024 * 1024;
   }
 
-  public async fetch(url: string, opts: { timeoutMs: number; signal: AbortSignal }): Promise<FetchedDoc> {
+  public async fetch(
+    url: string,
+    opts: { timeoutMs: number; signal: AbortSignal },
+  ): Promise<FetchedDoc> {
     const startedAt = Date.now();
     const timeoutController = new AbortController();
     const signal = mergeSignals(opts.signal, timeoutController.signal);
@@ -118,7 +121,10 @@ export class BrowserFallbackFetcher implements ContentFetcher {
     this.browserProvider = options.browserProvider;
   }
 
-  public async fetch(url: string, _opts: { timeoutMs: number; signal: AbortSignal }): Promise<FetchedDoc> {
+  public async fetch(
+    url: string,
+    _opts: { timeoutMs: number; signal: AbortSignal },
+  ): Promise<FetchedDoc> {
     const startedAt = Date.now();
     const session = await this.browserProvider.launch({
       profile: { kind: 'ephemeral' },
@@ -163,7 +169,10 @@ export class HybridContentFetcher implements ContentFetcher {
     this.browserFetcher = options.browserFetcher;
   }
 
-  public async fetch(url: string, opts: { timeoutMs: number; signal: AbortSignal }): Promise<FetchedDoc> {
+  public async fetch(
+    url: string,
+    opts: { timeoutMs: number; signal: AbortSignal },
+  ): Promise<FetchedDoc> {
     const doc = await this.httpFetcher.fetch(url, opts);
     if (shouldEscalateToBrowser(doc)) {
       return this.browserFetcher.fetch(url, opts);

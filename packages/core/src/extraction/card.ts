@@ -12,7 +12,10 @@ export interface RenderTerminalOptions {
 /**
  * Renders ask cards as plain terminal boxes.
  */
-export function renderTerminal(cards: readonly AskCard[], options: RenderTerminalOptions = {}): string {
+export function renderTerminal(
+  cards: readonly AskCard[],
+  options: RenderTerminalOptions = {},
+): string {
   const width = Math.max(40, options.width ?? 80);
   const useColor = options.color ?? false;
   const color = useColor ? picocolors : noColor;

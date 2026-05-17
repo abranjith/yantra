@@ -6,7 +6,12 @@
  * No runtime imports — this is a pure .d.ts-style module.
  */
 
-import type { ActionableState, HitTargetCheckResult, JsonLocatorIntent, CandidateResolution } from '../types.js';
+import type {
+  ActionableState,
+  HitTargetCheckResult,
+  JsonLocatorIntent,
+  CandidateResolution,
+} from '../types.js';
 
 export interface InjectedAPI {
   /**

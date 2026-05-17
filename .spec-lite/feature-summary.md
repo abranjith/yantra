@@ -58,6 +58,12 @@ CLI integration is implemented in `apps/cli/src/commands/ask.ts` and wired throu
 
 Verification coverage includes extraction unit suites under `packages/core/tests/extraction`, CLI ask command tests under `apps/cli/src/commands/ask.spec.ts`, and ask-focused E2E tests in `e2e/ask.spec.ts` and `e2e/ask-no-llm.spec.ts`.
 
+## Workflow Authoring
+
+**Annotate UI & Workflow YAML** _(updated: 2026-05-16 by implement)_
+Source spec: [feature_annotate_and_yaml.md](.spec-lite/features/feature_annotate_and_yaml.md)
+Closes the record→review→save loop that converts a raw recording draft into a production-ready Workflow YAML file. The `AnnotateSession` state machine walks each captured action interactively (keep/skip, locator name, param/secret/output promotion, scope override) and produces a fully validated `WorkflowFile`. The `FileWorkflowStore` persists workflows atomically to `~/.local/share/yantra/workflows/<name>.yaml`, with sidecar `.locators.json` emission when `_locators` exceeds 50 entries. `yantra lint <file.yaml>` validates offline using 12 pluggable lint rules (mandatory errors: `SecretShapedLiteralInValue`, `UndeclaredSecretRef`, `UndeclaredParamRef`, `JSONataExpressionInvalid`, `ScopeMutatingVerbInReadOnlyData`, `MixedExpressionForms`). A sandboxed `JSONataEvaluator` wraps the `jsonata` package with a 200 ms timeout, 100 KB result cap, no custom functions, and no global access.
+
 ## Recorder
 
 ### Recorder Phase 1 (FEAT-008)
@@ -68,13 +74,31 @@ The **protocol schema** (`RecordingDraftSchema`, `CapturedActionSchema`) lives i
 
 The **overlay** (esbuild IIFE bundle, built with `pnpm --filter @yantra/core build:recorder-overlay`) runs in-page and captures `click`, `input` (250 ms debounce), `change`, and `keydown(Enter)` events. For each captured action it calls `buildElementDescriptor()` (ARIA role + accessible name + sanitized attr sample + XPath debug string) and forwards the payload to Node via a CDP `Runtime.addBinding` channel. The overlay also draws a fixed-position recording indicator (red dot + action counter) and advises the user to "stop with Ctrl+C in the terminal".
 
-The **redactor** (`DefaultCaptureRedactor`) is the only code that reads `raw_value`; it replaces it with the sentinel `'<redacted>'` and records `value_length` (code-point count). Defense-in-depth `defangAttrValue()` strips credential-shaped strings (sk-, sk-proj-, ghp_, AKIA, eyJ, xoxb-, gho_, glpat-) from element attribute samples before they are persisted.
+The **redactor** (`DefaultCaptureRedactor`) is the only code that reads `raw_value`; it replaces it with the sentinel `'<redacted>'` and records `value_length` (code-point count). Defense-in-depth `defangAttrValue()` strips credential-shaped strings (sk-, sk-proj-, ghp*, AKIA, eyJ, xoxb-, gho*, glpat-) from element attribute samples before they are persisted.
 
 **Session lifecycle**: `RecordingSession.start(name)` generates a time-ordered recording ID, calls `RecordingStore.create()`, launches Chrome headful, registers the CDP binding and overlay, sets up popup attachment (`PopupHandler`), cross-origin iframe detection, and starts the `IdleWatcher` (default 5-minute timeout, fires `IdleTimeoutPromptEvent`). `RecordingSession.stop(reason)` assembles and Zod-validates the draft via `assembleDraft()`, writes it atomically to `draft.json`, removes the partial draft, closes the browser, and destroys the ephemeral profile unless `keepProfile` was set. `abort()` preserves the profile for post-mortem.
 
 **Crash safety**: `appendAction` + `FileSystemRecordingStore` write `draft.partial.json` atomically (`.tmp` + `fs.rename`) after every captured action. If the process crashes before `stop()`, the partial draft survives on disk.
 
 **Tests** (all tagged `@no-llm`): 66 unit tests across `redactor.spec.ts` (incl. 500-run fast-check property test), `descriptor-builder.spec.ts` (jsdom, 22 tests), `draft-builder.spec.ts` (10 tests), `store.spec.ts` (8 tests), `idle-watcher.spec.ts` (7 fake-timer tests), `session.spec.ts` (4 integration + state-machine tests).
+
+## Agent Integration
+
+### Agent Integration — pi-agent-core Adapter (FEAT-011)
+
+`packages/agent` provides the `LLMClient` strategy interface wrapping `pi-agent-core` behind a stable internal boundary. The package cannot import `@yantra/core` (architectural boundary enforced at the compiler level). The `createLLMClient(config)` factory resolves the provider from `LLM_PROVIDER` env → config → degrades gracefully to `NullLLMClient` (returns `LLMUnavailable` immediately, zero I/O) when `LLM_PROVIDER=none` or `pi-agent-core` is unavailable.
+
+`runGeneratePlan()` implements the full generation loop: sanitizer guard → system-prompt assembly (tools sorted by name for canonical SHA-256 hash) → provider call → Zod schema validation → semantic validation (FEAT-002's `validateSemantics`) → bounded re-prompt (max `budget.maxCalls` retries, errors serialized as JSON-pointer paths). On repeated failure `dominantErrorCode()` picks the most-frequent validation error code and `resolveUserFacingHint()` maps it to an actionable message. `wrapWithAudit()` wraps any `LLMClient` to emit two `AgentJsonlEntry` records per call (request + response) with fields including `run_id`, `provider_id`, `system_prompt_hash`, `tool_calls`, token counts, `cost_estimate_usd`, `attempt`, and `outcome`. `estimateCostUsd()` covers Claude 4 and 3.5 model families. `Sanitized<T>` brand type plus LRU-registry `assertSanitized()` enforce runtime sanitization at the LLM call boundary. `InMemoryAuditWriter` and `InMemoryUsageWriter` are provided for testing without I/O.
+
+## CLI Surface
+
+**CLI Polish, Audit, Distribution** _(updated: 2026-05-16 by implement)_
+Source spec: [feature_cli_polish_distribution.md](.spec-lite/features/feature_cli_polish_distribution.md)
+Caps the MVP with the user-visible command surface: `yantra ask`, `run`, `resume`, `list`, `show`, `lint`, `audit`, `report`, `doctor`, `init` — all behind a single `yantra` binary with a documented exit-code map (0 OK / 1 validation / 2 execution / 3 environment / 4 user-handoff). The `--json` flag emits a stable `schemaVersion: "0.1"` envelope on every command for scripting. `yantra audit <run-id>` builds a structured audit report (trust narrative + agent/secret/engine sections) from `manifest.json` + `agent.jsonl` + `secrets.jsonl` + `events.jsonl` without ever surfacing secret values. `yantra report <run-id>` prints (or `--open`s) the per-run `report.md` verbatim. `yantra doctor` extends FEAT-003 v0 with overall ok/warn/fail rollups and remediation hints.
+
+The `ConnectorIO` interface in `apps/cli/src/connector-io.ts` is the load-bearing abstraction that decouples the CLI surface from the underlying executor — Phase 2 connectors (WhatsApp, email, web) plug in by implementing this single interface. `TerminalRenderer` and `JSONRenderer` are interchangeable implementations of `OutputRenderer`; `buildRenderOpts(flags)` picks between them at process start based on `--json` / TTY detection / `NO_COLOR`. The runtime helper (`apps/cli/src/runtime.ts`) wires the workflow orchestrator dependency graph (ethics gate, browser provider, keychain, profile store, workflow store, run store) so individual subcommands don't repeat the boilerplate.
+
+Verification: 29 unit tests across `apps/cli/src/` (commander setup, exit-code map, global-flags parser, ConnectorIO contract, audit-builder round-trip, auto-detect for `show`); 7 e2e tests in `e2e/cli-commands.spec.ts` covering the no-args banner, `list runs|workflows --json` empty roots, `audit`/`report` not-found paths, and `init --provider {none|invalid}`. Distribution channels (npm `bin: { yantra: dist/bin.js }`, Homebrew tap, Scoop bucket) and the bundled-CLI release pipeline are deferred to the first stable release.
 
 ## Security Envelope
 

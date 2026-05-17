@@ -2,7 +2,7 @@
 
 # FEAT-011: Agent Integration (pi-agent-core)
 
-> **Status**: [ ] Not started
+> **Status**: [x] Complete
 > **Owner**: agent team
 > **Depends on**: FEAT-001 (Monorepo Scaffold & CI), FEAT-002 (Yantra Protocol v0 — tool defs + semantic validator), FEAT-006 (Security Envelope — sanitizer chokepoint + AuditLogWriter)
 > **Unblocks**: FEAT-007 (`ask` Pipeline) LLM synthesis path; FEAT-012 (CLI Polish) end-to-end audit story
@@ -24,6 +24,7 @@ This feature lights up three load-bearing capabilities:
 **Why this package owns the boundary**: it is the **only** place in the monorepo allowed to `import 'pi-agent-core'`. The import-restriction lint rule (set up in FEAT-001) and a CI static-analysis grep enforce this — and per memory.md the rule is non-negotiable. Anything else that wants LLM output goes through `LLMClient`.
 
 **Non-goals (deferred)**:
+
 - LLM reanchor of locator chains (Phase 2 — protocol leaves the slot in `LocatorChain`).
 - Discovery's bounded ReAct (Phase 3+ — out of MVP entirely).
 - OpenAI provider (Phase 2 — adapter shape stays open).
@@ -38,12 +39,12 @@ This package adds **no persistent storage of its own**. Its on-disk projection i
 
 ### 2.1 On-Disk Artifacts
 
-| Artifact | Owner / Writer | Shape | Notes |
-|---|---|---|---|
-| `~/.local/share/yantra/runs/<run-id>/agent.jsonl` | `AuditLogWriter.appendAgentCall` (from FEAT-006) — invoked by **every** `LLMClient` call via the audit wrapper (TASK-010) | `AgentJsonlEntry` (see §2.2) | Append-only JSONL; flushed per append (per FEAT-006 contract); secrets never appear; prompt is always the *sanitized* form. |
-| `packages/protocol/generated/tool-catalog.ts` | **FEAT-002** emits at build time | Vendor-neutral `ToolCatalog` (`ToolDefinition[]`) per `Step` discriminated-union variant | Consumed by `packages/agent` at runtime — no Zod runtime dep crosses the boundary; no pi-agent-core import either (protocol stays vendor-neutral per FEAT-002 TASK-009). The pi-agent-core translation happens here in `pi-adapter.ts`. Drift between protocol and agent fails CI (FEAT-002 guard). |
-| `packages/agent/src/prompts/guidance.md` | Hand-authored in this feature; checked in | Markdown | Style + principles section of the system prompt. Versioned with the code. Changes are reviewed like code. |
-| `e2e/golden/<intent>.golden.json` | Hand-authored fixtures; regenerated per LLM model bump | `{ intent, model, plan }` | Plumbing only in this feature (TASK-013); populated during MVP dogfooding. CI compares emitted Plan to golden on every dependency bump; intentional changes require explicit re-pinning. |
+| Artifact                                          | Owner / Writer                                                                                                            | Shape                                                                                    | Notes                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.local/share/yantra/runs/<run-id>/agent.jsonl` | `AuditLogWriter.appendAgentCall` (from FEAT-006) — invoked by **every** `LLMClient` call via the audit wrapper (TASK-010) | `AgentJsonlEntry` (see §2.2)                                                             | Append-only JSONL; flushed per append (per FEAT-006 contract); secrets never appear; prompt is always the _sanitized_ form.                                                                                                                                                                         |
+| `packages/protocol/generated/tool-catalog.ts`     | **FEAT-002** emits at build time                                                                                          | Vendor-neutral `ToolCatalog` (`ToolDefinition[]`) per `Step` discriminated-union variant | Consumed by `packages/agent` at runtime — no Zod runtime dep crosses the boundary; no pi-agent-core import either (protocol stays vendor-neutral per FEAT-002 TASK-009). The pi-agent-core translation happens here in `pi-adapter.ts`. Drift between protocol and agent fails CI (FEAT-002 guard). |
+| `packages/agent/src/prompts/guidance.md`          | Hand-authored in this feature; checked in                                                                                 | Markdown                                                                                 | Style + principles section of the system prompt. Versioned with the code. Changes are reviewed like code.                                                                                                                                                                                           |
+| `e2e/golden/<intent>.golden.json`                 | Hand-authored fixtures; regenerated per LLM model bump                                                                    | `{ intent, model, plan }`                                                                | Plumbing only in this feature (TASK-013); populated during MVP dogfooding. CI compares emitted Plan to golden on every dependency bump; intentional changes require explicit re-pinning.                                                                                                            |
 
 ### 2.2 In-Memory Entities
 
@@ -80,27 +81,27 @@ The `assertSanitized` runtime check is a **belt-and-suspenders defense**. Type-e
 The interface every consumer codes against. Three concrete strategies (`AnthropicLLMClient`, `OllamaLLMClient`, `NullLLMClient`) implement it.
 
 ```ts
-import type { Plan, ValidationError, UsageCall, ToolCatalog } from "@yantra/protocol";
-import type { ZodSchema } from "zod";
+import type { Plan, ValidationError, UsageCall, ToolCatalog } from '@yantra/protocol';
+import type { ZodSchema } from 'zod';
 
 export interface LLMBudget {
-  readonly maxCalls: number;            // hard cap on calls inside a single generatePlan invocation (re-prompts count)
-  readonly maxLatencyMs: number;        // per-call timeout
-  readonly maxTokensIn: number | null;  // null = provider default
+  readonly maxCalls: number; // hard cap on calls inside a single generatePlan invocation (re-prompts count)
+  readonly maxLatencyMs: number; // per-call timeout
+  readonly maxTokensIn: number | null; // null = provider default
   readonly maxTokensOut: number | null;
 }
 
 export interface GeneratePlanOpts {
   readonly sanitizedPrompt: Sanitized<string>;
-  readonly toolCatalog: ToolCatalog;    // vendor-neutral, from FEAT-002 TASK-009; pi-agent-core translation lives in pi-adapter.ts
-  readonly schema: ZodSchema;           // typically the Plan schema from protocol; allows test overrides
+  readonly toolCatalog: ToolCatalog; // vendor-neutral, from FEAT-002 TASK-009; pi-agent-core translation lives in pi-adapter.ts
+  readonly schema: ZodSchema; // typically the Plan schema from protocol; allows test overrides
   readonly budget: LLMBudget;
   readonly workflowContext?: {
     readonly workflowSecrets?: ReadonlyArray<string>;
     readonly workflowLocators?: ReadonlyArray<string>;
   };
-  readonly runId: string;               // for audit logging
-  readonly taskId: string;              // for audit logging
+  readonly runId: string; // for audit logging
+  readonly taskId: string; // for audit logging
 }
 
 export interface SummarizeOpts {
@@ -109,13 +110,13 @@ export interface SummarizeOpts {
   readonly budget: LLMBudget;
   readonly runId: string;
   readonly taskId: string;
-  readonly stepId?: string;             // populated when called from an llm_summarize step; null for ask-pipeline
+  readonly stepId?: string; // populated when called from an llm_summarize step; null for ask-pipeline
 }
 
 /** Plan §7 / FEAT-002 §2.1.8: callers receive both the result AND the per-call usage record. */
 export interface GeneratePlanResult {
   readonly plan: Plan;
-  readonly usage: UsageCall;            // aggregated across re-prompts: totals over all attempts of this generatePlan call
+  readonly usage: UsageCall; // aggregated across re-prompts: totals over all attempts of this generatePlan call
 }
 
 export interface SummarizeResult {
@@ -152,29 +153,44 @@ export interface LLMClient {
 
 ```ts
 export type LLMError =
-  | { readonly kind: "llm_unavailable"; readonly reason: "provider_none" | "missing_api_key" | "ollama_unreachable"; readonly hint: string }
-  | { readonly kind: "llm_timeout"; readonly elapsedMs: number; readonly budgetMs: number }
-  | { readonly kind: "llm_provider_error"; readonly providerCode: string | null; readonly message: string; readonly retryable: boolean }
-  | { readonly kind: "llm_validation_failed";
+  | {
+      readonly kind: 'llm_unavailable';
+      readonly reason: 'provider_none' | 'missing_api_key' | 'ollama_unreachable';
+      readonly hint: string;
+    }
+  | { readonly kind: 'llm_timeout'; readonly elapsedMs: number; readonly budgetMs: number }
+  | {
+      readonly kind: 'llm_provider_error';
+      readonly providerCode: string | null;
+      readonly message: string;
+      readonly retryable: boolean;
+    }
+  | {
+      readonly kind: 'llm_validation_failed';
       readonly attempts: number;
       readonly errors: ReadonlyArray<ValidationError>;
       // Plan §7: user-facing one-line hint derived from the dominant failure class.
       // The CLI renders this directly; the structured `errors` go to report.md.
-      readonly userFacingHint: string }
-  | { readonly kind: "llm_budget_exhausted"; readonly callsMade: number; readonly maxCalls: number };
+      readonly userFacingHint: string;
+    }
+  | {
+      readonly kind: 'llm_budget_exhausted';
+      readonly callsMade: number;
+      readonly maxCalls: number;
+    };
 ```
 
 Each variant is a closed shape — consumers must pattern-match exhaustively. Custom error classes (`LLMUnavailableError`, `LLMTimeoutError`, etc.) extending `Error` are derived from these for `throw`-style call sites that want to bubble; the canonical surface is the discriminated union returned in `Result<T, LLMError>`.
 
 **`userFacingHint` derivation** (per plan §7) — when `generatePlan` exhausts re-prompts, the orchestrator classifies the most common `ValidationError.code` across the collected attempts and maps it to a hint:
 
-| Dominant error code | `userFacingHint` |
-|---|---|
-| `UnknownLocator` | "the AI referenced a UI element the workflow doesn't define — try naming the target more concretely" |
-| `OutOfScopeVerb` | "the AI tried to perform a mutating action inside a `read-only-data` section — try splitting the task into read and write phases" |
-| `MissingParam` | "the AI needs a value you didn't provide — re-run with `--params <key>=<value>` for the missing field" |
-| `MissingSecret` | "the AI needs a credential not yet stored — run `yantra config set secret.<name>` first" |
-| `MalformedPlan` (catch-all) | "the AI couldn't structure a valid plan — try rephrasing your request more concretely with specific URLs or named elements" |
+| Dominant error code         | `userFacingHint`                                                                                                                  |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `UnknownLocator`            | "the AI referenced a UI element the workflow doesn't define — try naming the target more concretely"                              |
+| `OutOfScopeVerb`            | "the AI tried to perform a mutating action inside a `read-only-data` section — try splitting the task into read and write phases" |
+| `MissingParam`              | "the AI needs a value you didn't provide — re-run with `--params <key>=<value>` for the missing field"                            |
+| `MissingSecret`             | "the AI needs a credential not yet stored — run `yantra config set secret.<name>` first"                                          |
+| `MalformedPlan` (catch-all) | "the AI couldn't structure a valid plan — try rephrasing your request more concretely with specific URLs or named elements"       |
 
 The mapping table lives in `src/plan/user-facing-hints.ts` and is tested for coverage (every `ValidationError.code` from FEAT-002 has a hint).
 
@@ -182,24 +198,24 @@ The mapping table lives in `src/plan/user-facing-hints.ts` and is tested for cov
 
 ```ts
 export interface AgentJsonlEntry {
-  readonly direction: "request" | "response";
+  readonly direction: 'request' | 'response';
   readonly run_id: string;
   readonly task_id: string;
-  readonly provider_id: string;          // LLMClient.providerId
-  readonly model: string;                // e.g., "claude-sonnet-4-20250514"
-  readonly prompt_sanitized: string;     // the Sanitized<string> unwrapped at the audit boundary
-  readonly system_prompt_hash: string;   // SHA-256 of the assembled system prompt (cheap dedupe/audit)
-  readonly response: unknown;            // raw provider response (no secrets — sanitizer guarantees)
+  readonly provider_id: string; // LLMClient.providerId
+  readonly model: string; // e.g., "claude-sonnet-4-20250514"
+  readonly prompt_sanitized: string; // the Sanitized<string> unwrapped at the audit boundary
+  readonly system_prompt_hash: string; // SHA-256 of the assembled system prompt (cheap dedupe/audit)
+  readonly response: unknown; // raw provider response (no secrets — sanitizer guarantees)
   readonly tool_calls: ReadonlyArray<{ tool: string; input: unknown }>;
   readonly latency_ms: number;
   // Token telemetry sourced from pi-agent-core (plan §6 / FEAT-002 §2.1.8 / FEAT-005 UsageWriter):
   readonly input_tokens: number;
   readonly output_tokens: number;
-  readonly cost_estimate_usd: number | null;   // null for Ollama (local); positive for paid providers
-  readonly step_id: string | null;       // populated for llm_summarize calls; null for plan-generation
-  readonly attempt: number;              // 1 for first call; >1 for re-prompts
-  readonly outcome: "ok" | "validation_failed" | "timeout" | "provider_error";
-  readonly ts: string;                   // ISO-8601 UTC
+  readonly cost_estimate_usd: number | null; // null for Ollama (local); positive for paid providers
+  readonly step_id: string | null; // populated for llm_summarize calls; null for plan-generation
+  readonly attempt: number; // 1 for first call; >1 for re-prompts
+  readonly outcome: 'ok' | 'validation_failed' | 'timeout' | 'provider_error';
+  readonly ts: string; // ISO-8601 UTC
 }
 ```
 
@@ -210,19 +226,21 @@ Mandated by memory.md §Logging audit-events list. Two entries per call (`reques
 #### 2.2.5 `ProviderConfig` — config shape (`src/client/factory.ts`)
 
 ```ts
-export type ProviderName = "anthropic" | "ollama" | "openai" | "none";
+export type ProviderName = 'anthropic' | 'ollama' | 'openai' | 'none';
 
 export interface ProviderConfig {
   readonly provider: ProviderName;
   readonly anthropic?: {
-    readonly apiKey: { kind: "env"; name: "ANTHROPIC_API_KEY" } | { kind: "keychain"; service: "yantra"; account: "anthropic.api_key" };
-    readonly model: string;              // e.g., "claude-sonnet-4-20250514"
+    readonly apiKey:
+      | { kind: 'env'; name: 'ANTHROPIC_API_KEY' }
+      | { kind: 'keychain'; service: 'yantra'; account: 'anthropic.api_key' };
+    readonly model: string; // e.g., "claude-sonnet-4-20250514"
   };
   readonly ollama?: {
-    readonly baseUrl: string;            // default "http://localhost:11434"
-    readonly model: string;              // e.g., "llama3.1:8b" — see TASK-004 for recommended list
+    readonly baseUrl: string; // default "http://localhost:11434"
+    readonly model: string; // e.g., "llama3.1:8b" — see TASK-004 for recommended list
   };
-  readonly openai?: { readonly apiKey: unknown; readonly model: string };  // Phase 2 — scaffold only
+  readonly openai?: { readonly apiKey: unknown; readonly model: string }; // Phase 2 — scaffold only
   readonly defaultBudget: LLMBudget;
 }
 ```
@@ -233,17 +251,17 @@ Resolution order: `LLM_PROVIDER` env var > `~/.config/yantra/config.yaml` `provi
 
 ```ts
 export interface SystemPromptAssembly {
-  readonly text: string;                 // the full system prompt fed to pi-agent-core
-  readonly schemaVersion: "0.1";         // mirrors protocol's SCHEMA_VERSION
-  readonly toolCatalogHash: string;      // SHA-256 of the rendered tool catalog section
-  readonly guidanceHash: string;         // SHA-256 of guidance.md content at assembly time
-  readonly fullHash: string;             // SHA-256 of `text` — equality is the determinism contract
+  readonly text: string; // the full system prompt fed to pi-agent-core
+  readonly schemaVersion: '0.1'; // mirrors protocol's SCHEMA_VERSION
+  readonly toolCatalogHash: string; // SHA-256 of the rendered tool catalog section
+  readonly guidanceHash: string; // SHA-256 of guidance.md content at assembly time
+  readonly fullHash: string; // SHA-256 of `text` — equality is the determinism contract
 }
 
 export interface AssembleOpts {
   readonly toolCatalog: ToolCatalog;
-  readonly schemaVersion: "0.1";
-  readonly guidanceMarkdown: string;     // injected; defaults to file contents at build time
+  readonly schemaVersion: '0.1';
+  readonly guidanceMarkdown: string; // injected; defaults to file contents at build time
 }
 ```
 
@@ -255,8 +273,8 @@ export interface AssembleOpts {
 export interface RePromptContext {
   readonly originalPrompt: Sanitized<string>;
   readonly previousRawResponse: unknown;
-  readonly validationErrors: ReadonlyArray<ValidationError>;   // includes JSON-pointer paths
-  readonly attempt: number;              // 1-based; first re-prompt is 2
+  readonly validationErrors: ReadonlyArray<ValidationError>; // includes JSON-pointer paths
+  readonly attempt: number; // 1-based; first re-prompt is 2
 }
 ```
 
@@ -264,25 +282,25 @@ The re-prompt builder takes a `RePromptContext` and produces a fresh `Sanitized<
 
 ### 2.3 Repository-Style Interfaces
 
-| Interface | Role | Default impl | Test/alt impls |
-|---|---|---|---|
-| `LLMClient` | Strategy for all LLM calls. The factory picks one per process. | `AnthropicLLMClient` (when `ANTHROPIC_API_KEY` available); `OllamaLLMClient` (when configured); `NullLLMClient` (when `LLM_PROVIDER=none`, missing key, or Ollama unreachable on probe) | `RecordingLLMClient` (records prompts/responses for golden tests); `FakeLLMClient` (returns canned responses for hermetic CI) |
-| `LLMClientFactory` | Reads `ProviderConfig`, returns the right strategy. | One implementation; no plug points needed. | — |
-| `AuditLogWriter` | Consumed from FEAT-006. Every `LLMClient` call writes through it via the wrapper (TASK-010). | Provided by `packages/core/src/audit/` (FEAT-006). | In-memory writer for unit tests. |
+| Interface          | Role                                                                                         | Default impl                                                                                                                                                                            | Test/alt impls                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `LLMClient`        | Strategy for all LLM calls. The factory picks one per process.                               | `AnthropicLLMClient` (when `ANTHROPIC_API_KEY` available); `OllamaLLMClient` (when configured); `NullLLMClient` (when `LLM_PROVIDER=none`, missing key, or Ollama unreachable on probe) | `RecordingLLMClient` (records prompts/responses for golden tests); `FakeLLMClient` (returns canned responses for hermetic CI) |
+| `LLMClientFactory` | Reads `ProviderConfig`, returns the right strategy.                                          | One implementation; no plug points needed.                                                                                                                                              | —                                                                                                                             |
+| `AuditLogWriter`   | Consumed from FEAT-006. Every `LLMClient` call writes through it via the wrapper (TASK-010). | Provided by `packages/core/src/audit/` (FEAT-006).                                                                                                                                      | In-memory writer for unit tests.                                                                                              |
 
 The `LLMClient` strategy pattern is the **only** way to swap providers — there is no other extension point, no plugin loader, no DI container. Explicit constructor params per memory.md.
 
 ### 2.4 Relationships
 
-| Relationship | Cardinality | Enforced by |
-|---|---|---|
-| `LLMClient` ↔ provider implementation | 1:1 per process (factory chooses once) | `LLMClientFactory.create()` |
-| `LLMClient.generatePlan` call → `agent.jsonl` entries | 1:N (N = 2 × attempts; one `request`+`response` per attempt) | TASK-010 audit wrapper |
-| `generatePlan` attempt → `Plan` validated | 1:1 on success | Plan validator (TASK-008) |
-| `generatePlan` failure → `RePromptContext` | 1:1 per retry; max `budget.maxCalls` total | TASK-009 bounded re-prompt loop |
-| `Sanitized<T>` value → originating `sanitize()` call | 1:1 by construction (brand + runtime registry) | TASK-011 sanitizer-guard |
-| `LLMClient.providerId` → audit `provider_id` field | 1:1 every entry | TASK-010 |
-| `TOOL_CATALOG` from FEAT-002 → `AgentTool[]` consumed by pi-agent-core | N:N transformation at startup | TASK-002 adapter |
+| Relationship                                                           | Cardinality                                                  | Enforced by                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------- |
+| `LLMClient` ↔ provider implementation                                  | 1:1 per process (factory chooses once)                       | `LLMClientFactory.create()`     |
+| `LLMClient.generatePlan` call → `agent.jsonl` entries                  | 1:N (N = 2 × attempts; one `request`+`response` per attempt) | TASK-010 audit wrapper          |
+| `generatePlan` attempt → `Plan` validated                              | 1:1 on success                                               | Plan validator (TASK-008)       |
+| `generatePlan` failure → `RePromptContext`                             | 1:1 per retry; max `budget.maxCalls` total                   | TASK-009 bounded re-prompt loop |
+| `Sanitized<T>` value → originating `sanitize()` call                   | 1:1 by construction (brand + runtime registry)               | TASK-011 sanitizer-guard        |
+| `LLMClient.providerId` → audit `provider_id` field                     | 1:1 every entry                                              | TASK-010                        |
+| `TOOL_CATALOG` from FEAT-002 → `AgentTool[]` consumed by pi-agent-core | N:N transformation at startup                                | TASK-002 adapter                |
 
 ### 2.5 Future DB Schema (Phase 2+)
 
@@ -309,7 +327,7 @@ CREATE TABLE agent_calls (
 );
 ```
 
-Secrets never appear in this table (or its JSONL precursor). The `prompt_sanitized` column is the *output* of FEAT-006's sanitizer; by construction it contains no literal credentials or unredacted PII (within the chosen profile).
+Secrets never appear in this table (or its JSONL precursor). The `prompt_sanitized` column is the _output_ of FEAT-006's sanitizer; by construction it contains no literal credentials or unredacted PII (within the chosen profile).
 
 ---
 
@@ -373,21 +391,25 @@ Test files mirror source structure under `tests/` (one convention per package, p
 ## 4. Dependencies
 
 **Internal**:
+
 - **FEAT-001** — Monorepo scaffold, ESLint import-restriction rule (forbids `pi-agent-core` outside this package), `LLM_PROVIDER` CI matrix dimension, Vitest+fast-check baseline.
 - **FEAT-002** — `Plan` Zod schema, vendor-neutral `ToolCatalog` emit from `packages/protocol/generated/tool-catalog.ts`, `validateSemantics()` (consumed by `plan/validate.ts`), `ValidationError` shape, `SCHEMA_VERSION` const, `UsageCall` type.
-- **FEAT-006** — `sanitize()` chokepoint (the *only* producer of `Sanitized<T>`); `AuditLogWriter` interface and per-run instance (consumed by `audit/wrap.ts`); `KeychainProvider` (consumed by `AnthropicLLMClient` for API-key lookup).
+- **FEAT-006** — `sanitize()` chokepoint (the _only_ producer of `Sanitized<T>`); `AuditLogWriter` interface and per-run instance (consumed by `audit/wrap.ts`); `KeychainProvider` (consumed by `AnthropicLLMClient` for API-key lookup).
 
 **External (runtime)**:
+
 - **`pi-agent-core`** ([earendil-works/pi](https://github.com/earendil-works/pi/blob/main/packages/agent/README.md)) — latest stable; **only allowed in this package** (ESLint enforced).
 - **`zod`** — peer dep from `@yantra/protocol`; we don't add a separate version.
 - **`pino`** — workspace baseline logger.
 
 **External (dev/test)**:
+
 - `vitest`, `fast-check`, `@types/node`, `typescript` — workspace.
 - No mocks of `pi-agent-core` are shipped as runtime code; test doubles live under `tests/`.
 
 **Forbidden imports** (lint-enforced):
-- Anything from `packages/core/*` — `packages/agent` cannot import `core` (compiler+lint enforced, per memory.md). The sanitizer and audit-log writer are consumed via *types* imported from `@yantra/protocol` (where shared) or via *constructor-injected instances* passed from `apps/cli` — the agent never reaches into `core` directly.
+
+- Anything from `packages/core/*` — `packages/agent` cannot import `core` (compiler+lint enforced, per memory.md). The sanitizer and audit-log writer are consumed via _types_ imported from `@yantra/protocol` (where shared) or via _constructor-injected instances_ passed from `apps/cli` — the agent never reaches into `core` directly.
   - **Practical mechanism**: `LLMClient` factory accepts `{ sanitizer, auditLogWriter, keychainProvider }` parameters typed as interfaces defined in `@yantra/protocol` (re-exported from there for cross-package use) or in a new tiny `packages/contracts` if FEAT-006 promotes them. See "Deviations Flagged" — this is the one shape coordination point with FEAT-006 to settle during implementation.
 - Any direct `import 'pi-agent-core'` outside `packages/agent/src/client/*` — caught by ESLint + a CI grep (TASK-010 includes the grep script).
 
@@ -411,7 +433,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 
 - Build a thin adapter that converts FEAT-002's vendor-neutral `ToolCatalog` (emitted from `packages/protocol/generated/tool-catalog.ts` — each entry is `{ name, description, input_schema: JSONSchema, output_schema: JSONSchema | null }`) into pi-agent-core's `AgentTool[]` shape (per the README — `{ name, label, description, parameters (Typebox), executionMode?, execute }`).
 - Since the catalog carries JSON Schema (not Typebox), the adapter must round-trip JSON Schema → Typebox. Approach: hand-write a thin walker over our closed Zod-emitted JSON-Schema shape (we control it — it's not arbitrary JSON Schema) into Typebox calls. Bounded scope: `string`, `number`, `boolean`, `null`, `array`, `object`, `enum`, `union`. ~150 LOC, fully tested with one fixture per shape.
-- The adapter exposes `toolCatalogToAgentTools(catalog, executeHooks): AgentTool[]`. `executeHooks` is `{ onBeforeToolCall, onAfterToolCall }` — used by the audit wrapper to record every emitted plan step from the agent's perspective; in MVP the `execute` body returns a stub `{ content: [], details: {} }` because **the agent never executes tools — it emits a plan**. We use pi-agent-core's tool-call extraction as the *output channel*, not as ReAct.
+- The adapter exposes `toolCatalogToAgentTools(catalog, executeHooks): AgentTool[]`. `executeHooks` is `{ onBeforeToolCall, onAfterToolCall }` — used by the audit wrapper to record every emitted plan step from the agent's perspective; in MVP the `execute` body returns a stub `{ content: [], details: {} }` because **the agent never executes tools — it emits a plan**. We use pi-agent-core's tool-call extraction as the _output channel_, not as ReAct.
 - **`pi-adapter.ts` is the ONLY file in the entire monorepo that imports pi-agent-core's tool-definition types**. CI grep enforces this; FEAT-002's import-restriction lint rule already forbids `pi-agent-core` everywhere except `packages/agent/src/client/` and `packages/agent/src/pi-adapter.ts`.
 - **Unit test**: round-trip a known `ToolDefinition` (e.g., `FillStep`'s shape) through the adapter; pi-agent-core's Typebox validates a known-good `Step` instance against the resulting `parameters`.
 - **Unit test**: every pi-agent-core event (`agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_*`) is plumbed into a passed-in `EventSink` — verified with a fake sink that asserts presence.
@@ -437,7 +459,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 
 - Implement `OllamaLLMClient` (`src/client/ollama.ts`) using `pi-agent-core`'s Ollama provider (per pi-agent-core's `getModel(...)` shape; if pi-agent-core exposes Ollama under a different identifier, the adapter inspects the version at construction time and falls back to a direct `fetch` against `${baseUrl}/api/chat` with the equivalent message envelope — documented in code with a TODO comment if the fallback is taken).
 - **Base URL**: configurable; default `http://localhost:11434`. Connectivity probe at first `generatePlan` (lazy): on connection refused, returns `LLMUnavailable{reason:"ollama_unreachable"}` with a hint string pointing at `yantra doctor`.
-- **Model recommendations** (documented in JSDoc on the constructor and in `prompts/guidance.md`'s "operator notes" appendix — *not* in the prompt itself):
+- **Model recommendations** (documented in JSDoc on the constructor and in `prompts/guidance.md`'s "operator notes" appendix — _not_ in the prompt itself):
   - `llama3.1:8b` (recommended baseline — broad tool-call support)
   - `qwen2.5:7b` (alternative — good JSON-mode behavior)
   - `mistral-nemo:12b` (when RAM permits — better long-prompt fidelity)
@@ -467,7 +489,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
   3. If `provider: "ollama"`: construct `OllamaLLMClient` eagerly; defer connectivity check to first call (lazy probe).
   4. If `provider: "openai"`: log `pino.warn("openai not supported in MVP")` and return `NullLLMClient`. Phase 2 leaves a clear seam.
   5. Otherwise (`unknown` value): log a warning + return `NullLLMClient`.
-- Always returns *something* — never throws. Per memory.md §Error Handling: no silent failure, but also no fatal-at-startup.
+- Always returns _something_ — never throws. Per memory.md §Error Handling: no silent failure, but also no fatal-at-startup.
 - **Tests** (`@no-llm`): every branch, including the "anthropic configured but no key" warning (assert the log fires; assert no key bytes appear in the log message).
 
 **Acceptance**: `yantra doctor` (FEAT-003 + FEAT-012) calls the factory and reports `providerId` correctly across all five cases.
@@ -509,6 +531,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 
 - Implement `buildRePrompt(ctx: RePromptContext, opts: AssembleOpts): { systemPrompt: SystemPromptAssembly; userMessage: Sanitized<string> }`.
 - The re-prompt user message is a structured block:
+
   ```
   Your previous plan failed validation. Repair the issues below and emit a complete corrected Plan.
 
@@ -517,9 +540,10 @@ Test files mirror source structure under `tests/` (one convention per package, p
     - /steps/5: step in read-only-data scope cannot be a click step
     - /outputs/0/from: capture_as "transactions" is not produced by any prior ExtractStep
   ```
+
 - The `userMessage` is **already sanitized by construction** — it contains only protocol JSON-pointer paths and error codes (`ValidationError.code`), no user-supplied content, no captured DOM. It is branded via the same `brandSanitized` path (registered as exempt — see Deviations §1) because the inputs are fully under our control.
 - **Default `budget.maxCalls = 3`** (1 initial + 2 retries, matching memory.md §Error Handling "max 2 retries").
-- Each retry counts against `budget.maxCalls`. Final failure returns `LLMValidationFailed{attempts, errors}` aggregating the *last* attempt's errors only (avoids confusing union-of-all-errors output).
+- Each retry counts against `budget.maxCalls`. Final failure returns `LLMValidationFailed{attempts, errors}` aggregating the _last_ attempt's errors only (avoids confusing union-of-all-errors output).
 - **Tests** (`@no-llm`): structural format snapshot; idempotence (same `ctx` → same output); no secrets ever appear (property test: feed an arbitrary `ValidationError[]` with synthetic credential-shaped `.message` text; assert the renderer does not include any `sk-`/`ghp_`/`AKIA`/`eyJ` substring — defense in depth).
 
 **Acceptance**: a malformed plan whose JSON-pointer paths point at three distinct fields produces a re-prompt that pi-agent-core successfully completes against on attempt 2 in the golden suite (TASK-013).
@@ -530,9 +554,9 @@ Test files mirror source structure under `tests/` (one convention per package, p
 - **Token counts**: extracted from pi-agent-core's response event payload (`input_tokens`, `output_tokens`). Stored in both `AgentJsonlEntry` and the `UsageCall` row.
 - **`cost_estimate_usd` calculation**: model-id → per-token-cost lookup table (`src/client/pricing.ts`, small static map). `null` for Ollama (local). The table is **not** authoritative — it's a best-effort cost estimate; the `yantra audit` and `yantra usage` views label it as an estimate in human output.
 - **Latency**: `performance.now()` before/after; `latency_ms` rounded to integer.
-- **`generatePlan` aggregation across re-prompts**: the wrapper emits one `UsageCall` *per underlying provider call* (request/response pair) so re-prompts show as separate rows. The `GeneratePlanResult.usage` returned to the caller is the **sum** of all those rows (input_tokens, output_tokens, cost) — the caller sees the bottom line; the audit shows the per-attempt detail.
+- **`generatePlan` aggregation across re-prompts**: the wrapper emits one `UsageCall` _per underlying provider call_ (request/response pair) so re-prompts show as separate rows. The `GeneratePlanResult.usage` returned to the caller is the **sum** of all those rows (input_tokens, output_tokens, cost) — the caller sees the bottom line; the audit shows the per-attempt detail.
 - **Wrapper enforcement**:
-  - **Runtime**: the factory (TASK-006) *always* wraps its return value with `wrapWithAudit`. An unwrapped `LLMClient` is never exposed outside this package — the factory's return type is `LLMClient` (interface), so consumers cannot tell the difference, but `apps/cli` never sees a bare provider.
+  - **Runtime**: the factory (TASK-006) _always_ wraps its return value with `wrapWithAudit`. An unwrapped `LLMClient` is never exposed outside this package — the factory's return type is `LLMClient` (interface), so consumers cannot tell the difference, but `apps/cli` never sees a bare provider.
   - **Static**: `scripts/verify-llm-call-wrapping.ts` — greps `packages/*/src` and `apps/*/src` for any direct `pi-agent-core` import outside `packages/agent/src/client/`; greps for any construction of `AnthropicLLMClient`/`OllamaLLMClient`/`NullLLMClient` outside `packages/agent/src/client/factory.ts`. CI runs this on every PR.
 - **Tests**: a fake `AuditLogWriter` and fake `UsageWriter` (both in-memory) verify that every `generatePlan` and `summarize` call (success and failure) produces exactly 2 `AgentJsonlEntry`s (request + response) and (on success) exactly 1 `UsageCall` per underlying provider call; assertion that the `prompt_sanitized` field equals the input's unwrapped string (no double-sanitization, no missing-sanitization); assertion that `GeneratePlanResult.usage.input_tokens` equals the sum of per-attempt `UsageCall.input_tokens`.
 
@@ -568,7 +592,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 - Author a `RecordingLLMClient` (`src/client/recording.ts`): wraps any `LLMClient`; on success, writes the produced `Plan` to `e2e/golden/<slug>.<providerId>.golden.json` (created if absent, diff-checked if present). On diff, fails the test with a side-by-side report.
 - Author the comparator: a small `e2e/golden/run.spec.ts` that loads each `.golden.json`, submits the `intent` to the configured `LLMClient`, and asserts equality (deep-equal modulo non-determinism: `task_id` and `plan_id` are stripped before comparison — ULIDs change per run).
 - **Populating canonical plans is MVP dogfooding** — not in this feature's scope. Plumbing is. The directory ships with a `.gitkeep` and `README.md`.
-- CI runs the suite on every dependency bump of `pi-agent-core` *or* every model-id change in `config.yaml` (a Turborepo `inputs` declaration triggers re-run). Intentional changes go through `pnpm --filter @yantra/agent golden:rerecord` + reviewer confirmation.
+- CI runs the suite on every dependency bump of `pi-agent-core` _or_ every model-id change in `config.yaml` (a Turborepo `inputs` declaration triggers re-run). Intentional changes go through `pnpm --filter @yantra/agent golden:rerecord` + reviewer confirmation.
 
 **Acceptance**: the suite skeleton runs green with zero `.golden.json` files (no-op pass); adding a malformed `.golden.json` produces an actionable failure.
 
@@ -579,7 +603,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 - For each of N canonical intents (small set, e.g. 5 — same intents as the golden suite):
   - Submit `intent` to both clients.
   - Assert each `Result.ok(plan)`.
-  - Assert each `plan` passes schema validation (the *same* schema validation as production).
+  - Assert each `plan` passes schema validation (the _same_ schema validation as production).
   - **Do not** assert plan-equivalence between providers — that's expected to drift in shape. Schema validity is the universal contract; semantic equivalence is a Phase 2 question.
 - Output: a small markdown report (`agent-drift-<date>.md`) summarising which providers' plans diverged in step count, in scope assignment, in extraction shape — useful for guidance.md tuning.
 - **Skip gate**: skips cleanly if either `ANTHROPIC_CI=1` or `OLLAMA_CI=1` is not set; emits a `pino.info` so the CI run is auditable.
@@ -642,6 +666,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
 - **TODO.md entries** (added by this spec):
 
   Under `## General`:
+
   ```
   - FEAT-011 follow-up: when pi-agent-core's public API changes (esp. the Agent
     constructor shape or event-payload schema), update src/client/pi-adapter.ts.
@@ -663,6 +688,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
   ```
 
   Under `## Security`:
+
   ```
   - FEAT-011 follow-up: every model bump (Anthropic or Ollama) must run the
     sanitizer + scope-enforcer property tests AND the provider-drift suite
@@ -675,6 +701,7 @@ Test files mirror source structure under `tests/` (one convention per package, p
   ```
 
   Under `## Testing`:
+
   ```
   - FEAT-011 follow-up: the e2e/golden/ suite needs a regenerate script with a
     human approval gate (a pnpm script that diffs the new plan against the old
@@ -691,7 +718,7 @@ The author of the implementation must verify, before flipping the status:
 1. `pnpm --filter @yantra/agent build` succeeds clean on macOS, Windows, and Ubuntu.
 2. `pnpm --filter @yantra/agent test` passes 100% in both `LLM_PROVIDER=anthropic` (with `ANTHROPIC_API_KEY` set) and `LLM_PROVIDER=none` CI dimensions.
 3. With `LLM_PROVIDER=anthropic`, `yantra ask "what time is it in Tokyo right now?"` produces a card whose summary text was clearly LLM-generated (the synthesis path lit up via TASK-012), with `agent.jsonl` containing exactly 2 entries (request + response), `provider_id: anthropic:claude-sonnet-4-...`, `cost_estimate_usd > 0`, and `prompt_sanitized` containing no PII patterns from the query.
-4. With `LLM_PROVIDER=none`, the same `yantra ask` command returns a rule-based summary (FEAT-007's fallback) with `agent.jsonl` containing exactly 2 entries showing `outcome: "provider_error"` and `provider_id: "null"` — the audit trail records the *intent* to call even when no LLM is available.
+4. With `LLM_PROVIDER=none`, the same `yantra ask` command returns a rule-based summary (FEAT-007's fallback) with `agent.jsonl` containing exactly 2 entries showing `outcome: "provider_error"` and `provider_id: "null"` — the audit trail records the _intent_ to call even when no LLM is available.
 5. Hand-construct a deliberately-malformed prompt expectation (intent that the agent is likely to misjudge — e.g., "give me a plan that fills my password into a Google search box"); verify the agent emits a `Plan` that either (a) refuses (no `FillStep` against `password`) or (b) emits a malformed plan that the semantic validator catches; in case (b), confirm exactly 2 re-prompt attempts before final `kind: "llm_validation_failed"` with structured errors and no run aborting outside the typed-error path.
 6. Run `tests-integration/provider-drift.spec.ts` once locally with both `ANTHROPIC_CI=1` and `OLLAMA_CI=1`; confirm both providers produce schema-valid plans on all canonical intents.
 

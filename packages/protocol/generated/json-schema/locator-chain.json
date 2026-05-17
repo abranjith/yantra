@@ -17,10 +17,7 @@
               "description": "Recorded step index."
             }
           },
-          "required": [
-            "kind",
-            "step_index"
-          ],
+          "required": ["kind", "step_index"],
           "additionalProperties": false
         },
         {
@@ -37,10 +34,7 @@
               "description": "Human-readable workflow locator key."
             }
           },
-          "required": [
-            "kind",
-            "name"
-          ],
+          "required": ["kind", "name"],
           "additionalProperties": false
         },
         {
@@ -92,10 +86,7 @@
                           "description": "Exact accessible name value."
                         }
                       },
-                      "required": [
-                        "kind",
-                        "value"
-                      ],
+                      "required": ["kind", "value"],
                       "additionalProperties": false
                     },
                     {
@@ -115,11 +106,7 @@
                           "description": "Regex flags such as i or im."
                         }
                       },
-                      "required": [
-                        "kind",
-                        "pattern",
-                        "flags"
-                      ],
+                      "required": ["kind", "pattern", "flags"],
                       "additionalProperties": false
                     }
                   ],
@@ -143,12 +130,7 @@
               "description": "Optional relative anchor."
             }
           },
-          "required": [
-            "kind",
-            "role",
-            "name_match",
-            "near"
-          ],
+          "required": ["kind", "role", "name_match", "near"],
           "additionalProperties": false
         }
       ],

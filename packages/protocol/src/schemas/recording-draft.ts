@@ -82,7 +82,11 @@ const LocatorIntentJsonSchema = z
 export const RankedCandidateSchema = z
   .object({
     candidate: LocatorIntentJsonSchema.describe('The locator intent for this candidate'),
-    score: z.number().min(0).max(1.5).describe('Ranking score from 0..1 (may be slightly > 1 for boosted candidates)'),
+    score: z
+      .number()
+      .min(0)
+      .max(1.5)
+      .describe('Ranking score from 0..1 (may be slightly > 1 for boosted candidates)'),
     rank_reason: z.string().describe('Short human label explaining the score'),
   })
   .describe('One entry in the ranked locator candidate chain');
@@ -106,14 +110,21 @@ export type InputTypeHint = z.infer<typeof InputTypeHintSchema>;
 const BaseActionFields = {
   ts: z.string().describe('ISO-8601 timestamp (page clock via performance.now() + timeOrigin)'),
   url_before: z.string().url().describe('Page URL at the time of the action'),
-  url_after: z.string().url().nullable().describe('Page URL after the action, null if no navigation within 500ms'),
+  url_after: z
+    .string()
+    .url()
+    .nullable()
+    .describe('Page URL after the action, null if no navigation within 500ms'),
 };
 
 export const ClickActionSchema = z
   .object({
     kind: z.literal('click'),
     element_descriptor: ElementDescriptorSchema,
-    candidate_chain: z.array(RankedCandidateSchema).max(5).describe('Top-5 ranked locator candidates'),
+    candidate_chain: z
+      .array(RankedCandidateSchema)
+      .max(5)
+      .describe('Top-5 ranked locator candidates'),
     ...BaseActionFields,
   })
   .describe('A user click event');
@@ -137,10 +148,19 @@ export const FillActionSchema = z
   .object({
     kind: z.literal('fill'),
     element_descriptor: ElementDescriptorSchema,
-    candidate_chain: z.array(RankedCandidateSchema).max(5).describe('Top-5 ranked locator candidates'),
+    candidate_chain: z
+      .array(RankedCandidateSchema)
+      .max(5)
+      .describe('Top-5 ranked locator candidates'),
     ...BaseActionFields,
-    raw_value: z.literal('<redacted>').describe('Always the literal string "<redacted>" — type system enforces this'),
-    value_length: z.number().int().nonnegative().describe('Number of code points the user typed (not PII)'),
+    raw_value: z
+      .literal('<redacted>')
+      .describe('Always the literal string "<redacted>" — type system enforces this'),
+    value_length: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe('Number of code points the user typed (not PII)'),
     input_type: InputTypeHintSchema,
   })
   .describe('A form fill event — value is always redacted');
@@ -159,7 +179,9 @@ export const NavigateActionSchema = z
       .int()
       .nonnegative()
       .nullable()
-      .describe('Index of the click action that triggered this navigation, null for non-click navigations'),
+      .describe(
+        'Index of the click action that triggered this navigation, null for non-click navigations',
+      ),
   })
   .describe('A page navigation event');
 
@@ -189,11 +211,7 @@ export type NavigateAction = z.infer<typeof NavigateActionSchema>;
 export type WaitAction = z.infer<typeof WaitActionSchema>;
 
 /** Pre-redaction input type — only used inside the recorder module, never exported publicly. */
-export type RawCapturedActionInput =
-  | ClickAction
-  | RawFillAction
-  | NavigateAction
-  | WaitAction;
+export type RawCapturedActionInput = ClickAction | RawFillAction | NavigateAction | WaitAction;
 
 // ---------------------------------------------------------------------------
 // RecordingMetadata — session-level metadata
@@ -202,14 +220,21 @@ export type RawCapturedActionInput =
 export const RecordingMetadataSchema = z
   .object({
     start_ts: z.string().describe('ISO-8601 recording start timestamp'),
-    end_ts: z.string().nullable().describe('ISO-8601 recording end timestamp, null until stop/abort'),
+    end_ts: z
+      .string()
+      .nullable()
+      .describe('ISO-8601 recording end timestamp, null until stop/abort'),
     os: z.object({
       platform: z.string(),
       release: z.string(),
       arch: z.string(),
     }),
     chrome_version: z.string().describe('Full Chrome version string, e.g. "124.0.6367.91"'),
-    chrome_major: z.number().int().positive().describe('Chrome major version, parsed from chrome_version'),
+    chrome_major: z
+      .number()
+      .int()
+      .positive()
+      .describe('Chrome major version, parsed from chrome_version'),
     yantra_version: z.string().describe('yantra CLI version from package.json'),
     initial_url: z.string().describe('First navigation URL captured during the session'),
     capture_count: z.number().int().nonnegative().describe('Total number of captured actions'),
@@ -238,7 +263,10 @@ export const RecordingDraftSchema = z
   .object({
     schema_version: z.literal('0.1').describe('Schema version for forward-compatibility checks'),
     recording_id: z.string().min(1).describe('ULID-formatted recording identifier'),
-    workflow_name_hint: z.string().min(1).describe('Workflow name hint from RecordingSession.start()'),
+    workflow_name_hint: z
+      .string()
+      .min(1)
+      .describe('Workflow name hint from RecordingSession.start()'),
     started_at: z.string().describe('ISO-8601 session start timestamp'),
     stopped_at: z.string().describe('ISO-8601 session stop timestamp'),
     stop_reason: StopReasonSchema.describe('Reason the recording ended'),

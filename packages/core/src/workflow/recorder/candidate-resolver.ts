@@ -58,14 +58,14 @@ function isValidCandidate(raw: RawInPageCandidate): boolean {
   if (typeof raw.rank_reason !== 'string') return false;
   if (typeof raw.candidate !== 'object' || raw.candidate === null) return false;
   const c = raw.candidate as Record<string, unknown>;
-  if (typeof c['kind'] !== 'string') return false;
+  if (typeof c.kind !== 'string') return false;
   return true;
 }
 
 function fallbackChain(xpathFallback: string): RankedCandidate[] {
   return [
     {
-      candidate: { kind: 'xpath', expression: xpathFallback } as RankedCandidate['candidate'],
+      candidate: { kind: 'xpath', expression: xpathFallback },
       score: 0.1,
       rank_reason: 'absolute XPath (last resort — in-page ranking unavailable)',
     },

@@ -148,9 +148,9 @@ describe('@no-llm launch-options', () => {
     });
 
     it('rejects unknown profile kind', () => {
-      expect(() =>
-        parseLaunchOptions({ profile: { kind: 'unknown' } }),
-      ).toThrow(BrowserLaunchError);
+      expect(() => parseLaunchOptions({ profile: { kind: 'unknown' } })).toThrow(
+        BrowserLaunchError,
+      );
     });
   });
 
@@ -187,5 +187,3 @@ describe('@no-llm launch-options', () => {
     });
   });
 });
-
-

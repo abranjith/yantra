@@ -7,4 +7,3 @@ describe('@no-llm core smoke', () => {
     expect(CORE_PROTOCOL_VERSION).toBe('0.0.0');
   });
 });
-
