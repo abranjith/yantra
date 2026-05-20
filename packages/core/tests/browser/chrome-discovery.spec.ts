@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { accessSync } from 'node:fs';
+import { accessSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ vi.mock('node:child_process', () => ({
 }));
 vi.mock('node:fs', () => ({
   accessSync: vi.fn(),
+  readdirSync: vi.fn(() => []),
   constants: { X_OK: 1 },
 }));
 vi.mock('node:os', () => ({
@@ -19,6 +20,7 @@ vi.mock('node:os', () => ({
 
 const mockExecFileSync = vi.mocked(execFileSync);
 const mockAccessSync = vi.mocked(accessSync);
+const mockReaddirSync = vi.mocked(readdirSync);
 
 function makeVersionOutput(versionString = 'Google Chrome 124.0.6367.91'): string {
   return `${versionString}\n`;
@@ -73,6 +75,7 @@ describe('@no-llm chrome-discovery', () => {
     });
 
     it('returns null when version output is malformed', async () => {
+      setPlatform('linux');
       mockAccessSync.mockReturnValue(undefined);
       mockExecFileSync.mockReturnValue('not a version\n');
 
@@ -83,6 +86,7 @@ describe('@no-llm chrome-discovery', () => {
 
   describe('override path', () => {
     it('returns result for valid executable with correct version', async () => {
+      setPlatform('linux');
       mockAccessSync.mockReturnValue(undefined);
       mockExecFileSync.mockReturnValue(makeVersionOutput());
 
@@ -94,6 +98,7 @@ describe('@no-llm chrome-discovery', () => {
     });
 
     it('returns null for non-existent or non-executable path', async () => {
+      setPlatform('linux');
       mockAccessSync.mockImplementation(() => {
         throw new Error('ENOENT');
       });
@@ -211,6 +216,7 @@ describe('@no-llm chrome-discovery', () => {
 
     it('prefers HKLM registry over standard paths', async () => {
       mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
       mockExecFileSync.mockImplementation((cmd: string, args: unknown) => {
         const argsArr = args as string[];
         if (
@@ -221,22 +227,21 @@ describe('@no-llm chrome-discovery', () => {
         ) {
           return makeRegistryOutput('C:\\Program Files\\Custom\\chrome.exe');
         }
-        if (String(cmd).includes('chrome.exe')) {
-          return makeVersionOutput();
-        }
         throw new Error('not found');
       });
 
       const result = await detectChrome();
       expect(result?.path).toBe('C:\\Program Files\\Custom\\chrome.exe');
+      expect(result?.version).toBe('124.0.6367.91');
+      expect(result?.majorVersion).toBe(124);
     });
 
     it('falls back to Program Files when registry is empty', async () => {
       const programFilesPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
       mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
       mockExecFileSync.mockImplementation((cmd: string) => {
         if (String(cmd) === 'reg') throw new Error('key not found');
-        if (String(cmd) === programFilesPath) return makeVersionOutput();
         throw new Error('not found');
       });
 
@@ -247,18 +252,139 @@ describe('@no-llm chrome-discovery', () => {
     it('handles missing reg binary gracefully', async () => {
       const programFilesPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
       mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
       mockExecFileSync.mockImplementation((cmd: string) => {
         if (String(cmd) === 'reg') {
           const err = new Error('ENOENT') as NodeJS.ErrnoException;
           err.code = 'ENOENT';
           throw err;
         }
-        if (String(cmd) === programFilesPath) return makeVersionOutput();
         throw new Error('not found');
       });
 
       const result = await detectChrome();
       expect(result?.path).toBe(programFilesPath);
+    });
+
+    // Regression: chrome.exe --version on Windows opens a visible browser window
+    // and prints nothing to stdout. Discovery must NOT execute the Chrome binary.
+    it('never executes the Chrome binary to read its version', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+
+      expect(result).not.toBeNull();
+      const executedCommands = mockExecFileSync.mock.calls.map((call) => String(call[0]));
+      expect(executedCommands.every((cmd) => !cmd.toLowerCase().includes('chrome'))).toBe(true);
+    });
+
+    it('reads the version from the versioned Application subfolder', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue([
+        'chrome.exe',
+        'master_preferences',
+        '124.0.6367.91',
+      ] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+      expect(result?.version).toBe('124.0.6367.91');
+      expect(result?.majorVersion).toBe(124);
+    });
+
+    it('picks the newest version folder when several are present', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue([
+        '123.0.6312.59',
+        '124.0.6367.91',
+        '123.0.6312.105',
+      ] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+      expect(result?.version).toBe('124.0.6367.91');
+    });
+
+    it('falls back to PowerShell VersionInfo when no version folder exists', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['chrome.exe'] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        if (String(cmd) === 'powershell') return '124.0.6367.91\r\n';
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+      expect(result?.version).toBe('124.0.6367.91');
+    });
+
+    it('suppresses the reg query stderr leak via stdio config', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        throw new Error('not found');
+      });
+
+      await detectChrome();
+
+      const regCall = mockExecFileSync.mock.calls.find((call) => String(call[0]) === 'reg');
+      expect(regCall).toBeDefined();
+      const opts = regCall?.[2] as { stdio?: unknown } | undefined;
+      expect(opts?.stdio).toEqual(['ignore', 'pipe', 'ignore']);
+    });
+
+    it('returns null when the binary is absent', async () => {
+      mockAccessSync.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+      expect(result).toBeNull();
+    });
+
+    it('returns null when no version can be determined', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['chrome.exe', 'master_preferences'] as never);
+      mockExecFileSync.mockImplementation((cmd: string) => {
+        if (String(cmd) === 'reg') throw new Error('key not found');
+        // PowerShell fallback also yields nothing parseable
+        if (String(cmd) === 'powershell') return '';
+        throw new Error('not found');
+      });
+
+      const result = await detectChrome();
+      expect(result).toBeNull();
+    });
+
+    it('routes a Windows override through metadata probing, not execution', async () => {
+      mockAccessSync.mockReturnValue(undefined);
+      mockReaddirSync.mockReturnValue(['124.0.6367.91'] as never);
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error('should not exec the override binary on win32');
+      });
+
+      const result = await detectChrome({
+        override: 'C:\\custom\\Chrome\\Application\\chrome.exe',
+      });
+      expect(result?.path).toBe('C:\\custom\\Chrome\\Application\\chrome.exe');
+      expect(result?.version).toBe('124.0.6367.91');
     });
   });
 

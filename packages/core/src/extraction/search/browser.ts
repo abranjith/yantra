@@ -21,6 +21,31 @@ interface BrowserSearchRow {
   readonly snippet: string | null;
 }
 
+interface BrowserSearchPageResult {
+  readonly rows: readonly BrowserSearchRow[];
+  /** True when DuckDuckGo served its anti-bot anomaly/challenge page. */
+  readonly blocked: boolean;
+}
+
+/**
+ * Chrome flags that make the headless session look like an ordinary desktop
+ * browser. DuckDuckGo's anomaly detector challenges requests whose User-Agent
+ * advertises "HeadlessChrome" or that expose `navigator.webdriver` (set by
+ * puppeteer's default `--enable-automation`). Without these, the html endpoint
+ * returns a CAPTCHA page with zero result rows instead of search results.
+ */
+function antiFingerprintArgs(chromeMajor: number | undefined): readonly string[] {
+  const major = chromeMajor && chromeMajor > 0 ? chromeMajor : 124;
+  const userAgent =
+    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ` +
+    `(KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+  return [
+    `--user-agent=${userAgent}`,
+    '--disable-blink-features=AutomationControlled',
+    '--lang=en-US,en',
+  ];
+}
+
 /**
  * Browser-only search fallback using DuckDuckGo's HTML endpoint.
  */
@@ -46,11 +71,14 @@ export class BrowserSearchProvider implements SearchProvider {
     const searchUrl = this.buildSearchUrl(query);
     const ethicsDecision = await this.ethicsGate.checkUrl(searchUrl);
     if (!ethicsDecision.ok) {
-      throw new BrowserSearchError('Browser search URL refused by ethics gate.', {
-        provider: this.name,
-        host: safeHost(searchUrl),
-        code: `ethics-refused:${ethicsDecision.reason}:${ethicsDecision.detail}`,
-      });
+      throw new BrowserSearchError(
+        `Browser search URL refused by ethics gate [${ethicsDecision.reason}: ${ethicsDecision.detail}] (host: ${safeHost(searchUrl)}).`,
+        {
+          provider: this.name,
+          host: safeHost(searchUrl),
+          code: `ethics-refused:${ethicsDecision.reason}:${ethicsDecision.detail}`,
+        },
+      );
     }
 
     if (opts.signal.aborted) {
@@ -61,18 +89,24 @@ export class BrowserSearchProvider implements SearchProvider {
       });
     }
 
+    const detected = await this.browserProvider.detectChrome().catch(() => null);
     const session = await this.browserProvider.launch({
       profile: { kind: 'ephemeral' },
       headless: true,
+      extraArgs: [...antiFingerprintArgs(detected?.majorVersion)],
     });
 
     try {
       const page = await session.newPage();
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
 
-      const rows = await page.evaluate(() => {
+      const { rows, blocked } = await page.evaluate((): BrowserSearchPageResult => {
+        const blockedPage =
+          document.querySelector(
+            '#challenge-form, .anomaly-modal__modal, form[action*="anomaly"]',
+          ) !== null;
         const links = Array.from(document.querySelectorAll('a.result__a'));
-        return links.map((anchor) => {
+        const mappedRows = links.map((anchor) => {
           const result = anchor.closest('.result');
           const snippetElement = result?.querySelector('.result__snippet');
           const snippet = snippetElement?.textContent ?? null;
@@ -82,6 +116,7 @@ export class BrowserSearchProvider implements SearchProvider {
             snippet: snippet?.trim() ?? null,
           };
         });
+        return { rows: mappedRows, blocked: blockedPage };
       });
 
       const mapped = rows
@@ -90,6 +125,18 @@ export class BrowserSearchProvider implements SearchProvider {
         .slice(0, Math.max(1, opts.limit));
 
       if (mapped.length === 0) {
+        if (blocked) {
+          throw new BrowserSearchError(
+            'DuckDuckGo served an anti-bot challenge instead of search results. ' +
+              'The automated browser was flagged; retry shortly, or configure a keyed ' +
+              'search provider (`--provider tavily` or `--provider brave`) to avoid scraping.',
+            {
+              provider: this.name,
+              host: safeHost(searchUrl),
+              code: 'anomaly-challenge',
+            },
+          );
+        }
         throw new BrowserSearchError('Browser search did not return result rows.', {
           provider: this.name,
           host: safeHost(searchUrl),

@@ -63,7 +63,9 @@ export async function buildOrchestratorRuntime(
       clearTimeout: (handle) => clearTimeout(handle),
     },
   );
-  const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent);
+  const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent, {
+    enforceRobotsTxt: ethicsConfig.robotsEnabled,
+  });
 
   const profileStore = new LocalProfileStore({ logger });
   const browserProvider = new LocalBrowserProvider({ profileStore, logger });

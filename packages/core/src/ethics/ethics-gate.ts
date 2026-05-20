@@ -5,23 +5,32 @@ import type { BlocklistImpl } from './blocklist.js';
 import type { RateLimiterImpl } from './rate-limiter.js';
 import type { RobotsCacheImpl } from './robots.js';
 
+export interface EthicsGateOptions {
+  readonly enforceRobotsTxt?: boolean;
+}
+
 /**
- * Composite ethics gate: blocklist → robots.txt → rate-limiter.
+ * Composite ethics gate: blocklist → optional robots.txt → rate-limiter.
  *
  * Blocklist is checked first (cheap, synchronous pattern match).
- * Robots.txt is checked second (cached, one network fetch per host per 24h).
+ * Robots.txt is checked second only when enforcement is enabled.
  * Rate-limiter is last — it may sleep to acquire a token.
  *
  * Throws EthicsRefusedError on any disallow.
- * The gate is NON-BYPASSABLE in MVP — no config flag disables it.
+ * Blocklist + rate-limiter remain non-bypassable.
  */
 export class EthicsGateImpl implements EthicsGate {
+  private readonly enforceRobotsTxt: boolean;
+
   constructor(
     private readonly blocklist: BlocklistImpl,
     private readonly robots: RobotsCacheImpl,
     private readonly rateLimiter: RateLimiterImpl,
     private readonly userAgent: string,
-  ) {}
+    options?: EthicsGateOptions,
+  ) {
+    this.enforceRobotsTxt = options?.enforceRobotsTxt ?? false;
+  }
 
   async check(
     url: string,
@@ -44,18 +53,20 @@ export class EthicsGateImpl implements EthicsGate {
       );
     }
 
-    // 2. Robots.txt — cached, fail-closed on errors
-    const robotsReason = await this.robots.reasonIfDisallowed(url, this.userAgent);
-    if (robotsReason !== null) {
-      throw new EthicsRefusedError(
-        {
-          host,
-          rule: 'robots.txt',
-          reason: robotsReason,
-          source: 'robots',
-        },
-        ctx,
-      );
+    // 2. Robots.txt — opt-in check, cached and fail-closed when enabled
+    if (this.enforceRobotsTxt) {
+      const robotsReason = await this.robots.reasonIfDisallowed(url, this.userAgent);
+      if (robotsReason !== null) {
+        throw new EthicsRefusedError(
+          {
+            host,
+            rule: 'robots.txt',
+            reason: robotsReason,
+            source: 'robots',
+          },
+          ctx,
+        );
+      }
     }
 
     // 3. Rate-limiter — token bucket, may sleep

@@ -104,4 +104,13 @@ describe('@no-llm RobotsCacheImpl', () => {
     expect(reason).toBeTypeOf('string');
     expect(reason).toContain('example.com');
   });
+
+  it('reasonIfDisallowed reports unavailable robots policy on fail-closed fetches', async () => {
+    mockFetch(500, 'Server Error');
+
+    const cache = new RobotsCacheImpl('TestBot/1.0');
+    const reason = await cache.reasonIfDisallowed('https://example.com/page', 'TestBot/1.0');
+    expect(reason).toContain('Robots policy unavailable');
+    expect(reason).toContain('example.com');
+  });
 });

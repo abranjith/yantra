@@ -30,12 +30,17 @@ function parseFixtureRows(): { href: string; title: string; snippet: string | nu
 }
 
 class FakePage implements Page {
+  public constructor(private readonly blocked = false) {}
+
   public async goto(_url: string): Promise<unknown> {
     return { ok: true };
   }
 
   public async evaluate<T>(_fn: () => T): Promise<T> {
-    return parseFixtureRows() as unknown as T;
+    return {
+      rows: this.blocked ? [] : parseFixtureRows(),
+      blocked: this.blocked,
+    } as unknown as T;
   }
 
   public async close(): Promise<void> {
@@ -62,8 +67,10 @@ class FakeSession implements BrowserSession {
   };
   public readonly profilePath = '/tmp/fake-profile';
 
+  public constructor(private readonly blocked = false) {}
+
   public async newPage(): Promise<Page> {
-    return new FakePage();
+    return new FakePage(this.blocked);
   }
 
   public async close(): Promise<void> {
@@ -110,6 +117,68 @@ describe('@no-llm extraction/search/browser', () => {
     expect(rows[2]?.url).toBe('https://example.com/three');
   });
 
+  it('throws a clear anomaly error when DuckDuckGo serves an anti-bot challenge', async () => {
+    const provider = new BrowserSearchProvider({
+      browserProvider: {
+        launch: async () => new FakeSession(true),
+        detectChrome: async () => null,
+      },
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      },
+    });
+
+    const error = await provider
+      .search('ai news', { limit: 3, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    const msg = (error as Error).message;
+    expect(msg).toContain('anti-bot challenge');
+    expect(msg).not.toContain('did not return result rows');
+    expect((error as { context?: { code?: string } }).context?.code).toBe('anomaly-challenge');
+  });
+
+  it('launches with a non-headless User-Agent and automation masking to avoid the bot wall', async () => {
+    let launchOpts: { extraArgs?: readonly string[] } | undefined;
+    const provider = new BrowserSearchProvider({
+      browserProvider: {
+        launch: async (opts) => {
+          launchOpts = opts;
+          return new FakeSession();
+        },
+        detectChrome: async () => ({
+          path: '/fake/chrome',
+          version: '130.0.6700.0',
+          majorVersion: 130,
+          channel: 'stable',
+          source: 'system',
+        }),
+      },
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      },
+    });
+
+    await provider.search('ai news', { limit: 3, signal: new AbortController().signal });
+
+    const args = launchOpts?.extraArgs ?? [];
+    const uaArg = args.find((a) => a.startsWith('--user-agent='));
+    expect(uaArg).toBeDefined();
+    expect(uaArg).not.toContain('HeadlessChrome');
+    // User-Agent reflects the detected Chrome major version.
+    expect(uaArg).toContain('Chrome/130.0.0.0');
+    expect(args).toContain('--disable-blink-features=AutomationControlled');
+  });
+
   it('refuses before browser launch when ethics gate blocks search url', async () => {
     let launched = 0;
     const provider = new BrowserSearchProvider({
@@ -139,5 +208,68 @@ describe('@no-llm extraction/search/browser', () => {
     ).rejects.toThrow();
 
     expect(launched).toBe(0);
+  });
+
+  it('error message includes reason and detail when ethics gate refuses', async () => {
+    const provider = new BrowserSearchProvider({
+      browserProvider: {
+        launch: async () => new FakeSession(),
+        detectChrome: async () => null,
+      },
+      ethicsGate: {
+        checkUrl: async () => ({
+          ok: false,
+          reason: 'robots' as const,
+          detail: 'Disallowed by robots.txt at "html.duckduckgo.com"',
+        }),
+      },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      },
+    });
+
+    const error = await provider
+      .search("today's top news", { limit: 3, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    const msg = (error as Error).message;
+    expect(msg).toContain('robots');
+    expect(msg).toContain('Disallowed by robots.txt at "html.duckduckgo.com"');
+    expect(msg).toContain('html.duckduckgo.com');
+  });
+
+  it.each([
+    ['robots', 'Disallowed by robots.txt at "example.com"'],
+    ['blocklist', 'Host is in the ads blocklist'],
+    ['rate-limit', 'rate limit exceeded'],
+  ] as const)('error message surfaces reason=%s for ethics refusal', async (reason, detail) => {
+    const provider = new BrowserSearchProvider({
+      browserProvider: {
+        launch: async () => new FakeSession(),
+        detectChrome: async () => null,
+      },
+      ethicsGate: {
+        checkUrl: async () => ({ ok: false, reason, detail }),
+      },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      },
+    });
+
+    const error = await provider
+      .search('test query', { limit: 1, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    const msg = (error as Error).message;
+    expect(msg).toContain(reason);
+    expect(msg).toContain(detail);
   });
 });

@@ -30,7 +30,7 @@
     "verify-generated": "tsx scripts/verify-generated.ts",
     "verify-exports": "tsx scripts/verify-exports.ts",
     "verify": "tsx scripts/verify-generated.ts && tsx scripts/verify-exports.ts && tsc --noEmit",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
   },
   "dependencies": {
     "zod": "^3.24.1",

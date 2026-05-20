@@ -27,17 +27,39 @@ export class RobotsCacheImpl {
   async isAllowed(url: string, userAgent: string): Promise<boolean> {
     const parser = await this.getParser(url);
     if (parser === null) return false; // fail-closed on fetch error
-    const allowed = parser.isAllowed(url, userAgent);
+    const allowed = parser.isAllowed(url, resolveUserAgent(userAgent, this.userAgent));
     return allowed !== false; // treat undefined (no matching rule) as allowed
   }
 
   async reasonIfDisallowed(url: string, userAgent: string): Promise<string | null> {
-    if (await this.isAllowed(url, userAgent)) return null;
+    const parser = await this.getParser(url);
+    if (parser === null) {
+      try {
+        const host = new URL(url).hostname;
+        return `Robots policy unavailable at "${host}" (could not fetch robots.txt)`;
+      } catch {
+        return 'Robots policy unavailable (could not fetch robots.txt)';
+      }
+    }
+
+    const allowed = parser.isAllowed(url, resolveUserAgent(userAgent, this.userAgent));
+    if (allowed !== false) return null;
+    const lineNumber = parser.getMatchingLineNumber(
+      url,
+      resolveUserAgent(userAgent, this.userAgent),
+    );
+
     try {
       const host = new URL(url).hostname;
-      return `Disallowed by robots.txt at "${host}"`;
+      if (lineNumber >= 0) {
+        return `Disallowed by robots.txt at "${host}" (matched line ${lineNumber})`;
+      }
+      return `Disallowed by robots.txt at "${host}" (matched disallow rule)`;
     } catch {
-      return 'Disallowed by robots.txt';
+      if (lineNumber >= 0) {
+        return `Disallowed by robots.txt (matched line ${lineNumber})`;
+      }
+      return 'Disallowed by robots.txt (matched disallow rule)';
     }
   }
 
@@ -69,14 +91,14 @@ export class RobotsCacheImpl {
     let status: number;
 
     try {
-      const result = await fetchWithTimeout(robotsUrl, FETCH_TIMEOUT_MS);
+      const result = await fetchWithTimeout(robotsUrl, FETCH_TIMEOUT_MS, this.userAgent);
       status = result.status;
       content = result.body;
     } catch {
       // Timeout or network error — try http fallback
       try {
         const httpUrl = robotsUrl.replace('https://', 'http://');
-        const result = await fetchWithTimeout(httpUrl, FETCH_TIMEOUT_MS);
+        const result = await fetchWithTimeout(httpUrl, FETCH_TIMEOUT_MS, this.userAgent);
         status = result.status;
         content = result.body;
       } catch {
@@ -129,16 +151,25 @@ function openRobotsParser(): RobotsParser {
 async function fetchWithTimeout(
   url: string,
   timeoutMs: number,
+  userAgent: string,
 ): Promise<{ status: number; body: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'user-agent': userAgent },
+    });
     const body = await response.text();
     return { status: response.status, body };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function resolveUserAgent(userAgent: string, fallbackUserAgent: string): string {
+  const normalized = userAgent.trim();
+  return normalized.length > 0 ? normalized : fallbackUserAgent;
 }
 
 function extractHost(url: string): string {

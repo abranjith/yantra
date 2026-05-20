@@ -27,7 +27,11 @@ describe('@no-llm EthicsGateImpl', () => {
     vi.restoreAllMocks();
   });
 
-  const makeGate = async (robotsStatus = 200, robotsBody = 'User-agent: *\n') => {
+  const makeGate = async (
+    opts: { robotsStatus?: number; robotsBody?: string; enforceRobotsTxt?: boolean } = {},
+  ) => {
+    const { robotsStatus = 200, robotsBody = 'User-agent: *\n', enforceRobotsTxt = false } = opts;
+
     vi.mocked(fetch).mockResolvedValue({
       status: robotsStatus,
       text: () => Promise.resolve(robotsBody),
@@ -43,7 +47,9 @@ describe('@no-llm EthicsGateImpl', () => {
       fakeClock,
     );
 
-    return new EthicsGateImpl(blocklist, robots, rateLimiter, 'YantraBot/0.1');
+    return new EthicsGateImpl(blocklist, robots, rateLimiter, 'YantraBot/0.1', {
+      enforceRobotsTxt,
+    });
   };
 
   it('passes for a clean URL with no restrictions', async () => {
@@ -70,15 +76,31 @@ describe('@no-llm EthicsGateImpl', () => {
     }
   });
 
-  it('throws EthicsRefusedError for a robots-disallowed URL', async () => {
-    const gate = await makeGate(200, 'User-agent: *\nDisallow: /private/');
+  it('does not enforce robots rules by default', async () => {
+    const gate = await makeGate({ robotsBody: 'User-agent: *\nDisallow: /' });
+    await expect(
+      gate.check('https://example.com/private/secret', 'navigate', fakeCtx),
+    ).resolves.toBeUndefined();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('throws EthicsRefusedError for a robots-disallowed URL when opt-in is enabled', async () => {
+    const gate = await makeGate({
+      robotsStatus: 200,
+      robotsBody: 'User-agent: *\nDisallow: /private/',
+      enforceRobotsTxt: true,
+    });
     await expect(
       gate.check('https://example.com/private/secret', 'navigate', fakeCtx),
     ).rejects.toThrow(EthicsRefusedError);
   });
 
-  it('robots error has source=robots', async () => {
-    const gate = await makeGate(200, 'User-agent: *\nDisallow: /');
+  it('robots error has source=robots when opt-in is enabled', async () => {
+    const gate = await makeGate({
+      robotsStatus: 200,
+      robotsBody: 'User-agent: *\nDisallow: /',
+      enforceRobotsTxt: true,
+    });
     try {
       await gate.check('https://example.com/any', 'navigate', fakeCtx);
     } catch (err) {
@@ -89,7 +111,7 @@ describe('@no-llm EthicsGateImpl', () => {
 
   it('blocklist check runs before robots (cheaper check first)', async () => {
     // If blocklist throws, fetch (robots) should never be called
-    const gate = await makeGate();
+    const gate = await makeGate({ enforceRobotsTxt: true });
     vi.mocked(fetch).mockClear();
 
     try {
@@ -101,15 +123,15 @@ describe('@no-llm EthicsGateImpl', () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it('does not throw for a 404 robots.txt (fail-open per RFC 9309)', async () => {
-    const gate = await makeGate(404, '');
+  it('does not throw for a 404 robots.txt when opt-in is enabled (fail-open per RFC 9309)', async () => {
+    const gate = await makeGate({ robotsStatus: 404, robotsBody: '', enforceRobotsTxt: true });
     await expect(
       gate.check('https://example.com/page', 'navigate', fakeCtx),
     ).resolves.toBeUndefined();
   });
 
-  it('throws for a 500 robots.txt (fail-closed)', async () => {
-    const gate = await makeGate(500, '');
+  it('throws for a 500 robots.txt when opt-in is enabled (fail-closed)', async () => {
+    const gate = await makeGate({ robotsStatus: 500, robotsBody: '', enforceRobotsTxt: true });
     await expect(gate.check('https://example.com/page', 'navigate', fakeCtx)).rejects.toThrow(
       EthicsRefusedError,
     );

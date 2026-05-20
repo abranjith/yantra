@@ -97,7 +97,7 @@ describe('@no-llm extraction/search/provider-selector', () => {
     expect(selected.name).toBe('browser');
   });
 
-  it('auto prefers tavily over brave when both keys are present', async () => {
+  it('auto prefers tavily when API keys are present', async () => {
     const selected = await selectSearchProvider({
       explicitProvider: 'auto',
       keychain: keychain({ 'tavily.api_key': 'a', 'brave.api_key': 'b' }),
@@ -109,10 +109,58 @@ describe('@no-llm extraction/search/provider-selector', () => {
     expect(selected.name).toBe('tavily');
   });
 
-  it('auto falls back to browser when no keys are available', async () => {
+  it('auto uses brave when tavily key is missing', async () => {
+    const selected = await selectSearchProvider({
+      explicitProvider: 'auto',
+      keychain: keychain({ 'brave.api_key': 'b' }),
+      browserProvider: browserProvider(),
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger,
+    });
+
+    expect(selected.name).toBe('brave');
+  });
+
+  it('auto uses browser when no keys are available', async () => {
     const selected = await selectSearchProvider({
       explicitProvider: 'auto',
       keychain: keychain({}),
+      browserProvider: browserProvider(),
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger,
+    });
+
+    expect(selected.name).toBe('browser');
+  });
+
+  it('selects brave when explicitly requested and key exists', async () => {
+    const selected = await selectSearchProvider({
+      explicitProvider: 'brave',
+      keychain: keychain({ 'brave.api_key': 'k' }),
+      browserProvider: browserProvider(),
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger,
+    });
+
+    expect(selected.name).toBe('brave');
+  });
+
+  it('falls back to browser when explicit brave key is missing', async () => {
+    const selected = await selectSearchProvider({
+      explicitProvider: 'brave',
+      keychain: keychain({}),
+      browserProvider: browserProvider(),
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger,
+    });
+
+    expect(selected.name).toBe('browser');
+  });
+
+  it('browser provider selected explicitly', async () => {
+    const selected = await selectSearchProvider({
+      explicitProvider: 'browser',
+      keychain: keychain({ 'tavily.api_key': 'a', 'brave.api_key': 'b' }),
       browserProvider: browserProvider(),
       ethicsGate: { checkUrl: async () => ({ ok: true }) },
       logger,

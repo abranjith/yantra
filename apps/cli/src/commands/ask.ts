@@ -69,7 +69,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     .addOption(
       new Option(
         '--search-provider <provider>',
-        'search provider: auto|tavily|brave|browser',
+        'search provider (default: auto: tavily -> brave -> browser); tavily/brave require API keys',
       ).choices(['auto', 'tavily', 'brave', 'browser']),
     )
     .addOption(new Option('--limit <count>', 'number of cards to return').default('3'))
@@ -121,7 +121,9 @@ export async function createDefaultAskPipeline(query: AskQuery): Promise<AskPipe
       clearTimeout: (handle) => clearTimeout(handle),
     },
   );
-  const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent);
+  const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent, {
+    enforceRobotsTxt: ethicsConfig.robotsEnabled,
+  });
   const askEthicsGate = createAskEthicsAdapter(ethicsGate, {
     taskId: 'ask',
     runId: 'ask',

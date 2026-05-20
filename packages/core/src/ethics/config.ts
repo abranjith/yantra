@@ -12,12 +12,14 @@ export interface HostRateLimit {
 }
 
 export interface EthicsConfig {
+  readonly robotsEnabled: boolean;
   readonly userAgent: string;
   readonly rateLimitDefault: HostRateLimit;
   readonly rateLimitOverrides: ReadonlyMap<string, HostRateLimit>;
 }
 
 export const defaultEthicsConfig: EthicsConfig = {
+  robotsEnabled: false,
   userAgent: DEFAULT_USER_AGENT,
   rateLimitDefault: { tokensPerSecond: DEFAULT_TOKENS_PER_SECOND, burst: DEFAULT_BURST },
   rateLimitOverrides: new Map(),
@@ -39,6 +41,7 @@ export async function loadEthicsConfig(): Promise<EthicsConfig> {
 function parseEthicsConfig(raw: Record<string, unknown> | undefined): EthicsConfig {
   if (!raw) return defaultEthicsConfig;
 
+  const robotsEnabled = raw.robots_enabled === true;
   const userAgent = typeof raw.user_agent === 'string' ? raw.user_agent : DEFAULT_USER_AGENT;
 
   const rateLimit = raw.rate_limit as Record<string, unknown> | undefined;
@@ -55,7 +58,7 @@ function parseEthicsConfig(raw: Record<string, unknown> | undefined): EthicsConf
     }
   }
 
-  return { userAgent, rateLimitDefault, rateLimitOverrides };
+  return { robotsEnabled, userAgent, rateLimitDefault, rateLimitOverrides };
 }
 
 function parseHostRateLimit(raw: Record<string, unknown> | undefined): HostRateLimit | null {

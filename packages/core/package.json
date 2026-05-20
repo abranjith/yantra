@@ -35,7 +35,7 @@
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

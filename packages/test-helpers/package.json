@@ -21,7 +21,7 @@
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
   },
   "peerDependencies": {
     "vitest": "^2.1.0"

@@ -10,7 +10,7 @@
     "test": "vitest run",
     "lint": "eslint . --max-warnings=0 --ignore-pattern dist --ignore-pattern node_modules",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist .turbo *.tsbuildinfo"
+    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
   },
   "dependencies": {
     "@yantra/agent": "workspace:*",

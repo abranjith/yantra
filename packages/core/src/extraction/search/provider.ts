@@ -33,6 +33,10 @@ export interface SelectSearchProviderOptions {
 
 /**
  * Selects a concrete SearchProvider using config, env override, and keychain.
+ *
+ * `auto` prefers API providers when keys are present (tavily, then brave), and
+ * falls back to browser search when no API keys are available.
+ * Explicit provider requests still require their matching API keys.
  */
 export async function selectSearchProvider(
   options: SelectSearchProviderOptions,
@@ -43,36 +47,42 @@ export async function selectSearchProvider(
     options.config?.search?.provider ??
     'auto';
 
-  const hasTavily = await hasKey(options.keychain, 'tavily.api_key');
-  const hasBrave = await hasKey(options.keychain, 'brave.api_key');
-
-  if (configured === 'tavily') {
-    if (hasTavily) {
+  if (configured === 'auto') {
+    if (await hasKey(options.keychain, 'tavily.api_key')) {
       options.logger.info({ provider: 'tavily' }, 'selected search provider');
       return new TavilySearchProvider({ keychain: options.keychain });
     }
-    options.logger.warn('tavily requested but key missing; falling back');
+
+    if (await hasKey(options.keychain, 'brave.api_key')) {
+      options.logger.info({ provider: 'brave' }, 'selected search provider');
+      return new BraveSearchProvider({ keychain: options.keychain });
+    }
+
+    options.logger.info({ provider: 'browser' }, 'selected search provider');
+    return new BrowserSearchProvider({
+      browserProvider: options.browserProvider,
+      ethicsGate: options.ethicsGate,
+      logger: options.logger,
+    });
+  }
+
+  if (configured === 'tavily') {
+    if (await hasKey(options.keychain, 'tavily.api_key')) {
+      options.logger.info({ provider: 'tavily' }, 'selected search provider');
+      return new TavilySearchProvider({ keychain: options.keychain });
+    }
+    options.logger.warn('tavily requested but key missing; falling back to browser');
   }
 
   if (configured === 'brave') {
-    if (hasBrave) {
+    if (await hasKey(options.keychain, 'brave.api_key')) {
       options.logger.info({ provider: 'brave' }, 'selected search provider');
       return new BraveSearchProvider({ keychain: options.keychain });
     }
-    options.logger.warn('brave requested but key missing; falling back');
+    options.logger.warn('brave requested but key missing; falling back to browser');
   }
 
-  if (configured === 'auto') {
-    if (hasTavily) {
-      options.logger.info({ provider: 'tavily' }, 'selected search provider');
-      return new TavilySearchProvider({ keychain: options.keychain });
-    }
-    if (hasBrave) {
-      options.logger.info({ provider: 'brave' }, 'selected search provider');
-      return new BraveSearchProvider({ keychain: options.keychain });
-    }
-  }
-
+  // Explicit browser selection always resolves to browser.
   options.logger.info({ provider: 'browser' }, 'selected search provider');
   return new BrowserSearchProvider({
     browserProvider: options.browserProvider,
