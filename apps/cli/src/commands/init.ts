@@ -17,8 +17,10 @@
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { configPath } from '@yantra/core';
+import { configPath, defaultProfile, profilePath, saveProfile } from '@yantra/core';
 import { Command } from 'commander';
+
+import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 interface InitOptions {
   readonly provider?: string;
@@ -54,7 +56,7 @@ export function makeInitCommand(): Command {
           if (options.json === true) {
             process.stdout.write(
               `${JSON.stringify({
-                schemaVersion: '0.1',
+                schemaVersion: CLI_JSON_SCHEMA_VERSION,
                 kind: 'init',
                 status: 'already-initialized',
                 configPath: target,
@@ -73,10 +75,17 @@ export function makeInitCommand(): Command {
         const content = buildConfig(provider);
         await writeFile(target, content, { encoding: 'utf8', mode: 0o600 });
 
+        // Seed the human-editable personalization profile with defaults. Only
+        // created when absent (or on --reset) so hand edits are never clobbered.
+        const profileTarget = profilePath();
+        if (options.reset === true || !(await fileExists(profileTarget))) {
+          await saveProfile(defaultProfile(), profileTarget);
+        }
+
         if (options.json === true) {
           process.stdout.write(
             `${JSON.stringify({
-              schemaVersion: '0.1',
+              schemaVersion: CLI_JSON_SCHEMA_VERSION,
               kind: 'init',
               status: 'written',
               configPath: target,
@@ -117,7 +126,14 @@ function buildConfig(provider: string): string {
     '    model: llama3.1:8b',
     '',
     'search:',
-    "  provider: auto # 'auto' | 'tavily' | 'brave' | 'browser'",
+    "  provider: auto # 'auto' | 'google' | 'duckduckgo' | 'brave' | 'tavily'",
+    '  # order `auto` walks, skipping providers whose API key is missing.',
+    '  # google is opt-in (highest anti-bot friction) — add it explicitly if wanted.',
+    '  fallback_chain:',
+    '    - tavily',
+    '    - brave',
+    '    - duckduckgo',
+    '  # API keys live in the OS keychain (tavily.api_key / brave.api_key), never here.',
     '',
     'ethics:',
     '  robots_enabled: false # opt-in robots.txt enforcement',

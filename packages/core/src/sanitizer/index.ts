@@ -21,6 +21,7 @@ import {
 import { truncateUtf8 } from './truncate.js';
 
 export type { SanitizationProfile } from './profiles.js';
+export { brandSanitized, type Sanitized } from './brand.js';
 
 export type TransformationTag =
   | 'form-value-strip'

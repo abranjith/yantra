@@ -17,6 +17,8 @@ import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
 import type { SanitizedPayload } from '../sanitizer/index.js';
 
+import type { ConfirmationGateway, ConfirmationStore } from './confirmation-gateway.js';
+
 // ---------------------------------------------------------------------------
 // Clock abstraction for testability
 // ---------------------------------------------------------------------------
@@ -201,6 +203,10 @@ export interface ExecutionContext {
   readonly logger: Logger;
   readonly clock: Clock;
   readonly runDir: string;
+  /** Consent gateway — null when no connector is wired. Flagged steps + null gateway = validation error. */
+  readonly confirmationGateway: ConfirmationGateway | null;
+  /** Confirmation persistence (confirmations.jsonl). Null in test contexts that don't need disk. */
+  readonly confirmationStore: ConfirmationStore | null;
 }
 
 // ---------------------------------------------------------------------------

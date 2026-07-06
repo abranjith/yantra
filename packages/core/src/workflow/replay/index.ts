@@ -11,6 +11,7 @@ export type {
   LocatorTable,
   OrchestratorRunOutcome,
   OutputBinding,
+  ParamArg,
   PreflightResult,
   ResumePoint,
   RunBudgets,

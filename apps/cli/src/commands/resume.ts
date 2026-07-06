@@ -10,6 +10,7 @@
  *   yantra resume 20260511T091234Z-bank-statement-a7b3 --json
  */
 
+import { InteractiveConfirmationGateway } from '@yantra/core';
 import { exitCodeFor, loadResumePoint, requiresUserConsent } from '@yantra/core/workflow/replay';
 import { Command } from 'commander';
 
@@ -39,7 +40,13 @@ export function makeResumeCommand(): Command {
       logger.info({ runId }, 'yantra resume: starting');
 
       try {
-        const { orchestrator, runStore } = await buildOrchestratorRuntime({ logger });
+        // Same consent policy as `run`: prompt only in an interactive TTY,
+        // never under `--json` / unattended (plan §6).
+        const interactive = process.stdin.isTTY === true && options.json !== true;
+        const { orchestrator, runStore } = await buildOrchestratorRuntime({
+          logger,
+          confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+        });
 
         // Load resume point first so we can check consent before doing real work.
         const point = await loadResumePoint(runStore, runId);

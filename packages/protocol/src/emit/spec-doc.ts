@@ -13,7 +13,12 @@ const isZodSchema = (value: unknown): value is z.ZodTypeAny =>
 
 const escapeTableCell = (value: string): string => value.replace(/\|/g, '\\|');
 
-const renderFieldTable = (schema: z.ZodTypeAny): string => {
+/** Unwraps refinement/transform wrappers so superRefined objects still render field tables. */
+const unwrapEffects = (schema: z.ZodTypeAny): z.ZodTypeAny =>
+  schema instanceof z.ZodEffects ? unwrapEffects(schema.innerType() as z.ZodTypeAny) : schema;
+
+const renderFieldTable = (wrapped: z.ZodTypeAny): string => {
+  const schema = unwrapEffects(wrapped);
   if (!(schema instanceof z.ZodObject)) {
     return '';
   }
@@ -46,7 +51,8 @@ const renderFieldTable = (schema: z.ZodTypeAny): string => {
   ].join('\n');
 };
 
-const toExample = (schema: z.ZodTypeAny): string => {
+const toExample = (wrapped: z.ZodTypeAny): string => {
+  const schema = unwrapEffects(wrapped);
   if (schema instanceof z.ZodObject) {
     const shape = schema.shape as unknown as Record<string, z.ZodTypeAny>;
     const exampleObject = Object.fromEntries(Object.keys(shape).map((key) => [key, `<${key}>`]));
@@ -87,6 +93,9 @@ export const emitProtocolSpecDoc = async (repositoryRoot: string): Promise<void>
     '# Protocol Spec',
     '',
     '> DO NOT EDIT - regenerated from packages/protocol',
+    '',
+    `Current schema version: **${Protocol.SCHEMA_VERSION}**. Accepted versions: ${Protocol.SUPPORTED_SCHEMA_VERSIONS.join(', ')}.`,
+    'The 0.2 bump is additive: it introduces the Brief document type; Plan and workflow contracts are unchanged and 0.1 documents remain valid.',
     '',
     ...sections,
   ].join('\n');

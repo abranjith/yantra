@@ -8,11 +8,20 @@ export * from './executor/index.js';
 export * from './ethics/index.js';
 export * from './audit/index.js';
 export * from './extraction/index.js';
+export * from './synthesis/index.js';
+export * from './research/index.js';
+export * from './brief/index.js';
+export * from './index-db/index.js';
+export * from './profile/index.js';
+export * from './discovery/index.js';
+export * from './scheduler/index.js';
 
 export {
   DefaultSanitizer,
+  brandSanitized,
   sanitize,
   type SanitizationProfile,
+  type Sanitized,
   type SanitizedPayload,
   type Sanitizer as PayloadSanitizer,
   type TransformationTag,

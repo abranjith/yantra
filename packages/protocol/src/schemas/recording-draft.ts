@@ -12,6 +12,8 @@
 
 import { z } from 'zod';
 
+import { SUPPORTED_SCHEMA_VERSIONS } from '../version.js';
+
 // ---------------------------------------------------------------------------
 // ElementDescriptor — sanitized structural fingerprint of the captured element
 // ---------------------------------------------------------------------------
@@ -261,7 +263,9 @@ export type StopReason = z.infer<typeof StopReasonSchema>;
 
 export const RecordingDraftSchema = z
   .object({
-    schema_version: z.literal('0.1').describe('Schema version for forward-compatibility checks'),
+    schema_version: z
+      .enum(SUPPORTED_SCHEMA_VERSIONS)
+      .describe('Schema version for forward-compatibility checks'),
     recording_id: z.string().min(1).describe('ULID-formatted recording identifier'),
     workflow_name_hint: z
       .string()

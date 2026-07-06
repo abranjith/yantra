@@ -9,9 +9,27 @@
  * {@link JSONRenderer}) live in adjacent modules.
  */
 
-import type { TaskEvent } from '@yantra/protocol';
+import type { Brief, TaskEvent } from '@yantra/protocol';
 
 import type { GlobalFlags } from '../global-flags.js';
+
+/**
+ * Terminal progressive-disclosure level. Declared here (not in
+ * `brief-terminal.ts`) so the dependency-free `json.ts` path can reference it
+ * without transitively importing the rendering toolchain — the `--json`
+ * import-restriction guard depends on this separation.
+ */
+export type BriefDetailLevel = 'overview' | 'standard' | 'full';
+
+/** What a Brief render writes to stdout. */
+export type BriefOutputFormat = 'terminal' | 'md' | 'html' | 'json';
+
+/** On-disk paths of the persisted Brief artifacts. */
+export interface BriefArtifactPaths {
+  readonly jsonPath: string;
+  readonly mdPath: string;
+  readonly htmlPath: string;
+}
 
 export interface ConnectorRenderOpts {
   readonly json: boolean;
@@ -19,6 +37,12 @@ export interface ConnectorRenderOpts {
   readonly noColor: boolean;
   readonly stream: NodeJS.WritableStream;
   readonly errStream: NodeJS.WritableStream;
+  /** Brief disclosure level (terminal format only); defaults to `standard`. */
+  readonly briefDetail?: BriefDetailLevel;
+  /** Which Brief representation goes to stdout; defaults to `terminal`. */
+  readonly briefFormat?: BriefOutputFormat;
+  /** Target terminal width for the Brief renderer; clamped to [60, 120]. */
+  readonly width?: number;
 }
 
 export function renderOptsFromGlobals(flags: GlobalFlags): ConnectorRenderOpts {
@@ -106,6 +130,13 @@ export interface OutputRenderer {
   renderDoctor(result: DoctorRenderResult, opts: ConnectorRenderOpts): void;
   renderAudit(report: AuditRenderReport, opts: ConnectorRenderOpts): void;
   renderReport(markdown: string, opts: ConnectorRenderOpts): void;
+  /**
+   * Renders a synthesized Brief. Terminal styles it (per `briefDetail` /
+   * `briefFormat`); JSON emits the Brief verbatim inside the schema envelope.
+   * `artifacts` names the persisted `brief.md`/`brief.html`, or null when the
+   * best-effort artifact write failed.
+   */
+  renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void;
   /** Streamed per-event rendering. Terminal: one-line tick. JSON: JSON Line. */
   renderEvent(event: TaskEvent, opts: ConnectorRenderOpts): void;
 }

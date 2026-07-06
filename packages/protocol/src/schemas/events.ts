@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ConfirmationRequest } from './confirmation.js';
+import { DiscoveryCycle, DiscoveryOutcome } from './discovery.js';
 import { FailureClass, SecurityScope, STEP_VERBS } from './security.js';
 
 const StepVerbSchema = z.enum(STEP_VERBS);
@@ -97,6 +99,97 @@ export const TaskEvent = z
         .describe('Chrome major at recording time.'),
       current_chrome_major: z.number().int().positive().describe('Chrome major at run time.'),
       drift: z.number().int().describe('Absolute difference in major versions.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('synthesis_completed')
+        .describe('The synthesize stage produced a Brief (FEAT-014).'),
+      strategy: z
+        .enum(['deterministic', 'llm'])
+        .describe('Synthesis strategy that produced the Brief.'),
+      sources_in: z
+        .number()
+        .int()
+        .nonnegative()
+        .describe('Number of extracted sources fed into synthesis.'),
+      sources_used: z
+        .number()
+        .int()
+        .nonnegative()
+        .describe('Number of deduplicated numbered sources in the Brief.'),
+      coverage: z
+        .number()
+        .min(0)
+        .max(1)
+        .nullable()
+        .describe('Fraction of sources represented in the Brief (0-1), or null.'),
+      citation_verdict: z
+        .object({
+          claims_checked: z.number().int().nonnegative().describe('Claims inspected.'),
+          flagged: z.number().int().nonnegative().describe('Claims flagged as unanchored.'),
+          stripped: z.number().int().nonnegative().describe('Claims stripped as unanchored.'),
+        })
+        .describe('Citation-faithfulness verdict from the validator.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('research_hop_completed')
+        .describe('One deep-research hop finished (FEAT-017).'),
+      hop_index: z.number().int().positive().describe('1-based hop index.'),
+      queries: z.array(z.string()).describe('Queries issued this hop.'),
+      docs_fetched: z
+        .number()
+        .int()
+        .nonnegative()
+        .describe('Documents successfully fetched+extracted this hop.'),
+      docs_kept: z
+        .number()
+        .int()
+        .nonnegative()
+        .describe('Documents kept after dedup/diversification this hop.'),
+      coverage: z.number().min(0).max(1).describe('Coverage score after this hop (0-1).'),
+      coverage_delta: z
+        .number()
+        .describe('Change in coverage vs the previous hop (may be negative).'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('confirmation_requested')
+        .describe('Executor paused for human consent before a flagged step (FEAT-019).'),
+      request: ConfirmationRequest.describe('The structured confirmation request.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('confirmation_resolved')
+        .describe('A confirmation request was resolved by a human decision (FEAT-019).'),
+      confirmation_id: z.string().min(1).describe('ULID of the resolved request.'),
+      decision: z.enum(['granted', 'denied', 'timed_out']).describe('Outcome of the confirmation.'),
+      decided_by: z
+        .enum(['user_interactive', 'user_cli_confirm', 'timeout'])
+        .describe('Who or what resolved the confirmation — never agent.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('discovery_cycle_completed')
+        .describe('One discovery propose→act→observe cycle finished (FEAT-020).'),
+      cycle: DiscoveryCycle.describe('The completed cycle record.'),
+    }),
+    z.object({
+      ...TaskEventBase,
+      kind: z
+        .literal('discovery_session_completed')
+        .describe('A discovery session reached a terminal outcome (FEAT-020).'),
+      outcome: DiscoveryOutcome.describe('Terminal outcome of the session.'),
+      cycles: z.number().int().nonnegative().describe('Total cycles executed.'),
+      promoted_workflow: z
+        .string()
+        .nullable()
+        .describe('Workflow name if promoted via --save-as, or null.'),
     }),
   ])
   .describe('Discriminated union for task lifecycle events.');

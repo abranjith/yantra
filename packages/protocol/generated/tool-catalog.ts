@@ -12,2297 +12,2911 @@ export type ToolCatalog = ToolDefinition[];
 
 export const TOOL_CATALOG: ToolCatalog = [
   {
-    name: 'navigate',
-    description: 'Navigate browser to a URL.',
-    input_schema: {
-      $ref: '#/definitions/navigate_input',
-      definitions: {
-        navigate_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "navigate",
+    "description": "Navigate browser to a URL.",
+    "input_schema": {
+      "$ref": "#/definitions/navigate_input",
+      "definitions": {
+        "navigate_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            url: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "confirmation_description": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'literal',
-                      description: 'Discriminator for literal values.',
-                    },
-                    value: {
-                      type: ['string', 'number', 'boolean', 'null'],
-                      description: 'Literal scalar value embedded in the plan.',
-                    },
-                  },
-                  required: ['kind', 'value'],
-                  additionalProperties: false,
-                  description: 'Literal scalar value.',
+                  "type": "string",
+                  "minLength": 1
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'param',
-                      description: 'Discriminator for runtime param references.',
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Human-readable override for the consent card. Falls back to step name when null."
+            },
+            "expected_cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "number",
+                      "description": "Numeric cost amount."
                     },
-                    key: {
-                      type: 'string',
-                      pattern: '^[a-z][a-z0-9_]*$',
-                      description: 'Declared workflow/task param key.',
-                    },
+                    "currency": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                    }
                   },
-                  required: ['kind', 'key'],
-                  additionalProperties: false,
-                  description: 'Reference to runtime input provided by the user.',
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Best-effort cost estimate for the action being confirmed."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'secret',
-                      description: 'Discriminator for secret references.',
-                    },
-                    key: {
-                      type: 'string',
-                      pattern: '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$',
-                      description: 'Secret key in namespace.name format.',
-                    },
-                  },
-                  required: ['kind', 'key'],
-                  additionalProperties: false,
-                  description: 'Reference to a credential stored outside the plan payload.',
+                  "type": "null"
+                }
+              ],
+              "description": "Best-effort cost estimate shown on the consent card, or null if unknown.",
+              "default": null
+            },
+            "consequence": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "reversible",
+                    "hard_to_reverse",
+                    "irreversible",
+                    "unknown"
+                  ],
+                  "description": "How difficult it would be to undo the action if it goes wrong."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'capture',
-                      description: 'Discriminator for capture references.',
+                  "type": "null"
+                }
+              ],
+              "description": "Reversibility hint for the action, or null to default to \"unknown\".",
+              "default": null
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "literal",
+                      "description": "Discriminator for literal values."
                     },
-                    step_id: {
-                      type: 'string',
-                      pattern: '^s[0-9]+$',
-                      description: 'Extract step id that produced the capture.',
-                    },
-                    field: {
-                      type: ['string', 'null'],
-                      description:
-                        'Optional extracted field key. Null means the whole capture payload.',
-                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Literal scalar value embedded in the plan."
+                    }
                   },
-                  required: ['kind', 'step_id', 'field'],
-                  additionalProperties: false,
-                  description: 'Reference to values captured by a previous extract step.',
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Literal scalar value."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'template',
-                      description: 'Discriminator for template-backed values.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "param",
+                      "description": "Discriminator for runtime param references."
                     },
-                    template: {
-                      type: 'string',
-                      description: 'Template string with {{placeholder}} markers.',
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "description": "Declared workflow/task param key."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to runtime input provided by the user."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "secret",
+                      "description": "Discriminator for secret references."
                     },
-                    bindings: {
-                      type: 'object',
-                      additionalProperties: {
-                        anyOf: [
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                      "description": "Secret key in namespace.name format."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to a credential stored outside the plan payload."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "capture",
+                      "description": "Discriminator for capture references."
+                    },
+                    "step_id": {
+                      "type": "string",
+                      "pattern": "^s[0-9]+$",
+                      "description": "Extract step id that produced the capture."
+                    },
+                    "field": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional extracted field key. Null means the whole capture payload."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to values captured by a previous extract step."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "template",
+                      "description": "Discriminator for template-backed values."
+                    },
+                    "template": {
+                      "type": "string",
+                      "description": "Template string with {{placeholder}} markers."
+                    },
+                    "bindings": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
                           {
-                            $ref: '#/definitions/navigate_input/properties/url/anyOf/0',
+                            "$ref": "#/definitions/navigate_input/properties/url/anyOf/0"
                           },
                           {
-                            $ref: '#/definitions/navigate_input/properties/url/anyOf/1',
+                            "$ref": "#/definitions/navigate_input/properties/url/anyOf/1"
                           },
                           {
-                            $ref: '#/definitions/navigate_input/properties/url/anyOf/2',
+                            "$ref": "#/definitions/navigate_input/properties/url/anyOf/2"
                           },
                           {
-                            $ref: '#/definitions/navigate_input/properties/url/anyOf/3',
+                            "$ref": "#/definitions/navigate_input/properties/url/anyOf/3"
                           },
                           {
-                            $ref: '#/definitions/navigate_input/properties/url/anyOf/4',
-                          },
+                            "$ref": "#/definitions/navigate_input/properties/url/anyOf/4"
+                          }
                         ],
-                        description:
-                          'Any value reference that can flow through a plan or workflow.',
+                        "description": "Any value reference that can flow through a plan or workflow."
                       },
-                      description: 'Typed mapping from placeholder names to value references.',
-                    },
+                      "description": "Typed mapping from placeholder names to value references."
+                    }
                   },
-                  required: ['kind', 'template', 'bindings'],
-                  additionalProperties: false,
-                  description: 'Templated value with explicit typed bindings.',
-                },
+                  "required": [
+                    "kind",
+                    "template",
+                    "bindings"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Templated value with explicit typed bindings."
+                }
               ],
-              description: 'Target URL as a value reference.',
-            },
+              "description": "Target URL as a value reference."
+            }
           },
-          required: ['id', 'scope', 'url'],
-          additionalProperties: false,
-          description: 'Navigate browser to a URL.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "Navigate browser to a URL."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'click',
-    description: 'Click on a resolved locator target.',
-    input_schema: {
-      $ref: '#/definitions/click_input',
-      definitions: {
-        click_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "click",
+    "description": "Click on a resolved locator target.",
+    "input_schema": {
+      "$ref": "#/definitions/click_input",
+      "definitions": {
+        "click_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            locator: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "confirmation_description": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'recorded',
-                      description: 'Recorded locator candidate index reference.',
-                    },
-                    step_index: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Recorded step index.',
-                    },
-                  },
-                  required: ['kind', 'step_index'],
-                  additionalProperties: false,
+                  "type": "string",
+                  "minLength": 1
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'workflow',
-                      description: 'Named workflow locator chain reference.',
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Human-readable override for the consent card. Falls back to step name when null."
+            },
+            "expected_cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "number",
+                      "description": "Numeric cost amount."
                     },
-                    name: {
-                      type: 'string',
-                      pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                      description: 'Human-readable workflow locator key.',
-                    },
+                    "currency": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                    }
                   },
-                  required: ['kind', 'name'],
-                  additionalProperties: false,
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Best-effort cost estimate for the action being confirmed."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'intent',
-                      description: 'Semantic intent locator that engine resolves.',
+                  "type": "null"
+                }
+              ],
+              "description": "Best-effort cost estimate shown on the consent card, or null if unknown.",
+              "default": null
+            },
+            "consequence": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "reversible",
+                    "hard_to_reverse",
+                    "irreversible",
+                    "unknown"
+                  ],
+                  "description": "How difficult it would be to undo the action if it goes wrong."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reversibility hint for the action, or null to default to \"unknown\".",
+              "default": null
+            },
+            "locator": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "recorded",
+                      "description": "Recorded locator candidate index reference."
                     },
-                    role: {
-                      type: 'string',
-                      enum: [
-                        'button',
-                        'link',
-                        'textbox',
-                        'table',
-                        'heading',
-                        'region',
-                        'dialog',
-                        'listitem',
-                        'cell',
-                        'checkbox',
-                        'radio',
-                        'combobox',
-                        'option',
-                        'tab',
-                        'tabpanel',
-                        'menuitem',
-                        'row',
-                        'grid',
+                    "step_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Recorded step index."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "workflow",
+                      "description": "Named workflow locator chain reference."
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                      "description": "Human-readable workflow locator key."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "intent",
+                      "description": "Semantic intent locator that engine resolves."
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
                       ],
-                      description: 'Target ARIA role.',
+                      "description": "Target ARIA role."
                     },
-                    name_match: {
-                      anyOf: [
+                    "name_match": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'exact',
-                                  description: 'Exact match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "exact",
+                                  "description": "Exact match strategy."
                                 },
-                                value: {
-                                  type: 'string',
-                                  description: 'Exact accessible name value.',
-                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "Exact accessible name value."
+                                }
                               },
-                              required: ['kind', 'value'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'regex',
-                                  description: 'Regex match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "regex",
+                                  "description": "Regex match strategy."
                                 },
-                                pattern: {
-                                  type: 'string',
-                                  description: 'Regex pattern to compile.',
+                                "pattern": {
+                                  "type": "string",
+                                  "description": "Regex pattern to compile."
                                 },
-                                flags: {
-                                  type: 'string',
-                                  description: 'Regex flags such as i or im.',
-                                },
+                                "flags": {
+                                  "type": "string",
+                                  "description": "Regex flags such as i or im."
+                                }
                               },
-                              required: ['kind', 'pattern', 'flags'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Accessible-name matcher for intent locators.',
+                          "description": "Accessible-name matcher for intent locators."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional accessible-name matcher.',
+                      "description": "Optional accessible-name matcher."
                     },
-                    near: {
-                      anyOf: [
+                    "near": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'recorded',
-                                  description: 'Recorded locator candidate index reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "recorded",
+                                  "description": "Recorded locator candidate index reference."
                                 },
-                                step_index: {
-                                  type: 'integer',
-                                  minimum: 0,
-                                  description: 'Recorded step index.',
-                                },
+                                "step_index": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Recorded step index."
+                                }
                               },
-                              required: ['kind', 'step_index'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'workflow',
-                                  description: 'Named workflow locator chain reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workflow",
+                                  "description": "Named workflow locator chain reference."
                                 },
-                                name: {
-                                  type: 'string',
-                                  pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                                  description: 'Human-readable workflow locator key.',
-                                },
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                  "description": "Human-readable workflow locator key."
+                                }
                               },
-                              required: ['kind', 'name'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'intent',
-                                  description: 'Semantic intent locator that engine resolves.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "intent",
+                                  "description": "Semantic intent locator that engine resolves."
                                 },
-                                role: {
-                                  type: 'string',
-                                  enum: [
-                                    'button',
-                                    'link',
-                                    'textbox',
-                                    'table',
-                                    'heading',
-                                    'region',
-                                    'dialog',
-                                    'listitem',
-                                    'cell',
-                                    'checkbox',
-                                    'radio',
-                                    'combobox',
-                                    'option',
-                                    'tab',
-                                    'tabpanel',
-                                    'menuitem',
-                                    'row',
-                                    'grid',
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "button",
+                                    "link",
+                                    "textbox",
+                                    "table",
+                                    "heading",
+                                    "region",
+                                    "dialog",
+                                    "listitem",
+                                    "cell",
+                                    "checkbox",
+                                    "radio",
+                                    "combobox",
+                                    "option",
+                                    "tab",
+                                    "tabpanel",
+                                    "menuitem",
+                                    "row",
+                                    "grid"
                                   ],
-                                  description: 'Target ARIA role.',
+                                  "description": "Target ARIA role."
                                 },
-                                name_match: {
-                                  anyOf: [
+                                "name_match": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/click_input/properties/locator/anyOf/2/properties/name_match/anyOf/0',
+                                      "$ref": "#/definitions/click_input/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional accessible-name matcher.',
+                                  "description": "Optional accessible-name matcher."
                                 },
-                                near: {
-                                  anyOf: [
+                                "near": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/click_input/properties/locator/anyOf/2/properties/near/anyOf/0',
+                                      "$ref": "#/definitions/click_input/properties/locator/anyOf/2/properties/near/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional relative anchor.',
-                                },
+                                  "description": "Optional relative anchor."
+                                }
                               },
-                              required: ['kind', 'role', 'name_match', 'near'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Locator resolution strategy chain.',
+                          "description": "Locator resolution strategy chain."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional relative anchor.',
-                    },
+                      "description": "Optional relative anchor."
+                    }
                   },
-                  required: ['kind', 'role', 'name_match', 'near'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Locator chain for click target.',
+              "description": "Locator chain for click target."
             },
-            modifiers: {
-              anyOf: [
+            "modifiers": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    alt: {
-                      type: 'boolean',
-                      default: false,
-                      description: 'Alt modifier key.',
+                  "type": "object",
+                  "properties": {
+                    "alt": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Alt modifier key."
                     },
-                    shift: {
-                      type: 'boolean',
-                      default: false,
-                      description: 'Shift modifier key.',
+                    "shift": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Shift modifier key."
                     },
-                    ctrl: {
-                      type: 'boolean',
-                      default: false,
-                      description: 'Control modifier key.',
+                    "ctrl": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Control modifier key."
                     },
-                    meta: {
-                      type: 'boolean',
-                      default: false,
-                      description: 'Meta modifier key.',
-                    },
+                    "meta": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Meta modifier key."
+                    }
                   },
-                  additionalProperties: false,
-                  description: 'Optional keyboard modifiers for click steps.',
+                  "additionalProperties": false,
+                  "description": "Optional keyboard modifiers for click steps."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Optional click modifier keys.',
-            },
+              "description": "Optional click modifier keys."
+            }
           },
-          required: ['id', 'scope', 'locator', 'modifiers'],
-          additionalProperties: false,
-          description: 'Click on a resolved locator target.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "modifiers"
+          ],
+          "additionalProperties": false,
+          "description": "Click on a resolved locator target."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'fill',
-    description: 'Fill an input-like field.',
-    input_schema: {
-      $ref: '#/definitions/fill_input',
-      definitions: {
-        fill_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "fill",
+    "description": "Fill an input-like field.",
+    "input_schema": {
+      "$ref": "#/definitions/fill_input",
+      "definitions": {
+        "fill_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            locator: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "confirmation_description": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'recorded',
-                      description: 'Recorded locator candidate index reference.',
-                    },
-                    step_index: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Recorded step index.',
-                    },
-                  },
-                  required: ['kind', 'step_index'],
-                  additionalProperties: false,
+                  "type": "string",
+                  "minLength": 1
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'workflow',
-                      description: 'Named workflow locator chain reference.',
-                    },
-                    name: {
-                      type: 'string',
-                      pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                      description: 'Human-readable workflow locator key.',
-                    },
-                  },
-                  required: ['kind', 'name'],
-                  additionalProperties: false,
-                },
-                {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'intent',
-                      description: 'Semantic intent locator that engine resolves.',
-                    },
-                    role: {
-                      type: 'string',
-                      enum: [
-                        'button',
-                        'link',
-                        'textbox',
-                        'table',
-                        'heading',
-                        'region',
-                        'dialog',
-                        'listitem',
-                        'cell',
-                        'checkbox',
-                        'radio',
-                        'combobox',
-                        'option',
-                        'tab',
-                        'tabpanel',
-                        'menuitem',
-                        'row',
-                        'grid',
-                      ],
-                      description: 'Target ARIA role.',
-                    },
-                    name_match: {
-                      anyOf: [
-                        {
-                          anyOf: [
-                            {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'exact',
-                                  description: 'Exact match strategy.',
-                                },
-                                value: {
-                                  type: 'string',
-                                  description: 'Exact accessible name value.',
-                                },
-                              },
-                              required: ['kind', 'value'],
-                              additionalProperties: false,
-                            },
-                            {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'regex',
-                                  description: 'Regex match strategy.',
-                                },
-                                pattern: {
-                                  type: 'string',
-                                  description: 'Regex pattern to compile.',
-                                },
-                                flags: {
-                                  type: 'string',
-                                  description: 'Regex flags such as i or im.',
-                                },
-                              },
-                              required: ['kind', 'pattern', 'flags'],
-                              additionalProperties: false,
-                            },
-                          ],
-                          description: 'Accessible-name matcher for intent locators.',
-                        },
-                        {
-                          type: 'null',
-                        },
-                      ],
-                      description: 'Optional accessible-name matcher.',
-                    },
-                    near: {
-                      anyOf: [
-                        {
-                          anyOf: [
-                            {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'recorded',
-                                  description: 'Recorded locator candidate index reference.',
-                                },
-                                step_index: {
-                                  type: 'integer',
-                                  minimum: 0,
-                                  description: 'Recorded step index.',
-                                },
-                              },
-                              required: ['kind', 'step_index'],
-                              additionalProperties: false,
-                            },
-                            {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'workflow',
-                                  description: 'Named workflow locator chain reference.',
-                                },
-                                name: {
-                                  type: 'string',
-                                  pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                                  description: 'Human-readable workflow locator key.',
-                                },
-                              },
-                              required: ['kind', 'name'],
-                              additionalProperties: false,
-                            },
-                            {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'intent',
-                                  description: 'Semantic intent locator that engine resolves.',
-                                },
-                                role: {
-                                  type: 'string',
-                                  enum: [
-                                    'button',
-                                    'link',
-                                    'textbox',
-                                    'table',
-                                    'heading',
-                                    'region',
-                                    'dialog',
-                                    'listitem',
-                                    'cell',
-                                    'checkbox',
-                                    'radio',
-                                    'combobox',
-                                    'option',
-                                    'tab',
-                                    'tabpanel',
-                                    'menuitem',
-                                    'row',
-                                    'grid',
-                                  ],
-                                  description: 'Target ARIA role.',
-                                },
-                                name_match: {
-                                  anyOf: [
-                                    {
-                                      $ref: '#/definitions/fill_input/properties/locator/anyOf/2/properties/name_match/anyOf/0',
-                                    },
-                                    {
-                                      type: 'null',
-                                    },
-                                  ],
-                                  description: 'Optional accessible-name matcher.',
-                                },
-                                near: {
-                                  anyOf: [
-                                    {
-                                      $ref: '#/definitions/fill_input/properties/locator/anyOf/2/properties/near/anyOf/0',
-                                    },
-                                    {
-                                      type: 'null',
-                                    },
-                                  ],
-                                  description: 'Optional relative anchor.',
-                                },
-                              },
-                              required: ['kind', 'role', 'name_match', 'near'],
-                              additionalProperties: false,
-                            },
-                          ],
-                          description: 'Locator resolution strategy chain.',
-                        },
-                        {
-                          type: 'null',
-                        },
-                      ],
-                      description: 'Optional relative anchor.',
-                    },
-                  },
-                  required: ['kind', 'role', 'name_match', 'near'],
-                  additionalProperties: false,
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Locator chain for fill target.',
+              "default": null,
+              "description": "Human-readable override for the consent card. Falls back to step name when null."
             },
-            value: {
-              anyOf: [
+            "expected_cost": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'literal',
-                      description: 'Discriminator for literal values.',
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "number",
+                      "description": "Numeric cost amount."
                     },
-                    value: {
-                      type: ['string', 'number', 'boolean', 'null'],
-                      description: 'Literal scalar value embedded in the plan.',
-                    },
+                    "currency": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                    }
                   },
-                  required: ['kind', 'value'],
-                  additionalProperties: false,
-                  description: 'Literal scalar value.',
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Best-effort cost estimate for the action being confirmed."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'param',
-                      description: 'Discriminator for runtime param references.',
-                    },
-                    key: {
-                      type: 'string',
-                      pattern: '^[a-z][a-z0-9_]*$',
-                      description: 'Declared workflow/task param key.',
-                    },
-                  },
-                  required: ['kind', 'key'],
-                  additionalProperties: false,
-                  description: 'Reference to runtime input provided by the user.',
+                  "type": "null"
+                }
+              ],
+              "description": "Best-effort cost estimate shown on the consent card, or null if unknown.",
+              "default": null
+            },
+            "consequence": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "reversible",
+                    "hard_to_reverse",
+                    "irreversible",
+                    "unknown"
+                  ],
+                  "description": "How difficult it would be to undo the action if it goes wrong."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'secret',
-                      description: 'Discriminator for secret references.',
+                  "type": "null"
+                }
+              ],
+              "description": "Reversibility hint for the action, or null to default to \"unknown\".",
+              "default": null
+            },
+            "locator": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "recorded",
+                      "description": "Recorded locator candidate index reference."
                     },
-                    key: {
-                      type: 'string',
-                      pattern: '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$',
-                      description: 'Secret key in namespace.name format.',
-                    },
+                    "step_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Recorded step index."
+                    }
                   },
-                  required: ['kind', 'key'],
-                  additionalProperties: false,
-                  description: 'Reference to a credential stored outside the plan payload.',
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'capture',
-                      description: 'Discriminator for capture references.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "workflow",
+                      "description": "Named workflow locator chain reference."
                     },
-                    step_id: {
-                      type: 'string',
-                      pattern: '^s[0-9]+$',
-                      description: 'Extract step id that produced the capture.',
-                    },
-                    field: {
-                      type: ['string', 'null'],
-                      description:
-                        'Optional extracted field key. Null means the whole capture payload.',
-                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                      "description": "Human-readable workflow locator key."
+                    }
                   },
-                  required: ['kind', 'step_id', 'field'],
-                  additionalProperties: false,
-                  description: 'Reference to values captured by a previous extract step.',
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'template',
-                      description: 'Discriminator for template-backed values.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "intent",
+                      "description": "Semantic intent locator that engine resolves."
                     },
-                    template: {
-                      type: 'string',
-                      description: 'Template string with {{placeholder}} markers.',
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
+                      ],
+                      "description": "Target ARIA role."
                     },
-                    bindings: {
-                      type: 'object',
-                      additionalProperties: {
-                        anyOf: [
+                    "name_match": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "exact",
+                                  "description": "Exact match strategy."
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "Exact accessible name value."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "regex",
+                                  "description": "Regex match strategy."
+                                },
+                                "pattern": {
+                                  "type": "string",
+                                  "description": "Regex pattern to compile."
+                                },
+                                "flags": {
+                                  "type": "string",
+                                  "description": "Regex flags such as i or im."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Accessible-name matcher for intent locators."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Optional accessible-name matcher."
+                    },
+                    "near": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "recorded",
+                                  "description": "Recorded locator candidate index reference."
+                                },
+                                "step_index": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Recorded step index."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workflow",
+                                  "description": "Named workflow locator chain reference."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                  "description": "Human-readable workflow locator key."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "intent",
+                                  "description": "Semantic intent locator that engine resolves."
+                                },
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "button",
+                                    "link",
+                                    "textbox",
+                                    "table",
+                                    "heading",
+                                    "region",
+                                    "dialog",
+                                    "listitem",
+                                    "cell",
+                                    "checkbox",
+                                    "radio",
+                                    "combobox",
+                                    "option",
+                                    "tab",
+                                    "tabpanel",
+                                    "menuitem",
+                                    "row",
+                                    "grid"
+                                  ],
+                                  "description": "Target ARIA role."
+                                },
+                                "name_match": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/definitions/fill_input/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Optional accessible-name matcher."
+                                },
+                                "near": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/definitions/fill_input/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Optional relative anchor."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Locator resolution strategy chain."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Optional relative anchor."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
+                  "additionalProperties": false
+                }
+              ],
+              "description": "Locator chain for fill target."
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "literal",
+                      "description": "Discriminator for literal values."
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Literal scalar value embedded in the plan."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Literal scalar value."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "param",
+                      "description": "Discriminator for runtime param references."
+                    },
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "description": "Declared workflow/task param key."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to runtime input provided by the user."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "secret",
+                      "description": "Discriminator for secret references."
+                    },
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                      "description": "Secret key in namespace.name format."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to a credential stored outside the plan payload."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "capture",
+                      "description": "Discriminator for capture references."
+                    },
+                    "step_id": {
+                      "type": "string",
+                      "pattern": "^s[0-9]+$",
+                      "description": "Extract step id that produced the capture."
+                    },
+                    "field": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional extracted field key. Null means the whole capture payload."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to values captured by a previous extract step."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "template",
+                      "description": "Discriminator for template-backed values."
+                    },
+                    "template": {
+                      "type": "string",
+                      "description": "Template string with {{placeholder}} markers."
+                    },
+                    "bindings": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
                           {
-                            $ref: '#/definitions/fill_input/properties/value/anyOf/0',
+                            "$ref": "#/definitions/fill_input/properties/value/anyOf/0"
                           },
                           {
-                            $ref: '#/definitions/fill_input/properties/value/anyOf/1',
+                            "$ref": "#/definitions/fill_input/properties/value/anyOf/1"
                           },
                           {
-                            $ref: '#/definitions/fill_input/properties/value/anyOf/2',
+                            "$ref": "#/definitions/fill_input/properties/value/anyOf/2"
                           },
                           {
-                            $ref: '#/definitions/fill_input/properties/value/anyOf/3',
+                            "$ref": "#/definitions/fill_input/properties/value/anyOf/3"
                           },
                           {
-                            $ref: '#/definitions/fill_input/properties/value/anyOf/4',
-                          },
+                            "$ref": "#/definitions/fill_input/properties/value/anyOf/4"
+                          }
                         ],
-                        description:
-                          'Any value reference that can flow through a plan or workflow.',
+                        "description": "Any value reference that can flow through a plan or workflow."
                       },
-                      description: 'Typed mapping from placeholder names to value references.',
-                    },
+                      "description": "Typed mapping from placeholder names to value references."
+                    }
                   },
-                  required: ['kind', 'template', 'bindings'],
-                  additionalProperties: false,
-                  description: 'Templated value with explicit typed bindings.',
-                },
+                  "required": [
+                    "kind",
+                    "template",
+                    "bindings"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Templated value with explicit typed bindings."
+                }
               ],
-              description: 'Value inserted into the target input.',
+              "description": "Value inserted into the target input."
             },
-            submit: {
-              type: 'boolean',
-              default: false,
-              description: 'Whether to submit after filling.',
-            },
+            "submit": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to submit after filling."
+            }
           },
-          required: ['id', 'scope', 'locator', 'value'],
-          additionalProperties: false,
-          description: 'Fill an input-like field.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "value"
+          ],
+          "additionalProperties": false,
+          "description": "Fill an input-like field."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'extract',
-    description: 'Extract data from the page using a declared schema.',
-    input_schema: {
-      $ref: '#/definitions/extract_input',
-      definitions: {
-        extract_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "extract",
+    "description": "Extract data from the page using a declared schema.",
+    "input_schema": {
+      "$ref": "#/definitions/extract_input",
+      "definitions": {
+        "extract_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            locator: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "locator": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'recorded',
-                      description: 'Recorded locator candidate index reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "recorded",
+                      "description": "Recorded locator candidate index reference."
                     },
-                    step_index: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Recorded step index.',
-                    },
+                    "step_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Recorded step index."
+                    }
                   },
-                  required: ['kind', 'step_index'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'workflow',
-                      description: 'Named workflow locator chain reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "workflow",
+                      "description": "Named workflow locator chain reference."
                     },
-                    name: {
-                      type: 'string',
-                      pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                      description: 'Human-readable workflow locator key.',
-                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                      "description": "Human-readable workflow locator key."
+                    }
                   },
-                  required: ['kind', 'name'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'intent',
-                      description: 'Semantic intent locator that engine resolves.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "intent",
+                      "description": "Semantic intent locator that engine resolves."
                     },
-                    role: {
-                      type: 'string',
-                      enum: [
-                        'button',
-                        'link',
-                        'textbox',
-                        'table',
-                        'heading',
-                        'region',
-                        'dialog',
-                        'listitem',
-                        'cell',
-                        'checkbox',
-                        'radio',
-                        'combobox',
-                        'option',
-                        'tab',
-                        'tabpanel',
-                        'menuitem',
-                        'row',
-                        'grid',
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
                       ],
-                      description: 'Target ARIA role.',
+                      "description": "Target ARIA role."
                     },
-                    name_match: {
-                      anyOf: [
+                    "name_match": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'exact',
-                                  description: 'Exact match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "exact",
+                                  "description": "Exact match strategy."
                                 },
-                                value: {
-                                  type: 'string',
-                                  description: 'Exact accessible name value.',
-                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "Exact accessible name value."
+                                }
                               },
-                              required: ['kind', 'value'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'regex',
-                                  description: 'Regex match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "regex",
+                                  "description": "Regex match strategy."
                                 },
-                                pattern: {
-                                  type: 'string',
-                                  description: 'Regex pattern to compile.',
+                                "pattern": {
+                                  "type": "string",
+                                  "description": "Regex pattern to compile."
                                 },
-                                flags: {
-                                  type: 'string',
-                                  description: 'Regex flags such as i or im.',
-                                },
+                                "flags": {
+                                  "type": "string",
+                                  "description": "Regex flags such as i or im."
+                                }
                               },
-                              required: ['kind', 'pattern', 'flags'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Accessible-name matcher for intent locators.',
+                          "description": "Accessible-name matcher for intent locators."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional accessible-name matcher.',
+                      "description": "Optional accessible-name matcher."
                     },
-                    near: {
-                      anyOf: [
+                    "near": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'recorded',
-                                  description: 'Recorded locator candidate index reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "recorded",
+                                  "description": "Recorded locator candidate index reference."
                                 },
-                                step_index: {
-                                  type: 'integer',
-                                  minimum: 0,
-                                  description: 'Recorded step index.',
-                                },
+                                "step_index": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Recorded step index."
+                                }
                               },
-                              required: ['kind', 'step_index'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'workflow',
-                                  description: 'Named workflow locator chain reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workflow",
+                                  "description": "Named workflow locator chain reference."
                                 },
-                                name: {
-                                  type: 'string',
-                                  pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                                  description: 'Human-readable workflow locator key.',
-                                },
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                  "description": "Human-readable workflow locator key."
+                                }
                               },
-                              required: ['kind', 'name'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'intent',
-                                  description: 'Semantic intent locator that engine resolves.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "intent",
+                                  "description": "Semantic intent locator that engine resolves."
                                 },
-                                role: {
-                                  type: 'string',
-                                  enum: [
-                                    'button',
-                                    'link',
-                                    'textbox',
-                                    'table',
-                                    'heading',
-                                    'region',
-                                    'dialog',
-                                    'listitem',
-                                    'cell',
-                                    'checkbox',
-                                    'radio',
-                                    'combobox',
-                                    'option',
-                                    'tab',
-                                    'tabpanel',
-                                    'menuitem',
-                                    'row',
-                                    'grid',
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "button",
+                                    "link",
+                                    "textbox",
+                                    "table",
+                                    "heading",
+                                    "region",
+                                    "dialog",
+                                    "listitem",
+                                    "cell",
+                                    "checkbox",
+                                    "radio",
+                                    "combobox",
+                                    "option",
+                                    "tab",
+                                    "tabpanel",
+                                    "menuitem",
+                                    "row",
+                                    "grid"
                                   ],
-                                  description: 'Target ARIA role.',
+                                  "description": "Target ARIA role."
                                 },
-                                name_match: {
-                                  anyOf: [
+                                "name_match": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/extract_input/properties/locator/anyOf/2/properties/name_match/anyOf/0',
+                                      "$ref": "#/definitions/extract_input/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional accessible-name matcher.',
+                                  "description": "Optional accessible-name matcher."
                                 },
-                                near: {
-                                  anyOf: [
+                                "near": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/extract_input/properties/locator/anyOf/2/properties/near/anyOf/0',
+                                      "$ref": "#/definitions/extract_input/properties/locator/anyOf/2/properties/near/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional relative anchor.',
-                                },
+                                  "description": "Optional relative anchor."
+                                }
                               },
-                              required: ['kind', 'role', 'name_match', 'near'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Locator resolution strategy chain.',
+                          "description": "Locator resolution strategy chain."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional relative anchor.',
-                    },
+                      "description": "Optional relative anchor."
+                    }
                   },
-                  required: ['kind', 'role', 'name_match', 'near'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Locator chain for extraction target.',
+              "description": "Locator chain for extraction target."
             },
-            extraction_schema: {
-              anyOf: [
+            "extraction_schema": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    type: {
-                      type: 'string',
-                      const: 'primitive',
-                      description: 'Primitive extraction schema node.',
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "primitive",
+                      "description": "Primitive extraction schema node."
                     },
-                    kind: {
-                      type: 'string',
-                      enum: ['string', 'number', 'boolean', 'date', 'money'],
-                      description: 'Primitive value kind.',
-                    },
-                  },
-                  required: ['type', 'kind'],
-                  additionalProperties: false,
-                },
-                {
-                  type: 'object',
-                  properties: {
-                    type: {
-                      type: 'string',
-                      const: 'array',
-                      description: 'Array extraction schema node.',
-                    },
-                    items: {
-                      anyOf: [
-                        {
-                          type: 'object',
-                          properties: {
-                            type: {
-                              type: 'string',
-                              const: 'primitive',
-                              description: 'Primitive extraction schema node.',
-                            },
-                            kind: {
-                              type: 'string',
-                              enum: ['string', 'number', 'boolean', 'date', 'money'],
-                              description: 'Primitive value kind.',
-                            },
-                          },
-                          required: ['type', 'kind'],
-                          additionalProperties: false,
-                        },
-                        {
-                          type: 'object',
-                          properties: {
-                            type: {
-                              type: 'string',
-                              const: 'array',
-                              description: 'Array extraction schema node.',
-                            },
-                            items: {
-                              $ref: '#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items',
-                              description: 'Item schema for extracted arrays.',
-                            },
-                          },
-                          required: ['type', 'items'],
-                          additionalProperties: false,
-                        },
-                        {
-                          type: 'object',
-                          properties: {
-                            type: {
-                              type: 'string',
-                              const: 'object',
-                              description: 'Object extraction schema node.',
-                            },
-                            fields: {
-                              type: 'object',
-                              additionalProperties: {
-                                $ref: '#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items',
-                              },
-                              description: 'Field mapping for extracted object rows.',
-                            },
-                          },
-                          required: ['type', 'fields'],
-                          additionalProperties: false,
-                        },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "date",
+                        "money"
                       ],
-                      description: 'Item schema for extracted arrays.',
-                    },
+                      "description": "Primitive value kind."
+                    }
                   },
-                  required: ['type', 'items'],
-                  additionalProperties: false,
+                  "required": [
+                    "type",
+                    "kind"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    type: {
-                      type: 'string',
-                      const: 'object',
-                      description: 'Object extraction schema node.',
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "array",
+                      "description": "Array extraction schema node."
                     },
-                    fields: {
-                      type: 'object',
-                      additionalProperties: {
-                        $ref: '#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items',
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "primitive",
+                              "description": "Primitive extraction schema node."
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "date",
+                                "money"
+                              ],
+                              "description": "Primitive value kind."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "array",
+                              "description": "Array extraction schema node."
+                            },
+                            "items": {
+                              "$ref": "#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items",
+                              "description": "Item schema for extracted arrays."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "items"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "object",
+                              "description": "Object extraction schema node."
+                            },
+                            "fields": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "$ref": "#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items"
+                              },
+                              "description": "Field mapping for extracted object rows."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "fields"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Item schema for extracted arrays."
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "object",
+                      "description": "Object extraction schema node."
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "#/definitions/extract_input/properties/extraction_schema/anyOf/1/properties/items"
                       },
-                      description: 'Field mapping for extracted object rows.',
-                    },
+                      "description": "Field mapping for extracted object rows."
+                    }
                   },
-                  required: ['type', 'fields'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "type",
+                    "fields"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Expected extracted data shape.',
+              "description": "Expected extracted data shape."
             },
-            capture_as: {
-              type: 'string',
-              pattern: '^[a-z][a-z0-9_]*$',
-              description: 'Capture alias for downstream references.',
-            },
+            "capture_as": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "Capture alias for downstream references."
+            }
           },
-          required: ['id', 'scope', 'locator', 'extraction_schema', 'capture_as'],
-          additionalProperties: false,
-          description: 'Extract data from the page using a declared schema.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "extraction_schema",
+            "capture_as"
+          ],
+          "additionalProperties": false,
+          "description": "Extract data from the page using a declared schema."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'wait_for',
-    description: 'Wait for target element state transitions.',
-    input_schema: {
-      $ref: '#/definitions/wait_for_input',
-      definitions: {
-        wait_for_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "wait_for",
+    "description": "Wait for target element state transitions.",
+    "input_schema": {
+      "$ref": "#/definitions/wait_for_input",
+      "definitions": {
+        "wait_for_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            locator: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "locator": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'recorded',
-                      description: 'Recorded locator candidate index reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "recorded",
+                      "description": "Recorded locator candidate index reference."
                     },
-                    step_index: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Recorded step index.',
-                    },
+                    "step_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Recorded step index."
+                    }
                   },
-                  required: ['kind', 'step_index'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'workflow',
-                      description: 'Named workflow locator chain reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "workflow",
+                      "description": "Named workflow locator chain reference."
                     },
-                    name: {
-                      type: 'string',
-                      pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                      description: 'Human-readable workflow locator key.',
-                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                      "description": "Human-readable workflow locator key."
+                    }
                   },
-                  required: ['kind', 'name'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'intent',
-                      description: 'Semantic intent locator that engine resolves.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "intent",
+                      "description": "Semantic intent locator that engine resolves."
                     },
-                    role: {
-                      type: 'string',
-                      enum: [
-                        'button',
-                        'link',
-                        'textbox',
-                        'table',
-                        'heading',
-                        'region',
-                        'dialog',
-                        'listitem',
-                        'cell',
-                        'checkbox',
-                        'radio',
-                        'combobox',
-                        'option',
-                        'tab',
-                        'tabpanel',
-                        'menuitem',
-                        'row',
-                        'grid',
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
                       ],
-                      description: 'Target ARIA role.',
+                      "description": "Target ARIA role."
                     },
-                    name_match: {
-                      anyOf: [
+                    "name_match": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'exact',
-                                  description: 'Exact match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "exact",
+                                  "description": "Exact match strategy."
                                 },
-                                value: {
-                                  type: 'string',
-                                  description: 'Exact accessible name value.',
-                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "Exact accessible name value."
+                                }
                               },
-                              required: ['kind', 'value'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'regex',
-                                  description: 'Regex match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "regex",
+                                  "description": "Regex match strategy."
                                 },
-                                pattern: {
-                                  type: 'string',
-                                  description: 'Regex pattern to compile.',
+                                "pattern": {
+                                  "type": "string",
+                                  "description": "Regex pattern to compile."
                                 },
-                                flags: {
-                                  type: 'string',
-                                  description: 'Regex flags such as i or im.',
-                                },
+                                "flags": {
+                                  "type": "string",
+                                  "description": "Regex flags such as i or im."
+                                }
                               },
-                              required: ['kind', 'pattern', 'flags'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Accessible-name matcher for intent locators.',
+                          "description": "Accessible-name matcher for intent locators."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional accessible-name matcher.',
+                      "description": "Optional accessible-name matcher."
                     },
-                    near: {
-                      anyOf: [
+                    "near": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'recorded',
-                                  description: 'Recorded locator candidate index reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "recorded",
+                                  "description": "Recorded locator candidate index reference."
                                 },
-                                step_index: {
-                                  type: 'integer',
-                                  minimum: 0,
-                                  description: 'Recorded step index.',
-                                },
+                                "step_index": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Recorded step index."
+                                }
                               },
-                              required: ['kind', 'step_index'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'workflow',
-                                  description: 'Named workflow locator chain reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workflow",
+                                  "description": "Named workflow locator chain reference."
                                 },
-                                name: {
-                                  type: 'string',
-                                  pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                                  description: 'Human-readable workflow locator key.',
-                                },
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                  "description": "Human-readable workflow locator key."
+                                }
                               },
-                              required: ['kind', 'name'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'intent',
-                                  description: 'Semantic intent locator that engine resolves.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "intent",
+                                  "description": "Semantic intent locator that engine resolves."
                                 },
-                                role: {
-                                  type: 'string',
-                                  enum: [
-                                    'button',
-                                    'link',
-                                    'textbox',
-                                    'table',
-                                    'heading',
-                                    'region',
-                                    'dialog',
-                                    'listitem',
-                                    'cell',
-                                    'checkbox',
-                                    'radio',
-                                    'combobox',
-                                    'option',
-                                    'tab',
-                                    'tabpanel',
-                                    'menuitem',
-                                    'row',
-                                    'grid',
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "button",
+                                    "link",
+                                    "textbox",
+                                    "table",
+                                    "heading",
+                                    "region",
+                                    "dialog",
+                                    "listitem",
+                                    "cell",
+                                    "checkbox",
+                                    "radio",
+                                    "combobox",
+                                    "option",
+                                    "tab",
+                                    "tabpanel",
+                                    "menuitem",
+                                    "row",
+                                    "grid"
                                   ],
-                                  description: 'Target ARIA role.',
+                                  "description": "Target ARIA role."
                                 },
-                                name_match: {
-                                  anyOf: [
+                                "name_match": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/wait_for_input/properties/locator/anyOf/2/properties/name_match/anyOf/0',
+                                      "$ref": "#/definitions/wait_for_input/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional accessible-name matcher.',
+                                  "description": "Optional accessible-name matcher."
                                 },
-                                near: {
-                                  anyOf: [
+                                "near": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/wait_for_input/properties/locator/anyOf/2/properties/near/anyOf/0',
+                                      "$ref": "#/definitions/wait_for_input/properties/locator/anyOf/2/properties/near/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional relative anchor.',
-                                },
+                                  "description": "Optional relative anchor."
+                                }
                               },
-                              required: ['kind', 'role', 'name_match', 'near'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Locator resolution strategy chain.',
+                          "description": "Locator resolution strategy chain."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional relative anchor.',
-                    },
+                      "description": "Optional relative anchor."
+                    }
                   },
-                  required: ['kind', 'role', 'name_match', 'near'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Locator chain for awaited target.',
+              "description": "Locator chain for awaited target."
             },
-            state: {
-              type: 'string',
-              enum: ['visible', 'hidden', 'attached', 'detached'],
-              description: 'Target state to wait for.',
-            },
-            timeout_ms: {
-              anyOf: [
-                {
-                  type: 'integer',
-                  exclusiveMinimum: 0,
-                },
-                {
-                  type: 'null',
-                },
+            "state": {
+              "type": "string",
+              "enum": [
+                "visible",
+                "hidden",
+                "attached",
+                "detached"
               ],
-              description: 'Optional timeout override.',
+              "description": "Target state to wait for."
             },
+            "timeout_ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional timeout override."
+            }
           },
-          required: ['id', 'scope', 'locator', 'state', 'timeout_ms'],
-          additionalProperties: false,
-          description: 'Wait for target element state transitions.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "state",
+            "timeout_ms"
+          ],
+          "additionalProperties": false,
+          "description": "Wait for target element state transitions."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'assert',
-    description: 'Assert state against the current page.',
-    input_schema: {
-      $ref: '#/definitions/assert_input',
-      definitions: {
-        assert_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "assert",
+    "description": "Assert state against the current page.",
+    "input_schema": {
+      "$ref": "#/definitions/assert_input",
+      "definitions": {
+        "assert_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            locator: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "locator": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'recorded',
-                      description: 'Recorded locator candidate index reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "recorded",
+                      "description": "Recorded locator candidate index reference."
                     },
-                    step_index: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Recorded step index.',
-                    },
+                    "step_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Recorded step index."
+                    }
                   },
-                  required: ['kind', 'step_index'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "step_index"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'workflow',
-                      description: 'Named workflow locator chain reference.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "workflow",
+                      "description": "Named workflow locator chain reference."
                     },
-                    name: {
-                      type: 'string',
-                      pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                      description: 'Human-readable workflow locator key.',
-                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                      "description": "Human-readable workflow locator key."
+                    }
                   },
-                  required: ['kind', 'name'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'intent',
-                      description: 'Semantic intent locator that engine resolves.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "intent",
+                      "description": "Semantic intent locator that engine resolves."
                     },
-                    role: {
-                      type: 'string',
-                      enum: [
-                        'button',
-                        'link',
-                        'textbox',
-                        'table',
-                        'heading',
-                        'region',
-                        'dialog',
-                        'listitem',
-                        'cell',
-                        'checkbox',
-                        'radio',
-                        'combobox',
-                        'option',
-                        'tab',
-                        'tabpanel',
-                        'menuitem',
-                        'row',
-                        'grid',
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "button",
+                        "link",
+                        "textbox",
+                        "table",
+                        "heading",
+                        "region",
+                        "dialog",
+                        "listitem",
+                        "cell",
+                        "checkbox",
+                        "radio",
+                        "combobox",
+                        "option",
+                        "tab",
+                        "tabpanel",
+                        "menuitem",
+                        "row",
+                        "grid"
                       ],
-                      description: 'Target ARIA role.',
+                      "description": "Target ARIA role."
                     },
-                    name_match: {
-                      anyOf: [
+                    "name_match": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'exact',
-                                  description: 'Exact match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "exact",
+                                  "description": "Exact match strategy."
                                 },
-                                value: {
-                                  type: 'string',
-                                  description: 'Exact accessible name value.',
-                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "Exact accessible name value."
+                                }
                               },
-                              required: ['kind', 'value'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'regex',
-                                  description: 'Regex match strategy.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "regex",
+                                  "description": "Regex match strategy."
                                 },
-                                pattern: {
-                                  type: 'string',
-                                  description: 'Regex pattern to compile.',
+                                "pattern": {
+                                  "type": "string",
+                                  "description": "Regex pattern to compile."
                                 },
-                                flags: {
-                                  type: 'string',
-                                  description: 'Regex flags such as i or im.',
-                                },
+                                "flags": {
+                                  "type": "string",
+                                  "description": "Regex flags such as i or im."
+                                }
                               },
-                              required: ['kind', 'pattern', 'flags'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "pattern",
+                                "flags"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Accessible-name matcher for intent locators.',
+                          "description": "Accessible-name matcher for intent locators."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional accessible-name matcher.',
+                      "description": "Optional accessible-name matcher."
                     },
-                    near: {
-                      anyOf: [
+                    "near": {
+                      "anyOf": [
                         {
-                          anyOf: [
+                          "anyOf": [
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'recorded',
-                                  description: 'Recorded locator candidate index reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "recorded",
+                                  "description": "Recorded locator candidate index reference."
                                 },
-                                step_index: {
-                                  type: 'integer',
-                                  minimum: 0,
-                                  description: 'Recorded step index.',
-                                },
+                                "step_index": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Recorded step index."
+                                }
                               },
-                              required: ['kind', 'step_index'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "step_index"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'workflow',
-                                  description: 'Named workflow locator chain reference.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workflow",
+                                  "description": "Named workflow locator chain reference."
                                 },
-                                name: {
-                                  type: 'string',
-                                  pattern: '^[A-Za-z][A-Za-z0-9 _-]{0,63}$',
-                                  description: 'Human-readable workflow locator key.',
-                                },
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                  "description": "Human-readable workflow locator key."
+                                }
                               },
-                              required: ['kind', 'name'],
-                              additionalProperties: false,
+                              "required": [
+                                "kind",
+                                "name"
+                              ],
+                              "additionalProperties": false
                             },
                             {
-                              type: 'object',
-                              properties: {
-                                kind: {
-                                  type: 'string',
-                                  const: 'intent',
-                                  description: 'Semantic intent locator that engine resolves.',
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "intent",
+                                  "description": "Semantic intent locator that engine resolves."
                                 },
-                                role: {
-                                  type: 'string',
-                                  enum: [
-                                    'button',
-                                    'link',
-                                    'textbox',
-                                    'table',
-                                    'heading',
-                                    'region',
-                                    'dialog',
-                                    'listitem',
-                                    'cell',
-                                    'checkbox',
-                                    'radio',
-                                    'combobox',
-                                    'option',
-                                    'tab',
-                                    'tabpanel',
-                                    'menuitem',
-                                    'row',
-                                    'grid',
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "button",
+                                    "link",
+                                    "textbox",
+                                    "table",
+                                    "heading",
+                                    "region",
+                                    "dialog",
+                                    "listitem",
+                                    "cell",
+                                    "checkbox",
+                                    "radio",
+                                    "combobox",
+                                    "option",
+                                    "tab",
+                                    "tabpanel",
+                                    "menuitem",
+                                    "row",
+                                    "grid"
                                   ],
-                                  description: 'Target ARIA role.',
+                                  "description": "Target ARIA role."
                                 },
-                                name_match: {
-                                  anyOf: [
+                                "name_match": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/assert_input/properties/locator/anyOf/2/properties/name_match/anyOf/0',
+                                      "$ref": "#/definitions/assert_input/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional accessible-name matcher.',
+                                  "description": "Optional accessible-name matcher."
                                 },
-                                near: {
-                                  anyOf: [
+                                "near": {
+                                  "anyOf": [
                                     {
-                                      $ref: '#/definitions/assert_input/properties/locator/anyOf/2/properties/near/anyOf/0',
+                                      "$ref": "#/definitions/assert_input/properties/locator/anyOf/2/properties/near/anyOf/0"
                                     },
                                     {
-                                      type: 'null',
-                                    },
+                                      "type": "null"
+                                    }
                                   ],
-                                  description: 'Optional relative anchor.',
-                                },
+                                  "description": "Optional relative anchor."
+                                }
                               },
-                              required: ['kind', 'role', 'name_match', 'near'],
-                              additionalProperties: false,
-                            },
+                              "required": [
+                                "kind",
+                                "role",
+                                "name_match",
+                                "near"
+                              ],
+                              "additionalProperties": false
+                            }
                           ],
-                          description: 'Locator resolution strategy chain.',
+                          "description": "Locator resolution strategy chain."
                         },
                         {
-                          type: 'null',
-                        },
+                          "type": "null"
+                        }
                       ],
-                      description: 'Optional relative anchor.',
-                    },
+                      "description": "Optional relative anchor."
+                    }
                   },
-                  required: ['kind', 'role', 'name_match', 'near'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "role",
+                    "name_match",
+                    "near"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Locator chain for assertion target.',
+              "description": "Locator chain for assertion target."
             },
-            condition: {
-              anyOf: [
+            "condition": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'visible',
-                      description: 'Assert that target is visible.',
-                    },
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "visible",
+                      "description": "Assert that target is visible."
+                    }
                   },
-                  required: ['kind'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'hidden',
-                      description: 'Assert that target is hidden.',
-                    },
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "hidden",
+                      "description": "Assert that target is hidden."
+                    }
                   },
-                  required: ['kind'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'text_matches',
-                      description: 'Assert text by regex pattern.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "text_matches",
+                      "description": "Assert text by regex pattern."
                     },
-                    pattern: {
-                      type: 'string',
-                      description: 'Regular expression source.',
+                    "pattern": {
+                      "type": "string",
+                      "description": "Regular expression source."
                     },
-                    flags: {
-                      type: 'string',
-                      default: '',
-                      description: 'Regex flags.',
-                    },
+                    "flags": {
+                      "type": "string",
+                      "default": "",
+                      "description": "Regex flags."
+                    }
                   },
-                  required: ['kind', 'pattern'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind",
+                    "pattern"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'count_equals',
-                      description: 'Assert list count equals expected value.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "count_equals",
+                      "description": "Assert list count equals expected value."
                     },
-                    count: {
-                      type: 'integer',
-                      minimum: 0,
-                      description: 'Expected count.',
-                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Expected count."
+                    }
                   },
-                  required: ['kind', 'count'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Assertion condition payload.',
-            },
+              "description": "Assertion condition payload."
+            }
           },
-          required: ['id', 'scope', 'locator', 'condition'],
-          additionalProperties: false,
-          description: 'Assert state against the current page.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "locator",
+            "condition"
+          ],
+          "additionalProperties": false,
+          "description": "Assert state against the current page."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'branch',
-    description: 'Explicit branch to another step id.',
-    input_schema: {
-      $ref: '#/definitions/branch_input',
-      definitions: {
-        branch_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "branch",
+    "description": "Explicit branch to another step id.",
+    "input_schema": {
+      "$ref": "#/definitions/branch_input",
+      "definitions": {
+        "branch_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            condition: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "condition": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'always',
-                      description: 'Always branch to then_step_id.',
-                    },
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "always",
+                      "description": "Always branch to then_step_id."
+                    }
                   },
-                  required: ['kind'],
-                  additionalProperties: false,
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'capture_exists',
-                      description: 'Branch if capture reference resolves.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "capture_exists",
+                      "description": "Branch if capture reference resolves."
                     },
-                    capture: {
-                      type: 'object',
-                      properties: {
-                        kind: {
-                          type: 'string',
-                          const: 'capture',
-                          description: 'Discriminator for capture references.',
+                    "capture": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "capture",
+                          "description": "Discriminator for capture references."
                         },
-                        step_id: {
-                          type: 'string',
-                          pattern: '^s[0-9]+$',
-                          description: 'Extract step id that produced the capture.',
+                        "step_id": {
+                          "type": "string",
+                          "pattern": "^s[0-9]+$",
+                          "description": "Extract step id that produced the capture."
                         },
-                        field: {
-                          type: ['string', 'null'],
-                          description:
-                            'Optional extracted field key. Null means the whole capture payload.',
-                        },
+                        "field": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Optional extracted field key. Null means the whole capture payload."
+                        }
                       },
-                      required: ['kind', 'step_id', 'field'],
-                      additionalProperties: false,
-                      description: 'Capture checked for branch decision.',
-                    },
+                      "required": [
+                        "kind",
+                        "step_id",
+                        "field"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Capture checked for branch decision."
+                    }
                   },
-                  required: ['kind', 'capture'],
-                  additionalProperties: false,
-                },
+                  "required": [
+                    "kind",
+                    "capture"
+                  ],
+                  "additionalProperties": false
+                }
               ],
-              description: 'Branch condition payload.',
+              "description": "Branch condition payload."
             },
-            then_step_id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step id for true branch.',
+            "then_step_id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step id for true branch."
             },
-            else_step_id: {
-              anyOf: [
+            "else_step_id": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  pattern: '^s[0-9]+$',
+                  "type": "string",
+                  "pattern": "^s[0-9]+$"
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Optional step id for false branch.',
-            },
+              "description": "Optional step id for false branch."
+            }
           },
-          required: ['id', 'scope', 'condition', 'then_step_id', 'else_step_id'],
-          additionalProperties: false,
-          description: 'Explicit branch to another step id.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "condition",
+            "then_step_id",
+            "else_step_id"
+          ],
+          "additionalProperties": false,
+          "description": "Explicit branch to another step id."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'loop',
-    description: 'Iterate over collection values.',
-    input_schema: {
-      $ref: '#/definitions/loop_input',
-      definitions: {
-        loop_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "loop",
+    "description": "Iterate over collection values.",
+    "input_schema": {
+      "$ref": "#/definitions/loop_input",
+      "definitions": {
+        "loop_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            over: {
-              anyOf: [
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "over": {
+              "anyOf": [
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'capture',
-                      description: 'Discriminator for capture references.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "capture",
+                      "description": "Discriminator for capture references."
                     },
-                    step_id: {
-                      type: 'string',
-                      pattern: '^s[0-9]+$',
-                      description: 'Extract step id that produced the capture.',
+                    "step_id": {
+                      "type": "string",
+                      "pattern": "^s[0-9]+$",
+                      "description": "Extract step id that produced the capture."
                     },
-                    field: {
-                      type: ['string', 'null'],
-                      description:
-                        'Optional extracted field key. Null means the whole capture payload.',
-                    },
+                    "field": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional extracted field key. Null means the whole capture payload."
+                    }
                   },
-                  required: ['kind', 'step_id', 'field'],
-                  additionalProperties: false,
-                  description: 'Reference to values captured by a previous extract step.',
+                  "required": [
+                    "kind",
+                    "step_id",
+                    "field"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to values captured by a previous extract step."
                 },
                 {
-                  type: 'object',
-                  properties: {
-                    kind: {
-                      type: 'string',
-                      const: 'param',
-                      description: 'Discriminator for runtime param references.',
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "param",
+                      "description": "Discriminator for runtime param references."
                     },
-                    key: {
-                      type: 'string',
-                      pattern: '^[a-z][a-z0-9_]*$',
-                      description: 'Declared workflow/task param key.',
-                    },
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "description": "Declared workflow/task param key."
+                    }
                   },
-                  required: ['kind', 'key'],
-                  additionalProperties: false,
-                  description: 'Reference to runtime input provided by the user.',
-                },
+                  "required": [
+                    "kind",
+                    "key"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Reference to runtime input provided by the user."
+                }
               ],
-              description: 'Collection reference iterated by loop.',
+              "description": "Collection reference iterated by loop."
             },
-            as: {
-              type: 'string',
-              pattern: '^[a-z][a-z0-9_]*$',
-              description: 'Loop variable alias.',
+            "as": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "Loop variable alias."
             },
-            body_step_ids: {
-              type: 'array',
-              items: {
-                type: 'string',
-                pattern: '^s[0-9]+$',
+            "body_step_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^s[0-9]+$"
               },
-              minItems: 1,
-              description: 'Step ids that form the loop body.',
+              "minItems": 1,
+              "description": "Step ids that form the loop body."
             },
-            max_iterations: {
-              type: 'integer',
-              exclusiveMinimum: 0,
-              description: 'Hard cap for loop iterations at runtime.',
-            },
+            "max_iterations": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Hard cap for loop iterations at runtime."
+            }
           },
-          required: ['id', 'scope', 'over', 'as', 'body_step_ids', 'max_iterations'],
-          additionalProperties: false,
-          description: 'Iterate over collection values.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "over",
+            "as",
+            "body_step_ids",
+            "max_iterations"
+          ],
+          "additionalProperties": false,
+          "description": "Iterate over collection values."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'call_workflow',
-    description: 'Invoke another workflow from the current plan.',
-    input_schema: {
-      $ref: '#/definitions/call_workflow_input',
-      definitions: {
-        call_workflow_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "call_workflow",
+    "description": "Invoke another workflow from the current plan.",
+    "input_schema": {
+      "$ref": "#/definitions/call_workflow_input",
+      "definitions": {
+        "call_workflow_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            workflow_name: {
-              type: 'string',
-              minLength: 1,
-              description: 'Name of workflow to invoke.',
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
             },
-            params: {
-              type: 'object',
-              additionalProperties: {
-                anyOf: [
+            "workflow_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of workflow to invoke."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
                   {
-                    type: 'object',
-                    properties: {
-                      kind: {
-                        type: 'string',
-                        const: 'literal',
-                        description: 'Discriminator for literal values.',
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "literal",
+                        "description": "Discriminator for literal values."
                       },
-                      value: {
-                        type: ['string', 'number', 'boolean', 'null'],
-                        description: 'Literal scalar value embedded in the plan.',
-                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean",
+                          "null"
+                        ],
+                        "description": "Literal scalar value embedded in the plan."
+                      }
                     },
-                    required: ['kind', 'value'],
-                    additionalProperties: false,
-                    description: 'Literal scalar value.',
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Literal scalar value."
                   },
                   {
-                    type: 'object',
-                    properties: {
-                      kind: {
-                        type: 'string',
-                        const: 'param',
-                        description: 'Discriminator for runtime param references.',
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "param",
+                        "description": "Discriminator for runtime param references."
                       },
-                      key: {
-                        type: 'string',
-                        pattern: '^[a-z][a-z0-9_]*$',
-                        description: 'Declared workflow/task param key.',
-                      },
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "description": "Declared workflow/task param key."
+                      }
                     },
-                    required: ['kind', 'key'],
-                    additionalProperties: false,
-                    description: 'Reference to runtime input provided by the user.',
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Reference to runtime input provided by the user."
                   },
                   {
-                    type: 'object',
-                    properties: {
-                      kind: {
-                        type: 'string',
-                        const: 'secret',
-                        description: 'Discriminator for secret references.',
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "secret",
+                        "description": "Discriminator for secret references."
                       },
-                      key: {
-                        type: 'string',
-                        pattern: '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$',
-                        description: 'Secret key in namespace.name format.',
-                      },
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "description": "Secret key in namespace.name format."
+                      }
                     },
-                    required: ['kind', 'key'],
-                    additionalProperties: false,
-                    description: 'Reference to a credential stored outside the plan payload.',
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Reference to a credential stored outside the plan payload."
                   },
                   {
-                    type: 'object',
-                    properties: {
-                      kind: {
-                        type: 'string',
-                        const: 'capture',
-                        description: 'Discriminator for capture references.',
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "capture",
+                        "description": "Discriminator for capture references."
                       },
-                      step_id: {
-                        type: 'string',
-                        pattern: '^s[0-9]+$',
-                        description: 'Extract step id that produced the capture.',
+                      "step_id": {
+                        "type": "string",
+                        "pattern": "^s[0-9]+$",
+                        "description": "Extract step id that produced the capture."
                       },
-                      field: {
-                        type: ['string', 'null'],
-                        description:
-                          'Optional extracted field key. Null means the whole capture payload.',
-                      },
+                      "field": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Optional extracted field key. Null means the whole capture payload."
+                      }
                     },
-                    required: ['kind', 'step_id', 'field'],
-                    additionalProperties: false,
-                    description: 'Reference to values captured by a previous extract step.',
+                    "required": [
+                      "kind",
+                      "step_id",
+                      "field"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Reference to values captured by a previous extract step."
                   },
                   {
-                    type: 'object',
-                    properties: {
-                      kind: {
-                        type: 'string',
-                        const: 'template',
-                        description: 'Discriminator for template-backed values.',
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "template",
+                        "description": "Discriminator for template-backed values."
                       },
-                      template: {
-                        type: 'string',
-                        description: 'Template string with {{placeholder}} markers.',
+                      "template": {
+                        "type": "string",
+                        "description": "Template string with {{placeholder}} markers."
                       },
-                      bindings: {
-                        type: 'object',
-                        additionalProperties: {
-                          $ref: '#/definitions/call_workflow_input/properties/params/additionalProperties',
+                      "bindings": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/definitions/call_workflow_input/properties/params/additionalProperties"
                         },
-                        description: 'Typed mapping from placeholder names to value references.',
-                      },
+                        "description": "Typed mapping from placeholder names to value references."
+                      }
                     },
-                    required: ['kind', 'template', 'bindings'],
-                    additionalProperties: false,
-                    description: 'Templated value with explicit typed bindings.',
-                  },
+                    "required": [
+                      "kind",
+                      "template",
+                      "bindings"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Templated value with explicit typed bindings."
+                  }
                 ],
-                description: 'Any value reference that can flow through a plan or workflow.',
+                "description": "Any value reference that can flow through a plan or workflow."
               },
-              default: {},
-              description: 'Param values passed to called workflow.',
+              "default": {},
+              "description": "Param values passed to called workflow."
             },
-            capture_as: {
-              anyOf: [
+            "capture_as": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  pattern: '^[a-z][a-z0-9_]*$',
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Optional capture alias for workflow output.',
-            },
+              "description": "Optional capture alias for workflow output."
+            }
           },
-          required: ['id', 'scope', 'workflow_name', 'capture_as'],
-          additionalProperties: false,
-          description: 'Invoke another workflow from the current plan.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "workflow_name",
+            "capture_as"
+          ],
+          "additionalProperties": false,
+          "description": "Invoke another workflow from the current plan."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
+    "output_schema": null
   },
   {
-    name: 'llm_summarize',
-    description: 'Summarize extracted captures with an LLM.',
-    input_schema: {
-      $ref: '#/definitions/llm_summarize_input',
-      definitions: {
-        llm_summarize_input: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              pattern: '^s[0-9]+$',
-              description: 'Step identifier, unique within the plan.',
+    "name": "llm_summarize",
+    "description": "Summarize extracted captures with an LLM.",
+    "input_schema": {
+      "$ref": "#/definitions/llm_summarize_input",
+      "definitions": {
+        "llm_summarize_input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[0-9]+$",
+              "description": "Step identifier, unique within the plan."
             },
-            scope: {
-              anyOf: [
+            "scope": {
+              "anyOf": [
                 {
-                  type: 'string',
-                  enum: ['public', 'read-only-data', 'authenticated'],
-                  description: 'Step-level security scope.',
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "read-only-data",
+                    "authenticated"
+                  ],
+                  "description": "Step-level security scope."
                 },
                 {
-                  type: 'null',
-                },
+                  "type": "null"
+                }
               ],
-              description: 'Step scope; null inherits the plan default.',
+              "description": "Step scope; null inherits the plan default."
             },
-            input: {
-              type: 'object',
-              properties: {
-                kind: {
-                  type: 'string',
-                  const: 'capture',
-                  description: 'Discriminator for capture references.',
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+            },
+            "input": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "capture",
+                  "description": "Discriminator for capture references."
                 },
-                step_id: {
-                  type: 'string',
-                  pattern: '^s[0-9]+$',
-                  description: 'Extract step id that produced the capture.',
+                "step_id": {
+                  "type": "string",
+                  "pattern": "^s[0-9]+$",
+                  "description": "Extract step id that produced the capture."
                 },
-                field: {
-                  type: ['string', 'null'],
-                  description:
-                    'Optional extracted field key. Null means the whole capture payload.',
-                },
+                "field": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional extracted field key. Null means the whole capture payload."
+                }
               },
-              required: ['kind', 'step_id', 'field'],
-              additionalProperties: false,
-              description: 'Capture reference fed to summarization.',
+              "required": [
+                "kind",
+                "step_id",
+                "field"
+              ],
+              "additionalProperties": false,
+              "description": "Capture reference fed to summarization."
             },
-            prompt: {
-              type: 'string',
-              minLength: 1,
-              description: 'Summarization instruction prompt.',
+            "prompt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Summarization instruction prompt."
             },
-            output_as: {
-              type: 'string',
-              pattern: '^[a-z][a-z0-9_]*$',
-              description: 'Capture alias for summarization output.',
-            },
+            "output_as": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "Capture alias for summarization output."
+            }
           },
-          required: ['id', 'scope', 'input', 'prompt', 'output_as'],
-          additionalProperties: false,
-          description: 'Summarize extracted captures with an LLM.',
-        },
+          "required": [
+            "id",
+            "scope",
+            "input",
+            "prompt",
+            "output_as"
+          ],
+          "additionalProperties": false,
+          "description": "Summarize extracted captures with an LLM."
+        }
       },
-      $schema: 'http://json-schema.org/draft-07/schema#',
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    output_schema: null,
-  },
+    "output_schema": null
+  }
 ];

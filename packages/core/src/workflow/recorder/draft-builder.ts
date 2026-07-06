@@ -5,7 +5,7 @@
  * functional and easy to unit-test without touching the filesystem.
  */
 
-import { RecordingDraftSchema } from '@yantra/protocol';
+import { RecordingDraftSchema, SCHEMA_VERSION } from '@yantra/protocol';
 import type {
   CapturedAction,
   RecordingDraft,
@@ -35,7 +35,7 @@ export interface AssembleDraftOptions {
  */
 export function assembleDraft(opts: AssembleDraftOptions): RecordingDraft {
   const draft = {
-    schema_version: '0.1' as const,
+    schema_version: SCHEMA_VERSION,
     recording_id: opts.recordingId,
     workflow_name_hint: opts.workflowNameHint,
     started_at: opts.startedAt,

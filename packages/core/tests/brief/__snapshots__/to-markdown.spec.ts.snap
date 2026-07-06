@@ -1,0 +1,40 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@no-llm briefToMarkdown > renders the canonical Brief to a stable full-detail document 1`] = `
+"# Cheapest Sony WH-1000XM5 today
+
+> Lowest price is **$328** at Amazon (down from a $399 list price). All three tracked retailers list the WH-1000XM5, and prices have risen roughly 4% this week. [1][3]
+
+## Key Findings
+
+- Amazon — $328, in stock, free shipping [1]
+- Best Buy — $349, in stock [2]
+- Walmart — $342 via a third-party seller [3]
+- Prices have trended upward since last week, so buying now is reasonable. *(editorial)*
+
+## Price & availability
+
+All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. [1][2][3]
+
+## Caveats
+
+The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. [3]
+
+## Comparison
+
+| Retailer | Price | In stock |
+| --- | --- | --- |
+| Amazon | $328 | ✓ |
+| Best Buy | $349 | ✓ |
+| Walmart | $342 | ✓ |
+
+## Sources
+
+1. [Sony WH-1000XM5 Wireless Headphones — Amazon](https://www.amazon.com/sony-wh-1000xm5) — amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z
+2. [Sony WH-1000XM5 | Best Buy](https://www.bestbuy.com/sony-wh-1000xm5) — bestbuy.com · fetched 2026-07-01T09:00:05.000Z
+3. [Sony WH-1000XM5 Headphones - Walmart](https://www.walmart.com/ip/sony-wh-1000xm5) — walmart.com · fetched 2026-07-01T09:00:10.000Z
+
+## Notices
+
+- **fetch_failed** — example-blog.com: fetch timed out after 8000ms"
+`;

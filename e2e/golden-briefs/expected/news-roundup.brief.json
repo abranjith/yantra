@@ -1,0 +1,102 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "City transit budget expansion",
+  "overview": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2] The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. [1] The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3]",
+  "key_findings": [
+    {
+      "text": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit.",
+      "citations": [1, 2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade.",
+      "citations": [3],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "The plan allocates 45 million dollars to bus rapid transit over the next three years.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Transit officials confirmed construction would begin in early 2027 pending environmental review.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Opponents argued the money should instead go to road maintenance in outer neighborhoods.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Numbers & figures",
+      "body_md": "- After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2]\n- The plan allocates 45 million dollars to bus rapid transit over the next three years. [1]\n- Transit officials confirmed construction would begin in early 2027 pending environmental review. [2]",
+      "citations": [1, 2]
+    },
+    {
+      "heading": "Key facts",
+      "body_md": "- The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. [1]\n- The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3]\n- Opponents argued the money should instead go to road maintenance in outer neighborhoods. [2]\n- Analysts noted ridership had declined during the pandemic but has since recovered strongly. [3]",
+      "citations": [1, 2, 3]
+    }
+  ],
+  "facets": null,
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://tribune.example.com/transit-vote",
+      "final_url": null,
+      "host": "tribune.example.com",
+      "title": "Council approves transit expansion",
+      "fetched_at": "2026-06-14T08:00:00.000Z",
+      "published_at": "2026-06-13T18:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://dailynews.example.com/transit-budget",
+      "final_url": null,
+      "host": "dailynews.example.com",
+      "title": "Transit budget clears final hurdle",
+      "fetched_at": "2026-06-14T08:00:05.000Z",
+      "published_at": "2026-06-13T20:00:00.000Z"
+    },
+    {
+      "n": 3,
+      "url": "https://civicwatch.example.com/analysis",
+      "final_url": null,
+      "host": "civicwatch.example.com",
+      "title": "What the transit vote means",
+      "fetched_at": "2026-06-14T08:00:10.000Z",
+      "published_at": "2026-06-14T06:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "today",
+    "citation_verdict": {
+      "claims_checked": 12,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "run_id": "golden-run"
+  },
+  "notices": []
+}

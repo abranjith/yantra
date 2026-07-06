@@ -1,9 +1,9 @@
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Checkpoint, CheckpointStore, CheckpointSummary } from './types.js';
+import { SCHEMA_VERSION } from '@yantra/protocol';
 
-const SCHEMA_VERSION = '0.1';
+import type { Checkpoint, CheckpointStore, CheckpointSummary } from './types.js';
 
 /**
  * Filesystem-backed checkpoint store.

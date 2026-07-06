@@ -193,6 +193,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -203,6 +204,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -213,6 +215,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
 
     const workflow = session.assemble();
@@ -276,6 +279,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -287,6 +291,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -298,6 +303,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: 'param',
       paramOrSecretKey: 'user_password',
       scopeOverride: null,
+      requiresConfirmation: false,
     });
 
     const workflow = session.assemble();
@@ -314,6 +320,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -324,6 +331,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: null,
       paramOrSecretKey: null,
       scopeOverride: null,
+      requiresConfirmation: false,
     });
     session.next();
 
@@ -334,6 +342,7 @@ describe('AnnotateSession.assemble()', () => {
       valuePromotion: 'secret',
       paramOrSecretKey: 'bank.password',
       scopeOverride: null,
+      requiresConfirmation: false,
     });
 
     const workflow = session.assemble();
@@ -348,5 +357,127 @@ describe('AnnotateSession.assemble()', () => {
     expect(ids[0]).toBe('s1');
     if (ids.length > 1) expect(ids[1]).toBe('s2');
     if (ids.length > 2) expect(ids[2]).toBe('s3');
+  });
+});
+
+// A recording whose single annotatable action is a purchase-shaped click,
+// used to exercise the requires_confirmation heuristic (FEAT-019 TASK-005).
+function makePurchaseClickDraft(): RecordingDraft {
+  return makeDraft({
+    actions: [
+      {
+        kind: 'click',
+        ts: '2026-04-15T09:00:05.000Z',
+        url_before: 'https://shop.example.com/cart',
+        url_after: null,
+        element_descriptor: {
+          tag: 'button',
+          role: 'button',
+          accessible_name: 'Buy now',
+          visible_text: 'Buy now',
+          attrs_sample: {},
+          bounding_rect: { x: 100, y: 200, width: 120, height: 44 },
+          in_iframe: false,
+          xpath_for_debug: '//button',
+        },
+        candidate_chain: [
+          {
+            candidate: { kind: 'role', role: 'button', name: 'Buy now' },
+            score: 0.98,
+            rank_reason: 'ARIA role match',
+          },
+        ],
+      },
+    ],
+  });
+}
+
+describe('AnnotateSession requires_confirmation propagation (FEAT-019)', () => {
+  it('carries requiresConfirmation:true from a kept click decision into the assembled step', () => {
+    const session = new AnnotateSession(makeDraft(), 'test', 'public');
+
+    // Skip navigate, keep+flag the click, skip fill.
+    session.applyDecision({
+      draftActionId: '0',
+      action: 'skip',
+      locatorName: null,
+      valuePromotion: null,
+      paramOrSecretKey: null,
+      scopeOverride: null,
+      requiresConfirmation: false,
+    });
+    session.next();
+
+    session.applyDecision({
+      draftActionId: '1',
+      action: 'keep',
+      locatorName: 'Sign in button',
+      valuePromotion: null,
+      paramOrSecretKey: null,
+      scopeOverride: null,
+      requiresConfirmation: true,
+    });
+    session.next();
+
+    session.applyDecision({
+      draftActionId: '2',
+      action: 'skip',
+      locatorName: null,
+      valuePromotion: null,
+      paramOrSecretKey: null,
+      scopeOverride: null,
+      requiresConfirmation: false,
+    });
+
+    const clickStep = session.assemble().steps.find((s) => s.verb === 'click');
+    expect(clickStep?.requires_confirmation).toBe(true);
+  });
+
+  it('carries requiresConfirmation:false from a kept click decision into the assembled step', () => {
+    const session = new AnnotateSession(makeDraft(), 'test', 'public');
+
+    session.applyDecision({
+      draftActionId: '0',
+      action: 'skip',
+      locatorName: null,
+      valuePromotion: null,
+      paramOrSecretKey: null,
+      scopeOverride: null,
+      requiresConfirmation: false,
+    });
+    session.next();
+
+    session.applyDecision({
+      draftActionId: '1',
+      action: 'keep',
+      locatorName: 'Sign in button',
+      valuePromotion: null,
+      paramOrSecretKey: null,
+      scopeOverride: null,
+      requiresConfirmation: false,
+    });
+
+    const clickStep = session.assemble().steps.find((s) => s.verb === 'click');
+    expect(clickStep?.requires_confirmation).toBe(false);
+  });
+
+  it('acceptAll() flags purchase-shaped clicks via the heuristic', () => {
+    const session = new AnnotateSession(makePurchaseClickDraft(), 'shop', 'public');
+    session.acceptAll();
+    const clickStep = session.assemble().steps.find((s) => s.verb === 'click');
+    expect(clickStep?.requires_confirmation).toBe(true);
+  });
+
+  it('acceptAll() leaves ordinary (non-purchase) clicks unflagged', () => {
+    const session = new AnnotateSession(makeDraft(), 'test', 'public');
+    session.acceptAll();
+    const clickStep = session.assemble().steps.find((s) => s.verb === 'click');
+    expect(clickStep?.requires_confirmation).toBe(false);
+  });
+
+  it('skipAll() produces no confirmable steps (all actions skipped)', () => {
+    const session = new AnnotateSession(makeDraft(), 'test', 'public');
+    session.skipAll();
+    expect(session.assemble().steps).toHaveLength(0);
   });
 });

@@ -1,0 +1,114 @@
+{
+  "$ref": "#/definitions/ConfirmationRequest",
+  "definitions": {
+    "ConfirmationRequest": {
+      "type": "object",
+      "properties": {
+        "confirmation_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Globally unique ULID for this confirmation request."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "step_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Step id that triggered the request."
+        },
+        "action_kind": {
+          "type": "string",
+          "enum": [
+            "click",
+            "fill",
+            "navigate"
+          ],
+          "description": "The mutating verb that will execute on grant."
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resolved target host for the action (e.g. \"bank.example.com\")."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable summary of what will happen — from step name or annotation."
+        },
+        "expected_cost": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number",
+                  "description": "Numeric cost amount."
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                }
+              },
+              "required": [
+                "amount",
+                "currency"
+              ],
+              "additionalProperties": false,
+              "description": "Best-effort cost estimate for the action being confirmed."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Best-effort cost estimate, or null if unknown."
+        },
+        "consequence": {
+          "type": "string",
+          "enum": [
+            "reversible",
+            "hard_to_reverse",
+            "irreversible",
+            "unknown"
+          ],
+          "description": "Reversibility classification.",
+          "default": "unknown"
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp when the request was created."
+        },
+        "timeout_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Timeout in milliseconds, or null to wait indefinitely (interactive mode)."
+        }
+      },
+      "required": [
+        "confirmation_id",
+        "run_id",
+        "step_id",
+        "action_kind",
+        "host",
+        "description",
+        "expected_cost",
+        "requested_at",
+        "timeout_ms"
+      ],
+      "additionalProperties": false,
+      "description": "Structured consent request emitted before a flagged step executes."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

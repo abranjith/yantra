@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ConsequenceLevel, ExpectedCost } from './confirmation.js';
 import { RoleEnum } from './refs.js';
 import { SecurityClass, SecurityScope } from './security.js';
 import { AssertCondition, ExtractionSchema } from './steps.js';
@@ -9,6 +10,29 @@ const OUTPUT_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 const SECRET_KEY_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 const PARAM_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 const STEP_ID_PATTERN = /^s[0-9]+$/;
+
+/** Workflow verbs that may carry `requires_confirmation`. */
+const CONFIRMABLE_WORKFLOW_VERBS = new Set(['navigate', 'click', 'fill']);
+
+/**
+ * Optional confirmation annotations for workflow steps — mirrors the
+ * protocol `ConfirmationAnnotations` on `steps.ts`. These enrich the
+ * consent card when a step is flagged `requires_confirmation`.
+ */
+const WorkflowConfirmationAnnotations = {
+  confirmation_description: z
+    .string()
+    .min(1)
+    .nullable()
+    .default(null)
+    .describe('Human-readable override for the consent card. Falls back to step name when null.'),
+  expected_cost: ExpectedCost.nullable()
+    .default(null)
+    .describe('Best-effort cost estimate shown on the consent card, or null if unknown.'),
+  consequence: ConsequenceLevel.nullable()
+    .default(null)
+    .describe('Reversibility hint for the action, or null to default to "unknown".'),
+} as const;
 
 export const RegexShape = z
   .object({
@@ -68,22 +92,31 @@ export const WorkflowValueExpression = z
 const WorkflowStepBase = {
   id: z.string().regex(STEP_ID_PATTERN).describe('Workflow step id.'),
   scope: SecurityScope.nullable().describe('Optional step scope override.'),
+  requires_confirmation: z
+    .boolean()
+    .default(false)
+    .describe(
+      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps.',
+    ),
 } as const;
 
 export const WorkflowStep = z
   .discriminatedUnion('verb', [
     z.object({
       ...WorkflowStepBase,
+      ...WorkflowConfirmationAnnotations,
       verb: z.literal('navigate').describe('Navigate workflow step.'),
       url: WorkflowValueExpression.describe('URL value or template expression.'),
     }),
     z.object({
       ...WorkflowStepBase,
+      ...WorkflowConfirmationAnnotations,
       verb: z.literal('click').describe('Click workflow step.'),
       locator: z.string().min(1).describe('Named locator key from _locators.'),
     }),
     z.object({
       ...WorkflowStepBase,
+      ...WorkflowConfirmationAnnotations,
       verb: z.literal('fill').describe('Fill workflow step.'),
       locator: z.string().min(1).describe('Named locator key from _locators.'),
       value: WorkflowValueExpression.describe('Fill value or template expression.'),
@@ -161,6 +194,13 @@ export const WorkflowStep = z
         .describe('Capture alias for summary output.'),
     }),
   ])
+  .refine(
+    (step) => !step.requires_confirmation || CONFIRMABLE_WORKFLOW_VERBS.has(step.verb),
+    (step) => ({
+      message: `requires_confirmation is not legal on "${step.verb}" steps — only click, fill, and navigate may require confirmation.`,
+      path: ['requires_confirmation'],
+    }),
+  )
   .describe('Workflow-friendly step union mirroring protocol step verbs.');
 
 export type WorkflowStep = z.infer<typeof WorkflowStep>;

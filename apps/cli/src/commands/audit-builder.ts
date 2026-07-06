@@ -88,12 +88,17 @@ export async function buildAuditReport(
   const endedAt = readString(manifestObj.endedAt);
   const durationMs = typeof manifestObj.durationMs === 'number' ? manifestObj.durationMs : null;
 
+  // Schedule linkage (FEAT-021): a `schedule.json` sidecar means this run was
+  // produced by the scheduler daemon. Narrate the fire (plan §10).
+  const scheduleLink = await readScheduleLink(join(runDir, 'schedule.json'));
+
   const trustNarrative = buildTrustNarrative({
     status,
     durationMs,
     llmCallCount,
     secretLookupCount: secretLookups.length,
     stepCount: stepIdsSeen.size,
+    scheduleLink,
   });
 
   const report: AuditRenderReport = {
@@ -113,12 +118,43 @@ export async function buildAuditReport(
   return { kind: 'ok', report };
 }
 
+/** The schedule-link fields the audit narrates, when present. */
+interface ScheduleLinkView {
+  readonly scheduleId: string;
+  readonly cronExpr: string;
+  readonly firedAt: string;
+  readonly status: string;
+}
+
+/** Reads and validates the `schedule.json` sidecar, or null when absent. */
+async function readScheduleLink(path: string): Promise<ScheduleLinkView | null> {
+  const raw = await readJsonFile(path);
+  if (raw === null || typeof raw !== 'object') {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+  const scheduleId = readString(obj.schedule_id);
+  const cronExpr = readString(obj.cron_expr);
+  const firedAt = readString(obj.fired_at);
+  const status = readString(obj.status);
+  if (scheduleId === undefined || cronExpr === undefined) {
+    return null;
+  }
+  return {
+    scheduleId,
+    cronExpr,
+    firedAt: firedAt ?? '',
+    status: status ?? 'unknown',
+  };
+}
+
 function buildTrustNarrative(input: {
   status: string;
   durationMs: number | null;
   llmCallCount: number;
   secretLookupCount: number;
   stepCount: number;
+  scheduleLink?: ScheduleLinkView | null;
 }): string {
   const durationPhrase =
     input.durationMs === null ? '' : ` in ${(input.durationMs / 1000).toFixed(1)}s`;
@@ -136,7 +172,17 @@ function buildTrustNarrative(input: {
     input.secretLookupCount === 0
       ? 'no secrets were resolved'
       : `${input.secretLookupCount} secret lookup${input.secretLookupCount === 1 ? '' : 's'} were performed (keys only — never values)`;
-  return `Run ${verb}${durationPhrase}. ${llmPhrase} and ${secretPhrase}. The engine executed ${input.stepCount} step${input.stepCount === 1 ? '' : 's'}.`;
+  const base = `Run ${verb}${durationPhrase}. ${llmPhrase} and ${secretPhrase}. The engine executed ${input.stepCount} step${input.stepCount === 1 ? '' : 's'}.`;
+  return input.scheduleLink ? `${schedulePhrase(input.scheduleLink)} ${base}` : base;
+}
+
+/** Narrates the schedule linkage line (fire → status), including pause-and-notify. */
+function schedulePhrase(link: ScheduleLinkView): string {
+  const firedPhrase = link.firedAt.length > 0 ? ` at ${link.firedAt}` : '';
+  if (link.status === 'pending-confirmation') {
+    return `Fired by schedule ${link.scheduleId} (cron "${link.cronExpr}")${firedPhrase} and paused-and-notified for confirmation — it never auto-confirmed.`;
+  }
+  return `Fired by schedule ${link.scheduleId} (cron "${link.cronExpr}")${firedPhrase}.`;
 }
 
 function readString(value: unknown): string | undefined {

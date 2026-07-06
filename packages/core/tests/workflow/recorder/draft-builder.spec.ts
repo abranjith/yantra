@@ -93,7 +93,7 @@ function makeFillAction(): CapturedAction {
 // ---------------------------------------------------------------------------
 
 describe('@no-llm assembleDraft', () => {
-  it('produces a valid RecordingDraft with schema_version 0.1', () => {
+  it('produces a valid RecordingDraft stamped with the current schema version', () => {
     const draft = assembleDraft({
       recordingId: 'REC001',
       workflowNameHint: 'test-workflow',
@@ -104,7 +104,7 @@ describe('@no-llm assembleDraft', () => {
       metadata: makeMetadata(),
     });
 
-    expect(draft.schema_version).toBe('0.1');
+    expect(draft.schema_version).toBe('0.2');
     expect(draft.recording_id).toBe('REC001');
     expect(draft.workflow_name_hint).toBe('test-workflow');
     expect(draft.stop_reason).toBe('user');

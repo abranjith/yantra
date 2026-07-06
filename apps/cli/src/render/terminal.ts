@@ -1,16 +1,23 @@
 /**
- * Plain-text terminal renderer.
+ * Plain-text terminal renderer for structured command output
+ * (`list`/`show`/`doctor`/`audit`/`report`).
  *
- * Deliberately minimal — no boxen, no chalk, no ora. The CLI ships without
- * a TTY-decoration dependency to keep the bundle small and the renderer
- * easy to snapshot-test. Color is suppressed under `--no-color` /
- * `NO_COLOR` / non-TTY conditions.
+ * Intentionally plain — no boxen, chalk, or tables here. Note that the MVP's
+ * blanket "the CLI ships without a TTY-decoration dependency" stance is no
+ * longer true: plan §8 (FEAT-015) makes presentation a first-class concern and
+ * the **Brief** surface adopts `boxen`/`chalk`/`cli-table3`/`marked-terminal`
+ * in `render/brief-terminal.ts`. This renderer stays plain because its payloads
+ * are terse operational tables, not documents. Color is suppressed under
+ * `--no-color` / `NO_COLOR` / non-TTY conditions.
  */
 
-import type { TaskEvent } from '@yantra/protocol';
+import { briefToHtml, briefToMarkdown } from '@yantra/core';
+import type { Brief, TaskEvent } from '@yantra/protocol';
 
+import { renderBriefTerminal } from './brief-terminal.js';
 import type {
   AuditRenderReport,
+  BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
   ListItem,
@@ -114,6 +121,32 @@ export class TerminalRenderer implements OutputRenderer {
   renderReport(markdown: string, opts: ConnectorRenderOpts): void {
     opts.stream.write(markdown);
     if (!markdown.endsWith('\n')) opts.stream.write('\n');
+  }
+
+  renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void {
+    const format = opts.briefFormat ?? 'terminal';
+
+    // `--format md|html` streams the portable artifact's exact content instead
+    // of the ANSI view — same bytes the on-disk `brief.md`/`brief.html` carry.
+    if (format === 'md') {
+      opts.stream.write(`${briefToMarkdown(brief)}\n`);
+      return;
+    }
+    if (format === 'html') {
+      opts.stream.write(briefToHtml(brief));
+      return;
+    }
+
+    const rendered = renderBriefTerminal(brief, {
+      detail: opts.briefDetail ?? 'standard',
+      noColor: opts.noColor,
+      ...(opts.width !== undefined ? { width: opts.width } : {}),
+    });
+    opts.stream.write(`${rendered}\n`);
+
+    if (artifacts !== null) {
+      opts.stream.write(`\nSaved: ${artifacts.mdPath} · ${artifacts.htmlPath}\n`);
+    }
   }
 
   renderEvent(event: TaskEvent, opts: ConnectorRenderOpts): void {

@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "url": "https://example.com/one",
+      "title": "First Tavily Result",
+      "content": "First Tavily snippet text.",
+      "published_date": "2026-05-11T10:14:00.000Z"
+    },
+    {
+      "url": "https://example.com/two",
+      "title": "Second Tavily Result",
+      "content": "Second Tavily snippet text."
+    },
+    {
+      "url": "https://example.com/three",
+      "title": "Third Tavily Result",
+      "content": "Third Tavily snippet text."
+    }
+  ]
+}

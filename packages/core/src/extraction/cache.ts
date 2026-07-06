@@ -1,10 +1,12 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { Brief } from '@yantra/protocol';
+
 import { cacheDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
 
-import type { AskCard, SearchProviderName } from './types.js';
+import type { SearchProviderName } from './types.js';
 
 export interface AskCachePutMeta {
   readonly query: string;
@@ -13,19 +15,25 @@ export interface AskCachePutMeta {
 }
 
 export interface AskCache {
-  get(key: string): Promise<readonly AskCard[] | null>;
-  put(key: string, cards: readonly AskCard[], meta?: AskCachePutMeta): Promise<void>;
+  get(key: string): Promise<Brief | null>;
+  put(key: string, brief: Brief, meta?: AskCachePutMeta): Promise<void>;
   delete(key: string): Promise<void>;
 }
 
+/**
+ * Cache entry version. Bumped to 2 for the FEAT-015 Brief cutover: version-1
+ * card entries no longer parse into this shape and are treated as misses.
+ */
+const CACHE_VERSION = 2 as const;
+
 interface CacheFileShape {
-  readonly version: 1;
+  readonly version: typeof CACHE_VERSION;
   readonly query: string;
   readonly search_provider: SearchProviderName;
   readonly utc_day: string;
   readonly created_at: string;
   readonly ttl_seconds: number;
-  readonly cards: readonly AskCard[];
+  readonly brief: Brief;
 }
 
 /* eslint-disable @typescript-eslint/no-empty-function */
@@ -64,7 +72,7 @@ export class FileSystemAskCache implements AskCache {
     this.clock = options.clock ?? (() => new Date());
   }
 
-  public async get(key: string): Promise<readonly AskCard[] | null> {
+  public async get(key: string): Promise<Brief | null> {
     await this.ensureReady();
 
     const filePath = this.filePathFor(key);
@@ -84,26 +92,27 @@ export class FileSystemAskCache implements AskCache {
       return null;
     }
 
-    if (this.isExpired(parsed)) {
+    // Legacy (version-1 card) entries are misses after the Brief cutover.
+    if (parsed.version !== CACHE_VERSION || this.isExpired(parsed)) {
       await this.delete(key);
       return null;
     }
 
-    return parsed.cards;
+    return parsed.brief;
   }
 
-  public async put(key: string, cards: readonly AskCard[], meta?: AskCachePutMeta): Promise<void> {
+  public async put(key: string, brief: Brief, meta?: AskCachePutMeta): Promise<void> {
     await this.ensureReady();
 
     const now = this.clock().toISOString();
     const payload: CacheFileShape = {
-      version: 1,
+      version: CACHE_VERSION,
       query: meta?.query ?? '',
-      search_provider: meta?.searchProvider ?? 'browser',
+      search_provider: meta?.searchProvider ?? 'duckduckgo',
       utc_day: meta?.utcDay ?? now.slice(0, 10),
       created_at: now,
       ttl_seconds: this.ttlSeconds,
-      cards,
+      brief,
     };
 
     const target = this.filePathFor(key);

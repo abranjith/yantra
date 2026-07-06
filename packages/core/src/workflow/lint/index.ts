@@ -1,5 +1,6 @@
 import type { WorkflowFile } from '@yantra/protocol';
 
+import { criticalActionWithoutConfirmation } from './rules/critical-action-without-confirmation.js';
 import { deeplyNestedStep } from './rules/deeply-nested-step.js';
 import { jsonataExpressionInvalid } from './rules/jsonata-expression-invalid.js';
 import { missingIntentName } from './rules/missing-intent-name.js';
@@ -54,6 +55,7 @@ const DEFAULT_RULES: LintRule[] = [
   mixedExpressionForms,
   outputsUnredactedWithoutReadOnly,
   unrecordedFramesOnAuthenticated,
+  criticalActionWithoutConfirmation,
 ];
 
 /** Run all lint rules against a workflow. */

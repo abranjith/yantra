@@ -1,0 +1,66 @@
+import type { WorkflowFile } from '@yantra/protocol';
+
+import type { LintFinding, LintRule } from '../index.js';
+
+/**
+ * Heuristic: button text or locator name that looks like a purchase/submit
+ * action. Steps matching this heuristic should carry `requires_confirmation`.
+ */
+const PURCHASE_SHAPED_PATTERN =
+  /\b(buy|pay|book|order|submit|purchase|checkout|confirm|place\s+order|complete\s+purchase)\b/i;
+
+/**
+ * Warns when a mutating step (click/fill) whose locator name or accessible
+ * name matches the purchase-shaped heuristic does **not** carry
+ * `requires_confirmation`.
+ *
+ * This is a warning, not an error — the author may have intentionally
+ * decided the action doesn't need consent. But the lint rule ensures the
+ * decision is conscious.
+ */
+export const criticalActionWithoutConfirmation: LintRule = {
+  name: 'CriticalActionWithoutConfirmation',
+  check(workflow: WorkflowFile): LintFinding[] {
+    const findings: LintFinding[] = [];
+
+    for (let i = 0; i < workflow.steps.length; i++) {
+      const step = workflow.steps[i];
+      if (!step) continue;
+
+      // Only check mutating verbs that can carry requires_confirmation
+      if (step.verb !== 'click' && step.verb !== 'fill') continue;
+
+      // Skip steps that already have the flag
+      if (step.requires_confirmation) continue;
+
+      // Check the locator name against the purchase-shaped heuristic
+      const locatorName = 'locator' in step ? step.locator : '';
+
+      // Also check the _locators block for accessible names
+      const locatorCandidates = workflow._locators[locatorName] ?? [];
+      const accessibleNames = locatorCandidates
+        .map((c) => {
+          if (c.kind === 'role' && typeof c.name === 'string') return c.name;
+          if (c.kind === 'label') return c.value;
+          if (c.kind === 'testid') return c.value;
+          return '';
+        })
+        .join(' ');
+
+      const textToCheck = `${locatorName} ${accessibleNames}`;
+
+      if (PURCHASE_SHAPED_PATTERN.test(textToCheck)) {
+        findings.push({
+          code: 'CriticalActionWithoutConfirmation',
+          severity: 'warning',
+          path: `steps[${i}]`,
+          message: `Step "${step.id}" (verb: ${step.verb}, locator: "${locatorName}") looks like a purchase/submit action but does not have requires_confirmation set.`,
+          suggestion:
+            'Add `requires_confirmation: true` to this step so the executor pauses for human consent before executing it.',
+        });
+      }
+    }
+
+    return findings;
+  },
+};

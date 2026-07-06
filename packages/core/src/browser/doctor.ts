@@ -1,5 +1,8 @@
 import { access, constants, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 
+import { indexDbPath, openIndexDb, setMeta } from '../index-db/db.js';
+import { SqliteHistoryStore } from '../index-db/history-store.js';
+
 import { detectChrome } from './chrome-discovery.js';
 import { MIN_SUPPORTED_CHROME_MAJOR } from './launch-options.js';
 import { cacheDir, dataDir, doctorCachePath, profilesRoot } from './paths.js';
@@ -221,6 +224,49 @@ async function checkKeychainReachable(): Promise<DoctorCheck> {
   }
 }
 
+/**
+ * Verifies the local SQLite index opens, migrates, and accepts a write. Because
+ * the index is a rebuildable cache (plan §7), a corrupt file is not an error:
+ * {@link openIndexDb} moves it aside and rebuilds `history` from the run tree,
+ * and this check reports a `warn` so the user sees it happened.
+ */
+async function checkIndexDbWritable(): Promise<DoctorCheck> {
+  const path = indexDbPath();
+  try {
+    const { db, wasCorrupt } = await openIndexDb({
+      rebuild: async (fresh) => {
+        const store = new SqliteHistoryStore({ db: fresh });
+        await store.rebuildFromRuns();
+      },
+    });
+    try {
+      // Probe write — a read-only DB (bad perms) throws here.
+      setMeta(db, 'doctor_probe_at', new Date().toISOString());
+    } finally {
+      db.close();
+    }
+
+    if (wasCorrupt) {
+      return buildCheck(
+        'indexdb.writable',
+        'warn',
+        'index.db was corrupt and has been rebuilt from the run history.',
+        { path },
+        'No action needed — the index is a rebuildable cache of your runs.',
+      );
+    }
+    return buildCheck('indexdb.writable', 'ok', `${path} is writable.`, { path });
+  } catch (e) {
+    return buildCheck(
+      'indexdb.writable',
+      'error',
+      `index.db is not writable: ${(e as Error).message}`,
+      { path },
+      'Check permissions on the Yantra data directory (expected owner-only 0700/0600).',
+    );
+  }
+}
+
 function rollupOverall(checks: readonly DoctorCheck[]): DoctorReport['overall'] {
   if (checks.some((c) => c.status === 'error')) return 'error';
   if (checks.some((c) => c.status === 'warn')) return 'warn';
@@ -234,8 +280,17 @@ async function runAllChecks(): Promise<readonly DoctorCheck[]> {
   const dataPermsCheck = await checkDataDirPermissions();
   const cacheDirCheck = await checkDirWritable('cachedir.writable', cacheDir());
   const keychainCheck = await checkKeychainReachable();
+  const indexDbCheck = await checkIndexDbWritable();
 
-  return [chromeCheck, versionCheck, dataDirCheck, dataPermsCheck, cacheDirCheck, keychainCheck];
+  return [
+    chromeCheck,
+    versionCheck,
+    dataDirCheck,
+    dataPermsCheck,
+    cacheDirCheck,
+    keychainCheck,
+    indexDbCheck,
+  ];
 }
 
 /**

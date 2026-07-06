@@ -174,12 +174,19 @@ function workflowLocator(name: string): LocatorChain {
 }
 
 function translateStep(wfStep: WorkflowStep, stepId: string): Step {
-  const base = { id: stepId, scope: wfStep.scope };
+  const base = {
+    id: stepId,
+    scope: wfStep.scope,
+    requires_confirmation: wfStep.requires_confirmation,
+  };
 
   switch (wfStep.verb) {
     case 'navigate':
       return {
         ...base,
+        confirmation_description: wfStep.confirmation_description,
+        expected_cost: wfStep.expected_cost,
+        consequence: wfStep.consequence,
         type: 'navigate',
         url: exprToValueRef(wfStep.url),
       };
@@ -187,6 +194,9 @@ function translateStep(wfStep: WorkflowStep, stepId: string): Step {
     case 'click':
       return {
         ...base,
+        confirmation_description: wfStep.confirmation_description,
+        expected_cost: wfStep.expected_cost,
+        consequence: wfStep.consequence,
         type: 'click',
         locator: workflowLocator(wfStep.locator),
         modifiers: null,
@@ -195,6 +205,9 @@ function translateStep(wfStep: WorkflowStep, stepId: string): Step {
     case 'fill':
       return {
         ...base,
+        confirmation_description: wfStep.confirmation_description,
+        expected_cost: wfStep.expected_cost,
+        consequence: wfStep.consequence,
         type: 'fill',
         locator: workflowLocator(wfStep.locator),
         value: exprToValueRef(wfStep.value),

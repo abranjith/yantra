@@ -171,7 +171,7 @@ describe('@no-llm FileSystemRecordingStore', () => {
     await store.create('REC008', 'wf');
     // Corrupt the draft by passing invalid schema_version
     const badDraft = {
-      schema_version: '0.2', // invalid — only '0.1' is allowed
+      schema_version: '9.9', // invalid — not a supported schema version
       recording_id: 'REC008',
       workflow_name_hint: 'wf',
       started_at: '2026-05-11T12:00:00.000Z',

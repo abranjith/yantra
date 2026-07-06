@@ -2,22 +2,32 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { FailureClass, TaskEvent } from '@yantra/protocol';
+import type { Brief, FailureClass, TaskEvent } from '@yantra/protocol';
+import { appendNotice, generateUlid } from '@yantra/protocol';
 
+import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
 import { JsonlEventBus } from '../executor/event-bus.js';
+import type { Synthesizer } from '../synthesis/types.js';
 
 import { cacheKey, utcDayFrom } from './cache-key.js';
 import type { AskCache } from './cache.js';
-import { renderJson, renderMarkdown } from './card.js';
 import type { AskEthicsGate } from './ethics-adapter.js';
 import { FetchError, type ContentFetcher } from './fetcher.js';
 import type { Extractor } from './readability.js';
 import { SearchProviderError } from './search/errors.js';
-import type { SearchProvider } from './search/provider.js';
-import type { Summarizer } from './summarizer.js';
-import type { AskCard, AskQuery, SearchResult } from './types.js';
+import type { SearchProvider } from './search/registry.js';
+import { processSource, type ProcessedSource } from './source-processor.js';
+import type { AskQuery, SearchResult } from './types.js';
+
+/** The result of one ask run: the Brief plus its persisted artifact paths. */
+export interface AskRunResult {
+  /** The synthesized Brief document. */
+  readonly brief: Brief;
+  /** Paths of the written brief.json/md/html, or null when the write failed. */
+  readonly artifacts: BriefArtifactPaths | null;
+}
 
 export class AskPipelineError extends Error {
   public override readonly name = 'AskPipelineError';
@@ -38,27 +48,33 @@ interface AskPipelineDependencies {
   readonly searchProvider: SearchProvider;
   readonly fetcher: ContentFetcher;
   readonly extractor: Extractor;
-  readonly ruleBasedSummarizer: Summarizer;
-  readonly llmSummarizer: Summarizer | null;
   readonly cache: AskCache;
   readonly ethicsGate: AskEthicsGate;
   readonly logger: Logger;
+  /**
+   * The Synthesize stage (FEAT-014). Turns the search/fetch/extract output into
+   * one Brief. Callers select the strategy (deterministic vs LLM) via
+   * `selectSynthesizer` and pass the chosen instance here.
+   */
+  readonly synthesizer: Synthesizer;
   readonly runRootDir?: string;
   readonly clock?: () => Date;
 }
 
 /**
- * Orchestrates the ask pipeline with deterministic fallback behavior.
+ * Orchestrates the ask pipeline: `Search → Fetch → Extract → Synthesize →
+ * (persist) → Brief`. Per-source failures are isolated and surfaced as honest
+ * Brief notices rather than dropped; a budget timeout yields a partial Brief
+ * carrying a `budget_exhausted` notice instead of a hard error.
  */
 export class AskPipeline {
   private readonly searchProvider: SearchProvider;
   private readonly fetcher: ContentFetcher;
   private readonly extractor: Extractor;
-  private readonly ruleBasedSummarizer: Summarizer;
-  private readonly llmSummarizer: Summarizer | null;
   private readonly cache: AskCache;
   private readonly ethicsGate: AskEthicsGate;
   private readonly logger: Logger;
+  private readonly synthesizer: Synthesizer;
   private readonly runRootDir: string;
   private readonly clock: () => Date;
 
@@ -66,18 +82,17 @@ export class AskPipeline {
     this.searchProvider = deps.searchProvider;
     this.fetcher = deps.fetcher;
     this.extractor = deps.extractor;
-    this.ruleBasedSummarizer = deps.ruleBasedSummarizer;
-    this.llmSummarizer = deps.llmSummarizer;
     this.cache = deps.cache;
     this.ethicsGate = deps.ethicsGate;
     this.logger = deps.logger;
+    this.synthesizer = deps.synthesizer;
     this.runRootDir = deps.runRootDir ?? join(dataDir(), 'runs');
     this.clock = deps.clock ?? (() => new Date());
   }
 
-  public async run(query: AskQuery): Promise<readonly AskCard[]> {
+  public async run(query: AskQuery): Promise<AskRunResult> {
     const runId = randomUUID();
-    const taskId = runId;
+    const taskId = generateUlid();
     const startedAt = this.clock().toISOString();
     const runDir = join(this.runRootDir, runId);
     const events = new JsonlEventBus(join(runDir, 'events.jsonl'));
@@ -86,12 +101,10 @@ export class AskPipeline {
       events.publish(event);
     };
 
-    let cards: AskCard[] = [];
     let status: 'ok' | 'partial' | 'failed' = 'failed';
     let failureClass: FailureClass | null = null;
 
     await this.prepareRunDir(runDir);
-
     emit({ kind: 'task_started', task_id: taskId, at: this.clock().toISOString() });
 
     const normalizedQuery = query.normalized.trim() || query.raw.trim();
@@ -99,119 +112,140 @@ export class AskPipeline {
     const providerName = query.searchProvider ?? this.searchProvider.name;
     const key = cacheKey(normalizedQuery, providerName, utcDay);
 
-    const pipelineController = new AbortController();
-    const budgetTimer = setTimeout(() => pipelineController.abort(), query.pipelineBudgetMs);
+    const controller = new AbortController();
+    const budgetTimer = setTimeout(() => controller.abort(), query.pipelineBudgetMs);
     if (typeof budgetTimer.unref === 'function') {
       budgetTimer.unref();
     }
 
     try {
       if (!query.noCache) {
-        const cachedCards = await this.cache.get(key);
-        if (cachedCards) {
-          cards = [...cachedCards];
-          status = cards.some((card) => card.notice !== null) ? 'partial' : 'ok';
-          emit({
-            kind: 'task_completed',
-            task_id: taskId,
-            outputs_keys: ['cards'],
-            at: this.clock().toISOString(),
-          });
-          await this.writeArtifacts({
+        const cached = await this.cache.get(key);
+        if (cached) {
+          status = cached.notices.length > 0 ? 'partial' : 'ok';
+          const artifacts = await this.persist(
             runDir,
             taskId,
             query,
             providerName,
             startedAt,
             status,
-            cards,
+            cached,
+          );
+          emit({
+            kind: 'task_completed',
+            task_id: taskId,
+            outputs_keys: ['brief'],
+            at: this.clock().toISOString(),
           });
-          return cards;
+          return { brief: cached, artifacts };
         }
       }
 
-      emit({
-        kind: 'step_started',
-        task_id: taskId,
-        step_id: 'search',
-        step_type: 'extract',
-        at: this.clock().toISOString(),
-      });
-
-      const searchResults = await this.searchProvider.search(normalizedQuery, {
-        limit: Math.max(1, query.limit) + 2,
-        signal: pipelineController.signal,
-      });
-
-      emit({
-        kind: 'step_completed',
-        task_id: taskId,
-        step_id: 'search',
-        capture_keys: [],
-        at: this.clock().toISOString(),
-      });
-
-      const budgetCalls = query.budgetCalls ?? query.limit;
-      const candidates = searchResults.slice(
-        0,
-        Math.max(1, Math.min(searchResults.length, Math.max(query.limit, budgetCalls) + 2)),
+      const { candidates, budgetExhausted: searchBudgetHit } = await this.search(
+        normalizedQuery,
+        query,
+        taskId,
+        emit,
+        controller,
       );
 
-      cards = (
-        await Promise.all(
-          candidates.map(async (result) =>
-            this.processSearchResult(
-              result,
-              query,
-              runDir,
-              taskId,
-              emit,
-              pipelineController.signal,
-            ),
-          ),
-        )
-      )
-        .sort((left, right) => {
-          const leftScore = left.notice === null ? 0 : 1;
-          const rightScore = right.notice === null ? 0 : 1;
-          return leftScore - rightScore || left.rank - right.rank;
-        })
-        .slice(0, query.limit)
-        .map((entry) => entry.card);
+      const processed = await Promise.all(
+        candidates.map((result) =>
+          this.processSearchResult(result, query, runDir, taskId, emit, controller.signal),
+        ),
+      );
 
-      if (cards.length === 0) {
-        throw new AskPipelineError('Ask pipeline produced no cards.', 'unexpected', { runDir });
+      const budgetExhausted = searchBudgetHit || controller.signal.aborted;
+
+      const docs = processed.flatMap((entry) => (entry.doc !== null ? [entry.doc] : []));
+      const failures = processed.flatMap((entry) =>
+        entry.failure !== null ? [entry.failure] : [],
+      );
+
+      const outcome = await this.synthesizer.synthesize(
+        { query: normalizedQuery, docs, failures },
+        {
+          strategy: query.noLlm ? 'deterministic' : 'auto',
+          // The Brief always carries the full document; the terminal `--detail`
+          // flag chooses what to *display*, so synthesis fills every block.
+          detail: 'full',
+          length: query.length,
+          scope: 'public',
+          taskId,
+          runId,
+          searchProvider: providerName,
+          ...(query.personalization ? { personalization: query.personalization } : {}),
+        },
+      );
+
+      if (!outcome.isOk) {
+        throw new AskPipelineError(outcome.error.message, 'unexpected', {
+          runDir,
+          cause: outcome.error,
+        });
       }
 
-      if (cards.every((card) => card.notice !== null)) {
-        throw new AskPipelineError('All ask sources failed.', 'unexpected', { runDir });
+      let brief = outcome.value.brief;
+      if (candidates.length === 0 && !budgetExhausted) {
+        brief = appendNotice(brief, {
+          source: 'search',
+          reason: 'the search provider returned no results',
+          kind: 'other',
+        });
+      }
+      if (budgetExhausted) {
+        brief = appendNotice(brief, {
+          source: 'pipeline',
+          reason: 'time budget exhausted before all sources were processed',
+          kind: 'budget_exhausted',
+        });
       }
 
-      if (!query.noCache) {
-        await this.cache.put(key, cards, {
+      emit({
+        kind: 'synthesis_completed',
+        task_id: taskId,
+        at: this.clock().toISOString(),
+        strategy: outcome.value.strategyUsed,
+        sources_in: docs.length,
+        sources_used: brief.sources.length,
+        coverage: brief.metadata.coverage,
+        citation_verdict: {
+          claims_checked: outcome.value.verdict.claimsChecked,
+          flagged: outcome.value.verdict.flagged,
+          stripped: outcome.value.verdict.stripped,
+        },
+      });
+
+      // Cache only Briefs that carry real sources, so a transient all-failed or
+      // budget-truncated run can be retried within the day.
+      if (!query.noCache && brief.sources.length > 0) {
+        await this.cache.put(key, brief, {
           query: normalizedQuery,
           searchProvider: providerName,
           utcDay,
         });
       }
 
-      status = cards.some((card) => card.notice !== null) ? 'partial' : 'ok';
-      emit({
-        kind: 'task_completed',
-        task_id: taskId,
-        outputs_keys: ['cards'],
-        at: this.clock().toISOString(),
-      });
-      await this.writeArtifacts({
+      status = brief.notices.length > 0 ? 'partial' : 'ok';
+      const artifacts = await this.persist(
         runDir,
         taskId,
         query,
         providerName,
         startedAt,
         status,
-        cards,
+        brief,
+      );
+
+      emit({
+        kind: 'task_completed',
+        task_id: taskId,
+        outputs_keys: ['brief'],
+        at: this.clock().toISOString(),
       });
-      return cards;
+
+      return { brief, artifacts };
     } catch (error) {
       failureClass = classifyFailure(error);
       const reportPath = join(runDir, 'report.md');
@@ -222,17 +256,8 @@ export class AskPipeline {
         report_path: reportPath,
         at: this.clock().toISOString(),
       });
-
-      await this.writeArtifacts({
-        runDir,
-        taskId,
-        query,
-        providerName,
-        startedAt,
-        status: 'failed',
-        cards,
-      });
-
+      await this.writeManifest(runDir, taskId, query, providerName, startedAt, 'failed');
+      await writeFile(reportPath, this.failureReport(query, error), 'utf8');
       throw toAskPipelineError(error, failureClass, runDir);
     } finally {
       clearTimeout(budgetTimer);
@@ -242,6 +267,56 @@ export class AskPipeline {
     }
   }
 
+  /** Runs search, honoring the budget: an abort mid-search yields empty candidates. */
+  private async search(
+    normalizedQuery: string,
+    query: AskQuery,
+    taskId: string,
+    emit: (event: TaskEvent) => void,
+    controller: AbortController,
+  ): Promise<{ candidates: readonly SearchResult[]; budgetExhausted: boolean }> {
+    emit({
+      kind: 'step_started',
+      task_id: taskId,
+      step_id: 'search',
+      step_type: 'extract',
+      at: this.clock().toISOString(),
+    });
+
+    let searchResults: readonly SearchResult[] = [];
+    let budgetExhausted = false;
+    try {
+      searchResults = await this.searchProvider.search(normalizedQuery, {
+        limit: Math.max(1, query.limit) + 2,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      // A budget abort during search is not a hard failure — degrade to a
+      // partial (empty) Brief; any other search error propagates.
+      if (controller.signal.aborted) {
+        budgetExhausted = true;
+      } else {
+        throw error;
+      }
+    }
+
+    emit({
+      kind: 'step_completed',
+      task_id: taskId,
+      step_id: 'search',
+      capture_keys: [],
+      at: this.clock().toISOString(),
+    });
+
+    const budgetCalls = query.budgetCalls ?? query.limit;
+    const candidates = searchResults.slice(
+      0,
+      Math.max(1, Math.min(searchResults.length, Math.max(query.limit, budgetCalls) + 2)),
+    );
+
+    return { candidates, budgetExhausted };
+  }
+
   private async processSearchResult(
     result: SearchResult,
     query: AskQuery,
@@ -249,7 +324,7 @@ export class AskPipeline {
     taskId: string,
     emit: (event: TaskEvent) => void,
     signal: AbortSignal,
-  ): Promise<{ rank: number; notice: string | null; card: AskCard }> {
+  ): Promise<ProcessedSource> {
     const stepId = `source-${result.rank}`;
     emit({
       kind: 'step_started',
@@ -259,76 +334,57 @@ export class AskPipeline {
       at: this.clock().toISOString(),
     });
 
-    let card: AskCard;
-
     try {
-      const ethics = await this.ethicsGate.checkUrl(result.url);
-      if (!ethics.ok) {
-        card = noticeCard(
-          result,
-          null,
-          `this source was skipped: ${ethics.reason} - ${ethics.detail}`,
-        );
-        return { rank: result.rank, notice: card.notice, card };
-      }
-
-      const fetched = await this.fetcher.fetch(result.url, {
-        timeoutMs: query.perFetchTimeoutMs,
-        signal,
-      });
-
-      await this.writeFetchedHtml(runDir, result.url, fetched.html);
-
-      const article = await this.extractor.extract(fetched);
-      if (!article) {
-        card = noticeCard(result, fetched.fetchedAt, 'could not extract a readable article');
-        return { rank: result.rank, notice: card.notice, card };
-      }
-
-      const summarizer =
-        query.noLlm || this.llmSummarizer === null ? this.ruleBasedSummarizer : this.llmSummarizer;
-      const summary = await summarizer.summarize(article, query);
-
-      card = {
-        url: article.url,
-        title: article.title ?? fallbackTitle(article.url),
-        source: safeHost(article.url),
-        fetchedAt: fetched.fetchedAt,
-        publishedAt: article.publishedAt,
-        summary: summary.summary,
-        summaryKind: summary.kind,
-        quotedSnippet: makeQuotedSnippet(
-          article.contentText.length > 0 ? article.contentText : (article.excerpt ?? ''),
-        ),
-        tags: inferTags(query.normalized),
-        notice: null,
-      };
-
-      return { rank: result.rank, notice: null, card };
-    } catch (error) {
-      if (error instanceof FetchError && error.context.kind === 'timeout') {
-        emit({
-          kind: 'step_retry',
-          task_id: taskId,
-          step_id: stepId,
-          attempt: 1,
-          reason: 'network_error',
-          at: this.clock().toISOString(),
-        });
-      }
-
-      const notice = buildNoticeFromError(error);
-      card = noticeCard(result, null, notice);
-      return { rank: result.rank, notice, card };
+      return await processSource(
+        { ethicsGate: this.ethicsGate, fetcher: this.fetcher, extractor: this.extractor },
+        result,
+        {
+          perFetchTimeoutMs: query.perFetchTimeoutMs,
+          signal,
+          onFetchedHtml: (url, html) => this.writeFetchedHtml(runDir, url, html),
+          onTimeout: () =>
+            emit({
+              kind: 'step_retry',
+              task_id: taskId,
+              step_id: stepId,
+              attempt: 1,
+              reason: 'network_error',
+              at: this.clock().toISOString(),
+            }),
+        },
+      );
     } finally {
       emit({
         kind: 'step_completed',
         task_id: taskId,
         step_id: stepId,
-        capture_keys: [`card:${result.rank}`],
+        capture_keys: [`source:${result.rank}`],
         at: this.clock().toISOString(),
       });
     }
+  }
+
+  /** Writes the manifest + Brief artifacts; artifact failures degrade to null. */
+  private async persist(
+    runDir: string,
+    taskId: string,
+    query: AskQuery,
+    providerName: string,
+    startedAt: string,
+    status: 'ok' | 'partial' | 'failed',
+    brief: Brief,
+  ): Promise<BriefArtifactPaths | null> {
+    await this.writeManifest(runDir, taskId, query, providerName, startedAt, status);
+
+    const result = await writeBriefArtifacts(runDir, brief);
+    if (!result.isOk) {
+      this.logger.warn(
+        { runDir, error: result.error.message },
+        'brief artifacts not written; run still succeeded',
+      );
+      return null;
+    }
+    return result.value;
   }
 
   private async writeFetchedHtml(runDir: string, url: string, html: string): Promise<void> {
@@ -338,60 +394,42 @@ export class AskPipeline {
     await writeFile(join(dir, fileName), html, 'utf8');
   }
 
-  private async writeArtifacts(input: {
-    readonly runDir: string;
-    readonly taskId: string;
-    readonly query: AskQuery;
-    readonly providerName: string;
-    readonly startedAt: string;
-    readonly status: 'ok' | 'partial' | 'failed';
-    readonly cards: readonly AskCard[];
-  }): Promise<void> {
-    const finishedAt = this.clock().toISOString();
-
-    await mkdir(join(input.runDir, 'cards'), { recursive: true });
-
+  private async writeManifest(
+    runDir: string,
+    taskId: string,
+    query: AskQuery,
+    providerName: string,
+    startedAt: string,
+    status: 'ok' | 'partial' | 'failed',
+  ): Promise<void> {
     await writeFile(
-      join(input.runDir, 'manifest.json'),
+      join(runDir, 'manifest.json'),
       JSON.stringify(
         {
-          task_id: input.taskId,
+          task_id: taskId,
           type: 'ask',
-          query: input.query.raw,
-          search_provider: input.providerName,
-          started_at: input.startedAt,
-          finished_at: finishedAt,
-          status: input.status,
+          query: query.raw,
+          search_provider: providerName,
+          started_at: startedAt,
+          finished_at: this.clock().toISOString(),
+          status,
           scope_summary: 'public',
+          outputs: status === 'failed' ? [] : ['brief.json', 'brief.md', 'brief.html'],
         },
         null,
         2,
       ),
       'utf8',
     );
+  }
 
-    await writeFile(
-      join(input.runDir, 'outputs.json'),
-      JSON.stringify(renderJson(input.cards), null, 2),
-      'utf8',
-    );
-
-    await Promise.all(
-      input.cards.map(async (card, index) => {
-        await writeFile(
-          join(input.runDir, 'cards', `${index}.json`),
-          JSON.stringify(card, null, 2),
-          'utf8',
-        );
-      }),
-    );
-
-    await writeFile(join(input.runDir, 'report.md'), renderMarkdown(input.cards), 'utf8');
+  private failureReport(query: AskQuery, error: unknown): string {
+    const reason = error instanceof Error ? error.message : String(error);
+    return `# Ask failed\n\nQuery: ${query.raw}\n\nReason: ${reason}\n`;
   }
 
   private async prepareRunDir(runDir: string): Promise<void> {
     await mkdir(runDir, { recursive: true });
-    await mkdir(join(runDir, 'cards'), { recursive: true });
     await mkdir(join(runDir, 'fetched'), { recursive: true });
     await writeFile(join(runDir, 'agent.jsonl'), '', 'utf8');
     await writeFile(join(runDir, 'secrets.jsonl'), '', 'utf8');
@@ -402,21 +440,12 @@ function classifyFailure(error: unknown): FailureClass {
   if (error instanceof AskPipelineError) {
     return error.failureClass;
   }
-
   if (error instanceof FetchError) {
-    if (error.context.kind === 'timeout') {
-      return 'navigation_timeout';
-    }
-    return 'network_error';
+    return error.context.kind === 'timeout' ? 'navigation_timeout' : 'network_error';
   }
-
   if (error instanceof SearchProviderError) {
-    if (error.context.statusCode === 429) {
-      return 'rate_limited';
-    }
-    return 'network_error';
+    return error.context.statusCode === 429 ? 'rate_limited' : 'network_error';
   }
-
   return 'unexpected';
 }
 
@@ -428,7 +457,6 @@ function toAskPipelineError(
   if (error instanceof AskPipelineError) {
     return error;
   }
-
   return new AskPipelineError(
     error instanceof Error ? error.message : 'ask pipeline failed',
     failureClass,
@@ -437,83 +465,4 @@ function toAskPipelineError(
       cause: error,
     },
   );
-}
-
-function noticeCard(result: SearchResult, fetchedAt: string | null, notice: string): AskCard {
-  return {
-    url: result.url,
-    title: result.title ?? fallbackTitle(result.url),
-    source: safeHost(result.url),
-    fetchedAt: fetchedAt ?? new Date().toISOString(),
-    publishedAt: result.publishedAt,
-    summary: '',
-    summaryKind: 'fallback-lede',
-    quotedSnippet: result.snippet?.slice(0, 280) ?? '',
-    tags: [],
-    notice,
-  };
-}
-
-function makeQuotedSnippet(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= 280) {
-    return trimmed;
-  }
-
-  const sentenceBoundary = /^([\s\S]*?[.!?])\s/.exec(trimmed.slice(0, 280));
-  if (sentenceBoundary?.[1]) {
-    return sentenceBoundary[1].trim();
-  }
-
-  return trimmed.slice(0, 280).trim();
-}
-
-function inferTags(normalizedQuery: string): readonly string[] {
-  return normalizedQuery
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 1)
-    .slice(0, 5);
-}
-
-function fallbackTitle(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.hostname}${parsed.pathname === '/' ? '' : parsed.pathname}`;
-  } catch {
-    return url;
-  }
-}
-
-function safeHost(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
-
-function buildNoticeFromError(error: unknown): string {
-  if (error instanceof FetchError) {
-    if (error.context.kind === 'timeout') {
-      return 'fetch timed out';
-    }
-    if (error.context.kind === 'http-status') {
-      return `source returned HTTP ${error.context.statusCode ?? 'error'}`;
-    }
-    if (error.context.kind === 'too-large') {
-      return 'source payload exceeded the size limit';
-    }
-    return 'fetch failed';
-  }
-
-  if (error instanceof AskPipelineError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'unexpected failure while processing source';
 }

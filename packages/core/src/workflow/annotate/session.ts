@@ -8,7 +8,11 @@ import type {
 import type { SecurityClass, SecurityScope } from '@yantra/protocol';
 import { RoleEnum } from '@yantra/protocol';
 
-import { suggestLocatorName, suggestValuePromotion } from './suggest.js';
+import {
+  suggestLocatorName,
+  suggestRequiresConfirmation,
+  suggestValuePromotion,
+} from './suggest.js';
 
 export type ValuePromotion = 'literal' | 'param' | 'secret' | 'output' | null;
 
@@ -26,6 +30,7 @@ export interface AnnotateDecision {
   valuePromotion: ValuePromotion;
   paramOrSecretKey: string | null;
   scopeOverride: SecurityScope | null;
+  requiresConfirmation: boolean;
 }
 
 export interface AnnotateView {
@@ -178,6 +183,7 @@ export class AnnotateSession {
           valuePromotion: suggestValuePromotion(action),
           paramOrSecretKey: null,
           scopeOverride: null,
+          requiresConfirmation: suggestRequiresConfirmation(action),
         };
       }
     }
@@ -195,6 +201,7 @@ export class AnnotateSession {
         valuePromotion: null,
         paramOrSecretKey: null,
         scopeOverride: null,
+        requiresConfirmation: false,
       };
     }
     this.state = { kind: 'preview' };
@@ -243,6 +250,10 @@ export class AnnotateSession {
           verb: 'navigate',
           url: action.url_after ?? action.url_before,
           scope: decision.scopeOverride,
+          requires_confirmation: decision.requiresConfirmation,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
         });
         continue;
       }
@@ -262,6 +273,10 @@ export class AnnotateSession {
           verb: 'click',
           locator: locatorName,
           scope: decision.scopeOverride,
+          requires_confirmation: decision.requiresConfirmation,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
         });
         continue;
       }
@@ -306,6 +321,10 @@ export class AnnotateSession {
           value,
           submit: false,
           scope: decision.scopeOverride,
+          requires_confirmation: decision.requiresConfirmation,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
         });
       }
     }

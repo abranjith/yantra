@@ -4,6 +4,9 @@ import path from 'node:path';
 import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
+import { Brief } from '../schemas/brief.js';
+import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
+import { DiscoverySession } from '../schemas/discovery.js';
 import { TaskEvent } from '../schemas/events.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
@@ -30,6 +33,10 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
     name: 'ExtractionResultEnvelope',
   },
   'usage-ledger.json': { schema: UsageLedger, name: 'UsageLedger' },
+  'brief.schema.json': { schema: Brief, name: 'Brief' },
+  'confirmation-request.json': { schema: ConfirmationRequest, name: 'ConfirmationRequest' },
+  'confirmation-decision.json': { schema: ConfirmationDecision, name: 'ConfirmationDecision' },
+  'discovery-session.json': { schema: DiscoverySession, name: 'DiscoverySession' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

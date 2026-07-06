@@ -51,7 +51,7 @@ describe('@no-llm cli/connector-io', () => {
     connector.renderResult({ kind: 'list', items }, makeOpts(stdout.stream, true));
     const parsed = JSON.parse(stdout.value()) as Record<string, unknown>;
     expect(parsed.kind).toBe('list');
-    expect(parsed.schemaVersion).toBe('0.1');
+    expect(parsed.schemaVersion).toBe('0.2');
     expect(parsed.items as ListItem[]).toHaveLength(1);
   });
 

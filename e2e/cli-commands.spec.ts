@@ -130,7 +130,7 @@ describe('@no-llm cli commands e2e', () => {
       kind: string;
       items: unknown[];
     };
-    expect(parsed.schemaVersion).toBe('0.1');
+    expect(parsed.schemaVersion).toBe('0.2');
     expect(parsed.kind).toBe('list');
     expect(parsed.items).toEqual([]);
   });

@@ -68,10 +68,55 @@ export { buildRePrompt } from './prompts/reprompt.js';
 export type { RePromptContext } from './prompts/reprompt.js';
 
 // ---------------------------------------------------------------------------
+// Synthesis prompt template (FEAT-014) — plain data injected into core's
+// LlmSynthesizer at wiring time (core cannot import agent).
+// ---------------------------------------------------------------------------
+export { SYNTHESIS_PROMPT } from './synthesis/prompt.js';
+export type {
+  SynthesisPromptInput,
+  SynthesisPromptSource,
+  SynthesisPromptTemplate,
+} from './synthesis/prompt.js';
+
+// ---------------------------------------------------------------------------
+// Research follow-up-query prompt template (FEAT-017) — plain data injected
+// into core's FollowUpQueryGenerator at wiring time.
+// ---------------------------------------------------------------------------
+export { RESEARCH_QUERY_PROMPT } from './research/prompt.js';
+export type { ResearchQueryPromptInput, ResearchQueryPromptTemplate } from './research/prompt.js';
+
+// ---------------------------------------------------------------------------
 // Plan generation
 // ---------------------------------------------------------------------------
 export { runGeneratePlan } from './plan/generate.js';
 export type { RawCallClient, RawCallResult } from './plan/generate.js';
+
+// ---------------------------------------------------------------------------
+// Discovery mode (FEAT-020) — proposer, prompt template, session-state reducer
+// ---------------------------------------------------------------------------
+export { DISCOVERY_PROMPT } from './discovery/prompts.js';
+export type {
+  DiscoveryPromptCycle,
+  DiscoveryPromptCycleOneLine,
+  DiscoveryPromptCycleSummary,
+  DiscoveryPromptInput,
+  DiscoveryPromptTemplate,
+} from './discovery/prompts.js';
+export {
+  DEFAULT_MAX_REPROMPTS as DISCOVERY_DEFAULT_MAX_REPROMPTS,
+  propose,
+} from './discovery/propose.js';
+export type { ProposeDeps, ProposeError, ProposeOpts } from './discovery/propose.js';
+export {
+  appendCycle,
+  expandAllowlist,
+  initDiscoveryState,
+  latestBudgetSnapshot,
+  latestObservation,
+  trimHistoryForPrompt,
+  ZERO_BUDGET_SNAPSHOT,
+} from './discovery/session-state.js';
+export type { DiscoverySessionState } from './discovery/session-state.js';
 
 // ---------------------------------------------------------------------------
 // Plan validation

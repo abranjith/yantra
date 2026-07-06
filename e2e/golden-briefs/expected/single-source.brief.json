@@ -1,0 +1,67 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "Quarterly earnings summary acme corp",
+  "overview": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. [1] Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment. [1] The company raised its full year guidance and announced a 500 million dollar share buyback. [1]",
+  "key_findings": [
+    {
+      "text": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "The company raised its full year guidance and announced a 500 million dollar share buyback.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Numbers & figures",
+      "body_md": "- Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. [1]\n- Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment. [1]\n- The company raised its full year guidance and announced a 500 million dollar share buyback. [1]",
+      "citations": [1]
+    }
+  ],
+  "facets": null,
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://investor.example.com/acme-q2",
+      "final_url": null,
+      "host": "investor.example.com",
+      "title": "Acme Corp Q2 results",
+      "fetched_at": "2026-06-14T06:00:00.000Z",
+      "published_at": "2026-06-12T21:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "this week",
+    "citation_verdict": {
+      "claims_checked": 6,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "run_id": "golden-run"
+  },
+  "notices": [
+    {
+      "source": "press.example.net",
+      "reason": "could not extract a readable article",
+      "kind": "extract_failed"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@no-llm briefToHtml > renders the canonical Brief to a stable self-contained document 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cheapest Sony WH-1000XM5 today</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 2rem 1rem;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+  background: #fafaf8;
+}
+.brief { max-width: 46rem; margin: 0 auto; }
+h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 1rem; }
+h2 {
+  font-size: 1.3rem;
+  margin: 2rem 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e0ddd5;
+}
+a { color: #1256a3; }
+.overview {
+  background: #fff;
+  border: 1px solid #e0ddd5;
+  border-left: 4px solid #1256a3;
+  border-radius: 6px;
+  padding: 0.75rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+  font-size: 1.05rem;
+}
+.overview p:first-child { margin-top: 0; }
+.overview p:last-child { margin-bottom: 0; }
+table.comparison {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 0.95rem;
+}
+table.comparison th, table.comparison td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e0ddd5;
+}
+table.comparison thead th { border-bottom: 2px solid #cfc9bd; }
+table.comparison tbody tr:nth-child(even) { background: #f2efe9; }
+ol.sources { padding-left: 1.5rem; }
+ol.sources li { margin: 0.35rem 0; }
+.src-meta { color: #6b675e; font-size: 0.85rem; }
+ul.notices {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+ul.notices li {
+  background: #fff8e6;
+  border: 1px solid #eadfb8;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+}
+</style>
+</head>
+<body>
+<main class="brief">
+<h1>Cheapest Sony WH-1000XM5 today</h1>
+<section class="overview"><p>Lowest price is <strong>$328</strong> at Amazon (down from a $399 list price). All three tracked retailers list the WH-1000XM5, and prices have risen roughly 4% this week. [1][3]</p></section>
+<h2>Key Findings</h2>
+<ul>
+<li>Amazon — $328, in stock, free shipping [1]</li>
+<li>Best Buy — $349, in stock [2]</li>
+<li>Walmart — $342 via a third-party seller [3]</li>
+<li>Prices have trended upward since last week, so buying now is reasonable. <em>(editorial)</em></li>
+</ul>
+<h2>Price &amp; availability</h2>
+<p>All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. [1][2][3]</p>
+<h2>Caveats</h2>
+<p>The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. [3]</p>
+<h2>Comparison</h2>
+<table class="comparison">
+<thead><tr><th>Retailer</th><th>Price</th><th>In stock</th></tr></thead>
+<tbody>
+<tr><td>Amazon</td><td>$328</td><td>✓</td></tr>
+<tr><td>Best Buy</td><td>$349</td><td>✓</td></tr>
+<tr><td>Walmart</td><td>$342</td><td>✓</td></tr>
+</tbody>
+</table>
+<h2>Sources</h2>
+<ol class="sources">
+<li><a href="https://www.amazon.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Wireless Headphones — Amazon</a> <span class="src-meta">amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z</span></li>
+<li><a href="https://www.bestbuy.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 | Best Buy</a> <span class="src-meta">bestbuy.com · fetched 2026-07-01T09:00:05.000Z</span></li>
+<li><a href="https://www.walmart.com/ip/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Headphones - Walmart</a> <span class="src-meta">walmart.com · fetched 2026-07-01T09:00:10.000Z</span></li>
+</ol>
+<h2>Notices</h2>
+<ul class="notices">
+<li><strong>fetch_failed</strong> — example-blog.com: fetch timed out after 8000ms</li>
+</ul>
+</main>
+</body>
+</html>
+"
+`;

@@ -7,6 +7,8 @@ import type { BrowserSession, Logger } from '../browser/types.js';
 
 import { InMemoryCaptureStore } from './capture-store.js';
 import { FilesystemCheckpointStore } from './checkpoint-store.js';
+import { createConfirmationStore } from './confirmation-gateway.js';
+import type { ConfirmationGateway } from './confirmation-gateway.js';
 import { JsonlEventBus } from './event-bus.js';
 import { RetryBudgetImpl } from './retry-budget.js';
 import { buildScopeChain } from './scope-enforcer.js';
@@ -41,6 +43,7 @@ export interface ExecutionContextOptions {
   readonly logger: Logger;
   readonly clock?: Clock;
   readonly budgets?: Partial<RetryBudgetLevels>;
+  readonly confirmationGateway?: ConfirmationGateway | null;
 }
 
 /**
@@ -98,6 +101,8 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     logger: opts.logger,
     clock,
     runDir: opts.runDir,
+    confirmationGateway: opts.confirmationGateway ?? null,
+    confirmationStore: createConfirmationStore(opts.runDir),
   };
 }
 

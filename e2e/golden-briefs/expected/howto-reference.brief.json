@@ -1,0 +1,76 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "How to rotate ssh keys safely",
+  "overview": "Rotating SSH keys regularly reduces the blast radius of a leaked credential. [1] Good key hygiene means never reusing a single SSH key across unrelated systems. [2] Store private keys encrypted with a passphrase and prefer a hardware token where possible. [2]",
+  "key_findings": [
+    {
+      "text": "Rotating SSH keys regularly reduces the blast radius of a leaked credential.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Good key hygiene means never reusing a single SSH key across unrelated systems.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Store private keys encrypted with a passphrase and prefer a hardware token where possible.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "First generate a new key pair with a strong algorithm such as ed25519.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Key facts",
+      "body_md": "- Rotating SSH keys regularly reduces the blast radius of a leaked credential. [1]\n- Good key hygiene means never reusing a single SSH key across unrelated systems. [2]\n- Store private keys encrypted with a passphrase and prefer a hardware token where possible. [2]\n- First generate a new key pair with a strong algorithm such as ed25519. [1]",
+      "citations": [1, 2]
+    }
+  ],
+  "facets": null,
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://docs.example.com/ssh-key-rotation",
+      "final_url": null,
+      "host": "docs.example.com",
+      "title": "SSH key rotation guide",
+      "fetched_at": "2026-06-14T07:00:00.000Z",
+      "published_at": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://security.example.org/key-hygiene",
+      "final_url": null,
+      "host": "security.example.org",
+      "title": "Key hygiene best practices",
+      "fetched_at": "2026-06-14T07:00:05.000Z",
+      "published_at": "2026-04-15T00:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "older than a month",
+    "citation_verdict": {
+      "claims_checked": 7,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "run_id": "golden-run"
+  },
+  "notices": []
+}

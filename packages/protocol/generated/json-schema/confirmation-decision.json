@@ -1,0 +1,47 @@
+{
+  "$ref": "#/definitions/ConfirmationDecision",
+  "definitions": {
+    "ConfirmationDecision": {
+      "type": "object",
+      "properties": {
+        "confirmation_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "ULID of the request being resolved."
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "granted",
+            "denied",
+            "timed_out"
+          ],
+          "description": "Outcome: granted proceeds, denied/timed_out abort."
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp of the decision."
+        },
+        "decided_by": {
+          "type": "string",
+          "enum": [
+            "user_interactive",
+            "user_cli_confirm",
+            "timeout"
+          ],
+          "description": "Provenance of the decision — never agent."
+        }
+      },
+      "required": [
+        "confirmation_id",
+        "decision",
+        "decided_at",
+        "decided_by"
+      ],
+      "additionalProperties": false,
+      "description": "Terminal resolution of a ConfirmationRequest — always human-originated."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

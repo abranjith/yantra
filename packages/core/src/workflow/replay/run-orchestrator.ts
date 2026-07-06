@@ -15,6 +15,7 @@ import type { Plan, SecretRef } from '@yantra/protocol';
 import { runsRoot } from '../../browser/paths.js';
 import type { BrowserProvider } from '../../browser/types.js';
 import type { Logger } from '../../browser/types.js';
+import type { ConfirmationGateway } from '../../executor/confirmation-gateway.js';
 import { createExecutionContext } from '../../executor/execution-context.js';
 import { Executor } from '../../executor/executor.js';
 import type {
@@ -61,6 +62,14 @@ export interface RunOrchestratorOptions {
   readonly llmClient?: LLMClient | null;
   readonly logger: Logger;
   readonly clock?: { now(): Date };
+  /**
+   * Human-in-the-loop consent gateway (FEAT-019). When a workflow contains a
+   * `requires_confirmation` step, the executor blocks on this gateway. When
+   * omitted (`null`), a flagged step fails closed (user-handoff abort) — never
+   * auto-confirmed. Interactive CLI runs inject an `InteractiveConfirmationGateway`;
+   * unattended surfaces leave it null so they cannot self-authorize (plan §6).
+   */
+  readonly confirmationGateway?: ConfirmationGateway | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +240,7 @@ export class RunOrchestrator {
         workflowLocators: {
           resolve: (name: string) => locatorTable[name] ?? null,
         },
+        confirmationGateway: this.opts.confirmationGateway ?? null,
         logger,
       });
 
@@ -345,6 +355,7 @@ export class RunOrchestrator {
         sanitizer: this.opts.sanitizer ?? null,
         llmClient: this.opts.llmClient ?? null,
         ethics: this.opts.ethicsGate,
+        confirmationGateway: this.opts.confirmationGateway ?? null,
         logger,
       });
 

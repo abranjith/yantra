@@ -35,6 +35,7 @@ const CHECK_TITLES: Record<string, string> = {
   'datadir.permissions': 'Yantra data directory permissions safe',
   'cachedir.writable': 'Cache directory writable',
   'keychain.reachable': 'OS keychain reachable',
+  'indexdb.writable': 'Local SQLite index writable',
 };
 
 export function makeDoctorCommand(): Command {

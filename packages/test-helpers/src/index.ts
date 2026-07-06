@@ -1,5 +1,7 @@
 import { it } from 'vitest';
 
+export * from './brief.js';
+
 /**
  * Returns the current LLM provider as configured via the `LLM_PROVIDER`
  * environment variable. Falls back to `'none'` when unset so the deterministic

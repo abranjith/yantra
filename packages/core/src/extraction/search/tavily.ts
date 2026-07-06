@@ -4,7 +4,7 @@ import { YANTRA_KEYCHAIN_SERVICE, type KeychainProvider } from '../../secrets/ke
 import type { SearchResult } from '../types.js';
 
 import { RateLimitError, SearchProviderError, TavilyAuthError } from './errors.js';
-import type { SearchProvider } from './provider.js';
+import type { SearchProvider } from './registry.js';
 
 interface TavilyResultWire {
   readonly url?: string;
@@ -129,7 +129,8 @@ export class TavilySearchProvider implements SearchProvider {
           publishedAt: toIsoOrNull(row.published_date),
         };
       })
-      .filter((row): row is SearchResult => row !== null);
+      .filter((row): row is SearchResult => row !== null)
+      .slice(0, Math.max(1, opts.limit));
   }
 }
 

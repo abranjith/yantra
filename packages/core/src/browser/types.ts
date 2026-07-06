@@ -79,7 +79,8 @@ export interface DoctorCheck {
     | 'datadir.writable'
     | 'datadir.permissions'
     | 'cachedir.writable'
-    | 'keychain.reachable';
+    | 'keychain.reachable'
+    | 'indexdb.writable';
   readonly status: 'ok' | 'warn' | 'error';
   readonly message: string;
   readonly details: Readonly<Record<string, unknown>>;

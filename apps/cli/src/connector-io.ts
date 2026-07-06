@@ -13,14 +13,23 @@
  * interface — anything that doesn't fit these three responsibilities
  * belongs in surface-specific glue, not here.
  *
+ * **Realized Phase-2 connector (FEAT-021):** the scheduler daemon is the first
+ * non-CLI surface to drive the same inline executor. Rather than a full
+ * `ConnectorIO`, an unattended fire reuses the executor's narrower
+ * `ConfirmationGateway` seam via the `DaemonConfirmationGateway`
+ * (park-and-notify) — "same protocol, two connectors" (plan §7). Result
+ * rendering for a fire is to run-dir artifacts + `daemon.log`, not stdout.
+ *
  * @see .spec-lite/features/feature_cli_polish_distribution.md §2.2.1
+ * @see .spec-lite/features/feature_scheduling_runner.md
  */
 
-import type { TaskEvent } from '@yantra/protocol';
+import type { Brief, TaskEvent } from '@yantra/protocol';
 
 import type { GlobalFlags } from './global-flags.js';
 import type {
   AuditRenderReport,
+  BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
   ListItem,
@@ -35,7 +44,16 @@ export type ConnectorResult =
   | { readonly kind: 'show'; readonly item: ShowItem }
   | { readonly kind: 'doctor'; readonly result: DoctorRenderResult }
   | { readonly kind: 'audit'; readonly report: AuditRenderReport }
-  | { readonly kind: 'report'; readonly markdown: string };
+  | { readonly kind: 'report'; readonly markdown: string }
+  // FEAT-015: the unified Brief output. `ask` (and later `research`/`do`) fold
+  // their result into this one kind; the renderer styles it three ways
+  // (terminal/md/html) or emits it verbatim as `--json`. `artifacts` names the
+  // persisted brief.md/brief.html, or null when the best-effort write failed.
+  | {
+      readonly kind: 'brief';
+      readonly brief: Brief;
+      readonly artifacts: BriefArtifactPaths | null;
+    };
 
 export interface ConnectorIO {
   readonly id: ConnectorId;
@@ -99,6 +117,9 @@ export class CLIConnectorIO implements ConnectorIO {
         return;
       case 'report':
         this.renderer.renderReport(result.markdown, opts);
+        return;
+      case 'brief':
+        this.renderer.renderBrief(result.brief, result.artifacts, opts);
         return;
     }
   }

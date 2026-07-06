@@ -1,0 +1,43 @@
+{
+  "query": "cheapest sony wh-1000xm5 today",
+  "docs": [
+    {
+      "url": "https://amazon.example.com/sony-wh1000xm5",
+      "finalUrl": null,
+      "host": "amazon.example.com",
+      "title": "Sony WH-1000XM5 — Amazon",
+      "fetchedAt": "2026-06-14T09:00:00.000Z",
+      "publishedAt": "2026-06-13T12:00:00.000Z",
+      "text": "The Sony flagship wireless headphones are on sale for $328 at Amazon today, down from the usual $399 list price. Price trackers say the noise cancelling flagship rarely drops below $350 in any season. Shipping is free for all customers this week and returns stay open for thirty days.",
+      "excerpt": "The Sony flagship wireless headphones are on sale for $328 at Amazon today."
+    },
+    {
+      "url": "https://bestbuy.example.com/sony-wh1000xm5",
+      "finalUrl": null,
+      "host": "bestbuy.example.com",
+      "title": "Sony WH-1000XM5 — Best Buy",
+      "fetchedAt": "2026-06-14T09:00:05.000Z",
+      "publishedAt": null,
+      "text": "Best Buy lists the Sony flagship wireless headphones at $349 with in-store pickup available in most regions. The retailer says the noise cancelling model remains its best selling headphone this quarter. Stock levels are healthy across most regions according to the latest inventory report.",
+      "excerpt": "Best Buy lists the Sony flagship wireless headphones at $349."
+    },
+    {
+      "url": "https://walmart.example.com/sony-wh1000xm5",
+      "finalUrl": null,
+      "host": "walmart.example.com",
+      "title": "Sony WH-1000XM5 — Walmart",
+      "fetchedAt": "2026-06-14T09:00:10.000Z",
+      "publishedAt": null,
+      "text": "Walmart offers the Sony flagship wireless headphones for $335 through a third party seller with standard shipping. Buyers should note the third party listing has a longer return window than direct sales. The headphones usually ship within five business days from the partner warehouse.",
+      "excerpt": "Walmart offers the Sony flagship wireless headphones for $335."
+    }
+  ],
+  "failures": [
+    {
+      "url": "https://target.example.com/sony-wh1000xm5",
+      "host": "target.example.com",
+      "stage": "fetch",
+      "reason": "fetch timed out"
+    }
+  ]
+}

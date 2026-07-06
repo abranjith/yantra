@@ -15,11 +15,15 @@ import {
   LocalProfileStore,
   RateLimiterImpl,
   RobotsCacheImpl,
+  SqliteRateLimitStore,
   createKeychainProvider,
   loadEthicsConfig,
+  openIndexDb,
   workflowsRoot,
+  type ConfirmationGateway,
   type KeychainProvider,
   type Logger,
+  type RateLimitStore,
 } from '@yantra/core';
 import { LocalRunStore, RunOrchestrator } from '@yantra/core/workflow/replay';
 
@@ -45,6 +49,13 @@ export interface OrchestratorRuntime {
 export async function buildOrchestratorRuntime(
   opts: {
     readonly logger?: Logger;
+    /**
+     * Human-in-the-loop consent gateway for `requires_confirmation` steps
+     * (FEAT-019). Callers inject an `InteractiveConfirmationGateway` for
+     * interactive TTY runs; omitting it keeps flagged steps fail-closed so
+     * unattended surfaces cannot self-authorize (plan §6).
+     */
+    readonly confirmationGateway?: ConfirmationGateway | null;
   } = {},
 ): Promise<OrchestratorRuntime> {
   const logger = opts.logger ?? noopLogger;
@@ -54,6 +65,7 @@ export async function buildOrchestratorRuntime(
   const blocklist = new BlocklistImpl();
   await blocklist.reload();
   const robots = new RobotsCacheImpl(ethicsConfig.userAgent);
+  const rateLimitStore = await openRateLimitStore(logger);
   const rateLimiter = new RateLimiterImpl(
     ethicsConfig.rateLimitDefault,
     ethicsConfig.rateLimitOverrides,
@@ -62,6 +74,7 @@ export async function buildOrchestratorRuntime(
       setTimeout: (fn, ms) => setTimeout(fn, ms),
       clearTimeout: (handle) => clearTimeout(handle),
     },
+    rateLimitStore,
   );
   const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent, {
     enforceRobotsTxt: ethicsConfig.robotsEnabled,
@@ -81,9 +94,24 @@ export async function buildOrchestratorRuntime(
     sanitizer,
     ethicsGate,
     logger,
+    confirmationGateway: opts.confirmationGateway ?? null,
   });
 
   return { orchestrator, runStore, workflowStore, logger };
+}
+
+/**
+ * Opens a persistent rate-limit store best-effort. Returns undefined when the
+ * index is unavailable — the ethics gate then falls back to in-process-only
+ * token buckets (identical to the MVP behavior).
+ */
+async function openRateLimitStore(logger: Logger): Promise<RateLimitStore | undefined> {
+  try {
+    const { db } = await openIndexDb({ logger });
+    return new SqliteRateLimitStore({ db, logger });
+  } catch {
+    return undefined;
+  }
 }
 
 export function makeStderrLogger(debug: boolean): Logger {

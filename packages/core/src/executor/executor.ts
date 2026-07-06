@@ -1,8 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { FailureClass, Step, TaskEvent } from '@yantra/protocol';
+import type { ConfirmationRequest, FailureClass, Step, TaskEvent } from '@yantra/protocol';
+import { SCHEMA_VERSION, generateUlid } from '@yantra/protocol';
 
+import { isParked } from './confirmation-gateway.js';
 import type { ScopeViolationError } from './errors.js';
 import { writeReport } from './report-writer.js';
 import { checkScopeViolations } from './scope-enforcer.js';
@@ -18,6 +20,15 @@ const MAX_TOTAL_STEP_EXECUTIONS = 1000;
  * `run(plan, ctx)` walks `plan.steps` linearly, emitting `TaskEvent`s at each
  * state transition and writing a checkpoint after every successful step.
  * Branch jumps and loops are handled by updating the step cursor.
+ *
+ * **Confirmation checkpoint (FEAT-019):** Before dispatching a step flagged
+ * `requires_confirmation`, the executor builds a `ConfirmationRequest`,
+ * persists it to `confirmations.jsonl`, emits a `confirmation_requested`
+ * event, and blocks on the injected `ConfirmationGateway`. Only a
+ * human-operated `ConnectorIO.confirm()` can resolve the request. Deny
+ * or timeout terminates the run as a user-handoff abort (exit 4). The
+ * grant is single-use and step-scoped — a re-execution after resume
+ * re-requests (no blanket grants).
  *
  * `resumeFrom(checkpoint, ctx)` rehydrates from a persisted checkpoint and
  * continues from the step after the checkpointed one.
@@ -110,6 +121,17 @@ export class Executor {
         at: now(),
       });
 
+      // ── Confirmation checkpoint (FEAT-019) ──────────────────────────
+      // Before dispatching a flagged step (and before its ethics-gate call),
+      // build a ConfirmationRequest, persist it, emit the event, and block
+      // on the gateway. Grant → proceed; deny/timeout → handoff abort (exit 4).
+      if (step.requires_confirmation) {
+        const confirmOutcome = await this.runConfirmationCheckpoint(ctx, step, completedStepIds);
+        if (confirmOutcome.kind !== 'granted') {
+          return { status: 'handoff', reportPath: confirmOutcome.reportPath };
+        }
+      }
+
       const handler = STEP_DISPATCH.get(step.type);
       if (!handler) {
         const reportPath = await this.emitFailure(
@@ -170,7 +192,7 @@ export class Executor {
 
         // Write checkpoint
         const checkpoint: Checkpoint = {
-          schema_version: '0.1',
+          schema_version: SCHEMA_VERSION,
           run_id: ctx.runId,
           task_id: ctx.taskId,
           after_step_id: step.id,
@@ -298,6 +320,202 @@ export class Executor {
     return { status: 'completed', outputKeys };
   }
 
+  // ---------------------------------------------------------------------------
+  // Confirmation checkpoint (FEAT-019)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Pre-step consent checkpoint for `requires_confirmation` steps.
+   *
+   * Builds a `ConfirmationRequest` from the step's annotations and resolved
+   * host, persists it to `confirmations.jsonl`, emits a `confirmation_requested`
+   * event, then awaits the gateway's decision. On grant, appends the decision
+   * and emits `confirmation_resolved`. On deny/timeout, appends the decision,
+   * emits the event, and terminates as a user-handoff abort (exit 4).
+   *
+   * The pause point is *before* the step, so resume-after-grant re-enters at
+   * the same step cleanly. The grant is single-use and step-scoped.
+   */
+  private async runConfirmationCheckpoint(
+    ctx: ExecutionContext,
+    step: Step,
+    completedStepIds: readonly string[],
+  ): Promise<
+    | { kind: 'granted' }
+    | { kind: 'denied' | 'timed_out'; reportPath: string }
+    | { kind: 'parked'; reportPath: string }
+  > {
+    if (!ctx.confirmationGateway) {
+      // Fail-closed: no gateway + flagged step = abort, never silently skip.
+      ctx.logger.error(
+        { stepId: step.id, runId: ctx.runId },
+        'confirmation required but no gateway is wired — aborting',
+      );
+      const reportPath = await this.writeConfirmationAbortReport(
+        ctx,
+        step,
+        completedStepIds,
+        'No confirmation gateway is wired — cannot request consent for a flagged step.',
+      );
+      return { kind: 'denied', reportPath };
+    }
+
+    const host = resolveHostForStep(step, ctx);
+    const description =
+      (step as { confirmation_description?: string | null }).confirmation_description ??
+      `Execute ${step.type} on ${host}`;
+    const expectedCost =
+      (step as { expected_cost?: { amount: number; currency: string } | null }).expected_cost ??
+      null;
+    const consequence = (step as { consequence?: string | null }).consequence ?? 'unknown';
+
+    const request: ConfirmationRequest = {
+      confirmation_id: generateUlid(),
+      run_id: ctx.runId,
+      step_id: step.id,
+      action_kind: step.type as 'click' | 'fill' | 'navigate',
+      host,
+      description,
+      expected_cost: expectedCost,
+      consequence: consequence as 'reversible' | 'hard_to_reverse' | 'irreversible' | 'unknown',
+      requested_at: now(),
+      timeout_ms: null,
+    };
+
+    // Persist the request
+    if (ctx.confirmationStore) {
+      await ctx.confirmationStore.appendRequest(request);
+    }
+
+    // Emit the request event
+    ctx.events.publish({
+      kind: 'confirmation_requested',
+      task_id: ctx.taskId,
+      at: now(),
+      request,
+    });
+    await ctx.events.flush();
+
+    // Block on the gateway — only a human-operated ConnectorIO can resolve this
+    let outcome;
+    try {
+      outcome = await ctx.confirmationGateway.request(request);
+    } catch (err) {
+      // Gateway transport failure → fail-closed (treated as deny)
+      ctx.logger.error(
+        { stepId: step.id, err: err instanceof Error ? err.message : String(err) },
+        'confirmation gateway failed — treating as deny',
+      );
+      outcome = {
+        confirmation_id: request.confirmation_id,
+        decision: 'denied' as const,
+        decided_at: now(),
+        decided_by: 'timeout' as const,
+      };
+    }
+
+    // Park signal (unattended surfaces): DO NOT append a decision — the request
+    // stays pending in confirmations.jsonl so `yantra confirm` can resolve it
+    // later. The run is checkpointed before the flagged step (resumable) and
+    // terminated as a handoff so the daemon can notify + move on (plan §6).
+    if (isParked(outcome)) {
+      ctx.logger.info(
+        { stepId: step.id, confirmationId: request.confirmation_id },
+        'confirmation parked — run stays pending for out-of-band consent',
+      );
+      const reportPath = await this.writeConfirmationAbortReport(
+        ctx,
+        step,
+        completedStepIds,
+        `Confirmation parked for step "${step.id}" — awaiting out-of-band consent.`,
+      );
+      ctx.events.publish({
+        kind: 'human_handoff_requested',
+        task_id: ctx.taskId,
+        step_id: step.id,
+        reason: 'other',
+        at: now(),
+      });
+      await ctx.events.flush();
+      return { kind: 'parked', reportPath };
+    }
+
+    const decision = outcome;
+
+    // Persist the decision
+    if (ctx.confirmationStore) {
+      await ctx.confirmationStore.appendDecision(decision);
+    }
+
+    // Emit the resolution event
+    ctx.events.publish({
+      kind: 'confirmation_resolved',
+      task_id: ctx.taskId,
+      at: now(),
+      confirmation_id: decision.confirmation_id,
+      decision: decision.decision,
+      decided_by: decision.decided_by,
+    });
+    await ctx.events.flush();
+
+    if (decision.decision === 'granted') {
+      ctx.logger.info(
+        { stepId: step.id, confirmationId: request.confirmation_id },
+        'confirmation granted — proceeding with step',
+      );
+      return { kind: 'granted' };
+    }
+
+    // Denied or timed_out → user-handoff abort
+    ctx.logger.warn(
+      { stepId: step.id, decision: decision.decision, decidedBy: decision.decided_by },
+      'confirmation denied/timed_out — aborting run',
+    );
+
+    const reportPath = await this.writeConfirmationAbortReport(
+      ctx,
+      step,
+      completedStepIds,
+      `Confirmation ${decision.decision} by ${decision.decided_by} for step "${step.id}".`,
+    );
+
+    ctx.events.publish({
+      kind: 'human_handoff_requested',
+      task_id: ctx.taskId,
+      step_id: step.id,
+      reason: 'other',
+      at: now(),
+    });
+    await ctx.events.flush();
+
+    return { kind: decision.decision, reportPath };
+  }
+
+  /**
+   * Writes the `report.md` for a confirmation abort (deny/timeout/no-gateway).
+   * Reuses the same `writeReport` machinery as `handoff_requested`.
+   */
+  private async writeConfirmationAbortReport(
+    ctx: ExecutionContext,
+    step: Step,
+    completedStepIds: readonly string[],
+    message: string,
+  ): Promise<string> {
+    await ctx.events.flush();
+    const reportPath = await writeReport(ctx.runDir, {
+      runId: ctx.runId,
+      taskId: ctx.taskId,
+      plan: ctx.plan,
+      status: 'handoff',
+      failedAtStepId: step.id,
+      completedStepIds: [...completedStepIds],
+      captureKeys: ctx.captures.keys(),
+      outputKeys: [],
+    });
+    ctx.logger.info({ stepId: step.id, reportPath, message }, 'confirmation abort report written');
+    return reportPath;
+  }
+
   private async emitFailure(
     ctx: ExecutionContext,
     failureClass: FailureClass,
@@ -352,6 +570,35 @@ function buildScopeViolationEvent(taskId: string, violation: ScopeViolationError
     step_id: violation.scopeContext.stepId,
     at: now(),
   };
+}
+
+/**
+ * Resolves the target host for a step — used to populate the
+ * `ConfirmationRequest.host` field. For navigate steps, extracts from
+ * the URL ValueRef. For click/fill, falls back to the current page URL
+ * or a placeholder.
+ */
+function resolveHostForStep(step: Step, ctx: ExecutionContext): string {
+  if (step.type === 'navigate') {
+    const url = step.url;
+    if (url.kind === 'literal' && typeof url.value === 'string') {
+      try {
+        return new URL(url.value).host;
+      } catch {
+        return url.value;
+      }
+    }
+  }
+  // Fall back to current page URL or a generic placeholder
+  const pageUrl = ctx.page?.url();
+  if (pageUrl) {
+    try {
+      return new URL(pageUrl).host;
+    } catch {
+      return pageUrl;
+    }
+  }
+  return 'unknown';
 }
 
 function resolveOutputKeys(ctx: ExecutionContext): string[] {

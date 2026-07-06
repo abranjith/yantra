@@ -2,6 +2,10 @@ import type { CapturedAction } from '@yantra/protocol';
 
 import type { ValuePromotion } from './session.js';
 
+/** Heuristic: button text or accessible name that looks like a purchase/submit action. */
+const PURCHASE_SHAPED_PATTERN =
+  /\b(buy|pay|book|order|submit|purchase|checkout|confirm|place\s+order|complete\s+purchase)\b/i;
+
 /**
  * Suggest a human-readable locator name for a captured action. Pure function.
  */
@@ -51,6 +55,24 @@ export function suggestLocatorName(action: CapturedAction): string | null {
   }
 
   return `${desc.tag} element`;
+}
+
+/**
+ * Suggest whether a captured action should require human confirmation.
+ *
+ * Returns `true` for click actions whose accessible name, visible text, or
+ * role matches the purchase-shaped heuristic (buy, pay, book, order, submit,
+ * etc.). Returns `false` for all other actions.
+ */
+export function suggestRequiresConfirmation(action: CapturedAction): boolean {
+  if (action.kind !== 'click') return false;
+
+  const desc = action.element_descriptor;
+  const textToCheck = [desc.accessible_name, desc.visible_text, desc.attrs_sample['aria-label']]
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
+    .join(' ');
+
+  return PURCHASE_SHAPED_PATTERN.test(textToCheck);
 }
 
 /**

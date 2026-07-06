@@ -1,0 +1,22 @@
+{
+  "web": {
+    "results": [
+      {
+        "url": "https://example.com/one",
+        "title": "First Brave Result",
+        "description": "First Brave snippet text.",
+        "age": "2026-05-11T10:14:00.000Z"
+      },
+      {
+        "url": "https://example.com/two",
+        "title": "Second Brave Result",
+        "description": "Second Brave snippet text."
+      },
+      {
+        "url": "https://example.com/three",
+        "title": "Third Brave Result",
+        "description": "Third Brave snippet text."
+      }
+    ]
+  }
+}

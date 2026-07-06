@@ -28,6 +28,18 @@ vi.mock('keytar', () => ({
     deletePassword: vi.fn().mockResolvedValue(true),
   },
 }));
+vi.mock('../../src/index-db/db.js', () => ({
+  openIndexDb: vi.fn(),
+  indexDbPath: vi.fn(() => '/home/testuser/.local/share/yantra/index.db'),
+  setMeta: vi.fn(),
+}));
+vi.mock('../../src/index-db/history-store.js', () => ({
+  SqliteHistoryStore: class {
+    async rebuildFromRuns() {
+      return { isOk: true as const, value: { rowCount: 0 } };
+    }
+  },
+}));
 
 const mockDetectChrome = vi.mocked(
   await import('../../src/browser/chrome-discovery.js').then((m) => m.detectChrome),
@@ -45,6 +57,7 @@ const keytarMocks = (await import('keytar')) as {
     deletePassword: ReturnType<typeof vi.fn>;
   };
 };
+const mockOpenIndexDb = vi.mocked((await import('../../src/index-db/db.js')).openIndexDb);
 
 function makeChrome(majorVersion = 124) {
   return {
@@ -75,6 +88,11 @@ describe('@no-llm doctor', () => {
     keytarMocks.default.setPassword.mockResolvedValue(undefined);
     keytarMocks.default.getPassword.mockResolvedValue('ok');
     keytarMocks.default.deletePassword.mockResolvedValue(true);
+    mockOpenIndexDb.mockResolvedValue({
+      db: { close: vi.fn() } as never,
+      path: '/home/testuser/.local/share/yantra/index.db',
+      wasCorrupt: false,
+    });
   });
 
   afterEach(() => {
@@ -85,7 +103,7 @@ describe('@no-llm doctor', () => {
     it('returns overall=ok when everything passes', async () => {
       const report = await doctor({ refresh: true });
       expect(report.overall).toBe('ok');
-      expect(report.checks).toHaveLength(6);
+      expect(report.checks).toHaveLength(7);
     });
 
     it('has a valid ISO-8601 generatedAt', async () => {
@@ -217,6 +235,32 @@ describe('@no-llm doctor', () => {
       keytarMocks.default.getPassword.mockResolvedValue('wrong-value');
       const report = await doctor({ refresh: true });
       const check = report.checks.find((c) => c.id === 'keychain.reachable');
+      expect(check?.status).toBe('error');
+    });
+  });
+
+  describe('indexdb.writable check', () => {
+    it('returns ok when the index opens and accepts a write', async () => {
+      const report = await doctor({ refresh: true });
+      const check = report.checks.find((c) => c.id === 'indexdb.writable');
+      expect(check?.status).toBe('ok');
+    });
+
+    it('returns warn when the index was corrupt and rebuilt', async () => {
+      mockOpenIndexDb.mockResolvedValue({
+        db: { close: vi.fn() } as never,
+        path: '/home/testuser/.local/share/yantra/index.db',
+        wasCorrupt: true,
+      });
+      const report = await doctor({ refresh: true });
+      const check = report.checks.find((c) => c.id === 'indexdb.writable');
+      expect(check?.status).toBe('warn');
+    });
+
+    it('returns error when the index cannot be opened', async () => {
+      mockOpenIndexDb.mockRejectedValue(new Error('EACCES: permission denied'));
+      const report = await doctor({ refresh: true });
+      const check = report.checks.find((c) => c.id === 'indexdb.writable');
       expect(check?.status).toBe('error');
     });
   });

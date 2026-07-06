@@ -1,5 +1,16 @@
-/** Search provider names supported by the ask pipeline. */
-export type SearchProviderName = 'tavily' | 'brave' | 'browser';
+import type { Sanitized } from '../sanitizer/brand.js';
+import type { SynthesisLength } from '../synthesis/types.js';
+
+/**
+ * First-class search provider names supported by the ask pipeline.
+ *
+ * Each name maps 1:1 to a descriptor in the search registry
+ * (`extraction/search/registry.ts`). `google` and `duckduckgo` are scraped
+ * providers (no API key); `brave` and `tavily` are keyed API providers. The
+ * former internal `browser` name (DuckDuckGo HTML scraping) is gone — it is now
+ * the named `duckduckgo` provider riding the shared scrape transport.
+ */
+export type SearchProviderName = 'google' | 'duckduckgo' | 'brave' | 'tavily';
 
 /**
  * Parsed ask query options used by the extraction pipeline.
@@ -14,6 +25,14 @@ export interface AskQuery {
   readonly searchProvider: SearchProviderName | null;
   readonly perFetchTimeoutMs: number;
   readonly pipelineBudgetMs: number;
+  /** Synthesis length budget (findings/sections count); defaults to `medium`. */
+  readonly length: SynthesisLength;
+  /**
+   * Optional privacy-gated personalization context (FEAT-018). Sanitized-branded
+   * so only `buildPersonalizationContext` output can populate it. Forwarded to
+   * the LLM synthesizer; the deterministic path ignores it.
+   */
+  readonly personalization?: Sanitized<string>;
 }
 
 /** A single search provider hit before fetch/extract. */
@@ -49,18 +68,4 @@ export interface ExtractedArticle {
   readonly contentHtml: string;
   readonly excerpt: string | null;
   readonly lengthChars: number;
-}
-
-/** User-facing ask output card. */
-export interface AskCard {
-  readonly url: string;
-  readonly title: string;
-  readonly source: string;
-  readonly fetchedAt: string;
-  readonly publishedAt: string | null;
-  readonly summary: string;
-  readonly summaryKind: 'rule-based' | 'llm-enhanced' | 'fallback-lede';
-  readonly quotedSnippet: string;
-  readonly tags: readonly string[];
-  readonly notice: string | null;
 }

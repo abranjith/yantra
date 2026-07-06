@@ -468,3 +468,6 @@ specs/
 !.vscode/settings.json
 !.vscode/extensions.json
 
+# Cline agent
+.cline/*
+.clinerules

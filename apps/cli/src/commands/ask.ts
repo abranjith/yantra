@@ -2,7 +2,7 @@ import {
   AskPipeline,
   BlocklistImpl,
   BrowserFallbackFetcher,
-  DefaultSanitizer,
+  DeterministicSynthesizer,
   EthicsGateImpl,
   FileSystemAskCache,
   HttpFetcher,
@@ -12,19 +12,30 @@ import {
   ReadabilityExtractor,
   RateLimiterImpl,
   RobotsCacheImpl,
-  RuleBasedSummarizer,
+  buildPersonalizationContext,
   createAskEthicsAdapter,
   createKeychainProvider,
-  createLlmSummarizer,
   loadEthicsConfig,
-  renderJson,
-  renderTerminal,
-  selectSearchProvider,
+  loadSearchConfig,
+  preferenceValue,
+  resolveSearchProvider,
   type AskQuery,
+  type AskRunResult,
+  type EffectivePreferences,
   type Logger,
+  type Sanitized,
   type SearchProviderName,
+  type SynthesisLength,
 } from '@yantra/core';
 import { CommanderError, Option, type Command } from 'commander';
+
+import { CLIConnectorIO } from '../connector-io.js';
+import { recordTaskHistory } from '../history.js';
+import { openArtifact } from '../open-artifact.js';
+import { loadEffectivePreferences } from '../preferences.js';
+import { JSONRenderer } from '../render/json.js';
+import { TerminalRenderer } from '../render/terminal.js';
+import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -35,12 +46,16 @@ const noopLogger: Logger = {
 
 interface AskOptions {
   readonly json?: boolean;
-  readonly noLlm?: boolean;
   readonly llm?: boolean;
-  readonly noCache?: boolean;
+  readonly cache?: boolean;
+  readonly color?: boolean;
+  readonly open?: boolean;
   readonly budget?: string;
   readonly searchProvider?: string;
   readonly limit?: string;
+  readonly detail?: string;
+  readonly format?: string;
+  readonly length?: string;
   readonly fetchTimeout?: string;
   readonly budgetMs?: string;
 }
@@ -50,46 +65,89 @@ export interface AskRuntime {
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly createPipeline: (query: AskQuery) => Promise<AskPipeline>;
+  /** Resolves the merged effective preferences used for flag defaults. */
+  readonly resolveDefaults: () => Promise<EffectivePreferences>;
+  /** Records a completed task into the history index (best-effort). */
+  readonly recordHistory: (runId: string) => Promise<void>;
 }
 
 /**
- * Registers the `ask` subcommand.
+ * Registers the `ask` subcommand: `Search → Fetch → Extract → Synthesize →
+ * Render`, producing a Brief (styled terminal / md / html / json).
  */
 export function registerAskCommand(program: Command, runtime?: Partial<AskRuntime>): void {
   const resolvedRuntime = runtimeWithDefaults(runtime);
 
   program
     .command('ask')
-    .description('Run the ask pipeline (search -> fetch -> extract -> summarize).')
+    .description('Answer a question from the web as a synthesized Brief.')
     .argument('<query>', 'question to answer from web sources')
-    .addOption(new Option('--json', 'print machine-readable JSON output').default(false))
-    .addOption(new Option('--no-llm', 'force rule-based summarization path').default(false))
-    .addOption(new Option('--no-cache', 'disable cache reads/writes').default(false))
+    .addOption(new Option('--json', 'shorthand for --format json').default(false))
+    .addOption(
+      new Option(
+        '--detail <level>',
+        'terminal disclosure level (default: prefs.defaults.detail)',
+      ).choices(['overview', 'standard', 'full']),
+    )
+    .addOption(
+      new Option('--format <format>', 'output format sent to stdout')
+        .choices(['terminal', 'md', 'html', 'json'])
+        .default('terminal'),
+    )
+    .addOption(
+      new Option(
+        '--length <length>',
+        'synthesis length budget (default: prefs.defaults.length)',
+      ).choices(['short', 'medium', 'long']),
+    )
+    .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
+    .addOption(new Option('--no-llm', 'force the deterministic (no-LLM) synthesizer'))
+    .addOption(new Option('--no-cache', 'disable cache reads/writes'))
+    .addOption(new Option('--no-color', 'disable ANSI color output'))
     .addOption(new Option('--budget <calls>', 'maximum sources to fetch'))
     .addOption(
       new Option(
         '--search-provider <provider>',
-        'search provider (default: auto: tavily -> brave -> browser); tavily/brave require API keys',
-      ).choices(['auto', 'tavily', 'brave', 'browser']),
+        'search provider (default: auto walks tavily -> brave -> duckduckgo); ' +
+          'tavily/brave require API keys, google/duckduckgo scrape (google is opt-in)',
+      ).choices(['auto', 'google', 'duckduckgo', 'brave', 'tavily']),
     )
-    .addOption(new Option('--limit <count>', 'number of cards to return').default('3'))
+    .addOption(new Option('--limit <count>', 'number of sources to consider').default('3'))
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
     .addOption(new Option('--budget-ms <ms>', 'pipeline timeout budget in ms').default('30000'))
     .action(async (queryArg: string, options: AskOptions) => {
-      const query = buildAskQuery(queryArg, options, resolvedRuntime.env);
+      // Resolve unset flags from the effective preferences (explicit flag wins).
+      const effective = await resolvedRuntime.resolveDefaults();
+      const resolved = resolveAskDefaults(options, effective);
+      const baseQuery = buildAskQuery(queryArg, options, resolvedRuntime.env, resolved);
+      // Build the privacy-gated personalization context (LLM path only). The
+      // builder takes preferences only — raw history has no path in.
+      const personalization = baseQuery.noLlm ? null : personalizationFrom(effective);
+      const query: AskQuery = personalization ? { ...baseQuery, personalization } : baseQuery;
+      const format = resolveFormat(options);
+      const detail = resolved.detail;
 
       resolvedRuntime.stderr.write(
-        `ask: provider=${query.searchProvider ?? 'auto'} limit=${query.limit} no-llm=${query.noLlm}\n`,
+        `ask: provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
+          `no-llm=${query.noLlm} detail=${detail} format=${format}\n`,
       );
 
       try {
         const pipeline = await resolvedRuntime.createPipeline(query);
-        const cards = await pipeline.run(query);
+        const result: AskRunResult = await pipeline.run(query);
 
-        if (options.json === true) {
-          resolvedRuntime.stdout.write(`${JSON.stringify(renderJson(cards), null, 2)}\n`);
-        } else {
-          resolvedRuntime.stdout.write(`${renderTerminal(cards, { color: false, width: 80 })}\n`);
+        renderBrief(resolvedRuntime, result, { format, detail, options });
+
+        // Record the completed task into the history index (best-effort — a
+        // missing/failed index never fails the ask). Reads the manifest the
+        // pipeline just wrote under runs/<run_id>/.
+        const runId = result.brief.metadata.run_id;
+        if (typeof runId === 'string' && runId.length > 0) {
+          await resolvedRuntime.recordHistory(runId);
+        }
+
+        if (options.open === true && result.artifacts !== null) {
+          openArtifact(result.artifacts.htmlPath);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -99,8 +157,35 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     });
 }
 
+/** Renders the Brief through the unified connector dispatch. */
+function renderBrief(
+  runtime: AskRuntime,
+  result: AskRunResult,
+  view: { format: BriefOutputFormat; detail: BriefDetailLevel; options: AskOptions },
+): void {
+  const renderer = view.format === 'json' ? new JSONRenderer() : new TerminalRenderer();
+  const io = new CLIConnectorIO(renderer);
+  const stdout = runtime.stdout as NodeJS.WriteStream;
+
+  const opts: ConnectorRenderOpts = {
+    json: view.format === 'json',
+    debug: false,
+    noColor: resolveNoColor(view.options, runtime),
+    stream: runtime.stdout,
+    errStream: runtime.stderr,
+    briefDetail: view.detail,
+    briefFormat: view.format,
+    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+  };
+
+  io.renderResult({ kind: 'brief', brief: result.brief, artifacts: result.artifacts }, opts);
+}
+
 /**
- * Constructs the default ask pipeline used by the CLI.
+ * Constructs the default ask pipeline used by the CLI. The synthesizer is the
+ * deterministic strategy today; LLM synthesis is wired when the configurable
+ * provider registry (FEAT-016) lands, at which point `selectSynthesizer` picks
+ * between the two.
  */
 export async function createDefaultAskPipeline(query: AskQuery): Promise<AskPipeline> {
   const logger = noopLogger;
@@ -132,35 +217,33 @@ export async function createDefaultAskPipeline(query: AskQuery): Promise<AskPipe
   });
 
   const keychain = await createKeychainProvider();
-  const searchProvider = await selectSearchProvider({
-    explicitProvider: query.searchProvider ?? 'auto',
-    keychain,
-    browserProvider,
-    ethicsGate: askEthicsGate,
-    logger,
+  const searchConfig = await loadSearchConfig();
+  const resolved = await resolveSearchProvider({
+    explicitProvider: query.searchProvider,
+    env: process.env,
+    config: searchConfig,
+    deps: { keychain, browserProvider, ethicsGate: askEthicsGate, logger },
   });
+  if (!resolved.isOk) {
+    // Explicit-selection key-missing / exhausted-chain failures carry an
+    // actionable hint; surface the message verbatim.
+    throw resolved.error;
+  }
+  const searchProvider = resolved.value;
 
   const fetcher = new HybridContentFetcher({
     httpFetcher: new HttpFetcher(),
     browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
   });
 
-  const llmSummarizer = createLlmSummarizer({
-    llmClient: null,
-    sanitizer: new DefaultSanitizer(),
-    featureGate: { llmSummarize: false },
-    noLlm: query.noLlm,
-  });
-
   return new AskPipeline({
     searchProvider,
     fetcher,
     extractor: new ReadabilityExtractor(),
-    ruleBasedSummarizer: new RuleBasedSummarizer(),
-    llmSummarizer,
     cache: new FileSystemAskCache(),
     ethicsGate: askEthicsGate,
     logger,
+    synthesizer: new DeterministicSynthesizer(),
   });
 }
 
@@ -170,26 +253,102 @@ function runtimeWithDefaults(runtime?: Partial<AskRuntime>): AskRuntime {
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,
     createPipeline: runtime?.createPipeline ?? createDefaultAskPipeline,
+    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
+    recordHistory: runtime?.recordHistory ?? ((runId: string) => recordTaskHistory(runId)),
   };
 }
 
-function buildAskQuery(raw: string, options: AskOptions, env: NodeJS.ProcessEnv): AskQuery {
+/** Resolved presentation/synthesis defaults (explicit flag > prefs > hardcoded). */
+export interface ResolvedAskDefaults {
+  readonly detail: BriefDetailLevel;
+  readonly length: SynthesisLength;
+  readonly provider: SearchProviderName | null;
+}
+
+/**
+ * Applies the flag-default resolution matrix: an explicit CLI flag always wins;
+ * otherwise the effective preference value is used; otherwise a hardcoded
+ * fallback. `defaults.search_provider = auto` resolves to `null` (the pipeline's
+ * "walk the fallback chain" sentinel).
+ */
+export function resolveAskDefaults(
+  options: AskOptions,
+  effective: EffectivePreferences,
+): ResolvedAskDefaults {
+  const detail =
+    asDetail(options.detail) ??
+    preferenceValue<BriefDetailLevel>(effective, 'defaults.detail', 'standard');
+  const length =
+    asLength(options.length) ??
+    preferenceValue<SynthesisLength>(effective, 'defaults.length', 'medium');
+
+  const explicitProvider = parseProvider(options.searchProvider);
+  const prefProvider = preferenceValue<string>(effective, 'defaults.search_provider', 'auto');
+  const provider =
+    explicitProvider ?? (prefProvider === 'auto' ? null : parseProvider(prefProvider));
+
+  return { detail, length, provider };
+}
+
+/**
+ * Builds the sanitized personalization context from the effective preferences,
+ * or null when personalization is disabled / empty / errors. Never throws —
+ * personalization is a nicety, not a requirement for `ask`.
+ */
+function personalizationFrom(effective: EffectivePreferences): Sanitized<string> | null {
+  const result = buildPersonalizationContext(effective);
+  return result.isOk ? result.value : null;
+}
+
+function asDetail(raw: string | undefined): BriefDetailLevel | undefined {
+  return raw === 'overview' || raw === 'standard' || raw === 'full' ? raw : undefined;
+}
+
+function asLength(raw: string | undefined): SynthesisLength | undefined {
+  return raw === 'short' || raw === 'medium' || raw === 'long' ? raw : undefined;
+}
+
+function buildAskQuery(
+  raw: string,
+  options: AskOptions,
+  env: NodeJS.ProcessEnv,
+  resolved: ResolvedAskDefaults,
+): AskQuery {
   const limit = clampInt(options.limit, 3, 1, 10);
   const budgetCalls = parseNullablePositiveInt(options.budget);
-  const provider = parseProvider(options.searchProvider);
-  const noLlm = options.noLlm === true || options.llm === false || env.LLM_PROVIDER === 'none';
+  const noLlm = options.llm === false || env.LLM_PROVIDER === 'none';
 
   return {
     raw,
     normalized: raw.trim().replace(/\s+/g, ' ').toLowerCase(),
     limit,
-    noCache: options.noCache === true,
+    noCache: options.cache === false,
     noLlm,
     budgetCalls,
-    searchProvider: provider,
+    searchProvider: resolved.provider,
     perFetchTimeoutMs: clampInt(options.fetchTimeout, 8_000, 1_000, 120_000),
     pipelineBudgetMs: clampInt(options.budgetMs, 30_000, 1_000, 300_000),
+    length: resolved.length,
   };
+}
+
+/** `--json` is a shorthand for `--format json`; otherwise honor `--format`. */
+function resolveFormat(options: AskOptions): BriefOutputFormat {
+  if (options.json === true) {
+    return 'json';
+  }
+  const format = options.format ?? 'terminal';
+  return format === 'md' || format === 'html' || format === 'json' ? format : 'terminal';
+}
+
+function resolveNoColor(options: AskOptions, runtime: AskRuntime): boolean {
+  if (options.color === false) {
+    return true;
+  }
+  if (runtime.env.NO_COLOR !== undefined && runtime.env.NO_COLOR !== '') {
+    return true;
+  }
+  return (runtime.stdout as NodeJS.WriteStream).isTTY !== true;
 }
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {
@@ -204,12 +363,10 @@ function parseNullablePositiveInt(raw: string | undefined): number | null {
   if (!raw) {
     return null;
   }
-
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return null;
   }
-
   return parsed;
 }
 
@@ -217,10 +374,8 @@ function parseProvider(raw: string | undefined): SearchProviderName | null {
   if (!raw || raw === 'auto') {
     return null;
   }
-
-  if (raw === 'tavily' || raw === 'brave' || raw === 'browser') {
+  if (raw === 'google' || raw === 'duckduckgo' || raw === 'brave' || raw === 'tavily') {
     return raw;
   }
-
   return null;
 }

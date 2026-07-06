@@ -1,0 +1,117 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "Cheapest sony wh-1000xm5 today",
+  "overview": "The Sony flagship wireless headphones are on sale for $328 at Amazon today, down from the usual $399 list price. [1] Best Buy lists the Sony flagship wireless headphones at $349 with in-store pickup available in most regions. [2] Walmart offers the Sony flagship wireless headphones for $335 through a third party seller with standard shipping. [3]",
+  "key_findings": [
+    {
+      "text": "The Sony flagship wireless headphones are on sale for $328 at Amazon today, down from the usual $399 list price.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Best Buy lists the Sony flagship wireless headphones at $349 with in-store pickup available in most regions.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Walmart offers the Sony flagship wireless headphones for $335 through a third party seller with standard shipping.",
+      "citations": [3],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Price trackers say the noise cancelling flagship rarely drops below $350 in any season.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "The retailer says the noise cancelling model remains its best selling headphone this quarter.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null
+    },
+    {
+      "text": "Buyers should note the third party listing has a longer return window than direct sales.",
+      "citations": [3],
+      "editorial": false,
+      "facet": null
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Numbers & figures",
+      "body_md": "- The Sony flagship wireless headphones are on sale for $328 at Amazon today, down from the usual $399 list price. [1]\n- Best Buy lists the Sony flagship wireless headphones at $349 with in-store pickup available in most regions. [2]\n- Walmart offers the Sony flagship wireless headphones for $335 through a third party seller with standard shipping. [3]\n- Price trackers say the noise cancelling flagship rarely drops below $350 in any season. [1]",
+      "citations": [1, 2, 3]
+    },
+    {
+      "heading": "Key facts",
+      "body_md": "- The retailer says the noise cancelling model remains its best selling headphone this quarter. [2]\n- Buyers should note the third party listing has a longer return window than direct sales. [3]",
+      "citations": [2, 3]
+    }
+  ],
+  "facets": {
+    "comparison": {
+      "columns": ["Source", "Price"],
+      "rows": [
+        ["amazon.example.com", "$328"],
+        ["bestbuy.example.com", "$349"],
+        ["walmart.example.com", "$335"]
+      ]
+    }
+  },
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://amazon.example.com/sony-wh1000xm5",
+      "final_url": null,
+      "host": "amazon.example.com",
+      "title": "Sony WH-1000XM5 — Amazon",
+      "fetched_at": "2026-06-14T09:00:00.000Z",
+      "published_at": "2026-06-13T12:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://bestbuy.example.com/sony-wh1000xm5",
+      "final_url": null,
+      "host": "bestbuy.example.com",
+      "title": "Sony WH-1000XM5 — Best Buy",
+      "fetched_at": "2026-06-14T09:00:05.000Z",
+      "published_at": null
+    },
+    {
+      "n": 3,
+      "url": "https://walmart.example.com/sony-wh1000xm5",
+      "final_url": null,
+      "host": "walmart.example.com",
+      "title": "Sony WH-1000XM5 — Walmart",
+      "fetched_at": "2026-06-14T09:00:10.000Z",
+      "published_at": null
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "today",
+    "citation_verdict": {
+      "claims_checked": 9,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "run_id": "golden-run"
+  },
+  "notices": [
+    {
+      "source": "target.example.com",
+      "reason": "fetch timed out",
+      "kind": "fetch_failed"
+    }
+  ]
+}

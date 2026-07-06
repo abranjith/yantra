@@ -5,13 +5,18 @@ import { err, ok } from './utils/result.js';
 
 /**
  * Schema versioning policy:
- * - v0 uses a single literal value (0.1)
- * - additive changes bump minor (for example 0.2)
+ * - additive changes bump minor (0.2 added the Brief document type; Plan and
+ *   workflow contracts are unchanged and 0.1 documents remain valid)
  * - breaking changes require a major bump and migration notes
+ * - every version in SUPPORTED_SCHEMA_VERSIONS stays accepted by
+ *   parseSchemaVersion until a major bump retires it
  */
-export const SCHEMA_VERSION = '0.1' as const;
+export const SCHEMA_VERSION = '0.2' as const;
 
-export type SchemaVersion = typeof SCHEMA_VERSION;
+/** Every schema version currently accepted, oldest first. */
+export const SUPPORTED_SCHEMA_VERSIONS = ['0.1', SCHEMA_VERSION] as const;
+
+export type SchemaVersion = (typeof SUPPORTED_SCHEMA_VERSIONS)[number];
 
 export class VersionError extends Error {
   public readonly code = 'version_error';
@@ -27,17 +32,21 @@ export class VersionError extends Error {
 
 /**
  * @example
- * parseSchemaVersion('0.1')
+ * parseSchemaVersion('0.2') // ok('0.2')
+ * parseSchemaVersion('0.1') // ok('0.1') — legacy documents stay valid
  */
 export const parseSchemaVersion = (value: unknown): Result<SchemaVersion, VersionError> => {
-  if (value === SCHEMA_VERSION) {
-    return ok(SCHEMA_VERSION);
+  if (
+    typeof value === 'string' &&
+    (SUPPORTED_SCHEMA_VERSIONS as readonly string[]).includes(value)
+  ) {
+    return ok(value as SchemaVersion);
   }
 
   return err(
     new VersionError(
       value,
-      `Unsupported schema_version: ${String(value)}. Expected ${SCHEMA_VERSION}.`,
+      `Unsupported schema_version: ${String(value)}. Expected one of ${SUPPORTED_SCHEMA_VERSIONS.join(', ')}.`,
     ),
   );
 };

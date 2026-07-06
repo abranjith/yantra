@@ -80,6 +80,54 @@ describe('@no-llm cli/audit-builder', () => {
     expect(result.report.trustNarrative).toContain('2 secret lookup');
   });
 
+  it('narrates a scheduled fire (with pause-and-notify) from the schedule.json sidecar', async () => {
+    const manifest = {
+      runId: 'sched-run',
+      workflowName: 'weekly-report',
+      status: 'paused',
+      startedAt: '2026-07-05T08:00:00.000Z',
+      endedAt: '2026-07-05T08:00:02.000Z',
+      durationMs: 2000,
+    };
+    await writeFile(join(runDir, 'manifest.json'), JSON.stringify(manifest), 'utf8');
+    await writeFile(
+      join(runDir, 'schedule.json'),
+      JSON.stringify({
+        schedule_id: 'SCH123',
+        workflow_name: 'weekly-report',
+        cron_expr: '0 8 * * 1',
+        fired_at: '2026-07-05T08:00:00.000Z',
+        status: 'pending-confirmation',
+      }),
+      'utf8',
+    );
+
+    const result = await buildAuditReport('sched-run', runDir);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.report.trustNarrative).toContain('Fired by schedule SCH123');
+    expect(result.report.trustNarrative).toContain('0 8 * * 1');
+    expect(result.report.trustNarrative).toContain('paused-and-notified');
+    expect(result.report.trustNarrative).toContain('never auto-confirmed');
+  });
+
+  it('omits schedule narration when there is no schedule.json sidecar', async () => {
+    await writeFile(
+      join(runDir, 'manifest.json'),
+      JSON.stringify({
+        runId: 'plain-run',
+        workflowName: 'demo',
+        status: 'completed',
+        startedAt: '2026-07-05T08:00:00.000Z',
+      }),
+      'utf8',
+    );
+    const result = await buildAuditReport('plain-run', runDir);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.report.trustNarrative).not.toContain('Fired by schedule');
+  });
+
   it('handles missing optional files gracefully', async () => {
     await writeFile(
       join(runDir, 'manifest.json'),

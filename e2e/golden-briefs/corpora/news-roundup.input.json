@@ -1,0 +1,36 @@
+{
+  "query": "city transit budget expansion",
+  "docs": [
+    {
+      "url": "https://tribune.example.com/transit-vote",
+      "finalUrl": null,
+      "host": "tribune.example.com",
+      "title": "Council approves transit expansion",
+      "fetchedAt": "2026-06-14T08:00:00.000Z",
+      "publishedAt": "2026-06-13T18:00:00.000Z",
+      "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. The plan allocates 45 million dollars to bus rapid transit over the next three years. Advocates said the expansion will cut average commute times across the northern corridor. Council members praised the compromise reached with suburban representatives.",
+      "excerpt": "The city council approved a new transit budget on Tuesday evening."
+    },
+    {
+      "url": "https://dailynews.example.com/transit-budget",
+      "finalUrl": null,
+      "host": "dailynews.example.com",
+      "title": "Transit budget clears final hurdle",
+      "fetchedAt": "2026-06-14T08:00:05.000Z",
+      "publishedAt": "2026-06-13T20:00:00.000Z",
+      "text": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. Opponents argued the money should instead go to road maintenance in outer neighborhoods. Transit officials confirmed construction would begin in early 2027 pending environmental review.",
+      "excerpt": "The city council approved a new transit budget on Tuesday."
+    },
+    {
+      "url": "https://civicwatch.example.com/analysis",
+      "finalUrl": null,
+      "host": "civicwatch.example.com",
+      "title": "What the transit vote means",
+      "fetchedAt": "2026-06-14T08:00:10.000Z",
+      "publishedAt": "2026-06-14T06:00:00.000Z",
+      "text": "The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. Analysts noted ridership had declined during the pandemic but has since recovered strongly. The bus rapid transit lines are expected to serve an additional forty thousand riders daily once complete.",
+      "excerpt": "The transit expansion is the largest such investment in a decade."
+    }
+  ],
+  "failures": []
+}

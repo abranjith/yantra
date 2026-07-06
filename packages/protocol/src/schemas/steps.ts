@@ -1,14 +1,45 @@
 import { z } from 'zod';
 
+import { ConsequenceLevel, ExpectedCost } from './confirmation.js';
 import { CaptureRef, LocatorChain, ParamRef, ValueRef } from './refs.js';
 import { SecurityScope } from './security.js';
 
 const STEP_ID_PATTERN = /^s[0-9]+$/;
 const CAPTURE_ALIAS_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+/** Step types that may carry `requires_confirmation`. */
+const CONFIRMABLE_STEP_TYPES = new Set(['navigate', 'click', 'fill']);
+
+/**
+ * Optional annotations that enrich the `ConfirmationRequest` when a
+ * confirmable step is flagged `requires_confirmation`. These are
+ * author-supplied hints — the executor reads them to populate the
+ * `description`, `expected_cost`, and `consequence` fields.
+ */
+export const ConfirmationAnnotations = {
+  confirmation_description: z
+    .string()
+    .min(1)
+    .nullable()
+    .default(null)
+    .describe('Human-readable override for the consent card. Falls back to step name when null.'),
+  expected_cost: ExpectedCost.nullable()
+    .default(null)
+    .describe('Best-effort cost estimate shown on the consent card, or null if unknown.'),
+  consequence: ConsequenceLevel.nullable()
+    .default(null)
+    .describe('Reversibility hint for the action, or null to default to "unknown".'),
+} as const;
+
 export const StepHeader = {
   id: z.string().regex(STEP_ID_PATTERN).describe('Step identifier, unique within the plan.'),
   scope: SecurityScope.nullable().describe('Step scope; null inherits the plan default.'),
+  requires_confirmation: z
+    .boolean()
+    .default(false)
+    .describe(
+      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps.',
+    ),
 } as const;
 
 export const PrimitiveExtractionKind = z
@@ -91,6 +122,7 @@ export type ClickModifiers = z.infer<typeof ClickModifiers>;
 export const NavigateStep = z
   .object({
     ...StepHeader,
+    ...ConfirmationAnnotations,
     type: z.literal('navigate').describe('Navigate step discriminator.'),
     url: ValueRef.describe('Target URL as a value reference.'),
   })
@@ -99,6 +131,7 @@ export const NavigateStep = z
 export const ClickStep = z
   .object({
     ...StepHeader,
+    ...ConfirmationAnnotations,
     type: z.literal('click').describe('Click step discriminator.'),
     locator: LocatorChain.describe('Locator chain for click target.'),
     modifiers: ClickModifiers.nullable().describe('Optional click modifier keys.'),
@@ -108,6 +141,7 @@ export const ClickStep = z
 export const FillStep = z
   .object({
     ...StepHeader,
+    ...ConfirmationAnnotations,
     type: z.literal('fill').describe('Fill step discriminator.'),
     locator: LocatorChain.describe('Locator chain for fill target.'),
     value: ValueRef.describe('Value inserted into the target input.'),
@@ -224,6 +258,13 @@ export const Step = z
     CallWorkflowStep,
     LLMSummarizeStep,
   ])
+  .refine(
+    (step) => !step.requires_confirmation || CONFIRMABLE_STEP_TYPES.has(step.type),
+    (step) => ({
+      message: `requires_confirmation is not legal on "${step.type}" steps — only click, fill, and navigate may require confirmation.`,
+      path: ['requires_confirmation'],
+    }),
+  )
   .describe('Single executable unit in a validated plan.');
 
 export type NavigateStep = z.infer<typeof NavigateStep>;

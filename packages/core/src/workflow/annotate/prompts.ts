@@ -5,6 +5,7 @@ import prompts from 'prompts';
 import type { WorkflowStore } from '../store.types.js';
 
 import type { AnnotateSession, AnnotateView } from './session.js';
+import { suggestRequiresConfirmation } from './suggest.js';
 
 export interface AnnotatePromptsOptions {
   onSaved?: (workflow: WorkflowFile) => void;
@@ -107,6 +108,7 @@ export async function runAnnotatePrompts(
     }
 
     if (keep === 'skip') {
+      // Skipped actions never become steps, so confirmation is irrelevant.
       session.applyDecision({
         draftActionId: String(view.index),
         action: 'skip',
@@ -114,6 +116,7 @@ export async function runAnnotatePrompts(
         valuePromotion: null,
         paramOrSecretKey: null,
         scopeOverride: null,
+        requiresConfirmation: false,
       });
       session.next();
       continue;
@@ -192,6 +195,32 @@ export async function runAnnotatePrompts(
       }
     }
 
+    // Per FEAT-019 TASK-005: offer the human-in-the-loop confirmation flag on
+    // kept click actions, defaulting to the purchase-shaped heuristic (buy/pay/
+    // book/order/submit → default yes; everything else → default no). Navigate
+    // and fill fall back to the heuristic (false) without an extra prompt.
+    let requiresConfirmation = suggestRequiresConfirmation(action);
+
+    if (action.kind === 'click') {
+      const { confirmAction } = await prompts(
+        {
+          type: 'confirm',
+          name: 'confirmAction',
+          message: 'Require human confirmation before this action?',
+          initial: requiresConfirmation,
+        },
+        { onCancel },
+      );
+
+      if (cancelled) {
+        session.cancel();
+        opts?.onCancelled?.();
+        return;
+      }
+
+      requiresConfirmation = (confirmAction as boolean | undefined) ?? requiresConfirmation;
+    }
+
     session.applyDecision({
       draftActionId: String(view.index),
       action: 'keep',
@@ -199,6 +228,7 @@ export async function runAnnotatePrompts(
       valuePromotion,
       paramOrSecretKey,
       scopeOverride: null,
+      requiresConfirmation,
     });
 
     session.next();

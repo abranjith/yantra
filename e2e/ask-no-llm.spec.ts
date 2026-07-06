@@ -1,7 +1,8 @@
 import { Writable } from 'node:stream';
 
 import { run } from '@yantra/cli';
-import type { AskCard, AskPipeline } from '@yantra/core';
+import type { AskPipeline, AskRunResult } from '@yantra/core';
+import { canonicalBrief } from '@yantra/test-helpers';
 import { describe, expect, it } from 'vitest';
 
 function captureStream() {
@@ -12,57 +13,15 @@ function captureStream() {
       callback();
     },
   });
-
-  return {
-    stream,
-    value: () => data,
-  };
+  return { stream, value: () => data };
 }
 
 describe('@no-llm ask e2e no-llm mode', () => {
-  it('sets noLlm=true when LLM_PROVIDER=none and still succeeds', async () => {
+  it('sets noLlm=true when LLM_PROVIDER=none and still emits a deterministic Brief', async () => {
     const stdout = captureStream();
     const stderr = captureStream();
     let observedNoLlm = false;
-
-    const cards: AskCard[] = [
-      {
-        url: 'https://example.com/one',
-        title: 'One',
-        source: 'example.com',
-        fetchedAt: '2026-05-11T10:14:00.000Z',
-        publishedAt: null,
-        summary: 'Summary one.',
-        summaryKind: 'rule-based',
-        quotedSnippet: 'Snippet one.',
-        tags: ['ai'],
-        notice: null,
-      },
-      {
-        url: 'https://example.com/two',
-        title: 'Two',
-        source: 'example.com',
-        fetchedAt: '2026-05-11T10:14:00.000Z',
-        publishedAt: null,
-        summary: 'Summary two.',
-        summaryKind: 'rule-based',
-        quotedSnippet: 'Snippet two.',
-        tags: ['ai'],
-        notice: null,
-      },
-      {
-        url: 'https://example.com/three',
-        title: 'Three',
-        source: 'example.com',
-        fetchedAt: '2026-05-11T10:14:00.000Z',
-        publishedAt: null,
-        summary: 'Summary three.',
-        summaryKind: 'rule-based',
-        quotedSnippet: 'Snippet three.',
-        tags: ['ai'],
-        notice: null,
-      },
-    ];
+    const result: AskRunResult = { brief: canonicalBrief, artifacts: null };
 
     const exitCode = await run(['ask', 'fixture topic', '--json'], {
       askRuntime: {
@@ -71,15 +30,14 @@ describe('@no-llm ask e2e no-llm mode', () => {
         stderr: stderr.stream,
         createPipeline: (query) => {
           observedNoLlm = query.noLlm;
-          return Promise.resolve({
-            run: () => Promise.resolve(cards),
-          } as unknown as AskPipeline);
+          return Promise.resolve({ run: () => Promise.resolve(result) } as unknown as AskPipeline);
         },
       },
     });
 
     expect(exitCode).toBe(0);
     expect(observedNoLlm).toBe(true);
-    expect(stdout.value()).toContain('"cards"');
+    expect(stdout.value()).toContain('"kind":"brief"');
+    expect(stdout.value()).toContain('"synthesis":"deterministic"');
   });
 });

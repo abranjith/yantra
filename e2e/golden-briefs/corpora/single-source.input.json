@@ -1,0 +1,22 @@
+{
+  "query": "quarterly earnings summary acme corp",
+  "docs": [
+    {
+      "url": "https://investor.example.com/acme-q2",
+      "finalUrl": null,
+      "host": "investor.example.com",
+      "title": "Acme Corp Q2 results",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": "2026-06-12T21:00:00.000Z",
+      "text": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment. The company raised its full year guidance and announced a 500 million dollar share buyback. Management said demand for its analytics platform remained strong across enterprise customers."
+    }
+  ],
+  "failures": [
+    {
+      "url": "https://press.example.net/acme",
+      "host": "press.example.net",
+      "stage": "extract",
+      "reason": "could not extract a readable article"
+    }
+  ]
+}

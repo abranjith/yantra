@@ -12,10 +12,12 @@
  *   yantra run bank-statement --json
  */
 
+import { InteractiveConfirmationGateway } from '@yantra/core';
 import type { RunRequest } from '@yantra/core/workflow/replay';
 import { exitCodeFor } from '@yantra/core/workflow/replay';
 import { Command } from 'commander';
 
+import { recordTaskHistory } from '../history.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 
 interface RunOptions {
@@ -65,7 +67,14 @@ export function makeRunCommand(): Command {
       }
 
       try {
-        const { orchestrator } = await buildOrchestratorRuntime({ logger });
+        // Interactive TTY runs can prompt for consent in-process; `--json` and
+        // non-TTY surfaces stay fail-closed (no gateway) so they never
+        // self-authorize a confirmable step (plan §6).
+        const interactive = process.stdin.isTTY === true && options.json !== true;
+        const { orchestrator } = await buildOrchestratorRuntime({
+          logger,
+          confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+        });
 
         const request: RunRequest =
           options.paramsFile === undefined
@@ -86,6 +95,12 @@ export function makeRunCommand(): Command {
               };
 
         const outcome = await orchestrator.run(request);
+
+        // Record the completed run into the history index (best-effort — the
+        // index is an optional cache and must never fail a run).
+        if (typeof outcome.runId === 'string' && outcome.runId.length > 0) {
+          await recordTaskHistory(outcome.runId);
+        }
 
         if (options.json === true) {
           process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);

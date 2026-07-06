@@ -2,14 +2,13 @@ import { z } from 'zod';
 
 import type { Result } from '../utils/result.js';
 import { err, ok } from '../utils/result.js';
-import { SCHEMA_VERSION } from '../version.js';
+import { ULID_PATTERN } from '../utils/ulid.js';
+import { SUPPORTED_SCHEMA_VERSIONS } from '../version.js';
 
 import { CaptureRef } from './refs.js';
 import { SecurityScope } from './security.js';
 import { Step } from './steps.js';
 import type { TaskRequest } from './task.js';
-
-const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 export const OutputBinding = z
   .object({
@@ -24,7 +23,9 @@ export const PlanSchema = z
   .object({
     task_id: z.string().regex(ULID_PATTERN).describe('Owning task id.'),
     plan_id: z.string().regex(ULID_PATTERN).describe('Unique plan id.'),
-    schema_version: z.literal(SCHEMA_VERSION).describe('Protocol schema version literal.'),
+    schema_version: z
+      .enum(SUPPORTED_SCHEMA_VERSIONS)
+      .describe('Protocol schema version the plan was authored under; legacy 0.1 stays accepted.'),
     default_scope: SecurityScope.describe('Default scope applied when step scope is null.'),
     steps: z.array(Step).min(1).max(64).describe('Ordered finite list of plan steps.'),
     outputs: z.array(OutputBinding).default([]).describe('Optional plan outputs.'),

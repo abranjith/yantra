@@ -1,15 +1,18 @@
 /**
  * Stable JSON renderer for the Yantra CLI.
  *
- * Every output object carries `schemaVersion: "0.1"` so downstream tooling
- * can pin against the surface. Streamed events are emitted as JSON Lines
- * (one event per line); final outcomes are emitted as a single JSON object.
+ * Every output object carries a `schemaVersion` (the current protocol
+ * schema version) so downstream tooling can pin against the surface.
+ * Streamed events are emitted as JSON Lines (one event per line); final
+ * outcomes are emitted as a single JSON object.
  */
 
-import type { TaskEvent } from '@yantra/protocol';
+import type { Brief, TaskEvent } from '@yantra/protocol';
+import { SCHEMA_VERSION } from '@yantra/protocol';
 
 import type {
   AuditRenderReport,
+  BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
   ListItem,
@@ -17,7 +20,7 @@ import type {
   ShowItem,
 } from './types.js';
 
-export const CLI_JSON_SCHEMA_VERSION = '0.1' as const;
+export const CLI_JSON_SCHEMA_VERSION = SCHEMA_VERSION;
 
 export class JSONRenderer implements OutputRenderer {
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void {
@@ -47,6 +50,18 @@ export class JSONRenderer implements OutputRenderer {
   renderReport(markdown: string, opts: ConnectorRenderOpts): void {
     opts.stream.write(
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'report', markdown })}\n`,
+    );
+  }
+
+  /**
+   * Emits the Brief verbatim inside the schema envelope. This is the
+   * dependency-free `--json` surface (plan §8): key order is fixed
+   * (`schemaVersion`, `kind`, `brief`, `artifacts`) so the same Brief always
+   * serializes to identical bytes.
+   */
+  renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void {
+    opts.stream.write(
+      `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'brief', brief, artifacts })}\n`,
     );
   }
 

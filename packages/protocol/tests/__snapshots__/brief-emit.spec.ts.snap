@@ -1,0 +1,436 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@no-llm brief json schema emission > emits brief.schema.json as valid draft-07 JSON Schema with citation structure 1`] = `
+{
+  "$ref": "#/definitions/Brief",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "Brief": {
+      "additionalProperties": false,
+      "description": "The universal synthesized output document: answer-first overview, key findings, sections, facets, numbered sources, notices, and metadata. Every citation resolves to a declared source (no uncited claims).",
+      "properties": {
+        "brief_id": {
+          "description": "Unique Brief document id (ULID).",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string",
+        },
+        "facets": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "Structured/tabular facets of the Brief.",
+              "properties": {
+                "comparison": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "columns": {
+                          "description": "Column headers.",
+                          "items": {
+                            "type": "string",
+                          },
+                          "minItems": 1,
+                          "type": "array",
+                        },
+                        "rows": {
+                          "description": "Comparison rows; every row length must equal columns.length.",
+                          "items": {
+                            "description": "One comparison row.",
+                            "items": {
+                              "$ref": "#/definitions/Brief/properties/key_findings/items/properties/facet/anyOf/0/additionalProperties",
+                            },
+                            "type": "array",
+                          },
+                          "type": "array",
+                        },
+                      },
+                      "required": [
+                        "columns",
+                        "rows",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                  "description": "Tabular comparison data, or null when the query has no comparative shape.",
+                },
+              },
+              "required": [
+                "comparison",
+              ],
+              "type": "object",
+            },
+            {
+              "type": "null",
+            },
+          ],
+          "description": "Structured/tabular facets, or null when the query has no comparative shape.",
+        },
+        "key_findings": {
+          "description": "Scannable findings; may be empty.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A scannable, citation-backed finding bullet.",
+            "properties": {
+              "citations": {
+                "description": "Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true.",
+                "items": {
+                  "description": "A source number (sources[].n).",
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "type": "array",
+              },
+              "editorial": {
+                "default": false,
+                "description": "True marks uncited synthesis commentary — the only legal uncited form.",
+                "type": "boolean",
+              },
+              "facet": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "description": "A scalar facet value.",
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null",
+                      ],
+                    },
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "default": null,
+                "description": "Optional structured payload (for example { price: 328, in_stock: true }), or null.",
+              },
+              "text": {
+                "description": "Markdown text of the finding; inline [n] markers refer to sources[].n.",
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "text",
+              "citations",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "metadata": {
+          "additionalProperties": false,
+          "description": "Provenance and quality signals.",
+          "properties": {
+            "citation_verdict": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "claims_checked": {
+                      "description": "Claims inspected by the citation-faithfulness validator.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "flagged": {
+                      "description": "Claims flagged as unanchored.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "stripped": {
+                      "description": "Claims stripped as unanchored.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "claims_checked",
+                    "flagged",
+                    "stripped",
+                  ],
+                  "type": "object",
+                },
+                {
+                  "type": "null",
+                },
+              ],
+              "default": null,
+              "description": "Citation-faithfulness verdict (filled post-synthesis), or null before validation.",
+            },
+            "coverage": {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                {
+                  "type": "null",
+                },
+              ],
+              "description": "Fraction of fetched sources represented in the Brief (0-1), or null.",
+            },
+            "deterministic_fallback_used": {
+              "description": "True when the LLM path failed and the deterministic synthesizer took over.",
+              "type": "boolean",
+            },
+            "freshness": {
+              "description": "Human-readable freshness signal (for example "today"), or null.",
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "run_id": {
+              "description": "Owning run id, or null outside a run context.",
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "search_provider": {
+              "description": "Search provider that produced the source candidates, or null.",
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+            "synthesis": {
+              "description": "Synthesis strategy that produced the Brief.",
+              "enum": [
+                "deterministic",
+                "llm",
+              ],
+              "type": "string",
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cost_usd": {
+                      "description": "Estimated LLM cost in USD.",
+                      "minimum": 0,
+                      "type": "number",
+                    },
+                    "input_tokens": {
+                      "description": "LLM input tokens consumed.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "output_tokens": {
+                      "description": "LLM output tokens produced.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "input_tokens",
+                    "output_tokens",
+                    "cost_usd",
+                  ],
+                  "type": "object",
+                },
+                {
+                  "type": "null",
+                },
+              ],
+              "description": "LLM usage totals, or null on the deterministic path.",
+            },
+          },
+          "required": [
+            "search_provider",
+            "synthesis",
+            "deterministic_fallback_used",
+            "coverage",
+            "freshness",
+            "usage",
+            "run_id",
+          ],
+          "type": "object",
+        },
+        "notices": {
+          "description": "Honest per-source failures and validator flags; may be empty.",
+          "items": {
+            "additionalProperties": false,
+            "description": "An honest per-source failure or validator flag.",
+            "properties": {
+              "kind": {
+                "description": "Notice classification.",
+                "enum": [
+                  "fetch_failed",
+                  "extract_failed",
+                  "blocked",
+                  "uncited_claim_stripped",
+                  "uncited_claim_flagged",
+                  "budget_exhausted",
+                  "other",
+                ],
+                "type": "string",
+              },
+              "reason": {
+                "description": "Human-readable reason for the notice.",
+                "minLength": 1,
+                "type": "string",
+              },
+              "source": {
+                "description": "Host or subsystem the notice concerns.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "source",
+              "reason",
+              "kind",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "overview": {
+          "description": "Answer-first Markdown synthesis (1-3 paragraphs) with inline [n] citations.",
+          "type": "string",
+        },
+        "schema_version": {
+          "const": "0.2",
+          "description": "Protocol schema version this document was written under.",
+          "type": "string",
+        },
+        "sections": {
+          "description": "Deep-detail sections; empty at the overview synthesis budget.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A deep-detail prose section of the Brief.",
+            "properties": {
+              "body_md": {
+                "description": "Markdown body prose; must not contain raw ANSI escapes.",
+                "type": "string",
+              },
+              "citations": {
+                "description": "Source numbers (sources[].n) cited by this section.",
+                "items": {
+                  "$ref": "#/definitions/Brief/properties/key_findings/items/properties/citations/items",
+                },
+                "type": "array",
+              },
+              "heading": {
+                "description": "Section heading.",
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "heading",
+              "body_md",
+              "citations",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "sources": {
+          "description": "Numbered, deduplicated source references.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A numbered, deduplicated source reference.",
+            "properties": {
+              "fetched_at": {
+                "description": "ISO-8601 UTC fetch timestamp.",
+                "format": "date-time",
+                "type": "string",
+              },
+              "final_url": {
+                "anyOf": [
+                  {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "default": null,
+                "description": "Post-redirect landing URL, or null when no redirect was observed.",
+              },
+              "host": {
+                "description": "Source host.",
+                "minLength": 1,
+                "type": "string",
+              },
+              "n": {
+                "description": "Citation number; contiguous 1..N in array order.",
+                "minimum": 1,
+                "type": "integer",
+              },
+              "published_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "ISO-8601 publication timestamp, or null when unknown.",
+              },
+              "title": {
+                "description": "Page title, or null when unavailable.",
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "url": {
+                "description": "URL as fetched.",
+                "format": "uri",
+                "type": "string",
+              },
+            },
+            "required": [
+              "n",
+              "url",
+              "host",
+              "title",
+              "fetched_at",
+              "published_at",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "task_id": {
+          "description": "Originating task id (ULID).",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string",
+        },
+        "title": {
+          "description": "One-line document title.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "brief_id",
+        "task_id",
+        "schema_version",
+        "title",
+        "overview",
+        "key_findings",
+        "sections",
+        "facets",
+        "sources",
+        "metadata",
+        "notices",
+      ],
+      "type": "object",
+    },
+  },
+}
+`;

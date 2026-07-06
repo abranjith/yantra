@@ -1,11 +1,10 @@
 import { z } from 'zod';
 
-import { SCHEMA_VERSION } from '../version.js';
+import { ULID_PATTERN } from '../utils/ulid.js';
+import { SUPPORTED_SCHEMA_VERSIONS } from '../version.js';
 
 import { SecretRef } from './refs.js';
 import { SecurityClass } from './security.js';
-
-const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 export const ScalarValue = z
   .union([z.string(), z.number(), z.boolean(), z.null()])
@@ -43,7 +42,11 @@ export const TaskRequest = z
       .describe('Optional overall deadline in milliseconds.'),
     budget: BudgetSchema.nullable().describe('Optional execution budget constraints.'),
     security_class: SecurityClass.describe('Security class for the task.'),
-    schema_version: z.literal(SCHEMA_VERSION).describe('Protocol schema version literal.'),
+    schema_version: z
+      .enum(SUPPORTED_SCHEMA_VERSIONS)
+      .describe(
+        'Protocol schema version the request was authored under; legacy 0.1 stays accepted.',
+      ),
   })
   .describe('Top-level task request entering the agent/executor pipeline.');
 

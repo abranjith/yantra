@@ -15,12 +15,19 @@
           "description": "Workflow slug name."
         },
         "description": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Optional workflow description."
         },
         "security_class": {
           "type": "string",
-          "enum": ["public", "read-only-data", "authenticated"],
+          "enum": [
+            "public",
+            "read-only-data",
+            "authenticated"
+          ],
           "description": "Workflow security class.",
           "default": "public"
         },
@@ -40,7 +47,10 @@
                   "description": "Yantra version used at recording time."
                 }
               },
-              "required": ["chrome_major", "yantra_version"],
+              "required": [
+                "chrome_major",
+                "yantra_version"
+              ],
               "additionalProperties": false
             },
             {
@@ -57,11 +67,19 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["string", "number", "boolean", "date"],
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "date"
+                ],
                 "description": "Declared param scalar type."
               },
               "example": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "default": null,
                 "description": "Optional example value."
               },
@@ -71,7 +89,9 @@
                 "description": "Whether the param is required."
               }
             },
-            "required": ["type"],
+            "required": [
+              "type"
+            ],
             "additionalProperties": false,
             "description": "Workflow parameter declaration."
           },
@@ -92,7 +112,10 @@
         },
         "cookies": {
           "type": "string",
-          "enum": ["auto", "none"],
+          "enum": [
+            "auto",
+            "none"
+          ],
           "default": "none",
           "description": "Cookie/profile handling mode."
         },
@@ -112,7 +135,11 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "enum": ["public", "read-only-data", "authenticated"],
+                        "enum": [
+                          "public",
+                          "read-only-data",
+                          "authenticated"
+                        ],
                         "description": "Step-level security scope."
                       },
                       {
@@ -121,17 +148,93 @@
                     ],
                     "description": "Optional step scope override."
                   },
+                  "requires_confirmation": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+                  },
+                  "confirmation_description": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Human-readable override for the consent card. Falls back to step name when null."
+                  },
+                  "expected_cost": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "description": "Numeric cost amount."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Best-effort cost estimate for the action being confirmed."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Best-effort cost estimate shown on the consent card, or null if unknown.",
+                    "default": null
+                  },
+                  "consequence": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "reversible",
+                          "hard_to_reverse",
+                          "irreversible",
+                          "unknown"
+                        ],
+                        "description": "How difficult it would be to undo the action if it goes wrong."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Reversibility hint for the action, or null to default to \"unknown\".",
+                    "default": null
+                  },
                   "verb": {
                     "type": "string",
                     "const": "navigate",
                     "description": "Navigate workflow step."
                   },
                   "url": {
-                    "type": ["string", "number", "boolean", "null"],
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean",
+                      "null"
+                    ],
                     "description": "URL value or template expression."
                   }
                 },
-                "required": ["id", "scope", "verb", "url"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "url"
+                ],
                 "additionalProperties": false
               },
               {
@@ -142,6 +245,18 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                  },
+                  "confirmation_description": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/confirmation_description"
+                  },
+                  "expected_cost": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/expected_cost"
+                  },
+                  "consequence": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/consequence"
                   },
                   "verb": {
                     "type": "string",
@@ -154,7 +269,12 @@
                     "description": "Named locator key from _locators."
                   }
                 },
-                "required": ["id", "scope", "verb", "locator"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "locator"
+                ],
                 "additionalProperties": false
               },
               {
@@ -165,6 +285,18 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                  },
+                  "confirmation_description": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/confirmation_description"
+                  },
+                  "expected_cost": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/expected_cost"
+                  },
+                  "consequence": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/consequence"
                   },
                   "verb": {
                     "type": "string",
@@ -177,7 +309,12 @@
                     "description": "Named locator key from _locators."
                   },
                   "value": {
-                    "type": ["string", "number", "boolean", "null"],
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean",
+                      "null"
+                    ],
                     "description": "Fill value or template expression."
                   },
                   "submit": {
@@ -186,7 +323,13 @@
                     "description": "Whether to submit after fill."
                   }
                 },
-                "required": ["id", "scope", "verb", "locator", "value"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "locator",
+                  "value"
+                ],
                 "additionalProperties": false
               },
               {
@@ -197,6 +340,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -220,11 +366,20 @@
                           },
                           "kind": {
                             "type": "string",
-                            "enum": ["string", "number", "boolean", "date", "money"],
+                            "enum": [
+                              "string",
+                              "number",
+                              "boolean",
+                              "date",
+                              "money"
+                            ],
                             "description": "Primitive value kind."
                           }
                         },
-                        "required": ["type", "kind"],
+                        "required": [
+                          "type",
+                          "kind"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -247,11 +402,20 @@
                                   },
                                   "kind": {
                                     "type": "string",
-                                    "enum": ["string", "number", "boolean", "date", "money"],
+                                    "enum": [
+                                      "string",
+                                      "number",
+                                      "boolean",
+                                      "date",
+                                      "money"
+                                    ],
                                     "description": "Primitive value kind."
                                   }
                                 },
-                                "required": ["type", "kind"],
+                                "required": [
+                                  "type",
+                                  "kind"
+                                ],
                                 "additionalProperties": false
                               },
                               {
@@ -267,7 +431,10 @@
                                     "description": "Item schema for extracted arrays."
                                   }
                                 },
-                                "required": ["type", "items"],
+                                "required": [
+                                  "type",
+                                  "items"
+                                ],
                                 "additionalProperties": false
                               },
                               {
@@ -286,14 +453,20 @@
                                     "description": "Field mapping for extracted object rows."
                                   }
                                 },
-                                "required": ["type", "fields"],
+                                "required": [
+                                  "type",
+                                  "fields"
+                                ],
                                 "additionalProperties": false
                               }
                             ],
                             "description": "Item schema for extracted arrays."
                           }
                         },
-                        "required": ["type", "items"],
+                        "required": [
+                          "type",
+                          "items"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -312,7 +485,10 @@
                             "description": "Field mapping for extracted object rows."
                           }
                         },
-                        "required": ["type", "fields"],
+                        "required": [
+                          "type",
+                          "fields"
+                        ],
                         "additionalProperties": false
                       }
                     ],
@@ -324,7 +500,14 @@
                     "description": "Capture alias for extracted data."
                   }
                 },
-                "required": ["id", "scope", "verb", "locator", "extraction_schema", "capture_as"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "locator",
+                  "extraction_schema",
+                  "capture_as"
+                ],
                 "additionalProperties": false
               },
               {
@@ -335,6 +518,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -348,7 +534,12 @@
                   },
                   "state": {
                     "type": "string",
-                    "enum": ["visible", "hidden", "attached", "detached"],
+                    "enum": [
+                      "visible",
+                      "hidden",
+                      "attached",
+                      "detached"
+                    ],
                     "description": "Awaited target state."
                   },
                   "timeout_ms": {
@@ -364,7 +555,14 @@
                     "description": "Optional timeout override."
                   }
                 },
-                "required": ["id", "scope", "verb", "locator", "state", "timeout_ms"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "locator",
+                  "state",
+                  "timeout_ms"
+                ],
                 "additionalProperties": false
               },
               {
@@ -375,6 +573,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -397,7 +598,9 @@
                             "description": "Assert that target is visible."
                           }
                         },
-                        "required": ["kind"],
+                        "required": [
+                          "kind"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -409,7 +612,9 @@
                             "description": "Assert that target is hidden."
                           }
                         },
-                        "required": ["kind"],
+                        "required": [
+                          "kind"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -430,7 +635,10 @@
                             "description": "Regex flags."
                           }
                         },
-                        "required": ["kind", "pattern"],
+                        "required": [
+                          "kind",
+                          "pattern"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -447,14 +655,23 @@
                             "description": "Expected count."
                           }
                         },
-                        "required": ["kind", "count"],
+                        "required": [
+                          "kind",
+                          "count"
+                        ],
                         "additionalProperties": false
                       }
                     ],
                     "description": "Assertion condition payload."
                   }
                 },
-                "required": ["id", "scope", "verb", "locator", "condition"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "locator",
+                  "condition"
+                ],
                 "additionalProperties": false
               },
               {
@@ -465,6 +682,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -494,7 +714,14 @@
                     "description": "Optional step id for false branch."
                   }
                 },
-                "required": ["id", "scope", "verb", "condition", "then_step_id", "else_step_id"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "condition",
+                  "then_step_id",
+                  "else_step_id"
+                ],
                 "additionalProperties": false
               },
               {
@@ -505,6 +732,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -556,6 +786,9 @@
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
                   },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                  },
                   "verb": {
                     "type": "string",
                     "const": "call_workflow",
@@ -569,7 +802,12 @@
                   "params": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": ["string", "number", "boolean", "null"],
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
                       "description": "Workflow value expression or scalar literal."
                     },
                     "default": {},
@@ -588,7 +826,13 @@
                     "description": "Optional capture alias for workflow call output."
                   }
                 },
-                "required": ["id", "scope", "verb", "workflow_name", "capture_as"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "workflow_name",
+                  "capture_as"
+                ],
                 "additionalProperties": false
               },
               {
@@ -599,6 +843,9 @@
                   },
                   "scope": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
                   "verb": {
                     "type": "string",
@@ -621,7 +868,14 @@
                     "description": "Capture alias for summary output."
                   }
                 },
-                "required": ["id", "scope", "verb", "input", "prompt", "output_as"],
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "input",
+                  "prompt",
+                  "output_as"
+                ],
                 "additionalProperties": false
               }
             ],
@@ -647,7 +901,10 @@
                 "description": "Template expression sourcing output value."
               }
             },
-            "required": ["name", "from"],
+            "required": [
+              "name",
+              "from"
+            ],
             "additionalProperties": false,
             "description": "Workflow output binding."
           },
@@ -723,7 +980,9 @@
                               "description": "Regex flags string."
                             }
                           },
-                          "required": ["pattern"],
+                          "required": [
+                            "pattern"
+                          ],
                           "additionalProperties": false,
                           "description": "Regex descriptor for workflow locator names."
                         }
@@ -731,7 +990,11 @@
                       "description": "Accessible name matcher."
                     }
                   },
-                  "required": ["kind", "role", "name"],
+                  "required": [
+                    "kind",
+                    "role",
+                    "name"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -747,7 +1010,10 @@
                       "description": "Test id value."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -763,7 +1029,10 @@
                       "description": "Label text value."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -779,7 +1048,10 @@
                       "description": "Placeholder text value."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -795,7 +1067,10 @@
                       "description": "CSS selector value."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -811,7 +1086,10 @@
                       "description": "XPath selector value."
                     }
                   },
-                  "required": ["kind", "value"],
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
                   "additionalProperties": false
                 }
               ],
@@ -825,7 +1103,12 @@
           "description": "Named locator chains captured or authored for replay."
         }
       },
-      "required": ["version", "name", "description", "steps"],
+      "required": [
+        "version",
+        "name",
+        "description",
+        "steps"
+      ],
       "additionalProperties": false,
       "description": "Workflow YAML schema source used by parser, linter, and editor integrations."
     }

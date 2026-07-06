@@ -1,0 +1,25 @@
+{
+  "query": "how to rotate ssh keys safely",
+  "docs": [
+    {
+      "url": "https://docs.example.com/ssh-key-rotation",
+      "finalUrl": null,
+      "host": "docs.example.com",
+      "title": "SSH key rotation guide",
+      "fetchedAt": "2026-06-14T07:00:00.000Z",
+      "publishedAt": "2026-05-01T00:00:00.000Z",
+      "text": "Rotating SSH keys regularly reduces the blast radius of a leaked credential. First generate a new key pair with a strong algorithm such as ed25519. Add the new public key to every server the old key could access before removing anything. Verify you can authenticate with the new key, then remove the old public key from authorized_keys on each host. Finally revoke the old private key from any agent and delete it.",
+      "excerpt": "Rotating SSH keys regularly reduces the blast radius of a leaked credential."
+    },
+    {
+      "url": "https://security.example.org/key-hygiene",
+      "finalUrl": null,
+      "host": "security.example.org",
+      "title": "Key hygiene best practices",
+      "fetchedAt": "2026-06-14T07:00:05.000Z",
+      "publishedAt": "2026-04-15T00:00:00.000Z",
+      "text": "Good key hygiene means never reusing a single SSH key across unrelated systems. Store private keys encrypted with a passphrase and prefer a hardware token where possible. Rotate keys at least once a year, and immediately after any suspected compromise. Keep an inventory of which keys authorize which hosts so rotation never locks you out."
+    }
+  ],
+  "failures": []
+}
