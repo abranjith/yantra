@@ -14,12 +14,14 @@ import {
 describe('@no-llm golden briefs — deterministic synthesizer', () => {
   const names = goldenCorpusNames();
 
-  it('ships at least four fixture corpora', () => {
-    expect(names.length).toBeGreaterThanOrEqual(4);
+  it('ships the fixture corpora, including the evidence-first failure-mode set', () => {
+    expect(names.length).toBeGreaterThanOrEqual(5);
     expect(names).toContain('price-comparison');
     expect(names).toContain('news-roundup');
     expect(names).toContain('howto-reference');
     expect(names).toContain('single-source');
+    expect(names).toContain('ev-sales-mixed');
+    expect(names).toContain('ev-sales-messy');
   });
 
   for (const name of names) {
@@ -54,6 +56,42 @@ describe('@no-llm golden briefs — deterministic synthesizer', () => {
     expect(price.facets).not.toBeNull();
     expect(price.facets!.comparison!.rows.length).toBeGreaterThanOrEqual(2);
     expect(news.facets).toBeNull();
+  });
+
+  it('excludes off-topic sources from the mixed corpus and notices them honestly', async () => {
+    const brief = await synthesizeCorpus('ev-sales-mixed');
+
+    // Only the on-topic EV sources survive; the NASA/e-signature intrusions are
+    // dropped before numbering and surfaced as honest source_excluded notices.
+    const hosts = brief.sources.map((source) => source.host);
+    expect(hosts).not.toContain('nasa.example.gov');
+    expect(hosts).not.toContain('leegality.example.com');
+    expect(brief.notices.filter((n) => n.kind === 'source_excluded').length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(brief.metadata.evidence).not.toBeNull();
+    expect(brief.metadata.evidence!.excluded_sources).toBeGreaterThanOrEqual(2);
+    // No finding is a heading or an off-topic sentence.
+    const findingText = brief.key_findings.map((finding) => finding.text).join(' ');
+    expect(findingText).not.toMatch(/Mars|signature/u);
+  });
+
+  it('keeps the messy EV corpus readable and metric-labeled', async () => {
+    const brief = await synthesizeCorpus('ev-sales-messy');
+    const text = JSON.stringify(brief);
+
+    expect(text).not.toMatch(/Last Updated|Subscribe|Mars/u);
+    expect(brief.key_findings.some((finding) => finding.children.length > 0)).toBe(true);
+    expect(brief.facets?.comparison?.columns).toEqual(['Source', 'Metric', 'Change']);
+    expect(brief.facets!.comparison!.rows.flat()).toEqual(
+      expect.arrayContaining(['Sales decline (YoY)', 'Sales rise (MoM)', 'Market share']),
+    );
+    const prose = [
+      ...brief.key_findings.map((finding) => finding.text),
+      ...brief.key_findings.flatMap((finding) => finding.children.map((child) => child.text)),
+      ...brief.sections.map((section) => section.body_md),
+    ].join('\n');
+    expect(prose.match(/28%/gu)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 
   it('handles the degenerate single-source corpus with honest coverage', async () => {

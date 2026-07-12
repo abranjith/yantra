@@ -59,6 +59,17 @@ const citationsArb = (sourceCount: number): fc.Arbitrary<number[]> =>
     ? fc.constant([])
     : fc.array(fc.integer({ min: 1, max: sourceCount }), { maxLength: 4 });
 
+const childFindingsArb = (sourceCount: number): fc.Arbitrary<KeyFinding['children']> =>
+  sourceCount === 0
+    ? fc.constant([])
+    : fc.array(
+        fc.record({
+          text: textArb(1),
+          citations: citationsArb(sourceCount).filter((citations) => citations.length > 0),
+        }),
+        { maxLength: 2 },
+      );
+
 const keyFindingArb = (sourceCount: number): fc.Arbitrary<KeyFinding> =>
   fc
     .record({
@@ -66,13 +77,15 @@ const keyFindingArb = (sourceCount: number): fc.Arbitrary<KeyFinding> =>
       citations: citationsArb(sourceCount),
       editorialBias: fc.boolean(),
       facet: fc.option(fc.dictionary(textArb(1), facetScalarArb, { maxKeys: 3 }), { nil: null }),
+      children: childFindingsArb(sourceCount),
     })
-    .map(({ text, citations, editorialBias, facet }) => ({
+    .map(({ text, citations, editorialBias, facet, children }) => ({
       text,
       citations,
       // Uncited findings are only legal when editorial — keep samples valid.
       editorial: citations.length === 0 ? true : editorialBias,
       facet,
+      children,
     }));
 
 const sectionArb = (sourceCount: number): fc.Arbitrary<Section> =>
@@ -159,9 +172,11 @@ const noticeArb: fc.Arbitrary<BriefNotice> = fc.record({
     'fetch_failed',
     'extract_failed',
     'blocked',
+    'source_excluded',
     'uncited_claim_stripped',
     'uncited_claim_flagged',
     'budget_exhausted',
+    'limited_evidence',
     'other',
   ),
 });

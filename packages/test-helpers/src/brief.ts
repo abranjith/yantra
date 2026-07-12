@@ -17,7 +17,7 @@
  * every citation resolves, editorial marks the one uncited finding).
  */
 
-import type { Brief, BriefSource } from '@yantra/protocol';
+import type { Brief, BriefSource, KeyFinding } from '@yantra/protocol';
 
 /** Builds a numbered {@link BriefSource} with sensible defaults. */
 export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): BriefSource => ({
@@ -37,14 +37,23 @@ export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): Bri
  * (empty sections, null facets, notice-only) without restating the whole
  * document.
  */
-export const makeBrief = (overrides: Partial<Brief> = {}): Brief => {
+type KeyFindingInput = Omit<KeyFinding, 'children'> & {
+  readonly children?: KeyFinding['children'];
+};
+type BriefOverrides = Omit<Partial<Brief>, 'key_findings'> & {
+  readonly key_findings?: readonly KeyFindingInput[];
+};
+
+export const makeBrief = (overrides: BriefOverrides = {}): Brief => {
   const base: Brief = {
     brief_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
     schema_version: '0.2',
     title: 'Test Brief',
     overview: 'Answer-first overview. [1]',
-    key_findings: [{ text: 'Finding one [1]', citations: [1], editorial: false, facet: null }],
+    key_findings: [
+      { text: 'Finding one [1]', citations: [1], editorial: false, facet: null, children: [] },
+    ],
     sections: [],
     facets: null,
     sources: [makeSource(1)],
@@ -56,12 +65,20 @@ export const makeBrief = (overrides: Partial<Brief> = {}): Brief => {
       freshness: null,
       citation_verdict: null,
       usage: null,
+      evidence: null,
       run_id: null,
     },
     notices: [],
   };
 
-  return { ...base, ...overrides };
+  return {
+    ...base,
+    ...overrides,
+    key_findings: (overrides.key_findings ?? base.key_findings).map((finding) => ({
+      ...finding,
+      children: [...(finding.children ?? [])],
+    })),
+  };
 };
 
 /**
@@ -85,24 +102,33 @@ export const canonicalBrief: Brief = {
       citations: [1],
       editorial: false,
       facet: { price: 328, currency: 'USD', in_stock: true },
+      children: [
+        {
+          text: 'Amazon also shows the steepest list-price discount among tracked retailers',
+          citations: [1],
+        },
+      ],
     },
     {
       text: 'Best Buy — $349, in stock [2]',
       citations: [2],
       editorial: false,
       facet: { price: 349, in_stock: true },
+      children: [],
     },
     {
       text: 'Walmart — $342 via a third-party seller [3]',
       citations: [3],
       editorial: false,
       facet: { price: 342, in_stock: true },
+      children: [],
     },
     {
       text: 'Prices have trended upward since last week, so buying now is reasonable.',
       citations: [],
       editorial: true,
       facet: null,
+      children: [],
     },
   ],
   sections: [
@@ -169,6 +195,7 @@ export const canonicalBrief: Brief = {
     freshness: 'today',
     citation_verdict: { claims_checked: 6, flagged: 0, stripped: 0 },
     usage: null,
+    evidence: null,
     run_id: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
   },
   notices: [

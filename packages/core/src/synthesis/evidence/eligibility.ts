@@ -1,0 +1,501 @@
+/**
+ * Claim eligibility + sentence-level support + ranking (absorbs the old
+ * `claims.ts`).
+ *
+ * This is where "evidence selection first" is enforced. Candidate sentences
+ * from the relevance-passing documents must clear four **hard gates** before
+ * they can become findings:
+ *
+ * 1. **Grammaticality** — the sentence carries a finite verb
+ *    ({@link DocAnalysis.hasFiniteVerb}). Headings and nav fragments
+ *    ("State-Wise EV Sales & Adoption") are rejected outright.
+ * 2. **Size** — the sentence is within readable claim bounds and has enough
+ *    informative tokens.
+ * 3. **Evidence-kind match** — a sentence carrying a typed *figure* is kept
+ *    only when that figure's kind is one the query wants
+ *    ({@link QueryProfile.requiredEvidenceKinds}) *or* the sentence also names
+ *    a target entity. A stray "125 Interesting Facts" number for an EV query
+ *    fails here.
+ * 4. **Relevance floor** — the sentence must name a target entity or clear a
+ *    must-match coverage threshold. This is a hard filter, replacing the old
+ *    query-overlap *dampener* (which only scaled salience and let off-topic
+ *    sentences through).
+ *
+ * **Support is sentence-level.** The old code counted a whole document as
+ * evidence when it shared 60% of a claim's tokens anywhere in its text — the
+ * direct cause of `[1][4][6][7][8][9][10]` citation runs. A document now
+ * supports a claim only when *one of its sentences* restates it: it carries the
+ * claim's numeric figures, or clears a lemma-overlap threshold within a single
+ * sentence.
+ *
+ * Ranking reuses the existing salience formula, computed over the gated set,
+ * with the same deterministic tie-breaks. Pure and deterministic throughout.
+ */
+
+import type { DocAnalysis, EntityKind, TextAnalyzer } from '../analysis/text-analyzer.js';
+import type { ClaimKind, SynthesisDoc } from '../types.js';
+
+import type { EvidenceClaim, EvidenceKind, QueryProfile } from './types.js';
+
+/** Sentence-position decay factor used in the salience position weight. */
+const POSITION_DECAY = 0.15;
+
+/** Minimum informative tokens for a sentence to be a claim candidate. */
+const MIN_CLAIM_TOKENS = 5;
+
+/** Bounds keeping claims readable as findings. */
+const MIN_CLAIM_CHARS = 25;
+const MAX_CLAIM_CHARS = 400;
+
+/** Cap on ranked claims returned; downstream budgets are far smaller. */
+const MAX_CLAIMS = 50;
+
+/** Lemma-overlap threshold for one sentence to count as restating a claim. */
+const SUPPORT_LEMMA_OVERLAP = 0.6;
+
+/** Numeric evidence kinds subject to the evidence-kind gate. */
+const NUMERIC_KINDS: ReadonlySet<EvidenceKind> = new Set(['money', 'percent', 'quantity', 'date']);
+
+/** Percent/money only: safe anchors for numeric duplicate merging. */
+const ANCHOR_VALUE_KINDS: ReadonlySet<EntityKind> = new Set(['money', 'percent']);
+
+/** Boilerplate/source-chrome openers rejected before content gates. */
+const BOILERPLATE_PATTERN =
+  /^(last updated|updated on|updated:|published(?: on|:)|posted(?: on|:)|by [A-Z][a-z]+ [A-Z]|read more|subscribe|sign up|advertisement|sponsored|share this|follow us|related (?:articles?|posts?)|table of contents|skip to|photo(?: credit)?:|image:|source:)\b/iu;
+
+const FIRST_WORD_ANAPHORS: ReadonlySet<string> = new Set(['it', 'they', 'he', 'she']);
+const DEICTIC_ANAPHORS: ReadonlySet<string> = new Set(['this', 'these', 'that', 'those']);
+const CONNECTIVE_ANAPHORS: ReadonlySet<string> = new Set([
+  'however',
+  'but',
+  'meanwhile',
+  'still',
+  'additionally',
+  'also',
+  'moreover',
+  'furthermore',
+  'yet',
+  'instead',
+  'nevertheless',
+  'nonetheless',
+]);
+const TEMPORAL_DEIXIS: ReadonlySet<string> = new Set([
+  'year',
+  'month',
+  'week',
+  'quarter',
+  'decade',
+  'time',
+]);
+
+/** Maps analyzer entity kinds onto the pipeline's evidence-kind vocabulary. */
+const EVIDENCE_KIND_BY_ENTITY: Readonly<Record<EntityKind, EvidenceKind>> = {
+  money: 'money',
+  percent: 'percent',
+  date: 'date',
+  cardinal: 'quantity',
+  named: 'entity',
+};
+
+/** Priority used when the same sentence surfaces from several docs. */
+const KIND_PRIORITY: Readonly<Record<ClaimKind, number>> = {
+  number: 3,
+  entity: 2,
+  quote: 1,
+  fact: 0,
+};
+
+/** Per-sentence analysis prepared once for gating, support, and ranking. */
+interface PreparedSentence {
+  readonly index: number;
+  readonly text: string;
+  readonly lemmas: ReadonlySet<string>;
+  readonly numericValues: ReadonlySet<string>;
+  readonly anchorValues: ReadonlySet<string>;
+  readonly entityKeys: ReadonlySet<string>;
+  readonly evidenceKinds: readonly EvidenceKind[];
+  readonly kind: ClaimKind;
+  readonly hasFiniteVerb: boolean;
+  readonly anaphoric: boolean;
+}
+
+/** A relevance-passing document's prepared sentences. */
+interface PreparedDoc {
+  readonly docIndex: number;
+  readonly sentences: readonly PreparedSentence[];
+}
+
+/**
+ * Extracts eligible, sentence-supported, ranked claims from the
+ * relevance-passing document set.
+ *
+ * @param docs - Relevance-passing documents (array order = search rank).
+ * @param profile - The query profile driving the eligibility gates.
+ * @param analyzer - Linguistic analyzer (sentences, entities, POS).
+ * @returns Ranked {@link EvidenceClaim}s (highest salience first), each with
+ *   sentence-level `docIndexes` (indexes into `docs`).
+ */
+export function extractEligibleClaims(
+  docs: readonly SynthesisDoc[],
+  profile: QueryProfile,
+  analyzer: TextAnalyzer,
+): readonly EvidenceClaim[] {
+  if (docs.length === 0) {
+    return [];
+  }
+
+  const prepared = docs.map((doc, docIndex) => prepareDoc(doc, docIndex, analyzer));
+
+  // Candidate sentences that clear all hard gates, deduplicated across
+  // docs by normalized text (best-ranked origin wins; support re-adds the rest).
+  const byNormalized = new Map<string, { doc: PreparedDoc; sentence: PreparedSentence }>();
+  for (const doc of prepared) {
+    for (const sentence of eligibleSentencesForDoc(doc, profile)) {
+      const key = normalizeClaimText(sentence.text);
+      const existing = byNormalized.get(key);
+      if (
+        existing === undefined ||
+        KIND_PRIORITY[sentence.kind] > KIND_PRIORITY[existing.sentence.kind] ||
+        (KIND_PRIORITY[sentence.kind] === KIND_PRIORITY[existing.sentence.kind] &&
+          doc.docIndex < existing.doc.docIndex)
+      ) {
+        byNormalized.set(key, { doc, sentence });
+      }
+    }
+  }
+
+  const claims: EvidenceClaim[] = [];
+  for (const { doc, sentence } of byNormalized.values()) {
+    const docIndexes = supportingDocs(sentence, doc.docIndex, prepared);
+    const overlap = coverage(sentence.lemmas, profile.mustMatchTerms);
+    const positionWeight = 1 / (1 + sentence.index * POSITION_DECAY);
+    const salience = docIndexes.length * positionWeight * (1 + overlap);
+
+    claims.push({
+      text: sentence.text,
+      kind: sentence.kind,
+      evidenceKinds: sentence.evidenceKinds,
+      anchorValues: [...sentence.anchorValues],
+      docIndexes,
+      salience,
+    });
+  }
+
+  return claims
+    .sort(
+      (left, right) =>
+        right.salience - left.salience ||
+        left.docIndexes[0]! - right.docIndexes[0]! ||
+        left.text.localeCompare(right.text),
+    )
+    .slice(0, MAX_CLAIMS);
+}
+
+/** Counts claim candidates before gating — feeds `metadata.evidence`. */
+export function countCandidateSentences(
+  docs: readonly SynthesisDoc[],
+  analyzer: TextAnalyzer,
+): number {
+  let total = 0;
+  for (const doc of docs) {
+    for (const sentence of analyzer.analyze(doc.text).sentences) {
+      if (isClaimSized(sentence.text) && sentence.tokens.length >= MIN_CLAIM_TOKENS) {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+/** Prepares one document's sentences for gating, support, and ranking. */
+function prepareDoc(doc: SynthesisDoc, docIndex: number, analyzer: TextAnalyzer): PreparedDoc {
+  const analysis = analyzer.analyze(doc.text);
+  const sentences = analysis.sentences.map((sentence) =>
+    prepareSentence(sentence.index, sentence.text, sentence.lemmas, analysis),
+  );
+  return { docIndex, sentences };
+}
+
+/** Builds the per-sentence view (entity kinds, numeric values, entity keys). */
+function prepareSentence(
+  index: number,
+  text: string,
+  lemmas: readonly string[],
+  analysis: DocAnalysis,
+): PreparedSentence {
+  const entities = analysis.entities.filter((entity) => entity.sentenceIndex === index);
+  const evidenceKindSet = new Set<EvidenceKind>();
+  const numericValues = new Set<string>();
+  const anchorValues = new Set<string>();
+  const entityKeys = new Set<string>(lemmas);
+  const displayText = collapseWhitespace(text);
+
+  for (const entity of entities) {
+    const kind = EVIDENCE_KIND_BY_ENTITY[entity.kind];
+    evidenceKindSet.add(kind);
+    if (NUMERIC_KINDS.has(kind)) {
+      numericValues.add(entity.normalized);
+    }
+    if (ANCHOR_VALUE_KINDS.has(entity.kind)) {
+      anchorValues.add(entity.normalized);
+    }
+    if (entity.kind === 'named') {
+      entityKeys.add(entity.normalized);
+    }
+  }
+
+  const hasNumeric = [...evidenceKindSet].some((kind) => NUMERIC_KINDS.has(kind));
+  const kind: ClaimKind = hasNumeric ? 'number' : evidenceKindSet.has('entity') ? 'entity' : 'fact';
+
+  const evidenceKinds = evidenceKindSet.size > 0 ? [...evidenceKindSet] : (['statement'] as const);
+
+  return {
+    index,
+    text: displayText,
+    lemmas: new Set(lemmas),
+    numericValues,
+    anchorValues,
+    entityKeys,
+    evidenceKinds,
+    kind,
+    hasFiniteVerb: analysis.hasFiniteVerb(index),
+    anaphoric: isAnaphoric(displayText),
+  };
+}
+
+function eligibleSentencesForDoc(
+  doc: PreparedDoc,
+  profile: QueryProfile,
+): readonly PreparedSentence[] {
+  const accepted: PreparedSentence[] = [];
+  const consumed = new Set<number>();
+
+  for (const sentence of doc.sentences) {
+    if (sentence.anaphoric) {
+      const stitched = stitchAnaphor(sentence, doc, profile, consumed);
+      if (stitched !== null) {
+        consumed.add(stitched.index);
+        const previous = accepted.findIndex((entry) => entry.index === stitched.index);
+        if (previous !== -1) {
+          accepted.splice(previous, 1);
+        }
+        accepted.push(stitched);
+      }
+      continue;
+    }
+
+    if (passesGates(sentence, profile) && !consumed.has(sentence.index)) {
+      accepted.push(sentence);
+    }
+  }
+
+  return accepted;
+}
+
+function stitchAnaphor(
+  sentence: PreparedSentence,
+  doc: PreparedDoc,
+  profile: QueryProfile,
+  consumed: ReadonlySet<number>,
+): PreparedSentence | null {
+  const antecedent = doc.sentences[sentence.index - 1];
+  if (
+    antecedent === undefined ||
+    antecedent.anaphoric ||
+    consumed.has(antecedent.index) ||
+    !passesGates(antecedent, profile)
+  ) {
+    return null;
+  }
+
+  const text = collapseWhitespace(`${antecedent.text} ${sentence.text}`);
+  if (text.length > MAX_CLAIM_CHARS) {
+    return null;
+  }
+
+  const evidenceKinds = unionArray(antecedent.evidenceKinds, sentence.evidenceKinds);
+  const hasNumeric = evidenceKinds.some((kind) => NUMERIC_KINDS.has(kind));
+  const kind: ClaimKind = hasNumeric
+    ? 'number'
+    : evidenceKinds.includes('entity')
+      ? 'entity'
+      : 'fact';
+
+  return {
+    index: antecedent.index,
+    text,
+    lemmas: unionSet(antecedent.lemmas, sentence.lemmas),
+    numericValues: unionSet(antecedent.numericValues, sentence.numericValues),
+    anchorValues: unionSet(antecedent.anchorValues, sentence.anchorValues),
+    entityKeys: unionSet(antecedent.entityKeys, sentence.entityKeys),
+    evidenceKinds,
+    kind,
+    hasFiniteVerb: true,
+    anaphoric: false,
+  };
+}
+
+/** Applies the hard eligibility gates to one sentence. */
+function passesGates(sentence: PreparedSentence, profile: QueryProfile): boolean {
+  // Gate 0: source boilerplate.
+  if (BOILERPLATE_PATTERN.test(sentence.text)) {
+    return false;
+  }
+  // Gate 1: grammaticality (kills headings and nav fragments).
+  if (!sentence.hasFiniteVerb) {
+    return false;
+  }
+  // Gate 2: size / token bounds.
+  if (!isClaimSized(sentence.text) || sentence.lemmas.size < MIN_CLAIM_TOKENS) {
+    return false;
+  }
+
+  const hasTargetEntity = profile.targetEntities.some((entity) => sentence.entityKeys.has(entity));
+
+  // Gate 3: evidence-kind match — only for number-seeking intents (price /
+  // comparison / rate-or-trend, which declare required kinds). There, a
+  // figure-carrying sentence is on-topic only when its figure kind is wanted or
+  // it also names a target entity, so a stray price in an EV-rate query is
+  // dropped. Intents that want no particular figure (general / factual /
+  // entity-profile) skip this gate and rely on the relevance floor below.
+  if (profile.requiredEvidenceKinds.length > 0) {
+    const numericKinds = sentence.evidenceKinds.filter((kind) => NUMERIC_KINDS.has(kind));
+    if (numericKinds.length > 0) {
+      const wanted = numericKinds.some((kind) => profile.requiredEvidenceKinds.includes(kind));
+      if (!wanted && !hasTargetEntity) {
+        return false;
+      }
+    }
+  }
+
+  // Gate 4: relevance floor. The source relevance gate has already established
+  // that the document is on-topic, so within it a candidate sentence only needs
+  // to touch the query: name a target entity, or share at least one must-match
+  // term. A tangent that shares no query term (a Mars aside in an EV article) is
+  // still dropped. Salience (below) rewards higher query overlap among those
+  // that pass.
+  if (
+    profile.mustMatchTerms.length > 0 &&
+    !hasTargetEntity &&
+    !sharesTerm(sentence.lemmas, profile.mustMatchTerms)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/** True when any of `terms` appears in `lemmas`. */
+function sharesTerm(lemmas: ReadonlySet<string>, terms: readonly string[]): boolean {
+  return terms.some((term) => lemmas.has(term));
+}
+
+/**
+ * Sentence-level support: the origin doc always counts, plus every other doc
+ * that has a *single sentence* restating the claim — carrying its numeric
+ * figures or clearing the lemma-overlap threshold.
+ */
+function supportingDocs(
+  claim: PreparedSentence,
+  originDocIndex: number,
+  docs: readonly PreparedDoc[],
+): number[] {
+  const supporters: number[] = [];
+  for (const doc of docs) {
+    if (doc.docIndex === originDocIndex) {
+      continue;
+    }
+    if (doc.sentences.some((sentence) => sentenceSupports(claim, sentence))) {
+      supporters.push(doc.docIndex);
+    }
+  }
+  return [originDocIndex, ...supporters].sort((left, right) => left - right);
+}
+
+/** True when `sentence` restates `claim` (numeric figures or lemma overlap). */
+function sentenceSupports(claim: PreparedSentence, sentence: PreparedSentence): boolean {
+  if (claim.numericValues.size > 0 && isSubset(claim.numericValues, sentence.numericValues)) {
+    return true;
+  }
+  return lemmaOverlap(claim.lemmas, sentence.lemmas) >= SUPPORT_LEMMA_OVERLAP;
+}
+
+/** Fraction of `terms` present in `lemmas` (0 when there are no terms). */
+function coverage(lemmas: ReadonlySet<string>, terms: readonly string[]): number {
+  if (terms.length === 0) {
+    return 1;
+  }
+  let hits = 0;
+  for (const term of terms) {
+    if (lemmas.has(term)) {
+      hits += 1;
+    }
+  }
+  return hits / terms.length;
+}
+
+/** Fraction of `claimLemmas` also present in `otherLemmas`. */
+function lemmaOverlap(claimLemmas: ReadonlySet<string>, otherLemmas: ReadonlySet<string>): number {
+  if (claimLemmas.size === 0) {
+    return 0;
+  }
+  let hits = 0;
+  for (const lemma of claimLemmas) {
+    if (otherLemmas.has(lemma)) {
+      hits += 1;
+    }
+  }
+  return hits / claimLemmas.size;
+}
+
+/** True when every member of `subset` is present in `superset`. */
+function isSubset(subset: ReadonlySet<string>, superset: ReadonlySet<string>): boolean {
+  for (const value of subset) {
+    if (!superset.has(value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** True when the sentence length is within readable claim bounds. */
+function isClaimSized(sentence: string): boolean {
+  return sentence.length >= MIN_CLAIM_CHARS && sentence.length <= MAX_CLAIM_CHARS;
+}
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/gu, ' ').trim();
+}
+
+/** Case/whitespace-normalized claim key for cross-doc deduplication. */
+function normalizeClaimText(text: string): string {
+  return text.toLowerCase().replace(/\s+/gu, ' ').trim();
+}
+
+function isAnaphoric(text: string): boolean {
+  const words = text
+    .replace(/^[^\p{L}]+/u, '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+  const first = words[0];
+  if (first === undefined) {
+    return false;
+  }
+  if (FIRST_WORD_ANAPHORS.has(first) || CONNECTIVE_ANAPHORS.has(first)) {
+    return true;
+  }
+  if (DEICTIC_ANAPHORS.has(first)) {
+    const second = words[1];
+    return second === undefined || !TEMPORAL_DEIXIS.has(second);
+  }
+  return false;
+}
+
+function unionSet<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): ReadonlySet<T> {
+  return new Set([...left, ...right]);
+}
+
+function unionArray<T>(left: readonly T[], right: readonly T[]): readonly T[] {
+  return [...new Set([...left, ...right])];
+}

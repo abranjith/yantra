@@ -43,6 +43,7 @@ const briefArb = fc
         citations: finding.editorial ? [] : [1],
         editorial: finding.editorial,
         facet: null,
+        children: [],
       })),
       sections: spec.sections.map((section) => ({
         heading: section.heading,

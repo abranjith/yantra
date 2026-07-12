@@ -1,0 +1,140 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "State of EV car sales in the US in 2026",
+  "overview": "US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases. [1][2][3][5] US EV market share reached 7.8% of new car sales in the US in 2026 as shoppers compared electric vehicle options. [2][5] US EV car sales rose 10.3% month over month in May 2026 after several automakers cut prices. [4]",
+  "key_findings": [
+    {
+      "text": "US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases.",
+      "citations": [1, 2, 3, 5],
+      "editorial": false,
+      "facet": null,
+      "children": [
+        {
+          "text": "US electric vehicle sales cratered 28% YoY in 2026 as demand cooled across the country.",
+          "citations": [1, 2, 3]
+        }
+      ]
+    },
+    {
+      "text": "US EV market share reached 7.8% of new car sales in the US in 2026 as shoppers compared electric vehicle options.",
+      "citations": [2, 5],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "US EV car sales rose 10.3% month over month in May 2026 after several automakers cut prices.",
+      "citations": [4],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "EV inventory climbed 12% in 2026 because dealers had more unsold electric cars.",
+      "citations": [3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Registrations remained stronger in coastal states where charging access improved.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    }
+  ],
+  "sections": [],
+  "facets": {
+    "comparison": {
+      "columns": ["Source", "Metric", "Change"],
+      "rows": [
+        ["coxauto.example.com", "Sales decline (YoY)", "28%"],
+        ["autonews.example.com", "Sales decline (YoY)", "28%"],
+        ["insideevs.example.com", "Sales decline (YoY)", "28%"],
+        ["momentum.example.com", "Sales rise (MoM)", "10.3%"],
+        ["marketshare.example.com", "Market share", "7.8%"]
+      ]
+    }
+  },
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://coxauto.example.com/ev-sales-2026",
+      "final_url": null,
+      "host": "coxauto.example.com",
+      "title": "US EV sales report 2026",
+      "fetched_at": "2026-06-14T12:00:00.000Z",
+      "published_at": "2026-06-10T00:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://autonews.example.com/ev-registrations",
+      "final_url": null,
+      "host": "autonews.example.com",
+      "title": "EV registrations slid in 2026",
+      "fetched_at": "2026-06-14T12:00:05.000Z",
+      "published_at": "2026-06-11T00:00:00.000Z"
+    },
+    {
+      "n": 3,
+      "url": "https://insideevs.example.com/us-sales",
+      "final_url": null,
+      "host": "insideevs.example.com",
+      "title": "US EV sales tracker",
+      "fetched_at": "2026-06-14T12:00:10.000Z",
+      "published_at": "2026-06-12T00:00:00.000Z"
+    },
+    {
+      "n": 4,
+      "url": "https://momentum.example.com/ev-may-sales",
+      "final_url": null,
+      "host": "momentum.example.com",
+      "title": "EV sales momentum May 2026",
+      "fetched_at": "2026-06-14T12:00:12.000Z",
+      "published_at": "2026-06-12T00:00:00.000Z"
+    },
+    {
+      "n": 5,
+      "url": "https://marketshare.example.com/ev-share",
+      "final_url": null,
+      "host": "marketshare.example.com",
+      "title": "US EV market share",
+      "fetched_at": "2026-06-14T12:00:13.000Z",
+      "published_at": "2026-06-12T00:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "this week",
+    "citation_verdict": {
+      "claims_checked": 7,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "evidence": {
+      "candidate_claims": 12,
+      "accepted_claims": 6,
+      "excluded_sources": 1
+    },
+    "run_id": "golden-run"
+  },
+  "notices": [
+    {
+      "source": "nasa.example.gov",
+      "reason": "no overlap with query terms \"state, ev, car, sale, 2026\"",
+      "kind": "source_excluded"
+    },
+    {
+      "source": "synthesis",
+      "reason": "only 5 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
+      "kind": "limited_evidence"
+    }
+  ]
+}

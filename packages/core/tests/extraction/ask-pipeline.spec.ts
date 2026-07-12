@@ -90,10 +90,10 @@ const searchRows: SearchResult[] = [
 // Distinct article bodies so the deterministic synthesizer keeps three sources
 // (near-identical text would cluster into one).
 const ARTICLE_TEXT: Record<string, string> = {
-  one: 'Solar capacity grew twelve percent last year. The national grid added four gigawatts of renewable power. Officials confirmed new incentives for rooftop installations.',
-  two: 'The transit authority approved a forty-five million dollar budget. Fares will remain frozen through 2027. Ridership recovered to pre-pandemic levels this quarter.',
+  one: 'AI news this week centered on a major research lab that released a new language model. The team reported the AI system improved reasoning accuracy by twelve percent. Officials confirmed wider availability soon.',
+  two: 'In AI news, a startup raised forty-five million dollars to expand its coding assistant. The company said its AI model automates enterprise workflows. Reporters covered the funding round widely.',
   three:
-    'Retail headphone prices climbed four percent this week. Amazon listed the flagship model at 328 dollars. Analysts expect discounts to return after the holiday.',
+    'AI news roundup: chipmakers unveiled faster processors built for AI model training. One vendor listed its flagship AI accelerator at 328 dollars. Analysts expect broader adoption after the holiday.',
 };
 
 function pathId(url: string): string {
@@ -165,7 +165,9 @@ describe('@no-llm extraction/ask-pipeline', () => {
     expect(validateBrief(brief).isOk).toBe(true);
     expect(brief.schema_version).toBe('0.2');
     expect(brief.sources).toHaveLength(3);
-    expect(brief.notices).toHaveLength(0);
+    // No source was dropped: the only notice a thin on-topic Brief may carry is
+    // the honest `limited_evidence` signal (fewer findings than the budget).
+    expect(brief.notices.filter((notice) => notice.kind !== 'limited_evidence')).toHaveLength(0);
     expect(artifacts).not.toBeNull();
     expect(cache.putCalls).toBe(1);
   });

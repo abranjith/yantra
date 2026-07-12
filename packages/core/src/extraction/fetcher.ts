@@ -173,12 +173,16 @@ export class HybridContentFetcher implements ContentFetcher {
     url: string,
     opts: { timeoutMs: number; signal: AbortSignal },
   ): Promise<FetchedDoc> {
-    const doc = await this.httpFetcher.fetch(url, opts);
-    if (shouldEscalateToBrowser(doc)) {
+    try {
+      const doc = await this.httpFetcher.fetch(url, opts);
+      if (shouldEscalateToBrowser(doc)) {
+        return this.browserFetcher.fetch(url, opts);
+      }
+
+      return doc;
+    } catch {
       return this.browserFetcher.fetch(url, opts);
     }
-
-    return doc;
   }
 }
 

@@ -41,13 +41,30 @@ const FacetScalar = z
   .union([z.string(), z.number(), z.boolean(), z.null()])
   .describe('A scalar facet value.');
 
+export const ChildFinding = z
+  .object({
+    text: z
+      .string()
+      .min(1)
+      .refine(noAnsi, ANSI_MESSAGE)
+      .describe('Markdown text of a nested child finding.'),
+    citations: CitationList.min(1).describe(
+      'Source numbers (sources[].n) backing this child finding; at least one is required.',
+    ),
+  })
+  .describe('A one-level nested finding under a key finding.');
+
+export type ChildFinding = z.infer<typeof ChildFinding>;
+
 export const KeyFinding = z
   .object({
     text: z
       .string()
       .min(1)
       .refine(noAnsi, ANSI_MESSAGE)
-      .describe('Markdown text of the finding; inline [n] markers refer to sources[].n.'),
+      .describe(
+        'Markdown text of the finding. Inline [n] markers are optional: the LLM path may emit them, while the deterministic path carries citations only in the structured citations[] array. The structured array is the single source of truth for rendering.',
+      ),
     citations: CitationList.describe(
       'Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true.',
     ),
@@ -62,6 +79,10 @@ export const KeyFinding = z
       .describe(
         'Optional structured payload (for example { price: 328, in_stock: true }), or null.',
       ),
+    children: z
+      .array(ChildFinding)
+      .default([])
+      .describe('Nested child findings that elaborate this parent; one level deep only.'),
   })
   .describe('A scannable, citation-backed finding bullet.');
 
@@ -180,6 +201,29 @@ export const BriefMetadata = z
       })
       .nullable()
       .describe('LLM usage totals, or null on the deterministic path.'),
+    evidence: z
+      .object({
+        candidate_claims: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Claim candidates considered before the eligibility gates.'),
+        accepted_claims: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Claims that passed the eligibility gates and reached the Brief.'),
+        excluded_sources: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Sources dropped by the query-relevance gate before assembly.'),
+      })
+      .nullable()
+      .default(null)
+      .describe(
+        'Evidence-selection counts from the deterministic pipeline (candidate vs accepted claims, excluded sources), or null on the LLM path.',
+      ),
     run_id: z.string().nullable().describe('Owning run id, or null outside a run context.'),
   })
   .describe('Provenance and quality metadata for the Brief.');
@@ -195,12 +239,16 @@ export const BriefNotice = z
         'fetch_failed',
         'extract_failed',
         'blocked',
+        'source_excluded',
         'uncited_claim_stripped',
         'uncited_claim_flagged',
         'budget_exhausted',
+        'limited_evidence',
         'other',
       ])
-      .describe('Notice classification.'),
+      .describe(
+        'Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates.',
+      ),
   })
   .describe('An honest per-source failure or validator flag.');
 
@@ -275,6 +323,9 @@ export const Brief = z
 
     brief.key_findings.forEach((finding, index) => {
       checkCitations(finding.citations, ['key_findings', index]);
+      finding.children.forEach((child, childIndex) => {
+        checkCitations(child.citations, ['key_findings', index, 'children', childIndex]);
+      });
       if (!finding.editorial && finding.citations.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

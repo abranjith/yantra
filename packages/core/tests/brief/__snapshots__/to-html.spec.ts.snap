@@ -55,6 +55,17 @@ table.comparison tbody tr:nth-child(even) { background: #f2efe9; }
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }
+ul.key-findings { padding-left: 1.5rem; }
+ul.key-findings li { margin: 0.35rem 0; }
+ul.children {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: #4c4942;
+}
+ul.children li { margin: 0.2rem 0; }
+sup.cite { font-size: 0.7em; margin-left: 1px; line-height: 0; }
+sup.cite a, sup.cite span { color: #8a8578; text-decoration: none; }
+sup.cite a:hover { text-decoration: underline; color: #1256a3; }
 ul.notices {
   list-style: none;
   padding: 0;
@@ -73,18 +84,21 @@ ul.notices li {
 <body>
 <main class="brief">
 <h1>Cheapest Sony WH-1000XM5 today</h1>
-<section class="overview"><p>Lowest price is <strong>$328</strong> at Amazon (down from a $399 list price). All three tracked retailers list the WH-1000XM5, and prices have risen roughly 4% this week. [1][3]</p></section>
+<section class="overview"><p>Lowest price is <strong>$328</strong> at Amazon (down from a $399 list price). All three tracked retailers list the WH-1000XM5, and prices have risen roughly 4% this week. <sup class="cite"><a href="#src-1">1</a></sup><sup class="cite"><a href="#src-3">3</a></sup></p></section>
 <h2>Key Findings</h2>
-<ul>
-<li>Amazon — $328, in stock, free shipping [1]</li>
-<li>Best Buy — $349, in stock [2]</li>
-<li>Walmart — $342 via a third-party seller [3]</li>
+<ul class="key-findings">
+<li>Amazon — $328, in stock, free shipping <sup class="cite"><a href="#src-1">1</a></sup>
+<ul class="children">
+<li>Amazon also shows the steepest list-price discount among tracked retailers<sup class="cite"><a href="#src-1">1</a></sup></li>
+</ul></li>
+<li>Best Buy — $349, in stock <sup class="cite"><a href="#src-2">2</a></sup></li>
+<li>Walmart — $342 via a third-party seller <sup class="cite"><a href="#src-3">3</a></sup></li>
 <li>Prices have trended upward since last week, so buying now is reasonable. <em>(editorial)</em></li>
 </ul>
 <h2>Price &amp; availability</h2>
-<p>All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. [1][2][3]</p>
+<p>All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. <sup class="cite"><a href="#src-1">1</a></sup><sup class="cite"><a href="#src-2">2</a></sup><sup class="cite"><a href="#src-3">3</a></sup></p>
 <h2>Caveats</h2>
-<p>The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. [3]</p>
+<p>The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. <sup class="cite"><a href="#src-3">3</a></sup></p>
 <h2>Comparison</h2>
 <table class="comparison">
 <thead><tr><th>Retailer</th><th>Price</th><th>In stock</th></tr></thead>
@@ -96,9 +110,9 @@ ul.notices li {
 </table>
 <h2>Sources</h2>
 <ol class="sources">
-<li><a href="https://www.amazon.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Wireless Headphones — Amazon</a> <span class="src-meta">amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z</span></li>
-<li><a href="https://www.bestbuy.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 | Best Buy</a> <span class="src-meta">bestbuy.com · fetched 2026-07-01T09:00:05.000Z</span></li>
-<li><a href="https://www.walmart.com/ip/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Headphones - Walmart</a> <span class="src-meta">walmart.com · fetched 2026-07-01T09:00:10.000Z</span></li>
+<li id="src-1"><a href="https://www.amazon.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Wireless Headphones — Amazon</a> <span class="src-meta">amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z</span></li>
+<li id="src-2"><a href="https://www.bestbuy.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 | Best Buy</a> <span class="src-meta">bestbuy.com · fetched 2026-07-01T09:00:05.000Z</span></li>
+<li id="src-3"><a href="https://www.walmart.com/ip/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Headphones - Walmart</a> <span class="src-meta">walmart.com · fetched 2026-07-01T09:00:10.000Z</span></li>
 </ol>
 <h2>Notices</h2>
 <ul class="notices">

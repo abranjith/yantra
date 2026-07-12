@@ -1,0 +1,53 @@
+{
+  "query": "State of EV car sales in the US in 2026",
+  "docs": [
+    {
+      "url": "https://coxauto.example.com/ev-2026",
+      "finalUrl": null,
+      "host": "coxauto.example.com",
+      "title": "US EV sales report 2026",
+      "fetchedAt": "2026-06-14T12:00:00.000Z",
+      "publishedAt": "2026-06-10T00:00:00.000Z",
+      "text": "US electric vehicle sales fell 28% in 2026 as demand cooled, according to Cox Automotive. EV car buyers in the US grew more cautious about pricing during the 2026 sales season.",
+      "excerpt": null
+    },
+    {
+      "url": "https://autonews.example.com/ev-registrations",
+      "finalUrl": null,
+      "host": "autonews.example.com",
+      "title": "EV registrations slid in 2026",
+      "fetchedAt": "2026-06-14T12:00:05.000Z",
+      "publishedAt": "2026-06-11T00:00:00.000Z",
+      "text": "EV car registrations in the US dropped 19% during 2026 across most states nationwide. Analysts said the US electric vehicle market cooled after several years of rapid growth.",
+      "excerpt": null
+    },
+    {
+      "url": "https://nasa.example.gov/mars-water",
+      "finalUrl": null,
+      "host": "nasa.example.gov",
+      "title": "Ancient water on Mars",
+      "fetchedAt": "2026-06-14T12:00:10.000Z",
+      "publishedAt": null,
+      "text": "NASA scientists confirmed that ancient water once flowed across the surface of Mars. The rover collected rock samples suggesting a wetter climate billions of years ago.",
+      "excerpt": null
+    },
+    {
+      "url": "https://leegality.example.com/esign-guide",
+      "finalUrl": null,
+      "host": "leegality.example.com",
+      "title": "Are electronic signatures legal",
+      "fetchedAt": "2026-06-14T12:00:15.000Z",
+      "publishedAt": null,
+      "text": "Electronic signatures are legally valid and help businesses e-sign documents securely today. Digital contract platforms let teams sign paperwork online without printing anything.",
+      "excerpt": null
+    }
+  ],
+  "failures": [
+    {
+      "url": "https://blocked.example.com/ev",
+      "host": "blocked.example.com",
+      "stage": "blocked",
+      "reason": "robots.txt disallow"
+    }
+  ]
+}

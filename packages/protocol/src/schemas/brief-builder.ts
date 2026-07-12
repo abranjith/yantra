@@ -56,6 +56,7 @@ const DEFAULT_METADATA: BriefMetadata = {
   freshness: null,
   citation_verdict: null,
   usage: null,
+  evidence: null,
   run_id: null,
 };
 
@@ -75,7 +76,15 @@ const DEFAULT_METADATA: BriefMetadata = {
  *   title: 'Cheapest Sony WH-1000XM5 today',
  *   overview: 'Lowest price is $328 at Amazon. [1]',
  *   sources: [source],
- *   key_findings: [{ text: 'Amazon — $328 [1]', citations: [1], editorial: false, facet: null }],
+ *   key_findings: [
+ *     {
+ *       text: 'Amazon — $328 [1]',
+ *       citations: [1],
+ *       editorial: false,
+ *       facet: null,
+ *       children: [{ text: 'Amazon lists free shipping.', citations: [1] }],
+ *     },
+ *   ],
  * });
  */
 export const createBrief = (input: CreateBriefInput): Brief => ({

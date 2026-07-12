@@ -3,34 +3,17 @@
   "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "schema_version": "0.2",
   "title": "Quarterly earnings summary acme corp",
-  "overview": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. [1] Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment. [1] The company raised its full year guidance and announced a 500 million dollar share buyback. [1]",
+  "overview": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. [1]",
   "key_findings": [
     {
       "text": "Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier.",
       "citations": [1],
       "editorial": false,
-      "facet": null
-    },
-    {
-      "text": "Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment.",
-      "citations": [1],
-      "editorial": false,
-      "facet": null
-    },
-    {
-      "text": "The company raised its full year guidance and announced a 500 million dollar share buyback.",
-      "citations": [1],
-      "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     }
   ],
-  "sections": [
-    {
-      "heading": "Numbers & figures",
-      "body_md": "- Acme Corp reported second quarter revenue of 1.2 billion dollars, up 8 percent from a year earlier. [1]\n- Operating margin expanded to 22 percent as cloud services grew faster than the legacy hardware segment. [1]\n- The company raised its full year guidance and announced a 500 million dollar share buyback. [1]",
-      "citations": [1]
-    }
-  ],
+  "sections": [],
   "facets": null,
   "sources": [
     {
@@ -50,11 +33,16 @@
     "coverage": 1,
     "freshness": "this week",
     "citation_verdict": {
-      "claims_checked": 6,
+      "claims_checked": 1,
       "flagged": 0,
       "stripped": 0
     },
     "usage": null,
+    "evidence": {
+      "candidate_claims": 4,
+      "accepted_claims": 1,
+      "excluded_sources": 0
+    },
     "run_id": "golden-run"
   },
   "notices": [
@@ -62,6 +50,11 @@
       "source": "press.example.net",
       "reason": "could not extract a readable article",
       "kind": "extract_failed"
+    },
+    {
+      "source": "synthesis",
+      "reason": "only 1 relevant finding met the evidence bar for a medium brief (up to 6 requested)",
+      "kind": "limited_evidence"
     }
   ]
 }

@@ -105,6 +105,7 @@ export function validateCitations(
   brief.key_findings.forEach((finding) => {
     // Inline markers inside finding text are also structurally checked.
     structuralFlag(finding.text, 'finding');
+    (finding.children ?? []).forEach((child) => structuralFlag(child.text, 'finding child'));
 
     if (opts.strategy !== 'llm' || finding.editorial) {
       keptFindings.push(finding);

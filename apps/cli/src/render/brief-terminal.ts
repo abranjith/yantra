@@ -118,12 +118,26 @@ function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: nu
 
 /** Scannable key-finding bullets; editorial notes use a distinct glyph. */
 function keyFindingsBlock(findings: readonly KeyFinding[], c: ChalkInstance): string {
-  const lines = findings.map((finding) => {
+  const lines = findings.flatMap((finding) => {
     const glyph = finding.editorial ? c.yellow('◦') : c.green('•');
     const marker = finding.editorial ? c.dim(' (editorial)') : '';
-    return `${glyph} ${styleInline(finding.text, c)}${marker}`;
+    const body = findingText(finding.text, finding.citations, c);
+    return [
+      `${glyph} ${body}${marker}`,
+      ...(finding.children ?? []).map(
+        (child) => `  ${c.dim('◦')} ${c.dim(findingText(child.text, child.citations, c))}`,
+      ),
+    ];
   });
   return `${c.bold('Key Findings')}\n${lines.join('\n')}`;
+}
+
+function findingText(text: string, citations: readonly number[], c: ChalkInstance): string {
+  const styled = styleInline(text, c);
+  if (/\[\d+\]/u.test(text) || citations.length === 0) {
+    return styled;
+  }
+  return `${styled} ${citations.map((n) => c.cyan(`[${n}]`)).join('')}`;
 }
 
 /** Comparison facet as an aligned `cli-table3`, width-fitted so it never overflows. */

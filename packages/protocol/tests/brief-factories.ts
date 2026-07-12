@@ -1,4 +1,4 @@
-import type { Brief, BriefSource } from '../src/index.js';
+import type { Brief, BriefSource, KeyFinding } from '../src/index.js';
 
 export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): BriefSource => ({
   n,
@@ -11,14 +11,23 @@ export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): Bri
   ...overrides,
 });
 
-export const makeBrief = (overrides: Partial<Brief> = {}): Brief => {
+type KeyFindingInput = Omit<KeyFinding, 'children'> & {
+  readonly children?: KeyFinding['children'];
+};
+type BriefOverrides = Omit<Partial<Brief>, 'key_findings'> & {
+  readonly key_findings?: readonly KeyFindingInput[];
+};
+
+export const makeBrief = (overrides: BriefOverrides = {}): Brief => {
   const base: Brief = {
     brief_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
     schema_version: '0.2',
     title: 'Test Brief',
     overview: 'Answer-first overview. [1]',
-    key_findings: [{ text: 'Finding one [1]', citations: [1], editorial: false, facet: null }],
+    key_findings: [
+      { text: 'Finding one [1]', citations: [1], editorial: false, facet: null, children: [] },
+    ],
     sections: [],
     facets: null,
     sources: [makeSource(1)],
@@ -30,10 +39,18 @@ export const makeBrief = (overrides: Partial<Brief> = {}): Brief => {
       freshness: null,
       citation_verdict: null,
       usage: null,
+      evidence: null,
       run_id: null,
     },
     notices: [],
   };
 
-  return { ...base, ...overrides };
+  return {
+    ...base,
+    ...overrides,
+    key_findings: (overrides.key_findings ?? base.key_findings).map((finding) => ({
+      ...finding,
+      children: [...(finding.children ?? [])],
+    })),
+  };
 };

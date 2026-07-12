@@ -26,14 +26,38 @@ import { err, validateBrief, type Result } from '@yantra/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Three genuinely distinct corpus bodies (distinct topics keep them below the
-// near-dup threshold) that each carry a lede *fact*, a *number* claim, and an
-// *entity* claim — so the deterministic long-form synthesis yields multiple
-// kind-grouped sections. The shared "Grid Research Institute" entity recurs
-// across docs, which is what qualifies the entity section.
+// topic-grouping threshold) that each carry several *fact*, *number*, and
+// *entity* claims — so the deterministic long-form synthesis groups them into
+// topic findings with nested children, and the finding whose group exceeds
+// the per-finding child cap spills its remainder into a kind-headed section.
 const CORPUS_BODIES: readonly string[] = [
-  'Community solar programs transformed rural electricity access this decade. The Global Energy Council recorded 4 gigawatts of fresh rooftop installations. Grid Research Institute analysts highlighted steadily falling battery costs nationwide.',
-  'Offshore wind turbines now anchor the entire northern coastline network. The Global Energy Council valued that maritime sector at 328 million dollars. Grid Research Institute forecasts a confident expansion continuing through 2027.',
-  'Hydrogen pipelines began linking distant industrial hubs across the continent. Regional cooperatives reported a 12 percent efficiency gain over 2025. Independent operators praised the ambitious modernization and permitting timeline widely.',
+  [
+    'Solar renewable energy grid costs fell 12 percent across the region last year.',
+    'Utility solar farms added 800 megawatts to the renewable energy grid this spring.',
+    'The Solar Alliance praised the renewable energy permitting timeline for the coastal grid.',
+    'The Global Energy Council endorsed community solar renewable energy grid programs widely.',
+    'Community solar renewable energy programs expanded rural grid access broadly this year.',
+    'Rooftop solar renewable energy adoption strengthened the neighborhood grid steadily overall.',
+    'Analysts said solar renewable energy demand climbed across the national grid this decade.',
+  ].join(' '),
+  [
+    'Wind renewable energy grid expansion reached 30 percent of capacity nationwide this year.',
+    'Wind renewable energy generation set a grid output record of 5 gigawatts overnight recently.',
+    'The Wind Consortium backed the renewable energy modernization of the coastal power grid.',
+    'The Global Energy Council valued the wind renewable energy grid sector at fresh highs.',
+    'Offshore wind renewable energy turbines anchored the northern coastline grid network firmly.',
+    'Onshore wind renewable energy permits accelerated across the open plains grid corridor quickly.',
+    'Operators said wind renewable energy reliability improved across the regional grid this winter.',
+  ].join(' '),
+  [
+    'Hydrogen renewable energy grid storage reached 200 megawatts across the network last quarter.',
+    'Hydrogen renewable energy plants boosted grid resilience by 40 percent over the season.',
+    'The Hydrogen Council endorsed the renewable energy grid resilience roadmap in full detail.',
+    'The Global Energy Council estimated hydrogen renewable energy grid output at new highs.',
+    'Green hydrogen renewable energy pipelines linked distant industrial grid hubs together directly.',
+    'Regional cooperatives expanded hydrogen renewable energy access to the rural grid steadily.',
+    'Independent operators praised hydrogen renewable energy modernization of the aging grid widely.',
+  ].join(' '),
 ];
 
 function bodyFor(i: number): string {
@@ -205,7 +229,10 @@ describe('@no-llm research e2e', () => {
 
     expect(validateBrief(result.brief).isOk).toBe(true);
     expect(result.hops).toHaveLength(2);
-    expect(result.brief.sections.length).toBeGreaterThanOrEqual(3);
+    // Sections now hold only the *remainder* beyond the per-finding child cap
+    // (topic-grouped composition), not a full kind-partition of every claim.
+    expect(result.brief.sections.length).toBeGreaterThanOrEqual(1);
+    expect(result.brief.key_findings.some((finding) => finding.children.length > 0)).toBe(true);
     expect(result.brief.metadata.coverage).not.toBeNull();
     expect(result.brief.sources.length).toBeGreaterThan(0);
     expect(elapsed).toBeLessThan(5_000);

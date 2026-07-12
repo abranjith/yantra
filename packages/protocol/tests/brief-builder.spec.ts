@@ -56,6 +56,7 @@ describe('@no-llm brief builder', () => {
       freshness: null,
       citation_verdict: null,
       usage: null,
+      evidence: null,
       run_id: null,
     });
   });

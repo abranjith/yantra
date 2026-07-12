@@ -146,20 +146,11 @@ export interface SourceCluster {
   readonly similarity: number;
 }
 
-/** Classification of an extracted candidate claim. */
+/**
+ * Classification of an extracted candidate claim, retained for section
+ * grouping (see `evidence/eligibility.ts`).
+ */
 export type ClaimKind = 'fact' | 'number' | 'entity' | 'quote';
-
-/** A candidate claim extracted from the doc set (internal). */
-export interface ExtractedClaim {
-  /** The claim sentence text. */
-  readonly text: string;
-  /** Doc indexes providing evidence for this claim (always >= 1 entry). */
-  readonly docIndexes: readonly number[];
-  /** What kind of signal surfaced the claim. */
-  readonly kind: ClaimKind;
-  /** Ranking score; higher = more likely to become a key finding. */
-  readonly salience: number;
-}
 
 /**
  * Error returned (never thrown) by synthesizers, carrying the query and

@@ -14,6 +14,7 @@ export {
   BriefMetadata,
   BriefNotice,
   BriefSource,
+  ChildFinding,
   KeyFinding,
   Section,
 } from './schemas/brief.js';

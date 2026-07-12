@@ -62,7 +62,8 @@ describe('@no-llm briefToHtml', () => {
     );
 
     // The dangerous URL never becomes an href; the label survives as text.
-    expect(/href="(?!https?:\/\/)/i.test(html)).toBe(false);
+    // Internal #src-n citation fragments are the only non-http(s) hrefs allowed.
+    expect(/href="(?!https?:\/\/|#src-)/i.test(html)).toBe(false);
     expect(html).not.toContain('javascript:alert(1)');
     expect(html).toContain('Evil source');
   });
@@ -77,8 +78,8 @@ describe('@no-llm briefToHtml', () => {
         expect(/<script/i.test(html)).toBe(false);
         expect(/<\/script/i.test(html)).toBe(false);
         expect(/<(iframe|object|embed|link|img)\b/i.test(html)).toBe(false);
-        // Every href attribute must be an http(s) URL — no javascript:/data:.
-        expect(/href="(?!https?:\/\/)/i.test(html)).toBe(false);
+        // Every href is an http(s) URL or an internal #src-n citation fragment.
+        expect(/href="(?!https?:\/\/|#src-)/i.test(html)).toBe(false);
       }),
       { numRuns: 500 },
     );
@@ -99,7 +100,10 @@ describe('@no-llm briefToHtml', () => {
             if (attr.name === 'href' || attr.name === 'src') {
               const value = attr.value.trim().toLowerCase();
               const safe =
-                value === '' || value.startsWith('http://') || value.startsWith('https://');
+                value === '' ||
+                value.startsWith('http://') ||
+                value.startsWith('https://') ||
+                value.startsWith('#src-');
               expect(safe).toBe(true);
             }
           }
@@ -111,5 +115,65 @@ describe('@no-llm briefToHtml', () => {
 
   it('is deterministic — identical input yields identical bytes', () => {
     expect(briefToHtml(canonicalBrief)).toBe(briefToHtml(canonicalBrief));
+  });
+
+  it('renders a heavily-cited finding as three superscripts plus a +k affordance', () => {
+    const sources = Array.from({ length: 9 }, (_, i) => ({
+      n: i + 1,
+      url: `https://s${i + 1}.example.com/page`,
+      final_url: null,
+      host: `s${i + 1}.example.com`,
+      title: `Source ${i + 1}`,
+      fetched_at: '2026-07-01T10:00:00.000Z',
+      published_at: null,
+    }));
+    const html = briefToHtml(
+      makeBrief({
+        sources,
+        overview: 'Answer first. [1]',
+        key_findings: [
+          {
+            text: 'A widely reported claim about the topic.',
+            citations: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            editorial: false,
+            facet: null,
+          },
+        ],
+      }),
+    );
+
+    // Exactly three visible citation superscripts, then a collapsed +6.
+    expect(html).toContain('<sup class="cite"><a href="#src-1">1</a></sup>');
+    expect(html).toContain('<sup class="cite"><a href="#src-3">3</a></sup>');
+    expect(html).not.toContain('href="#src-4"');
+    expect(html).toContain('title="also sources 4, 5, 6, 7, 8, 9"');
+    expect(html).toMatch(/\+6<\/span><\/sup>/);
+  });
+
+  it('transforms inline [n] runs in the overview into muted superscripts', () => {
+    const html = briefToHtml(makeBrief({ overview: 'Lowest price is $328. [1]' }));
+    expect(html).toContain('<sup class="cite"><a href="#src-1">1</a></sup>');
+    // No literal bracket marker survives in the rendered prose.
+    expect(html).not.toMatch(/\[1\]/u);
+  });
+
+  it('anchors every citation superscript to a Sources entry with a matching id', () => {
+    const dom = new JSDOM(briefToHtml(canonicalBrief));
+    const doc = dom.window.document;
+    const anchors = Array.from(doc.querySelectorAll('sup.cite a'));
+    expect(anchors.length).toBeGreaterThan(0);
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href') ?? '';
+      expect(href.startsWith('#src-')).toBe(true);
+      expect(doc.getElementById(href.slice(1))).not.toBeNull();
+    }
+  });
+
+  it('leaves an inline marker literal when it resolves to no declared source', () => {
+    // Only source 1 is declared; [9] cannot resolve and must stay literal text.
+    const html = briefToHtml(makeBrief({ overview: 'A real cite [1] and a bogus one [9].' }));
+    expect(html).toContain('<sup class="cite"><a href="#src-1">1</a></sup>');
+    expect(html).toContain('[9]');
+    expect(html).not.toContain('href="#src-9"');
   });
 });

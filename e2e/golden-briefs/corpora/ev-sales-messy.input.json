@@ -1,0 +1,66 @@
+{
+  "query": "State of EV car sales in the US in 2026",
+  "docs": [
+    {
+      "url": "https://coxauto.example.com/ev-sales-2026",
+      "finalUrl": null,
+      "host": "coxauto.example.com",
+      "title": "US EV sales report 2026",
+      "fetchedAt": "2026-06-14T12:00:00.000Z",
+      "publishedAt": "2026-06-10T00:00:00.000Z",
+      "text": "State of EV Sales in the US\n\n\nLast Updated: May 2026 - Q1 2026 sales data was verified by analysts.\n\nUS electric vehicle sales fell 28% year over year in 2026 as demand cooled, according to Cox Automotive. US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases. The federal tax credit expired on September 30, 2025. This led to a sharp drop in EV car purchases across the US market during 2026.",
+      "excerpt": null
+    },
+    {
+      "url": "https://autonews.example.com/ev-registrations",
+      "finalUrl": null,
+      "host": "autonews.example.com",
+      "title": "EV registrations slid in 2026",
+      "fetchedAt": "2026-06-14T12:00:05.000Z",
+      "publishedAt": "2026-06-11T00:00:00.000Z",
+      "text": "US EV Sales 2026\nUS electric vehicle sales cratered 28% YoY in 2026 as demand cooled across the country. Registrations remained stronger in coastal states where charging access improved.\n\nEV market share reached 7.8% of new car sales in the US in 2026.",
+      "excerpt": null
+    },
+    {
+      "url": "https://insideevs.example.com/us-sales",
+      "finalUrl": null,
+      "host": "insideevs.example.com",
+      "title": "US EV sales tracker",
+      "fetchedAt": "2026-06-14T12:00:10.000Z",
+      "publishedAt": "2026-06-12T00:00:00.000Z",
+      "text": "Subscribe for more EV updates.\n\nUS electric vehicle sales dropped 28% year over year to 216,399 vehicles in 2026 as tax-credit changes disrupted demand. EV inventory climbed 12% in 2026 because dealers had more unsold electric cars.",
+      "excerpt": null
+    },
+    {
+      "url": "https://momentum.example.com/ev-may-sales",
+      "finalUrl": null,
+      "host": "momentum.example.com",
+      "title": "EV sales momentum May 2026",
+      "fetchedAt": "2026-06-14T12:00:12.000Z",
+      "publishedAt": "2026-06-12T00:00:00.000Z",
+      "text": "EV Sales Momentum\nUS EV car sales rose 10.3% month over month in May 2026 after several automakers cut prices.",
+      "excerpt": null
+    },
+    {
+      "url": "https://marketshare.example.com/ev-share",
+      "finalUrl": null,
+      "host": "marketshare.example.com",
+      "title": "US EV market share",
+      "fetchedAt": "2026-06-14T12:00:13.000Z",
+      "publishedAt": "2026-06-12T00:00:00.000Z",
+      "text": "US EV market share reached 7.8% of new car sales in the US in 2026 as shoppers compared electric vehicle options.",
+      "excerpt": null
+    },
+    {
+      "url": "https://nasa.example.gov/mars-water",
+      "finalUrl": null,
+      "host": "nasa.example.gov",
+      "title": "Ancient water on Mars",
+      "fetchedAt": "2026-06-14T12:00:15.000Z",
+      "publishedAt": null,
+      "text": "NASA scientists confirmed that ancient water once flowed across the surface of Mars. The rover collected rock samples suggesting a wetter climate billions of years ago.",
+      "excerpt": null
+    }
+  ],
+  "failures": []
+}

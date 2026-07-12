@@ -120,8 +120,26 @@ describe('@no-llm synthesis/DeterministicSynthesizer', () => {
   });
 
   it('emits no sections at detail: overview and some at detail: full', async () => {
-    const overviewResult = await synth().synthesize(priceCorpus, opts({ detail: 'overview' }));
-    const fullResult = await synth().synthesize(priceCorpus, opts({ detail: 'full' }));
+    // Sections now hold the *remainder* of accepted claims beyond the finding
+    // budget, so this needs more than budget-many *distinct* on-topic claims
+    // (near-identical sentences would merge into one).
+    const sentences = [
+      'Electric vehicle sales fell 28% in the US during 2026 amid tighter supply.',
+      'Electric car battery output expanded 45% across the country in 2026.',
+      'Electric vehicle charging stations grew to 200000 units nationwide in 2026.',
+      'Electric car registrations rose 12% in coastal states during 2026.',
+      'Electric vehicle exports climbed 33% to foreign markets in 2026.',
+      'Electric truck deliveries increased 60% for commercial fleets in 2026.',
+      'Electric car adoption reached 18% of new vehicle sales in 2026.',
+      'Electric vehicle model choices expanded to 90 options for buyers in 2026.',
+    ];
+    const docs = sentences.map((text, i) =>
+      doc({ url: `https://ev-${i}.example.com/report`, text }),
+    );
+    const input: SynthesisInput = { query: 'electric vehicle trends 2026', docs, failures: [] };
+
+    const overviewResult = await synth().synthesize(input, opts({ detail: 'overview' }));
+    const fullResult = await synth().synthesize(input, opts({ detail: 'full' }));
 
     expect(overviewResult.isOk && overviewResult.value.brief.sections).toEqual([]);
     expect(fullResult.isOk && fullResult.value.brief.sections.length).toBeGreaterThan(0);
@@ -244,5 +262,109 @@ describe('@no-llm synthesis/DeterministicSynthesizer', () => {
       }),
       { numRuns: 200 },
     );
+  });
+});
+
+describe('@no-llm synthesis/DeterministicSynthesizer evidence-first composition', () => {
+  const evDocs = [
+    'Electric vehicle sales fell 28% in the US during 2026 amid tighter supply.',
+    'Electric car battery output expanded 45% across the country in 2026.',
+    'Electric vehicle charging stations grew to 200000 units nationwide in 2026.',
+    'Electric car registrations rose 12% in coastal states during 2026.',
+    'Electric vehicle exports climbed 33% to foreign markets in 2026.',
+    'Electric truck deliveries increased 60% for commercial fleets in 2026.',
+    'Electric car adoption reached 18% of new vehicle sales in 2026.',
+  ].map((text, i) => doc({ url: `https://ev-${i}.example.com/r`, text }));
+
+  const evInput: SynthesisInput = {
+    query: 'electric vehicle trends 2026',
+    docs: evDocs,
+    failures: [],
+  };
+
+  it('never repeats a key finding as a section bullet', async () => {
+    const result = await synth().synthesize(evInput, opts({ detail: 'full' }));
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const { brief } = result.value;
+    const sectionBodies = brief.sections.map((section) => section.body_md).join('\n');
+    for (const finding of brief.key_findings) {
+      expect(sectionBodies.includes(finding.text)).toBe(false);
+    }
+  });
+
+  it('carries citations only in the structured array, never as inline [n] in finding text', async () => {
+    const result = await synth().synthesize(evInput, opts());
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    for (const finding of result.value.brief.key_findings) {
+      expect(finding.text).not.toMatch(/\[\d+\]/u);
+      expect(finding.citations.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('stamps metadata.evidence counts consistent with the assembled evidence', async () => {
+    const result = await synth().synthesize(evInput, opts());
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const { evidence } = result.value.brief.metadata;
+    expect(evidence).not.toBeNull();
+    expect(evidence!.accepted_claims).toBeGreaterThan(0);
+    expect(evidence!.candidate_claims).toBeGreaterThanOrEqual(evidence!.accepted_claims);
+    expect(evidence!.excluded_sources).toBe(0);
+  });
+
+  it('excludes an off-topic source with a source_excluded notice and drops it from Sources', async () => {
+    const input: SynthesisInput = {
+      query: 'electric vehicle trends 2026',
+      docs: [
+        doc({
+          url: 'https://ev.example.com/1',
+          text: 'Electric vehicle sales fell 28% in the US during 2026 amid tighter supply.',
+        }),
+        doc({
+          url: 'https://nasa.example.gov/mars',
+          text: 'NASA scientists confirmed ancient water once flowed across the surface of Mars.',
+        }),
+      ],
+      failures: [],
+    };
+
+    const result = await synth().synthesize(input, opts());
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const { brief } = result.value;
+    expect(
+      brief.notices.some((n) => n.kind === 'source_excluded' && n.source === 'nasa.example.gov'),
+    ).toBe(true);
+    expect(brief.sources.some((s) => s.host === 'nasa.example.gov')).toBe(false);
+    expect(brief.metadata.evidence!.excluded_sources).toBe(1);
+  });
+
+  it('emits a limited_evidence notice when accepted findings fall short of the budget', async () => {
+    const input: SynthesisInput = {
+      query: 'electric vehicle trends 2026',
+      docs: [
+        doc({
+          url: 'https://a.example.com/1',
+          text: 'Electric vehicle sales fell 28% in the US during 2026 amid tighter supply.',
+        }),
+        doc({
+          url: 'https://b.example.com/1',
+          text: 'Electric car battery output expanded 45% across the country in 2026.',
+        }),
+      ],
+      failures: [],
+    };
+
+    const result = await synth().synthesize(input, opts({ length: 'medium' }));
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    expect(result.value.brief.notices.some((n) => n.kind === 'limited_evidence')).toBe(true);
   });
 });

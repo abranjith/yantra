@@ -119,6 +119,44 @@ describe('@no-llm brief schema', () => {
     }
   });
 
+  it('defaults finding children to an empty array when omitted', () => {
+    const parsed = Brief.parse(planSketchBrief);
+    expect(parsed.key_findings[0]?.children).toEqual([]);
+  });
+
+  it('rejects a child finding with empty or dangling citations', () => {
+    const empty = makeBrief({
+      key_findings: [
+        {
+          text: 'parent',
+          citations: [1],
+          editorial: false,
+          facet: null,
+          children: [{ text: 'child', citations: [] }],
+        },
+      ],
+    });
+    const dangling = makeBrief({
+      key_findings: [
+        {
+          text: 'parent',
+          citations: [1],
+          editorial: false,
+          facet: null,
+          children: [{ text: 'child', citations: [9] }],
+        },
+      ],
+    });
+
+    expect(Brief.safeParse(empty).success).toBe(false);
+    const result = Brief.safeParse(dangling);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join('.'));
+      expect(paths).toContain('key_findings.0.children.0.citations.0');
+    }
+  });
+
   it('fails non-contiguous source numbering', () => {
     const brief = makeBrief({
       sources: [makeSource(1), { ...makeSource(2), n: 3 }],
@@ -323,5 +361,66 @@ describe('@no-llm brief schema', () => {
 
     expect(Brief.safeParse(zero).success).toBe(false);
     expect(Brief.safeParse(negative).success).toBe(false);
+  });
+});
+
+describe('@no-llm brief schema — evidence-first additions (FEAT-FP-001)', () => {
+  it('accepts the source_excluded and limited_evidence notice kinds', () => {
+    const brief = makeBrief({
+      notices: [
+        {
+          source: 'nasa.example.gov',
+          reason: 'no overlap with query terms',
+          kind: 'source_excluded',
+        },
+        {
+          source: 'synthesis',
+          reason: 'fewer relevant findings than requested',
+          kind: 'limited_evidence',
+        },
+      ],
+    });
+    expect(Brief.safeParse(brief).success).toBe(true);
+  });
+
+  it('rejects an unknown notice kind', () => {
+    const brief = makeBrief({
+      notices: [{ source: 'x', reason: 'y', kind: 'totally_made_up' as never }],
+    });
+    expect(Brief.safeParse(brief).success).toBe(false);
+  });
+
+  it('accepts a populated metadata.evidence block', () => {
+    const brief = makeBrief({
+      metadata: {
+        ...makeBrief().metadata,
+        evidence: { candidate_claims: 40, accepted_claims: 6, excluded_sources: 3 },
+      },
+    });
+    const parsed = Brief.safeParse(brief);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.metadata.evidence).toEqual({
+        candidate_claims: 40,
+        accepted_claims: 6,
+        excluded_sources: 3,
+      });
+    }
+  });
+
+  it('defaults metadata.evidence to null when omitted', () => {
+    const { evidence: _omitted, ...metadataWithoutEvidence } = makeBrief().metadata;
+    const parsed = Brief.parse(makeBrief({ metadata: metadataWithoutEvidence as never }));
+    expect(parsed.metadata.evidence).toBeNull();
+  });
+
+  it('rejects negative evidence counts', () => {
+    const brief = makeBrief({
+      metadata: {
+        ...makeBrief().metadata,
+        evidence: { candidate_claims: -1, accepted_claims: 0, excluded_sources: 0 },
+      },
+    });
+    expect(Brief.safeParse(brief).success).toBe(false);
   });
 });

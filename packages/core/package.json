@@ -53,6 +53,8 @@
     "puppeteer-core": "^24.43.1",
     "robots-parser": "^3.0.1",
     "undici": "^7.16.0",
+    "wink-eng-lite-web-model": "^1.8.1",
+    "wink-nlp": "^2.4.0",
     "yaml": "^2.7.1",
     "zod": "^3.25.76"
   },

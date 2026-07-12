@@ -20,6 +20,14 @@
  *   inlined `<style>` theme, `<meta charset>`, and zero `<script>`, `<link>`,
  *   or `<img>` elements. The only external references are the source
  *   hyperlinks the reader deliberately clicks.
+ * - **Subtle citations stay inert.** Findings render their structured
+ *   `citations[]`, and inline `[n]` marker runs in already-escaped prose are
+ *   rewritten (`subtleizeCitations`), into small muted `<sup>` superscripts.
+ *   The transform only ever emits `sup`/`a`/`span`, every anchor is an internal
+ *   `#src-n` fragment, and every value is digits-only — so it introduces no new
+ *   executable vector. It also skips whole tags, so a `[n]` inside an attribute
+ *   value is never touched. Hover reveals the collapsed `+k` remainder with no
+ *   JavaScript.
  *
  * ## Purity
  *
@@ -64,21 +72,26 @@ markdown.use({
  */
 export function briefToHtml(brief: Brief): string {
   const body: string[] = [];
+  // Declared source numbers — inline [n] markers only become citation links
+  // when they resolve to one of these (see subtleizeCitations).
+  const declared = new Set(brief.sources.map((source) => source.n));
 
   body.push(`<h1>${escapeHtml(brief.title)}</h1>`);
 
   const overview = brief.overview.trim();
   if (overview.length > 0) {
-    body.push(`<section class="overview">${renderMarkdown(overview)}</section>`);
+    body.push(
+      `<section class="overview">${subtleizeCitations(renderMarkdown(overview), declared)}</section>`,
+    );
   }
 
   if (brief.key_findings.length > 0) {
     body.push('<h2>Key Findings</h2>');
-    body.push(renderMarkdown(brief.key_findings.map(keyFindingMarkdown).join('\n')));
+    body.push(keyFindingsHtml(brief.key_findings, declared));
   }
 
   for (const section of brief.sections) {
-    body.push(sectionHtml(section));
+    body.push(sectionHtml(section, declared));
   }
 
   const comparison = brief.facets?.comparison ?? null;
@@ -105,19 +118,99 @@ function renderMarkdown(text: string): string {
   return (markdown.parse(escapeHtml(text)) as string).trim();
 }
 
-/** One key finding as an escaped Markdown list item, tagging editorial notes. */
-function keyFindingMarkdown(finding: KeyFinding): string {
-  // escapeHtml runs in renderMarkdown; here we only build the Markdown list
-  // structure, keeping the trusted `- ` / `*(editorial)*` syntax unescaped.
-  const marker = finding.editorial ? ' *(editorial)*' : '';
-  return `- ${finding.text}${marker}`;
+/** Renders a Brief field as inline HTML (no block wrapper), escaped pre-parse. */
+function renderInline(text: string): string {
+  return (markdown.parseInline(escapeHtml(text)) as string).trim();
+}
+
+/** Max citation superscripts shown inline before collapsing to a `+k` affordance. */
+const MAX_VISIBLE_CITATIONS = 3;
+
+/**
+ * Renders a citation-number list as small, muted superscript anchors, capped at
+ * {@link MAX_VISIBLE_CITATIONS}. The remainder collapses into a single `+k`
+ * superscript whose `title` lists the hidden sources (hover works with zero JS).
+ * Every anchor is an internal `#src-n` fragment and every value is digits-only,
+ * so this cannot introduce an executable vector.
+ */
+function citationSuperscripts(numbers: readonly number[]): string {
+  if (numbers.length === 0) {
+    return '';
+  }
+  const visible = numbers.slice(0, MAX_VISIBLE_CITATIONS);
+  const overflow = numbers.slice(MAX_VISIBLE_CITATIONS);
+  const anchors = visible.map((n) => `<sup class="cite"><a href="#src-${n}">${n}</a></sup>`);
+  if (overflow.length > 0) {
+    const title = `also sources ${overflow.join(', ')}`;
+    anchors.push(
+      `<sup class="cite"><span title="${escapeHtml(title)}">+${overflow.length}</span></sup>`,
+    );
+  }
+  return anchors.join('');
+}
+
+/**
+ * Post-markdown transform: rewrites inline `[n]`/`[n][m]` marker runs in already
+ * rendered prose into the same muted superscripts.
+ *
+ * Inertness: the alternation consumes whole tags (`<[^>]*>`) first, so a `[n]`
+ * that happens to sit inside an attribute value (for example a link href) is
+ * never matched — only markers in text nodes are transformed. A run is left as
+ * literal text unless *every* marker in it resolves to a declared source, so a
+ * stray `[99]` (or a literal `[1]` in content when no source 1 exists) stays put.
+ */
+function subtleizeCitations(html: string, declared: ReadonlySet<number>): string {
+  return html.replace(/<[^>]*>|(?:\[\d+\])+/gu, (match) => {
+    if (match.startsWith('<')) {
+      return match;
+    }
+    const numbers = [...match.matchAll(/\[(\d+)\]/gu)].map((m) => Number(m[1]));
+    if (!numbers.every((n) => declared.has(n))) {
+      return match;
+    }
+    return citationSuperscripts(numbers);
+  });
+}
+
+/** The key findings as a list, each carrying its citations as subtle superscripts. */
+function keyFindingsHtml(findings: readonly KeyFinding[], declared: ReadonlySet<number>): string {
+  const items = findings
+    .map((finding) => {
+      const editorial = finding.editorial ? ' <em>(editorial)</em>' : '';
+      // The deterministic path carries citations only in the structured array;
+      // the LLM path may inline [n] in the text — transform those in place.
+      const body = /\[\d+\]/u.test(finding.text)
+        ? subtleizeCitations(renderInline(finding.text), declared)
+        : `${renderInline(finding.text)}${citationSuperscripts(
+            finding.citations.filter((n) => declared.has(n)),
+          )}`;
+      const childFindings = finding.children ?? [];
+      const children =
+        childFindings.length === 0
+          ? ''
+          : `\n<ul class="children">\n${childFindings
+              .map((child) => {
+                const childBody = /\[\d+\]/u.test(child.text)
+                  ? subtleizeCitations(renderInline(child.text), declared)
+                  : `${renderInline(child.text)}${citationSuperscripts(
+                      child.citations.filter((n) => declared.has(n)),
+                    )}`;
+                return `<li>${childBody}</li>`;
+              })
+              .join('\n')}\n</ul>`;
+      return `<li>${body}${editorial}${children}</li>`;
+    })
+    .join('\n');
+  return `<ul class="key-findings">\n${items}\n</ul>`;
 }
 
 /** A detail section as an `<h2>` heading plus its rendered Markdown body. */
-function sectionHtml(section: Section): string {
+function sectionHtml(section: Section, declared: ReadonlySet<number>): string {
   const heading = `<h2>${escapeHtml(section.heading)}</h2>`;
   const body = section.body_md.trim();
-  return body.length > 0 ? `${heading}\n${renderMarkdown(body)}` : heading;
+  return body.length > 0
+    ? `${heading}\n${subtleizeCitations(renderMarkdown(body), declared)}`
+    : heading;
 }
 
 /** The comparison facet as a striped HTML table (hand-built, fully escaped). */
@@ -145,7 +238,8 @@ function sourcesHtml(sources: readonly BriefSource[]): string {
       if (source.published_at !== null) {
         meta.push(`published ${escapeHtml(source.published_at)}`);
       }
-      return `<li>${link} <span class="src-meta">${meta.join(' · ')}</span></li>`;
+      // id="src-n" is the citation-superscript jump target.
+      return `<li id="src-${source.n}">${link} <span class="src-meta">${meta.join(' · ')}</span></li>`;
     })
     .join('\n');
   return `<ol class="sources">\n${items}\n</ol>`;
@@ -259,6 +353,17 @@ table.comparison tbody tr:nth-child(even) { background: #f2efe9; }
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }
+ul.key-findings { padding-left: 1.5rem; }
+ul.key-findings li { margin: 0.35rem 0; }
+ul.children {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: #4c4942;
+}
+ul.children li { margin: 0.2rem 0; }
+sup.cite { font-size: 0.7em; margin-left: 1px; line-height: 0; }
+sup.cite a, sup.cite span { color: #8a8578; text-decoration: none; }
+sup.cite a:hover { text-decoration: underline; color: #1256a3; }
 ul.notices {
   list-style: none;
   padding: 0;

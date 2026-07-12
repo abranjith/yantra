@@ -3,37 +3,60 @@
   "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "schema_version": "0.2",
   "title": "How to rotate ssh keys safely",
-  "overview": "Rotating SSH keys regularly reduces the blast radius of a leaked credential. [1] Good key hygiene means never reusing a single SSH key across unrelated systems. [2] Store private keys encrypted with a passphrase and prefer a hardware token where possible. [2]",
+  "overview": "Rotating SSH keys regularly reduces the blast radius of a leaked credential. [1] Good key hygiene means never reusing a single SSH key across unrelated systems. [2] Rotate keys at least once a year, and immediately after any suspected compromise. [2]",
   "key_findings": [
     {
       "text": "Rotating SSH keys regularly reduces the blast radius of a leaked credential.",
       "citations": [1],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     },
     {
       "text": "Good key hygiene means never reusing a single SSH key across unrelated systems.",
       "citations": [2],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": [
+        {
+          "text": "Verify you can authenticate with the new key, then remove the old public key from authorized_keys on each host.",
+          "citations": [1]
+        }
+      ]
     },
     {
-      "text": "Store private keys encrypted with a passphrase and prefer a hardware token where possible.",
+      "text": "Rotate keys at least once a year, and immediately after any suspected compromise.",
       "citations": [2],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     },
     {
       "text": "First generate a new key pair with a strong algorithm such as ed25519.",
       "citations": [1],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Store private keys encrypted with a passphrase and prefer a hardware token where possible.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Add the new public key to every server the old key could access before removing anything.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null,
+      "children": []
     }
   ],
   "sections": [
     {
       "heading": "Key facts",
-      "body_md": "- Rotating SSH keys regularly reduces the blast radius of a leaked credential. [1]\n- Good key hygiene means never reusing a single SSH key across unrelated systems. [2]\n- Store private keys encrypted with a passphrase and prefer a hardware token where possible. [2]\n- First generate a new key pair with a strong algorithm such as ed25519. [1]",
+      "body_md": "- Keep an inventory of which keys authorize which hosts so rotation never locks you out. [2]\n- Finally revoke the old private key from any agent and delete it. [1]",
       "citations": [1, 2]
     }
   ],
@@ -65,11 +88,16 @@
     "coverage": 1,
     "freshness": "older than a month",
     "citation_verdict": {
-      "claims_checked": 7,
+      "claims_checked": 5,
       "flagged": 0,
       "stripped": 0
     },
     "usage": null,
+    "evidence": {
+      "candidate_claims": 9,
+      "accepted_claims": 9,
+      "excluded_sources": 0
+    },
     "run_id": "golden-run"
   },
   "notices": []

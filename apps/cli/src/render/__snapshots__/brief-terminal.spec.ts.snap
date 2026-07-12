@@ -10,6 +10,7 @@ exports[`@no-llm renderBriefTerminal > renders the canonical Brief at detail=ful
 
 [1mKey Findings[22m
 [32m•[39m Amazon — $328, in stock, free shipping [36m[1][39m
+  [2m◦[22m [2mAmazon also shows the steepest list-price discount among tracked retailers [36m[1][39m[22m
 [32m•[39m Best Buy — $349, in stock [36m[2][39m
 [32m•[39m Walmart — $342 via a third-party seller [36m[3][39m
 [33m◦[39m Prices have trended upward since last week, so buying now is reasonable.[2m (editorial)[22m
@@ -54,6 +55,7 @@ exports[`@no-llm renderBriefTerminal > renders the canonical Brief at detail=ful
 
 Key Findings
 • Amazon — $328, in stock, free shipping [1]
+  ◦ Amazon also shows the steepest list-price discount among tracked retailers [1]
 • Best Buy — $349, in stock [2]
 • Walmart — $342 via a third-party seller [3]
 ◦ Prices have trended upward since last week, so buying now is reasonable. (editorial)
@@ -126,6 +128,7 @@ exports[`@no-llm renderBriefTerminal > renders the canonical Brief at detail=sta
 
 [1mKey Findings[22m
 [32m•[39m Amazon — $328, in stock, free shipping [36m[1][39m
+  [2m◦[22m [2mAmazon also shows the steepest list-price discount among tracked retailers [36m[1][39m[22m
 [32m•[39m Best Buy — $349, in stock [36m[2][39m
 [32m•[39m Walmart — $342 via a third-party seller [36m[3][39m
 [33m◦[39m Prices have trended upward since last week, so buying now is reasonable.[2m (editorial)[22m
@@ -158,6 +161,7 @@ exports[`@no-llm renderBriefTerminal > renders the canonical Brief at detail=sta
 
 Key Findings
 • Amazon — $328, in stock, free shipping [1]
+  ◦ Amazon also shows the steepest list-price discount among tracked retailers [1]
 • Best Buy — $349, in stock [2]
 • Walmart — $342 via a third-party seller [3]
 ◦ Prices have trended upward since last week, so buying now is reasonable. (editorial)

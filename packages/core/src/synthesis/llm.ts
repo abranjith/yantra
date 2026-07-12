@@ -390,6 +390,7 @@ function normalizeFindings(value: unknown): KeyFinding[] {
       citations: numberArray(record.citations),
       editorial: record.editorial === true,
       facet: isFacetRecord(record.facet) ? (record.facet as KeyFinding['facet']) : null,
+      children: [],
     });
   }
   return findings;

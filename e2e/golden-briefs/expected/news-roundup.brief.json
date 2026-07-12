@@ -3,57 +3,50 @@
   "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "schema_version": "0.2",
   "title": "City transit budget expansion",
-  "overview": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2] The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. [1] The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3]",
+  "overview": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2] The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3] Advocates said the expansion will cut average commute times across the northern corridor. [1]",
   "key_findings": [
     {
       "text": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit.",
       "citations": [1, 2],
       "editorial": false,
-      "facet": null
-    },
-    {
-      "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing.",
-      "citations": [1],
-      "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": [
+        {
+          "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing.",
+          "citations": [1]
+        }
+      ]
     },
     {
       "text": "The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade.",
       "citations": [3],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     },
     {
-      "text": "The plan allocates 45 million dollars to bus rapid transit over the next three years.",
+      "text": "Advocates said the expansion will cut average commute times across the northern corridor.",
       "citations": [1],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     },
     {
       "text": "Transit officials confirmed construction would begin in early 2027 pending environmental review.",
       "citations": [2],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     },
     {
-      "text": "Opponents argued the money should instead go to road maintenance in outer neighborhoods.",
-      "citations": [2],
+      "text": "The bus rapid transit lines are expected to serve an additional forty thousand riders daily once complete.",
+      "citations": [3],
       "editorial": false,
-      "facet": null
+      "facet": null,
+      "children": []
     }
   ],
-  "sections": [
-    {
-      "heading": "Numbers & figures",
-      "body_md": "- After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2]\n- The plan allocates 45 million dollars to bus rapid transit over the next three years. [1]\n- Transit officials confirmed construction would begin in early 2027 pending environmental review. [2]",
-      "citations": [1, 2]
-    },
-    {
-      "heading": "Key facts",
-      "body_md": "- The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. [1]\n- The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3]\n- Opponents argued the money should instead go to road maintenance in outer neighborhoods. [2]\n- Analysts noted ridership had declined during the pandemic but has since recovered strongly. [3]",
-      "citations": [1, 2, 3]
-    }
-  ],
+  "sections": [],
   "facets": null,
   "sources": [
     {
@@ -91,12 +84,23 @@
     "coverage": 1,
     "freshness": "today",
     "citation_verdict": {
-      "claims_checked": 12,
+      "claims_checked": 4,
       "flagged": 0,
       "stripped": 0
     },
     "usage": null,
+    "evidence": {
+      "candidate_claims": 10,
+      "accepted_claims": 6,
+      "excluded_sources": 0
+    },
     "run_id": "golden-run"
   },
-  "notices": []
+  "notices": [
+    {
+      "source": "synthesis",
+      "reason": "only 5 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
+      "kind": "limited_evidence"
+    }
+  ]
 }

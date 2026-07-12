@@ -61,16 +61,17 @@ Example:
 
 Provenance and quality metadata for the Brief.
 
-| Field                       | Description                                                                       |
-| --------------------------- | --------------------------------------------------------------------------------- |
-| search_provider             | Search provider that produced the source candidates, or null.                     |
-| synthesis                   | Synthesis strategy that produced the Brief.                                       |
-| deterministic_fallback_used | True when the LLM path failed and the deterministic synthesizer took over.        |
-| coverage                    | Fraction of fetched sources represented in the Brief (0-1), or null.              |
-| freshness                   | Human-readable freshness signal (for example "today"), or null.                   |
-| citation_verdict            | Citation-faithfulness verdict (filled post-synthesis), or null before validation. |
-| usage                       | LLM usage totals, or null on the deterministic path.                              |
-| run_id                      | Owning run id, or null outside a run context.                                     |
+| Field                       | Description                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| search_provider             | Search provider that produced the source candidates, or null.                                                                        |
+| synthesis                   | Synthesis strategy that produced the Brief.                                                                                          |
+| deterministic_fallback_used | True when the LLM path failed and the deterministic synthesizer took over.                                                           |
+| coverage                    | Fraction of fetched sources represented in the Brief (0-1), or null.                                                                 |
+| freshness                   | Human-readable freshness signal (for example "today"), or null.                                                                      |
+| citation_verdict            | Citation-faithfulness verdict (filled post-synthesis), or null before validation.                                                    |
+| usage                       | LLM usage totals, or null on the deterministic path.                                                                                 |
+| evidence                    | Evidence-selection counts from the deterministic pipeline (candidate vs accepted claims, excluded sources), or null on the LLM path. |
+| run_id                      | Owning run id, or null outside a run context.                                                                                        |
 
 Example:
 
@@ -83,6 +84,7 @@ Example:
   "freshness": "<freshness>",
   "citation_verdict": "<citation_verdict>",
   "usage": "<usage>",
+  "evidence": "<evidence>",
   "run_id": "<run_id>"
 }
 ```
@@ -91,11 +93,11 @@ Example:
 
 An honest per-source failure or validator flag.
 
-| Field  | Description                            |
-| ------ | -------------------------------------- |
-| source | Host or subsystem the notice concerns. |
-| reason | Human-readable reason for the notice.  |
-| kind   | Notice classification.                 |
+| Field  | Description                                                                                                                                                                                                                                         |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source | Host or subsystem the notice concerns.                                                                                                                                                                                                              |
+| reason | Human-readable reason for the notice.                                                                                                                                                                                                               |
+| kind   | Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates. |
 
 Example:
 
@@ -135,16 +137,35 @@ Example:
 }
 ```
 
+## ChildFinding
+
+A one-level nested finding under a key finding.
+
+| Field     | Description                                                                        |
+| --------- | ---------------------------------------------------------------------------------- |
+| text      | Markdown text of a nested child finding.                                           |
+| citations | Source numbers (sources[].n) backing this child finding; at least one is required. |
+
+Example:
+
+```json
+{
+  "text": "<text>",
+  "citations": "<citations>"
+}
+```
+
 ## KeyFinding
 
 A scannable, citation-backed finding bullet.
 
-| Field     | Description                                                                                           |
-| --------- | ----------------------------------------------------------------------------------------------------- |
-| text      | Markdown text of the finding; inline [n] markers refer to sources[].n.                                |
-| citations | Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true. |
-| editorial | True marks uncited synthesis commentary — the only legal uncited form.                                |
-| facet     | Optional structured payload (for example { price: 328, in_stock: true }), or null.                    |
+| Field     | Description                                                                                                                                                                                                                                           |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| text      | Markdown text of the finding. Inline [n] markers are optional: the LLM path may emit them, while the deterministic path carries citations only in the structured citations[] array. The structured array is the single source of truth for rendering. |
+| citations | Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true.                                                                                                                                                 |
+| editorial | True marks uncited synthesis commentary — the only legal uncited form.                                                                                                                                                                                |
+| facet     | Optional structured payload (for example { price: 328, in_stock: true }), or null.                                                                                                                                                                    |
+| children  | Nested child findings that elaborate this parent; one level deep only.                                                                                                                                                                                |
 
 Example:
 
@@ -153,7 +174,8 @@ Example:
   "text": "<text>",
   "citations": "<citations>",
   "editorial": "<editorial>",
-  "facet": "<facet>"
+  "facet": "<facet>",
+  "children": "<children>"
 }
 ```
 

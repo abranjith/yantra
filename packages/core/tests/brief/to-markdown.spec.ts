@@ -105,4 +105,52 @@ describe('@no-llm briefToMarkdown', () => {
       { numRuns: 300 },
     );
   });
+
+  it('appends capped citation markers to a finding with structured citations', () => {
+    const sources = Array.from({ length: 5 }, (_, i) => ({
+      n: i + 1,
+      url: `https://s${i + 1}.example.com/page`,
+      final_url: null,
+      host: `s${i + 1}.example.com`,
+      title: `Source ${i + 1}`,
+      fetched_at: '2026-07-01T10:00:00.000Z',
+      published_at: null,
+    }));
+    const md = briefToMarkdown(
+      makeBrief({
+        sources,
+        overview: 'Answer first.',
+        key_findings: [
+          {
+            text: 'A widely reported claim.',
+            citations: [1, 2, 3, 4, 5],
+            editorial: false,
+            facet: null,
+          },
+        ],
+      }),
+    );
+    expect(md).toContain('- A widely reported claim. [1][2][3] (+2)');
+  });
+
+  it('caps inline [n] runs in the overview to the same budget', () => {
+    const sources = Array.from({ length: 5 }, (_, i) => ({
+      n: i + 1,
+      url: `https://s${i + 1}.example.com/page`,
+      final_url: null,
+      host: `s${i + 1}.example.com`,
+      title: `Source ${i + 1}`,
+      fetched_at: '2026-07-01T10:00:00.000Z',
+      published_at: null,
+    }));
+    const md = briefToMarkdown(
+      makeBrief({
+        sources,
+        overview: 'Corroborated everywhere. [1][2][3][4][5]',
+        key_findings: [],
+      }),
+    );
+    expect(md).toContain('[1][2][3] (+2)');
+    expect(md).not.toContain('[4]');
+  });
 });

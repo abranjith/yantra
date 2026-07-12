@@ -38,7 +38,14 @@ yantra ask "cheapest Sony WH-1000XM5 today"
 
 Pipeline stages are `search -> fetch -> extract -> synthesize -> render`. The
 synthesizer reasons across sources into an answer-first overview, scannable key
-findings, comparison tables, and numbered, verifiable citations.
+findings, comparison tables, and numbered, verifiable citations. Synthesis is
+**evidence-first**: it profiles the query, drops off-topic sources and headings
+before assembly (surfacing each as an honest notice), cites each finding only
+from the sources whose sentences actually support it, and renders citations as
+small, muted superscripts rather than long `[1][4][6][7]` runs. Related
+findings are grouped into parent/child bullets, and percentage comparison tables
+include a Metric column so YoY declines, MoM rises, and market-share figures
+stay readable instead of blending into context-free percentages.
 
 ```
 Cheapest Sony WH-1000XM5 today

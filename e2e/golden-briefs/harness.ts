@@ -12,6 +12,14 @@
  *     pnpm golden:update
  *
  * which runs `e2e/golden-briefs/update.ts` (this same harness in write mode).
+ *
+ * The pinned Briefs were regenerated for FEAT-FP-002 (coherent deterministic
+ * synthesis): the deterministic synthesizer now block-splits Readability text,
+ * rejects boilerplate, stitches one-level anaphora, merges numeric duplicates,
+ * labels percentage facets with a Metric column, and emits topic-grouped
+ * parent/child findings. The `ev-sales-messy` corpus pins those readability
+ * failure modes. winkNLP is local and deterministic, so the suite remains
+ * byte-stable run to run.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';

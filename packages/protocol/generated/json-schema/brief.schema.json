@@ -36,7 +36,7 @@
               "text": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Markdown text of the finding; inline [n] markers refer to sources[].n."
+                "description": "Markdown text of the finding. Inline [n] markers are optional: the LLM path may emit them, while the deterministic path carries citations only in the structured citations[] array. The structured array is the single source of truth for rendering."
               },
               "citations": {
                 "type": "array",
@@ -72,6 +72,35 @@
                 ],
                 "default": null,
                 "description": "Optional structured payload (for example { price: 328, in_stock: true }), or null."
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Markdown text of a nested child finding."
+                    },
+                    "citations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/Brief/properties/key_findings/items/properties/citations/items"
+                      },
+                      "minItems": 1,
+                      "description": "Source numbers (sources[].n) backing this child finding; at least one is required."
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "citations"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A one-level nested finding under a key finding."
+                },
+                "default": [],
+                "description": "Nested child findings that elaborate this parent; one level deep only."
               }
             },
             "required": [
@@ -352,6 +381,41 @@
               ],
               "description": "LLM usage totals, or null on the deterministic path."
             },
+            "evidence": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "candidate_claims": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Claim candidates considered before the eligibility gates."
+                    },
+                    "accepted_claims": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Claims that passed the eligibility gates and reached the Brief."
+                    },
+                    "excluded_sources": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Sources dropped by the query-relevance gate before assembly."
+                    }
+                  },
+                  "required": [
+                    "candidate_claims",
+                    "accepted_claims",
+                    "excluded_sources"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Evidence-selection counts from the deterministic pipeline (candidate vs accepted claims, excluded sources), or null on the LLM path."
+            },
             "run_id": {
               "type": [
                 "string",
@@ -392,12 +456,14 @@
                   "fetch_failed",
                   "extract_failed",
                   "blocked",
+                  "source_excluded",
                   "uncited_claim_stripped",
                   "uncited_claim_flagged",
                   "budget_exhausted",
+                  "limited_evidence",
                   "other"
                 ],
-                "description": "Notice classification."
+                "description": "Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates."
               }
             },
             "required": [

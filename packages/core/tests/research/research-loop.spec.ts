@@ -128,16 +128,59 @@ async function makeRunRoot(): Promise<string> {
   return dir;
 }
 
+/**
+ * Extractor producing several distinct on-topic sentences per URL, so the
+ * interim Brief has more claims than the budget and therefore real sections —
+ * which the coverage tracker turns into gaps for multi-hop tests.
+ */
+class RichExtractor implements Extractor {
+  private static readonly THEMES: readonly (readonly string[])[] = [
+    [
+      'Solar renewable energy farms added record capacity across sunny southern states.',
+      'Rooftop solar renewable energy adoption rose as home installation costs declined.',
+      'Utility solar renewable energy projects secured new long-term supply contracts.',
+    ],
+    [
+      'Offshore wind renewable energy turbines began feeding the coastal power grid.',
+      'Onshore wind renewable energy permits accelerated across the open plains region.',
+      'Wind renewable energy generation set an overnight national output record.',
+    ],
+    [
+      'Pumped hydro renewable energy storage balanced the grid during peak demand.',
+      'Hydroelectric renewable energy dams increased seasonal reservoir water output.',
+      'Small hydro renewable energy plants expanded rural village electricity access.',
+    ],
+  ];
+
+  public extract(doc: FetchedDoc): Promise<ExtractedArticle | null> {
+    const n = Number(/-(\d+)\./u.exec(doc.url)?.[1] ?? '0');
+    const sentences = RichExtractor.THEMES[n % RichExtractor.THEMES.length]!;
+    const text = sentences.join(' ');
+    return Promise.resolve({
+      url: doc.url,
+      title: `Renewable energy report ${n}`,
+      byline: null,
+      publishedAt: null,
+      siteName: doc.url,
+      contentText: text,
+      contentHtml: `<p>${text}</p>`,
+      excerpt: text.slice(0, 100),
+      lengthChars: text.length,
+    });
+  }
+}
+
 function makeLoop(deps: {
   search?: SearchProvider;
   fetcher?: ContentFetcher;
+  extractor?: Extractor;
   runRootDir: string;
   budgetNow?: () => number;
 }): ResearchLoop {
   return new ResearchLoop({
     searchProvider: deps.search ?? new FakeSearch(),
     fetcher: deps.fetcher ?? new FakeFetcher(),
-    extractor: new FakeExtractor(),
+    extractor: deps.extractor ?? new FakeExtractor(),
     ethicsGate: allowEthics,
     synthesizer: new DeterministicSynthesizer({
       clock: () => new Date('2026-06-15T00:00:00.000Z'),
@@ -231,7 +274,8 @@ describe('@no-llm research/research-loop', () => {
   it('issues novel hop-2 queries distinct from hop-1 (multi-hop)', async () => {
     const runRootDir = await makeRunRoot();
     const search = new FakeSearch();
-    const loop = makeLoop({ runRootDir, search });
+    // Rich corpus → interim Brief has sections → coverage gaps → a real hop 2.
+    const loop = makeLoop({ runRootDir, search, extractor: new RichExtractor() });
 
     const result = await loop.run(
       baseOptions({
