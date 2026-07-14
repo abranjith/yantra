@@ -1,0 +1,122 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "FIFA World Cup 2026 news",
+  "overview": "The 2026 FIFA World Cup is the 23rd edition of the international football tournament. [1][2][3] France advanced after controlling possession throughout its FIFA World Cup quarter-final. [3] Norway defeated England to stand one win from an unprecedented FIFA World Cup semi-final. [1]",
+  "key_findings": [
+    {
+      "text": "The 2026 FIFA World Cup is the 23rd edition of the international football tournament.",
+      "citations": [1, 2, 3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "FIFA confirmed that knockout matches will use the expanded bracket announced for 2026.",
+      "citations": [1, 2, 3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Spain named a younger midfield for its next 2026 tournament match.",
+      "citations": [1, 2, 3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Norway defeated England to stand one win from an unprecedented FIFA World Cup semi-final.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Host cities added late-night transit for FIFA World Cup supporters.",
+      "citations": [4],
+      "editorial": false,
+      "facet": null,
+      "children": [
+        {
+          "text": "Stadium transit plans include 300 late-night buses on World Cup match days.",
+          "citations": [2]
+        }
+      ]
+    },
+    {
+      "text": "France advanced after controlling possession throughout its FIFA World Cup quarter-final.",
+      "citations": [3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Numbers & figures",
+      "body_md": "| Figure | Context | Sources |\n| --- | --- | --- |\n| June 11, 2026 | The opening match is scheduled for | [2] |\n| 104 | Teams will play World Cup matches during the expanded tournament. | [2] |\n| 65,000 | Organizers recruited volunteers for World Cup host operations. | [2] |\n| 150 | Rail operators scheduled extra trains for FIFA World Cup supporters. | [2] |\n| 24 | Fan zones will operate at public sites across World Cup host regions. | [2] |\n| 200 | Broadcast coverage will reach countries during the FIFA tournament. | [2] |",
+      "citations": [2]
+    }
+  ],
+  "facets": null,
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/latest-news",
+      "final_url": null,
+      "host": "www.fifa.com",
+      "title": "FIFA World Cup 2026 latest news",
+      "fetched_at": "2026-07-10T12:00:00.000Z",
+      "published_at": "2026-07-10T10:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup",
+      "final_url": null,
+      "host": "en.wikipedia.org",
+      "title": "2026 FIFA World Cup",
+      "fetched_at": "2026-07-10T12:00:05.000Z",
+      "published_at": null
+    },
+    {
+      "n": 3,
+      "url": "https://www.si.com/soccer/world-cup-2026-news",
+      "final_url": null,
+      "host": "www.si.com",
+      "title": "FIFA World Cup 2026 news and analysis",
+      "fetched_at": "2026-07-10T12:00:10.000Z",
+      "published_at": "2026-07-10T09:30:00.000Z"
+    },
+    {
+      "n": 4,
+      "url": "https://football.example.com/world-cup-hosts",
+      "final_url": null,
+      "host": "football.example.com",
+      "title": "FIFA World Cup host city preparations",
+      "fetched_at": "2026-07-10T12:00:15.000Z",
+      "published_at": "2026-07-09T18:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "today",
+    "citation_verdict": {
+      "claims_checked": 11,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "evidence": {
+      "candidate_claims": 21,
+      "accepted_claims": 14,
+      "excluded_sources": 0
+    },
+    "run_id": "golden-run"
+  },
+  "notices": []
+}

@@ -9,6 +9,8 @@
  *    `body_md`, and finding text resolves to a declared source. (The Brief
  *    schema already refuses dangling `citations[]` arrays; this additionally
  *    scans the free Markdown text those arrays do not cover.)
+ *    Unresolved markers are aggregated into one notice per location, listing
+ *    the first three marker values plus a deterministic overflow count.
  * 2. **Anchoring** (LLM path only) — each cited finding's content words are
  *    fuzzy-matched against its cited sources' text. Below-threshold findings
  *    are **flagged** (kept, noticed); numeric findings whose numbers appear
@@ -75,6 +77,7 @@ export function validateCitations(
 ): CitationValidationResult {
   const declared = new Set(brief.sources.map((source) => source.n));
   const notices: BriefNotice[] = [];
+  const structuralFlags = new Map<string, Set<number>>();
   let claimsChecked = 0;
   let flagged = 0;
   let stripped = 0;
@@ -86,11 +89,9 @@ export function validateCitations(
       const n = Number(match[1]);
       if (!declared.has(n)) {
         flagged += 1;
-        notices.push({
-          source: where,
-          reason: `inline citation [${n}] does not resolve to a declared source`,
-          kind: 'uncited_claim_flagged',
-        });
+        const values = structuralFlags.get(where) ?? new Set<number>();
+        values.add(n);
+        structuralFlags.set(where, values);
       }
     }
   };
@@ -105,7 +106,7 @@ export function validateCitations(
   brief.key_findings.forEach((finding) => {
     // Inline markers inside finding text are also structurally checked.
     structuralFlag(finding.text, 'finding');
-    (finding.children ?? []).forEach((child) => structuralFlag(child.text, 'finding child'));
+    (finding.children ?? []).forEach((child) => structuralFlag(child.text, 'finding'));
 
     if (opts.strategy !== 'llm' || finding.editorial) {
       keptFindings.push(finding);
@@ -145,12 +146,26 @@ export function validateCitations(
     keptFindings.push(finding);
   });
 
+  for (const [where, markerSet] of structuralFlags) {
+    const markers = [...markerSet].sort((left, right) => left - right);
+    const visible = markers
+      .slice(0, 3)
+      .map((n) => `[${n}]`)
+      .join(', ');
+    const overflow = markers.length - 3;
+    notices.push({
+      source: where,
+      reason: `inline citations ${visible}${overflow > 0 ? ` (+${overflow} more)` : ''} do not resolve to a declared source`,
+      kind: 'uncited_claim_flagged',
+    });
+  }
+
   const verdict: CitationVerdict = { claimsChecked, flagged, stripped };
 
   const annotated: Brief = {
     ...brief,
     key_findings: keptFindings,
-    notices: [...brief.notices, ...notices],
+    notices: dedupeNotices([...brief.notices, ...notices]),
     metadata: {
       ...brief.metadata,
       citation_verdict: {
@@ -162,6 +177,17 @@ export function validateCitations(
   };
 
   return { brief: annotated, verdict };
+}
+
+/** Stable global notice dedupe on the user-visible identity tuple. */
+function dedupeNotices(notices: readonly BriefNotice[]): BriefNotice[] {
+  const seen = new Set<string>();
+  return notices.filter((notice) => {
+    const key = `${notice.kind}\u0000${notice.source}\u0000${notice.reason}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Maps each source number to its evidence text (matched by URL, then host). */

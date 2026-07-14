@@ -80,6 +80,13 @@ export interface EvidenceClaim {
   readonly evidenceKinds: readonly EvidenceKind[];
   /** Normalized percent/money values used for numeric-aware duplicate merge. */
   readonly anchorValues: readonly string[];
+  /**
+   * Word-level keys of the sentence's named entities (lower-cased tokens of
+   * each PROPN run: `"Erling Haaland"` → `"erling"`, `"haaland"`). Drives the
+   * topic-group nesting anchor: a child must share a named-entity key or an
+   * anchor value with its parent to nest under it.
+   */
+  readonly entityKeys: readonly string[];
   /** Doc indexes whose sentences actually restate this claim (>= 1 entry). */
   readonly docIndexes: readonly number[];
   /** Ranking score (existing salience formula, computed over the gated set). */

@@ -2,6 +2,7 @@ import { Readability } from '@mozilla/readability';
 import { load } from 'cheerio';
 import { JSDOM } from 'jsdom';
 
+import { htmlToText } from './html-to-text.js';
 import type { ExtractedArticle, FetchedDoc } from './types.js';
 
 export interface Extractor {
@@ -9,15 +10,51 @@ export interface Extractor {
 }
 
 /**
+ * Elements removed before Readability runs: page chrome plus source-footnote
+ * and infobox/navbox markup (Wikipedia-style `sup.reference` markers otherwise
+ * survive into the text as `[45]` and get mistaken for citation markers).
+ */
+const PRE_CLEAN_SELECTOR = [
+  'nav',
+  'aside',
+  'footer',
+  'form',
+  '[role="banner"]',
+  '[role="contentinfo"]',
+  '[aria-hidden="true"]',
+  '.cookie-banner',
+  '.ad',
+  '.advertisement',
+  'script',
+  'style',
+  'iframe',
+  'noscript',
+  'sup.reference',
+  'sup[class*="reference"]',
+  '[role="doc-noteref"]',
+  '.mw-editsection',
+  'table.infobox',
+  'table[class*="infobox"]',
+  '.navbox',
+  '.vertical-navbox',
+  '.sidebar',
+  '.reflist',
+].join(',');
+
+/**
  * Readability-based extraction pipeline with a small pre-clean pass.
+ *
+ * `contentText` is **block-structured**: it is serialized from Readability's
+ * cleaned content HTML via {@link htmlToText} (blank line between block
+ * elements, footnote markers stripped) rather than taken from
+ * `parsed.textContent`, which glues adjacent blocks together with no
+ * separator. Downstream sentence analysis depends on those boundaries.
  */
 export class ReadabilityExtractor implements Extractor {
   public extract(doc: FetchedDoc): Promise<ExtractedArticle | null> {
     try {
       const $ = load(doc.html);
-      $(
-        'nav,aside,footer,form,[role="banner"],[role="contentinfo"],[aria-hidden="true"],.cookie-banner,.ad,.advertisement,script,style,iframe,noscript',
-      ).remove();
+      $(PRE_CLEAN_SELECTOR).remove();
 
       const cleanedHtml = $.html();
       const window = new JSDOM(cleanedHtml, { url: doc.finalUrl }).window;
@@ -30,21 +67,33 @@ export class ReadabilityExtractor implements Extractor {
         return Promise.resolve(null);
       }
 
+      const structuredText = htmlToText(parsed.content ?? '');
+      const contentText = structuredText.length > 0 ? structuredText : parsed.textContent;
+
       return Promise.resolve({
         url: doc.finalUrl,
-        title: parsed.title ?? null,
+        title: normalizeTitle(parsed.title),
         byline: parsed.byline ?? null,
         publishedAt: extractPublishedAt($),
         siteName: parsed.siteName ?? null,
-        contentText: parsed.textContent,
+        contentText,
         contentHtml: parsed.content ?? '',
         excerpt: parsed.excerpt ?? null,
-        lengthChars: parsed.textContent.length,
+        lengthChars: contentText.length,
       });
     } catch {
       return Promise.resolve(null);
     }
   }
+}
+
+/** Collapses whitespace (including NBSP variants) in an extracted title. */
+function normalizeTitle(title: string | null | undefined): string | null {
+  if (title === null || title === undefined) {
+    return null;
+  }
+  const cleaned = title.replace(/[   ]/gu, ' ').replace(/\s+/gu, ' ').trim();
+  return cleaned.length > 0 ? cleaned : null;
 }
 
 function extractPublishedAt($: ReturnType<typeof load>): string | null {

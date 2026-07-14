@@ -3,7 +3,7 @@
   "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "schema_version": "0.2",
   "title": "State of EV car sales in the US in 2026",
-  "overview": "US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases. [1][2][3][5] US EV market share reached 7.8% of new car sales in the US in 2026 as shoppers compared electric vehicle options. [2][5] US EV car sales rose 10.3% month over month in May 2026 after several automakers cut prices. [4]",
+  "overview": "EV market share reached 7.8% of new car sales in the US in 2026. [2][5] EV inventory climbed 12% in 2026 because dealers had more unsold electric cars. [3] US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases. [1][2][3][5]",
   "key_findings": [
     {
       "text": "US electric vehicle sales demand weakened across the US in 2026 as buyers delayed purchases.",
@@ -18,22 +18,8 @@
       ]
     },
     {
-      "text": "US EV market share reached 7.8% of new car sales in the US in 2026 as shoppers compared electric vehicle options.",
+      "text": "EV market share reached 7.8% of new car sales in the US in 2026.",
       "citations": [2, 5],
-      "editorial": false,
-      "facet": null,
-      "children": []
-    },
-    {
-      "text": "US EV car sales rose 10.3% month over month in May 2026 after several automakers cut prices.",
-      "citations": [4],
-      "editorial": false,
-      "facet": null,
-      "children": []
-    },
-    {
-      "text": "EV inventory climbed 12% in 2026 because dealers had more unsold electric cars.",
-      "citations": [3],
       "editorial": false,
       "facet": null,
       "children": []
@@ -41,6 +27,13 @@
     {
       "text": "Registrations remained stronger in coastal states where charging access improved.",
       "citations": [2],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "EV inventory climbed 12% in 2026 because dealers had more unsold electric cars.",
+      "citations": [3],
       "editorial": false,
       "facet": null,
       "children": []
@@ -110,7 +103,7 @@
     "search_provider": "tavily",
     "synthesis": "deterministic",
     "deterministic_fallback_used": false,
-    "coverage": 1,
+    "coverage": 0.8,
     "freshness": "this week",
     "citation_verdict": {
       "claims_checked": 7,
@@ -120,7 +113,7 @@
     "usage": null,
     "evidence": {
       "candidate_claims": 12,
-      "accepted_claims": 6,
+      "accepted_claims": 5,
       "excluded_sources": 1
     },
     "run_id": "golden-run"
@@ -133,7 +126,7 @@
     },
     {
       "source": "synthesis",
-      "reason": "only 5 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
+      "reason": "only 4 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
       "kind": "limited_evidence"
     }
   ]

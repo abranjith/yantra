@@ -141,6 +141,10 @@ function cleanSectionBody(bodyMd: string): string {
       if (trimmed.length === 0) {
         return '';
       }
+      // GFM key-figures tables are already composed and escaped upstream.
+      if (trimmed.startsWith('|')) {
+        return capInlineMarkers(line.trimEnd());
+      }
       const marker = /^\s{2}-\s/u.test(line) ? '  - ' : /^-\s/u.test(trimmed) ? '- ' : '';
       const content =
         marker.length > 0 ? trimmed.replace(/^-\s/u, '').replace(/^\s{2}-\s/u, '') : trimmed;

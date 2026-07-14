@@ -43,6 +43,21 @@ describe('@no-llm synthesis/buildEvidenceSet near-duplicate merge', () => {
     // The single surviving claim carries evidence from both sources.
     expect(evidenceSet.claims[0]!.docIndexes).toEqual([0, 1]);
   });
+
+  it('merges a contained restatement and unions source indexes', () => {
+    const { evidenceSet } = assemble([
+      doc(
+        'https://a.example.com/1',
+        'US electric vehicle sales stand one gain from an unprecedented 2026 record after incentives expanded nationwide.',
+      ),
+      doc(
+        'https://b.example.com/1',
+        'US electric vehicle sales stand one gain from an unprecedented 2026 record.',
+      ),
+    ]);
+    expect(evidenceSet.claims).toHaveLength(1);
+    expect(evidenceSet.claims[0]!.docIndexes).toEqual([0, 1]);
+  });
 });
 
 describe('@no-llm synthesis/buildEvidenceSet budgets as caps', () => {

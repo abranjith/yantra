@@ -122,4 +122,23 @@ export interface TextAnalyzer {
    * @returns Similarity score in `[0, 1]`.
    */
   similarity(textA: string, textB: string): number;
+
+  /**
+   * Containment coefficient between two texts in `[0, 1]`: the fraction of
+   * the *smaller* text's informative-lemma mass also present in the larger
+   * one. `1` means the smaller text is (lexically) fully inside the larger —
+   * the signal cosine misses when a short claim restates a fragment of a
+   * long one. Symmetric; `0` when either side carries no informative tokens.
+   *
+   * @param textA - First text.
+   * @param textB - Second text.
+   * @returns Containment coefficient in `[0, 1]`.
+   *
+   * @example
+   * analyzer.containment(
+   *   'Norway stand one win from a semi-final.',
+   *   'Match previews: Norway stand one win from a semi-final.',
+   * ); // ≈ 1 — the first text is contained in the second
+   */
+  containment(textA: string, textB: string): number;
 }

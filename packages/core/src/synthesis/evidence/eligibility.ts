@@ -3,9 +3,17 @@
  * `claims.ts`).
  *
  * This is where "evidence selection first" is enforced. Candidate sentences
- * from the relevance-passing documents must clear four **hard gates** before
+ * from the relevance-passing documents must clear the **hard gates** before
  * they can become findings:
  *
+ * 0. **Boilerplate** — source-chrome and marketing openers ("Last updated…",
+ *    "Check out…", "Welcome to…") are rejected outright.
+ * 0.5. **Junk shape** ({@link isJunkSentence}) — glued UI fragments
+ *    ("HEADLINESNext", ≥ 3 lowercase→uppercase boundaries), ALL-CAPS chrome
+ *    runs ("MUST READS"), video-player timestamps and pipe separators
+ *    ("01:18:30 | …"), sentences that do not start with a capital/digit or
+ *    end with terminal punctuation ("† denotes…", bare fragments), unbalanced
+ *    parens/quotes, and editorial questions ("…turn on the style?").
  * 1. **Grammaticality** — the sentence carries a finite verb
  *    ({@link DocAnalysis.hasFiniteVerb}). Headings and nav fragments
  *    ("State-Wise EV Sales & Adoption") are rejected outright.
@@ -61,7 +69,28 @@ const ANCHOR_VALUE_KINDS: ReadonlySet<EntityKind> = new Set(['money', 'percent']
 
 /** Boilerplate/source-chrome openers rejected before content gates. */
 const BOILERPLATE_PATTERN =
-  /^(last updated|updated on|updated:|published(?: on|:)|posted(?: on|:)|by [A-Z][a-z]+ [A-Z]|read more|subscribe|sign up|advertisement|sponsored|share this|follow us|related (?:articles?|posts?)|table of contents|skip to|photo(?: credit)?:|image:|source:)\b/iu;
+  /^(last updated|updated on|updated:|published(?: on|:)|posted(?: on|:)|by [A-Z][a-z]+ [A-Z]|read more|subscribe|sign up|advertisement|sponsored|share this|follow us|related (?:articles?|posts?)|table of contents|skip to|photo(?: credit)?:|image:|source:|check out|welcome to|discover|don't miss|watch|learn more|find out|see all|read next|up next|more from|trending|newsletter|download the app|breaking:)\b/iu;
+
+/** Caps run flowing into a word ("HEADLINESNext", "FCWhy"). */
+const CAPS_GLUE_PATTERN = /[A-Z]{2,}[a-z]{2,}/u;
+
+/** Lowercase-to-uppercase boundary; ≥ 3 of these means glued fragments. */
+const LOWER_UPPER_BOUNDARY = /[a-z][A-Z]/gu;
+
+/** Consecutive ALL-CAPS words (chrome candidates; see {@link hasAllCapsChrome}). */
+const ALL_CAPS_RUN_PATTERN = /\b[A-Z]{2,}(?:\s+[A-Z]{2,})+\b/u;
+
+/** Clock/video timestamp ("01:18:30", "9:41"). */
+const TIMESTAMP_PATTERN = /\b\d{1,2}:\d{2}(?::\d{2})?\b/u;
+
+/** A claim sentence must open with a capital, digit, or opening quote/paren. */
+const WELL_FORMED_START = /^["'“‘(]?[A-Z0-9]/u;
+
+/** A claim sentence must close with terminal punctuation. */
+const TERMINAL_PUNCTUATION = /[.!?…]["'”’)\]]?$/u;
+
+/** Interrogative ending — editorial questions are not findings. */
+const INTERROGATIVE_END = /\?["'”’)\]]?$/u;
 
 const FIRST_WORD_ANAPHORS: ReadonlySet<string> = new Set(['it', 'they', 'he', 'she']);
 const DEICTIC_ANAPHORS: ReadonlySet<string> = new Set(['this', 'these', 'that', 'those']);
@@ -113,6 +142,8 @@ interface PreparedSentence {
   readonly numericValues: ReadonlySet<string>;
   readonly anchorValues: ReadonlySet<string>;
   readonly entityKeys: ReadonlySet<string>;
+  /** Word-level named-entity keys (see EvidenceClaim.entityKeys). */
+  readonly namedKeys: ReadonlySet<string>;
   readonly evidenceKinds: readonly EvidenceKind[];
   readonly kind: ClaimKind;
   readonly hasFiniteVerb: boolean;
@@ -176,6 +207,7 @@ export function extractEligibleClaims(
       kind: sentence.kind,
       evidenceKinds: sentence.evidenceKinds,
       anchorValues: [...sentence.anchorValues],
+      entityKeys: [...sentence.namedKeys].sort(),
       docIndexes,
       salience,
     });
@@ -228,6 +260,7 @@ function prepareSentence(
   const numericValues = new Set<string>();
   const anchorValues = new Set<string>();
   const entityKeys = new Set<string>(lemmas);
+  const namedKeys = new Set<string>();
   const displayText = collapseWhitespace(text);
 
   for (const entity of entities) {
@@ -241,6 +274,11 @@ function prepareSentence(
     }
     if (entity.kind === 'named') {
       entityKeys.add(entity.normalized);
+      for (const word of entity.normalized.split(/\s+/u)) {
+        if (word.length > 1) {
+          namedKeys.add(word);
+        }
+      }
     }
   }
 
@@ -256,6 +294,7 @@ function prepareSentence(
     numericValues,
     anchorValues,
     entityKeys,
+    namedKeys,
     evidenceKinds,
     kind,
     hasFiniteVerb: analysis.hasFiniteVerb(index),
@@ -328,6 +367,7 @@ function stitchAnaphor(
     numericValues: unionSet(antecedent.numericValues, sentence.numericValues),
     anchorValues: unionSet(antecedent.anchorValues, sentence.anchorValues),
     entityKeys: unionSet(antecedent.entityKeys, sentence.entityKeys),
+    namedKeys: unionSet(antecedent.namedKeys, sentence.namedKeys),
     evidenceKinds,
     kind,
     hasFiniteVerb: true,
@@ -335,10 +375,67 @@ function stitchAnaphor(
   };
 }
 
+/**
+ * Gate 0.5: UI-chrome / malformed-sentence rejection (see the module header's
+ * gate list). Each sub-check is a named predicate so the table-driven junk
+ * corpus can pin its behavior. Exported for tests.
+ *
+ * @param text - The candidate sentence's display text.
+ * @returns True when the sentence is junk and must not become a claim.
+ */
+export function isJunkSentence(text: string): boolean {
+  return (
+    hasIntrawordGlue(text) ||
+    hasAllCapsChrome(text) ||
+    hasPlayerChrome(text) ||
+    isMalformedShape(text) ||
+    INTERROGATIVE_END.test(text)
+  );
+}
+
+/** Glued fragments: caps-run flowing into a word, or ≥ 3 aZ boundaries. */
+function hasIntrawordGlue(text: string): boolean {
+  if (CAPS_GLUE_PATTERN.test(text)) {
+    return true;
+  }
+  return (text.match(LOWER_UPPER_BOUNDARY) ?? []).length >= 3;
+}
+
+/** ALL-CAPS chrome: any run of two or more consecutive all-caps words. */
+function hasAllCapsChrome(text: string): boolean {
+  return ALL_CAPS_RUN_PATTERN.test(text);
+}
+
+/** Video-player/nav chrome: leading timestamp or a spaced pipe separator. */
+function hasPlayerChrome(text: string): boolean {
+  const timestamp = TIMESTAMP_PATTERN.exec(text);
+  if (timestamp !== null && (timestamp.index ?? 0) < 20) {
+    return true;
+  }
+  return /\s\|\s?|^\|/u.test(text);
+}
+
+/** Malformed shape: bad opener, no terminal punctuation, unbalanced pairs. */
+function isMalformedShape(text: string): boolean {
+  if (!WELL_FORMED_START.test(text) || !TERMINAL_PUNCTUATION.test(text)) {
+    return true;
+  }
+  const opens = (text.match(/\(/gu) ?? []).length;
+  const closes = (text.match(/\)/gu) ?? []).length;
+  if (opens !== closes) {
+    return true;
+  }
+  return (text.match(/"/gu) ?? []).length % 2 !== 0;
+}
+
 /** Applies the hard eligibility gates to one sentence. */
 function passesGates(sentence: PreparedSentence, profile: QueryProfile): boolean {
   // Gate 0: source boilerplate.
   if (BOILERPLATE_PATTERN.test(sentence.text)) {
+    return false;
+  }
+  // Gate 0.5: UI chrome and malformed sentence shapes.
+  if (isJunkSentence(sentence.text)) {
     return false;
   }
   // Gate 1: grammaticality (kills headings and nav fragments).

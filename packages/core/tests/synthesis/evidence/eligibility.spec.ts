@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { WinkAnalyzer } from '../../../src/synthesis/analysis/wink-analyzer.js';
-import { extractEligibleClaims } from '../../../src/synthesis/evidence/eligibility.js';
+import {
+  extractEligibleClaims,
+  isJunkSentence,
+} from '../../../src/synthesis/evidence/eligibility.js';
 import { buildQueryProfile } from '../../../src/synthesis/evidence/query-profile.js';
 import type { SynthesisDoc } from '../../../src/synthesis/types.js';
 
@@ -23,6 +26,59 @@ function doc(text: string, url = 'https://ev.example.com/a'): SynthesisDoc {
 
 const claimTexts = (docs: readonly SynthesisDoc[]): string[] =>
   extractEligibleClaims(docs, profile, analyzer).map((claim) => claim.text);
+
+describe('@no-llm synthesis/isJunkSentence (gate 0.5)', () => {
+  const junk: readonly string[] = [
+    // Every string that leaked into the reference brief (run 842c64d1).
+    'Match previewsMatch previewsSee allNOR1 FT2 ENGNOR1 FT2 ENGMatch PreviewMatch PreviewNorway break new ground as England aim to halt HaalandNorway stand one win from an unprecedented semi-final.',
+    'WORLD CUP HEADLINESNextBEST OF SI FCThere were layers to the USMNT’s victory over Bosnia and Herzegovina.',
+    'WATCH SI FCWhy France Are The Main Candidate To Win The World CupWelcome to the big leagues.',
+    '01:18:30 | Jul 10, 2026MUST READS The 2018 World Cup champion scored in a friendly.',
+    '† denotes a stadium used for previous men’s World Cup tournaments.',
+    '1,000th FIFA World Cup match',
+    'Lamine Yamal is still waiting for his World Cup moment - is he waiting until it really matters to turn on the style?',
+    'MUST READS The 2018 World Cup champion scored in a friendly against the Rowdies.',
+  ];
+
+  const legitimate: readonly string[] = [
+    'Norway stand one win from an unprecedented semi-final, while England aim to return to the FIFA World Cup last four in an intriguing all-European quarter-final in Miami.',
+    'The 2026 FIFA World Cup is the 23rd FIFA World Cup and the current edition of the quadrennial international championship.',
+    'On June 25, 2026, total attendance reached 3,605,357 spectators, setting the record for the highest attendance in World Cup history.',
+    'There were layers to the USMNT’s victory over Bosnia and Herzegovina which exposed how deep Pochettino’s influence goes.',
+    'McDonald’s promoted the tournament with an iPhone app built for supporters.',
+    'Mexico became the first country to host or co-host the World Cup three times, having hosted the 1970 and 1986 tournaments.',
+    '“Europe and Asia are excluded from the bidding,” the president confirmed.',
+  ];
+
+  it.each(junk.map((text) => [text]))('rejects junk: %s', (text) => {
+    expect(isJunkSentence(text)).toBe(true);
+  });
+
+  it.each(legitimate.map((text) => [text]))('keeps legitimate: %s', (text) => {
+    expect(isJunkSentence(text)).toBe(false);
+  });
+});
+
+describe('@no-llm synthesis/extractEligibleClaims junk gate integration', () => {
+  it('drops chrome sentences from claims even when grammatical', () => {
+    const texts = claimTexts([
+      doc(
+        'Electric vehicle sales declined 28% across the US in 2026 nationwide. 01:18:30 | MUST READS EV sales were strong this quarter too.',
+      ),
+    ]);
+    expect(texts.some((text) => text.includes('MUST READS'))).toBe(false);
+    expect(texts.some((text) => text.includes('28%'))).toBe(true);
+  });
+
+  it('drops editorial questions', () => {
+    const texts = claimTexts([
+      doc(
+        'Electric vehicle sales declined 28% across the US in 2026 nationwide. Are EV sales in the US finally about to turn the corner this year?',
+      ),
+    ]);
+    expect(texts.some((text) => text.endsWith('?'))).toBe(false);
+  });
+});
 
 describe('@no-llm synthesis/extractEligibleClaims hard gates', () => {
   it('accepts an on-topic, grammatical figure sentence', () => {

@@ -157,6 +157,23 @@ describe('@no-llm briefToHtml', () => {
     expect(html).not.toMatch(/\[1\]/u);
   });
 
+  it('renders a GFM key-figures section as an HTML table', () => {
+    const html = briefToHtml(
+      makeBrief({
+        sections: [
+          {
+            heading: 'Numbers & figures',
+            body_md:
+              '| Figure | Context | Sources |\n| --- | --- | --- |\n| 48 teams | Expanded field | [1] |',
+            citations: [1],
+          },
+        ],
+      }),
+    );
+    const dom = new JSDOM(html);
+    expect(dom.window.document.querySelector('section table')).not.toBeNull();
+  });
+
   it('anchors every citation superscript to a Sources entry with a matching id', () => {
     const dom = new JSDOM(briefToHtml(canonicalBrief));
     const doc = dom.window.document;

@@ -31,6 +31,10 @@ Source spec: [feature_deep_research.md](.spec-lite/features/feature_deep_researc
 
 ## Synthesis
 
+**Extraction-Grounded Brief Quality** _(updated: 2026-07-12 by implement)_
+Source spec: [feature_brief_quality.md](.spec-lite/features/feature_brief_quality.md)
+Offline Briefs preserve HTML block boundaries, remove source footnotes and page chrome, reject malformed or junk sentences, and merge contained restatements with their citations. Findings are selected for relevance and diversity; overviews prefer a definitional lead plus central distinct claims, and titles adopt source-backed casing such as `FIFA`. Detail sections are capped and thin sections disappear; `Numbers & figures` uses a compact key-figures table when at least three claims reduce cleanly. Citation problems and duplicate notices are aggregated while deterministic output retains the zero-flag invariant.
+
 **Synthesis Engine (deterministic + LLM)** _(updated: 2026-07-11 by implement)_
 Source spec: [feature_evidence_first_synthesis.md](.spec-lite/features/feature_evidence_first_synthesis.md)
 FEAT-FP-002 update: deterministic synthesis is now block-aware and coherence-focused. The default analyzer wraps winkNLP in `BlockSegmentingAnalyzer`; eligibility collapses claim text, rejects boilerplate, and stitches one-level anaphora; near-duplicate merging also uses shared percent/money anchors; percent facets add a `Metric` column for labels such as `Sales decline (YoY)`, `Sales rise (MoM)`, and `Market share`; and composition groups related claims into parent findings with child bullets plus nested section overflow. The checked-in golden suite now covers six corpora, including `ev-sales-messy`.

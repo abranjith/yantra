@@ -117,6 +117,17 @@ export class BlockSegmentingAnalyzer implements TextAnalyzer {
   public similarity(textA: string, textB: string): number {
     return this.inner.similarity(textA, textB);
   }
+
+  /**
+   * Delegates text containment to the wrapped analyzer.
+   *
+   * @param textA - First text.
+   * @param textB - Second text.
+   * @returns Containment coefficient in [0, 1].
+   */
+  public containment(textA: string, textB: string): number {
+    return this.inner.containment(textA, textB);
+  }
 }
 
 function isHeadingLine(line: string): boolean {

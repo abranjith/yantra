@@ -3,6 +3,7 @@ import type { Brief, BriefSource } from '@yantra/protocol';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
+import { htmlToText } from '../../src/extraction/html-to-text.js';
 import { validateCitations } from '../../src/synthesis/citation-validator.js';
 import { DeterministicSynthesizer } from '../../src/synthesis/deterministic.js';
 import type { SynthesisInput, SynthesisOptions } from '../../src/synthesis/types.js';
@@ -142,6 +143,41 @@ describe('@no-llm synthesis/validateCitations', () => {
         (n) => n.kind === 'uncited_claim_flagged' && n.reason.includes('[5]'),
       ),
     ).toBe(true);
+  });
+
+  it('aggregates unresolved markers per location while counting every marker', () => {
+    const pairs = [source(1, 'a.example.com', 'Declared source text.')];
+    const markers = Array.from({ length: 17 }, (_, index) => `[${index + 2}]`).join(' ');
+    const brief = createBrief({
+      task_id: DET_OPTS.taskId,
+      title: 'T',
+      overview: markers,
+      key_findings: [],
+      sources: pairs.map((pair) => pair.source),
+    });
+
+    const result = validateCitations(brief, inputFrom(pairs), { strategy: 'deterministic' });
+
+    expect(result.verdict.flagged).toBe(17);
+    const flags = result.brief.notices.filter((notice) => notice.kind === 'uncited_claim_flagged');
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.reason).toContain('[2], [3], [4] (+14 more)');
+  });
+
+  it('deduplicates identical notices already present on the Brief', () => {
+    const notice = { source: 'x', reason: 'same', kind: 'other' as const };
+    const brief = createBrief({
+      task_id: DET_OPTS.taskId,
+      title: 'T',
+      overview: '',
+      notices: [notice, notice],
+    });
+    const result = validateCitations(
+      brief,
+      { query: 'q', docs: [], failures: [] },
+      { strategy: 'deterministic' },
+    );
+    expect(result.brief.notices).toEqual([notice]);
   });
 
   it('does not run anchoring on the deterministic path (editorial + structural only)', () => {
@@ -316,5 +352,40 @@ describe('@no-llm synthesis/validateCitations', () => {
 
     expect(second.verdict.flagged).toBe(0);
     expect(second.verdict.stripped).toBe(0);
+  });
+
+  it('keeps the deterministic zero-flag invariant after stripping Wikipedia footnotes', async () => {
+    const text = htmlToText(
+      '<article><p>The 2026 FIFA World Cup is the 23rd edition of the tournament.<sup class="reference">[45]</sup></p><p>It includes 48 teams across host cities.[14]</p></article>',
+    );
+    expect(text).not.toMatch(/\[(?:45|14)\]/u);
+    const synth = new DeterministicSynthesizer({
+      clock: () => new Date('2026-06-02T00:00:00.000Z'),
+    });
+    const outcome = await synth.synthesize(
+      {
+        query: 'FIFA World Cup 2026',
+        docs: [
+          {
+            url: 'https://en.wikipedia.org/wiki/2026_FIFA_World_Cup',
+            finalUrl: null,
+            host: 'en.wikipedia.org',
+            title: '2026 FIFA World Cup',
+            fetchedAt: '2026-06-01T00:00:00.000Z',
+            publishedAt: null,
+            text,
+            excerpt: null,
+          },
+        ],
+        failures: [],
+      },
+      DET_OPTS,
+    );
+    expect(outcome.isOk).toBe(true);
+    if (!outcome.isOk) return;
+    expect(outcome.value.verdict.flagged).toBe(0);
+    expect(
+      outcome.value.brief.notices.some((notice) => notice.kind === 'uncited_claim_flagged'),
+    ).toBe(false);
   });
 });

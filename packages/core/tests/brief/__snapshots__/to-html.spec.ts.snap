@@ -38,20 +38,20 @@ a { color: #1256a3; }
 }
 .overview p:first-child { margin-top: 0; }
 .overview p:last-child { margin-bottom: 0; }
-table.comparison {
+table.comparison, section table {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5rem 0 1rem;
   font-family: -apple-system, Segoe UI, Roboto, sans-serif;
   font-size: 0.95rem;
 }
-table.comparison th, table.comparison td {
+table.comparison th, table.comparison td, section table th, section table td {
   text-align: left;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid #e0ddd5;
 }
-table.comparison thead th { border-bottom: 2px solid #cfc9bd; }
-table.comparison tbody tr:nth-child(even) { background: #f2efe9; }
+table.comparison thead th, section table thead th { border-bottom: 2px solid #cfc9bd; }
+table.comparison tbody tr:nth-child(even), section table tbody tr:nth-child(even) { background: #f2efe9; }
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }
@@ -95,10 +95,10 @@ ul.notices li {
 <li>Walmart — $342 via a third-party seller <sup class="cite"><a href="#src-3">3</a></sup></li>
 <li>Prices have trended upward since last week, so buying now is reasonable. <em>(editorial)</em></li>
 </ul>
-<h2>Price &amp; availability</h2>
-<p>All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. <sup class="cite"><a href="#src-1">1</a></sup><sup class="cite"><a href="#src-2">2</a></sup><sup class="cite"><a href="#src-3">3</a></sup></p>
-<h2>Caveats</h2>
-<p>The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. <sup class="cite"><a href="#src-3">3</a></sup></p>
+<section><h2>Price &amp; availability</h2>
+<p>All three major retailers currently stock the WH-1000XM5. Amazon has the lowest sticker at $328, down from a $399 list price, followed by Walmart at $342 and Best Buy at $349. <sup class="cite"><a href="#src-1">1</a></sup><sup class="cite"><a href="#src-2">2</a></sup><sup class="cite"><a href="#src-3">3</a></sup></p></section>
+<section><h2>Caveats</h2>
+<p>The Walmart listing is fulfilled by a third-party seller, so warranty terms differ from a first-party sale. <sup class="cite"><a href="#src-3">3</a></sup></p></section>
 <h2>Comparison</h2>
 <table class="comparison">
 <thead><tr><th>Retailer</th><th>Price</th><th>In stock</th></tr></thead>

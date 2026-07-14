@@ -1,3 +1,4 @@
+import { BaselineAnalyzer } from '@yantra/core';
 import { TaskEvent, validateBrief } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +23,7 @@ describe('@no-llm golden briefs — deterministic synthesizer', () => {
     expect(names).toContain('single-source');
     expect(names).toContain('ev-sales-mixed');
     expect(names).toContain('ev-sales-messy');
+    expect(names).toContain('worldcup-hubs');
   });
 
   for (const name of names) {
@@ -128,6 +130,43 @@ describe('@no-llm golden briefs — deterministic synthesizer', () => {
     expect(brief.metadata.citation_verdict!.flagged).toBe(0);
     expect(brief.metadata.citation_verdict!.stripped).toBe(0);
     expect(brief.metadata.citation_verdict!.claims_checked).toBeGreaterThanOrEqual(0);
+  });
+
+  it('enforces readability and dedupe invariants across every golden Brief', async () => {
+    const analyzer = new BaselineAnalyzer();
+    for (const name of names) {
+      const brief = await synthesizeCorpus(name);
+      const declared = new Set(brief.sources.map((source) => source.n));
+      const findings = brief.key_findings.flatMap((finding) => [
+        finding.text,
+        ...(finding.children ?? []).map((child) => child.text),
+      ]);
+      const prose = [...findings, ...brief.sections.map((section) => section.body_md)];
+      for (const text of prose) {
+        const scrubbed = text.replace(/\bJPMorgan\b/gu, '');
+        expect(scrubbed).not.toMatch(/[A-Z]{2,}[a-z]{2,}/u);
+        expect(scrubbed.match(/[a-z][A-Z]/gu)?.length ?? 0).toBeLessThan(3);
+        for (const marker of text.matchAll(/\[(\d{1,3})\]/gu)) {
+          expect(declared.has(Number(marker[1]))).toBe(true);
+        }
+      }
+      for (let left = 0; left < findings.length; left += 1) {
+        for (let right = left + 1; right < findings.length; right += 1) {
+          expect(analyzer.containment(findings[left]!, findings[right]!)).toBeLessThan(0.9);
+        }
+      }
+      expect(
+        new Set(
+          brief.notices.map(
+            (notice) => `${notice.kind}\u0000${notice.source}\u0000${notice.reason}`,
+          ),
+        ).size,
+      ).toBe(brief.notices.length);
+      for (const text of findings) {
+        expect(text).toMatch(/^["'â€œâ€˜(]?[A-Z0-9]/u);
+        expect(text).toMatch(/[.!?â€¦]["'â€â€™)\]]?$/u);
+      }
+    }
   });
 });
 

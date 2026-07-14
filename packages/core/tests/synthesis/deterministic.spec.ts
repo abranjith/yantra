@@ -132,6 +132,8 @@ describe('@no-llm synthesis/DeterministicSynthesizer', () => {
       'Electric truck deliveries increased 60% for commercial fleets in 2026.',
       'Electric car adoption reached 18% of new vehicle sales in 2026.',
       'Electric vehicle model choices expanded to 90 options for buyers in 2026.',
+      'Electric bus purchases reached 2400 fleet units across the US during 2026.',
+      'Electric motorcycle sales doubled to 80000 units in the US during 2026.',
     ];
     const docs = sentences.map((text, i) =>
       doc({ url: `https://ev-${i}.example.com/report`, text }),
@@ -227,6 +229,76 @@ describe('@no-llm synthesis/DeterministicSynthesizer', () => {
     expect(result.value.brief.sources).toEqual([]);
     expect(result.value.brief.key_findings).toEqual([]);
     expect(result.value.brief.metadata.coverage).toBeNull();
+  });
+
+  it('uses a definitional lead and source-informed acronym casing', async () => {
+    const input: SynthesisInput = {
+      query: 'fifa world cup 2026 news',
+      docs: [
+        doc({
+          url: 'https://a.example.com/world-cup',
+          title: 'FIFA World Cup 2026 guide',
+          text: 'The 2026 FIFA World Cup is the 23rd edition of the international football tournament.',
+        }),
+        doc({
+          url: 'https://b.example.com/norway',
+          title: 'Latest FIFA World Cup news',
+          text: 'Norway defeated England to reach an unprecedented FIFA World Cup semi-final.',
+        }),
+        doc({
+          url: 'https://c.example.com/hosts',
+          title: 'FIFA tournament hosts',
+          text: 'Sixteen host cities are preparing transit services for the 2026 FIFA tournament.',
+        }),
+      ],
+      failures: [],
+    };
+    const result = await synth().synthesize(input, opts());
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(result.value.brief.title).toBe('FIFA World Cup 2026 news');
+    expect(
+      result.value.brief.overview.startsWith('The 2026 FIFA World Cup is the 23rd edition'),
+    ).toBe(true);
+  });
+
+  it('emits a capped key-figures table when at least three remainder figures reduce', async () => {
+    const figureSentences = [
+      'World Cup attendance reached 3,605,357 spectators after the quarter-finals.',
+      'The World Cup field expanded to 48 teams for the 2026 tournament.',
+      'World Cup matches are scheduled across 16 host cities in 2026.',
+      'The World Cup opening ceremony will welcome 70,000 supporters in 2026.',
+      'World Cup organizers allocated 12 training bases to qualified teams.',
+      'World Cup transit plans add 300 late-night buses for supporters.',
+      'World Cup fan zones will operate at 24 public sites during 2026.',
+      'World Cup volunteers completed 80 hours of host training this year.',
+      'World Cup broadcasters will serve 40 international markets in 2026.',
+      'World Cup stadium teams completed 18 emergency drills before opening.',
+      'World Cup ticket centers opened 22 service desks across host regions.',
+      'World Cup rail operators scheduled 150 extra trains for match days.',
+    ];
+    const docs = figureSentences.map((text, index) =>
+      doc({
+        url: `https://figures-${index}.example.com/report`,
+        title: 'FIFA World Cup figures',
+        text,
+      }),
+    );
+    const result = await synth().synthesize(
+      { query: 'world cup host teams figures 2026', docs, failures: [] },
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    const numberSection = result.value.brief.sections.find(
+      (section) => section.heading === 'Numbers & figures',
+    );
+    expect(numberSection).toBeDefined();
+    expect(numberSection!.body_md).toContain('| Figure | Context | Sources |');
+    const dataRows =
+      numberSection?.body_md.split('\n').filter((line) => /^\| (?!Figure|---)/u.test(line)) ?? [];
+    expect(dataRows.length).toBeGreaterThanOrEqual(3);
+    expect(dataRows.length).toBeLessThanOrEqual(12);
   });
 
   it('is deterministic: identical input yields identical Briefs modulo brief_id', async () => {

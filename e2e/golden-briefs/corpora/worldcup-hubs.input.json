@@ -1,0 +1,46 @@
+{
+  "query": "fifa world cup 2026 news",
+  "docs": [
+    {
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/latest-news",
+      "finalUrl": null,
+      "host": "www.fifa.com",
+      "title": "FIFA World Cup 2026 latest news",
+      "fetchedAt": "2026-07-10T12:00:00.000Z",
+      "publishedAt": "2026-07-10T10:00:00.000Z",
+      "text": "Norway defeated England to stand one win from an unprecedented FIFA World Cup semi-final. The tournament schedule includes matches across Canada, Mexico and the United States. FIFA confirmed that knockout matches will use the expanded bracket announced for 2026.",
+      "excerpt": "Norway stand one win from an unprecedented semi-final."
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup",
+      "finalUrl": null,
+      "host": "en.wikipedia.org",
+      "title": "2026 FIFA World Cup",
+      "fetchedAt": "2026-07-10T12:00:05.000Z",
+      "publishedAt": null,
+      "text": "The 2026 FIFA World Cup is the 23rd edition of the international football tournament. The expanded final tournament includes 48 teams competing across 16 host cities. The opening match is scheduled for June 11, 2026, in Mexico City. Total tournament attendance reached 3,605,357 spectators after the latest completed round. Teams will play 104 World Cup matches during the expanded tournament. Organizers recruited 65,000 volunteers for World Cup host operations. Broadcast coverage will reach 200 countries during the FIFA tournament. Stadium transit plans include 300 late-night buses on World Cup match days. Fan zones will operate at 24 public sites across World Cup host regions. Rail operators scheduled 150 extra trains for FIFA World Cup supporters. Ticket centers opened 22 service desks across the tournament host cities. Stadium teams completed 18 emergency drills before World Cup opening day.",
+      "excerpt": "The 2026 FIFA World Cup is the 23rd edition."
+    },
+    {
+      "url": "https://www.si.com/soccer/world-cup-2026-news",
+      "finalUrl": null,
+      "host": "www.si.com",
+      "title": "FIFA World Cup 2026 news and analysis",
+      "fetchedAt": "2026-07-10T12:00:10.000Z",
+      "publishedAt": "2026-07-10T09:30:00.000Z",
+      "text": "France advanced after controlling possession throughout its FIFA World Cup quarter-final. Spain named a younger midfield for its next 2026 tournament match. Supporters used expanded rail services around the busiest host venues.",
+      "excerpt": "France advanced after controlling possession."
+    },
+    {
+      "url": "https://football.example.com/world-cup-hosts",
+      "finalUrl": null,
+      "host": "football.example.com",
+      "title": "FIFA World Cup host city preparations",
+      "fetchedAt": "2026-07-10T12:00:15.000Z",
+      "publishedAt": "2026-07-09T18:00:00.000Z",
+      "text": "Host cities added late-night transit for FIFA World Cup supporters. Organizers opened additional fan zones near major stadiums. Local authorities increased multilingual wayfinding across tournament districts.",
+      "excerpt": "Host cities added late-night transit."
+    }
+  ],
+  "failures": []
+}

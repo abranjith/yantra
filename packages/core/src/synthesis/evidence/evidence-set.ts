@@ -23,7 +23,10 @@
  *   {@link EvidenceSet.underBudget} is set so the composer can state it plainly.
  * - **Near-duplicate merge.** Reworded restatements of the same claim collapse
  *   into the higher-salience claim with their citations unioned, so a finding
- *   is not shown twice under two hosts.
+ *   is not shown twice under two hosts. Merge fires on lemma-cosine (>= 0.75),
+ *   on a shared percent/money anchor (>= 0.5 cosine), on lemma containment
+ *   (>= 0.9 — a claim restating a fragment of another), or on a normalized
+ *   substring match.
  *
  * Pure and deterministic: same docs + query ⇒ same EvidenceSet.
  */
@@ -75,12 +78,20 @@ export interface EvidenceAssembly {
   readonly candidateClaims: number;
 }
 
+/**
+ * Containment coefficient at/above which two claims merge regardless of
+ * cosine: the smaller claim is lexically inside the larger one (a restated
+ * fragment), so showing both would be duplicate information.
+ */
+export const CONTAINMENT_DUP_THRESHOLD = 0.9;
+
 /** Working (mutable) claim used while merging near-duplicates. */
 interface MergingClaim {
   readonly text: string;
   readonly kind: EvidenceClaim['kind'];
   readonly evidenceKinds: Set<EvidenceKind>;
   readonly anchorValues: Set<string>;
+  readonly entityKeys: Set<string>;
   readonly docIndexes: Set<number>;
   readonly salience: number;
 }
@@ -144,6 +155,7 @@ function mergeNearDuplicates(
       claim.docIndexes.forEach((docIndex) => match.docIndexes.add(docIndex));
       claim.evidenceKinds.forEach((kind) => match.evidenceKinds.add(kind));
       claim.anchorValues.forEach((value) => match.anchorValues.add(value));
+      claim.entityKeys.forEach((key) => match.entityKeys.add(key));
       continue;
     }
     accepted.push({
@@ -151,6 +163,7 @@ function mergeNearDuplicates(
       kind: claim.kind,
       evidenceKinds: new Set(claim.evidenceKinds),
       anchorValues: new Set(claim.anchorValues),
+      entityKeys: new Set(claim.entityKeys),
       docIndexes: new Set(claim.docIndexes),
       salience: claim.salience,
     });
@@ -161,6 +174,7 @@ function mergeNearDuplicates(
     kind: claim.kind,
     evidenceKinds: [...claim.evidenceKinds],
     anchorValues: [...claim.anchorValues],
+    entityKeys: [...claim.entityKeys].sort(),
     docIndexes: [...claim.docIndexes].sort((left, right) => left - right),
     salience: claim.salience,
   }));
@@ -175,9 +189,26 @@ function shouldMerge(
   if (similarity >= NEAR_DUP_THRESHOLD) {
     return true;
   }
-  return (
-    similarity >= NUMERIC_DUP_FLOOR && sharesAnchorValue(existing.anchorValues, claim.anchorValues)
-  );
+  if (
+    similarity >= NUMERIC_DUP_FLOOR &&
+    sharesAnchorValue(existing.anchorValues, claim.anchorValues)
+  ) {
+    return true;
+  }
+  // Containment catches a claim restating a *fragment* of another: cosine is
+  // diluted by everything else the longer text says, but the shorter text's
+  // lemma mass (or normalized text) sits inside the longer one.
+  if (analyzer.containment(existing.text, claim.text) >= CONTAINMENT_DUP_THRESHOLD) {
+    return true;
+  }
+  const existingKey = normalizeForSubstring(existing.text);
+  const claimKey = normalizeForSubstring(claim.text);
+  return existingKey.includes(claimKey) || claimKey.includes(existingKey);
+}
+
+/** Case/whitespace-normalized text for the substring duplicate check. */
+function normalizeForSubstring(text: string): string {
+  return text.toLowerCase().replace(/\s+/gu, ' ').trim();
 }
 
 function sharesAnchorValue(left: ReadonlySet<string>, right: readonly string[]): boolean {

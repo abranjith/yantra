@@ -3,23 +3,25 @@
   "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "schema_version": "0.2",
   "title": "City transit budget expansion",
-  "overview": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2] The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3] Advocates said the expansion will cut average commute times across the northern corridor. [1]",
+  "overview": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit. [1][2] The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade. [3] The city council approved a new transit budget on Tuesday evening after a lengthy public hearing. [1]",
   "key_findings": [
     {
       "text": "After months of negotiation the city council approved a new transit budget that commits 45 million dollars to bus rapid transit.",
       "citations": [1, 2],
       "editorial": false,
       "facet": null,
-      "children": [
-        {
-          "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing.",
-          "citations": [1]
-        }
-      ]
+      "children": []
     },
     {
       "text": "The transit expansion approved this week represents the largest single investment in public transportation the city has made in a decade.",
       "citations": [3],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "The city council approved a new transit budget on Tuesday evening after a lengthy public hearing.",
+      "citations": [1],
       "editorial": false,
       "facet": null,
       "children": []
@@ -96,11 +98,5 @@
     },
     "run_id": "golden-run"
   },
-  "notices": [
-    {
-      "source": "synthesis",
-      "reason": "only 5 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
-      "kind": "limited_evidence"
-    }
-  ]
+  "notices": []
 }

@@ -28,6 +28,8 @@
  *   executable vector. It also skips whole tags, so a `[n]` inside an attribute
  *   value is never touched. Hover reveals the collapsed `+k` remainder with no
  *   JavaScript.
+ * - **Section tables share the comparison styling.** GFM key-figures tables
+ *   remain escape-before-parse inert and use the same readable striped theme.
  *
  * ## Purity
  *
@@ -209,7 +211,7 @@ function sectionHtml(section: Section, declared: ReadonlySet<number>): string {
   const heading = `<h2>${escapeHtml(section.heading)}</h2>`;
   const body = section.body_md.trim();
   return body.length > 0
-    ? `${heading}\n${subtleizeCitations(renderMarkdown(body), declared)}`
+    ? `<section>${heading}\n${subtleizeCitations(renderMarkdown(body), declared)}</section>`
     : heading;
 }
 
@@ -336,20 +338,20 @@ a { color: #1256a3; }
 }
 .overview p:first-child { margin-top: 0; }
 .overview p:last-child { margin-bottom: 0; }
-table.comparison {
+table.comparison, section table {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5rem 0 1rem;
   font-family: -apple-system, Segoe UI, Roboto, sans-serif;
   font-size: 0.95rem;
 }
-table.comparison th, table.comparison td {
+table.comparison th, table.comparison td, section table th, section table td {
   text-align: left;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid #e0ddd5;
 }
-table.comparison thead th { border-bottom: 2px solid #cfc9bd; }
-table.comparison tbody tr:nth-child(even) { background: #f2efe9; }
+table.comparison thead th, section table thead th { border-bottom: 2px solid #cfc9bd; }
+table.comparison tbody tr:nth-child(even), section table tbody tr:nth-child(even) { background: #f2efe9; }
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }

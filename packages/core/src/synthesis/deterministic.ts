@@ -11,8 +11,9 @@
  *
  * - **Key findings** are the top accepted claims, carrying their citations in
  *   the structured `citations[]` array only — no inline `[n]` in the text.
- * - **The overview** restates the top few claims as answer-first prose, keeping
- *   inline `[n]` markers (the renderers subtle-ize them).
+ * - **The overview** leads with a query-target definition when available,
+ *   then uses TextRank + MMR to add central, non-redundant claims while
+ *   keeping inline `[n]` markers (the renderers subtle-ize them).
  * - **Sections** hold the *remainder* of the accepted claims grouped by kind;
  *   a claim shown as a finding never repeats in a section.
  * - **Notices** are honest: per-source failures, one `source_excluded` per
@@ -41,6 +42,8 @@ import type { TextAnalyzer } from './analysis/text-analyzer.js';
 import { WinkAnalyzer } from './analysis/wink-analyzer.js';
 import { validateCitations } from './citation-validator.js';
 import { buildEvidenceSet, LENGTH_BUDGETS } from './evidence/evidence-set.js';
+import { deriveKeyFigures } from './evidence/figures.js';
+import { selectMmr, textRank } from './evidence/rank.js';
 import {
   groupClaimsByTopic,
   MAX_CHILDREN_PER_FINDING,
@@ -60,6 +63,9 @@ import type {
 
 /** How many top claims compose the answer-first overview. */
 const OVERVIEW_CLAIMS = 3;
+
+/** MMR relevance weight: favor strong claims while suppressing restatements. */
+const FINDING_MMR_LAMBDA = 0.7;
 
 /** Section headings per claim kind, in emission order. */
 const SECTION_HEADINGS = [
@@ -156,7 +162,7 @@ export class DeterministicSynthesizer implements Synthesizer {
 
     // Findings and sections partition the accepted claims — a finding never
     // repeats as a section bullet.
-    const findingGroups = groups.slice(0, budget);
+    const findingGroups = selectFindingGroups(groups, this.analyzer, budget);
 
     const keyFindings: KeyFinding[] = findingGroups.map((group) => ({
       text: group.parent.text,
@@ -166,10 +172,9 @@ export class DeterministicSynthesizer implements Synthesizer {
       children: group.children.slice(0, MAX_CHILDREN_PER_FINDING).map(childFinding),
     }));
 
-    const overview = composeOverview(
-      findingGroups.slice(0, OVERVIEW_CLAIMS).map((group) => group.parent),
-    );
-    const sections = opts.detail === 'overview' ? [] : composeSections(groups, budget, opts.detail);
+    const overview = composeOverview(findingGroups, input.query, this.analyzer);
+    const sections =
+      opts.detail === 'overview' ? [] : composeSections(groups, findingGroups, budget, opts.detail);
     const facets = toBriefFacets(evidenceSet.facets);
 
     const citedNumbers = new Set<number>();
@@ -201,7 +206,7 @@ export class DeterministicSynthesizer implements Synthesizer {
 
     const brief = createBrief({
       task_id: opts.taskId,
-      title: composeTitle(input.query),
+      title: composeTitle(input.query, keptDocs.map((doc) => doc.title).filter(isString)),
       overview,
       key_findings: keyFindings,
       sections,
@@ -300,36 +305,108 @@ function toBriefFacets(facets: AcceptedFacets | null): BriefFacets | null {
   return { comparison: { columns: [...facets.columns], rows: facets.rows.map((row) => [...row]) } };
 }
 
-function composeTitle(query: string): string {
+function composeTitle(query: string, sourceTitles: readonly string[]): string {
   const cleaned = stripAnsi(query).replace(/\s+/gu, ' ').trim().slice(0, 120);
   if (cleaned.length === 0) {
     return 'Untitled brief';
   }
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  const required = sourceTitles.length < 2 ? sourceTitles.length : 2;
+  const recased = cleaned.replace(/\p{L}{2,}/gu, (token) => {
+    const variants = new Map<string, number>();
+    for (const title of sourceTitles) {
+      const match = new RegExp(`\\b${escapeRegExp(token)}\\b`, 'iu').exec(title)?.[0];
+      if (match !== undefined && match !== token) {
+        variants.set(match, (variants.get(match) ?? 0) + 1);
+      }
+    }
+    const winner = [...variants.entries()].sort(
+      ([left, leftCount], [right, rightCount]) =>
+        rightCount - leftCount || left.localeCompare(right),
+    )[0];
+    return winner !== undefined && winner[1] >= required && required > 0 ? winner[0] : token;
+  });
+  return recased.charAt(0).toUpperCase() + recased.slice(1);
 }
 
-/** Answer-first prose: top claims joined, each tailed by its inline [n] markers. */
-function composeOverview(top: readonly ComposedClaim[]): string {
-  if (top.length === 0) {
+/** Definitional lead plus central, mutually non-redundant selected findings. */
+function composeOverview(
+  groups: readonly ComposedGroup[],
+  query: string,
+  analyzer: TextAnalyzer,
+): string {
+  const candidates = groups.map((group) => group.parent);
+  if (candidates.length === 0) {
     return 'No usable source content could be synthesized for this query.';
   }
-  return top
+  const queryTokens = new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+  const lead = candidates.find((entry) => isDefinitional(entry.claim, queryTokens));
+  const remaining = candidates.filter(
+    (entry) =>
+      entry !== lead && (lead === undefined || analyzer.containment(lead.text, entry.text) < 0.85),
+  );
+  const centrality = textRank(
+    remaining.map((entry) => entry.text),
+    (left, right) => analyzer.similarity(left, right),
+  );
+  const centralityByClaim = new Map(
+    remaining.map((entry, index) => [entry, centrality[index] ?? 0]),
+  );
+  const selected = selectMmr(
+    remaining,
+    (entry) => centralityByClaim.get(entry) ?? 0,
+    (left, right) => analyzer.similarity(left.text, right.text),
+    FINDING_MMR_LAMBDA,
+    OVERVIEW_CLAIMS - (lead === undefined ? 0 : 1),
+  );
+  return [...(lead === undefined ? [] : [lead]), ...selected]
     .map((entry) => `${entry.text} ${entry.citations.map((n) => `[${n}]`).join('')}`)
     .join(' ');
+}
+
+function isDefinitional(claim: EvidenceClaim, queryTokens: ReadonlySet<string>): boolean {
+  if (claim.kind !== 'fact' && claim.kind !== 'entity') return false;
+  const firstTokens = claim.text.match(/[\p{L}\p{N}']+/gu)?.slice(0, 8) ?? [];
+  if (!firstTokens.some((token) => /^(?:is|are|was|were)$/iu.test(token))) return false;
+  return claim.entityKeys.some((key) => queryTokens.has(key));
+}
+
+function selectFindingGroups(
+  groups: readonly ComposedGroup[],
+  analyzer: TextAnalyzer,
+  budget: number,
+): readonly ComposedGroup[] {
+  const ordered = [...groups].sort(
+    (left, right) =>
+      right.parent.claim.salience - left.parent.claim.salience ||
+      (left.parent.claim.docIndexes[0] ?? Infinity) -
+        (right.parent.claim.docIndexes[0] ?? Infinity) ||
+      left.parent.text.localeCompare(right.parent.text),
+  );
+  return selectMmr(
+    ordered,
+    (group) => group.parent.claim.salience,
+    (left, right) => analyzer.similarity(left.parent.text, right.parent.text),
+    FINDING_MMR_LAMBDA,
+    budget,
+  );
 }
 
 /** Groups the remainder claims by kind into kind-headed detail sections. */
 function composeSections(
   groups: readonly ComposedGroup[],
+  findingGroups: readonly ComposedGroup[],
   budget: number,
   detail: 'standard' | 'full',
 ): Section[] {
-  const pool = sectionPool(groups, budget, detail);
+  const pool = sectionPool(groups, findingGroups, budget, detail);
 
   const sections: Section[] = [];
   for (const [kind, heading] of SECTION_HEADINGS) {
-    const sectionGroups = pool.filter((entry) => entry.parent.claim.kind === kind);
-    if (sectionGroups.length === 0) {
+    const parentCap = detail === 'full' ? 12 : 8;
+    const sectionGroups = pool
+      .filter((entry) => entry.parent.claim.kind === kind)
+      .slice(0, parentCap);
+    if (sectionGroups.length < 2) {
       continue;
     }
 
@@ -339,9 +416,32 @@ function composeSections(
       group.children.forEach((child) => child.citations.forEach((n) => citations.add(n)));
     }
 
+    let bodyMd = sectionGroups.map(sectionGroupMarkdown).join('\n');
+    if (kind === 'number') {
+      const figures = deriveKeyFigures(
+        sectionGroups.map((group) => ({
+          text: group.parent.text,
+          citations: group.parent.citations,
+        })),
+      );
+      if (figures.length >= 3) {
+        const tableCap = detail === 'full' ? 12 : 8;
+        const tableFigures = figures.slice(0, tableCap);
+        const used = new Set(tableFigures.map((figure) => figure.sourceText));
+        const bulletCap = detail === 'full' ? 10 : 6;
+        const bullets = sectionGroups
+          .filter((group) => !used.has(group.parent.text))
+          .slice(0, bulletCap);
+        bodyMd = [keyFiguresTable(tableFigures), ...bullets.map(sectionGroupMarkdown)].join('\n');
+      } else {
+        const bulletCap = detail === 'full' ? 10 : 6;
+        bodyMd = sectionGroups.slice(0, bulletCap).map(sectionGroupMarkdown).join('\n');
+      }
+    }
+
     sections.push({
       heading,
-      body_md: sectionGroups.map(sectionGroupMarkdown).join('\n'),
+      body_md: bodyMd,
       citations: [...citations].sort((left, right) => left - right),
     });
   }
@@ -349,19 +449,40 @@ function composeSections(
   return sections;
 }
 
+function keyFiguresTable(figures: ReturnType<typeof deriveKeyFigures>): string {
+  const rows = figures.map(
+    (figure) =>
+      `| ${escapeTableCell(figure.figure)} | ${escapeTableCell(figure.context)} | ${figure.citations.map((n) => `[${n}]`).join('')} |`,
+  );
+  return ['| Figure | Context | Sources |', '| --- | --- | --- |', ...rows].join('\n');
+}
+
+function escapeTableCell(value: string): string {
+  return value.replace(/\|/gu, '\\|').replace(/\r?\n/gu, ' ');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function isString(value: string | null): value is string {
+  return value !== null;
+}
+
 function sectionPool(
   groups: readonly ComposedGroup[],
+  findingGroups: readonly ComposedGroup[],
   budget: number,
   detail: 'standard' | 'full',
 ): readonly ComposedGroup[] {
-  const findingGroups = groups.slice(0, budget);
   const findingOverflow = findingGroups
     .map((group) => ({
       parent: group.parent,
       children: group.children.slice(MAX_CHILDREN_PER_FINDING),
     }))
     .filter((group) => group.children.length > 0);
-  const nonFindingGroups = groups.slice(budget);
+  const selected = new Set(findingGroups);
+  const nonFindingGroups = groups.filter((group) => !selected.has(group));
   const pool = [...findingOverflow, ...nonFindingGroups];
   return detail === 'full' ? pool : pool.slice(0, budget);
 }

@@ -30,11 +30,18 @@ Markdown and semantic (rather than structural) fabrication:
 
 - **Structural** — scans inline `[n]` markers in `overview`, section
   `body_md`, and finding text. A marker beyond the declared source set is
-  **flagged**, even though the `citations[]` arrays validate.
+  **flagged**, even though the `citations[]` arrays validate. Repeated failures
+  are aggregated per location, for example: `inline citations [14], [45], [46]
+(+14 more) do not resolve to a declared source`.
 - **Anchoring (LLM path only)** — fuzzy-matches each cited finding's content
   words against its cited sources' text. Below-threshold findings are
   **flagged** (kept, noticed). A finding whose numbers appear in **no** cited
   source (a fabricated statistic) is **stripped** (removed, noticed).
+
+Readability extraction strips source footnote markers such as `[45]`, `[A]`,
+`[citation needed]`, and `[edit]` before synthesis. At extraction time these
+cannot be Yantra citations (those are added during composition), and removing
+them prevents source footnotes from creating false structural flags.
 
 The deterministic strategy skips anchoring: its claims carry their evidence
 by construction (each claim keeps the `docIndexes` it was extracted from), so
@@ -49,6 +56,10 @@ The validator's output is honest and auditable:
   the Brief so nothing is silently dropped.
 - It stamps `metadata.citation_verdict = { claims_checked, flagged, stripped }`
   and returns the same verdict on the `SynthesisOutcome`.
+
+`Numbers & figures` may include a GitHub-flavored key-figures table. Citation
+markers in its `Sources` column use the same `[n]` convention and are validated
+exactly like markers in section bullets.
 
 Both synthesizers run this pass as their final step, so the guarantee holds
 regardless of strategy, and `yantra audit` can narrate the verdict.

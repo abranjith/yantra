@@ -174,10 +174,58 @@ function sectionsBlock(sections: readonly Section[], c: ChalkInstance, width: nu
   const md = markdownRenderer(c, width);
   return sections
     .map((section) => {
-      const body = (md.parse(section.body_md) as string).replace(/\n+$/u, '');
+      const body = renderSectionBody(section.body_md, md);
       return `${c.bold(section.heading)}\n${body}`;
     })
     .join('\n\n');
+}
+
+/** Renders GFM tables as aligned plain columns and other chunks as Markdown. */
+function renderSectionBody(bodyMd: string, md: Marked): string {
+  const lines = bodyMd.split(/\r?\n/u);
+  const output: string[] = [];
+  for (let index = 0; index < lines.length; ) {
+    if (lines[index]!.trim().startsWith('|')) {
+      const table: string[] = [];
+      while (index < lines.length && lines[index]!.trim().startsWith('|')) {
+        table.push(lines[index]!.trim());
+        index += 1;
+      }
+      output.push(alignMarkdownTable(table));
+      continue;
+    }
+    const markdown: string[] = [];
+    while (index < lines.length && !lines[index]!.trim().startsWith('|')) {
+      markdown.push(lines[index]!);
+      index += 1;
+    }
+    const rendered = (md.parse(markdown.join('\n')) as string).replace(/\n+$/u, '');
+    if (rendered.length > 0) output.push(rendered);
+  }
+  return output.join('\n');
+}
+
+function alignMarkdownTable(lines: readonly string[]): string {
+  const rows = lines
+    .map((line) =>
+      line
+        .slice(1, line.endsWith('|') ? -1 : undefined)
+        .split('|')
+        .map((cell) => cell.trim()),
+    )
+    .filter((_, index) => index !== 1);
+  const widths = Array.from(
+    { length: Math.max(0, ...rows.map((row) => row.length)) },
+    (_, column) => Math.max(...rows.map((row) => row[column]?.length ?? 0)),
+  );
+  return rows
+    .map((row) =>
+      row
+        .map((cell, column) => cell.padEnd(widths[column] ?? cell.length))
+        .join('  ')
+        .trimEnd(),
+    )
+    .join('\n');
 }
 
 /** Honest per-source failures as a yellow block. */

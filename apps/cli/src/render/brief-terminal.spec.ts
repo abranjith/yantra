@@ -128,6 +128,23 @@ describe('@no-llm renderBriefTerminal', () => {
     }
   });
 
+  it('aligns a section key-figures table as plain terminal columns', () => {
+    const brief = makeBrief({
+      sections: [
+        {
+          heading: 'Numbers & figures',
+          body_md:
+            '| Figure | Context | Sources |\n| --- | --- | --- |\n| 48 teams | Expanded field | [1] |\n| 16 cities | Host locations | [1] |',
+          citations: [1],
+        },
+      ],
+    });
+    const out = renderBriefTerminal(brief, { detail: 'full', noColor: true });
+    expect(out).toMatch(/Figure\s+Context\s+Sources/u);
+    expect(out).toMatch(/48 teams\s+Expanded field\s+\[1\]/u);
+    expect(out).not.toContain('| --- |');
+  });
+
   it('emits zero ANSI escape bytes under noColor for any Brief and detail', () => {
     fc.assert(
       fc.property(briefArb, fc.constantFrom(...DETAIL_LEVELS), (brief, detail) => {

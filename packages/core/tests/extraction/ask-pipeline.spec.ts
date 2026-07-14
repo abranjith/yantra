@@ -291,7 +291,8 @@ describe('@no-llm extraction/ask-pipeline', () => {
     const { brief } = await pipeline.run(baseQuery);
 
     expect(brief.sources).toHaveLength(0);
-    expect(brief.notices.filter((notice) => notice.kind === 'fetch_failed')).toHaveLength(3);
+    // Identical per-host failures collapse to one readable notice.
+    expect(brief.notices.filter((notice) => notice.kind === 'fetch_failed')).toHaveLength(1);
     // All-failed Briefs are not cached, so the day can be retried.
     expect(cache.putCalls).toBe(0);
   });

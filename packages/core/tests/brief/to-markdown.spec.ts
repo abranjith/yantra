@@ -153,4 +153,13 @@ describe('@no-llm briefToMarkdown', () => {
     expect(md).toContain('[1][2][3] (+2)');
     expect(md).not.toContain('[4]');
   });
+
+  it('preserves GFM key-figures table lines', () => {
+    const table =
+      '| Figure | Context | Sources |\n| --- | --- | --- |\n| 48 teams | Expanded field | [1] |';
+    const md = briefToMarkdown(
+      makeBrief({ sections: [{ heading: 'Numbers & figures', body_md: table, citations: [1] }] }),
+    );
+    expect(md).toContain(table);
+  });
 });

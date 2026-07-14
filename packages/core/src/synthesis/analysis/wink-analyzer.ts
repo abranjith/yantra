@@ -33,7 +33,7 @@ import model from 'wink-eng-lite-web-model';
 import winkNLP from 'wink-nlp';
 import type { ItemEntity, ItemSentence, ItemToken, ItsFunction, WinkMethods } from 'wink-nlp';
 
-import { cosineSimilarity } from '../similarity.js';
+import { bagContainment, cosineSimilarity } from '../similarity.js';
 
 /*
  * winkNLP's `its` accessors (its.pos, its.normal, its.type, its.lemma, ...) are
@@ -203,6 +203,18 @@ export class WinkAnalyzer implements TextAnalyzer {
    */
   public similarity(textA: string, textB: string): number {
     return cosineSimilarity(this.bagOfLemmas(textA), this.bagOfLemmas(textB));
+  }
+
+  /**
+   * Lemma-bag containment coefficient between two texts, in `[0, 1]` (shared
+   * lemma mass ÷ smaller bag's mass).
+   *
+   * @param textA - First text.
+   * @param textB - Second text.
+   * @returns Containment coefficient; `0` when either side has no lemmas.
+   */
+  public containment(textA: string, textB: string): number {
+    return bagContainment(this.bagOfLemmas(textA), this.bagOfLemmas(textB));
   }
 
   /** Builds a lemma frequency vector (bag of words) from a text's analysis. */

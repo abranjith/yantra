@@ -11,6 +11,8 @@ export * from './evidence/relevance.js';
 export * from './evidence/eligibility.js';
 export * from './evidence/facet-planner.js';
 export * from './evidence/evidence-set.js';
+export * from './evidence/figures.js';
+export * from './evidence/rank.js';
 export * from './evidence/topic-groups.js';
 export * from './llm.js';
 export * from './select.js';

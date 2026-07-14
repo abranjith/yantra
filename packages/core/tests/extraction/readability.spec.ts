@@ -55,6 +55,45 @@ describe('@no-llm extraction/readability', () => {
     expect(article?.lengthChars ?? 0).toBeLessThan(500);
   });
 
+  it('strips footnote sups, infobox, navbox, and reflist chrome before extraction', async () => {
+    const extractor = new ReadabilityExtractor();
+    const article = await extractor.extract(
+      makeDoc('https://en.wikipedia.org/wiki/2026_FIFA_World_Cup', fixture('wiki-refs.html')),
+    );
+
+    expect(article).not.toBeNull();
+    const text = article?.contentText ?? '';
+    expect(text).not.toMatch(/\[\d{1,3}\]/u);
+    expect(text).not.toMatch(/\[A\]/u);
+    expect(text).not.toContain('[edit]');
+    expect(text).not.toContain('Host countries');
+    expect(text).not.toContain('Reference forty-five text');
+    expect(text).not.toContain('Navigation: 1930');
+    expect(text).toContain('The 2026 FIFA World Cup is the 23rd FIFA World Cup');
+  });
+
+  it('produces block-structured text with blank-line separators', async () => {
+    const extractor = new ReadabilityExtractor();
+    const article = await extractor.extract(
+      makeDoc('https://en.wikipedia.org/wiki/2026_FIFA_World_Cup', fixture('wiki-refs.html')),
+    );
+
+    const blocks = (article?.contentText ?? '').split('\n\n');
+    expect(blocks.length).toBeGreaterThanOrEqual(3);
+    expect(article?.contentText ?? '').not.toMatch(/[a-z][A-Z]/u);
+  });
+
+  it('normalizes NBSP and whitespace runs in the extracted title', async () => {
+    const extractor = new ReadabilityExtractor();
+    const html = fixture('wiki-refs.html').replace(
+      '<title>2026 FIFA World Cup - Wikipedia</title>',
+      '<title>2026 FIFA  World Cup</title>',
+    );
+    const article = await extractor.extract(makeDoc('https://news.example/t', html));
+
+    expect(article?.title).toBe('2026 FIFA World Cup');
+  });
+
   it('handles malformed HTML without throwing', async () => {
     const extractor = new ReadabilityExtractor();
     const article = await extractor.extract(

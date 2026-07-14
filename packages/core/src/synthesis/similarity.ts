@@ -152,6 +152,46 @@ export function tfidfVectors(docs: readonly string[]): TermVector[] {
 }
 
 /**
+ * Containment coefficient between two term bags: the shared term mass divided
+ * by the smaller bag's mass, in `[0, 1]`.
+ *
+ * Where cosine asks "how similar are these texts overall?", containment asks
+ * "is the smaller text essentially inside the larger one?" — which is the
+ * right question for detecting a claim that restates a fragment of another
+ * (cosine is diluted by everything else the longer text says).
+ *
+ * @param left - First term bag (term → count or weight).
+ * @param right - Second term bag.
+ * @returns Shared mass ÷ smaller bag's mass; `0` when either bag is empty.
+ */
+export function bagContainment(left: TermVector, right: TermVector): number {
+  if (left.size === 0 || right.size === 0) {
+    return 0;
+  }
+
+  let leftMass = 0;
+  for (const weight of left.values()) {
+    leftMass += weight;
+  }
+  let rightMass = 0;
+  for (const weight of right.values()) {
+    rightMass += weight;
+  }
+
+  const [smaller, larger] = leftMass <= rightMass ? [left, right] : [right, left];
+  let shared = 0;
+  for (const [term, weight] of smaller) {
+    const other = larger.get(term);
+    if (other !== undefined) {
+      shared += Math.min(weight, other);
+    }
+  }
+
+  const smallerMass = Math.min(leftMass, rightMass);
+  return smallerMass === 0 ? 0 : shared / smallerMass;
+}
+
+/**
  * Cosine similarity between two sparse term vectors.
  *
  * @param left - First term vector.

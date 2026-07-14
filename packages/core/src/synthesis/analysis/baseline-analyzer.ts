@@ -25,7 +25,7 @@
  * Purity: `analyze`/`similarity` are pure functions of their text inputs.
  */
 
-import { cosineSimilarity, tfidfVectors, tokenize } from '../similarity.js';
+import { bagContainment, cosineSimilarity, tfidfVectors, tokenize } from '../similarity.js';
 
 import { normalizeDate, normalizeNamed, normalizeNumeric } from './normalize.js';
 import type {
@@ -192,4 +192,25 @@ export class BaselineAnalyzer implements TextAnalyzer {
     const [vectorA, vectorB] = tfidfVectors([textA, textB]);
     return cosineSimilarity(vectorA!, vectorB!);
   }
+
+  /**
+   * Token-bag containment coefficient between two texts, in `[0, 1]` (shared
+   * token mass ÷ smaller bag's mass; tokens double as lemmas here).
+   *
+   * @param textA - First text.
+   * @param textB - Second text.
+   * @returns Containment coefficient; `0` when either side has no tokens.
+   */
+  public containment(textA: string, textB: string): number {
+    return bagContainment(countBag(tokenize(textA)), countBag(tokenize(textB)));
+  }
+}
+
+/** Builds a term-frequency bag from a token list. */
+function countBag(tokens: readonly string[]): ReadonlyMap<string, number> {
+  const bag = new Map<string, number>();
+  for (const token of tokens) {
+    bag.set(token, (bag.get(token) ?? 0) + 1);
+  }
+  return bag;
 }
