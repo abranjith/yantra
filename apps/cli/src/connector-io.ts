@@ -24,7 +24,11 @@
  * @see .spec-lite/features/feature_scheduling_runner.md
  */
 
-import type { Brief, TaskEvent } from '@yantra/protocol';
+import { createInterface } from 'node:readline/promises';
+
+import type { AgentProgressEvent, AgentTaskConnector, AgenticTaskOutcome } from '@yantra/agent';
+import type { Brief, ConfirmationRequest, TaskEvent } from '@yantra/protocol';
+import { SCHEMA_VERSION } from '@yantra/protocol';
 
 import type { GlobalFlags } from './global-flags.js';
 import type {
@@ -55,7 +59,7 @@ export type ConnectorResult =
       readonly artifacts: BriefArtifactPaths | null;
     };
 
-export interface ConnectorIO {
+export interface ConnectorIO extends AgentTaskConnector {
   readonly id: ConnectorId;
 
   /**
@@ -70,6 +74,18 @@ export interface ConnectorIO {
    * typed reply object instead.
    */
   renderResult(result: ConnectorResult, opts: ConnectorRenderOpts): void;
+}
+
+/** Agent-stream configuration bound to a CLI connector for one command. */
+export interface CliAgentConnectorOptions {
+  readonly renderOpts: ConnectorRenderOpts;
+  readonly interactive: boolean;
+  readonly confirmationPrompt?: (
+    request: ConfirmationRequest,
+    signal: AbortSignal,
+  ) => Promise<'granted' | 'denied'>;
+  /** Command will render the published Brief itself using its selected format. */
+  readonly suppressPublishedOutcome?: boolean;
 }
 
 /**
@@ -95,7 +111,15 @@ export class CLIConnectorIO implements ConnectorIO {
   readonly id: ConnectorId = 'cli';
   private readonly events = new NoopEventStream();
 
-  constructor(private readonly renderer: OutputRenderer) {}
+  public constructor(
+    private readonly renderer: OutputRenderer,
+    private readonly agentOptions?: CliAgentConnectorOptions,
+  ) {}
+
+  /** True only for an explicitly interactive, non-JSON TTY command. */
+  public get interactive(): boolean {
+    return this.agentOptions?.interactive === true && this.agentOptions.renderOpts.json === false;
+  }
 
   onEvent(handler: (event: TaskEvent) => void): () => void {
     return this.events.subscribe(handler);
@@ -122,6 +146,97 @@ export class CLIConnectorIO implements ConnectorIO {
         this.renderer.renderBrief(result.brief, result.artifacts, opts);
         return;
     }
+  }
+
+  /** Render one bounded agent progress item; raw tool inputs/outputs are absent by type. */
+  public emitAgentEvent(event: AgentProgressEvent): void {
+    const opts = this.requireAgentOptions();
+    if (opts.json) {
+      opts.stream.write(
+        `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event })}\n`,
+      );
+      return;
+    }
+    switch (event.type) {
+      case 'assistant_text':
+        opts.stream.write(event.text);
+        return;
+      case 'tool_started':
+        opts.stream.write(`\n[${event.tool}] ${event.summary}\n`);
+        return;
+      case 'tool_finished':
+        opts.stream.write(
+          `[${event.tool}] ${event.status} â€” ${event.summary}` +
+            `${event.durationMs === null ? '' : ` (${event.durationMs}ms)`}\n`,
+        );
+        return;
+    }
+  }
+
+  /** Present a fail-closed terminal confirmation prompt. */
+  public async requestConfirmation(
+    request: ConfirmationRequest,
+    signal: AbortSignal,
+  ): Promise<'granted' | 'denied'> {
+    if (!this.interactive) return 'denied';
+    if (this.agentOptions?.confirmationPrompt) {
+      return this.agentOptions.confirmationPrompt(request, signal);
+    }
+
+    const opts = this.requireAgentOptions();
+    opts.errStream.write(
+      `\nConfirmation required\n` +
+        `  Action: ${request.action_kind}\n` +
+        `  Host: ${request.host}\n` +
+        `  Summary: ${request.description}\n` +
+        `  Consequence: ${request.consequence}\n`,
+    );
+    const readline = createInterface({ input: process.stdin, output: opts.errStream });
+    try {
+      const answer = await readline.question('Allow this action? [y/N] ', { signal });
+      return /^(y|yes)$/i.test(answer.trim()) ? 'granted' : 'denied';
+    } finally {
+      readline.close();
+    }
+  }
+
+  /** Render the finalized terminal state exactly once. */
+  public renderAgentOutcome(outcome: AgenticTaskOutcome): void {
+    const opts = this.requireAgentOptions();
+    if (opts.json) {
+      opts.stream.write(
+        `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_outcome', outcome })}\n`,
+      );
+      return;
+    }
+    switch (outcome.kind) {
+      case 'published':
+        if (this.agentOptions?.suppressPublishedOutcome === true) return;
+        opts.stream.write(`\nPublished Brief: ${outcome.brief.htmlPath}\nRun: ${outcome.runId}\n`);
+        return;
+      case 'handoff':
+        opts.errStream.write(
+          `\nHuman handoff required: ${outcome.blocker}\nSafest next action: ${outcome.safestNextAction}\n`,
+        );
+        return;
+      case 'failed':
+      case 'budget_exhausted':
+      case 'aborted':
+        opts.errStream.write(`\n${outcome.error.code}: ${outcome.error.message}\n`);
+        return;
+    }
+  }
+
+  private requireAgentOptions(): ConnectorRenderOpts {
+    return (
+      this.agentOptions?.renderOpts ?? {
+        json: false,
+        debug: false,
+        noColor: true,
+        stream: process.stdout,
+        errStream: process.stderr,
+      }
+    );
   }
 }
 

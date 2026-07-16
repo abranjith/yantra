@@ -47,4 +47,7 @@ export interface InjectedAPI {
    * Used by callHandle — the return value is captured as a CDP RemoteObject.
    */
   getSlotElement(): Element | null;
+
+  /** Returns the current slot's viewport rect for stability checks. */
+  getBoundingRect(): { top: number; left: number; width: number; height: number };
 }

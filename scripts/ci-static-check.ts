@@ -15,7 +15,10 @@ export interface StaticCheckViolation {
 }
 
 export interface RestrictedImportViolation {
-  readonly kind: 'restricted_pi_agent_core_import';
+  readonly kind:
+    | 'restricted_pi_agent_core_import'
+    | 'restricted_pi_sdk_import_outside_adapter'
+    | 'restricted_core_to_agent_import';
   readonly file: string;
   readonly line: number;
   readonly column: number;
@@ -481,6 +484,19 @@ async function walkTypeScriptFiles(currentPath: string, files: string[]): Promis
   }
 }
 
+/** The only agent-SDK package Yantra may depend on (plan_agentic.md §3). */
+const PI_SDK_PACKAGE = '@earendil-works/pi-coding-agent';
+
+/** Directories (source + mirrored tests) allowed to import the Pi SDK. */
+const PI_SDK_ALLOWED_PREFIXES = [
+  'packages/agent/src/adapters/pi/',
+  'packages/agent/tests/adapters/pi/',
+] as const;
+
+function matchesPackage(importPath: string, packageName: string): boolean {
+  return importPath === packageName || importPath.startsWith(`${packageName}/`);
+}
+
 function scanImports(
   sourceFile: ts.SourceFile,
   repoRoot: string,
@@ -489,18 +505,37 @@ function scanImports(
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const importPath = node.moduleSpecifier.text;
-      if (importPath === 'pi-agent-core' || importPath.startsWith('pi-agent-core/')) {
-        const normalizedFile = normalizePath(relative(repoRoot, sourceFile.fileName));
-        if (!normalizedFile.startsWith('packages/agent/')) {
-          const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-          collector.push({
-            kind: 'restricted_pi_agent_core_import',
-            file: normalizedFile,
-            line: position.line + 1,
-            column: position.character + 1,
-            importPath,
-          });
-        }
+      const normalizedFile = normalizePath(relative(repoRoot, sourceFile.fileName));
+      const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+      const violation = {
+        file: normalizedFile,
+        line: position.line + 1,
+        column: position.character + 1,
+        importPath,
+      };
+
+      // Legacy SDK name: forbidden outside packages/agent (removed by FEAT-029).
+      if (
+        matchesPackage(importPath, 'pi-agent-core') &&
+        !normalizedFile.startsWith('packages/agent/')
+      ) {
+        collector.push({ kind: 'restricted_pi_agent_core_import', ...violation });
+      }
+
+      // Pi SDK: confined to the adapter directory (plan_agentic.md §3).
+      if (
+        matchesPackage(importPath, PI_SDK_PACKAGE) &&
+        !PI_SDK_ALLOWED_PREFIXES.some((prefix) => normalizedFile.startsWith(prefix))
+      ) {
+        collector.push({ kind: 'restricted_pi_sdk_import_outside_adapter', ...violation });
+      }
+
+      // Dependency direction: core must never import agent (plan_agentic.md §3).
+      if (
+        matchesPackage(importPath, '@yantra/agent') &&
+        normalizedFile.startsWith('packages/core/')
+      ) {
+        collector.push({ kind: 'restricted_core_to_agent_import', ...violation });
       }
     }
 

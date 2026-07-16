@@ -1,3 +1,12 @@
+import { readFile } from 'node:fs/promises';
+
+import {
+  exitCodeForAgenticOutcome,
+  resolveCommandTaskProfile,
+  runAgenticTask,
+  type AgenticTaskOutcome,
+  type AgenticTaskRequest,
+} from '@yantra/agent';
 import {
   AskPipeline,
   BlocklistImpl,
@@ -27,6 +36,7 @@ import {
   type SearchProviderName,
   type SynthesisLength,
 } from '@yantra/core';
+import { validateBrief } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import { CLIConnectorIO } from '../connector-io.js';
@@ -69,6 +79,9 @@ export interface AskRuntime {
   readonly resolveDefaults: () => Promise<EffectivePreferences>;
   /** Records a completed task into the history index (best-effort). */
   readonly recordHistory: (runId: string) => Promise<void>;
+  /** Shared agentic runtime; only selected after deterministic mode is ruled out. */
+  readonly runTask: typeof runAgenticTask;
+  readonly isTty: boolean;
 }
 
 /**
@@ -113,8 +126,8 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       ).choices(['auto', 'google', 'duckduckgo', 'brave', 'tavily']),
     )
     .addOption(new Option('--limit <count>', 'number of sources to consider').default('3'))
-    .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
-    .addOption(new Option('--budget-ms <ms>', 'pipeline timeout budget in ms').default('30000'))
+    .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('30000'))
+    .addOption(new Option('--budget-ms <ms>', 'pipeline timeout budget in ms').default('100000'))
     .action(async (queryArg: string, options: AskOptions) => {
       // Resolve unset flags from the effective preferences (explicit flag wins).
       const effective = await resolvedRuntime.resolveDefaults();
@@ -133,6 +146,12 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       );
 
       try {
+        // Selection happens before the agent runtime/provider is constructed.
+        // The deterministic pipeline below is deliberately untouched.
+        if (!query.noLlm) {
+          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime);
+          return;
+        }
         const pipeline = await resolvedRuntime.createPipeline(query);
         const result: AskRunResult = await pipeline.run(query);
 
@@ -255,6 +274,89 @@ function runtimeWithDefaults(runtime?: Partial<AskRuntime>): AskRuntime {
     createPipeline: runtime?.createPipeline ?? createDefaultAskPipeline,
     resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
     recordHistory: runtime?.recordHistory ?? ((runId: string) => recordTaskHistory(runId)),
+    runTask: runtime?.runTask ?? runAgenticTask,
+    isTty: runtime?.isTty ?? process.stdin.isTTY === true,
+  };
+}
+
+async function runAgenticAsk(
+  question: string,
+  query: AskQuery,
+  format: BriefOutputFormat,
+  detail: BriefDetailLevel,
+  options: AskOptions,
+  runtime: AskRuntime,
+): Promise<void> {
+  const renderOpts = agentRenderOpts(runtime, format, detail, options);
+  const connector = new CLIConnectorIO(format === 'json' ? new JSONRenderer() : new TerminalRenderer(), {
+    renderOpts,
+    interactive: runtime.isTty && format !== 'json',
+    suppressPublishedOutcome: true,
+  });
+  const profile = resolveCommandTaskProfile('ask', runtime.env);
+  const outcome = await runtime.runTask({
+    goal: question,
+    model: selectAgentModel(runtime.env),
+    auth: { mode: 'managed' },
+    profile,
+    budgets: {
+      wallClockMs: query.pipelineBudgetMs,
+      ...(query.budgetCalls === null ? {} : { totalToolCalls: query.budgetCalls }),
+    },
+    ...(query.personalization ? { profileContext: query.personalization } : {}),
+    connector,
+  });
+  await renderAgenticOutcome(outcome, runtime, format, detail, options);
+}
+
+function agentRenderOpts(
+  runtime: AskRuntime,
+  format: BriefOutputFormat,
+  detail: BriefDetailLevel,
+  options: AskOptions,
+): ConnectorRenderOpts {
+  const stdout = runtime.stdout as NodeJS.WriteStream;
+  return {
+    json: format === 'json',
+    debug: false,
+    noColor: resolveNoColor(options, runtime),
+    stream: runtime.stdout,
+    errStream: runtime.stderr,
+    briefDetail: detail,
+    briefFormat: format,
+    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+  };
+}
+
+async function renderAgenticOutcome(
+  outcome: AgenticTaskOutcome,
+  runtime: AskRuntime,
+  format: BriefOutputFormat,
+  detail: BriefDetailLevel,
+  options: AskOptions,
+): Promise<void> {
+  if (outcome.kind !== 'published') {
+    throw new Error(agentFailureMessage(outcome));
+  }
+  const parsed = validateBrief(JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown);
+  if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
+  renderBrief(runtime, { brief: parsed.value, artifacts: null }, { format, detail, options });
+  await runtime.recordHistory(outcome.runId);
+  if (options.open === true) openArtifact(outcome.brief.htmlPath);
+  const exitCode = exitCodeForAgenticOutcome(outcome);
+  if (exitCode !== 0) throw new Error(`Agentic ask exited with ${exitCode}.`);
+}
+
+function agentFailureMessage(outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>): string {
+  return outcome.kind === 'handoff'
+    ? `${outcome.blocker}: ${outcome.safestNextAction}`
+    : `${outcome.error.code}: ${outcome.error.message}`;
+}
+
+function selectAgentModel(env: NodeJS.ProcessEnv): AgenticTaskRequest['model'] {
+  return {
+    provider: (env.YANTRA_AGENT_PROVIDER ?? 'anthropic').trim(),
+    id: (env.YANTRA_AGENT_MODEL ?? 'claude-haiku-4-5').trim(),
   };
 }
 

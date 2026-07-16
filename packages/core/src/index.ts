@@ -38,6 +38,8 @@ export {
   createKeychainProvider,
   enforce as enforceSecurityScope,
   validateScopeViolations,
+  assertHostBinding,
+  SecretHostMismatchError,
   withSecret,
   type KeychainProvider,
   type OpaqueRefResolver,
@@ -47,6 +49,8 @@ export {
 
 export * from './workflow/recorder/index.js';
 export * from './workflow/index.js';
+
+export * from './scripts/index.js';
 
 /** @deprecated Use PROTOCOL_VERSION directly. This re-export will be removed in a future release. */
 export const CORE_PROTOCOL_VERSION = PROTOCOL_VERSION;

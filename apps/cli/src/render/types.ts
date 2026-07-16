@@ -122,6 +122,34 @@ export interface AuditRenderReport {
     readonly authenticatedCount: number;
   };
   readonly trustNarrative: string;
+  readonly agent: {
+    readonly adapter: string;
+    readonly sdkVersion: string;
+    readonly provider: string;
+    readonly model: string;
+    readonly thinking: string;
+    readonly authSource: string;
+    readonly sessionId: string;
+    readonly sessionFile: string;
+    readonly promptVersion: string;
+  } | null;
+  readonly toolCalls: readonly {
+    readonly seq: number;
+    readonly callId: string;
+    readonly tool: string;
+    readonly status: 'ok' | 'error' | 'denied' | 'aborted' | 'incomplete';
+    readonly durationMs: number | null;
+    readonly confirmationId: string | null;
+    readonly confirmationDecision: string | null;
+    readonly incomplete: boolean;
+  }[];
+  readonly usage: {
+    readonly turns: number;
+    readonly inputTokens: number | null;
+    readonly outputTokens: number | null;
+    readonly costUsd: number | null;
+  } | null;
+  readonly terminalError: { readonly code: string; readonly message: string } | null;
 }
 
 export interface OutputRenderer {

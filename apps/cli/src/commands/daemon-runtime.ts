@@ -101,22 +101,26 @@ function makeOrchestratorDriver(logger: Logger): {
 } {
   return {
     async run(request): Promise<FireRunOutcome> {
-      const { orchestrator } = await buildOrchestratorRuntime({
+      const runtime = await buildOrchestratorRuntime({
         logger,
         confirmationGateway: request.confirmationGateway,
       });
-      const runRequest: RunRequest = {
-        workflowName: request.workflowName,
-        params: request.params,
-        budgets: {},
-        json: false,
-        debug: false,
-      };
-      const outcome = await orchestrator.run(runRequest);
-      if (outcome.kind === 'aborted') {
-        return { kind: 'aborted', runId: outcome.runId, reason: outcome.reason };
+      try {
+        const runRequest: RunRequest = {
+          workflowName: request.workflowName,
+          params: request.params,
+          budgets: {},
+          json: false,
+          debug: false,
+        };
+        const outcome = await runtime.orchestrator.run(runRequest);
+        if (outcome.kind === 'aborted') {
+          return { kind: 'aborted', runId: outcome.runId, reason: outcome.reason };
+        }
+        return { kind: outcome.kind, runId: outcome.runId };
+      } finally {
+        runtime.close();
       }
-      return { kind: outcome.kind, runId: outcome.runId };
     },
   };
 }
@@ -134,12 +138,16 @@ function makeResumeDriver(logger: Logger): {
     async resume(runId): Promise<{ status: LastFireStatus; runId: string }> {
       // Replay the human's prior `yantra confirm` grant so the executor's
       // re-request on resume is satisfied exactly once (never auto-created).
-      const { orchestrator } = await buildOrchestratorRuntime({
+      const runtime = await buildOrchestratorRuntime({
         logger,
         confirmationGateway: new PreGrantedConfirmationGateway({ logger }),
       });
-      const outcome = await orchestrator.resume(runId);
-      return { runId: outcome.runId, status: mapResumeStatus(outcome, exitCodeFor(outcome)) };
+      try {
+        const outcome = await runtime.orchestrator.resume(runId);
+        return { runId: outcome.runId, status: mapResumeStatus(outcome, exitCodeFor(outcome)) };
+      } finally {
+        runtime.close();
+      }
     },
   };
 }

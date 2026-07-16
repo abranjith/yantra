@@ -159,12 +159,21 @@ function getSlotElement(): Element | null {
   return resolvedSlot;
 }
 
+/** Returns the active slot's bounding rect for the Node-side stability poll. */
+function getBoundingRect(): { top: number; left: number; width: number; height: number } {
+  const rect = resolvedSlot?.getBoundingClientRect();
+  return rect
+    ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+    : { top: 0, left: 0, width: 0, height: 0 };
+}
+
 const api = {
   resolveCandidate,
   checkActionableState: checkActionableStateSlot,
   checkHitTarget: checkHitTargetSlot,
   clearSlot,
   getSlotElement,
+  getBoundingRect,
   // Internal helpers exported for test access
   isBoundingRectStable,
   isAttached,

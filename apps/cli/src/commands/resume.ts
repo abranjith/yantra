@@ -38,15 +38,18 @@ export function makeResumeCommand(): Command {
     .action(async (runId: string, options: ResumeOptions) => {
       const logger = makeStderrLogger(options.debug === true);
       logger.info({ runId }, 'yantra resume: starting');
+      let closeRuntime = (): void => undefined;
 
       try {
         // Same consent policy as `run`: prompt only in an interactive TTY,
         // never under `--json` / unattended (plan §6).
         const interactive = process.stdin.isTTY === true && options.json !== true;
-        const { orchestrator, runStore } = await buildOrchestratorRuntime({
+        const runtime = await buildOrchestratorRuntime({
           logger,
           confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
         });
+        const { orchestrator, runStore } = runtime;
+        closeRuntime = runtime.close;
 
         // Load resume point first so we can check consent before doing real work.
         const point = await loadResumePoint(runStore, runId);
@@ -56,6 +59,7 @@ export function makeResumeCommand(): Command {
             process.stderr.write(
               `Resume of run ${runId} requires interactive consent (failure class: ${point.manifest.failureClass}). Re-run without --json or pass --force.\n`,
             );
+            closeRuntime();
             process.exit(4);
           }
           process.stderr.write(
@@ -63,6 +67,7 @@ export function makeResumeCommand(): Command {
               `Resume only if you intended to allow this workflow to access that resource.\n` +
               `Pass --force to bypass this check.\n`,
           );
+          closeRuntime();
           process.exit(4);
         }
 
@@ -75,8 +80,10 @@ export function makeResumeCommand(): Command {
           process.stdout.write(`${icon} Resume ${outcome.runId}: ${outcome.kind}\n`);
         }
 
+        closeRuntime();
         process.exit(exitCodeFor(outcome));
       } catch (err) {
+        closeRuntime();
         const message = err instanceof Error ? err.message : String(err);
         process.stderr.write(`Error: ${message}\n`);
         if (options.debug === true && err instanceof Error && err.stack !== undefined) {

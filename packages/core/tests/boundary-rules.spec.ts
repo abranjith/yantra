@@ -17,17 +17,29 @@ const lintMessagesFor = async (filePath: string) => {
 };
 
 describe('@no-llm lint boundary rules', () => {
-  it('rejects @yantra/core imports from packages/agent', async () => {
+  it('rejects @yantra/agent imports from packages/core', async () => {
+    const fixturePath = resolve(repoRoot, 'packages/core/src/_lint-fixtures/core-imports-agent.ts');
+
+    const messages = await lintMessagesFor(fixturePath);
+    const restricted = messages.filter((message) => message.ruleId === 'no-restricted-imports');
+
+    expect(restricted).toHaveLength(1);
+    expect(restricted[0]?.message).toContain('must not import from @yantra/agent');
+  }, 30_000);
+
+  it('rejects Pi SDK imports in packages/agent outside src/adapters/pi', async () => {
     const fixturePath = resolve(
       repoRoot,
-      'packages/agent/src/_lint-fixtures/agent-imports-core.ts',
+      'packages/agent/src/_lint-fixtures/agent-pi-import-outside-adapter.ts',
     );
 
     const messages = await lintMessagesFor(fixturePath);
     const restricted = messages.filter((message) => message.ruleId === 'no-restricted-imports');
 
     expect(restricted).toHaveLength(1);
-    expect(restricted[0]?.message).toContain('must not import from @yantra/core');
+    expect(restricted[0]?.message).toContain(
+      'may only be imported under packages/agent/src/adapters/pi/',
+    );
   }, 30_000);
 
   it('rejects pi-agent-core imports outside packages/agent', async () => {

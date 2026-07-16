@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { TaskEvent } from '@yantra/protocol';
+import type { TaskEvent, UsageLedger } from '@yantra/protocol';
 
 import type { AgentJsonlEntry, SecretsJsonlEntry } from './log-writer.js';
 
@@ -27,6 +27,7 @@ export class MarkdownReportBuilder implements ReportBuilder {
     const events = await readJsonLines<TaskEvent>(join(runDir, 'events.jsonl'));
     const agentEntries = await readJsonLines<AgentJsonlEntry>(join(runDir, 'agent.jsonl'));
     const secretEntries = await readJsonLines<SecretsJsonlEntry>(join(runDir, 'secrets.jsonl'));
+    const usage = await readJson<UsageLedger>(join(runDir, 'usage.json'));
 
     const report = renderReport({
       runId: runDir.split(/[/\\]/).pop() ?? runDir,
@@ -34,6 +35,7 @@ export class MarkdownReportBuilder implements ReportBuilder {
       events,
       agentEntries,
       secretEntries,
+      usage,
       outcome,
       ...(failure ? { failure } : {}),
     });
@@ -49,6 +51,7 @@ function renderReport(input: {
   readonly events: TaskEvent[];
   readonly agentEntries: AgentJsonlEntry[];
   readonly secretEntries: SecretsJsonlEntry[];
+  readonly usage: UsageLedger | null;
   readonly outcome: 'completed' | 'failed';
   readonly failure?: FailureContext;
 }): string {
@@ -111,6 +114,17 @@ function renderReport(input: {
     (e) => e.direction === 'response' && e.outcome !== 'ok',
   );
   lines.push(`Failed calls: ${failedCalls.length}`);
+  lines.push('');
+
+  lines.push('## Agent Usage');
+  if (input.usage?.agent === undefined) {
+    lines.push('- none');
+  } else {
+    lines.push(`Turns: ${input.usage.agent.turns}`);
+    lines.push(`Input tokens: ${input.usage.agent.input_tokens ?? 'unknown'}`);
+    lines.push(`Output tokens: ${input.usage.agent.output_tokens ?? 'unknown'}`);
+    lines.push(`Cost (USD): ${input.usage.agent.cost_usd ?? 'unknown'}`);
+  }
   lines.push('');
 
   lines.push('## Secrets Resolved');

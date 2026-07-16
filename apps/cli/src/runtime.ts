@@ -39,6 +39,8 @@ export interface OrchestratorRuntime {
   readonly runStore: LocalRunStore;
   readonly workflowStore: FileWorkflowStore;
   readonly logger: Logger;
+  /** Releases runtime-owned persistence handles. Idempotent. */
+  readonly close: () => void;
 }
 
 /**
@@ -65,7 +67,7 @@ export async function buildOrchestratorRuntime(
   const blocklist = new BlocklistImpl();
   await blocklist.reload();
   const robots = new RobotsCacheImpl(ethicsConfig.userAgent);
-  const rateLimitStore = await openRateLimitStore(logger);
+  const rateLimitHandle = await openRateLimitStore(logger);
   const rateLimiter = new RateLimiterImpl(
     ethicsConfig.rateLimitDefault,
     ethicsConfig.rateLimitOverrides,
@@ -74,7 +76,7 @@ export async function buildOrchestratorRuntime(
       setTimeout: (fn, ms) => setTimeout(fn, ms),
       clearTimeout: (handle) => clearTimeout(handle),
     },
-    rateLimitStore,
+    rateLimitHandle?.store,
   );
   const ethicsGate = new EthicsGateImpl(blocklist, robots, rateLimiter, ethicsConfig.userAgent, {
     enforceRobotsTxt: ethicsConfig.robotsEnabled,
@@ -97,7 +99,13 @@ export async function buildOrchestratorRuntime(
     confirmationGateway: opts.confirmationGateway ?? null,
   });
 
-  return { orchestrator, runStore, workflowStore, logger };
+  return {
+    orchestrator,
+    runStore,
+    workflowStore,
+    logger,
+    close: () => rateLimitHandle?.close(),
+  };
 }
 
 /**
@@ -105,10 +113,21 @@ export async function buildOrchestratorRuntime(
  * index is unavailable — the ethics gate then falls back to in-process-only
  * token buckets (identical to the MVP behavior).
  */
-async function openRateLimitStore(logger: Logger): Promise<RateLimitStore | undefined> {
+async function openRateLimitStore(
+  logger: Logger,
+): Promise<{ readonly store: RateLimitStore; readonly close: () => void } | undefined> {
   try {
     const { db } = await openIndexDb({ logger });
-    return new SqliteRateLimitStore({ db, logger });
+    return {
+      store: new SqliteRateLimitStore({ db, logger }),
+      close: () => {
+        try {
+          db.close();
+        } catch {
+          // Idempotent best-effort shutdown for command/test process teardown.
+        }
+      },
+    };
   } catch {
     return undefined;
   }

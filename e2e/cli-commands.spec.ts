@@ -11,13 +11,15 @@
  * for cleaner testing.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { run } from '@yantra/cli';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { serveFixtureSite } from './fixtures/serve.js';
 
 interface InvocationResult {
   readonly exitCode: number;
@@ -113,7 +115,12 @@ describe('@no-llm cli commands e2e', () => {
     else process.env.XDG_CONFIG_HOME = savedConfigHome;
     if (savedAppData === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = savedAppData;
-    await rm(tmpHome, { recursive: true, force: true });
+    await rm(tmpHome, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === 'win32' ? 5 : 0,
+      retryDelay: 50,
+    });
   });
 
   it('yantra (no args) prints the protocol banner and exits 0', async () => {
@@ -148,6 +155,79 @@ describe('@no-llm cli commands e2e', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain('not found');
   });
+
+  it('loads and replays a pre-agentic workflow while preserving audit access to an old run', async () => {
+    const fixture = await serveFixtureSite();
+    try {
+      const dataRoot = join(tmpHome, 'yantra');
+      const workflowsDir = join(dataRoot, 'workflows');
+      const runsDir = join(dataRoot, 'runs');
+      const oldRunId = '20260516T120000Z-legacy-workflow-a7b3';
+      const oldRunDir = join(runsDir, oldRunId);
+      await mkdir(workflowsDir, { recursive: true });
+      await mkdir(oldRunDir, { recursive: true });
+
+      // This is the version-1 user-authored shape shipped before the agentic
+      // runtime. It is written directly instead of passing through the current
+      // emitter so the test remains a genuine compatibility fixture.
+      await writeFile(
+        join(workflowsDir, 'legacy-workflow.yaml'),
+        [
+          'version: 1',
+          'name: legacy-workflow',
+          'description: Pre-agentic compatibility fixture',
+          'security_class: public',
+          'steps:',
+          `  - navigate: ${fixture.baseUrl}/index.html`,
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      await writeFile(
+        join(oldRunDir, 'manifest.json'),
+        JSON.stringify({
+          runId: oldRunId,
+          taskId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          workflowName: 'legacy-workflow',
+          workflowVersion: 1,
+          params: {},
+          startedAt: '2026-05-16T12:00:00.000Z',
+          endedAt: '2026-05-16T12:00:01.000Z',
+          status: 'completed',
+          durationMs: 1000,
+          profileKind: 'ephemeral',
+          cookieProfilePath: null,
+          outputBindingNames: [],
+        }),
+        'utf8',
+      );
+      await writeFile(
+        join(oldRunDir, 'events.jsonl'),
+        `${JSON.stringify({ kind: 'step_started', step_id: 's1', scope: 'public' })}\n`,
+        'utf8',
+      );
+
+      const listed = await invoke(['list', 'workflows', '--json']);
+      expect(listed.exitCode).toBe(0);
+      expect(listed.stdout).toContain('legacy-workflow');
+
+      const replayed = await invoke(['run', 'legacy-workflow', '--json']);
+      expect(replayed.exitCode).toBe(0);
+      expect(JSON.parse(replayed.stdout)).toMatchObject({ kind: 'success' });
+
+      const audited = await invoke(['audit', oldRunId, '--json']);
+      expect(audited.exitCode).toBe(0);
+      expect(JSON.parse(audited.stdout)).toMatchObject({
+        kind: 'audit',
+        runId: oldRunId,
+        workflowName: 'legacy-workflow',
+        status: 'completed',
+        stepCount: 1,
+      });
+    } finally {
+      await fixture.close();
+    }
+  }, 30_000);
 
   it('yantra report <missing-run> exits with a non-zero error', async () => {
     const result = await invoke(['report', '20260516T120000Z-not-real-zzzz']);

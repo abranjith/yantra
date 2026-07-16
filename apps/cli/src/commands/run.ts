@@ -57,6 +57,7 @@ export function makeRunCommand(): Command {
     .action(async (workflowName: string, options: RunOptions) => {
       const logger = makeStderrLogger(options.debug === true);
       logger.info({ workflowName }, 'yantra run: starting');
+      let closeRuntime = (): void => undefined;
 
       let params: Record<string, string>;
       try {
@@ -71,10 +72,12 @@ export function makeRunCommand(): Command {
         // non-TTY surfaces stay fail-closed (no gateway) so they never
         // self-authorize a confirmable step (plan §6).
         const interactive = process.stdin.isTTY === true && options.json !== true;
-        const { orchestrator } = await buildOrchestratorRuntime({
+        const runtime = await buildOrchestratorRuntime({
           logger,
           confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
         });
+        const { orchestrator } = runtime;
+        closeRuntime = runtime.close;
 
         const request: RunRequest =
           options.paramsFile === undefined
@@ -109,8 +112,10 @@ export function makeRunCommand(): Command {
           process.stdout.write(`${icon} Run ${outcome.runId}: ${outcome.kind}\n`);
         }
 
+        closeRuntime();
         process.exit(exitCodeFor(outcome));
       } catch (err) {
+        closeRuntime();
         const message = err instanceof Error ? err.message : String(err);
         process.stderr.write(`Error: ${message}\n`);
         if (options.debug === true && err instanceof Error && err.stack !== undefined) {

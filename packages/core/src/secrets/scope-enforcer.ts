@@ -1,4 +1,4 @@
-import type { Plan, SecurityScope, Step } from '@yantra/protocol';
+import type { HostBoundSecretRef, Plan, SecurityScope, Step } from '@yantra/protocol';
 
 import { ScopeViolationError, type ScopeViolation } from './errors.js';
 
@@ -86,6 +86,63 @@ export function buildScopeChain(plan: Plan): readonly SecurityScope[] {
  */
 export function validateScopeViolations(plan: Plan): readonly ScopeViolation[] {
   return new DefaultScopeEnforcer().validate(plan);
+}
+
+/** Refuses a website secret unless its trusted binding matches the live host. */
+export function assertHostBinding(secretRef: HostBoundSecretRef, liveHost: string): void {
+  const normalizedLive = normalizeHost(liveHost);
+  const allowed = secretRef.hosts.some((binding) => {
+    const normalizedBinding = normalizeHost(binding);
+    return (
+      normalizedBinding === normalizedLive ||
+      registrableDomain(normalizedBinding) === registrableDomain(normalizedLive)
+    );
+  });
+  if (!allowed) {
+    throw new SecretHostMismatchError(secretRef.key, normalizedLive);
+  }
+}
+
+/** Typed structural refusal for wrong-host browser fills. */
+export class SecretHostMismatchError extends Error {
+  public readonly code = 'SECRET_HOST_MISMATCH' as const;
+  public constructor(
+    public readonly secretKey: string,
+    public readonly liveHost: string,
+  ) {
+    super(`Secret "${secretKey}" is not permitted for host "${liveHost}".`);
+    this.name = 'SecretHostMismatchError';
+  }
+}
+
+function normalizeHost(host: string): string {
+  const candidate = host.includes('://') ? host : `https://${host}`;
+  try {
+    return new URL(candidate).hostname.toLowerCase().replace(/^\.+|\.+$/g, '');
+  } catch {
+    return host.toLowerCase().replace(/^\.+|\.+$/g, '');
+  }
+}
+
+const TWO_LEVEL_PUBLIC_SUFFIXES = new Set([
+  'co.uk',
+  'org.uk',
+  'ac.uk',
+  'com.au',
+  'net.au',
+  'org.au',
+  'co.jp',
+  'co.nz',
+  'com.br',
+  'com.mx',
+]);
+
+function registrableDomain(host: string): string {
+  if (host === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return host;
+  const labels = host.split('.').filter(Boolean);
+  if (labels.length <= 2) return host;
+  const suffix2 = labels.slice(-2).join('.');
+  return labels.slice(TWO_LEVEL_PUBLIC_SUFFIXES.has(suffix2) ? -3 : -2).join('.');
 }
 
 function hasSideEffect(step: Step): boolean {

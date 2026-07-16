@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import { emitJsonSchemas } from '../src/emit/json-schema.js';
 import { emitProtocolSpecDoc } from '../src/emit/spec-doc.js';
-import { emitToolCatalog } from '../src/emit/tool-catalog.js';
 
 const escapeCmdArg = (value: string): string => {
   if (!/[\s"&|<>^()]/.test(value)) {
@@ -33,7 +32,6 @@ const run = async (): Promise<void> => {
   const repositoryRoot = path.resolve(packageRoot, '..', '..');
 
   await emitJsonSchemas(path.join(packageRoot, 'generated', 'json-schema'));
-  await emitToolCatalog(path.join(packageRoot, 'generated'));
   await emitProtocolSpecDoc(repositoryRoot);
 
   const prettier = runPnpm(

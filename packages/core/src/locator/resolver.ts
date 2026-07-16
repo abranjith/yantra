@@ -96,9 +96,6 @@ export class LocatorResolverImpl {
             'window.__yantra.getSlotElement()',
           );
 
-          // Clear the slot
-          await this.host.call(frameId, 'clearSlot', []).catch(() => undefined);
-
           const durationMs = Date.now() - startTime;
           this.emitEvent(chain, i, 'success', candidatesTried, durationMs, frameId);
 

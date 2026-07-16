@@ -254,6 +254,7 @@ export interface InjectedAPI {
   resolveCandidate(encodedIntent: JsonLocatorIntent, strict: boolean): CandidateResolution;
   checkActionableState(): ActionableState;
   checkHitTarget(): HitTargetCheckResult;
+  getBoundingRect(): { top: number; left: number; width: number; height: number };
 }
 
 /** JSON-safe form of LocatorIntent (RegExp → { __isRegExp, pattern, flags }). */

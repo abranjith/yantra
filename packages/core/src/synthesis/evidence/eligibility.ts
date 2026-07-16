@@ -77,8 +77,11 @@ const CAPS_GLUE_PATTERN = /[A-Z]{2,}[a-z]{2,}/u;
 /** Lowercase-to-uppercase boundary; ≥ 3 of these means glued fragments. */
 const LOWER_UPPER_BOUNDARY = /[a-z][A-Z]/gu;
 
-/** Consecutive ALL-CAPS words (chrome candidates; see {@link hasAllCapsChrome}). */
-const ALL_CAPS_RUN_PATTERN = /\b[A-Z]{2,}(?:\s+[A-Z]{2,})+\b/u;
+/** Three or more consecutive ALL-CAPS words (chrome candidates). */
+const ALL_CAPS_RUN_PATTERN = /\b[A-Z]{2,}(?:\s+[A-Z]{2,}){2,}\b/u;
+
+/** Common two-word source-chrome labels that are not ordinary acronym pairs. */
+const ALL_CAPS_CHROME_LABEL_PATTERN = /\b(?:MUST READS?|BREAKING NEWS|TOP STORIES)\b/u;
 
 /** Clock/video timestamp ("01:18:30", "9:41"). */
 const TIMESTAMP_PATTERN = /\b\d{1,2}:\d{2}(?::\d{2})?\b/u;
@@ -401,9 +404,12 @@ function hasIntrawordGlue(text: string): boolean {
   return (text.match(LOWER_UPPER_BOUNDARY) ?? []).length >= 3;
 }
 
-/** ALL-CAPS chrome: any run of two or more consecutive all-caps words. */
+/**
+ * ALL-CAPS chrome: a known two-word label or a run of at least three words.
+ * Two-word acronym pairs such as "US EV" are legitimate prose and must pass.
+ */
 function hasAllCapsChrome(text: string): boolean {
-  return ALL_CAPS_RUN_PATTERN.test(text);
+  return ALL_CAPS_CHROME_LABEL_PATTERN.test(text) || ALL_CAPS_RUN_PATTERN.test(text);
 }
 
 /** Video-player/nav chrome: leading timestamp or a spaced pipe separator. */

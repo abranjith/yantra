@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { emitJsonSchemas } from '../src/emit/json-schema.js';
-import { emitToolCatalog } from '../src/emit/tool-catalog.js';
 
 const readDirectoryFiles = async (directory: string): Promise<Map<string, string>> => {
   const files = await readdir(directory, { withFileTypes: true });
@@ -52,19 +51,12 @@ const run = async (): Promise<void> => {
 
   try {
     await emitJsonSchemas(tempJsonSchemaRoot);
-    await emitToolCatalog(tempGeneratedRoot);
 
     const expectedSchemas = await readDirectoryFiles(generatedJsonSchemaRoot);
     const actualSchemas = await readDirectoryFiles(tempJsonSchemaRoot);
     const schemaDiff = compare(expectedSchemas, actualSchemas);
 
-    const expectedCatalog = await readDirectoryFiles(generatedRoot);
-    const actualCatalog = await readDirectoryFiles(tempGeneratedRoot);
-    const catalogDiff = compare(expectedCatalog, actualCatalog).filter(
-      (file) => file === 'tool-catalog.json' || file === 'tool-catalog.ts',
-    );
-
-    const mismatches = [...schemaDiff, ...catalogDiff];
+    const mismatches = schemaDiff;
     if (mismatches.length > 0) {
       throw new Error(`Generated artifacts drift detected: ${mismatches.join(', ')}`);
     }

@@ -219,6 +219,82 @@ Example:
 "captcha"
 ```
 
+## AgentManifestSection
+
+Stable agent metadata embedded in manifest.json for one run-local session.
+
+| Field             | Description                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| adapter           | Agent adapter used for this run.                                       |
+| sdk_version       | Installed provider SDK version resolved at runtime.                    |
+| provider          | Effective model provider identifier.                                   |
+| model             | Effective provider-scoped model identifier.                            |
+| thinking          | Effective model thinking or reasoning level.                           |
+| auth_source       | Credential source used to open the session; never credential material. |
+| session_id        | Provider-assigned session identifier.                                  |
+| session_file      | Relative path from the run directory to the provider session JSONL.    |
+| prompt_version    | Version of the authoritative agent prompt.                             |
+| prompt_hash       | SHA-256 of the exact system prompt.                                    |
+| tool_catalog_hash | SHA-256 of the canonical tool catalog serialization.                   |
+
+Example:
+
+```json
+{
+  "adapter": "<adapter>",
+  "sdk_version": "<sdk_version>",
+  "provider": "<provider>",
+  "model": "<model>",
+  "thinking": "<thinking>",
+  "auth_source": "<auth_source>",
+  "session_id": "<session_id>",
+  "session_file": "<session_file>",
+  "prompt_version": "<prompt_version>",
+  "prompt_hash": "<prompt_hash>",
+  "tool_catalog_hash": "<tool_catalog_hash>"
+}
+```
+
+## ToolAuditEntry
+
+Stable append-only tool lifecycle entry stored in tool-calls.jsonl.
+
+| Field            | Description                                                  |
+| ---------------- | ------------------------------------------------------------ |
+| ts               | ISO-8601 UTC timestamp for this lifecycle phase.             |
+| seq              | Monotonic sequence number within the run.                    |
+| run_id           | Owning Yantra run identifier.                                |
+| session_id       | Owning provider session identifier.                          |
+| call_id          | Provider tool-call identifier pairing start and end.         |
+| tool             | Stable registered tool name.                                 |
+| phase            | Tool-call lifecycle phase.                                   |
+| input_sanitized  | Sanitized tool input, or null on end entries.                |
+| output_sanitized | Sanitized tool output, or null on start entries.             |
+| status           | Terminal tool status, or null on start entries.              |
+| duration_ms      | Elapsed tool time in milliseconds, or null on start entries. |
+| error_code       | Stable error code when present, otherwise null.              |
+| confirmation_id  | Linked confirmation identifier when present, otherwise null. |
+
+Example:
+
+```json
+{
+  "ts": "<ts>",
+  "seq": "<seq>",
+  "run_id": "<run_id>",
+  "session_id": "<session_id>",
+  "call_id": "<call_id>",
+  "tool": "<tool>",
+  "phase": "<phase>",
+  "input_sanitized": "<input_sanitized>",
+  "output_sanitized": "<output_sanitized>",
+  "status": "<status>",
+  "duration_ms": "<duration_ms>",
+  "error_code": "<error_code>",
+  "confirmation_id": "<confirmation_id>"
+}
+```
+
 ## ConfirmationDecidedBy
 
 Who or what resolved the confirmation — no agent variant exists.
@@ -483,17 +559,19 @@ Example:
 
 Reference to a credential stored outside the plan payload.
 
-| Field | Description                          |
-| ----- | ------------------------------------ |
-| kind  | Discriminator for secret references. |
-| key   | Secret key in namespace.name format. |
+| Field | Description                                                                       |
+| ----- | --------------------------------------------------------------------------------- |
+| kind  | Discriminator for secret references.                                              |
+| key   | Secret key in namespace.name format.                                              |
+| hosts | Trusted website hosts allowed to receive this secret. Required for browser fills. |
 
 Example:
 
 ```json
 {
   "kind": "<kind>",
-  "key": "<key>"
+  "key": "<key>",
+  "hosts": "<hosts>"
 }
 ```
 
@@ -971,6 +1049,28 @@ Example:
 }
 ```
 
+## AgentUsageTotals
+
+Aggregated provider usage for an agentic run.
+
+| Field         | Description                                                          |
+| ------------- | -------------------------------------------------------------------- |
+| turns         | Completed provider turns.                                            |
+| input_tokens  | Agent input tokens, or null when the provider does not report them.  |
+| output_tokens | Agent output tokens, or null when the provider does not report them. |
+| cost_usd      | Agent cost in USD, or null when the provider does not report it.     |
+
+Example:
+
+```json
+{
+  "turns": "<turns>",
+  "input_tokens": "<input_tokens>",
+  "output_tokens": "<output_tokens>",
+  "cost_usd": "<cost_usd>"
+}
+```
+
 ## UsageCall
 
 Single LLM usage call record.
@@ -1005,11 +1105,12 @@ Example:
 
 Usage ledger persisted per run.
 
-| Field  | Description                 |
-| ------ | --------------------------- |
-| run_id | Owning run id.              |
-| calls  | Chronological call records. |
-| totals | Aggregated usage totals.    |
+| Field  | Description                                                       |
+| ------ | ----------------------------------------------------------------- |
+| run_id | Owning run id.                                                    |
+| calls  | Chronological call records.                                       |
+| totals | Aggregated usage totals.                                          |
+| agent  | Agentic-session totals when this run used the live agent runtime. |
 
 Example:
 
@@ -1017,7 +1118,8 @@ Example:
 {
   "run_id": "<run_id>",
   "calls": "<calls>",
-  "totals": "<totals>"
+  "totals": "<totals>",
+  "agent": "<agent>"
 }
 ```
 

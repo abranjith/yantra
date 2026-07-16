@@ -11,8 +11,8 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
-    "test:no-llm": "cross-env LLM_PROVIDER=none turbo run test",
+    "test": "turbo run test --concurrency=1",
+    "test:no-llm": "cross-env LLM_PROVIDER=none turbo run test --concurrency=1",
     "security:static-check": "tsx scripts/ci-static-check.ts",
     "snapshots:update": "vitest run --update",
     "golden:update": "tsx e2e/golden-briefs/update.ts",

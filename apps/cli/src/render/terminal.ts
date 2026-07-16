@@ -116,6 +116,42 @@ export class TerminalRenderer implements OutputRenderer {
         opts.stream.write(`  • ${lookup.key} at step ${lookup.stepId}\n`);
       }
     }
+    if (report.agent !== null) {
+      opts.stream.write(
+        `\nAgent:       ${report.agent.provider}/${report.agent.model} ` +
+          `(thinking=${report.agent.thinking}, auth=${report.agent.authSource})\n`,
+      );
+      opts.stream.write(
+        `Prompt:      ${report.agent.promptVersion} via ${report.agent.adapter} ${report.agent.sdkVersion}\n`,
+      );
+      opts.stream.write(`Raw session: ${report.agent.sessionFile}\n`);
+    }
+    if (report.usage !== null) {
+      opts.stream.write(
+        `Usage:       turns=${report.usage.turns} input=${report.usage.inputTokens ?? 'unknown'} ` +
+          `output=${report.usage.outputTokens ?? 'unknown'} cost=${report.usage.costUsd ?? 'unknown'}\n`,
+      );
+    }
+    if (report.terminalError !== null) {
+      opts.stream.write(
+        `\nTerminal error: ${report.terminalError.code} — ${report.terminalError.message}\n`,
+      );
+    }
+    if (report.toolCalls.length > 0) {
+      opts.stream.write('\nTool calls:\n');
+      for (const call of report.toolCalls) {
+        const incomplete = call.incomplete ? ' ⚠ incomplete' : '';
+        const duration = call.durationMs === null ? '' : ` ${call.durationMs}ms`;
+        const confirmation =
+          call.confirmationId === null
+            ? ''
+            : ` confirmation=${call.confirmationId}` +
+              (call.confirmationDecision === null ? '' : `:${call.confirmationDecision}`);
+        opts.stream.write(
+          `  #${call.seq} ${call.tool} — ${call.status}${duration}${confirmation}${incomplete}\n`,
+        );
+      }
+    }
   }
 
   renderReport(markdown: string, opts: ConnectorRenderOpts): void {

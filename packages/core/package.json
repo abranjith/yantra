@@ -29,7 +29,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "tsx src/locator/build.ts && tsc -b tsconfig.build.json",
     "build:injected": "tsx src/locator/build.ts",
     "build:recorder-overlay": "tsx src/workflow/recorder/overlay/bundle.ts",
     "test": "vitest run",

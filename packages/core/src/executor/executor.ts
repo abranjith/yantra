@@ -6,6 +6,7 @@ import { SCHEMA_VERSION, generateUlid } from '@yantra/protocol';
 
 import { isParked } from './confirmation-gateway.js';
 import type { ScopeViolationError } from './errors.js';
+import { ensureExecutionBrowser } from './execution-context.js';
 import { writeReport } from './report-writer.js';
 import { checkScopeViolations } from './scope-enforcer.js';
 import { STEP_DISPATCH } from './step-handlers/index.js';
@@ -66,6 +67,8 @@ export class Executor {
       await ctx.events.flush();
       return { status: 'failed', failureClass: 'scope_violation', reportPath };
     }
+
+    await ensureExecutionBrowser(ctx);
 
     ctx.events.publish({ kind: 'task_started', task_id: ctx.taskId, at: now() });
 

@@ -1,8 +1,8 @@
 /**
  * Builds the structured audit report consumed by `yantra audit <run-id>`.
  *
- * Pure-function, read-only: ingests `manifest.json`, `agent.jsonl`,
- * `secrets.jsonl`, `events.jsonl`, and `outputs.json` from the run directory
+ * Pure-function, read-only: ingests `manifest.json`, `tool-calls.jsonl`,
+ * `usage.json`, `secrets.jsonl`, and `events.jsonl` from the run directory
  * and synthesizes an {@link AuditRenderReport}. No browser, no network, no
  * mutation of the run dir.
  *
@@ -13,6 +13,8 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
+import { AgentManifestSection, ToolAuditEntry, UsageLedger } from '@yantra/protocol';
 
 import type { AuditRenderReport } from '../render/types.js';
 
@@ -42,13 +44,8 @@ export async function buildAuditReport(
     };
   }
 
-  const agentEntries = await readJsonl(join(runDir, 'agent.jsonl'));
   const secretEntries = await readJsonl(join(runDir, 'secrets.jsonl'));
   const eventEntries = await readJsonl(join(runDir, 'events.jsonl'));
-
-  const llmCallCount = agentEntries.filter(
-    (entry) => (entry as { direction?: string }).direction === 'response',
-  ).length;
 
   const secretLookups = secretEntries.map((entry) => {
     const e = entry as { key?: unknown; step_id?: unknown; ts?: unknown };
@@ -81,7 +78,46 @@ export async function buildAuditReport(
     startedAt?: unknown;
     endedAt?: unknown;
     durationMs?: unknown;
+    agent?: unknown;
+    agentError?: unknown;
   };
+  const parsedAgent = AgentManifestSection.safeParse(manifestObj.agent);
+  const agent = parsedAgent.success
+    ? {
+        adapter: parsedAgent.data.adapter,
+        sdkVersion: parsedAgent.data.sdk_version,
+        provider: parsedAgent.data.provider,
+        model: parsedAgent.data.model,
+        thinking: parsedAgent.data.thinking,
+        authSource: parsedAgent.data.auth_source,
+        sessionId: parsedAgent.data.session_id,
+        sessionFile: parsedAgent.data.session_file,
+        promptVersion: parsedAgent.data.prompt_version,
+      }
+    : null;
+  const usageLedger = UsageLedger.safeParse(await readJsonFile(join(runDir, 'usage.json')));
+  const usage = usageLedger.success
+    ? usageLedger.data.agent === undefined
+      ? null
+      : {
+          turns: usageLedger.data.agent.turns,
+          inputTokens: usageLedger.data.agent.input_tokens,
+          outputTokens: usageLedger.data.agent.output_tokens,
+          costUsd: usageLedger.data.agent.cost_usd,
+        }
+    : null;
+  const legacyAgentEntries = agent === null ? await readJsonl(join(runDir, 'agent.jsonl')) : [];
+  const llmCallCount =
+    usage?.turns ??
+    legacyAgentEntries.filter((entry) => (entry as { direction?: string }).direction === 'response')
+      .length;
+  const toolEntries = (await readJsonl(join(runDir, 'tool-calls.jsonl'))).flatMap((entry) => {
+    const parsed = ToolAuditEntry.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  });
+  const confirmations = await readJsonl(join(runDir, 'confirmations.jsonl'));
+  const toolCalls = summarizeToolCalls(toolEntries, confirmations);
+  const terminalError = readTerminalError(manifestObj.agentError);
   const status = readString(manifestObj.status) ?? 'unknown';
   const workflowName = readString(manifestObj.workflowName) ?? '<unknown>';
   const startedAt = readString(manifestObj.startedAt) ?? '';
@@ -113,9 +149,79 @@ export async function buildAuditReport(
     stepCount: stepIdsSeen.size,
     scopeMix,
     trustNarrative,
+    agent,
+    toolCalls,
+    usage,
+    terminalError,
   };
 
   return { kind: 'ok', report };
+}
+
+function summarizeToolCalls(
+  entries: readonly ReturnType<typeof ToolAuditEntry.parse>[],
+  confirmationEntries: readonly unknown[],
+): AuditRenderReport['toolCalls'] {
+  const decisions = new Map<string, string>();
+  for (const entry of confirmationEntries) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const record = entry as Readonly<Record<string, unknown>>;
+    if (typeof record.confirmation_id === 'string' && typeof record.decision === 'string') {
+      decisions.set(record.confirmation_id, record.decision);
+    }
+  }
+
+  const calls = new Map<
+    string,
+    {
+      seq: number;
+      callId: string;
+      tool: string;
+      status: 'ok' | 'error' | 'denied' | 'aborted' | 'incomplete';
+      durationMs: number | null;
+      confirmationId: string | null;
+      confirmationDecision: string | null;
+      incomplete: boolean;
+    }
+  >();
+
+  for (const entry of [...entries].sort((left, right) => left.seq - right.seq)) {
+    if (entry.phase === 'start') {
+      calls.set(entry.call_id, {
+        seq: entry.seq,
+        callId: entry.call_id,
+        tool: entry.tool,
+        status: 'incomplete',
+        durationMs: null,
+        confirmationId: null,
+        confirmationDecision: null,
+        incomplete: true,
+      });
+      continue;
+    }
+    const existing = calls.get(entry.call_id);
+    const confirmationId = entry.confirmation_id;
+    calls.set(entry.call_id, {
+      seq: existing?.seq ?? entry.seq,
+      callId: entry.call_id,
+      tool: existing?.tool ?? entry.tool,
+      status: entry.status ?? 'error',
+      durationMs: entry.duration_ms,
+      confirmationId,
+      confirmationDecision:
+        confirmationId === null ? null : (decisions.get(confirmationId) ?? null),
+      incomplete: false,
+    });
+  }
+  return [...calls.values()].sort((left, right) => left.seq - right.seq);
+}
+
+function readTerminalError(value: unknown): { code: string; message: string } | null {
+  if (value === null || typeof value !== 'object') return null;
+  const record = value as Readonly<Record<string, unknown>>;
+  const code = readString(record.code);
+  const message = readString(record.message);
+  return code === undefined || message === undefined ? null : { code, message };
 }
 
 /** The schedule-link fields the audit narrates, when present. */

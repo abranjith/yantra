@@ -22,6 +22,16 @@ describe('@no-llm refs schemas', () => {
     expect(SecretRef.safeParse({ kind: 'secret', key: 'oops' }).success).toBe(false);
   });
 
+  it('accepts additive website host-binding metadata', () => {
+    expect(
+      SecretRef.parse({ kind: 'secret', key: 'bank.password', hosts: ['bank.example'] }),
+    ).toEqual({
+      kind: 'secret',
+      key: 'bank.password',
+      hosts: ['bank.example'],
+    });
+  });
+
   it('round-trips ValueRef via JSON serialization', () => {
     fc.assert(
       fc.property(

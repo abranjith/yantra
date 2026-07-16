@@ -86,7 +86,22 @@ interface DomEl {
   querySelector(selector: string): DomEl | null;
 }
 
+// This function is serialized and executed in the browser page context via
+// `elementHandle.evaluate`, so it must be fully self-contained: every helper it
+// calls has to be nested here (a module-level helper is `undefined` in the page,
+// which previously failed real extractions with "extractPrimitive is not
+// defined"). Recursive self-reference by name is safe — a named function
+// expression can reference itself inside its own body.
 function extractFromDom(el: DomEl, schema: ExtractionSchema): unknown {
+  function extractPrimitive(target: DomEl, kind: string): unknown {
+    const text = target.textContent?.trim() ?? '';
+    if (kind === 'number') return parseFloat(text.replace(/[^0-9.-]/g, ''));
+    if (kind === 'boolean') return text.toLowerCase() === 'true' || text === '1';
+    if (kind === 'date') return text;
+    if (kind === 'money') return text;
+    return text; // string
+  }
+
   if (schema.type === 'primitive') {
     return extractPrimitive(el, schema.kind);
   }
@@ -108,15 +123,6 @@ function extractFromDom(el: DomEl, schema: ExtractionSchema): unknown {
     return obj;
   }
   return null;
-}
-
-function extractPrimitive(el: DomEl, kind: string): unknown {
-  const text = el.textContent?.trim() ?? '';
-  if (kind === 'number') return parseFloat(text.replace(/[^0-9.-]/g, ''));
-  if (kind === 'boolean') return text.toLowerCase() === 'true' || text === '1';
-  if (kind === 'date') return text;
-  if (kind === 'money') return text;
-  return text; // string
 }
 
 // ---------------------------------------------------------------------------

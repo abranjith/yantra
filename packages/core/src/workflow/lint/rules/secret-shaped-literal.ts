@@ -23,11 +23,27 @@ function isHighEntropy(s: string): boolean {
   return uniqueChars >= 12 && mixScore >= 3;
 }
 
+/**
+ * True when the whole value is an absolute http(s) URL. A navigation target is
+ * not a credential — its host is policy-checked elsewhere — so it must not trip
+ * the entropy heuristic (numeric IPs, ports, and long paths raise entropy). An
+ * embedded credential is still caught by the explicit CREDENTIAL_PATTERNS above.
+ */
+function isAbsoluteHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function looksLikeCredential(value: string): boolean {
   if (OPAQUE_REF_PATTERN.test(value)) return false;
   for (const pattern of CREDENTIAL_PATTERNS) {
     if (pattern.test(value)) return true;
   }
+  if (isAbsoluteHttpUrl(value)) return false;
   if (isHighEntropy(value)) return true;
   return false;
 }

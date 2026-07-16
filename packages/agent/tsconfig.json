@@ -6,7 +6,7 @@
     "outDir": "./dist",
     "types": ["node", "vitest/globals"]
   },
-  "references": [{ "path": "../protocol" }],
+  "references": [{ "path": "../protocol" }, { "path": "../core" }],
   "include": ["src/**/*.ts"],
   "exclude": ["src/_lint-fixtures/**/*"]
 }

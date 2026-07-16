@@ -456,6 +456,7 @@ specs/
 .spec-lite/stacks/
 .spec-lite/brainstorm*.md
 .spec-lite/browser*.md
+.spec-lite/refs/
 
 # Yantra monorepo
 *.tsbuildinfo

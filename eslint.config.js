@@ -5,10 +5,12 @@ import importPlugin from 'eslint-plugin-import';
 import vitestPlugin from 'eslint-plugin-vitest';
 import prettierConfig from 'eslint-config-prettier';
 
-const AGENT_BOUNDARY_MESSAGE =
-  '@yantra/agent must not import from @yantra/core (architectural boundary, see CLAUDE.md / plan §7)';
+const CORE_BOUNDARY_MESSAGE =
+  '@yantra/core must not import from @yantra/agent (architectural boundary, see plan_agentic.md §3: protocol -> core -> agent -> cli)';
 const PI_AGENT_CORE_BOUNDARY_MESSAGE =
   'Direct pi-agent-core imports are forbidden outside packages/agent. Use the LLMClient interface.';
+const PI_SDK_BOUNDARY_MESSAGE =
+  '@earendil-works/pi-coding-agent may only be imported under packages/agent/src/adapters/pi/ (plan_agentic.md §3). Use the AgentProvider seam.';
 
 export default tseslint.config(
   {
@@ -76,7 +78,10 @@ export default tseslint.config(
     },
   },
 
-  // Architectural boundary 1: packages/agent cannot import @yantra/core.
+  // Architectural boundary 1 (plan_agentic.md §3): the Pi SDK is confined to
+  // packages/agent/src/adapters/pi/. Everywhere else in packages/agent it is
+  // restricted; the adapter directory (and its mirrored tests) un-restrict it
+  // below.
   {
     files: ['packages/agent/**/*.ts'],
     rules: {
@@ -85,20 +90,26 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@yantra/core', '@yantra/core/*', '**/packages/core/**'],
-              message: AGENT_BOUNDARY_MESSAGE,
+              group: ['@earendil-works/pi-coding-agent', '@earendil-works/pi-coding-agent/*'],
+              message: PI_SDK_BOUNDARY_MESSAGE,
             },
           ],
         },
       ],
     },
   },
+  {
+    files: ['packages/agent/src/adapters/pi/**/*.ts', 'packages/agent/tests/adapters/pi/**/*.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
 
-  // Architectural boundary 2: direct pi-agent-core imports forbidden outside packages/agent.
+  // Architectural boundary 2: no agent SDK imports outside packages/agent
+  // (legacy pi-agent-core name kept until FEAT-029 removes the last mention).
   {
     files: [
       'packages/protocol/**/*.ts',
-      'packages/core/**/*.ts',
       'packages/test-helpers/**/*.ts',
       'apps/**/*.ts',
       'e2e/**/*.ts',
@@ -111,6 +122,39 @@ export default tseslint.config(
             {
               group: ['pi-agent-core', 'pi-agent-core/*'],
               message: PI_AGENT_CORE_BOUNDARY_MESSAGE,
+            },
+            {
+              group: ['@earendil-works/pi-coding-agent', '@earendil-works/pi-coding-agent/*'],
+              message: PI_SDK_BOUNDARY_MESSAGE,
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Architectural boundary 3: packages/core cannot import @yantra/agent
+  // (dependency direction is protocol -> core -> agent -> cli). Stated as one
+  // combined rule because a later flat-config block replaces, not merges,
+  // `no-restricted-imports` options for matching files.
+  {
+    files: ['packages/core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@yantra/agent', '@yantra/agent/*', '**/packages/agent/**'],
+              message: CORE_BOUNDARY_MESSAGE,
+            },
+            {
+              group: ['pi-agent-core', 'pi-agent-core/*'],
+              message: PI_AGENT_CORE_BOUNDARY_MESSAGE,
+            },
+            {
+              group: ['@earendil-works/pi-coding-agent', '@earendil-works/pi-coding-agent/*'],
+              message: PI_SDK_BOUNDARY_MESSAGE,
             },
           ],
         },

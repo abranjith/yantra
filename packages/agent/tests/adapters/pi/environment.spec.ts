@@ -1,0 +1,237 @@
+/**
+ * @no-llm Environment isolation tests for the pinned Pi runtime (plan §8.11).
+ *
+ * These tests are the enforcement mechanism for the security acceptance
+ * criteria: pinned paths under the Yantra data dir, zero ambient resources,
+ * in-memory settings, opt-in personal auth, and runtime keys that never
+ * touch disk.
+ */
+
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, sep } from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  createPiEnvironment,
+  type PiEnvironmentOptions,
+} from '../../../src/adapters/pi/environment.js';
+import { AgentAuthUnavailableError } from '../../../src/errors.js';
+
+const SYSTEM_PROMPT = 'agent-v1: use only registered Yantra tools.';
+
+const tempDirs: string[] = [];
+
+async function makeTempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+async function baseOptions(
+  overrides: Partial<PiEnvironmentOptions> = {},
+): Promise<PiEnvironmentOptions> {
+  const dataDir = await makeTempDir('yantra-env-data-');
+  const cwd = await makeTempDir('yantra-env-cwd-');
+  return {
+    cwd,
+    systemPrompt: SYSTEM_PROMPT,
+    provider: 'testprov',
+    auth: { mode: 'managed' },
+    dataDir,
+    ...overrides,
+  };
+}
+
+/** Recursively collect every file under a directory. */
+async function collectFiles(root: string, collected: string[] = []): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return collected;
+  }
+  for (const entry of entries) {
+    const fullPath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      await collectFiles(fullPath, collected);
+    } else if (entry.isFile()) {
+      collected.push(fullPath);
+    }
+  }
+  return collected;
+}
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await Promise.all(
+    tempDirs
+      .splice(0)
+      .map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)),
+  );
+});
+
+describe('@no-llm createPiEnvironment — pinned paths', () => {
+  it('constructs every path under the injected Yantra data directory', async () => {
+    const options = await baseOptions();
+    const env = await createPiEnvironment(options);
+
+    const dataDir = options.dataDir ?? '';
+    expect(env.agentDir).toBe(join(dataDir, 'pi'));
+    for (const path of [env.authPath, env.modelsPath, env.sessionStagingDir]) {
+      expect(path.startsWith(env.agentDir + sep)).toBe(true);
+    }
+
+    const enumeration = env.enumerate();
+    expect(enumeration.agentDir).toBe(env.agentDir);
+    expect(enumeration.settingsSource).toBe('in-memory');
+  });
+
+  it('never consults planted pi settings files (global agentDir or project .pi)', async () => {
+    const options = await baseOptions();
+
+    // Plant a poisoned "global" settings.json inside the pinned agentDir and a
+    // poisoned project .pi/settings.json in cwd. A default (file-backed) Pi
+    // setup would read both; the in-memory manager must read neither.
+    const agentDir = join(options.dataDir ?? '', 'pi');
+    await mkdir(agentDir, { recursive: true });
+    await writeFile(
+      join(agentDir, 'settings.json'),
+      JSON.stringify({
+        defaultModel: 'poisoned-global-model',
+        extensions: ['/poison/global-extension.js'],
+      }),
+      'utf8',
+    );
+    await mkdir(join(options.cwd, '.pi'), { recursive: true });
+    await writeFile(
+      join(options.cwd, '.pi', 'settings.json'),
+      JSON.stringify({
+        defaultModel: 'poisoned-project-model',
+        skills: ['/poison/project-skill'],
+      }),
+      'utf8',
+    );
+
+    const env = await createPiEnvironment(options);
+
+    const effective = {
+      ...env.settingsManager.getGlobalSettings(),
+      ...env.settingsManager.getProjectSettings(),
+    };
+    expect(JSON.stringify(effective)).not.toContain('poisoned');
+    expect(env.settingsManager.getExtensionPaths()).toEqual([]);
+    expect(env.settingsManager.getSkillPaths()).toEqual([]);
+
+    const enumeration = env.enumerate();
+    expect(enumeration.extensions).toEqual([]);
+    expect(enumeration.skills).toEqual([]);
+  });
+});
+
+describe('@no-llm createPiEnvironment — controlled resources', () => {
+  it('yields exactly the supplied system prompt and zero ambient resources', async () => {
+    const options = await baseOptions();
+
+    // Plant ambient resources a default loader could discover.
+    await writeFile(join(options.cwd, 'AGENTS.md'), '# poisoned agents context', 'utf8');
+    await writeFile(join(options.cwd, 'CLAUDE.md'), '# poisoned claude context', 'utf8');
+    await mkdir(join(options.cwd, '.pi', 'extensions'), { recursive: true });
+    await writeFile(
+      join(options.cwd, '.pi', 'extensions', 'poison.js'),
+      'export default () => {};',
+      'utf8',
+    );
+
+    const env = await createPiEnvironment(options);
+    const enumeration = env.enumerate();
+
+    expect(enumeration.systemPrompt).toBe(SYSTEM_PROMPT);
+    expect(enumeration.appendSystemPrompt).toEqual([]);
+    expect(enumeration.extensions).toEqual([]);
+    expect(enumeration.skills).toEqual([]);
+    expect(enumeration.prompts).toEqual([]);
+    expect(enumeration.themes).toEqual([]);
+    expect(enumeration.contextFiles).toEqual([]);
+  });
+});
+
+describe('@no-llm createPiEnvironment — auth', () => {
+  it('the personal-store opt-in switches only the auth path', async () => {
+    const options = await baseOptions();
+    const personalDir = await makeTempDir('yantra-env-personal-');
+    const personalPiAuthPath = join(personalDir, 'auth.json');
+    await writeFile(personalPiAuthPath, '{}', 'utf8');
+
+    const pinned = await createPiEnvironment(options);
+    const optedIn = await createPiEnvironment({ ...options, personalPiAuthPath });
+
+    expect(optedIn.authPath).toBe(personalPiAuthPath);
+    expect(optedIn.agentDir).toBe(pinned.agentDir);
+    expect(optedIn.modelsPath).toBe(pinned.modelsPath);
+    expect(optedIn.sessionStagingDir).toBe(pinned.sessionStagingDir);
+  });
+
+  it('runtime-key resolves the secret in memory and never writes it to disk', async () => {
+    const canary = 'sk-canary-9f83b2e1d4c5a6b7';
+    const options = await baseOptions({
+      auth: { mode: 'runtime-key', secretRef: 'anthropic/api-key' },
+      resolveSecret: (ref) => {
+        expect(ref).toBe('anthropic/api-key');
+        return Promise.resolve(canary);
+      },
+    });
+
+    const env = await createPiEnvironment(options);
+    expect(env.authSource).toBe('runtime-key');
+
+    // Canary scan: no file anywhere under the data dir may contain the value.
+    const files = await collectFiles(options.dataDir ?? '');
+    const leakedInto: string[] = [];
+    for (const file of files) {
+      const content = await readFile(file, 'utf8').catch(() => '');
+      if (content.includes(canary)) {
+        leakedInto.push(file);
+      }
+    }
+    expect(leakedInto).toEqual([]);
+  });
+
+  it('runtime-key without a configured resolver is a typed AGENT_AUTH_UNAVAILABLE failure', async () => {
+    const options = await baseOptions({
+      auth: { mode: 'runtime-key', secretRef: 'anthropic/api-key' },
+    });
+
+    const attempt = createPiEnvironment(options);
+    await expect(attempt).rejects.toBeInstanceOf(AgentAuthUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ code: 'AGENT_AUTH_UNAVAILABLE' });
+  });
+
+  it('runtime-key whose secret reference fails to resolve is typed and names the source tried', async () => {
+    const options = await baseOptions({
+      auth: { mode: 'runtime-key', secretRef: 'missing/ref' },
+      resolveSecret: () => Promise.reject(new Error('keychain entry not found')),
+    });
+
+    await expect(createPiEnvironment(options)).rejects.toMatchObject({
+      code: 'AGENT_AUTH_UNAVAILABLE',
+      message: expect.stringContaining('missing/ref') as unknown,
+    });
+  });
+
+  it('reports environment-variable credentials as auth source "environment"', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-env-var-key-for-test');
+    const options = await baseOptions({ provider: 'anthropic' });
+
+    const env = await createPiEnvironment(options);
+    expect(env.authSource).toBe('environment');
+  });
+
+  it('reports no credentials as auth source "unavailable"', async () => {
+    const options = await baseOptions({ provider: 'testprov' });
+
+    const env = await createPiEnvironment(options);
+    expect(env.authSource).toBe('unavailable');
+  });
+});

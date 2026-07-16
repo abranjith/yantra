@@ -40,6 +40,222 @@ import { lint } from '../workflow/lint/index.js';
 import { WorkflowCollisionError } from '../workflow/store.js';
 import type { WorkflowStore } from '../workflow/store.types.js';
 
+// ---------------------------------------------------------------------------
+// Agent-trace promotion (FEAT-027 TASK-004)
+// ---------------------------------------------------------------------------
+
+/**
+ * A fill value recorded in an agent trace: a non-secret literal, or a website
+ * secret *reference* (never the resolved value).
+ */
+export type PromotableFillValue =
+  | { readonly kind: 'literal'; readonly value: string }
+  | { readonly kind: 'secret_ref'; readonly key: string };
+
+/**
+ * Structural shape of one recorded successful interaction. Mirrors the agent
+ * runtime's `AgentTraceStep` so this module never imports `@yantra/agent`; the
+ * agent passes its real trace steps in directly.
+ */
+export interface PromotableTraceStep {
+  readonly kind: 'navigate' | 'click' | 'fill' | 'extract';
+  readonly host: string;
+  readonly url?: string;
+  readonly locator?: readonly LocatorCandidate[];
+  readonly value?: PromotableFillValue;
+  readonly submit?: boolean;
+  readonly extractionKind?: 'content' | 'table';
+  readonly requires_confirmation: boolean;
+}
+
+/** Options for {@link promoteAgentTrace}. */
+export interface PromoteTraceOptions {
+  readonly workflowName: string;
+  /** Workflow store to save through; the caller wires the real `FileWorkflowStore`. */
+  readonly store: WorkflowStore;
+  /** Optional human-readable description (defaults to a generic promoted note). */
+  readonly description?: string;
+  /** Overwrite an existing workflow of the same name (default false). */
+  readonly force?: boolean;
+}
+
+/**
+ * Promotes a successful agent browser trace into a saved, replayable
+ * `WorkflowFile`. Each trace step becomes a workflow step with a candidate-chain
+ * locator; secret fills become `{{ secret:<key> }}` references with the key
+ * declared in `workflow.secrets`; `requires_confirmation` flags are preserved.
+ * The result is linted (strict) before saving — a lint failure returns a typed
+ * error and never partially saves.
+ *
+ * @param steps - The ordered successful interactions from an agentic run.
+ * @param opts - Target workflow name, store, description, and overwrite flag.
+ * @returns The saved `WorkflowFile`, or a typed error (never throws).
+ */
+export async function promoteAgentTrace(
+  steps: readonly PromotableTraceStep[],
+  opts: PromoteTraceOptions,
+): Promise<Result<WorkflowFile, PromoteError>> {
+  if (steps.length === 0) {
+    return err({
+      kind: 'no_completed_steps',
+      message: 'The agent trace has no successful interactions to promote.',
+    });
+  }
+
+  const locators: Record<string, LocatorCandidate[]> = {};
+  const secrets = new Set<string>();
+  const workflowSteps: WorkflowStep[] = [];
+  let stepCounter = 1;
+  let extractCounter = 0;
+
+  for (const step of steps) {
+    const id = `s${stepCounter}`;
+    const converted = convertTraceStep(step, id, locators, secrets, () => (extractCounter += 1));
+    if (converted !== null) {
+      workflowSteps.push(converted);
+      stepCounter += 1;
+    }
+  }
+
+  if (workflowSteps.length === 0) {
+    return err({
+      kind: 'no_completed_steps',
+      message: 'The agent trace produced no convertible workflow steps.',
+    });
+  }
+
+  const workflow: WorkflowFile = {
+    version: 1,
+    name: opts.workflowName,
+    description: opts.description ?? 'Promoted from an agentic run.',
+    security_class: secrets.size > 0 ? 'authenticated' : 'public',
+    recorded_with: null,
+    params: {},
+    secrets: [...secrets].sort(),
+    cookies: 'none',
+    steps: workflowSteps,
+    outputs: [],
+    outputs_unredacted: false,
+    _unrecorded_frames: [],
+    _locators: locators,
+  };
+
+  const report = lint(workflow, { strict: true });
+  if (report.errors.length > 0) {
+    return err({
+      kind: 'lint_failed',
+      message: `Promoted workflow failed lint (${report.errors.length} error(s)).`,
+      errors: report.errors.map((finding) => `${finding.code}: ${finding.message}`),
+    });
+  }
+
+  try {
+    await opts.store.save(workflow, { force: opts.force ?? false });
+  } catch (error) {
+    if (error instanceof WorkflowCollisionError) {
+      return err({ kind: 'name_collision', message: error.message });
+    }
+    return err({
+      kind: 'save_failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return ok(workflow);
+}
+
+/**
+ * Converts one trace step into a workflow step, registering its candidate-chain
+ * locator and (for secret fills) declaring the secret. Returns null for a step
+ * that cannot be represented (never happens for the four supported kinds).
+ */
+function convertTraceStep(
+  step: PromotableTraceStep,
+  id: string,
+  locators: Record<string, LocatorCandidate[]>,
+  secrets: Set<string>,
+  nextExtractIndex: () => number,
+): WorkflowStep | null {
+  switch (step.kind) {
+    case 'navigate':
+      return {
+        id,
+        verb: 'navigate',
+        scope: null,
+        requires_confirmation: step.requires_confirmation,
+        confirmation_description: null,
+        expected_cost: null,
+        consequence: null,
+        url: step.url ?? '',
+      };
+    case 'click':
+      return {
+        id,
+        verb: 'click',
+        scope: null,
+        requires_confirmation: step.requires_confirmation,
+        confirmation_description: null,
+        expected_cost: null,
+        consequence: null,
+        locator: registerCandidateChain(step.locator, id, locators),
+      };
+    case 'fill': {
+      const value = step.value ?? { kind: 'literal', value: '' };
+      if (value.kind === 'secret_ref') secrets.add(value.key);
+      return {
+        id,
+        verb: 'fill',
+        scope: null,
+        requires_confirmation: step.requires_confirmation,
+        confirmation_description: null,
+        expected_cost: null,
+        consequence: null,
+        locator: registerCandidateChain(step.locator, id, locators),
+        value: value.kind === 'secret_ref' ? `{{ secret:${value.key} }}` : value.value,
+        submit: step.submit ?? false,
+      };
+    }
+    case 'extract': {
+      const index = nextExtractIndex();
+      const kind = step.extractionKind ?? 'content';
+      const name = `${id}_locator`;
+      // The agent extract tool has no located element, so synthesize a broad,
+      // deterministic locator: the whole body for content, the first table for a
+      // table. Replay re-extracts from the live page.
+      locators[name] =
+        kind === 'table'
+          ? [{ kind: 'css', value: 'table' }]
+          : [{ kind: 'css', value: 'body' }];
+      return {
+        id,
+        verb: 'extract',
+        scope: null,
+        requires_confirmation: false,
+        locator: name,
+        extraction_schema:
+          kind === 'table'
+            ? { type: 'array', items: { type: 'primitive', kind: 'string' } }
+            : { type: 'primitive', kind: 'string' },
+        capture_as: `extracted_${kind}_${index}`,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+/** Registers a candidate chain under a fresh name and returns that name. */
+function registerCandidateChain(
+  chain: readonly LocatorCandidate[] | undefined,
+  stepId: string,
+  locators: Record<string, LocatorCandidate[]>,
+): string {
+  const name = `${stepId}_locator`;
+  locators[name] =
+    chain && chain.length > 0 ? [...chain] : [{ kind: 'role', role: 'button', name: '' }];
+  return name;
+}
+
 /** The structural shape this module needs from a discovery session. */
 export interface PromotableSession {
   readonly goal: string;

@@ -80,6 +80,7 @@ function makeCapturingStore(): { store: WorkflowStore; saved: () => WorkflowFile
       return Promise.resolve();
     },
     list: () => Promise.resolve([]),
+    listCatalog: () => Promise.resolve([]),
     delete: () => Promise.resolve(),
     exists: () => Promise.resolve(false),
   };

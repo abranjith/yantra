@@ -11,10 +11,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./generated/tool-catalog": {
-      "types": "./generated/tool-catalog.ts",
-      "import": "./generated/tool-catalog.ts"
     }
   },
   "files": [

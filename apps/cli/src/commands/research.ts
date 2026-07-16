@@ -1,3 +1,11 @@
+import { readFile } from 'node:fs/promises';
+
+import {
+  resolveCommandTaskProfile,
+  runAgenticTask,
+  type AgenticTaskOutcome,
+  type AgenticTaskRequest,
+} from '@yantra/agent';
 import {
   BlocklistImpl,
   BrowserFallbackFetcher,
@@ -23,6 +31,7 @@ import {
   type SearchProviderName,
   type SynthesisLength,
 } from '@yantra/core';
+import { validateBrief } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import { CLIConnectorIO } from '../connector-io.js';
@@ -66,6 +75,8 @@ export interface ResearchRuntime {
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly createLoop: (invocation: ResearchInvocation) => Promise<ResearchLoop>;
+  readonly runTask: typeof runAgenticTask;
+  readonly isTty: boolean;
 }
 
 /**
@@ -132,6 +143,11 @@ export function registerResearchCommand(
       );
 
       try {
+        // Deterministic selection is resolved before any agent/provider setup.
+        if (!invocation.options.noLlm) {
+          await runAgenticResearch(topicArg, invocation, format, detail, options, resolvedRuntime);
+          return;
+        }
         const loop = await resolvedRuntime.createLoop(invocation);
         const result: ResearchRunResult = await loop.run(invocation.options);
 
@@ -176,7 +192,7 @@ function renderBrief(
  * Constructs the default research loop. Like `ask`, the synthesizer and
  * query generator use the deterministic strategies by default (the
  * agent-optional invariant); the LLM ports are injected in tests and will be
- * wired to the live `LLMClient` alongside `ask`'s LLM synthesis.
+ * wired to the shared live agent runtime alongside agentic `ask` synthesis.
  */
 export async function createDefaultResearchLoop(
   invocation: ResearchInvocation,
@@ -243,6 +259,70 @@ function runtimeWithDefaults(runtime?: Partial<ResearchRuntime>): ResearchRuntim
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,
     createLoop: runtime?.createLoop ?? createDefaultResearchLoop,
+    runTask: runtime?.runTask ?? runAgenticTask,
+    isTty: runtime?.isTty ?? process.stdin.isTTY === true,
+  };
+}
+
+async function runAgenticResearch(
+  topic: string,
+  invocation: ResearchInvocation,
+  format: BriefOutputFormat,
+  detail: BriefDetailLevel,
+  options: ResearchCommandOptions,
+  runtime: ResearchRuntime,
+): Promise<void> {
+  const stdout = runtime.stdout as NodeJS.WriteStream;
+  const renderOpts: ConnectorRenderOpts = {
+    json: format === 'json',
+    debug: false,
+    noColor: resolveNoColor(options, runtime),
+    stream: runtime.stdout,
+    errStream: runtime.stderr,
+    briefDetail: detail,
+    briefFormat: format,
+    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+  };
+  const connector = new CLIConnectorIO(format === 'json' ? new JSONRenderer() : new TerminalRenderer(), {
+    renderOpts,
+    interactive: runtime.isTty && format !== 'json',
+    suppressPublishedOutcome: true,
+  });
+  const profile = resolveCommandTaskProfile('research', runtime.env);
+  const outcome = await runtime.runTask({
+    goal: topic,
+    model: selectAgentModel(runtime.env),
+    auth: { mode: 'managed' },
+    profile,
+    budgets: {
+      wallClockMs: invocation.options.budget.maxWallClockMs,
+      totalToolCalls: invocation.options.budget.maxLlmCalls,
+    },
+    connector,
+  });
+  if (outcome.kind !== 'published') {
+    throw new Error(agentFailureMessage(outcome));
+  }
+  const parsed = validateBrief(JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown);
+  if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
+  renderBrief(runtime, { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' }, {
+    format,
+    detail,
+    options,
+  });
+  if (options.open === true) openArtifact(outcome.brief.htmlPath);
+}
+
+function agentFailureMessage(outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>): string {
+  return outcome.kind === 'handoff'
+    ? `${outcome.blocker}: ${outcome.safestNextAction}`
+    : `${outcome.error.code}: ${outcome.error.message}`;
+}
+
+function selectAgentModel(env: NodeJS.ProcessEnv): AgenticTaskRequest['model'] {
+  return {
+    provider: (env.YANTRA_AGENT_PROVIDER ?? 'anthropic').trim(),
+    id: (env.YANTRA_AGENT_MODEL ?? 'claude-haiku-4-5').trim(),
   };
 }
 

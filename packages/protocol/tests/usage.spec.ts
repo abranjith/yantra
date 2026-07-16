@@ -34,9 +34,16 @@ describe('@no-llm usage ledger', () => {
         cost_estimate_usd: 0.30000000000000004,
         call_count: 2,
       },
+      agent: {
+        turns: 2,
+        input_tokens: 15,
+        output_tokens: 28,
+        cost_usd: 0.30000000000000004,
+      },
     });
 
     expect(validateUsageLedgerTotals(ledger)).toHaveLength(0);
+    expect(ledger.agent?.turns).toBe(2);
   });
 
   it('returns warnings instead of rejecting mismatched totals', () => {
@@ -52,5 +59,26 @@ describe('@no-llm usage ledger', () => {
     });
 
     expect(validateUsageLedgerTotals(ledger).length).toBeGreaterThan(0);
+  });
+
+  it('uses explicit nulls for unavailable agent metrics', () => {
+    const ledger = UsageLedger.parse({
+      run_id: 'local-run',
+      calls: [],
+      totals: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_estimate_usd: 0,
+        call_count: 0,
+      },
+      agent: { turns: 1, input_tokens: null, output_tokens: null, cost_usd: null },
+    });
+
+    expect(ledger.agent).toEqual({
+      turns: 1,
+      input_tokens: null,
+      output_tokens: null,
+      cost_usd: null,
+    });
   });
 });

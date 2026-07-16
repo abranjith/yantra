@@ -19,7 +19,11 @@ export {
 } from './interactive-confirmation-gateway.js';
 export {
   promoteDiscoverySession,
+  promoteAgentTrace,
   type PromotableSession,
+  type PromotableTraceStep,
+  type PromotableFillValue,
   type PromoteError,
   type PromoteOptions,
+  type PromoteTraceOptions,
 } from './promote.js';

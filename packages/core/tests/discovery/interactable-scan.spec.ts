@@ -43,7 +43,15 @@ describe('@no-llm scanInteractablesInPage', () => {
 
     const results = scanInteractablesInPage();
     expect(results).toEqual([
-      { role: 'button', name: 'Search', kind: 'button', disabled: false, top: 10, visible: true },
+      {
+        role: 'button',
+        name: 'Search',
+        kind: 'button',
+        disabled: false,
+        top: 10,
+        visible: true,
+        selectorIndex: 0,
+      },
     ]);
   });
 

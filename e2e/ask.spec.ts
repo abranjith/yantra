@@ -23,7 +23,7 @@ describe('@no-llm ask e2e', () => {
     const result: AskRunResult = { brief: canonicalBrief, artifacts: null };
 
     const started = Date.now();
-    const exitCode = await run(['ask', 'fixture topic', '--json'], {
+    const exitCode = await run(['ask', 'fixture topic', '--json', '--no-llm'], {
       askRuntime: {
         env: {},
         stdout: stdout.stream,
@@ -51,7 +51,7 @@ describe('@no-llm ask e2e', () => {
     const stderr = captureStream();
     const result: AskRunResult = { brief: canonicalBrief, artifacts: null };
 
-    const exitCode = await run(['ask', 'fixture topic', '--detail', 'full'], {
+    const exitCode = await run(['ask', 'fixture topic', '--detail', 'full', '--no-llm'], {
       askRuntime: {
         env: {},
         stdout: stdout.stream,

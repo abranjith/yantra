@@ -1,0 +1,199 @@
+/**
+ * `web_fetch` tool spec (FEAT-024 TASK-005, plan_agentic.md §5/§8.13).
+ *
+ * Wraps the existing `@yantra/core` fetch + readability extraction path with the
+ * mandatory pre-fetch controls: the outbound URL policy (length cap, https,
+ * credential-shape scan, host budget), the ethics gate (robots/blocklist/rate
+ * limit), a content-type allowlist, and a streamed size limit. The extracted
+ * text is sanitized by the middleware before return; large content is stored as
+ * a run capture and referenced rather than dumped inline.
+ */
+
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { EthicsRefusedError, FetchError } from '@yantra/core';
+import { generateUlid } from '@yantra/protocol';
+import { Type, type Static } from 'typebox';
+
+import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
+import type { RunServices } from '../../../runtime/run-services.js';
+
+const WebFetchParams = Type.Object(
+  {
+    url: Type.String({
+      minLength: 1,
+      maxLength: 2048,
+      description: 'The absolute https URL of a public page to fetch and extract.',
+    }),
+  },
+  { additionalProperties: false },
+);
+
+type WebFetchParamsType = Static<typeof WebFetchParams>;
+
+/**
+ * Build the `web_fetch` tool spec for one run.
+ *
+ * @param _services Reserved for symmetry with the other tool factories.
+ * @returns The provider-neutral tool spec consumed by `wrapTool`.
+ */
+export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof WebFetchParams> {
+  return {
+    name: 'web_fetch',
+    label: 'Web Fetch',
+    description:
+      'Fetch a single public web page and return its readable article text (title + body). ' +
+      'Use it to read a source you discovered with web_search. Do NOT use it to bypass a ' +
+      'paywall/login, to reach a blocked or non-public host, or to download non-text content ' +
+      '(PDFs, images, binaries).',
+    parameters: WebFetchParams,
+    sanitizationProfile: 'public',
+    run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
+      runWebFetch(params, ctx.services, ctx.signal),
+  };
+}
+
+async function runWebFetch(
+  params: WebFetchParamsType,
+  services: RunServices,
+  signal: AbortSignal,
+): Promise<DomainResult> {
+  const deps = services.domain.fetch;
+
+  // 1. Outbound URL policy (length, https, credential shapes, host budget).
+  const allowed = services.urlPolicy.check(params.url);
+  if (!allowed.isOk) {
+    return {
+      ok: false,
+      errorCode: allowed.error.code,
+      message: allowed.error.message,
+      retryable: allowed.error.retryable,
+    };
+  }
+
+  // 2. Ethics gate (robots/blocklist/rate limit) — no evasion path exists.
+  try {
+    await deps.ethics.check(allowed.value.url, 'fetch', {
+      taskId: services.runId,
+      runId: services.runId,
+      stepId: 'web_fetch',
+    });
+  } catch (error) {
+    if (error instanceof EthicsRefusedError) {
+      return {
+        ok: false,
+        errorCode: 'ETHICS_BLOCKED',
+        message: `Fetch refused for ${allowed.value.host}: ${error.ethicsContext.reason}.`,
+        retryable: false,
+        details: { source: error.ethicsContext.source, host: allowed.value.host },
+      };
+    }
+    throw error;
+  }
+
+  // 3. Fetch with timeout + streamed size limit.
+  let doc;
+  try {
+    doc = await deps.fetcher.fetch(allowed.value.url, {
+      timeoutMs: services.budgets.perToolTimeoutMs,
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof FetchError) {
+      return { ok: false, ...mapFetchError(error) };
+    }
+    throw error;
+  }
+
+  // 4. Content-type allowlist.
+  const contentType = (doc.contentType ?? '').toLowerCase();
+  if (!deps.allowedContentTypes.some((prefix) => contentType.includes(prefix))) {
+    return {
+      ok: false,
+      errorCode: 'CONTENT_TYPE_REFUSED',
+      message: `Refusing non-text content type "${doc.contentType ?? 'unknown'}".`,
+      retryable: false,
+    };
+  }
+
+  // 5. Readability extraction.
+  const article = await deps.extractor.extract(doc);
+  if (article === null || article.contentText.trim().length === 0) {
+    return {
+      ok: false,
+      errorCode: 'EXTRACTION_EMPTY',
+      message: 'No readable article content could be extracted from the page.',
+      retryable: false,
+    };
+  }
+
+  // 6. Large content → capture reference instead of an inline dump.
+  const textBytes = Buffer.byteLength(article.contentText, 'utf8');
+  if (textBytes > deps.captureThresholdBytes) {
+    const captureRef = await writeCapture(services.runDir, article.contentText);
+    return {
+      ok: true,
+      model: {
+        url: article.url,
+        title: article.title,
+        excerpt: article.excerpt ?? article.contentText.slice(0, 1000),
+        capture_ref: captureRef,
+        length_chars: article.lengthChars,
+        note: 'Full content stored as a capture; the excerpt is shown here.',
+      },
+      details: { capture_ref: captureRef, bytes: textBytes },
+    };
+  }
+
+  return {
+    ok: true,
+    model: {
+      url: article.url,
+      title: article.title,
+      byline: article.byline,
+      published_at: article.publishedAt,
+      text: article.contentText,
+    },
+    details: { bytes: textBytes, final_url: doc.finalUrl },
+  };
+}
+
+/** Persist full extracted content to the run's captures directory. */
+async function writeCapture(runDir: string, text: string): Promise<string> {
+  const id = `cap-${generateUlid()}`;
+  const dir = join(runDir, 'captures');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${id}.txt`), text, { encoding: 'utf8', mode: 0o600 });
+  return id;
+}
+
+/** Map a core FetchError kind to a stable tool error. */
+function mapFetchError(error: FetchError): {
+  readonly errorCode: string;
+  readonly message: string;
+  readonly retryable: boolean;
+} {
+  switch (error.context.kind) {
+    case 'timeout':
+      return { errorCode: 'FETCH_TIMEOUT', message: 'The fetch timed out.', retryable: true };
+    case 'too-large':
+      return {
+        errorCode: 'CONTENT_TOO_LARGE',
+        message: 'The page body exceeded the size limit and was aborted.',
+        retryable: false,
+      };
+    case 'http-status':
+      return {
+        errorCode: 'FETCH_HTTP_ERROR',
+        message: `The server returned HTTP ${error.context.statusCode ?? '4xx/5xx'}.`,
+        retryable: true,
+      };
+    default:
+      return {
+        errorCode: 'FETCH_FAILED',
+        message: 'A network failure occurred while fetching the page.',
+        retryable: true,
+      };
+  }
+}

@@ -159,6 +159,17 @@
                       "type": "string",
                       "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
                       "description": "Secret key in namespace.name format."
+                    },
+                    "hosts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253
+                      },
+                      "minItems": 1,
+                      "maxItems": 32,
+                      "description": "Trusted website hosts allowed to receive this secret. Required for browser fills."
                     }
                   },
                   "required": [

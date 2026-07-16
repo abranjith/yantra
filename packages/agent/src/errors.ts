@@ -1,73 +1,107 @@
+// ---------------------------------------------------------------------------
+// Agent provider startup errors (FEAT-022, plan_agentic.md §9).
+//
+// These carry the stable startup codes surfaced through the AgentProvider
+// seam. Messages must be actionable and secret-free: they may name which
+// credential SOURCE was tried and how to configure it, never key material.
+// Agentic commands never degrade to a null client — startup problems are
+// always one of these typed failures.
+// ---------------------------------------------------------------------------
+
+/** Stable startup error codes normalized at the provider seam (plan §9). */
+export type AgentStartupErrorCode =
+  | 'AGENT_MODEL_NOT_FOUND'
+  | 'AGENT_AUTH_UNAVAILABLE'
+  | 'AGENT_PROVIDER_UNAVAILABLE'
+  | 'AGENT_SESSION_START_FAILED'
+  | 'AGENT_ABORTED';
+
 /**
- * Custom error classes derived from LLMError discriminated union variants.
- * Thrown by internal code; public API surfaces return Result<T, LLMError>.
+ * Base class for typed agent startup failures.
+ *
+ * @example
+ *   try {
+ *     await provider.open(options);
+ *   } catch (err) {
+ *     if (err instanceof AgentStartupError) {
+ *       render(err.toAgentError()); // { code, message } — safe for artifacts
+ *     }
+ *   }
  */
+export abstract class AgentStartupError extends Error {
+  /** Plan §9 stable code for this failure. */
+  public abstract readonly code: AgentStartupErrorCode;
 
-export class LLMUnavailableError extends Error {
-  public readonly kind = 'llm_unavailable' as const;
-
-  public constructor(
-    public readonly reason: 'provider_none' | 'missing_api_key' | 'ollama_unreachable',
-    public readonly hint: string,
-  ) {
-    super(`LLM unavailable (${reason}): ${hint}`);
-    this.name = 'LLMUnavailableError';
+  /** Project this error onto the seam's render-safe `AgentError` shape. */
+  public toAgentError(): { readonly code: AgentStartupErrorCode; readonly message: string } {
+    return { code: this.code, message: this.message };
   }
 }
 
-export class LLMTimeoutError extends Error {
-  public readonly kind = 'llm_timeout' as const;
+/** The requested provider/model pair is not known to the model registry. */
+export class AgentModelNotFoundError extends AgentStartupError {
+  public readonly code = 'AGENT_MODEL_NOT_FOUND' as const;
 
   public constructor(
-    public readonly elapsedMs: number,
-    public readonly budgetMs: number,
+    public readonly provider: string,
+    public readonly modelId: string,
+    availableHint: string,
   ) {
-    super(`LLM call timed out after ${elapsedMs}ms (budget: ${budgetMs}ms)`);
-    this.name = 'LLMTimeoutError';
+    super(
+      `Model "${modelId}" was not found for provider "${provider}". ${availableHint} ` +
+        `Custom/local models (e.g. Ollama) are defined in Yantra's pinned models.json — ` +
+        `see the model-configuration docs.`,
+    );
+    this.name = 'AgentModelNotFoundError';
   }
 }
 
-export class LLMProviderError extends Error {
-  public readonly kind = 'llm_provider_error' as const;
+/** No usable credential could be resolved for the selected provider. */
+export class AgentAuthUnavailableError extends AgentStartupError {
+  public readonly code = 'AGENT_AUTH_UNAVAILABLE' as const;
 
   public constructor(
-    public readonly providerCode: string | null,
-    message: string,
-    public readonly retryable: boolean,
+    public readonly provider: string,
+    /** Which credential sources were tried, e.g. "managed store, environment". */
+    public readonly sourcesTried: string,
+    fixHint: string,
   ) {
-    super(message);
-    this.name = 'LLMProviderError';
+    super(
+      `No credentials available for provider "${provider}" (tried: ${sourcesTried}). ${fixHint}`,
+    );
+    this.name = 'AgentAuthUnavailableError';
   }
 }
 
-export class LLMValidationFailedError extends Error {
-  public readonly kind = 'llm_validation_failed' as const;
+/** The provider backend cannot be reached or refused the connection. */
+export class AgentProviderUnavailableError extends AgentStartupError {
+  public readonly code = 'AGENT_PROVIDER_UNAVAILABLE' as const;
 
   public constructor(
-    public readonly attempts: number,
-    public readonly errors: readonly { path: string; code: string; message: string }[],
-    public readonly userFacingHint: string,
+    public readonly provider: string,
+    reason: string,
   ) {
-    super(`LLM plan validation failed after ${attempts} attempt(s): ${userFacingHint}`);
-    this.name = 'LLMValidationFailedError';
+    super(`Provider "${provider}" is unavailable: ${reason}`);
+    this.name = 'AgentProviderUnavailableError';
   }
 }
 
-export class LLMBudgetExhaustedError extends Error {
-  public readonly kind = 'llm_budget_exhausted' as const;
+/** Session construction failed for a reason other than model/auth/transport. */
+export class AgentSessionStartFailedError extends AgentStartupError {
+  public readonly code = 'AGENT_SESSION_START_FAILED' as const;
 
-  public constructor(
-    public readonly callsMade: number,
-    public readonly maxCalls: number,
-  ) {
-    super(`LLM budget exhausted: ${callsMade} of ${maxCalls} calls used`);
-    this.name = 'LLMBudgetExhaustedError';
+  public constructor(reason: string) {
+    super(`Agent session failed to start: ${reason}`);
+    this.name = 'AgentSessionStartFailedError';
   }
 }
 
-export class SanitizerGuardError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = 'SanitizerGuardError';
+/** The session was aborted (user interrupt or budget exhaustion). */
+export class AgentAbortedError extends AgentStartupError {
+  public readonly code = 'AGENT_ABORTED' as const;
+
+  public constructor(reason = 'the run was aborted before completion') {
+    super(`Agent session aborted: ${reason}`);
+    this.name = 'AgentAbortedError';
   }
 }

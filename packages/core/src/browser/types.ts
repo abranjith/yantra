@@ -26,6 +26,10 @@ export interface LaunchOptions {
   readonly chromeOverridePath: string | null;
 }
 
+import type { Page as PuppeteerPage } from 'puppeteer-core';
+
+import type { InjectedScriptHost } from '../locator/types.js';
+
 /** Minimal structured logger interface (compatible with pino). */
 export interface Logger {
   info(obj: Record<string, unknown> | string, msg?: string): void;
@@ -44,6 +48,10 @@ export interface Page {
   close(): Promise<void>;
   url(): string;
   on(event: 'framenavigated', handler: (frame: unknown) => void): void;
+  /** Production-only Puppeteer page. Fakes may omit it. */
+  readonly puppeteerPage?: PuppeteerPage;
+  /** Live locator bridge paired with the Puppeteer page. */
+  readonly locatorHost?: InjectedScriptHost;
 }
 
 /** Strategy interface for launching Chrome sessions. MVP impl: LocalBrowserProvider. */

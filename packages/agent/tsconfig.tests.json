@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/provider/**/*.ts",
+    "tests/boundaries/**/*.ts",
+    "tests/adapters/**/*.ts"
+  ],
+  "exclude": ["src/_lint-fixtures/**/*"]
+}

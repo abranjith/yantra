@@ -8,3 +8,4 @@ export * from './annotate/suggest.js';
 export * from './annotate/prompts.js';
 export * from './store.types.js';
 export * from './store.js';
+export * from './catalog.js';

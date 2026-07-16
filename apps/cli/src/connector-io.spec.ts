@@ -1,7 +1,8 @@
 import { Writable } from 'node:stream';
 
-import type { TaskEvent } from '@yantra/protocol';
-import { describe, expect, it } from 'vitest';
+import type { AgentProgressEvent } from '@yantra/agent';
+import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CLIConnectorIO, buildRenderOpts } from './connector-io.js';
 import { JSONRenderer } from './render/json.js';
@@ -106,6 +107,10 @@ describe('@no-llm cli/connector-io', () => {
       stepCount: 3,
       scopeMix: { publicCount: 3, readOnlyDataCount: 0, authenticatedCount: 0 },
       trustNarrative: 'Run completed in 5.0s. No LLM calls and no secrets.',
+      agent: null,
+      toolCalls: [],
+      usage: null,
+      terminalError: null,
     };
     connector.renderResult({ kind: 'audit', report }, makeOpts(stdout.stream, false));
     expect(stdout.value()).toContain('Audit — run run-1');
@@ -143,5 +148,97 @@ describe('@no-llm cli/connector-io', () => {
     expect(opts.json).toBe(true);
     expect(opts.noColor).toBe(true);
     expect(opts.debug).toBe(false);
+  });
+
+  it('renders a scripted agent sequence without exposing raw tool payloads', () => {
+    const stdout = capture();
+    const opts = makeOpts(stdout.stream, false);
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      renderOpts: opts,
+      interactive: true,
+    });
+    const sequence: AgentProgressEvent[] = [
+      { type: 'assistant_text', text: 'Checking sources. ', at: '2026-07-14T12:00:00.000Z' },
+      {
+        type: 'tool_started',
+        tool: 'web_fetch',
+        summary: 'fields: url',
+        at: '2026-07-14T12:00:01.000Z',
+      },
+      {
+        type: 'tool_finished',
+        tool: 'web_fetch',
+        summary: 'ok',
+        status: 'ok',
+        durationMs: 25,
+        at: '2026-07-14T12:00:01.025Z',
+      },
+    ];
+
+    for (const event of sequence) connector.emitAgentEvent(event);
+
+    expect(stdout.value()).toMatchInlineSnapshot(`
+      "Checking sources. 
+      [web_fetch] fields: url
+      [web_fetch] ok â€” ok (25ms)
+      "
+    `);
+    expect(stdout.value()).not.toContain('secret-value');
+  });
+
+  it('emits parseable NDJSON for progress and the terminal outcome', () => {
+    const stdout = capture();
+    const opts = makeOpts(stdout.stream, true);
+    const connector = new CLIConnectorIO(new JSONRenderer(), {
+      renderOpts: opts,
+      interactive: false,
+    });
+
+    connector.emitAgentEvent({
+      type: 'tool_started',
+      tool: 'web_search',
+      summary: 'fields: query',
+      at: '2026-07-14T12:00:00.000Z',
+    });
+    connector.renderAgentOutcome({
+      kind: 'failed',
+      runId: 'run-1',
+      runDir: '/runs/run-1',
+      error: { code: 'AGENT_COMPLETION_MISSING', message: 'No publication.' },
+    });
+
+    const lines = stdout
+      .value()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { kind: string });
+    expect(lines.map((line) => line.kind)).toEqual(['agent_progress', 'agent_outcome']);
+  });
+
+  it('fails closed without prompting when the connector is non-interactive', async () => {
+    const stdout = capture();
+    const prompt = vi.fn(() => Promise.resolve<'granted'>('granted'));
+    const connector = new CLIConnectorIO(new JSONRenderer(), {
+      renderOpts: makeOpts(stdout.stream, true),
+      interactive: false,
+      confirmationPrompt: prompt,
+    });
+    const request: ConfirmationRequest = {
+      confirmation_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      run_id: 'run-1',
+      step_id: 'click:1',
+      action_kind: 'click',
+      host: 'example.com',
+      description: 'Submit',
+      expected_cost: null,
+      consequence: 'unknown',
+      requested_at: '2026-07-14T12:00:00.000Z',
+      timeout_ms: 1000,
+    };
+
+    await expect(
+      connector.requestConfirmation(request, new AbortController().signal),
+    ).resolves.toBe('denied');
+    expect(prompt).not.toHaveBeenCalled();
   });
 });

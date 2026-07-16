@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><title>Fixture form</title></head><body>
+  <h1>Account form</h1>
+  <form id="fixture-form">
+    <label>Username <input name="username" autocomplete="off"></label>
+    <label>Password <input name="password" type="password" autocomplete="off"></label>
+    <button type="submit">Submit form</button>
+  </form>
+  <button hidden>Hidden action</button>
+  <button disabled>Disabled action</button>
+  <button id="covered">Covered action</button><div id="cover">cover</div>
+  <div id="result"></div>
+  <script>
+    document.querySelector('#fixture-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const username = new FormData(event.currentTarget).get('username');
+      document.querySelector('#result').innerHTML = `<h2>Submitted</h2><table><thead><tr><th>User</th><th>Status</th></tr></thead><tbody><tr><td>${String(username)}</td><td>accepted</td></tr></tbody></table>`;
+    });
+    const covered = document.querySelector('#covered');
+    covered.style.cssText = 'position:absolute;left:10px;top:240px;width:120px;height:30px';
+    const cover = document.querySelector('#cover');
+    cover.style.cssText = 'position:absolute;left:10px;top:240px;width:120px;height:30px;z-index:2;background:#ddd';
+  </script>
+</body></html>

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import type { Plan } from '@yantra/protocol';
 
-import type { BrowserSession, Logger } from '../browser/types.js';
+import type { BrowserSession, Logger, Page } from '../browser/types.js';
 
 import { InMemoryCaptureStore } from './capture-store.js';
 import { FilesystemCheckpointStore } from './checkpoint-store.js';
@@ -35,6 +35,7 @@ export interface ExecutionContextOptions {
   readonly plan: Plan;
   readonly runDir: string;
   readonly browser?: BrowserSession | null;
+  readonly page?: Page | null;
   readonly secrets?: SecretResolver | null;
   readonly sanitizer?: Sanitizer | null;
   readonly llmClient?: LLMClient | null;
@@ -91,8 +92,8 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     llmClient: opts.llmClient ?? null,
     workflowLocators: opts.workflowLocators ?? null,
     browser: opts.browser ?? null,
-    page: null,
-    locatorHost: null,
+    page: opts.page ?? null,
+    locatorHost: opts.page?.locatorHost ?? null,
     events,
     budgets,
     ethics: opts.ethics,
@@ -104,6 +105,21 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     confirmationGateway: opts.confirmationGateway ?? null,
     confirmationStore: createConfirmationStore(opts.runDir),
   };
+}
+
+/**
+ * Lazily attaches the run's single browser page and its production locator
+ * host. Deterministic replay calls this before dispatching its first step.
+ */
+export async function ensureExecutionBrowser(ctx: ExecutionContext): Promise<void> {
+  if (ctx.page !== null) {
+    ctx.locatorHost ??= ctx.page.locatorHost ?? null;
+    return;
+  }
+  if (ctx.browser === null) return;
+  const page = await ctx.browser.newPage();
+  ctx.page = page;
+  ctx.locatorHost = page.locatorHost ?? null;
 }
 
 /**

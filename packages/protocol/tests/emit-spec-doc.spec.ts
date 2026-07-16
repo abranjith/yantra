@@ -44,5 +44,7 @@ describe('@no-llm protocol spec doc emitter', () => {
     expect(content).toContain('## Step');
     expect(content).toContain('## TaskEvent');
     expect(content).toContain('## WorkflowFile');
+    expect(content).toContain('## AgentManifestSection');
+    expect(content).toContain('## ToolAuditEntry');
   });
 });

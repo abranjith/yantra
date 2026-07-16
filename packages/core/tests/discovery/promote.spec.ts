@@ -47,6 +47,7 @@ function makeFakeStore(
     saved,
     load: vi.fn(),
     list: vi.fn(async () => []),
+    listCatalog: vi.fn(async () => []),
     delete: vi.fn(),
     exists: vi.fn(async (name: string) => existing.has(name)),
     save: vi.fn(async (workflow, saveOpts) => {

@@ -27,7 +27,7 @@ import type { FetchedDoc } from '../extraction/types.js';
 import { brandSanitized, type Sanitized } from '../sanitizer/brand.js';
 import { sanitize } from '../sanitizer/index.js';
 
-import { scanInteractablesInPage } from './interactable-scan.js';
+import { scanInteractablesInPage, type RawInteractable } from './interactable-scan.js';
 import { rankInteractables } from './interactables.js';
 
 /** Max page-digest length in characters — must match protocol's cap. */
@@ -42,6 +42,47 @@ export interface CycleExecutionSummary {
 /** Dependencies for {@link buildObservation}. */
 export interface BuildObservationDeps {
   readonly extractor: Extractor;
+}
+
+/** Model-safe page snapshot used by the run-scoped browser controller. */
+export interface AgentPageSnapshot {
+  readonly url: string;
+  readonly title: string;
+  readonly digest: string;
+  /** Ranked raw records retain only an internal scanner index for handle lookup. */
+  readonly interactables: readonly RawInteractable[];
+}
+
+/**
+ * Builds the browser tool's bounded observation while retaining internal
+ * scanner indexes. Opaque refs are minted later by the controller and are the
+ * only identifiers exposed to the model.
+ */
+export async function buildAgentPageSnapshot(
+  page: Page,
+  deps: BuildObservationDeps,
+  options: { readonly maxDigestBytes: number; readonly maxInteractables: number },
+): Promise<AgentPageSnapshot> {
+  const url = page.url();
+  const pageData = await safeEvaluate(page, () => ({
+    title: document.title,
+    html: document.documentElement.outerHTML,
+  }));
+  const digestText = await buildDigest(url, pageData?.html ?? '', deps.extractor);
+  const sanitized = sanitize(digestText, 'public', safeHost(url) ?? undefined).text;
+  const digest = truncateUtf8(sanitized, options.maxDigestBytes);
+  const raw = (await safeEvaluate(page, scanInteractablesInPage)) ?? [];
+  const interactables = raw
+    .filter((entry) => entry.visible)
+    .slice()
+    .sort((left, right) => left.top - right.top)
+    .slice(0, options.maxInteractables);
+  return {
+    url,
+    title: clampChars(pageData?.title ?? '', 300),
+    digest,
+    interactables,
+  };
 }
 
 /**
@@ -165,4 +206,12 @@ function safeHost(url: string): string | null {
 /** Clamps a string to `max` UTF-16 code units (matches the Zod `.max()` semantics). */
 function clampChars(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) : text;
+}
+
+function truncateUtf8(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= maxBytes) return text;
+  let end = maxBytes;
+  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString('utf8');
 }

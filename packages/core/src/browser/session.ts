@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 
 import type { Browser, Page as PuppeteerPage } from 'puppeteer-core';
 
+import { PuppeteerInjectedScriptHost } from '../locator/injected-host.js';
+
 import { BrowserCrashedError } from './errors.js';
 import type {
   BrowserSession,
@@ -16,7 +18,10 @@ import type {
 
 /** Wraps a puppeteer Page into Yantra's minimal Page facade. */
 function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
+  const locatorHost = new PuppeteerInjectedScriptHost(puppeteerPage);
   return {
+    puppeteerPage,
+    locatorHost,
     goto(url, opts) {
       return puppeteerPage.goto(url, opts as Parameters<PuppeteerPage['goto']>[1]);
     },
@@ -60,6 +65,7 @@ export class LocalBrowserSession implements BrowserSession {
   private closed = false;
   private crashed = false;
   private stderrBuffer = '';
+  private primaryPageClaimed = false;
   /** Maximum bytes of stderr to buffer for crash diagnostics. */
   private static readonly MAX_STDERR_BYTES = 4096;
 
@@ -163,7 +169,11 @@ export class LocalBrowserSession implements BrowserSession {
       });
     }
 
-    const puppeteerPage = await this.browser.newPage();
+    const existing = typeof this.browser.pages === 'function' ? await this.browser.pages() : [];
+    const reusable =
+      !this.primaryPageClaimed && existing.length === 1 && existing[0]?.url() === 'about:blank';
+    const puppeteerPage = reusable ? existing[0]! : await this.browser.newPage();
+    this.primaryPageClaimed = true;
     this.emit('page-created');
     return wrapPage(puppeteerPage, () => this.emit('page-closed'));
   }

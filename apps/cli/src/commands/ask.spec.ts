@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 
+import type { AgenticTaskRequest } from '@yantra/agent';
 import type { AskPipeline, AskQuery, AskRunResult } from '@yantra/core';
 import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
@@ -25,6 +26,7 @@ function harness(overrides: Partial<AskRuntime> = {}) {
   const stdout = captureStream();
   const stderr = captureStream();
   let query: AskQuery | undefined;
+  let agentRequest: AgenticTaskRequest | undefined;
 
   const program = new Command();
   program.exitOverride();
@@ -39,10 +41,19 @@ function harness(overrides: Partial<AskRuntime> = {}) {
     // Hermetic defaults: no index/profile access from unit tests.
     resolveDefaults: () => Promise.resolve(new Map()),
     recordHistory: () => Promise.resolve(),
+    runTask: (request) => {
+      agentRequest = request;
+      return Promise.resolve({
+        kind: 'failed',
+        runId: 'run',
+        runDir: 'run',
+        error: { code: 'AGENT_AUTH_UNAVAILABLE', message: 'fixture' },
+      });
+    },
     ...overrides,
   });
 
-  return { program, stdout, stderr, query: () => query };
+  return { program, stdout, stderr, query: () => query, agentRequest: () => agentRequest };
 }
 
 describe('@no-llm cli/ask command', () => {
@@ -58,27 +69,30 @@ describe('@no-llm cli/ask command', () => {
     expect(h.query()?.noLlm).toBe(true);
   });
 
-  it('defaults to the LLM synthesizer selection (noLlm=false)', async () => {
+  it('selects the shared agentic runtime when deterministic mode is not selected', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'today ai news'], { from: 'user' });
-    expect(h.query()?.noLlm).toBe(false);
+    await expect(h.program.parseAsync(['ask', 'today ai news'], { from: 'user' })).rejects.toMatchObject({
+      exitCode: 2,
+    });
+    expect(h.query()).toBeUndefined();
+    expect(h.agentRequest()?.profile?.command).toBe('ask');
   });
 
   it('passes --length through to the synthesis budget', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--length', 'long'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--length', 'long', '--no-llm'], { from: 'user' });
     expect(h.query()?.length).toBe('long');
   });
 
   it('sets noCache from --no-cache', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--no-cache'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--no-cache', '--no-llm'], { from: 'user' });
     expect(h.query()?.noCache).toBe(true);
   });
 
   it('emits the JSON Brief envelope with --json', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--json'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--json', '--no-llm'], { from: 'user' });
     expect(h.stdout.value()).toContain('"kind":"brief"');
     expect(h.stdout.value()).toContain('Cheapest Sony WH-1000XM5 today');
     // No ANSI escapes in the machine surface.
@@ -87,21 +101,21 @@ describe('@no-llm cli/ask command', () => {
 
   it('renders a styled terminal Brief by default', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--no-llm'], { from: 'user' });
     expect(h.stdout.value()).toContain('Cheapest Sony WH-1000XM5 today');
     expect(h.stdout.value()).toContain('Sources');
   });
 
   it('streams Markdown with --format md', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--format', 'md'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--format', 'md', '--no-llm'], { from: 'user' });
     expect(h.stdout.value()).toContain('# Cheapest Sony WH-1000XM5 today');
     expect(h.stdout.value()).toContain('## Sources');
   });
 
   it('accepts a named --search-provider and threads it into the query', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--search-provider', 'duckduckgo'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--search-provider', 'duckduckgo', '--no-llm'], { from: 'user' });
     expect(h.query()?.searchProvider).toBe('duckduckgo');
   });
 
@@ -114,7 +128,7 @@ describe('@no-llm cli/ask command', () => {
 
   it('leaves searchProvider null for auto (falls through to env/config)', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--search-provider', 'auto'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--search-provider', 'auto', '--no-llm'], { from: 'user' });
     expect(h.query()?.searchProvider).toBeNull();
   });
 
@@ -133,7 +147,7 @@ describe('@no-llm cli/ask command', () => {
         } as unknown as AskPipeline),
     });
 
-    await expect(program.parseAsync(['ask', 'q'], { from: 'user' })).rejects.toMatchObject({
+    await expect(program.parseAsync(['ask', 'q', '--no-llm'], { from: 'user' })).rejects.toMatchObject({
       exitCode: 2,
     });
     expect(stderr.value()).toContain('ask failed: boom');

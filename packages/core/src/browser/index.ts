@@ -1,4 +1,5 @@
 export * from './chrome-discovery.js';
+export * from './agent-controller.js';
 export * from './doctor.js';
 export * from './errors.js';
 export * from './launch-options.js';

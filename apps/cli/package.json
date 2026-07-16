@@ -35,7 +35,8 @@
     "cli-table3": "^0.6.5",
     "commander": "^14.0.2",
     "marked": "^15.0.12",
-    "marked-terminal": "^7.3.0"
+    "marked-terminal": "^7.3.0",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@types/marked-terminal": "^6.1.1",

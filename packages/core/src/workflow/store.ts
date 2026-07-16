@@ -1,9 +1,10 @@
-import { writeFile, rename, readdir, stat, unlink } from 'node:fs/promises';
+import { writeFile, rename, readdir, stat, unlink, mkdir } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
 import type { WorkflowFile } from '@yantra/protocol';
 import type { Result } from '@yantra/protocol';
 
+import { projectCatalogEntry, type WorkflowCatalogEntry } from './catalog.js';
 import type { LintReport } from './lint/index.js';
 import type { WorkflowStore, WorkflowSummary, SaveOptions } from './store.types.js';
 import { emitWorkflow } from './yaml/emitter.js';
@@ -68,6 +69,9 @@ export class FileWorkflowStore implements WorkflowStore {
     const finalPath = this.filePath(name);
 
     try {
+      // Ensure the workflows directory exists — a fresh install (or a promotion
+      // via `yantra do --save-as`) may be the first write to this location.
+      await mkdir(this.workflowsDir, { recursive: true });
       await writeFile(tmpPath, yamlStr, 'utf-8');
       await rename(tmpPath, finalPath);
 
@@ -130,6 +134,34 @@ export class FileWorkflowStore implements WorkflowStore {
     summaries.sort((a, b) => b.last_modified.getTime() - a.last_modified.getTime());
 
     return summaries;
+  }
+
+  async listCatalog(): Promise<WorkflowCatalogEntry[]> {
+    let entries: string[];
+    try {
+      entries = await readdir(this.workflowsDir);
+    } catch {
+      return [];
+    }
+
+    const catalog: WorkflowCatalogEntry[] = [];
+    for (const entry of entries) {
+      if (!entry.endsWith('.yaml')) continue;
+      const filePath = join(this.workflowsDir, entry);
+      try {
+        const result = await loadWorkflow(filePath);
+        // Only well-formed workflows enter the catalog; a lint-failed file
+        // cannot produce a trustworthy secret-free projection, so it is skipped.
+        if (result.isOk) {
+          catalog.push(projectCatalogEntry(result.value));
+        }
+      } catch {
+        // Skip files that can't be read/parsed.
+      }
+    }
+
+    catalog.sort((a, b) => a.name.localeCompare(b.name));
+    return catalog;
   }
 
   async delete(name: string): Promise<void> {

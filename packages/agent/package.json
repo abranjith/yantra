@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Yantra agent — pi-agent-core adapter behind the LLMClient interface. Must not import @yantra/core (architectural boundary).",
+  "description": "Yantra agent — thin AgentProvider seam over @earendil-works/pi-coding-agent. The Pi SDK is imported only under src/adapters/pi/; @yantra/core must never import this package (architectural boundary).",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,11 +20,15 @@
     "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json",
     "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.6",
+    "@yantra/core": "workspace:*",
     "@yantra/protocol": "workspace:*",
+    "pino": "^9.9.2",
+    "typebox": "1.1.38",
     "zod": "^3.24.1"
   },
   "devDependencies": {

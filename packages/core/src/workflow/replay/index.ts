@@ -6,6 +6,11 @@
 
 // Core types
 export type {
+  AgentRunRequest,
+  AgentRunStore,
+  AgentStartupFailure,
+  AgentStartupFailureCode,
+  AgentStartupFailureRecord,
   EvaluatedOutputs,
   FailureDetail,
   LocatorTable,
@@ -45,6 +50,7 @@ export type { RunOrchestratorOptions } from './run-orchestrator.js';
 
 // Run store + run-id formatting
 export { LocalRunStore, formatRunId } from './run-store.js';
+export { readManifest, writeManifest } from './manifest-writer.js';
 
 // Params resolver
 export { resolveParams } from './params-resolver.js';

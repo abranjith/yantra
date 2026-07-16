@@ -36,7 +36,7 @@ async function runAsk(args: readonly string[]): Promise<string> {
   const stderr = captureStream();
   const result: AskRunResult = { brief: canonicalBrief, artifacts: null };
 
-  const exitCode = await run(['ask', 'canonical fixture', ...args], {
+  const exitCode = await run(['ask', 'canonical fixture', '--no-llm', ...args], {
     askRuntime: {
       env: {},
       stdout: stdout.stream,

@@ -25,6 +25,32 @@ export const UsageCall = z
 
 export type UsageCall = z.infer<typeof UsageCall>;
 
+export const AgentUsageTotals = z
+  .object({
+    turns: z.number().int().nonnegative().describe('Completed provider turns.'),
+    input_tokens: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe('Agent input tokens, or null when the provider does not report them.'),
+    output_tokens: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .describe('Agent output tokens, or null when the provider does not report them.'),
+    cost_usd: z
+      .number()
+      .nonnegative()
+      .nullable()
+      .describe('Agent cost in USD, or null when the provider does not report it.'),
+  })
+  .strict()
+  .describe('Aggregated provider usage for an agentic run.');
+
+export type AgentUsageTotals = z.infer<typeof AgentUsageTotals>;
+
 export const UsageLedger = z
   .object({
     run_id: z.string().min(1).describe('Owning run id.'),
@@ -37,6 +63,9 @@ export const UsageLedger = z
         call_count: z.number().int().nonnegative().describe('Total call count.'),
       })
       .describe('Aggregated usage totals.'),
+    agent: AgentUsageTotals.optional().describe(
+      'Agentic-session totals when this run used the live agent runtime.',
+    ),
   })
   .describe('Usage ledger persisted per run.');
 

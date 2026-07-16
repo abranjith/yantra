@@ -176,52 +176,35 @@ Alongside the Brief artifacts, each hop writes a `research-state.json` snapshot
 (queries, kept/fetched counts, coverage, remaining budget) to the run dir for
 post-mortem inspection.
 
-## Discovery mode (`yantra do`)
+## Agentic web tasks (`yantra do`)
 
-`yantra do "<goal>"` (alias `discover`) works the **live web in real time**
-toward a goal with no saved workflow: propose a small next step, execute it
-through the deterministic engine, observe the (sanitized) result, re-plan —
-repeating under hard budgets until the goal is met, blocked, or exhausted.
+`yantra do "<goal>"` (alias `discover`) opens one fresh provider session and one
+run-scoped, ephemeral browser. The provider owns the multi-turn reasoning loop;
+Yantra supplies the policy-wrapped search, fetch, browser, script, and result
+tools. Success requires a validated, persisted Brief—raw assistant prose is
+progress, not completion.
 
 ```bash
-yantra do "find the cheapest flight from SFO to JFK next Friday"
-yantra do "check ticket availability" --dry-run       # validate proposals, never execute
-yantra do "..." --allow-host example.com              # seed the host allowlist
-yantra do "..." --save-as my-workflow                 # promote a successful path
+yantra do "compare the current return policies for these two stores"
+yantra do "submit the fixture form" --allow-host fixture.example
+yantra do "research this topic" --provider anthropic --model claude-haiku-4-5
+yantra do "..." --json                         # progress + outcome as NDJSON
 ```
 
-Every mutating action (navigate/click/fill) always pauses for your explicit
-consent — a card like this renders in the terminal and blocks until you answer:
+Live output streams assistant text and compact tool status lines without raw
+tool payloads. Protected actions pause immediately before the side effect and
+default to denial; waits are bounded, and `--json`/non-TTY runs fail closed
+without prompting. CAPTCHA, bot walls, robots restrictions, and other controls
+produce an honest handoff—Yantra never evades them.
 
-```
-┌─ Confirmation required ─────────────────────────────
-│ Action:      navigate on ticketsite.example
-│ Description: Navigate to ticketsite.example/events
-│ Cost:        unknown
-│ Consequence: reversible
-└──────────────────────────────────────────────────────
-Allow this action? (y/N)
-```
-
-Nothing is ever auto-granted — `--yes-to nothing` is the only accepted value
-for that flag, and it documents exactly that. The model never sees raw HTML or
-your DOM: it only ever receives a sanitized page digest plus a capped, ranked
-list of interactable elements (role/name/kind/disabled — no values, no
-attributes). It has no access to secrets or stored credentials, and it must
-report a bot-detection wall or CAPTCHA honestly rather than try to evade it.
-
-Budgets bound every session: `--max-steps` (default 15), `--budget` (max LLM
-propose calls, default 20), `--budget-ms` (wall-clock, default 5 minutes).
-Exit codes: `0` goal met or a clean budget-exhausted stop, `2` unreachable or
-aborted (e.g. the proposer's re-prompt budget ran out), `4` a confirmation was
-declined. A successful path can be promoted into a saved, replayable workflow
-with `--save-as <name>`.
-
-> **Current limitation**: no code path anywhere in the repo yet wires a real
-> element-locator host to a live browser page (a pre-existing gap that also
-> affects `yantra run`), so today `do` can meaningfully `navigate` and observe
-> a page, but `click`/`fill`/`extract` against a real site are not yet wired
-> end-to-end. See `.spec-lite/TODO.md`.
+Hard budgets cover wall-clock time, total/per-tool calls, per-tool timeout,
+provider tokens/cost (approximate at turn boundaries), navigation/host count,
+and result bytes. Relevant flags include `--budget-ms`, `--max-tool-calls`,
+`--max-calls-per-tool`, `--tool-timeout-ms`, `--max-provider-tokens`,
+`--max-cost-usd`, and `--confirmation-timeout-ms`. Exit codes are `0` for a
+published Brief, `2` for failure or budget exhaustion, `4` for human handoff,
+and `130` for an interrupt. `--save-as` is reserved for workflow promotion;
+deterministic saved workflows continue to use `yantra run` without an LLM loop.
 
 ## History & personalization
 
@@ -280,15 +263,39 @@ resumes a granted run on its next poll. See [docs/scheduling.md](docs/scheduling
 
 - `@yantra/protocol`: Zod schemas as the single source of truth for the agent/engine contract; TypeScript types, JSON Schema, and tool definitions are generated from these schemas.
 - `@yantra/core`: Core runtime and execution engine surface.
-- `@yantra/agent`: Agent-side integration surface.
+- `@yantra/agent`: Agent-side integration surface. Hosts the thin `AgentProvider` seam backed by the [`@earendil-works/pi-coding-agent`](https://github.com/earendil-works/pi) SDK — the SDK is imported only under `src/adapters/pi/` (boundary-tested).
 - `@yantra/test-helpers`: Internal helpers for test-provider tags.
 - `@yantra/cli`: CLI entrypoint package.
 - `e2e/`: Cross-package integration and smoke tests.
+
+The real browser tool suite requires system Chrome and runs without an LLM:
+
+```bash
+pnpm --filter @yantra/e2e exec vitest run agent-browser.spec.ts
+```
+
+It launches Chrome over CDP pipe with a fresh ephemeral profile and exercises
+the local fixture site's navigate/observe/click/fill/extract, stale-ref,
+actionability, secret-host-binding, and popup-interception paths. The remaining
+agent prompt/consent/CAPTCHA/injection scenarios are covered with the agentic
+orchestrator feature, where those policy layers are wired end to end.
+
+Dependency direction (see `.spec-lite/plan_agentic.md` §3): `protocol -> core -> agent -> cli`. `@yantra/agent` composes `@yantra/core` services; `@yantra/core` must never import `@yantra/agent` (enforced by lint rule, boundary tests, and the CI static check).
+
+### Agent API migration
+
+The legacy internal `@yantra/agent` task-planning client has been removed. The supported internal surface is the provider seam, agent runtime, and typed agent errors; commands and user-owned workflow YAML or run artifacts are unchanged. Contributors must not restore the removed client, null-provider fallback, generated step-tool catalog, or manual discovery loop.
 
 ## Documentation
 
 - Canonical project documentation lives under `docs/`.
 - Protocol specification is generated at `docs/protocol-spec.md`.
+- Agent model configuration & credentials: [docs/model-configuration.md](docs/model-configuration.md).
+- Run directory layout & the provider session artifact: [docs/run-artifacts.md](docs/run-artifacts.md).
+- Diagnostics & agent startup error codes: [docs/diagnostics.md](docs/diagnostics.md).
+- Agent tool runtime, budgets & tool safety: [docs/agent-tools.md](docs/agent-tools.md).
+- Agentic runtime release notes: [docs/agentic-release-notes.md](docs/agentic-release-notes.md).
+- Release-gate coverage and evidence: [docs/release-gate.md](docs/release-gate.md).
 - Personalization & privacy: [docs/personalization-and-privacy.md](docs/personalization-and-privacy.md).
 - Scheduling & the local daemon: [docs/scheduling.md](docs/scheduling.md).
 

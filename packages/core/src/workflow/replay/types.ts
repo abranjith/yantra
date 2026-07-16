@@ -5,7 +5,7 @@
  * through `RunManifest` on disk to the final `OrchestratorRunOutcome`.
  */
 
-import type { FailureClass, Plan } from '@yantra/protocol';
+import type { AgentManifestSection, FailureClass, Plan } from '@yantra/protocol';
 
 import type { ProfileSpec } from '../../browser/types.js';
 import type { Checkpoint } from '../../executor/types.js';
@@ -161,6 +161,44 @@ export interface RunManifest {
   cookieProfilePath: string | null;
   outputBindingNames: readonly string[];
   chromeDriftWarning: { recorded: number; current: number } | undefined;
+  /** Distinguishes direct agentic runs from deterministic workflow replay. */
+  runKind?: 'workflow' | 'agentic';
+  /** Partial during startup; complete and schema-valid after the session opens. */
+  agent?: Partial<AgentManifestSection>;
+  /** Typed, render-safe startup failure when the provider session never opened. */
+  agentError?: AgentStartupFailureRecord;
+}
+
+/** Stable agent startup codes persisted without importing the agent package into core. */
+export type AgentStartupFailureCode =
+  | 'AGENT_MODEL_NOT_FOUND'
+  | 'AGENT_AUTH_UNAVAILABLE'
+  | 'AGENT_PROVIDER_UNAVAILABLE'
+  | 'AGENT_SESSION_START_FAILED'
+  | 'AGENT_ABORTED';
+
+/** Typed and sanitized startup failure stored in `manifest.json`. */
+export interface AgentStartupFailure {
+  readonly code: AgentStartupFailureCode;
+  readonly message: string;
+}
+
+/** Persisted startup failure plus its terminal timestamp. */
+export interface AgentStartupFailureRecord extends AgentStartupFailure {
+  readonly at: string;
+}
+
+/** Minimum metadata needed to create an agentic run before provider validation. */
+export interface AgentRunRequest {
+  readonly taskId: string;
+  readonly command: string;
+  readonly partialAgent?: Partial<AgentManifestSection>;
+}
+
+/** Run-store operations used by agentic commands before and during startup. */
+export interface AgentRunStore {
+  createAgentRun(request: AgentRunRequest): Promise<{ runId: string; runDir: string }>;
+  finalizeStartupFailure(runId: string, error: AgentStartupFailure): Promise<void>;
 }
 
 /** Serialized to outputs.json. */

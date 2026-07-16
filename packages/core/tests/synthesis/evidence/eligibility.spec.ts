@@ -47,6 +47,7 @@ describe('@no-llm synthesis/isJunkSentence (gate 0.5)', () => {
     'There were layers to the USMNT’s victory over Bosnia and Herzegovina which exposed how deep Pochettino’s influence goes.',
     'McDonald’s promoted the tournament with an iPhone app built for supporters.',
     'Mexico became the first country to host or co-host the World Cup three times, having hosted the 1970 and 1986 tournaments.',
+    'US EV car sales fell 28% in 2026 as demand cooled.',
     '“Europe and Asia are excluded from the bidding,” the president confirmed.',
   ];
 

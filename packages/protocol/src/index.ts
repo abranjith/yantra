@@ -1,13 +1,6 @@
 export { emitJsonSchemas, JSON_SCHEMA_ARTIFACTS } from './emit/json-schema.js';
 export { emitProtocolSpecDoc } from './emit/spec-doc.js';
 export {
-  createToolCatalog,
-  emitToolCatalog,
-  type ToolCatalog,
-  type ToolDefinition,
-} from './emit/tool-catalog.js';
-
-export {
   BRIEF_SCHEMA_VERSION,
   Brief,
   BriefFacets,
@@ -27,6 +20,10 @@ export {
   type CreateBriefInput,
 } from './schemas/brief-builder.js';
 export { TaskEvent, HandoffReason } from './schemas/events.js';
+export { AgentManifestSection } from './schemas/agent-manifest.js';
+export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';
+export { ToolAuditEntry } from './schemas/tool-audit.js';
+export type { ToolAuditEntry as ToolAuditEntryType } from './schemas/tool-audit.js';
 export {
   CONFIRMABLE_ACTION_KINDS,
   ConfirmationDecidedBy,
@@ -63,6 +60,7 @@ export {
   ValueRef,
 } from './schemas/refs.js';
 export type { IntentLocatorChain } from './schemas/refs.js';
+export type { HostBoundSecretRef } from './schemas/refs.js';
 export {
   ALLOWED_VERBS_BY_SCOPE,
   FailureClass,
@@ -91,6 +89,7 @@ export {
 } from './schemas/steps.js';
 export { BudgetSchema, ScalarValue, TaskRequest } from './schemas/task.js';
 export {
+  AgentUsageTotals,
   UsageCall,
   UsageLedger,
   UsageProvider,

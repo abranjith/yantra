@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 
-import type { UsageCall, UsageLedger } from '@yantra/protocol';
+import { UsageLedger, type AgentUsageTotals, type UsageCall } from '@yantra/protocol';
 
 import type { UsageWriter } from '../executor/types.js';
 
@@ -16,6 +16,7 @@ const FLUSH_DEBOUNCE_MS = 500;
  */
 export class FileUsageWriter implements UsageWriter {
   private readonly calls: UsageCall[] = [];
+  private agentUsage: AgentUsageTotals | undefined;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
 
@@ -24,6 +25,19 @@ export class FileUsageWriter implements UsageWriter {
   append(call: UsageCall): Promise<void> {
     if (this.closed) return Promise.resolve();
     this.calls.push(call);
+    this.scheduleFlush();
+    return Promise.resolve();
+  }
+
+  /**
+   * Adds or replaces the aggregate agent-session totals in `usage.json`.
+   *
+   * @param usage Reconciled totals from turn events and the terminal result.
+   * @returns Nothing; {@link close} performs the durable flush.
+   */
+  mergeAgentUsage(usage: AgentUsageTotals): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    this.agentUsage = usage;
     this.scheduleFlush();
     return Promise.resolve();
   }
@@ -50,19 +64,28 @@ export class FileUsageWriter implements UsageWriter {
   }
 
   private async flush(): Promise<void> {
-    if (this.calls.length === 0) return;
+    if (this.calls.length === 0 && this.agentUsage === undefined) return;
 
     const path = join(this.runDir, 'usage.json');
     await mkdir(this.runDir, { recursive: true });
 
-    const totals = computeTotals(this.calls);
-    const ledger: UsageLedger = {
+    const existing = await readExistingLedger(path);
+    const calls = this.calls.length > 0 ? [...this.calls] : (existing?.calls ?? []);
+    const totals = computeTotals(calls);
+    const ledger = UsageLedger.parse({
       run_id: extractRunId(this.runDir),
-      calls: [...this.calls],
+      calls,
       totals,
-    };
+      ...(this.agentUsage === undefined
+        ? existing?.agent === undefined
+          ? {}
+          : { agent: existing.agent }
+        : { agent: this.agentUsage }),
+    });
 
-    await writeFile(path, JSON.stringify(ledger, null, 2), 'utf8');
+    const tmpPath = `${path}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(ledger, null, 2), 'utf8');
+    await rename(tmpPath, path);
   }
 }
 
@@ -79,5 +102,15 @@ function computeTotals(calls: UsageCall[]): UsageLedger['totals'] {
 }
 
 function extractRunId(runDir: string): string {
-  return runDir.split('/').pop() ?? runDir.split('\\').pop() ?? runDir;
+  return basename(runDir);
+}
+
+async function readExistingLedger(
+  path: string,
+): Promise<ReturnType<typeof UsageLedger.parse> | null> {
+  try {
+    return UsageLedger.parse(JSON.parse(await readFile(path, 'utf8')) as unknown);
+  } catch {
+    return null;
+  }
 }

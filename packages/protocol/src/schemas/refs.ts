@@ -8,6 +8,12 @@ const WORKFLOW_LOCATOR_PATTERN = /^[A-Za-z][A-Za-z0-9 _-]{0,63}$/;
 export interface SecretRef {
   kind: 'secret';
   key: string;
+  /** Trusted website host binding metadata. Required for browser fills. */
+  hosts?: string[] | undefined;
+}
+
+export interface HostBoundSecretRef extends SecretRef {
+  hosts: string[];
 }
 
 export interface ParamRef {
@@ -44,6 +50,14 @@ export const SecretRef = z
   .object({
     kind: z.literal('secret').describe('Discriminator for secret references.'),
     key: z.string().regex(SECRET_KEY_PATTERN).describe('Secret key in namespace.name format.'),
+    hosts: z
+      .array(z.string().min(1).max(253))
+      .min(1)
+      .max(32)
+      .optional()
+      .describe(
+        'Trusted website hosts allowed to receive this secret. Required for browser fills.',
+      ),
   })
   .describe('Reference to a credential stored outside the plan payload.');
 

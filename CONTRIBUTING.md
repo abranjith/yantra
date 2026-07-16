@@ -9,12 +9,13 @@
 
 ## Architectural Boundaries
 
-ESLint enforces two hard boundaries in [eslint.config.js](eslint.config.js):
+ESLint and boundary suites enforce the hard boundaries in [eslint.config.js](eslint.config.js):
 
-- `packages/agent` must not import `@yantra/core`.
-- `pi-agent-core` imports are forbidden outside `packages/agent`.
+- `packages/core` must not import `@yantra/agent`.
+- `@earendil-works/pi-coding-agent` imports are allowed only in `packages/agent/src/adapters/pi/`.
+- The deleted task-shaped client scaffold cannot be reintroduced. Its paths and symbols are checked by `packages/agent/tests/boundaries/forbidden.spec.ts` on every test run.
 
-Boundary fixtures live under `src/_lint-fixtures` and are validated by tests in [packages/core/src/boundary-rules.spec.ts](packages/core/src/boundary-rules.spec.ts).
+Boundary fixtures live under `src/_lint-fixtures` and the checks run in the core and agent boundary suites. To intentionally amend the forbidden list, update the governing plan and `.spec-lite/memory.md` first, then make the matching change in `packages/agent/tests/boundaries/forbidden.ts` with its verification coverage.
 
 ## TypeScript Baseline
 

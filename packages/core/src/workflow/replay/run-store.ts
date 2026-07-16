@@ -10,11 +10,22 @@ import { join } from 'node:path';
 
 import type { FailureClass } from '@yantra/protocol';
 
+import { MarkdownReportBuilder } from '../../audit/report-builder.js';
 import { runsRoot } from '../../browser/paths.js';
+import { JsonlEventBus } from '../../executor/event-bus.js';
 
 import { RunDirMissingError } from './errors.js';
 import { writeManifest, readManifest } from './manifest-writer.js';
-import type { RunManifest, RunRequest, RunStatus, RunStore, RunSummary } from './types.js';
+import type {
+  AgentRunRequest,
+  AgentRunStore,
+  AgentStartupFailure,
+  RunManifest,
+  RunRequest,
+  RunStatus,
+  RunStore,
+  RunSummary,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Run-id format
@@ -48,7 +59,7 @@ function makeShortUuid(): string {
 // LocalRunStore
 // ---------------------------------------------------------------------------
 
-export class LocalRunStore implements RunStore {
+export class LocalRunStore implements RunStore, AgentRunStore {
   private readonly root: string;
 
   public constructor(root?: string) {
@@ -59,7 +70,91 @@ export class LocalRunStore implements RunStore {
    * Creates the run directory + .lock file, returns the canonical runId.
    */
   public async createRun(request: RunRequest): Promise<{ runId: string; runDir: string }> {
-    const runId = formatRunId(new Date(), request.workflowName, makeShortUuid());
+    return this.createRunDirectory(request.workflowName);
+  }
+
+  /**
+   * Creates an agentic run and its initial manifest before model, provider, or
+   * credential validation begins.
+   *
+   * @param request Stable command/task metadata and any already-resolved,
+   *   non-secret agent metadata.
+   * @returns The single canonical run identity and directory for the attempt.
+   */
+  public async createAgentRun(
+    request: AgentRunRequest,
+  ): Promise<{ runId: string; runDir: string }> {
+    const { runId, runDir } = await this.createRunDirectory(request.command);
+    const startedAt = new Date().toISOString();
+    const manifest: RunManifest = {
+      runId,
+      taskId: request.taskId,
+      workflowName: request.command,
+      workflowVersion: null,
+      params: {},
+      startedAt,
+      endedAt: undefined,
+      status: 'running',
+      durationMs: undefined,
+      failureClass: undefined,
+      profileKind: 'ephemeral',
+      cookieProfilePath: null,
+      outputBindingNames: [],
+      chromeDriftWarning: undefined,
+      runKind: 'agentic',
+      ...(request.partialAgent === undefined ? {} : { agent: request.partialAgent }),
+    };
+    await writeManifest(runDir, manifest);
+    return { runId, runDir };
+  }
+
+  /**
+   * Finalizes an agentic startup failure as a normal auditable run.
+   *
+   * @param runId Existing run created by {@link createAgentRun}.
+   * @param error Typed, sanitized provider startup failure.
+   * @returns Nothing after manifest, event, report, and lock state are durable.
+   */
+  public async finalizeStartupFailure(runId: string, error: AgentStartupFailure): Promise<void> {
+    const runDir = join(this.root, runId);
+    let manifest: RunManifest;
+    try {
+      manifest = await readManifest(runDir);
+    } catch {
+      throw new RunDirMissingError(runId);
+    }
+
+    const endedAt = new Date().toISOString();
+    const updated: RunManifest = {
+      ...manifest,
+      status: 'failed',
+      endedAt,
+      durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(manifest.startedAt)),
+      failureClass: 'unexpected',
+      agentError: { ...error, at: endedAt },
+    };
+    await writeManifest(runDir, updated);
+
+    const events = new JsonlEventBus(join(runDir, 'events.jsonl'));
+    events.publish({
+      task_id: manifest.taskId,
+      at: endedAt,
+      kind: 'task_failed',
+      failure_class: 'unexpected',
+      report_path: 'report.md',
+    });
+    await events.close();
+
+    const report = new MarkdownReportBuilder();
+    await report.build(runDir, 'failed', {
+      failureClass: error.code,
+      message: error.message,
+    });
+    await this.releaseLock(runId);
+  }
+
+  private async createRunDirectory(name: string): Promise<{ runId: string; runDir: string }> {
+    const runId = formatRunId(new Date(), name, makeShortUuid());
     const runDir = join(this.root, runId);
 
     await mkdir(runDir, { recursive: true, mode: 0o700 });

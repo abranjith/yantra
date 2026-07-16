@@ -3,6 +3,10 @@ packages:
   - 'apps/*'
   - 'e2e'
 allowBuilds:
+  # Transitive deps of @earendil-works/pi-coding-agent (Gemini provider support).
+  # Their postinstall scripts are not needed for Yantra's Anthropic/Ollama use.
+  '@google/genai': false
   esbuild: true
   keytar: true
   lefthook: true
+  protobufjs: false
