@@ -27,6 +27,14 @@ describe('@no-llm command task profiles', () => {
     expect(new Set([ask, research, task]).size).toBe(3);
   });
 
+  it('does not time-bound any command by default; wall clock is an explicit override', () => {
+    // Unlimited-by-default: local models are slow, so a fixed deadline aborts
+    // legitimate runs. Bounding is opt-in via env/CLI (see budget.ts).
+    expect(COMMAND_TASK_PROFILES.ask.budgets.wallClockMs).toBeUndefined();
+    expect(COMMAND_TASK_PROFILES.research.budgets.wallClockMs).toBeUndefined();
+    expect(COMMAND_TASK_PROFILES.do.budgets.wallClockMs).toBeUndefined();
+  });
+
   it('reads per-command budget configuration with sane profile fallbacks', () => {
     const configured = resolveCommandTaskProfile('ask', {
       YANTRA_AGENT_ASK_BUDGET_MS: '90000',
@@ -45,7 +53,9 @@ describe('@no-llm command task profiles', () => {
 
   it('keeps do equivalent to the full FEAT-026 catalog and enables research browsing only explicitly', () => {
     const full = yantraToolCatalog(buildServices()).map((tool) => tool.name);
-    const task = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map((tool) => tool.name);
+    const task = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map(
+      (tool) => tool.name,
+    );
     const research = resolveCommandTaskProfile('research', { YANTRA_AGENT_RESEARCH_BROWSE: '1' });
 
     expect(task).toEqual(full);

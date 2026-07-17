@@ -71,11 +71,31 @@ describe('@no-llm cli/ask command', () => {
 
   it('selects the shared agentic runtime when deterministic mode is not selected', async () => {
     const h = harness();
-    await expect(h.program.parseAsync(['ask', 'today ai news'], { from: 'user' })).rejects.toMatchObject({
+    await expect(
+      h.program.parseAsync(['ask', 'today ai news'], { from: 'user' }),
+    ).rejects.toMatchObject({
       exitCode: 2,
     });
     expect(h.query()).toBeUndefined();
     expect(h.agentRequest()?.profile?.command).toBe('ask');
+  });
+
+  it('leaves the agentic wall clock unlimited when --budget-ms is not passed', async () => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['ask', 'today ai news'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 2 });
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBeUndefined();
+  });
+
+  it('passes an explicit --budget-ms through unclamped as the agentic wall clock', async () => {
+    const h = harness();
+    // 900000 exceeds the deterministic pipeline's 300000 ceiling; the agentic
+    // path must not clamp it (local models legitimately need longer runs).
+    await expect(
+      h.program.parseAsync(['ask', 'today ai news', '--budget-ms', '900000'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 2 });
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(900_000);
   });
 
   it('passes --length through to the synthesis budget', async () => {
@@ -115,7 +135,9 @@ describe('@no-llm cli/ask command', () => {
 
   it('accepts a named --search-provider and threads it into the query', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--search-provider', 'duckduckgo', '--no-llm'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--search-provider', 'duckduckgo', '--no-llm'], {
+      from: 'user',
+    });
     expect(h.query()?.searchProvider).toBe('duckduckgo');
   });
 
@@ -128,7 +150,9 @@ describe('@no-llm cli/ask command', () => {
 
   it('leaves searchProvider null for auto (falls through to env/config)', async () => {
     const h = harness();
-    await h.program.parseAsync(['ask', 'q', '--search-provider', 'auto', '--no-llm'], { from: 'user' });
+    await h.program.parseAsync(['ask', 'q', '--search-provider', 'auto', '--no-llm'], {
+      from: 'user',
+    });
     expect(h.query()?.searchProvider).toBeNull();
   });
 
@@ -147,7 +171,9 @@ describe('@no-llm cli/ask command', () => {
         } as unknown as AskPipeline),
     });
 
-    await expect(program.parseAsync(['ask', 'q', '--no-llm'], { from: 'user' })).rejects.toMatchObject({
+    await expect(
+      program.parseAsync(['ask', 'q', '--no-llm'], { from: 'user' }),
+    ).rejects.toMatchObject({
       exitCode: 2,
     });
     expect(stderr.value()).toContain('ask failed: boom');

@@ -197,9 +197,11 @@ default to denial; waits are bounded, and `--json`/non-TTY runs fail closed
 without prompting. CAPTCHA, bot walls, robots restrictions, and other controls
 produce an honest handoff—Yantra never evades them.
 
-Hard budgets cover wall-clock time, total/per-tool calls, per-tool timeout,
-provider tokens/cost (approximate at turn boundaries), navigation/host count,
-and result bytes. Relevant flags include `--budget-ms`, `--max-tool-calls`,
+Hard budgets cover total/per-tool calls, per-tool timeout, provider tokens/cost
+(approximate at turn boundaries), navigation/host count, and result bytes.
+Wall-clock time is **unlimited by default** — local models are slow, so
+time-bounding a run is opt-in via `--budget-ms` (or
+`YANTRA_AGENT_<COMMAND>_BUDGET_MS`). Relevant flags include `--budget-ms`, `--max-tool-calls`,
 `--max-calls-per-tool`, `--tool-timeout-ms`, `--max-provider-tokens`,
 `--max-cost-usd`, and `--confirmation-timeout-ms`. Exit codes are `0` for a
 published Brief, `2` for failure or budget exhaustion, `4` for human handoff,

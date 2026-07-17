@@ -69,6 +69,16 @@ describe('@no-llm agent-v1 prompt governance', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toMatch(/json schema|parameters|tool call id/i);
   });
 
+  it('renders an unbounded wall clock as "unlimited", never as Infinity', () => {
+    const prompt = buildAgentUserPrompt(
+      { goal: 'g', budgets: { ...budgets, wallClockMs: Number.POSITIVE_INFINITY } },
+      markerSanitizer,
+    );
+
+    expect(prompt).toContain('- wall clock: unlimited');
+    expect(prompt).not.toContain('Infinity');
+  });
+
   it('sanitizes the goal, bounds profile context by UTF-8 bytes, and normalizes hosts', () => {
     const prompt = buildAgentUserPrompt(
       {

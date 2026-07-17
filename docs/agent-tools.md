@@ -58,16 +58,16 @@ exists for the browser tools (FEAT-025).
 Budgets are configuration, not prompt promises (`runtime/budget.ts`,
 `DEFAULT_BUDGET_LIMITS`). The `BudgetTracker` enforces, per run:
 
-| Budget | Default | Meaning |
-| --- | --- | --- |
-| `wallClockMs` | 10 min | Total wall-clock time for the run. |
-| `totalToolCalls` | 60 | Tool calls across all tools. |
-| `perToolCalls` | 25 | Calls to any single tool (overridable per tool). |
-| `perToolTimeoutMs` | 45 s | Execution timeout for one tool call. |
-| `maxBytesPerResult` | 24 KB | Agent-visible bytes in one tool result. |
-| `maxBytesPerRun` | 512 KB | Cumulative agent-visible bytes for the run. |
-| `maxNavigations` | 30 | Browser navigations (FEAT-025). |
-| `maxHosts` | 20 | Distinct outbound hosts. |
+| Budget              | Default   | Meaning                                                                                                                                                      |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `wallClockMs`       | unlimited | Total wall-clock time for the run. Unbounded by default (local models are slow); cap it explicitly with `--budget-ms` or `YANTRA_AGENT_<COMMAND>_BUDGET_MS`. |
+| `totalToolCalls`    | 60        | Tool calls across all tools.                                                                                                                                 |
+| `perToolCalls`      | 25        | Calls to any single tool (overridable per tool).                                                                                                             |
+| `perToolTimeoutMs`  | 45 s      | Execution timeout for one tool call.                                                                                                                         |
+| `maxBytesPerResult` | 24 KB     | Agent-visible bytes in one tool result.                                                                                                                      |
+| `maxBytesPerRun`    | 512 KB    | Cumulative agent-visible bytes for the run.                                                                                                                  |
+| `maxNavigations`    | 30        | Browser navigations (FEAT-025).                                                                                                                              |
+| `maxHosts`          | 20        | Distinct outbound hosts.                                                                                                                                     |
 
 Exhaustion returns a typed `BUDGET_EXHAUSTED` decision that the orchestrator maps
 to a clean run abort.
@@ -75,7 +75,7 @@ to a clean run abort.
 ## Outbound URL policy (`web_fetch`, `browser_navigate`)
 
 Outbound URLs are the acknowledged injection-exfiltration channel. Prompt-injected
-page content can *request* a fetch, but it cannot make one invisibly or
+page content can _request_ a fetch, but it cannot make one invisibly or
 unboundedly (`runtime/url-policy.ts`). Every candidate URL is:
 
 1. **length-capped** (default 2 KB) — checked before parsing;
@@ -92,18 +92,18 @@ Every decision — allow or reject — is audited in full.
 
 `ask`, `research`, and `do` share the same wrappers and audit projection, but do not receive the same capabilities. `ask` is web-only and may only list saved workflows; `research` is web-only unless `YANTRA_AGENT_RESEARCH_BROWSE=1` explicitly enables read-only browsing; only `do` receives browser mutation tools. This is capability removal at registration time, not a prompt-only restriction.
 
-| Tool | What it does | Key constraints |
-| --- | --- | --- |
-| `web_search` | Query the public web; returns ranked `{url, title, snippet}`. | Result cap; snippets are untrusted and sanitized before the model sees them. |
-| `web_fetch` | Fetch + extract readable article text from one public page. | URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference. |
-| `browser_navigate` | Lazily open the single run page at a policy-checked URL. | URL/host budgets and ethics checks run before navigation. |
-| `browser_observe` | Return bounded readable text and ranked opaque refs. | Side-effect free; creates a new ref generation and invalidates the prior one. |
-| `browser_click` | Click an actionable opaque ref. | Hidden, disabled, occluded, and stale targets return structured errors; protected actions require confirmation. |
-| `browser_fill` | Fill an observed field with a literal or website secret reference. | Credential-shaped literals are rejected; secret refs require confirmation and trusted host metadata. |
-| `browser_extract` | Extract current-page content or the first table. | Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview. |
-| `script_run` | Run a named, allowlisted transformation script. | Registered ids only, validated args, out-of-process with time/memory/output caps. |
-| `workflow_run` | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow. | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`. |
-| `result_publish` | Validate and persist the final Brief; complete the task. | Exactly one successful publication; closes the action phase. |
+| Tool               | What it does                                                                | Key constraints                                                                                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`       | Query the public web; returns ranked `{url, title, snippet}`.               | Result cap; snippets are untrusted and sanitized before the model sees them.                                                                                                                                                       |
+| `web_fetch`        | Fetch + extract readable article text from one public page.                 | URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                     |
+| `browser_navigate` | Lazily open the single run page at a policy-checked URL.                    | URL/host budgets and ethics checks run before navigation.                                                                                                                                                                          |
+| `browser_observe`  | Return bounded readable text and ranked opaque refs.                        | Side-effect free; creates a new ref generation and invalidates the prior one.                                                                                                                                                      |
+| `browser_click`    | Click an actionable opaque ref.                                             | Hidden, disabled, occluded, and stale targets return structured errors; protected actions require confirmation.                                                                                                                    |
+| `browser_fill`     | Fill an observed field with a literal or website secret reference.          | Credential-shaped literals are rejected; secret refs require confirmation and trusted host metadata.                                                                                                                               |
+| `browser_extract`  | Extract current-page content or the first table.                            | Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                   |
+| `script_run`       | Run a named, allowlisted transformation script.                             | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                  |
+| `workflow_run`     | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow. | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`. |
+| `result_publish`   | Publish the final result content; complete the task.                        | Yantra builds and validates the formal Brief from agent content; exactly one successful publication; closes the action phase.                                                                                                      |
 
 Prefer `workflow_run` over ad-hoc browsing whenever a saved workflow matches the
 goal: it replays reliably and cheaply with no model involvement. The agent never
@@ -174,20 +174,43 @@ Registered scripts: `table_normalize`, `dedupe_lines`, `json_pick`.
 > still has the Node standard library. Yantra grants no network or filesystem
 > access to a script (no handles or env are passed), and the scripts are trusted
 > first-party code, so the security boundary is the **code-defined registry**,
-> not OS-level isolation. The worker exists for *resource* containment
+> not OS-level isolation. The worker exists for _resource_ containment
 > (time/memory/output), not to run untrusted code.
 
 ### `result_publish` — the completion contract
 
 Raw chat prose is **not** a completed task. A user-facing agentic run completes
-only when the agent calls `result_publish` with a Brief that validates against the
-protocol Brief schema (which enforces citation integrity). On success the tool
-writes `brief.json`, `brief.md`, and `brief.html` to the run directory and closes
-the run's **action phase**. Exactly one successful publication is allowed: a
-second attempt returns `ALREADY_PUBLISHED`, an invalid Brief returns a structured
-`BRIEF_INVALID` error listing the offending references, and after a successful
-publish any later *mutating* tool call is rejected with `ACTION_PHASE_CLOSED`
-(read-only tools remain available).
+only when the agent calls `result_publish` with its result **content**:
+
+```json
+{
+  "brief": {
+    "title": "One-line answer title",
+    "overview": "Answer-first Markdown citing sources inline as [n].",
+    "key_findings": ["a plain string", { "text": "cited claim [1]", "citations": [1] }],
+    "sources": ["https://example.com/a", { "url": "https://example.com/b", "title": "B" }]
+  }
+}
+```
+
+The agent supplies only what it can know — title, overview, findings, and the
+URLs it actually used, in citation order (`[1]` is the first `sources` entry).
+Yantra deterministically assembles the formal protocol Brief around that content
+(document/task ids, contiguous source numbering, hosts, fetch timestamps,
+metadata) and validates the result, including citation integrity: a citation
+must resolve to a declared source, and an uncited finding is published as
+editorial commentary unless the agent explicitly claims it as fact
+(`editorial: false`), which is rejected. Internal callers may still pass a
+complete protocol Brief (detected by `brief_id`/`schema_version`); it is
+validated as-is.
+
+On success the tool writes `brief.json`, `brief.md`, and `brief.html` to the run
+directory and closes the run's **action phase**. Exactly one successful
+publication is allowed: a second attempt returns `ALREADY_PUBLISHED`, invalid
+content returns a structured, retryable `BRIEF_INVALID` error whose issue
+pointers match the submitted shape, and after a successful publish any later
+_mutating_ tool call is rejected with `ACTION_PHASE_CLOSED` (read-only tools
+remain available).
 
 ## Adding a tool (contributor checklist)
 

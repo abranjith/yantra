@@ -73,7 +73,7 @@ configuration, then select the matching provider/model with your normal
       "baseUrl": "http://127.0.0.1:11434/v1",
       "api": "openai-completions",
       "apiKey": "ollama",
-      "models": [{ "id": "llama3.1:8b" }]
+      "models": [{ "id": "llama3.1:8b", "contextWindow": 16384 }]
     }
   }
 }
@@ -83,3 +83,29 @@ The `apiKey` value is an Ollama placeholder, not a credential. Do not put a
 remote provider key in this file; use managed, runtime-key, or environment
 credentials instead. If a local server does not support Pi's developer role or
 reasoning controls, use the relevant Pi `compat` options in this same file.
+
+### Declare the real context window (required for reliable agentic runs)
+
+A `models.json` model that omits `contextWindow` is assumed by the session
+runtime to have a **128,000-token** window, so context compaction never
+engages for small local models. Ollama, meanwhile, serves models with its own
+context limit (`num_ctx`, default **4096**) and **silently truncates the
+prompt from the front** when a conversation exceeds it — the system prompt,
+your goal, and the tool definitions are dropped first. The visible symptom is
+an agent that answers off-topic, "forgets" the task after a large tool result
+(a fetched page easily exceeds 4096 tokens on its own), stops calling tools,
+and ends with `AGENT_COMPLETION_MISSING`. Yantra logs a startup warning when
+it detects an undeclared `contextWindow` on a custom model.
+
+To run agentic `ask`/`research`/`do` against a local model:
+
+1. **Raise the server's context limit.** For Ollama, set the
+   `OLLAMA_CONTEXT_LENGTH` environment variable on the server (for example
+   `16384`), or bake `PARAMETER num_ctx 16384` into a Modelfile. Restart the
+   server after changing it.
+2. **Declare the same value in `models.json`** as `contextWindow` (see the
+   example above) so compaction engages before the server's limit is hit.
+
+Models served with a 4k window are generally too small for web tasks: a
+single fetched page plus the prompt can exceed the whole window, which no
+amount of compaction can fix. Prefer 16k or more.

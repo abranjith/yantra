@@ -117,14 +117,20 @@ async function runWebFetch(
     };
   }
 
-  // 5. Readability extraction.
+  // 5. Readability extraction. An empty result usually means the URL is not an
+  // article: index/hub pages, media-only pages, and script-rendered shells all
+  // extract to nothing. The message steers the agent toward a usable next step
+  // instead of retrying the same URL.
   const article = await deps.extractor.extract(doc);
   if (article === null || article.contentText.trim().length === 0) {
     return {
       ok: false,
       errorCode: 'EXTRACTION_EMPTY',
-      message: 'No readable article content could be extracted from the page.',
+      message:
+        'No readable article content could be extracted from the page. It is likely an ' +
+        'index/hub, media-only, or script-rendered page; fetch a specific article URL instead.',
       retryable: false,
+      details: { final_url: doc.finalUrl, fetch_mode: doc.fetchMode },
     };
   }
 

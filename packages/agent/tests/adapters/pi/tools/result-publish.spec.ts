@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -6,9 +6,16 @@ import { createBrief } from '@yantra/protocol';
 import { Type } from 'typebox';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createBriefPublisher, resultPublishSpec } from '../../../../src/adapters/pi/tools/result-publish.js';
+import {
+  createBriefPublisher,
+  resultPublishSpec,
+} from '../../../../src/adapters/pi/tools/result-publish.js';
 import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
-import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../../../src/runtime/middleware.js';
+import {
+  wrapTool,
+  type DomainResult,
+  type ToolWrapperSpec,
+} from '../../../../src/runtime/middleware.js';
 
 import { buildServices, extractorReturning, fetchedDoc, fetcherReturning } from './test-support.js';
 
@@ -98,3 +105,165 @@ describe('@no-llm result_publish tool', () => {
 function emptySchema() {
   return Type.Object({}, { additionalProperties: false });
 }
+
+describe('@no-llm result_publish tool — agent-authored content', () => {
+  const TASK_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-publish-agent-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  function agentPublisher() {
+    return createBriefPublisher(runDir, { taskId: TASK_ID, runId: 'run-under-test' });
+  }
+
+  async function publishedBrief(): Promise<Record<string, unknown>> {
+    return JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+  }
+
+  it('builds and publishes a valid Brief from the natural model payload (regression: BRIEF_INVALID on every agent publish)', async () => {
+    // The exact shape a model produces from the tool description and nudge:
+    // plain-string findings and source URLs, no protocol identity fields.
+    const services = buildServices({ runDir, publish: agentPublisher() });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Latest football results',
+          overview: 'Fixtures for today are listed on BBC Sport. [1]',
+          key_findings: ['Many leagues have friendlies today.', 'Kick-off times are UK local.'],
+          sources: [
+            'https://www.bbc.co.uk/sport/football/scores-fixtures',
+            { url: 'https://www.flashscore.com/', title: 'Flashscore' },
+          ],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.task_id).toBe(TASK_ID);
+    expect(brief.schema_version).toBe('0.2');
+    expect(brief.sources).toMatchObject([
+      { n: 1, host: 'www.bbc.co.uk', title: null },
+      { n: 2, host: 'www.flashscore.com', title: 'Flashscore' },
+    ]);
+    // String findings carry no citations and publish as explicit commentary.
+    expect(brief.key_findings).toMatchObject([
+      { text: 'Many leagues have friendlies today.', editorial: true, citations: [] },
+      { text: 'Kick-off times are UK local.', editorial: true, citations: [] },
+    ]);
+    expect(brief.metadata).toMatchObject({ synthesis: 'llm', run_id: 'run-under-test' });
+  });
+
+  it('preserves object findings with citations as non-editorial', async () => {
+    const services = buildServices({ runDir, publish: agentPublisher() });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Cited answer',
+          overview: 'Answer. [1]',
+          key_findings: [{ text: 'Backed claim. [1]', citations: [1] }],
+          sources: ['https://example.com/evidence'],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.key_findings).toMatchObject([
+      { text: 'Backed claim. [1]', citations: [1], editorial: false },
+    ]);
+  });
+
+  it('rejects a citation that resolves to no declared source, with the agent-visible pointer', async () => {
+    const services = buildServices({ runDir, publish: agentPublisher() });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Bad citation',
+          overview: 'Answer.',
+          key_findings: [{ text: 'Cites a ghost.', citations: [7] }],
+          sources: ['https://example.com/only-source'],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('BRIEF_INVALID');
+    expect(result.retryable).toBe(true);
+    const details = result.details as { issues: { pointer: string }[] };
+    expect(
+      details.issues.some((issue) => issue.pointer.startsWith('key_findings/0/citations')),
+    ).toBe(true);
+  });
+
+  it('rejects an unparsable source URL at the sources pointer', async () => {
+    const services = buildServices({ runDir, publish: agentPublisher() });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: { title: 'Bad source', overview: 'Answer.', sources: ['not a url'] },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('BRIEF_INVALID');
+    const details = result.details as { issues: { pointer: string }[] };
+    expect(details.issues.some((issue) => issue.pointer === 'sources/0/url')).toBe(true);
+  });
+
+  it('honors an explicit editorial: false on an uncited finding by rejecting it', async () => {
+    const services = buildServices({ runDir, publish: agentPublisher() });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Uncited claim',
+          overview: 'Answer.',
+          key_findings: [{ text: 'Asserted as fact.', citations: [], editorial: false }],
+          sources: ['https://example.com/unrelated'],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('BRIEF_INVALID');
+    const details = result.details as { issues: { pointer: string }[] };
+    expect(details.issues.some((issue) => issue.pointer === 'key_findings/0/citations')).toBe(true);
+  });
+
+  it('generates a task id when the publisher has no run context (back-compat callers)', async () => {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      { brief: { title: 'No context', overview: 'Answer.' } },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(typeof brief.task_id).toBe('string');
+    expect((brief.task_id as string).length).toBe(26);
+  });
+});

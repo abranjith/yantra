@@ -49,7 +49,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'ask',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'list',
-    budgets: { wallClockMs: 120_000, totalToolCalls: 20, perToolCalls: 10 },
+    budgets: { totalToolCalls: 20, perToolCalls: 10 },
     promptAddendum:
       'Answer the question directly, verify claims with cited sources, and publish an answer Brief.',
     briefKind: 'answer',
@@ -58,7 +58,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'research',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'run',
-    budgets: { wallClockMs: 300_000, totalToolCalls: 45, perToolCalls: 20 },
+    budgets: { totalToolCalls: 45, perToolCalls: 20 },
     promptAddendum:
       'Research broadly before publishing: use independent sources, cover material gaps, cite the evidence for every substantive conclusion, and publish a research Brief.',
     briefKind: 'research',
@@ -68,7 +68,8 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     toolNames: ALL_TOOLS,
     workflowToolMode: 'run',
     budgets: {},
-    promptAddendum: 'Complete the requested task safely, verify the outcome, and publish a task Brief.',
+    promptAddendum:
+      'Complete the requested task safely, verify the outcome, and publish a task Brief.',
     briefKind: 'task',
   },
 };
@@ -92,7 +93,8 @@ export function resolveCommandTaskProfile(
     ...positive(env[`${prefix}MAX_CALLS_PER_TOOL`], 'perToolCalls'),
   };
   const browseEnabled =
-    command === 'research' && (env.YANTRA_AGENT_RESEARCH_BROWSE === '1' || env.YANTRA_AGENT_RESEARCH_BROWSE === 'true');
+    command === 'research' &&
+    (env.YANTRA_AGENT_RESEARCH_BROWSE === '1' || env.YANTRA_AGENT_RESEARCH_BROWSE === 'true');
 
   return {
     ...base,
@@ -101,7 +103,10 @@ export function resolveCommandTaskProfile(
   };
 }
 
-function positive(raw: string | undefined, key: keyof AgentBudgetConfig): Partial<AgentBudgetConfig> {
+function positive(
+  raw: string | undefined,
+  key: keyof AgentBudgetConfig,
+): Partial<AgentBudgetConfig> {
   const value = Number(raw);
   return Number.isSafeInteger(value) && value > 0 ? { [key]: value } : {};
 }

@@ -75,6 +75,17 @@ describe('@no-llm BudgetTracker call reservation', () => {
 });
 
 describe('@no-llm BudgetTracker wall-clock', () => {
+  it('is unlimited by default: no elapsed time exhausts the default wall clock', () => {
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(DEFAULT_BUDGET_LIMITS, clock.now);
+
+    expect(DEFAULT_BUDGET_LIMITS.wallClockMs).toBe(Number.POSITIVE_INFINITY);
+    clock.advance(365 * 24 * 60 * 60 * 1000); // one simulated year
+    expect(budgets.isWallClockExhausted()).toBe(false);
+    expect(budgets.remainingWallClockMs()).toBe(Number.POSITIVE_INFINITY);
+    expect(budgets.reserveCall('web_search').isOk).toBe(true);
+  });
+
   it('passes exactly at the limit boundary and fails one millisecond over', () => {
     const clock = fakeClock();
     const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);

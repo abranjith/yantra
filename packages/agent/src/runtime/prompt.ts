@@ -28,6 +28,7 @@ After verifying the evidence, publish one validated result. If the goal cannot b
 
 /** Budget fields rendered into the per-run user prompt. */
 export interface AgentPromptBudgets {
+  /** `Number.POSITIVE_INFINITY` renders as "unlimited". */
   readonly wallClockMs: number;
   readonly totalToolCalls: number;
   readonly perToolCalls: number;
@@ -77,7 +78,7 @@ export function buildAgentUserPrompt(
     goal || '(empty after sanitization)',
     '',
     'Run constraints:',
-    `- wall clock: ${input.budgets.wallClockMs} ms`,
+    `- wall clock: ${Number.isFinite(input.budgets.wallClockMs) ? `${input.budgets.wallClockMs} ms` : 'unlimited'}`,
     `- total calls: ${input.budgets.totalToolCalls}`,
     `- calls per capability: ${input.budgets.perToolCalls}`,
     `- call timeout: ${input.budgets.perToolTimeoutMs} ms`,

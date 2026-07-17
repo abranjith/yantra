@@ -130,8 +130,13 @@ export function registerResearchCommand(
       new Option('--per-query-limit <n>', 'search results to consider per query').default('6'),
     )
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
-    .addOption(new Option('--budget-ms <ms>', 'wall-clock budget in ms').default('180000'))
-    .action(async (topicArg: string, options: ResearchCommandOptions) => {
+    .addOption(
+      new Option(
+        '--budget-ms <ms>',
+        'deterministic loop wall-clock budget in ms; for agentic runs, an opt-in wall-clock limit (unlimited when omitted)',
+      ).default('180000'),
+    )
+    .action(async (topicArg: string, options: ResearchCommandOptions, command: Command) => {
       const invocation = buildInvocation(topicArg, options, resolvedRuntime.env);
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
@@ -145,7 +150,21 @@ export function registerResearchCommand(
       try {
         // Deterministic selection is resolved before any agent/provider setup.
         if (!invocation.options.noLlm) {
-          await runAgenticResearch(topicArg, invocation, format, detail, options, resolvedRuntime);
+          // Agentic wall clock is unlimited unless --budget-ms was passed
+          // explicitly; the deterministic loop below keeps its bounded default.
+          const explicitWallClockMs =
+            command.getOptionValueSource('budgetMs') === 'cli'
+              ? invocation.options.budget.maxWallClockMs
+              : null;
+          await runAgenticResearch(
+            topicArg,
+            invocation,
+            format,
+            detail,
+            options,
+            resolvedRuntime,
+            explicitWallClockMs,
+          );
           return;
         }
         const loop = await resolvedRuntime.createLoop(invocation);
@@ -271,6 +290,7 @@ async function runAgenticResearch(
   detail: BriefDetailLevel,
   options: ResearchCommandOptions,
   runtime: ResearchRuntime,
+  explicitWallClockMs: number | null,
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -283,11 +303,14 @@ async function runAgenticResearch(
     briefFormat: format,
     ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
   };
-  const connector = new CLIConnectorIO(format === 'json' ? new JSONRenderer() : new TerminalRenderer(), {
-    renderOpts,
-    interactive: runtime.isTty && format !== 'json',
-    suppressPublishedOutcome: true,
-  });
+  const connector = new CLIConnectorIO(
+    format === 'json' ? new JSONRenderer() : new TerminalRenderer(),
+    {
+      renderOpts,
+      interactive: runtime.isTty && format !== 'json',
+      suppressPublishedOutcome: true,
+    },
+  );
   const profile = resolveCommandTaskProfile('research', runtime.env);
   const outcome = await runtime.runTask({
     goal: topic,
@@ -295,7 +318,7 @@ async function runAgenticResearch(
     auth: { mode: 'managed' },
     profile,
     budgets: {
-      wallClockMs: invocation.options.budget.maxWallClockMs,
+      ...(explicitWallClockMs === null ? {} : { wallClockMs: explicitWallClockMs }),
       totalToolCalls: invocation.options.budget.maxLlmCalls,
     },
     connector,
@@ -303,17 +326,25 @@ async function runAgenticResearch(
   if (outcome.kind !== 'published') {
     throw new Error(agentFailureMessage(outcome));
   }
-  const parsed = validateBrief(JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown);
+  const parsed = validateBrief(
+    JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,
+  );
   if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
-  renderBrief(runtime, { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' }, {
-    format,
-    detail,
-    options,
-  });
+  renderBrief(
+    runtime,
+    { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' },
+    {
+      format,
+      detail,
+      options,
+    },
+  );
   if (options.open === true) openArtifact(outcome.brief.htmlPath);
 }
 
-function agentFailureMessage(outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>): string {
+function agentFailureMessage(
+  outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>,
+): string {
   return outcome.kind === 'handoff'
     ? `${outcome.blocker}: ${outcome.safestNextAction}`
     : `${outcome.error.code}: ${outcome.error.message}`;

@@ -12,6 +12,7 @@
  * `~/.config/yantra/config.yaml`), never a default.
  */
 
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -223,6 +224,61 @@ export async function createPiEnvironment(options: PiEnvironmentOptions): Promis
     authSource,
     enumerate,
   };
+}
+
+/** The context window Pi assumes for custom models that do not declare one. */
+export const PI_DEFAULT_CUSTOM_CONTEXT_WINDOW = 128000;
+
+/** Outcome of inspecting the raw models.json declaration for one model. */
+export type CustomModelContextCheck =
+  | { readonly kind: 'not-custom' }
+  | { readonly kind: 'declared'; readonly contextWindow: number }
+  | { readonly kind: 'undeclared' };
+
+/**
+ * Reports whether a models.json custom model declares its real context window.
+ *
+ * Pi assigns undeclared custom models a {@link PI_DEFAULT_CUSTOM_CONTEXT_WINDOW}
+ * window, so compaction never engages for small local models. When the serving
+ * runtime enforces a smaller window (for example Ollama's default `num_ctx` of
+ * 4096), it silently truncates the prompt from the front — dropping the system
+ * prompt, goal, and tool definitions — and the agent derails mid-task. Callers
+ * use `undeclared` to warn actionably at session open.
+ *
+ * @param modelsPath Pinned models.json path (never the ambient `~/.pi` copy).
+ * @param provider Provider key to look up (e.g. `ollama`).
+ * @param modelId Model identifier within that provider.
+ * @returns `not-custom` when the file, provider, or model is absent or
+ *   unreadable; otherwise whether `contextWindow` is declared.
+ */
+export async function checkCustomModelContextWindow(
+  modelsPath: string,
+  provider: string,
+  modelId: string,
+): Promise<CustomModelContextCheck> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(modelsPath, 'utf8'));
+  } catch {
+    return { kind: 'not-custom' };
+  }
+  const providers = (parsed as { providers?: unknown } | null)?.providers;
+  if (typeof providers !== 'object' || providers === null) return { kind: 'not-custom' };
+  const entry = (providers as Record<string, unknown>)[provider];
+  if (typeof entry !== 'object' || entry === null) return { kind: 'not-custom' };
+  const models = (entry as { models?: unknown }).models;
+  if (!Array.isArray(models)) return { kind: 'not-custom' };
+  const model = models.find(
+    (candidate: unknown): candidate is Record<string, unknown> =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      (candidate as Record<string, unknown>).id === modelId,
+  );
+  if (model === undefined) return { kind: 'not-custom' };
+  const contextWindow = model.contextWindow;
+  return typeof contextWindow === 'number' && contextWindow > 0
+    ? { kind: 'declared', contextWindow }
+    : { kind: 'undeclared' };
 }
 
 /**

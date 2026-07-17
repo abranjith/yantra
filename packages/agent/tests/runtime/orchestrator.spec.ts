@@ -198,6 +198,83 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     });
     expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
     expect(provider.sessions[0]?.runPrompts[1]).toMatch(/no validated result has been published/i);
+    // Small local models cannot map "terminal publication capability" onto the
+    // registered tool — the nudge must name result_publish and its payload key.
+    expect(provider.sessions[0]?.runPrompts[1]).toContain('result_publish');
+    expect(provider.sessions[0]?.runPrompts[1]).toContain('"brief"');
+  });
+
+  it('surfaces the post-nudge blocker statement in the AGENT_COMPLETION_MISSING message', async () => {
+    // The nudge invites the model to state its blocker when it cannot publish;
+    // that statement must reach the failure message (and report.md), not be
+    // discarded in favor of a bare completion code.
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [event('assistant_text', { text: 'Here is a jumble of fixtures from many leagues.' })],
+        [
+          event('assistant_text', { text: 'The blocker is that the goal ' }),
+          event('assistant_text', { text: 'was truncated out of my context.' }),
+        ],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    // Deltas of the post-nudge run are accumulated; pre-nudge chatter is not.
+    expect(message).toContain(
+      'Final agent message: The blocker is that the goal was truncated out of my context.',
+    );
+    expect(message).not.toContain('jumble of fixtures');
+  });
+
+  it('keeps the bare AGENT_COMPLETION_MISSING message when the model produced no text', async () => {
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    const result = await fixture({ provider });
+
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toBe(
+      'The session ended without a successful result publication after one completion nudge.',
+    );
+  });
+
+  it('bounds and whitespace-collapses a long post-nudge message excerpt', async () => {
+    const longText = `lead-in\n\n${'x'.repeat(600)}`;
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[], [event('assistant_text', { text: longText })]],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider });
+
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    const excerpt = message.split('Final agent message: ')[1] ?? '';
+    expect(excerpt.length).toBe(403); // 400 chars + '...'
+    expect(excerpt.startsWith('lead-in x')).toBe(true); // newlines collapsed
+    expect(excerpt.endsWith('...')).toBe(true);
+  });
+
+  it('accepts an unbounded wall clock without aborting the run (unlimited default)', async () => {
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    const result = await fixture({
+      provider,
+      budgets: { wallClockMs: Number.POSITIVE_INFINITY },
+    });
+
+    // Pre-fix, Infinity was rejected by budget normalization (and a naive
+    // setTimeout(Infinity) would fire after 1ms and abort as 'wall-clock').
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(provider.sessions[0]?.abortCount).toBe(0);
   });
 
   it('maps a provider failure event to failed without a completion nudge', async () => {

@@ -32,7 +32,11 @@ import type {
   AgentUsage,
 } from '../../provider/types.js';
 
-import { createPiEnvironment } from './environment.js';
+import {
+  PI_DEFAULT_CUSTOM_CONTEXT_WINDOW,
+  checkCustomModelContextWindow,
+  createPiEnvironment,
+} from './environment.js';
 import {
   createDefaultPiEventMapContext,
   extractTerminalState,
@@ -164,6 +168,32 @@ export class PiAgentProvider implements AgentProvider {
     }
 
     const thinkingLevel = normalizeThinkingLevel(options.model.thinking);
+
+    // A models.json model without a declared contextWindow gets Pi's 128k
+    // default, so compaction never engages — and a small serving runtime
+    // (e.g. Ollama's default num_ctx of 4096) then silently truncates the
+    // prompt, dropping the system prompt, goal, and tools mid-task. Warn
+    // actionably; the session itself may still be viable for short tasks.
+    const contextCheck = await checkCustomModelContextWindow(
+      environment.modelsPath,
+      options.model.provider,
+      options.model.id,
+    );
+    if (contextCheck.kind === 'undeclared') {
+      logger.warn(
+        {
+          provider: options.model.provider,
+          model: options.model.id,
+          assumedContextWindow: PI_DEFAULT_CUSTOM_CONTEXT_WINDOW,
+          modelsPath: environment.modelsPath,
+        },
+        `models.json does not declare "contextWindow" for ${options.model.provider}/${options.model.id}; ` +
+          `Pi assumes ${PI_DEFAULT_CUSTOM_CONTEXT_WINDOW} tokens. If the model server enforces a smaller ` +
+          'window (Ollama defaults num_ctx to 4096), prompts are silently truncated and the agent can lose ' +
+          'its goal and tools mid-run. Declare "contextWindow" to match the server limit and raise the ' +
+          'server limit (e.g. OLLAMA_CONTEXT_LENGTH) for agentic use — see docs/model-configuration.md.',
+      );
+    }
 
     const runLocal = await createRunLocalSession({ runDir: options.runDir, cwd: options.cwd });
 

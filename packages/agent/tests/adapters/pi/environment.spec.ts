@@ -14,6 +14,7 @@ import { join, sep } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  checkCustomModelContextWindow,
   createPiEnvironment,
   type PiEnvironmentOptions,
 } from '../../../src/adapters/pi/environment.js';
@@ -233,5 +234,89 @@ describe('@no-llm createPiEnvironment — auth', () => {
 
     const env = await createPiEnvironment(options);
     expect(env.authSource).toBe('unavailable');
+  });
+});
+
+describe('@no-llm checkCustomModelContextWindow — models.json declaration check', () => {
+  async function writeModels(content: unknown): Promise<string> {
+    const dir = await makeTempDir('yantra-env-models-');
+    const modelsPath = join(dir, 'models.json');
+    await writeFile(modelsPath, JSON.stringify(content), 'utf8');
+    return modelsPath;
+  }
+
+  it('reports "undeclared" for a custom model without contextWindow (the gemma/ollama truncation setup)', async () => {
+    const modelsPath = await writeModels({
+      providers: {
+        ollama: {
+          baseUrl: 'http://127.0.0.1:11434/v1',
+          api: 'openai-completions',
+          apiKey: 'ollama',
+          models: [{ id: 'gemma4:e4b' }],
+        },
+      },
+    });
+
+    await expect(
+      checkCustomModelContextWindow(modelsPath, 'ollama', 'gemma4:e4b'),
+    ).resolves.toEqual({ kind: 'undeclared' });
+  });
+
+  it('reports the declared window when the model declares contextWindow', async () => {
+    const modelsPath = await writeModels({
+      providers: {
+        ollama: { models: [{ id: 'gemma4:e4b', contextWindow: 16384 }] },
+      },
+    });
+
+    await expect(
+      checkCustomModelContextWindow(modelsPath, 'ollama', 'gemma4:e4b'),
+    ).resolves.toEqual({ kind: 'declared', contextWindow: 16384 });
+  });
+
+  it('treats a non-positive or non-numeric contextWindow as undeclared', async () => {
+    const modelsPath = await writeModels({
+      providers: {
+        ollama: {
+          models: [
+            { id: 'a', contextWindow: 0 },
+            { id: 'b', contextWindow: '8k' },
+          ],
+        },
+      },
+    });
+
+    await expect(checkCustomModelContextWindow(modelsPath, 'ollama', 'a')).resolves.toEqual({
+      kind: 'undeclared',
+    });
+    await expect(checkCustomModelContextWindow(modelsPath, 'ollama', 'b')).resolves.toEqual({
+      kind: 'undeclared',
+    });
+  });
+
+  it('reports "not-custom" when the provider or model is not in models.json', async () => {
+    const modelsPath = await writeModels({
+      providers: { ollama: { models: [{ id: 'gemma4:e4b' }] } },
+    });
+
+    await expect(
+      checkCustomModelContextWindow(modelsPath, 'anthropic', 'claude-haiku-4-5'),
+    ).resolves.toEqual({ kind: 'not-custom' });
+    await expect(
+      checkCustomModelContextWindow(modelsPath, 'ollama', 'other-model'),
+    ).resolves.toEqual({ kind: 'not-custom' });
+  });
+
+  it('reports "not-custom" for a missing or malformed models.json', async () => {
+    const dir = await makeTempDir('yantra-env-models-missing-');
+    await expect(
+      checkCustomModelContextWindow(join(dir, 'models.json'), 'ollama', 'gemma4:e4b'),
+    ).resolves.toEqual({ kind: 'not-custom' });
+
+    const malformedPath = join(dir, 'malformed.json');
+    await writeFile(malformedPath, '{not json', 'utf8');
+    await expect(
+      checkCustomModelContextWindow(malformedPath, 'ollama', 'gemma4:e4b'),
+    ).resolves.toEqual({ kind: 'not-custom' });
   });
 });

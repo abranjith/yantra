@@ -44,7 +44,12 @@ export interface BudgetDecision {
 
 /** Configurable budget limits. All are hard caps; see plan §9 for defaults. */
 export interface BudgetLimits {
-  /** Maximum wall-clock time for the whole run, in milliseconds. */
+  /**
+   * Maximum wall-clock time for the whole run, in milliseconds.
+   * `Number.POSITIVE_INFINITY` disables the wall-clock cap (the default): local
+   * models are slow enough that a fixed default deadline aborts legitimate
+   * runs, so time-bounding a run is an explicit user/config decision.
+   */
   readonly wallClockMs: number;
   /** Maximum number of tool calls across all tools. */
   readonly totalToolCalls: number;
@@ -70,7 +75,7 @@ export interface BudgetLimits {
  * bounding runaway loops and injection-driven exfiltration.
  */
 export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
-  wallClockMs: 10 * 60 * 1000,
+  wallClockMs: Number.POSITIVE_INFINITY,
   totalToolCalls: 60,
   perToolCalls: 25,
   perToolTimeoutMs: 45 * 1000,
@@ -130,7 +135,10 @@ export class BudgetTracker {
     return this.limits.maxBytesPerResult;
   }
 
-  /** Milliseconds remaining on the wall-clock budget (never negative). */
+  /**
+   * Milliseconds remaining on the wall-clock budget (never negative).
+   * Returns `Number.POSITIVE_INFINITY` when the run is not time-bounded.
+   */
   public remainingWallClockMs(): number {
     return Math.max(0, this.limits.wallClockMs - (this.now() - this.startedAt));
   }

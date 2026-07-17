@@ -99,6 +99,22 @@ describe('@no-llm cli/research command', () => {
     expect(h.options()?.budget.maxWallClockMs).toBe(5_000);
   });
 
+  it('leaves the agentic wall clock unlimited when --budget-ms is not passed', async () => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['research', 'topic'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 2 });
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBeUndefined();
+  });
+
+  it('bounds the agentic wall clock only when --budget-ms is explicit', async () => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['research', 'topic', '--budget-ms', '5000'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 2 });
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(5_000);
+  });
+
   it('treats LLM_PROVIDER=none as noLlm=true', async () => {
     const h = harness({ env: { LLM_PROVIDER: 'none' } });
     await h.program.parseAsync(['research', 'topic', '--no-llm'], { from: 'user' });
@@ -134,7 +150,9 @@ describe('@no-llm cli/research command', () => {
 
   it('selects the shared agentic runtime outside deterministic mode', async () => {
     const h = harness();
-    await expect(h.program.parseAsync(['research', 'topic'], { from: 'user' })).rejects.toMatchObject({
+    await expect(
+      h.program.parseAsync(['research', 'topic'], { from: 'user' }),
+    ).rejects.toMatchObject({
       exitCode: 2,
     });
     expect(h.invocation()).toBeUndefined();
@@ -156,11 +174,11 @@ describe('@no-llm cli/research command', () => {
         } as unknown as ResearchLoop),
     });
 
-    await expect(program.parseAsync(['research', 'topic', '--no-llm'], { from: 'user' })).rejects.toMatchObject(
-      {
-        exitCode: 2,
-      },
-    );
+    await expect(
+      program.parseAsync(['research', 'topic', '--no-llm'], { from: 'user' }),
+    ).rejects.toMatchObject({
+      exitCode: 2,
+    });
     expect(stderr.value()).toContain('research failed: boom');
   });
 });

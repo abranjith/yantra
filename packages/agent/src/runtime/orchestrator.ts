@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import {
   AgentBrowserController,
   BlocklistImpl,
+  BrowserFallbackFetcher,
   DefaultOpaqueRefResolver,
   DefaultSanitizer,
   EthicsGateImpl,
   HttpFetcher,
+  HybridContentFetcher,
   JsonlEventBus,
   LocalBrowserProvider,
   LocalProfileStore,
@@ -73,8 +75,18 @@ import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
 
+/**
+ * Sent once when a session run stops without a successful publication. Small
+ * local models do not reliably map "terminal publication capability" onto the
+ * registered tool, so the nudge names `result_publish` and its minimal payload
+ * shape explicitly (this is a per-run user message, not the governed system
+ * prompt — the no-tool-catalog rule applies to `AGENT_SYSTEM_PROMPT` only).
+ */
 const COMPLETION_NUDGE =
-  'Completion check: no validated result has been published. Call the terminal publication capability now with a supported Brief, or stop with the precise blocker and safest next action.';
+  'Completion check: no validated result has been published, so the task is NOT complete. ' +
+  'Plain chat text is not a result. You MUST now call the result_publish tool exactly once, ' +
+  'passing {"brief": {...}} with your title, overview, key_findings, and sources. ' +
+  'If you cannot complete the goal, instead state the precise blocker and the safest next action.';
 
 /** Full enforced budget configuration for one agentic run. */
 export interface AgentBudgetConfig extends BudgetLimits, AgentPromptBudgets {
@@ -358,6 +370,8 @@ interface ExecutionState {
   readonly userAborted: boolean;
   readonly lastError: AgentError | undefined;
   readonly handoff: { blocker: string; safestNextAction: string } | undefined;
+  /** Accumulated (post-sanitizer) assistant text of the most recent prompt run. */
+  readonly lastResponseText: string;
   onEvent(event: AgentEvent): void;
   runPrompt(prompt: string): Promise<AgentRunResult | undefined>;
   dispose(): void;
@@ -381,6 +395,7 @@ function createExecutionState(input: {
   let lastError: AgentError | undefined;
   let handoff: { blocker: string; safestNextAction: string } | undefined;
   let abortPromise: Promise<void> | undefined;
+  let lastResponseText = '';
 
   const interrupt = (reason: string): void => {
     if (reason === 'user') userAborted = true;
@@ -388,8 +403,12 @@ function createExecutionState(input: {
     if (!input.runAbort.signal.aborted) input.runAbort.abort(reason);
     abortPromise ??= input.session.abort().catch(() => undefined);
   };
-  const wallTimer = setTimeout(() => interrupt('wall-clock'), input.budgets.wallClockMs);
-  wallTimer.unref?.();
+  // No timer when the run is not time-bounded: Node coerces out-of-range
+  // delays (including Infinity) to 1 ms, which would abort the run instantly.
+  const wallTimer = Number.isFinite(input.budgets.wallClockMs)
+    ? setTimeout(() => interrupt('wall-clock'), input.budgets.wallClockMs)
+    : undefined;
+  wallTimer?.unref?.();
   const onUserAbort = (): void => interrupt('user');
   if (input.request.signal?.aborted) onUserAbort();
   else input.request.signal?.addEventListener('abort', onUserAbort, { once: true });
@@ -397,6 +416,7 @@ function createExecutionState(input: {
   const onEvent = (event: AgentEvent): void => {
     switch (event.type) {
       case 'assistant_text':
+        lastResponseText += event.text;
         input.connector.emitAgentEvent(event);
         if (/\b(captcha|bot[- ]wall|mfa)\b/i.test(event.text)) {
           handoff ??= {
@@ -463,6 +483,9 @@ function createExecutionState(input: {
 
   const runPrompt = async (prompt: string): Promise<AgentRunResult | undefined> => {
     if (input.runAbort.signal.aborted) return undefined;
+    // Each prompt run owns its own response text so a completion-missing
+    // failure reports the post-nudge blocker, not earlier chatter.
+    lastResponseText = '';
     const runPromise = input.session.run(prompt);
     const interrupted = new Promise<undefined>((resolve) => {
       input.runAbort.signal.addEventListener('abort', () => resolve(undefined), { once: true });
@@ -493,6 +516,9 @@ function createExecutionState(input: {
     },
     get handoff() {
       return handoff;
+    },
+    get lastResponseText() {
+      return lastResponseText;
     },
     onEvent,
     runPrompt,
@@ -542,11 +568,23 @@ async function resolveTerminalOutcome(
   if (state.handoff !== undefined) {
     return { kind: 'handoff', runId, runDir, ...state.handoff };
   }
+  // The nudge invites the model to state its blocker when it cannot publish;
+  // surface that (already-sanitized) statement so the failure is diagnosable
+  // from the CLI error and report.md instead of a bare completion code.
+  const finalMessage = excerptText(state.lastResponseText, 400);
   return failed(runId, runDir, {
     code: 'AGENT_COMPLETION_MISSING',
     message:
-      'The session ended without a successful result publication after one completion nudge.',
+      'The session ended without a successful result publication after one completion nudge.' +
+      (finalMessage === undefined ? '' : ` Final agent message: ${finalMessage}`),
   });
+}
+
+/** Collapse whitespace and bound the excerpt; undefined when there is no text. */
+function excerptText(text: string, maxChars: number): string | undefined {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0) return undefined;
+  return collapsed.length <= maxChars ? collapsed : `${collapsed.slice(0, maxChars)}...`;
 }
 
 async function readPublishedBrief(runDir: string): Promise<PublishedBriefRef | undefined> {
@@ -780,7 +818,14 @@ async function createDefaultEnvironment(context: {
         resultCap: 8,
       },
       fetch: {
-        fetcher: new HttpFetcher({ maxBodyBytes: 5 * 1024 * 1024 }),
+        // Same hybrid strategy as the deterministic ask/research pipelines:
+        // HTTP first, escalating to a headless-browser fetch when the server
+        // refuses the bot UA (401/403) or returns a script-rendered shell that
+        // Readability cannot extract (the EXTRACTION_EMPTY class of failures).
+        fetcher: new HybridContentFetcher({
+          httpFetcher: new HttpFetcher({ maxBodyBytes: 5 * 1024 * 1024 }),
+          browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
+        }),
         extractor: new ReadabilityExtractor(),
         ethics,
         allowedContentTypes: ['text/html', 'text/plain'],
@@ -788,7 +833,10 @@ async function createDefaultEnvironment(context: {
         captureThresholdBytes: 16 * 1024,
       },
       script: { registry: new ScriptRegistry() },
-      publish: createBriefPublisher(context.runDir),
+      publish: createBriefPublisher(context.runDir, {
+        taskId: context.taskId,
+        runId: context.runId,
+      }),
       workflow: {
         listCatalog: () => workflowStore.listCatalog(),
         run: async (input, ctx) => {
@@ -841,6 +889,9 @@ function normalizeBudgets(overrides: Partial<AgentBudgetConfig> | undefined): Ag
   const merged = { ...DEFAULT_AGENT_BUDGETS, ...overrides };
   for (const [key, value] of Object.entries(merged)) {
     if (key === 'perToolCallOverrides') continue;
+    // The wall clock is the one budget that may be unbounded: runs are
+    // unlimited by default and time-bounding is an explicit override.
+    if (key === 'wallClockMs' && value === Number.POSITIVE_INFINITY) continue;
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) {
       throw new Error(`Agent budget "${key}" must be a positive finite number.`);
     }

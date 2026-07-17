@@ -127,8 +127,13 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     )
     .addOption(new Option('--limit <count>', 'number of sources to consider').default('3'))
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('30000'))
-    .addOption(new Option('--budget-ms <ms>', 'pipeline timeout budget in ms').default('100000'))
-    .action(async (queryArg: string, options: AskOptions) => {
+    .addOption(
+      new Option(
+        '--budget-ms <ms>',
+        'deterministic pipeline timeout in ms; for agentic runs, an opt-in wall-clock limit (unlimited when omitted)',
+      ).default('100000'),
+    )
+    .action(async (queryArg: string, options: AskOptions, command: Command) => {
       // Resolve unset flags from the effective preferences (explicit flag wins).
       const effective = await resolvedRuntime.resolveDefaults();
       const resolved = resolveAskDefaults(options, effective);
@@ -149,7 +154,22 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
         // Selection happens before the agent runtime/provider is constructed.
         // The deterministic pipeline below is deliberately untouched.
         if (!query.noLlm) {
-          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime);
+          // The agentic wall clock is unlimited by default; only an explicit
+          // --budget-ms bounds it (and it is not clamped to the deterministic
+          // pipeline's 300s ceiling — local models legitimately need longer).
+          const explicitWallClockMs =
+            command.getOptionValueSource('budgetMs') === 'cli'
+              ? parseNullablePositiveInt(options.budgetMs)
+              : null;
+          await runAgenticAsk(
+            queryArg,
+            query,
+            format,
+            detail,
+            options,
+            resolvedRuntime,
+            explicitWallClockMs,
+          );
           return;
         }
         const pipeline = await resolvedRuntime.createPipeline(query);
@@ -286,13 +306,17 @@ async function runAgenticAsk(
   detail: BriefDetailLevel,
   options: AskOptions,
   runtime: AskRuntime,
+  explicitWallClockMs: number | null,
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
-  const connector = new CLIConnectorIO(format === 'json' ? new JSONRenderer() : new TerminalRenderer(), {
-    renderOpts,
-    interactive: runtime.isTty && format !== 'json',
-    suppressPublishedOutcome: true,
-  });
+  const connector = new CLIConnectorIO(
+    format === 'json' ? new JSONRenderer() : new TerminalRenderer(),
+    {
+      renderOpts,
+      interactive: runtime.isTty && format !== 'json',
+      suppressPublishedOutcome: true,
+    },
+  );
   const profile = resolveCommandTaskProfile('ask', runtime.env);
   const outcome = await runtime.runTask({
     goal: question,
@@ -300,7 +324,7 @@ async function runAgenticAsk(
     auth: { mode: 'managed' },
     profile,
     budgets: {
-      wallClockMs: query.pipelineBudgetMs,
+      ...(explicitWallClockMs === null ? {} : { wallClockMs: explicitWallClockMs }),
       ...(query.budgetCalls === null ? {} : { totalToolCalls: query.budgetCalls }),
     },
     ...(query.personalization ? { profileContext: query.personalization } : {}),
@@ -338,7 +362,9 @@ async function renderAgenticOutcome(
   if (outcome.kind !== 'published') {
     throw new Error(agentFailureMessage(outcome));
   }
-  const parsed = validateBrief(JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown);
+  const parsed = validateBrief(
+    JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,
+  );
   if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
   renderBrief(runtime, { brief: parsed.value, artifacts: null }, { format, detail, options });
   await runtime.recordHistory(outcome.runId);
@@ -347,7 +373,9 @@ async function renderAgenticOutcome(
   if (exitCode !== 0) throw new Error(`Agentic ask exited with ${exitCode}.`);
 }
 
-function agentFailureMessage(outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>): string {
+function agentFailureMessage(
+  outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>,
+): string {
   return outcome.kind === 'handoff'
     ? `${outcome.blocker}: ${outcome.safestNextAction}`
     : `${outcome.error.code}: ${outcome.error.message}`;
