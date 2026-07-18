@@ -32,17 +32,51 @@ import type {
   RunServices,
 } from '../../../runtime/run-services.js';
 
-const ResultPublishParams = Type.Object(
+/**
+ * The agent-authored content shape. `title`/`overview` are structurally
+ * required so the provider surfaces a named missing field *before* the call
+ * runs — small local models repeatedly omitted `title` when the whole payload
+ * was `Type.Unknown` and the post-hoc BRIEF_INVALID message read like a length
+ * problem ("String must contain at least 1 character(s)"), not a missing one.
+ * The object stays open (`additionalProperties: true`) because complete
+ * protocol Briefs (internal/scripted callers) travel through the same
+ * parameter; content-level validation remains the publisher's job.
+ */
+const BriefContentParams = Type.Object(
   {
-    brief: Type.Unknown({
-      description:
-        'The final result content as an object: {"title": one line, "overview": answer-first ' +
-        'Markdown citing sources inline as [n], "key_findings": array of strings or ' +
-        '{"text", "citations": [n, ...]}, "sources": array of the URLs you actually used — ' +
-        'strings or {"url", "title"} — in citation order ([1] is the first entry). ' +
-        'Yantra builds and validates the formal Brief document from this content.',
+    title: Type.String({
+      minLength: 1,
+      description: 'One-line title of the result. Required.',
     }),
+    overview: Type.String({
+      description:
+        'Answer-first Markdown overview (1-3 paragraphs) citing sources inline as [n]. Required.',
+    }),
+    key_findings: Type.Optional(
+      Type.Array(Type.Unknown(), {
+        description:
+          'Scannable findings: strings, or {"text", "citations": [n, ...]} objects whose ' +
+          'citation numbers resolve to declared sources.',
+      }),
+    ),
+    sources: Type.Optional(
+      Type.Array(Type.Unknown(), {
+        description:
+          'The URLs you actually used, in citation order ([1] is the first entry): ' +
+          'strings or {"url", "title"} objects.',
+      }),
+    ),
   },
+  {
+    additionalProperties: true,
+    description:
+      'The final result content. Yantra builds and validates the formal Brief document ' +
+      '(ids, numbering, hosts, timestamps, metadata) from this content.',
+  },
+);
+
+const ResultPublishParams = Type.Object(
+  { brief: BriefContentParams },
   { additionalProperties: false },
 );
 

@@ -193,10 +193,14 @@ async function runPipeline<TParams extends TSchema>(
     // 1. Input validation — a closed schema rejects unknown/invalid input
     //    before any budget, policy, or domain code runs.
     if (!Check(spec.parameters, rawParams)) {
+      // TypeBox reports the failing location as `instancePath` (JSON pointer);
+      // older releases used `path`. Without it the model cannot tell WHICH
+      // field failed, so a weak model has no structured retry path.
       const first = Errors(spec.parameters, rawParams)[0] as
-        | { path?: string; message?: string }
+        | { path?: string; instancePath?: string; message?: string }
         | undefined;
-      const where = first?.path && first.path.length > 0 ? ` at "${first.path}"` : '';
+      const pointer = first?.instancePath ?? first?.path;
+      const where = pointer !== undefined && pointer.length > 0 ? ` at "${pointer}"` : '';
       return failure(
         spec,
         services,

@@ -24,6 +24,9 @@ runs/<run-id>/
   usage.json             # aggregated usage
   captures/              # oversized sanitized browser/web extraction payloads
   trace.json             # ordered successful browser interactions (promotion source)
+  brief.json|md|html     # the validated published result (successful runs)
+  result.md              # unvalidated final agent response (only when publication failed)
+  report.md              # human-readable run report
   ...
 ```
 
@@ -31,6 +34,12 @@ Large `browser_extract` results are written as restrictive-permission JSON
 files under `captures/`; the model receives only a bounded preview and opaque
 `capture_ref`. Capture references are run-local and do not reveal filesystem
 paths to the model.
+
+When a run ends **without** a validated publication (failure class
+`validation_error`, error `AGENT_COMPLETION_MISSING`), the final sanitized
+assistant response is salvaged to `result.md` so the model's answer is not lost.
+It is diagnostic output — not a validated, citable Brief — and the run still
+fails; `report.md` and the CLI error note when it was written.
 
 `trace.json` records the ordered successful browser interactions of the run
 (navigate/click/fill/extract). Each interactive step carries a **candidate-chain

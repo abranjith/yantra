@@ -193,8 +193,13 @@ only when the agent calls `result_publish` with its result **content**:
 }
 ```
 
-The agent supplies only what it can know — title, overview, findings, and the
-URLs it actually used, in citation order (`[1]` is the first `sources` entry).
+`title` and `overview` are **schema-required**: a call without them (or with an
+empty title) is rejected as `INVALID_INPUT` naming the missing field before the
+publisher runs, so even small local models get a structured retry path.
+`key_findings` and `sources` are optional at the schema level and validated as
+content. The agent supplies only what it can know — title, overview, findings,
+and the URLs it actually used, in citation order (`[1]` is the first `sources`
+entry).
 Yantra deterministically assembles the formal protocol Brief around that content
 (document/task ids, contiguous source numbering, hosts, fetch timestamps,
 metadata) and validates the result, including citation integrity: a citation

@@ -1,4 +1,4 @@
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -572,12 +572,35 @@ async function resolveTerminalOutcome(
   // surface that (already-sanitized) statement so the failure is diagnosable
   // from the CLI error and report.md instead of a bare completion code.
   const finalMessage = excerptText(state.lastResponseText, 400);
+  const savedResultNote = await saveUnpublishedResult(runDir, state.lastResponseText);
   return failed(runId, runDir, {
     code: 'AGENT_COMPLETION_MISSING',
     message:
       'The session ended without a successful result publication after one completion nudge.' +
+      savedResultNote +
       (finalMessage === undefined ? '' : ` Final agent message: ${finalMessage}`),
   });
+}
+
+/**
+ * Best-effort salvage of the final (already-sanitized) assistant response when
+ * the run ends without a validated publication: persist it as `result.md` so
+ * the user still gets a file artifact instead of only a 400-char excerpt in
+ * report.md. This is diagnostic output, not a published Brief — the run still
+ * fails with AGENT_COMPLETION_MISSING (raw prose is not success, plan §5).
+ *
+ * @returns The sentence appended to the failure message, or '' when nothing
+ *   was saved (no text, or the write failed).
+ */
+async function saveUnpublishedResult(runDir: string, responseText: string): Promise<string> {
+  const text = responseText.trim();
+  if (text.length === 0) return '';
+  try {
+    await writeFile(join(runDir, 'result.md'), `${text}\n`, 'utf8');
+    return ' The full unvalidated response was saved to result.md.';
+  } catch {
+    return '';
+  }
 }
 
 /** Collapse whitespace and bound the excerpt; undefined when there is no text. */
@@ -666,7 +689,15 @@ function finalizationFor(outcome: AgenticTaskOutcome): {
     case 'aborted':
       return { status: 'aborted', failureClass: 'user_aborted', error: outcome.error };
     case 'failed':
-      return { status: 'failed', failureClass: 'unexpected', error: outcome.error };
+      // A missing/unvalidated publication is a validation-contract failure,
+      // not an unexpected crash: keep manifest/events consistent with the
+      // AGENT_COMPLETION_MISSING code report.md already shows.
+      return {
+        status: 'failed',
+        failureClass:
+          outcome.error.code === 'AGENT_COMPLETION_MISSING' ? 'validation_error' : 'unexpected',
+        error: outcome.error,
+      };
   }
 }
 

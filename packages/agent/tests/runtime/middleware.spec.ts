@@ -78,6 +78,23 @@ describe('@no-llm middleware stage short-circuiting', () => {
     expect(services.budgets.snapshot().totalCalls).toBe(0);
   });
 
+  it('names the failing field path in the INVALID_INPUT message', async () => {
+    // Regression: the middleware read `path` from TypeBox errors, but the
+    // pinned TypeBox reports `instancePath` — so no tool ever told the model
+    // WHICH field was invalid, breaking the structured retry loop for models
+    // that depend on it (run 20260717T223950Z-research-03a436fd).
+    const services = makeServices();
+    const tool = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+
+    const result = await tool.execute({ q: 123 }, undefined);
+
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.modelText).toContain('/q');
+  });
+
   it('rejects unknown extra keys (closed schema)', async () => {
     const services = makeServices();
     const tool = wrapTool(

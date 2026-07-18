@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -258,6 +258,53 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(excerpt.length).toBe(403); // 400 chars + '...'
     expect(excerpt.startsWith('lead-in x')).toBe(true); // newlines collapsed
     expect(excerpt.endsWith('...')).toBe(true);
+  });
+
+  it('persists the full unvalidated final response as result.md on completion-missing', async () => {
+    // Regression (run 20260717T223950Z-research-03a436fd): the model answered
+    // in full but never published; everything beyond a 400-char excerpt in the
+    // failure message was discarded. The final response must survive as a file.
+    const longAnswer = `# A full answer\n\n${'detail '.repeat(200)}end`;
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[], [event('assistant_text', { text: longAnswer })]],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toContain('saved to result.md');
+    const saved = await readFile(join(result.outcome.runDir, 'result.md'), 'utf8');
+    expect(saved).toBe(`${longAnswer}\n`);
+  });
+
+  it('writes no result.md when the model produced no final text', async () => {
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    const result = await fixture({ provider });
+
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).not.toContain('result.md');
+    await expect(access(join(result.outcome.runDir, 'result.md'))).rejects.toThrow();
+  });
+
+  it('records validation_error (not unexpected) for a completion-missing failure', async () => {
+    // Regression: report.md showed AGENT_COMPLETION_MISSING while manifest and
+    // events.jsonl classified the same failure as "unexpected".
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    const result = await fixture({ provider });
+
+    const manifest = JSON.parse(
+      await readFile(join(result.outcome.runDir, 'manifest.json'), 'utf8'),
+    ) as { failureClass?: string };
+    expect(manifest.failureClass).toBe('validation_error');
+    const events = await readFile(join(result.outcome.runDir, 'events.jsonl'), 'utf8');
+    expect(events).toContain('"failure_class":"validation_error"');
   });
 
   it('accepts an unbounded wall clock without aborting the run (unlimited default)', async () => {

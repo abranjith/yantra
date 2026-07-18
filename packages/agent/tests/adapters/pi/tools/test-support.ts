@@ -223,7 +223,7 @@ function minimalValidFor(spec: ToolWrapperSpec<TObject>): Record<string, unknown
     case 'script_run':
       return { script_id: 'table_normalize', args: { text: 'a\n1' } };
     case 'result_publish':
-      return { brief: {} };
+      return { brief: { title: 'x', overview: 'x' } };
     case 'browser_navigate':
       return { url: 'https://example.com/' };
     case 'browser_observe':

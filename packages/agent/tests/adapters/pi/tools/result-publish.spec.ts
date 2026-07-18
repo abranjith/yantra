@@ -56,10 +56,44 @@ describe('@no-llm result_publish tool', () => {
     expect(second.error_code).toBe('ALREADY_PUBLISHED');
   });
 
-  it('returns a structured BRIEF_INVALID error for an invalid Brief', async () => {
+  it('rejects a payload without title/overview at the schema boundary, naming the field', async () => {
+    // Regression (run 20260717T223950Z-research-03a436fd): gemma4:e4b sent
+    // valid findings/sources but never a title, because `brief` was declared
+    // Type.Unknown and the model was never structurally told the field exists.
+    // The schema now surfaces the missing required field before the call runs.
     const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
     const tool = wrapTool(resultPublishSpec(services), services);
-    const result = await tool.execute({ brief: { not: 'a brief' } }, undefined);
+    const result = await tool.execute(
+      {
+        brief: {
+          key_findings: [{ text: 'Backed claim. [1]', citations: [1] }],
+          sources: ['https://example.com/evidence'],
+        },
+      },
+      undefined,
+    );
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.retryable).toBe(true);
+    expect(result.modelText).toContain('title');
+  });
+
+  it('rejects an empty title at the schema boundary', async () => {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+    const tool = wrapTool(resultPublishSpec(services), services);
+    const result = await tool.execute({ brief: { title: '', overview: 'Answer.' } }, undefined);
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.modelText).toContain('title');
+  });
+
+  it('returns a structured BRIEF_INVALID error for schema-valid but content-invalid input', async () => {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+    const tool = wrapTool(resultPublishSpec(services), services);
+    const result = await tool.execute(
+      { brief: { title: 'Bad content', overview: 'Answer. [1]', sources: ['not a url'] } },
+      undefined,
+    );
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('BRIEF_INVALID');
     expect(result.retryable).toBe(true);
