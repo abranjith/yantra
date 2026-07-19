@@ -49,18 +49,22 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'ask',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'list',
-    budgets: { totalToolCalls: 20, perToolCalls: 10 },
+    budgets: { totalToolCalls: 12, perToolCalls: 6 },
     promptAddendum:
-      'Answer the question directly, verify claims with cited sources, and publish an answer Brief.',
+      'Answer the question directly, verify claims with cited sources, and publish an answer Brief. ' +
+      'Each web_search returns the top sources already fetched with their page content — read that ' +
+      'evidence rather than re-searching; use web_fetch only to follow a specific link.',
     briefKind: 'answer',
   },
   research: {
     command: 'research',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'run',
-    budgets: { totalToolCalls: 45, perToolCalls: 20 },
+    budgets: { totalToolCalls: 30, perToolCalls: 12 },
     promptAddendum:
-      'Research broadly before publishing: use independent sources, cover material gaps, cite the evidence for every substantive conclusion, and publish a research Brief.',
+      'Research broadly before publishing: use independent sources, cover material gaps, cite the ' +
+      'evidence for every substantive conclusion, and publish a research Brief. Each web_search ' +
+      'returns fetched source content, not just links — follow specific leads with web_fetch.',
     briefKind: 'research',
   },
   do: {

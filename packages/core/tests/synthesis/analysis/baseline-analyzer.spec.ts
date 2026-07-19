@@ -46,6 +46,29 @@ describe('@no-llm synthesis/BaselineAnalyzer sentence + token parity', () => {
   });
 });
 
+describe('@no-llm synthesis/BaselineAnalyzer neutral analysis stubs', () => {
+  it('reports negated: false for every sentence, including explicit negations', () => {
+    const analysis = analyzer.analyze('Sales rose in 2025. Sales did not rise in 2024.');
+    for (const sentence of analysis.sentences) {
+      expect(sentence.negated).toBe(false);
+    }
+  });
+
+  it('reports sentiment: 0 for every sentence, including opinionated ones', () => {
+    const analysis = analyzer.analyze('This is a fantastic product. The report was terrible.');
+    for (const sentence of analysis.sentences) {
+      expect(sentence.sentiment).toBe(0);
+    }
+  });
+
+  it('reports junkScore 0 for any index, junk-looking sentences included', () => {
+    const analysis = analyzer.analyze('Home News Sport Business Innovation Culture Arts Travel.');
+    expect(analysis.junkScore(0)).toBe(0);
+    expect(analysis.junkScore(99)).toBe(0);
+    expect(analysis.junkScore(-1)).toBe(0);
+  });
+});
+
 describe('@no-llm synthesis/BaselineAnalyzer typed entities', () => {
   it('types a currency amount as money and normalizes to digits', () => {
     const [money] = analyzer.analyze('The price fell to $7,500 this week.').entities;

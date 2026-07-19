@@ -83,6 +83,7 @@ export class BlockSegmentingAnalyzer implements TextAnalyzer {
     const sentences: AnalyzedSentence[] = [];
     const entities: TypedEntity[] = [];
     const finiteVerbBySentence: boolean[] = [];
+    const junkScoreBySentence: number[] = [];
 
     for (const block of splitIntoBlocks(text)) {
       const analysis = this.inner.analyze(block);
@@ -91,6 +92,7 @@ export class BlockSegmentingAnalyzer implements TextAnalyzer {
         const index = offset + sentence.index;
         sentences.push({ ...sentence, index });
         finiteVerbBySentence[index] = analysis.hasFiniteVerb(sentence.index);
+        junkScoreBySentence[index] = analysis.junkScore(sentence.index);
       }
       for (const entity of analysis.entities) {
         entities.push({ ...entity, sentenceIndex: offset + entity.sentenceIndex });
@@ -102,6 +104,7 @@ export class BlockSegmentingAnalyzer implements TextAnalyzer {
       entities,
       hasFiniteVerb: (sentenceIndex: number): boolean =>
         finiteVerbBySentence[sentenceIndex] ?? false,
+      junkScore: (sentenceIndex: number): number => junkScoreBySentence[sentenceIndex] ?? 0,
     };
     this.cache.set(text, stitched);
     return stitched;

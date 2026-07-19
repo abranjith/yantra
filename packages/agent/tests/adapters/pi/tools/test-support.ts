@@ -53,6 +53,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
   const search: SearchToolDeps = {
     resolveProvider: () => Promise.resolve({ isOk: true, value: emptySearchProvider() }),
     resultCap: 5,
+    fetchTop: 3,
     ...options.search,
   };
   const fetch: FetchToolDeps = {

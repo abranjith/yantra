@@ -16,7 +16,9 @@ const providerNameSchema = z.enum(
  * fail validation (startup exit 1). `fallback_chain` entries are de-duplicated
  * (first occurrence wins) while preserving order. An empty chain is accepted
  * here — it is a valid config that only surfaces as a resolution-time error when
- * `auto` has nowhere to walk.
+ * `auto` has nowhere to walk. `fetch_top` (how many top hits the combined
+ * `web_search` tool fetches inline) is an integer in `[1, 5]`, default 3;
+ * out-of-range or non-integer values fail validation (startup exit 1).
  */
 export const searchConfigSchema = z
   .object({
@@ -25,11 +27,13 @@ export const searchConfigSchema = z
       .array(providerNameSchema)
       .default([...DEFAULT_SEARCH_CONFIG.fallbackChain])
       .transform((chain) => [...new Set(chain)]),
+    fetch_top: z.number().int().min(1).max(5).default(DEFAULT_SEARCH_CONFIG.fetchTop),
   })
   .transform(
     (raw): SearchConfig => ({
       provider: raw.provider,
       fallbackChain: raw.fallback_chain,
+      fetchTop: raw.fetch_top,
     }),
   );
 

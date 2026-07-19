@@ -103,6 +103,7 @@ function buildEnvironment(teardown: ReturnType<typeof vi.fn>): AgenticRunEnviron
       search: {
         resolveProvider: () => Promise.resolve({ isOk: true, value: searchProvider }),
         resultCap: 5,
+        fetchTop: 3,
       },
       fetch: {
         fetcher,

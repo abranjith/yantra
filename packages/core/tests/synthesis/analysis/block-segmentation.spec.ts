@@ -43,6 +43,22 @@ describe('@no-llm synthesis/BlockSegmentingAnalyzer', () => {
     expect(analysis.hasFiniteVerb(1)).toBe(true);
   });
 
+  it('re-indexes negation, sentiment, and junk score with the stitched sentences', () => {
+    const inner = new WinkAnalyzer();
+    const analyzer = new BlockSegmentingAnalyzer(inner);
+    const analysis = analyzer.analyze(
+      'Home News Sport Business Innovation Culture Arts Travel.\n\nSales did not rise in 2024.',
+    );
+
+    const negatedIndex = analysis.sentences.findIndex((sentence) => sentence.negated);
+    expect(negatedIndex).toBeGreaterThan(-1);
+    expect(analysis.sentences[negatedIndex]!.text).toContain('did not rise');
+
+    const junkIndex = analysis.sentences.findIndex((sentence) => sentence.text.startsWith('Home'));
+    expect(analysis.junkScore(junkIndex)).toBeGreaterThan(analysis.junkScore(negatedIndex));
+    expect(analysis.junkScore(99)).toBe(0);
+  });
+
   it('memoizes full-document analyses and delegates similarity', () => {
     const inner = new WinkAnalyzer();
     const analyzer = new BlockSegmentingAnalyzer(inner);

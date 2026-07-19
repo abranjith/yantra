@@ -10,3 +10,4 @@ export * from './search/registry.js';
 export * from './search/scrape-transport.js';
 export * from './source-processor.js';
 export * from './types.js';
+export * from './web-research.js';

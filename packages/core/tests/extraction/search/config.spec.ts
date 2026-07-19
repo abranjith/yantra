@@ -67,4 +67,35 @@ describe('@no-llm extraction/search/config', () => {
       expect(result.config.provider).toBe('auto');
     }
   });
+
+  it('defaults fetch_top to 3 when the block is absent', () => {
+    const result = parseSearchConfig(undefined);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.fetchTop).toBe(DEFAULT_SEARCH_CONFIG.fetchTop);
+      expect(result.config.fetchTop).toBe(3);
+    }
+  });
+
+  it('accepts an in-range fetch_top', () => {
+    const result = parseSearchConfig({ fetch_top: 5 });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.fetchTop).toBe(5);
+    }
+  });
+
+  it('rejects fetch_top below the minimum (0)', () => {
+    expect(parseSearchConfig({ fetch_top: 0 }).ok).toBe(false);
+  });
+
+  it('rejects fetch_top above the maximum (6)', () => {
+    expect(parseSearchConfig({ fetch_top: 6 }).ok).toBe(false);
+  });
+
+  it('rejects a non-integer fetch_top', () => {
+    expect(parseSearchConfig({ fetch_top: 2.5 }).ok).toBe(false);
+  });
 });

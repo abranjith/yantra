@@ -158,7 +158,7 @@ describe('@no-llm briefToMarkdown', () => {
     const table =
       '| Figure | Context | Sources |\n| --- | --- | --- |\n| 48 teams | Expanded field | [1] |';
     const md = briefToMarkdown(
-      makeBrief({ sections: [{ heading: 'Numbers & figures', body_md: table, citations: [1] }] }),
+      makeBrief({ sections: [{ heading: 'Key facts', body_md: table, citations: [1] }] }),
     );
     expect(md).toContain(table);
   });

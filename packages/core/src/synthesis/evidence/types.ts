@@ -91,6 +91,17 @@ export interface EvidenceClaim {
   readonly docIndexes: readonly number[];
   /** Ranking score (existing salience formula, computed over the gated set). */
   readonly salience: number;
+  /**
+   * True when the source sentence carries negation (analyzer
+   * `AnalyzedSentence.negated`), carried forward so the near-duplicate merge
+   * can refuse to merge a claim with its own negation without re-analyzing.
+   */
+  readonly negated: boolean;
+  /**
+   * Source-sentence sentiment in `[-1, 1]` (analyzer
+   * `AnalyzedSentence.sentiment`). A gate/rank signal only — never rendered.
+   */
+  readonly sentiment: number;
 }
 
 /**

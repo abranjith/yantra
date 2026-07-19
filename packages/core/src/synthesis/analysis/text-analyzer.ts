@@ -71,6 +71,20 @@ export interface AnalyzedSentence {
    * analyzer collapses inflections (`"sales" → "sale"`).
    */
   readonly lemmas: readonly string[];
+  /**
+   * True when the sentence carries negation ("Sales did **not** rise",
+   * "Sales **never** rose") — winkNLP's sentence-level `negationFlag`. Consumed
+   * by the near-duplicate merge guard so a claim never merges with its own
+   * negation. The baseline analyzer has no negation model and always reports
+   * `false`.
+   */
+  readonly negated: boolean;
+  /**
+   * Sentence sentiment in `[-1, 1]` (winkNLP's lexicon-based score; `0` is
+   * neutral). A gate/rank signal only — never displayed in a Brief. The
+   * baseline analyzer has no sentiment model and always reports `0`.
+   */
+  readonly sentiment: number;
 }
 
 /**
@@ -95,6 +109,19 @@ export interface DocAnalysis {
    *   out-of-range indexes and verbless fragments.
    */
   hasFiniteVerb(sentenceIndex: number): boolean;
+
+  /**
+   * Composite junk-likeness score for the sentence at `sentenceIndex`, in
+   * `[0, 1]` — higher means more boilerplate/chrome-like. Derived from
+   * per-token surface signals (capitalization density, stopword deficit,
+   * long-word density) because winkNLP's `readabilityStats` is
+   * document-scoped. Pure and deterministic like every other member. The
+   * baseline analyzer always reports `0`.
+   *
+   * @param sentenceIndex - Index into {@link sentences}.
+   * @returns Junk score in `[0, 1]`; `0` for out-of-range indexes.
+   */
+  junkScore(sentenceIndex: number): number;
 }
 
 /**

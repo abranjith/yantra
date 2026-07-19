@@ -22,6 +22,7 @@ import {
   createConfirmationStore,
   createKeychainProvider,
   loadEthicsConfig,
+  loadSearchConfig,
   promoteAgentTrace,
   resolveSearchProvider,
   FileWorkflowStore,
@@ -98,6 +99,13 @@ export interface AgentBudgetConfig extends BudgetLimits, AgentPromptBudgets {
 /** Production defaults; provider token/cost ceilings are opt-in and approximate. */
 export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
   ...DEFAULT_BUDGET_LIMITS,
+  // The combined `web_search` tool does a provider search then fetches the top-N
+  // hits in PARALLEL, so its wall time is ≈ search + one fetch round (not N×
+  // fetches). Each parallel fetch is allotted a fraction of this budget
+  // (web-search.ts FETCH_TIMEOUT_FRACTION), leaving headroom for the search and
+  // extraction within the single per-tool timeout — sized a little above the
+  // base 45s so a slow SERP plus one fetch round still completes.
+  perToolTimeoutMs: 60 * 1000,
   confirmationWaitMs: 3 * 60 * 1000,
 };
 
@@ -797,6 +805,10 @@ async function createDefaultEnvironment(context: {
   };
   const keychain = await createKeychainProvider();
   const ethicsConfig = await loadEthicsConfig();
+  // Load the search config once for this run so the combined `web_search` tool's
+  // breadth (resultCap) and inline-fetch depth (fetchTop) come from config,
+  // not hardcoded constants. An invalid `search:` block fails loud here.
+  const searchConfig = await loadSearchConfig();
   const blocklist = new BlocklistImpl();
   await blocklist.reload();
   const ethics = new EthicsGateImpl(
@@ -840,6 +852,7 @@ async function createDefaultEnvironment(context: {
         resolveProvider: async () => {
           const result = await resolveSearchProvider({
             env: process.env,
+            config: searchConfig,
             deps: { keychain, browserProvider, ethicsGate: searchEthics, logger },
           });
           return result.isOk
@@ -847,6 +860,7 @@ async function createDefaultEnvironment(context: {
             : { isOk: false as const, error: { message: result.error.message } };
         },
         resultCap: 8,
+        fetchTop: searchConfig.fetchTop,
       },
       fetch: {
         // Same hybrid strategy as the deterministic ask/research pipelines:

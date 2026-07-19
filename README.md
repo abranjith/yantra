@@ -109,7 +109,15 @@ search:
     - tavily
     - brave
     - duckduckgo
+  fetch_top: 3 # integer 1–5 (default 3)
 ```
+
+`fetch_top` controls the combined `web_search` agent tool: how many of the top
+hits it fetches and extracts inline (returning their page content), with the
+remaining hits listed as snippet-only "more results". It is bounded to `1–5` so
+one result cannot evict a small local model's context; an out-of-range or
+non-integer value fails loud at startup (exit 1). It has no effect on the
+deterministic `--no-llm` pipeline, which uses its own `--limit`.
 
 API keys live in the OS keychain (`tavily.api_key`, `brave.api_key`), never in
 `config.yaml`. Scraped providers never evade a bot wall or CAPTCHA — they report
@@ -147,7 +155,7 @@ Key Findings
 ...
 
 Sections
-Numbers & figures · Key facts · People & organizations
+Key facts · Additional findings
 
 Sources
 [1] ...  [2] ...  [3] ...

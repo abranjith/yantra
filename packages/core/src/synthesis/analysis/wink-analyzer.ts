@@ -5,7 +5,9 @@
  *
  * The evidence gates need real linguistic signal, not regexes: sentence
  * boundary detection, POS tags (to tell a grammatical sentence from a heading),
- * and typed named-entity recognition (money / percent / date / cardinal).
+ * typed named-entity recognition (money / percent / date / cardinal), plus the
+ * `negation` and `sentiment` pipe stages feeding the per-sentence
+ * `negated`/`sentiment` fields and the derived per-sentence junk score.
  * winkNLP (`wink-nlp` + `wink-eng-lite-web-model`) provides all of this as
  * **local, offline, rule-and-model inference** — no network, no service, and
  * fully deterministic (same text in, deep-equal analysis out). That is exactly
@@ -51,8 +53,12 @@ import type {
   TypedEntity,
 } from './text-analyzer.js';
 
-/** winkNLP pipeline stages the evidence gates depend on. */
-const PIPE: readonly string[] = ['sbd', 'pos', 'ner', 'cer'];
+/**
+ * winkNLP pipeline stages the evidence gates depend on. `negation` and
+ * `sentiment` populate the per-sentence `negationFlag`/`sentiment` accessors
+ * (they only fill sentence-tuple slots — sbd/pos/ner output is unaffected).
+ */
+const PIPE: readonly string[] = ['sbd', 'pos', 'ner', 'cer', 'negation', 'sentiment'];
 
 /** Maps winkNLP NER entity types onto the analyzer's {@link EntityKind}. */
 const ENTITY_KIND_BY_WINK: Readonly<Record<string, EntityKind>> = {
@@ -67,6 +73,27 @@ const FINITE_VERB_POS: ReadonlySet<string> = new Set(['VERB', 'AUX']);
 
 /** POS tags dropped from the informative token view (punctuation/symbols). */
 const NON_INFORMATIVE_POS: ReadonlySet<string> = new Set(['PUNCT', 'SYM', 'SPACE', 'X']);
+
+/**
+ * Junk-score formula weights and bounds (see the FEAT-WI-003 spike findings).
+ * The score blends three `[0, 1]` word-token ratios:
+ *
+ * - capitalization density of non-initial words (nav/title chrome is
+ *   Title-Case-dense) — weight {@link JUNK_CAP_WEIGHT};
+ * - stopword deficit — real prose carries roughly 20–60% stopwords, link glue
+ *   nearly none; full credit at {@link JUNK_STOPWORD_FLOOR} stopword ratio —
+ *   weight {@link JUNK_STOP_WEIGHT};
+ * - long-word density (`normal` length ≥ {@link JUNK_LONG_WORD_CHARS};
+ *   SEO/gibberish glue) — weight {@link JUNK_LONG_WEIGHT}.
+ *
+ * Probe separation on junk/prose fixture pairs: junk 0.45–0.90, prose
+ * 0.00–0.27.
+ */
+const JUNK_CAP_WEIGHT = 0.5;
+const JUNK_STOP_WEIGHT = 0.4;
+const JUNK_LONG_WEIGHT = 0.1;
+const JUNK_STOPWORD_FLOOR = 0.25;
+const JUNK_LONG_WORD_CHARS = 12;
 
 /**
  * Process-wide winkNLP engine. Lazily initialized and shared because the model
@@ -120,6 +147,7 @@ export class WinkAnalyzer implements TextAnalyzer {
 
     const sentences: AnalyzedSentence[] = [];
     const finiteVerbBySentence: boolean[] = [];
+    const junkScoreBySentence: number[] = [];
     const entities: TypedEntity[] = [];
 
     doc.sentences().each((sentence: ItemSentence, sentenceIndex: number) => {
@@ -127,6 +155,10 @@ export class WinkAnalyzer implements TextAnalyzer {
       const lemmas: string[] = [];
       let hasFiniteVerb = false;
       let propnRun: string[] = [];
+      let wordCount = 0;
+      let capitalizedNonInitial = 0;
+      let stopwordCount = 0;
+      let longWordCount = 0;
 
       const flushNamed = (): void => {
         if (propnRun.length > 0) {
@@ -154,10 +186,26 @@ export class WinkAnalyzer implements TextAnalyzer {
           flushNamed();
         }
 
-        if (NON_INFORMATIVE_POS.has(pos) || token.out(its.stopWordFlag) === true) {
+        const isStopword = token.out(its.stopWordFlag) === true;
+        const isWord = !NON_INFORMATIVE_POS.has(pos);
+        const normal = String(token.out(its.normal));
+
+        if (isWord) {
+          if (wordCount > 0 && String(token.out(its.shape)).startsWith('X')) {
+            capitalizedNonInitial += 1;
+          }
+          if (isStopword) {
+            stopwordCount += 1;
+          }
+          if (normal.length >= JUNK_LONG_WORD_CHARS) {
+            longWordCount += 1;
+          }
+          wordCount += 1;
+        }
+
+        if (!isWord || isStopword) {
           return;
         }
-        const normal = String(token.out(its.normal));
         if (normal.length <= 1) {
           return;
         }
@@ -166,8 +214,21 @@ export class WinkAnalyzer implements TextAnalyzer {
       });
       flushNamed();
 
-      sentences.push({ index: sentenceIndex, text: sentence.out(), tokens, lemmas });
+      sentences.push({
+        index: sentenceIndex,
+        text: sentence.out(),
+        tokens,
+        lemmas,
+        negated: sentence.out(its.negationFlag) === true,
+        sentiment: Number(sentence.out(its.sentiment)),
+      });
       finiteVerbBySentence[sentenceIndex] = hasFiniteVerb;
+      junkScoreBySentence[sentenceIndex] = junkScoreFor(
+        wordCount,
+        capitalizedNonInitial,
+        stopwordCount,
+        longWordCount,
+      );
     });
 
     doc.entities().each((entity: ItemEntity) => {
@@ -189,6 +250,7 @@ export class WinkAnalyzer implements TextAnalyzer {
       entities,
       hasFiniteVerb: (sentenceIndex: number): boolean =>
         finiteVerbBySentence[sentenceIndex] ?? false,
+      junkScore: (sentenceIndex: number): number => junkScoreBySentence[sentenceIndex] ?? 0,
     };
     this.cache.set(text, analysis);
     return analysis;
@@ -227,4 +289,26 @@ export class WinkAnalyzer implements TextAnalyzer {
     }
     return bow;
   }
+}
+
+/**
+ * Combines the per-sentence word-token counts into the `[0, 1]` junk score
+ * (weights and rationale on the JUNK_* constants above).
+ */
+function junkScoreFor(
+  wordCount: number,
+  capitalizedNonInitial: number,
+  stopwordCount: number,
+  longWordCount: number,
+): number {
+  if (wordCount === 0) {
+    return 0;
+  }
+  const capRatio = wordCount > 1 ? capitalizedNonInitial / (wordCount - 1) : 0;
+  const stopDeficit = Math.max(0, 1 - stopwordCount / wordCount / JUNK_STOPWORD_FLOOR);
+  const longRatio = longWordCount / wordCount;
+  return Math.min(
+    1,
+    JUNK_CAP_WEIGHT * capRatio + JUNK_STOP_WEIGHT * stopDeficit + JUNK_LONG_WEIGHT * longRatio,
+  );
 }

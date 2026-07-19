@@ -14,8 +14,14 @@
  * - **The overview** leads with a query-target definition when available,
  *   then uses TextRank + MMR to add central, non-redundant claims while
  *   keeping inline `[n]` markers (the renderers subtle-ize them).
- * - **Sections** hold the *remainder* of the accepted claims grouped by kind;
- *   a claim shown as a finding never repeats in a section.
+ * - **Sections** hold the *remainder* of the accepted claims grouped into two
+ *   honest tiers rather than one section per claim kind: **Key facts** (facts
+ *   and numbers, with the key-figures table folded in) and **Additional
+ *   findings** (entities, quotes, and any future kinds). The old kind-specific
+ *   sections leaned on a local NER that has no PERSON/ORG types, so the
+ *   "People & organizations" / "Notable quotes" buckets frequently degraded to
+ *   gibberish; two generic buckets keep the deterministic Brief honest. A
+ *   claim shown as a finding never repeats in a section.
  * - **Notices** are honest: per-source failures, one `source_excluded` per
  *   query-irrelevant source, and a `limited_evidence` notice when fewer
  *   relevant findings survived than the requested length asked for.
@@ -41,6 +47,7 @@ import { BlockSegmentingAnalyzer } from './analysis/block-segmentation.js';
 import type { TextAnalyzer } from './analysis/text-analyzer.js';
 import { WinkAnalyzer } from './analysis/wink-analyzer.js';
 import { validateCitations } from './citation-validator.js';
+import { isOpinionClaim } from './evidence/eligibility.js';
 import { buildEvidenceSet, LENGTH_BUDGETS } from './evidence/evidence-set.js';
 import { deriveKeyFigures } from './evidence/figures.js';
 import { selectMmr, textRank } from './evidence/rank.js';
@@ -67,13 +74,31 @@ const OVERVIEW_CLAIMS = 3;
 /** MMR relevance weight: favor strong claims while suppressing restatements. */
 const FINDING_MMR_LAMBDA = 0.7;
 
-/** Section headings per claim kind, in emission order. */
-const SECTION_HEADINGS = [
-  ['number', 'Numbers & figures'],
-  ['fact', 'Key facts'],
-  ['entity', 'People & organizations'],
-  ['quote', 'Notable quotes'],
-] as const;
+/**
+ * Consolidated section plan: emission order, heading, and the member claims
+ * each section absorbs. `Key facts` folds facts and numbers together (the
+ * key-figures table renders inside it) but excludes *opinionated* claims —
+ * fact/number claims whose source-sentence sentiment exceeds
+ * `SENTIMENT_OPINION_THRESHOLD` (see `evidence/eligibility.ts`) are demoted,
+ * not dropped: they land in
+ * `Additional findings` instead, which also collects entities, quotes, and any
+ * future kinds under one honest, generic heading. Sentiment is a routing
+ * signal only and is never rendered.
+ */
+const SECTION_PLAN: readonly {
+  readonly heading: string;
+  readonly accepts: (claim: EvidenceClaim) => boolean;
+}[] = [
+  {
+    heading: 'Key facts',
+    accepts: (claim) =>
+      (claim.kind === 'fact' || claim.kind === 'number') && !isOpinionClaim(claim),
+  },
+  {
+    heading: 'Additional findings',
+    accepts: (claim) => claim.kind === 'entity' || claim.kind === 'quote' || isOpinionClaim(claim),
+  },
+];
 
 /** Brief text fields refuse raw ANSI escapes; strip them from web content. */
 // eslint-disable-next-line no-control-regex -- removing raw ANSI escape bytes is the point
@@ -391,7 +416,13 @@ function selectFindingGroups(
   );
 }
 
-/** Groups the remainder claims by kind into kind-headed detail sections. */
+/**
+ * Groups the remainder claims into the consolidated detail sections defined by
+ * {@link SECTION_PLAN}. Each section absorbs a *set* of claim kinds rather than
+ * one kind; the ≥2-groups threshold and detail caps carry over unchanged, so a
+ * thin section still disappears instead of padding. The key-figures table is
+ * derived from the number-kind subset *inside* `Key facts`.
+ */
 function composeSections(
   groups: readonly ComposedGroup[],
   findingGroups: readonly ComposedGroup[],
@@ -401,11 +432,9 @@ function composeSections(
   const pool = sectionPool(groups, findingGroups, budget, detail);
 
   const sections: Section[] = [];
-  for (const [kind, heading] of SECTION_HEADINGS) {
+  for (const { heading, accepts } of SECTION_PLAN) {
     const parentCap = detail === 'full' ? 12 : 8;
-    const sectionGroups = pool
-      .filter((entry) => entry.parent.claim.kind === kind)
-      .slice(0, parentCap);
+    const sectionGroups = pool.filter((entry) => accepts(entry.parent.claim)).slice(0, parentCap);
     if (sectionGroups.length < 2) {
       continue;
     }
@@ -417,9 +446,10 @@ function composeSections(
     }
 
     let bodyMd = sectionGroups.map(sectionGroupMarkdown).join('\n');
-    if (kind === 'number') {
+    const numberGroups = sectionGroups.filter((group) => group.parent.claim.kind === 'number');
+    if (numberGroups.length > 0) {
       const figures = deriveKeyFigures(
-        sectionGroups.map((group) => ({
+        numberGroups.map((group) => ({
           text: group.parent.text,
           citations: group.parent.citations,
         })),
@@ -429,6 +459,8 @@ function composeSections(
         const tableFigures = figures.slice(0, tableCap);
         const used = new Set(tableFigures.map((figure) => figure.sourceText));
         const bulletCap = detail === 'full' ? 10 : 6;
+        // Bullets cover every group not consumed by the table — both facts and
+        // any number claims that didn't reduce into a figure row.
         const bullets = sectionGroups
           .filter((group) => !used.has(group.parent.text))
           .slice(0, bulletCap);

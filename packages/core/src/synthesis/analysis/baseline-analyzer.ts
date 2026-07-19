@@ -154,9 +154,12 @@ export class BaselineAnalyzer implements TextAnalyzer {
    */
   public analyze(text: string): DocAnalysis {
     const sentenceTexts = splitSentences(text);
+    // Neutral stubs for the analysis signals that need a linguistic model
+    // (negation, sentiment, junk scoring below): the baseline stays
+    // byte-stable and never gates on them.
     const sentences: AnalyzedSentence[] = sentenceTexts.map((sentenceText, index) => {
       const tokens = tokenize(sentenceText);
-      return { index, text: sentenceText, tokens, lemmas: tokens };
+      return { index, text: sentenceText, tokens, lemmas: tokens, negated: false, sentiment: 0 };
     });
 
     const entities: TypedEntity[] = sentences.flatMap((sentence) =>
@@ -178,6 +181,7 @@ export class BaselineAnalyzer implements TextAnalyzer {
         // informative tokens separates prose from Title-Case headings.
         return /[.!?]["')\]]?\s*$/u.test(sentence.text) && sentence.tokens.length >= 6;
       },
+      junkScore: (): number => 0,
     };
   }
 

@@ -128,6 +128,13 @@ export interface SearchConfig {
   readonly provider: SearchProviderSelection;
   /** Order `auto` walks, skipping key-missing API providers. */
   readonly fallbackChain: readonly SearchProviderName[];
+  /**
+   * How many of the top search hits the combined `web_search` tool fetches and
+   * extracts inline (the rest are returned as snippet-only "more results"). A
+   * small bound keeps one combined result from evicting a local model's
+   * context; the hard ceiling is enforced separately in the agent tool.
+   */
+  readonly fetchTop: number;
 }
 
 /**
@@ -138,6 +145,7 @@ export interface SearchConfig {
 export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   provider: 'auto',
   fallbackChain: ['tavily', 'brave', 'duckduckgo'],
+  fetchTop: 3,
 };
 
 export interface ResolveSearchProviderOptions {

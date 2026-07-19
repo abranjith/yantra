@@ -40,7 +40,12 @@
  * with the same deterministic tie-breaks. Pure and deterministic throughout.
  */
 
-import type { DocAnalysis, EntityKind, TextAnalyzer } from '../analysis/text-analyzer.js';
+import type {
+  AnalyzedSentence,
+  DocAnalysis,
+  EntityKind,
+  TextAnalyzer,
+} from '../analysis/text-analyzer.js';
 import type { ClaimKind, SynthesisDoc } from '../types.js';
 
 import type { EvidenceClaim, EvidenceKind, QueryProfile } from './types.js';
@@ -60,6 +65,36 @@ const MAX_CLAIMS = 50;
 
 /** Lemma-overlap threshold for one sentence to count as restating a claim. */
 const SUPPORT_LEMMA_OVERLAP = 0.6;
+
+/**
+ * Absolute sentence-sentiment above which (exclusive) a `fact`/`number` claim
+ * is treated as *opinion* and demoted out of the `Key facts` pool (it stays
+ * eligible for key findings and `Additional findings` — demote, never drop).
+ *
+ * Calibration (FEAT-WI-003 spike): winkNLP's lexicon scores clear opinion high
+ * ("This is a fantastic, must-buy EV" ≈ 0.7) and plain figures low ("Sales
+ * rose 12% in 2025" ≈ 0.2), but also fires on domain-neutral words — "Norway
+ * are one win from the semi-final" scores 0.8 via "win". `0.6` keeps
+ * mildly-positive factual prose (≤ 0.5) in `Key facts` while catching marketing
+ * language; sentiment is a gate signal only and is never rendered.
+ */
+export const SENTIMENT_OPINION_THRESHOLD = 0.6;
+
+/**
+ * True when a claim is too opinionated for the `Key facts` section: it is a
+ * `fact`/`number` claim whose source-sentence |sentiment| exceeds
+ * {@link SENTIMENT_OPINION_THRESHOLD}. Entity/quote claims are never demoted —
+ * they do not feed `Key facts` in the first place.
+ *
+ * @param claim - An accepted evidence claim.
+ * @returns True when the claim must stay out of the `Key facts` pool.
+ */
+export function isOpinionClaim(claim: Pick<EvidenceClaim, 'kind' | 'sentiment'>): boolean {
+  return (
+    (claim.kind === 'fact' || claim.kind === 'number') &&
+    Math.abs(claim.sentiment) > SENTIMENT_OPINION_THRESHOLD
+  );
+}
 
 /** Numeric evidence kinds subject to the evidence-kind gate. */
 const NUMERIC_KINDS: ReadonlySet<EvidenceKind> = new Set(['money', 'percent', 'quantity', 'date']);
@@ -151,6 +186,10 @@ interface PreparedSentence {
   readonly kind: ClaimKind;
   readonly hasFiniteVerb: boolean;
   readonly anaphoric: boolean;
+  /** Sentence-level negation flag (analyzer `AnalyzedSentence.negated`). */
+  readonly negated: boolean;
+  /** Sentence sentiment in [-1, 1] (analyzer `AnalyzedSentence.sentiment`). */
+  readonly sentiment: number;
 }
 
 /** A relevance-passing document's prepared sentences. */
@@ -213,6 +252,8 @@ export function extractEligibleClaims(
       entityKeys: [...sentence.namedKeys].sort(),
       docIndexes,
       salience,
+      negated: sentence.negated,
+      sentiment: sentence.sentiment,
     });
   }
 
@@ -245,19 +286,13 @@ export function countCandidateSentences(
 /** Prepares one document's sentences for gating, support, and ranking. */
 function prepareDoc(doc: SynthesisDoc, docIndex: number, analyzer: TextAnalyzer): PreparedDoc {
   const analysis = analyzer.analyze(doc.text);
-  const sentences = analysis.sentences.map((sentence) =>
-    prepareSentence(sentence.index, sentence.text, sentence.lemmas, analysis),
-  );
+  const sentences = analysis.sentences.map((sentence) => prepareSentence(sentence, analysis));
   return { docIndex, sentences };
 }
 
 /** Builds the per-sentence view (entity kinds, numeric values, entity keys). */
-function prepareSentence(
-  index: number,
-  text: string,
-  lemmas: readonly string[],
-  analysis: DocAnalysis,
-): PreparedSentence {
+function prepareSentence(analyzed: AnalyzedSentence, analysis: DocAnalysis): PreparedSentence {
+  const { index, text, lemmas } = analyzed;
   const entities = analysis.entities.filter((entity) => entity.sentenceIndex === index);
   const evidenceKindSet = new Set<EvidenceKind>();
   const numericValues = new Set<string>();
@@ -302,6 +337,8 @@ function prepareSentence(
     kind,
     hasFiniteVerb: analysis.hasFiniteVerb(index),
     anaphoric: isAnaphoric(displayText),
+    negated: analyzed.negated,
+    sentiment: analyzed.sentiment,
   };
 }
 
@@ -375,6 +412,13 @@ function stitchAnaphor(
     kind,
     hasFiniteVerb: true,
     anaphoric: false,
+    // The stitched claim is negated if either half is; its sentiment is the
+    // stronger (larger-magnitude) of the two, antecedent winning ties.
+    negated: antecedent.negated || sentence.negated,
+    sentiment:
+      Math.abs(sentence.sentiment) > Math.abs(antecedent.sentiment)
+        ? sentence.sentiment
+        : antecedent.sentiment,
   };
 }
 
@@ -515,8 +559,18 @@ function supportingDocs(
   return [originDocIndex, ...supporters].sort((left, right) => left - right);
 }
 
-/** True when `sentence` restates `claim` (numeric figures or lemma overlap). */
+/**
+ * True when `sentence` restates `claim` (numeric figures or lemma overlap).
+ *
+ * Polarity-guarded: a sentence never supports a claim of opposite polarity —
+ * "sales did not rise" has the same informative-lemma bag as "sales rose"
+ * (negators are stopwords), so without the guard a contradicting doc would be
+ * cited as supporting evidence.
+ */
 function sentenceSupports(claim: PreparedSentence, sentence: PreparedSentence): boolean {
+  if (claim.negated !== sentence.negated) {
+    return false;
+  }
   if (claim.numericValues.size > 0 && isSubset(claim.numericValues, sentence.numericValues)) {
     return true;
   }

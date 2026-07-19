@@ -57,7 +57,7 @@ The validator's output is honest and auditable:
 - It stamps `metadata.citation_verdict = { claims_checked, flagged, stripped }`
   and returns the same verdict on the `SynthesisOutcome`.
 
-`Numbers & figures` may include a GitHub-flavored key-figures table. Citation
+The `Key facts` section may include a GitHub-flavored key-figures table. Citation
 markers in its `Sources` column use the same `[n]` convention and are validated
 exactly like markers in section bullets.
 

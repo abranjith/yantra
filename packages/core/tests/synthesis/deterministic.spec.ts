@@ -291,7 +291,7 @@ describe('@no-llm synthesis/DeterministicSynthesizer', () => {
     expect(result.isOk).toBe(true);
     if (!result.isOk) return;
     const numberSection = result.value.brief.sections.find(
-      (section) => section.heading === 'Numbers & figures',
+      (section) => section.heading === 'Key facts',
     );
     expect(numberSection).toBeDefined();
     expect(numberSection!.body_md).toContain('| Figure | Context | Sources |');
@@ -438,5 +438,189 @@ describe('@no-llm synthesis/DeterministicSynthesizer evidence-first composition'
     if (!result.isOk) return;
 
     expect(result.value.brief.notices.some((n) => n.kind === 'limited_evidence')).toBe(true);
+  });
+});
+
+describe('@no-llm synthesis/DeterministicSynthesizer consolidated sections (FEAT-WI-002)', () => {
+  const RETIRED_HEADINGS = ['Numbers & figures', 'People & organizations', 'Notable quotes'];
+
+  /**
+   * Mixed corpus: seven distinct numeric claims (kept distinct so the
+   * near-duplicate merge does not collapse them) plus five named-organization
+   * claims. Yields both a `Key facts` (facts + numbers) and an `Additional
+   * findings` (entities) section.
+   */
+  function mixedInput(): SynthesisInput {
+    const sentences = [
+      'Electric vehicle sales captured 28% of new registrations.',
+      'Electric vehicle chargers numbered 200000 across national highways.',
+      'Electric vehicle exports shipped 41000 units toward Europe.',
+      'Electric vehicle range averaged 320 miles per charge.',
+      'Electric vehicle prices dropped 15% year over year.',
+      'Electric vehicle subsidies totalled 3 billion dollars overall.',
+      'Electric vehicle recalls affected 7500 sedans recently.',
+      'Tesla widened its electric vehicle lineup this season.',
+      'Rivian entered the electric vehicle pickup segment recently.',
+      'Hyundai reorganised its electric vehicle division here.',
+      'Volkswagen retooled several electric vehicle factories abroad.',
+      'Toyota expanded its electric vehicle roadmap further.',
+    ];
+    return {
+      query: 'electric vehicle market trends',
+      docs: sentences.map((text, i) =>
+        doc({ url: `https://ev-${i}.example.com/r`, title: 'EV market', text }),
+      ),
+      failures: [],
+    };
+  }
+
+  /**
+   * Figures corpus: eight distinct numeric claims (enough survive the finding
+   * budget to reduce into a key-figures table) plus three plain fact claims
+   * (non-name sentence starts so the local NER does not tag them as entities).
+   * The whole set lands in one `Key facts` section: table first, fact bullets
+   * after.
+   */
+  function figuresWithFactsInput(): SynthesisInput {
+    const sentences = [
+      'The market shipped 41000 electric vehicle exports toward Europe.',
+      'The fleet averaged 320 electric vehicle miles per charge.',
+      'The programme recalled 7500 electric vehicle sedans recently.',
+      'The registry logged 28000 electric vehicle registrations this period.',
+      'The grid added 200000 electric vehicle chargers along highways.',
+      'The auction cleared 5200 electric vehicle trade-ins overnight.',
+      'The dealership stocked 1400 electric vehicle crossovers regionally.',
+      'The port handled 9800 electric vehicle imports last month.',
+      'The demand for electric vehicles strengthened across rural districts.',
+      'The supply of electric vehicles stabilised throughout coastal ports.',
+      'The appetite for electric vehicles accelerated among younger commuters.',
+    ];
+    return {
+      query: 'electric vehicle market trends',
+      docs: sentences.map((text, i) =>
+        doc({ url: `https://ev-${i}.example.com/r`, title: 'EV market', text }),
+      ),
+      failures: [],
+    };
+  }
+
+  /** All `[n]` markers rendered in a body, as a sorted, de-duplicated list. */
+  function markersIn(bodyMd: string): number[] {
+    const markers = new Set<number>();
+    for (const match of bodyMd.matchAll(/\[(\d+)\]/gu)) {
+      markers.add(Number(match[1]));
+    }
+    return [...markers].sort((left, right) => left - right);
+  }
+
+  it('folds facts and numbers into Key facts and entities into Additional findings', async () => {
+    const result = await synth().synthesize(
+      mixedInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const headings = result.value.brief.sections.map((section) => section.heading);
+    expect(headings).toEqual(['Key facts', 'Additional findings']);
+
+    const additional = result.value.brief.sections.find(
+      (section) => section.heading === 'Additional findings',
+    );
+    // The named-organization claims are the ones that surface under the generic
+    // Additional-findings bucket, never under Key facts.
+    expect(additional!.body_md).toMatch(/Tesla|Rivian|Hyundai|Volkswagen|Toyota/u);
+  });
+
+  it('renders the key-figures table inside Key facts with bullets following', async () => {
+    const result = await synth().synthesize(
+      figuresWithFactsInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const keyFacts = result.value.brief.sections.find((section) => section.heading === 'Key facts');
+    expect(keyFacts).toBeDefined();
+
+    const lines = keyFacts!.body_md.split('\n');
+    const headerIndex = lines.findIndex((line) =>
+      line.startsWith('| Figure | Context | Sources |'),
+    );
+    expect(headerIndex).toBeGreaterThanOrEqual(0);
+    // At least one bullet follows the figures table (unconsumed numbers/facts).
+    const bulletsAfterTable = lines.slice(headerIndex).filter((line) => line.startsWith('- '));
+    expect(bulletsAfterTable.length).toBeGreaterThanOrEqual(1);
+    // The consolidation never re-emits the retired kind-specific headings.
+    expect(result.value.brief.sections.map((section) => section.heading)).not.toContain(
+      'Numbers & figures',
+    );
+  });
+
+  it('omits a section that falls below the two-group threshold', async () => {
+    // A solid Key-facts corpus plus a single entity claim: the lone entity is
+    // too thin for Additional findings, so only Key facts is emitted.
+    const base = figuresWithFactsInput();
+    const input: SynthesisInput = {
+      ...base,
+      docs: [
+        ...base.docs,
+        doc({
+          url: 'https://ev-solo.example.com/r',
+          title: 'EV market',
+          text: 'Tesla widened its electric vehicle lineup this season.',
+        }),
+      ],
+    };
+    const result = await synth().synthesize(input, opts({ detail: 'full', length: 'short' }));
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    expect(result.value.brief.sections.map((section) => section.heading)).toEqual(['Key facts']);
+  });
+
+  it('emits no sections at detail: overview even when both tiers would qualify', async () => {
+    const result = await synth().synthesize(mixedInput(), opts({ detail: 'overview' }));
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    expect(result.value.brief.sections).toEqual([]);
+  });
+
+  it('assembles each section citation set as the sorted union of its rendered markers', async () => {
+    const result = await synth().synthesize(
+      mixedInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    for (const section of result.value.brief.sections) {
+      // Union covers every parent and child citation rendered in the body, and
+      // stays ascending and de-duplicated.
+      expect(section.citations).toEqual(markersIn(section.body_md));
+      expect([...section.citations].sort((a, b) => a - b)).toEqual(section.citations);
+      expect(new Set(section.citations).size).toBe(section.citations.length);
+    }
+    const additional = result.value.brief.sections.find(
+      (section) => section.heading === 'Additional findings',
+    );
+    // The generic bucket draws on several sources, not one.
+    expect(additional!.citations.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('never emits the retired kind-specific headings across corpora', async () => {
+    const results = await Promise.all([
+      synth().synthesize(mixedInput(), opts({ detail: 'full', length: 'short' })),
+      synth().synthesize(figuresWithFactsInput(), opts({ detail: 'full', length: 'short' })),
+      synth().synthesize(priceCorpus, opts({ detail: 'full' })),
+    ]);
+    for (const result of results) {
+      expect(result.isOk).toBe(true);
+      if (!result.isOk) return;
+      for (const section of result.value.brief.sections) {
+        expect(RETIRED_HEADINGS).not.toContain(section.heading);
+      }
+    }
   });
 });

@@ -72,8 +72,15 @@ export function groupClaimsByTopic(
       continue;
     }
 
-    if (analyzer.containment(group.parent.text, claim.text) >= TOPIC_CONTAINMENT_DUP) {
-      // Duplicate of the parent: absorb its evidence, don't render it.
+    if (
+      claim.negated === group.parent.negated &&
+      analyzer.containment(group.parent.text, claim.text) >= TOPIC_CONTAINMENT_DUP
+    ) {
+      // Duplicate of the parent: absorb its evidence, don't render it. The
+      // polarity check mirrors the evidence-set merge guard — "sales did not
+      // rise" has the same lemma bag as "sales rose" (containment 1.0), and a
+      // contradiction must stay visible with its own citations, never be
+      // silently absorbed into the claim it disputes.
       group.parent = withUnionedEvidence(group.parent, claim);
       continue;
     }

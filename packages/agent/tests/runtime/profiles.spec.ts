@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
+import { DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
 import { COMMAND_TASK_PROFILES, resolveCommandTaskProfile } from '../../src/runtime/profiles.js';
 import { buildServices } from '../adapters/pi/tools/test-support.js';
@@ -69,6 +70,52 @@ describe('@no-llm command task profiles', () => {
       expect(profile.promptAddendum).not.toMatch(/\b(schema|typebox|parameters)\b/i);
       expect(profile.promptAddendum).toMatch(/publish/i);
     }
+  });
+
+  it('steers the web-facing commands toward the evidence-in-one-call flow', () => {
+    // ask/research must tell the model web_search now returns fetched content so
+    // it stops chaining web_fetch calls after every search (FEAT-WI-001 TASK-004).
+    for (const command of ['ask', 'research'] as const) {
+      const addendum = COMMAND_TASK_PROFILES[command].promptAddendum;
+      expect(addendum).toMatch(/web_search/);
+      expect(addendum).toMatch(/content|fetched|evidence/i);
+      expect(addendum).toMatch(/web_fetch/);
+    }
+  });
+
+  it('retunes caps for the combined tool while preserving ask < research < do', () => {
+    // One combined web_search replaces ~1 search + 2–3 fetches, so the per-command
+    // call budgets drop (FEAT-WI-001 TASK-005); `do` keeps the global defaults.
+    expect(COMMAND_TASK_PROFILES.ask.budgets).toMatchObject({
+      totalToolCalls: 12,
+      perToolCalls: 6,
+    });
+    expect(COMMAND_TASK_PROFILES.research.budgets).toMatchObject({
+      totalToolCalls: 30,
+      perToolCalls: 12,
+    });
+    expect(COMMAND_TASK_PROFILES.do.budgets.totalToolCalls).toBeUndefined();
+    expect(COMMAND_TASK_PROFILES.do.budgets.perToolCalls).toBeUndefined();
+
+    // Ordering invariant: ask < research < do (do falls back to global defaults).
+    const doTotal = DEFAULT_BUDGET_LIMITS.totalToolCalls;
+    const doPerTool = DEFAULT_BUDGET_LIMITS.perToolCalls;
+    expect(COMMAND_TASK_PROFILES.ask.budgets.totalToolCalls!).toBeLessThan(
+      COMMAND_TASK_PROFILES.research.budgets.totalToolCalls!,
+    );
+    expect(COMMAND_TASK_PROFILES.research.budgets.totalToolCalls!).toBeLessThan(doTotal);
+    expect(COMMAND_TASK_PROFILES.ask.budgets.perToolCalls!).toBeLessThan(
+      COMMAND_TASK_PROFILES.research.budgets.perToolCalls!,
+    );
+    expect(COMMAND_TASK_PROFILES.research.budgets.perToolCalls!).toBeLessThan(doPerTool);
+  });
+
+  it('still lets env overrides win over the retuned defaults', () => {
+    const configured = resolveCommandTaskProfile('research', {
+      YANTRA_AGENT_RESEARCH_MAX_TOOL_CALLS: '40',
+      YANTRA_AGENT_RESEARCH_MAX_CALLS_PER_TOOL: '18',
+    });
+    expect(configured.budgets).toMatchObject({ totalToolCalls: 40, perToolCalls: 18 });
   });
 
   it('removes the superseded ask and research prompt stacks', () => {

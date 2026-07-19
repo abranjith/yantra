@@ -9,15 +9,13 @@
  * a run capture and referenced rather than dumped inline.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { EthicsRefusedError, FetchError } from '@yantra/core';
-import { generateUlid } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+
+import { writeCapture } from './capture.js';
 
 const WebFetchParams = Type.Object(
   {
@@ -43,10 +41,11 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
     name: 'web_fetch',
     label: 'Web Fetch',
     description:
-      'Fetch a single public web page and return its readable article text (title + body). ' +
-      'Use it to read a source you discovered with web_search. Do NOT use it to bypass a ' +
-      'paywall/login, to reach a blocked or non-public host, or to download non-text content ' +
-      '(PDFs, images, binaries).',
+      'Fetch ONE specific public URL you already have (a direct link, or a link discovered ' +
+      'inside previously fetched content) and return its readable article text (title + body). ' +
+      'Do NOT use it to explore a topic — web_search already returns page content for a query. ' +
+      'Do NOT use it to bypass a paywall/login, to reach a blocked or non-public host, or to ' +
+      'download non-text content (PDFs, images, binaries).',
     parameters: WebFetchParams,
     sanitizationProfile: 'public',
     run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
@@ -163,15 +162,6 @@ async function runWebFetch(
     },
     details: { bytes: textBytes, final_url: doc.finalUrl },
   };
-}
-
-/** Persist full extracted content to the run's captures directory. */
-async function writeCapture(runDir: string, text: string): Promise<string> {
-  const id = `cap-${generateUlid()}`;
-  const dir = join(runDir, 'captures');
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, `${id}.txt`), text, { encoding: 'utf8', mode: 0o600 });
-  return id;
 }
 
 /** Map a core FetchError kind to a stable tool error. */

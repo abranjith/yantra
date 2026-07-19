@@ -1,0 +1,90 @@
+{
+  "brief_id": "GOLDEN00000000000000000000",
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "schema_version": "0.2",
+  "title": "Acme widget performance in 2026",
+  "overview": "Acme widget sales rose in 2026. [1] The flagship W-500 model accounted for nearly half of all Acme widget units sold this year. [1] Retail partners described flat widget sell-through despite heavier promotional spending. [2]",
+  "key_findings": [
+    {
+      "text": "The independent auditors reviewed shipment records from all seven regional Acme distribution centers.",
+      "citations": [1, 2],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Acme widget sales rose in 2026.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null,
+      "children": [
+        {
+          "text": "Acme widget sales did not rise in 2026.",
+          "citations": [2]
+        }
+      ]
+    },
+    {
+      "text": "The flagship W-500 model accounted for nearly half of all Acme widget units sold this year.",
+      "citations": [1],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    },
+    {
+      "text": "Retail partners described flat widget sell-through despite heavier promotional spending.",
+      "citations": [2],
+      "editorial": false,
+      "facet": null,
+      "children": []
+    }
+  ],
+  "sections": [],
+  "facets": null,
+  "sources": [
+    {
+      "n": 1,
+      "url": "https://marketreport.example.com/acme-widgets-2026",
+      "final_url": null,
+      "host": "marketreport.example.com",
+      "title": "Acme widget sales climb in 2026",
+      "fetched_at": "2026-06-14T06:00:00.000Z",
+      "published_at": "2026-06-10T09:00:00.000Z"
+    },
+    {
+      "n": 2,
+      "url": "https://audit.example.org/acme-widget-review",
+      "final_url": null,
+      "host": "audit.example.org",
+      "title": "Independent audit questions Acme widget growth",
+      "fetched_at": "2026-06-14T06:05:00.000Z",
+      "published_at": "2026-06-12T15:00:00.000Z"
+    }
+  ],
+  "metadata": {
+    "search_provider": "tavily",
+    "synthesis": "deterministic",
+    "deterministic_fallback_used": false,
+    "coverage": 1,
+    "freshness": "this week",
+    "citation_verdict": {
+      "claims_checked": 3,
+      "flagged": 0,
+      "stripped": 0
+    },
+    "usage": null,
+    "evidence": {
+      "candidate_claims": 6,
+      "accepted_claims": 5,
+      "excluded_sources": 0
+    },
+    "run_id": "golden-run"
+  },
+  "notices": [
+    {
+      "source": "synthesis",
+      "reason": "only 4 relevant findings met the evidence bar for a medium brief (up to 6 requested)",
+      "kind": "limited_evidence"
+    }
+  ]
+}

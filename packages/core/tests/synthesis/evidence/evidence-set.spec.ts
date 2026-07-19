@@ -60,6 +60,35 @@ describe('@no-llm synthesis/buildEvidenceSet near-duplicate merge', () => {
   });
 });
 
+describe('@no-llm synthesis/buildEvidenceSet negation-aware merge guard', () => {
+  it('never merges a claim with its negation, keeping both with their own citations', () => {
+    const { evidenceSet } = assemble([
+      doc('https://a.example.com/1', 'US electric vehicle car sales rose 28% in 2026.'),
+      doc('https://b.example.com/1', 'US electric vehicle car sales did not rise in 2026.'),
+    ]);
+
+    expect(evidenceSet.claims).toHaveLength(2);
+    const affirmative = evidenceSet.claims.find((claim) => !claim.negated);
+    const negated = evidenceSet.claims.find((claim) => claim.negated);
+    expect(affirmative).toBeDefined();
+    expect(negated).toBeDefined();
+    // Citations stay separate — the contradiction is not silently absorbed.
+    expect(affirmative!.docIndexes).toEqual([0]);
+    expect(negated!.docIndexes).toEqual([1]);
+  });
+
+  it('still merges two negated paraphrases (polarity agreement)', () => {
+    const { evidenceSet } = assemble([
+      doc('https://a.example.com/1', 'US electric vehicle car sales did not rise in 2026.'),
+      doc('https://b.example.com/1', 'Electric vehicle car sales in the US did not rise in 2026.'),
+    ]);
+
+    expect(evidenceSet.claims).toHaveLength(1);
+    expect(evidenceSet.claims[0]!.negated).toBe(true);
+    expect(evidenceSet.claims[0]!.docIndexes).toEqual([0, 1]);
+  });
+});
+
 describe('@no-llm synthesis/buildEvidenceSet budgets as caps', () => {
   const twoFindings = [
     doc('https://a.example.com/1', 'US EV car sales fell 28% in 2026 as demand cooled.'),

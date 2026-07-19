@@ -94,6 +94,8 @@ interface MergingClaim {
   readonly entityKeys: Set<string>;
   readonly docIndexes: Set<number>;
   readonly salience: number;
+  readonly negated: boolean;
+  readonly sentiment: number;
 }
 
 /**
@@ -166,6 +168,8 @@ function mergeNearDuplicates(
       entityKeys: new Set(claim.entityKeys),
       docIndexes: new Set(claim.docIndexes),
       salience: claim.salience,
+      negated: claim.negated,
+      sentiment: claim.sentiment,
     });
   }
 
@@ -177,14 +181,29 @@ function mergeNearDuplicates(
     entityKeys: [...claim.entityKeys].sort(),
     docIndexes: [...claim.docIndexes].sort((left, right) => left - right),
     salience: claim.salience,
+    negated: claim.negated,
+    sentiment: claim.sentiment,
   }));
 }
 
+/**
+ * Near-duplicate test between an accepted claim and a candidate.
+ *
+ * **Polarity guard**: claims whose `negated` flags disagree never merge, no
+ * matter how similar they look. Lemma cosine cannot tell "sales rose" from
+ * "sales did not rise" (negators are stopwords and vanish from the bag), so
+ * without the guard a claim could silently absorb its own contradiction and
+ * union the two sources' citations under one text. Polarity-agreeing pairs
+ * merge exactly as before (cosine / shared anchor / containment / substring).
+ */
 function shouldMerge(
   existing: MergingClaim,
   claim: EvidenceClaim,
   analyzer: TextAnalyzer,
 ): boolean {
+  if (existing.negated !== claim.negated) {
+    return false;
+  }
   const similarity = analyzer.similarity(existing.text, claim.text);
   if (similarity >= NEAR_DUP_THRESHOLD) {
     return true;

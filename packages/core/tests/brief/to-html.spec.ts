@@ -162,7 +162,7 @@ describe('@no-llm briefToHtml', () => {
       makeBrief({
         sections: [
           {
-            heading: 'Numbers & figures',
+            heading: 'Key facts',
             body_md:
               '| Figure | Context | Sources |\n| --- | --- | --- |\n| 48 teams | Expanded field | [1] |',
             citations: [1],

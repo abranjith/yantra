@@ -14,13 +14,21 @@ Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both tha
 
 `--no-llm` or `LLM_PROVIDER=none` selects the existing deterministic `ask` or `research` pipeline before Yantra constructs an agent session or contacts a model provider. Otherwise the command uses the same `runAgenticTask()` runtime and the same `result_publish` Brief validation used by `do`; run artifacts, usage, and `yantra audit` therefore have one format.
 
-| Command | Default agent tools | Notes |
-| --- | --- | --- |
-| `ask` | `web_search`, `web_fetch`, `script_run`, `workflow_run` (list only), `result_publish` | Produces a cited answer Brief; it cannot browse or execute workflows. |
-| `research` | `web_search`, `web_fetch`, `script_run`, `workflow_run`, `result_publish` | Requires broad multi-source evidence before publication. Set `YANTRA_AGENT_RESEARCH_BROWSE=1` to add read-only browser navigation, observation, and extraction; browser mutations remain unavailable. |
-| `do` | Full registered catalog | Includes browser actions and deterministic workflow execution, still guarded by policy and confirmation. |
+| Command    | Default agent tools                                                                   | Notes                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ask`      | `web_search`, `web_fetch`, `script_run`, `workflow_run` (list only), `result_publish` | Produces a cited answer Brief; it cannot browse or execute workflows.                                                                                                                                 |
+| `research` | `web_search`, `web_fetch`, `script_run`, `workflow_run`, `result_publish`             | Requires broad multi-source evidence before publication. Set `YANTRA_AGENT_RESEARCH_BROWSE=1` to add read-only browser navigation, observation, and extraction; browser mutations remain unavailable. |
+| `do`       | Full registered catalog                                                               | Includes browser actions and deterministic workflow execution, still guarded by policy and confirmation.                                                                                              |
 
 Command-budget defaults are configuration keys: `YANTRA_AGENT_ASK_*`, `YANTRA_AGENT_RESEARCH_*`, and `YANTRA_AGENT_DO_*` accept `BUDGET_MS`, `MAX_TOOL_CALLS`, and `MAX_CALLS_PER_TOOL` suffixes. The defaults intentionally increase from ask to research to do.
+
+| Command    | Total tool calls    | Calls per tool      |
+| ---------- | ------------------- | ------------------- |
+| `ask`      | 12                  | 6                   |
+| `research` | 30                  | 12                  |
+| `do`       | 60 (global default) | 25 (global default) |
+
+These caps were lowered from earlier releases because the combined `web_search` tool now returns fetched page content in a single call — one `web_search` replaces the old search-then-fetch-fetch-fetch chain, so a task reaches the same evidence in fewer tool calls. The per-tool execution timeout default is 60s (raised from 45s): `web_search` runs its top-N fetches in parallel, so its wall time is ≈ one search plus one fetch round, and the extra headroom keeps a slow SERP plus that fetch round inside a single per-tool timeout. Env overrides still win over every default.
 
 ## Confirmation UX
 

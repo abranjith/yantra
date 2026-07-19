@@ -1,0 +1,24 @@
+{
+  "query": "acme widget performance in 2026",
+  "docs": [
+    {
+      "url": "https://marketreport.example.com/acme-widgets-2026",
+      "finalUrl": null,
+      "host": "marketreport.example.com",
+      "title": "Acme widget sales climb in 2026",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": "2026-06-10T09:00:00.000Z",
+      "text": "Acme widget sales rose in 2026. Dealer inventories tightened through the spring as orders outpaced production for the first time in three years. The flagship W-500 model accounted for nearly half of all Acme widget units sold this year."
+    },
+    {
+      "url": "https://audit.example.org/acme-widget-review",
+      "finalUrl": null,
+      "host": "audit.example.org",
+      "title": "Independent audit questions Acme widget growth",
+      "fetchedAt": "2026-06-14T06:05:00.000Z",
+      "publishedAt": "2026-06-12T15:00:00.000Z",
+      "text": "Acme widget sales did not rise in 2026. The independent auditors reviewed shipment records from all seven regional Acme distribution centers. Retail partners described flat widget sell-through despite heavier promotional spending."
+    }
+  ],
+  "failures": []
+}

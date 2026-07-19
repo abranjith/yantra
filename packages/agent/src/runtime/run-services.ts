@@ -50,8 +50,15 @@ export interface SearchToolDeps {
    * surfaces a stable error rather than crashing.
    */
   readonly resolveProvider: () => Promise<Result<SearchProvider, { readonly message: string }>>;
-  /** Maximum normalized results returned to the model. */
+  /** Maximum search hits requested from the provider (search breadth). */
   readonly resultCap: number;
+  /**
+   * How many of the top hits the combined `web_search` tool fetches + extracts
+   * inline (`search.fetch_top`). The rest are returned as snippet-only "more
+   * results". Bounded to a small number so one result cannot evict a small
+   * model's context.
+   */
+  readonly fetchTop: number;
 }
 
 /** `web_fetch` domain dependencies (fetch → extract → sanitize path). */

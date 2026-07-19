@@ -18,6 +18,8 @@ function claim(text: string, salience: number, entityKeys: readonly string[] = [
     entityKeys,
     docIndexes: [0],
     salience,
+    negated: false,
+    sentiment: 0,
   };
 }
 
@@ -69,6 +71,26 @@ describe('@no-llm synthesis/groupClaimsByTopic', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]!.children).toEqual([]);
     expect(groups[0]!.parent.docIndexes).toEqual([0, 1]);
+  });
+
+  it('never absorbs a polarity-disagreeing claim as a duplicate of its contradiction', () => {
+    const affirmative = {
+      ...claim('Acme widget sales rose in 2026.', 10, ['acme']),
+      docIndexes: [0],
+    };
+    const negation = {
+      ...claim('Acme widget sales did not rise in 2026.', 8, ['acme']),
+      docIndexes: [1],
+      negated: true,
+    };
+
+    const groups = groupClaimsByTopic([affirmative, negation], analyzer, 0.2);
+
+    // The contradiction stays visible (as a child — it shares the anchor) with
+    // its own citations; the parent keeps only its own evidence.
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.parent.docIndexes).toEqual([0]);
+    expect(groups[0]!.children).toEqual([negation]);
   });
 
   it('keeps a similar claim separate when it shares no entity or numeric anchor', () => {
