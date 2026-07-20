@@ -240,8 +240,14 @@ function sourcesHtml(sources: readonly BriefSource[]): string {
       if (source.published_at !== null) {
         meta.push(`published ${escapeHtml(source.published_at)}`);
       }
+      // typeof-guard rather than a null check: pre-excerpt Briefs read from
+      // disk without a schema re-parse carry no excerpt property at all.
+      const excerpt =
+        typeof source.excerpt === 'string' && source.excerpt.trim().length > 0
+          ? `\n<blockquote class="src-excerpt">${escapeHtml(source.excerpt)}</blockquote>`
+          : '';
       // id="src-n" is the citation-superscript jump target.
-      return `<li id="src-${source.n}">${link} <span class="src-meta">${meta.join(' · ')}</span></li>`;
+      return `<li id="src-${source.n}">${link} <span class="src-meta">${meta.join(' · ')}</span>${excerpt}</li>`;
     })
     .join('\n');
   return `<ol class="sources">\n${items}\n</ol>`;
@@ -355,6 +361,13 @@ table.comparison tbody tr:nth-child(even), section table tbody tr:nth-child(even
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }
+blockquote.src-excerpt {
+  margin: 0.25rem 0 0;
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  border-left: 3px solid #e0ddd5;
+  color: #4c4942;
+  font-size: 0.9rem;
+}
 ul.key-findings { padding-left: 1.5rem; }
 ul.key-findings li { margin: 0.35rem 0; }
 ul.children {

@@ -171,7 +171,14 @@ function sourceLine(source: BriefSource): string {
   if (source.published_at !== null) {
     meta.push(`published ${source.published_at}`);
   }
-  return `${source.n}. [${label}](${source.url}) — ${meta.join(' · ')}`;
+  const line = `${source.n}. [${label}](${source.url}) — ${meta.join(' · ')}`;
+  // typeof-guard rather than a null check: pre-excerpt Briefs read from disk
+  // without a schema re-parse carry no excerpt property at all.
+  if (typeof source.excerpt === 'string' && source.excerpt.trim().length > 0) {
+    // Three-space continuation keeps the blockquote inside the ordered-list item.
+    return `${line}\n   > ${inline(source.excerpt)}`;
+  }
+  return line;
 }
 
 /** Formats a facet scalar for a table cell, escaping table-breaking chars. */

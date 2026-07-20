@@ -16,6 +16,7 @@ import type {
   FetchedDoc,
   SearchResult,
 } from '../../src/extraction/types.js';
+import type { DomainRankSignal } from '../../src/ranking/types.js';
 import { DeterministicSynthesizer } from '../../src/synthesis/deterministic.js';
 
 class InMemoryAskCache implements AskCache {
@@ -357,5 +358,67 @@ describe('@no-llm extraction/ask-pipeline', () => {
     const synth = events.find((event) => event.kind === 'synthesis_completed');
     expect(synth?.strategy).toBe('deterministic');
     expect(synth?.sources_in).toBe(3);
+  });
+
+  it('records one search signal per hit and one negative signal per source failure', async () => {
+    const signals: DomainRankSignal[] = [];
+    const pipeline = new AskPipeline({
+      searchProvider: { name: 'duckduckgo', search: async () => searchRows },
+      fetcher: {
+        fetch: async (url) => {
+          if (url.endsWith('/three')) {
+            throw new FetchError('network failed', { url, kind: 'network' });
+          }
+          return makeDoc(url);
+        },
+      },
+      extractor: {
+        extract: async (doc) => (doc.url.endsWith('/one') ? null : makeArticle(doc.url)),
+      },
+      cache: new InMemoryAskCache(),
+      ethicsGate: {
+        checkUrl: async (url) =>
+          url.endsWith('/two')
+            ? ({ ok: false, reason: 'robots', detail: 'disallowed' } as const)
+            : ({ ok: true } as const),
+      },
+      logger,
+      runRootDir: await makeRunDir(),
+      synthesizer: makeSynthesizer(),
+      rankSink: { record: (signal) => signals.push(signal) },
+    });
+
+    await pipeline.run({ ...baseQuery, noCache: true });
+
+    expect(signals).toEqual([
+      { domain: 'example.com', delta: 1, reason: 'search_result' },
+      { domain: 'example.com', delta: 1, reason: 'search_result' },
+      { domain: 'example.com', delta: 1, reason: 'search_result' },
+      { domain: 'example.com', delta: -1, reason: 'extract_failed' },
+      { domain: 'example.com', delta: -1, reason: 'blocked' },
+      { domain: 'example.com', delta: -1, reason: 'fetch_failed' },
+    ]);
+  });
+
+  it('does not let a throwing rank sink alter pipeline results', async () => {
+    const pipeline = new AskPipeline({
+      searchProvider: { name: 'duckduckgo', search: async () => searchRows },
+      fetcher: { fetch: async (url) => makeDoc(url) },
+      extractor: { extract: async (doc) => makeArticle(doc.url) },
+      cache: new InMemoryAskCache(),
+      ethicsGate: { checkUrl: async () => ({ ok: true }) },
+      logger,
+      runRootDir: await makeRunDir(),
+      synthesizer: makeSynthesizer(),
+      rankSink: {
+        record: () => {
+          throw new Error('rank sink unavailable');
+        },
+      },
+    });
+
+    const result = await pipeline.run({ ...baseQuery, noCache: true });
+
+    expect(result.brief.sources).toHaveLength(3);
   });
 });

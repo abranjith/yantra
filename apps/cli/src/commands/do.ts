@@ -8,7 +8,7 @@
 
 import {
   exitCodeForAgenticOutcome,
-  runAgenticTask,
+  type runAgenticTask,
   type AgentBudgetConfig,
   type AgenticTaskOutcome,
   type AgenticTaskRequest,
@@ -19,6 +19,7 @@ import { CLIConnectorIO } from '../connector-io.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
+import { runAgenticTaskWithRankSink } from '../runtime.js';
 
 const DEFAULT_PROVIDER = 'anthropic';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
@@ -212,7 +213,7 @@ function clean(value: string): string {
 
 function runtimeWithDefaults(runtime?: Partial<DoRuntime>): DoRuntime {
   return {
-    runTask: runtime?.runTask ?? runAgenticTask,
+    runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     env: runtime?.env ?? process.env,
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,

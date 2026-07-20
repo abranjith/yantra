@@ -9,7 +9,13 @@
  * a run capture and referenced rather than dumped inline.
  */
 
-import { EthicsRefusedError, FetchError } from '@yantra/core';
+import {
+  EthicsRefusedError,
+  FetchError,
+  domainFromUrl,
+  safeRecordRankSignal,
+  type DomainRankReason,
+} from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
@@ -45,9 +51,11 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
       'inside previously fetched content) and return its readable article text (title + body). ' +
       'Do NOT use it to explore a topic — web_search already returns page content for a query. ' +
       'Do NOT use it to bypass a paywall/login, to reach a blocked or non-public host, or to ' +
-      'download non-text content (PDFs, images, binaries).',
+      'download non-text content (PDFs, images, binaries). Every fetched page is recorded as ' +
+      'a source for your published result automatically.',
     parameters: WebFetchParams,
     sanitizationProfile: 'public',
+    evidenceGathering: true,
     run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
       runWebFetch(params, ctx.services, ctx.signal),
   };
@@ -80,6 +88,7 @@ async function runWebFetch(
     });
   } catch (error) {
     if (error instanceof EthicsRefusedError) {
+      recordFailure(services, allowed.value.url, 'blocked');
       return {
         ok: false,
         errorCode: 'ETHICS_BLOCKED',
@@ -100,6 +109,7 @@ async function runWebFetch(
     });
   } catch (error) {
     if (error instanceof FetchError) {
+      recordFailure(services, allowed.value.url, 'fetch_failed');
       return { ok: false, ...mapFetchError(error) };
     }
     throw error;
@@ -108,6 +118,7 @@ async function runWebFetch(
   // 4. Content-type allowlist.
   const contentType = (doc.contentType ?? '').toLowerCase();
   if (!deps.allowedContentTypes.some((prefix) => contentType.includes(prefix))) {
+    recordFailure(services, allowed.value.url, 'extract_failed');
     return {
       ok: false,
       errorCode: 'CONTENT_TYPE_REFUSED',
@@ -122,6 +133,7 @@ async function runWebFetch(
   // instead of retrying the same URL.
   const article = await deps.extractor.extract(doc);
   if (article === null || article.contentText.trim().length === 0) {
+    recordFailure(services, allowed.value.url, 'extract_failed');
     return {
       ok: false,
       errorCode: 'EXTRACTION_EMPTY',
@@ -132,6 +144,18 @@ async function runWebFetch(
       details: { final_url: doc.finalUrl, fetch_mode: doc.fetchMode },
     };
   }
+
+  // The fetched page becomes ledger evidence: result_publish attaches these
+  // as the Brief's sources, so the model never re-types URLs.
+  services.evidence.add({
+    url: article.url,
+    finalUrl: doc.finalUrl === article.url ? null : doc.finalUrl,
+    title: article.title,
+    excerpt: article.excerpt ?? article.contentText.slice(0, 1000),
+    fetchedAt: services.nowIso(),
+    publishedAt: article.publishedAt,
+    tool: 'web_fetch',
+  });
 
   // 6. Large content → capture reference instead of an inline dump.
   const textBytes = Buffer.byteLength(article.contentText, 'utf8');
@@ -162,6 +186,13 @@ async function runWebFetch(
     },
     details: { bytes: textBytes, final_url: doc.finalUrl },
   };
+}
+
+function recordFailure(services: RunServices, url: string, reason: DomainRankReason): void {
+  const domain = domainFromUrl(url);
+  if (domain !== null) {
+    safeRecordRankSignal(services.domain.rank, { domain, delta: -1, reason });
+  }
 }
 
 /** Map a core FetchError kind to a stable tool error. */

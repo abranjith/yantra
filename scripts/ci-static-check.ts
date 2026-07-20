@@ -43,12 +43,12 @@ export interface RestrictedRenderingImportViolation {
 }
 
 /**
- * A history/index-db import found on an LLM-payload-assembly path (FEAT-018
- * TASK-005, plan §6). The personalization privacy guarantee is enforced three
+ * An index-db import found on an LLM-payload-assembly path (FEAT-018 and
+ * FEAT-WI-004). The local-data privacy guarantee is enforced three
  * ways; this is the structural one: no module that assembles an LLM payload
  * (the synthesizer, the research query generator, the agent prompt builders)
- * may transitively import the `index-db` history/preference store, so raw
- * run-history text has no code path into a prompt. Same import-graph mechanism
+ * may transitively import the `index-db` history/preference/domain-rank stores,
+ * so raw local index data has no code path into a prompt. Same mechanism
  * as the pi-agent-core boundary and the `--json` freedom check.
  */
 export interface RestrictedHistoryImportViolation {
@@ -83,7 +83,7 @@ export interface StaticCheckOptions {
   readonly jsonPathEntries?: readonly string[];
   /**
    * LLM-payload-assembly entrypoints whose import closures must stay free of
-   * the `index-db` history/preference store (FEAT-018 TASK-005). Defaults to
+   * the `index-db` history/preference/domain-rank stores. Defaults to
    * {@link DEFAULT_LLM_PAYLOAD_ENTRIES}. Overridable for the fixture suite.
    */
   readonly llmPayloadEntries?: readonly string[];
@@ -116,7 +116,7 @@ const DEFAULT_JSON_PATH_ENTRIES = ['apps/cli/src/render/json.ts'] as const;
 
 /**
  * LLM-payload-assembly entrypoints whose import closures must never reach the
- * `index-db` history/preference store (FEAT-018 privacy guarantee). These are
+ * `index-db` history/preference/domain-rank stores (privacy guarantee). These are
  * every place a prompt is built from content: the LLM synthesizer, the research
  * query generator, and the agent-side prompt templates.
  */
@@ -127,8 +127,8 @@ const DEFAULT_LLM_PAYLOAD_ENTRIES = [
 ] as const;
 
 /**
- * Matches an `index-db/` path segment — the history/preference store directory
- * the LLM path may not reach. Segment-based so it holds regardless of package
+ * Matches an `index-db/` path segment. The LLM path may not reach any local
+ * index store, including domain ranks. Segment-based so it holds across package
  * layout (and so the fixture suite can exercise it).
  */
 function isIndexDbModule(repoRelativePath: string): boolean {

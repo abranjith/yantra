@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { WinkAnalyzer } from '../../../src/synthesis/analysis/wink-analyzer.js';
 import {
+  countCandidateSentences,
   extractEligibleClaims,
   isJunkSentence,
+  isOpinionClaim,
+  JUNK_SCORE_THRESHOLD,
+  SENTIMENT_OPINION_THRESHOLD,
 } from '../../../src/synthesis/evidence/eligibility.js';
 import { buildQueryProfile } from '../../../src/synthesis/evidence/query-profile.js';
 import type { SynthesisDoc } from '../../../src/synthesis/types.js';
@@ -78,6 +82,107 @@ describe('@no-llm synthesis/extractEligibleClaims junk gate integration', () => 
       ),
     ]);
     expect(texts.some((text) => text.endsWith('?'))).toBe(false);
+  });
+});
+
+describe('@no-llm synthesis/junk-score gate (FEAT-WI-003)', () => {
+  /**
+   * SEO/nav fragments the earlier gates cannot see: each has a finite verb
+   * (imperative), a well-formed shape, enough tokens, and shares query terms —
+   * only the analyzer junk score (Title-Case density, no stopwords) catches
+   * them.
+   */
+  const surfaceJunk = [
+    'Explore US EV Car Sales Data Insights Reports Directory Resources Here.',
+    'Browse EV Car Sales Guides Rankings Comparisons Deals Offers Now.',
+    'Get EV Car Sales Updates Alerts Newsletters Bulletins Delivered Daily.',
+  ];
+
+  const legitimateShort = [
+    'US EV car sales fell 28% in 2026 as demand cooled.',
+    'EV car sales in the US reached 1.3 million units in 2026.',
+  ];
+
+  it('pins the documented threshold constant (no magic number)', () => {
+    expect(JUNK_SCORE_THRESHOLD).toBe(0.5);
+  });
+
+  it('never rejects brand-word-dense legitimate prose (worldcup regression)', () => {
+    const brandDense = [
+      'Rail operators scheduled 150 extra trains for FIFA World Cup supporters.',
+      'Host cities added late-night transit for FIFA World Cup supporters.',
+    ];
+    for (const text of brandDense) {
+      const analysis = analyzer.analyze(text);
+      expect(analysis.junkScore(0)).toBeLessThanOrEqual(JUNK_SCORE_THRESHOLD);
+    }
+  });
+
+  it('rejects surface-junk fragments that pass every earlier gate', () => {
+    const texts = claimTexts(
+      surfaceJunk.map((text, index) => doc(text, `https://junk-${index}.example.com/a`)),
+    );
+    expect(texts).toEqual([]);
+    // These fixtures are specifically ones the shape gate does NOT catch.
+    for (const text of surfaceJunk) {
+      expect(isJunkSentence(text)).toBe(false);
+    }
+  });
+
+  it('passes legitimate short factual sentences', () => {
+    const texts = claimTexts(
+      legitimateShort.map((text, index) => doc(text, `https://fact-${index}.example.com/a`)),
+    );
+    expect(texts).toEqual(legitimateShort);
+  });
+
+  it('does not disturb candidate accounting: junk-rejected sentences still count as candidates', () => {
+    const docs = [
+      doc(surfaceJunk[0]!, 'https://junk.example.com/a'),
+      doc(legitimateShort[0]!, 'https://fact.example.com/a'),
+    ];
+    // Both are claim-sized candidates (metadata.evidence input) …
+    expect(countCandidateSentences(docs, analyzer)).toBe(2);
+    // … but only the legitimate sentence survives the gates.
+    expect(claimTexts(docs)).toEqual([legitimateShort[0]]);
+  });
+
+  it('rejects a heading with no finite verb regardless of junk score (gates stay independent)', () => {
+    const texts = claimTexts([
+      doc('State-Wise EV Car Sales & Adoption Insights', 'https://h.example.com/a'),
+    ]);
+    expect(texts).toEqual([]);
+  });
+});
+
+describe('@no-llm synthesis/isOpinionClaim sentiment gate (FEAT-WI-003)', () => {
+  it('pins the documented threshold constant (no magic number)', () => {
+    expect(SENTIMENT_OPINION_THRESHOLD).toBe(0.6);
+  });
+
+  it('flags a fact/number claim whose |sentiment| exceeds the threshold', () => {
+    expect(isOpinionClaim({ kind: 'fact', sentiment: 0.7 })).toBe(true);
+    expect(isOpinionClaim({ kind: 'number', sentiment: -0.7 })).toBe(true);
+  });
+
+  it('is a threshold, not zero-tolerance: mildly positive facts pass', () => {
+    expect(isOpinionClaim({ kind: 'fact', sentiment: 0.2 })).toBe(false);
+    expect(isOpinionClaim({ kind: 'number', sentiment: -0.5 })).toBe(false);
+    // Exclusive compare: exactly at the threshold is still factual.
+    expect(isOpinionClaim({ kind: 'fact', sentiment: SENTIMENT_OPINION_THRESHOLD })).toBe(false);
+  });
+
+  it('never demotes entity/quote claims — they do not feed Key facts', () => {
+    expect(isOpinionClaim({ kind: 'entity', sentiment: 0.9 })).toBe(false);
+    expect(isOpinionClaim({ kind: 'quote', sentiment: -0.9 })).toBe(false);
+  });
+
+  it('stays below the threshold for a factual sentence with a positive word', () => {
+    // "rose" carries mild positive sentiment (≈0.2) — well under the gate.
+    const analysis = analyzer.analyze('Sales rose 12% in 2025.');
+    expect(Math.abs(analysis.sentences[0]!.sentiment)).toBeLessThanOrEqual(
+      SENTIMENT_OPINION_THRESHOLD,
+    );
   });
 });
 

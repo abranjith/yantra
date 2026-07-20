@@ -1,0 +1,36 @@
+{
+  "query": "State of EV car sales in US in 2026",
+  "docs": [
+    {
+      "url": "https://autonews.example.com/ev-2026",
+      "finalUrl": null,
+      "host": "autonews.example.com",
+      "title": "US EV sales cool in 2026",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": "2026-06-12T09:00:00.000Z",
+      "text": "US EV car sales fell 28% in 2026 as demand cooled. Dealer discounts widened through the spring quarter.",
+      "excerpt": null
+    },
+    {
+      "url": "https://evstats.example.org/us-market",
+      "finalUrl": null,
+      "host": "evstats.example.org",
+      "title": "US EV market volume",
+      "fetchedAt": "2026-06-14T06:05:00.000Z",
+      "publishedAt": "2026-06-11T15:00:00.000Z",
+      "text": "Browse EV Car Sales Guides Rankings Comparisons Deals Offers Now. EV car sales in the US reached 1.3 million units in 2026. Get EV Car Sales Updates Alerts Newsletters Bulletins Delivered Daily.",
+      "excerpt": null
+    },
+    {
+      "url": "https://pricing.example.net/ev-prices",
+      "finalUrl": null,
+      "host": "pricing.example.net",
+      "title": "EV prices in 2026",
+      "fetchedAt": "2026-06-14T06:10:00.000Z",
+      "publishedAt": "2026-06-10T12:00:00.000Z",
+      "text": "Average EV car prices in the US dropped to $39,000 during 2026. US battery production for electric cars expanded 45% over the 2026 sales year.",
+      "excerpt": null
+    }
+  ],
+  "failures": []
+}

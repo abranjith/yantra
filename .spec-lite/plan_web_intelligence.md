@@ -10,12 +10,12 @@ Three targeted enhancements that make Yantra's web research smarter on both flow
 
 ## 2. High-Level Features
 
-| FEAT-ID     | Feature                                                                                                                  | Spec File                                         | Status          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- | --------------- |
-| FEAT-WI-001 | Combined Web Research Tool — `web_search` returns fetched+extracted top-N site content; `web_fetch` demoted to secondary | `features/feature_combined_web_research.md`       | [x] Complete    |
-| FEAT-WI-002 | Brief Section Consolidation — Key Findings / Key facts (figures folded in) / Additional findings; golden regeneration    | `features/feature_brief_section_consolidation.md` | [x] Complete    |
-| FEAT-WI-003 | wink-nlp Local-Analysis Spike & Quick Wins — negation merge guard, sentiment labeling, readability junk gate             | `features/feature_wink_nlp_quick_wins.md`         | [/] In progress |
-| FEAT-WI-004 | Domain Ranking Foundation — `domain_ranks` store (index.db v3), signal recording in both flows, `yantra sites` CLI       | `features/feature_domain_ranking.md`              | [ ] Not started |
+| FEAT-ID     | Feature                                                                                                                  | Spec File                                         | Status       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- | ------------ |
+| FEAT-WI-001 | Combined Web Research Tool — `web_search` returns fetched+extracted top-N site content; `web_fetch` demoted to secondary | `features/feature_combined_web_research.md`       | [x] Complete |
+| FEAT-WI-002 | Brief Section Consolidation — Key Findings / Key facts (figures folded in) / Additional findings; golden regeneration    | `features/feature_brief_section_consolidation.md` | [x] Complete |
+| FEAT-WI-003 | wink-nlp Local-Analysis Spike & Quick Wins — negation merge guard, sentiment labeling, readability junk gate             | `features/feature_wink_nlp_quick_wins.md`         | [x] Complete |
+| FEAT-WI-004 | Domain Ranking Foundation — `domain_ranks` store (index.db v3), signal recording in both flows, `yantra sites` CLI       | `features/feature_domain_ranking.md`              | [x] Complete |
 
 > **Note**: The `Spec File` column is populated by the **Feature** skill when it creates each feature spec. The `Status` column is owned exclusively by the **Implement** skill.
 

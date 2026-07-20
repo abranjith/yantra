@@ -68,6 +68,7 @@
       "final_url": null,
       "host": "www.fifa.com",
       "title": "FIFA World Cup 2026 latest news",
+      "excerpt": null,
       "fetched_at": "2026-07-10T12:00:00.000Z",
       "published_at": "2026-07-10T10:00:00.000Z"
     },
@@ -77,6 +78,7 @@
       "final_url": null,
       "host": "en.wikipedia.org",
       "title": "2026 FIFA World Cup",
+      "excerpt": null,
       "fetched_at": "2026-07-10T12:00:05.000Z",
       "published_at": null
     },
@@ -86,6 +88,7 @@
       "final_url": null,
       "host": "www.si.com",
       "title": "FIFA World Cup 2026 news and analysis",
+      "excerpt": null,
       "fetched_at": "2026-07-10T12:00:10.000Z",
       "published_at": "2026-07-10T09:30:00.000Z"
     },
@@ -95,6 +98,7 @@
       "final_url": null,
       "host": "football.example.com",
       "title": "FIFA World Cup host city preparations",
+      "excerpt": null,
       "fetched_at": "2026-07-10T12:00:15.000Z",
       "published_at": "2026-07-09T18:00:00.000Z"
     }

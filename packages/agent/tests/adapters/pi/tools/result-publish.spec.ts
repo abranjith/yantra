@@ -262,6 +262,10 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
     expect(result.error_code).toBe('BRIEF_INVALID');
     const details = result.details as { issues: { pointer: string }[] };
     expect(details.issues.some((issue) => issue.pointer === 'sources/0/url')).toBe(true);
+    // The message must tell a weak model the remedy: copy exact URLs from its
+    // web tool results (observed failure: publishing sources: [{url: "N/A"}]).
+    expect(result.modelText).toMatch(/copy them verbatim/i);
+    expect(result.modelText).toMatch(/web_search/);
   });
 
   it('honors an explicit editorial: false on an uncited finding by rejecting it', async () => {
@@ -299,5 +303,186 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
     const brief = await publishedBrief();
     expect(typeof brief.task_id).toBe('string');
     expect((brief.task_id as string).length).toBe(26);
+  });
+});
+
+describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-publish-ledger-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  async function publishedBrief(): Promise<Record<string, unknown>> {
+    return JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+  }
+
+  function withEvidence(): ReturnType<typeof buildServices> {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+    services.evidence.add({
+      url: 'https://news.example.com/final-report',
+      finalUrl: null,
+      title: 'Final report',
+      excerpt: 'Spain beat Argentina in the final.',
+      fetchedAt: '2026-07-19T22:05:00.000Z',
+      publishedAt: '2026-07-19T22:00:00.000Z',
+      tool: 'web_search',
+    });
+    services.evidence.add({
+      url: 'https://stats.example.com/match',
+      finalUrl: null,
+      title: null,
+      excerpt: null,
+      fetchedAt: '2026-07-19T22:06:00.000Z',
+      publishedAt: 'sometime yesterday',
+      tool: 'web_fetch',
+    });
+    return services;
+  }
+
+  it('attaches ledger sources with excerpts and ignores model-supplied sources (regression: placeholder "N/A" sources)', async () => {
+    const services = withEvidence();
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    // The exact failure shape observed in run logs: the model re-types sources
+    // as placeholders instead of copying URLs from its earlier tool results.
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Who won the final',
+          overview: 'Spain won the final against Argentina.',
+          sources: [{ url: 'N/A' }, 'not a url either'],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.sources).toMatchObject([
+      {
+        n: 1,
+        url: 'https://news.example.com/final-report',
+        title: 'Final report',
+        excerpt: 'Spain beat Argentina in the final.',
+        fetched_at: '2026-07-19T22:05:00.000Z',
+        published_at: '2026-07-19T22:00:00.000Z',
+      },
+      // Unparseable extraction-derived publication dates normalize to null
+      // rather than failing validation of a runtime-attached source.
+      { n: 2, url: 'https://stats.example.com/match', excerpt: null, published_at: null },
+    ]);
+  });
+
+  it('coerces model findings to editorial text so ad-hoc citation numbers can never invalidate the Brief', async () => {
+    const services = withEvidence();
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    // Citations like [7] point into the model's per-call web_search numbering,
+    // not the run-wide ledger numbering — mis-attribution is worse than none.
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Cited answer',
+          overview: 'Answer. [1]',
+          key_findings: [
+            { text: 'Backed claim.', citations: [7] },
+            'A bare string finding.',
+            { note: 'junk entry with no text' },
+          ],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.key_findings).toMatchObject([
+      { text: 'Backed claim.', citations: [], editorial: true },
+      { text: 'A bare string finding.', citations: [], editorial: true },
+    ]);
+  });
+
+  it('passes a complete protocol Brief through untouched even when the ledger has entries', async () => {
+    // Internal/scripted callers publish fully-formed Briefs; replacing their
+    // sources or coercing their typed findings would invalidate them.
+    const services = withEvidence();
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const complete = createBrief({
+      task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      title: 'Scripted result',
+      overview: 'Answer. [1]',
+      key_findings: [
+        { text: 'Cited claim. [1]', citations: [1], editorial: false, facet: null, children: [] },
+      ],
+      sources: [
+        {
+          n: 1,
+          url: 'https://scripted.example.com/evidence',
+          final_url: null,
+          host: 'scripted.example.com',
+          title: 'Scripted evidence',
+          excerpt: null,
+          fetched_at: '2026-07-19T20:00:00.000Z',
+          published_at: null,
+        },
+      ],
+    });
+    const result = await tool.execute({ brief: complete }, undefined);
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.sources).toMatchObject([{ n: 1, url: 'https://scripted.example.com/evidence' }]);
+    expect(brief.key_findings).toMatchObject([
+      { text: 'Cited claim. [1]', citations: [1], editorial: false },
+    ]);
+  });
+
+  it('publishes with an empty ledger exactly as before (browser-only runs keep model sources)', async () => {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+    const tool = wrapTool(resultPublishSpec(services), services);
+
+    const result = await tool.execute(
+      {
+        brief: {
+          title: 'Legacy path',
+          overview: 'Answer. [1]',
+          sources: ['https://example.com/evidence'],
+        },
+      },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await publishedBrief();
+    expect(brief.sources).toMatchObject([{ n: 1, url: 'https://example.com/evidence' }]);
+  });
+
+  it('stamps the runtime-assembly path honestly in metadata and notices', async () => {
+    const publisher = createBriefPublisher(runDir, { runId: 'run-under-test' });
+
+    const published = await publisher.publish(
+      {
+        title: 'Assembled result',
+        overview: 'The draft answer, packaged by the runtime.',
+        sources: ['https://news.example.com/final-report'],
+      },
+      { assembledByRuntime: true },
+    );
+
+    expect(published.isOk).toBe(true);
+    const brief = await publishedBrief();
+    expect(brief.metadata).toMatchObject({
+      synthesis: 'llm',
+      deterministic_fallback_used: true,
+    });
+    expect(brief.notices).toMatchObject([{ source: 'runtime', kind: 'other' }]);
   });
 });

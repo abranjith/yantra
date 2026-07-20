@@ -26,6 +26,7 @@ export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): Bri
   final_url: null,
   host: `source-${n}.example.com`,
   title: `Source ${n}`,
+  excerpt: null,
   fetched_at: '2026-07-01T10:00:00.000Z',
   published_at: null,
   ...overrides,
@@ -165,6 +166,9 @@ export const canonicalBrief: Brief = {
       final_url: null,
       host: 'amazon.com',
       title: 'Sony WH-1000XM5 Wireless Headphones — Amazon',
+      excerpt:
+        'Industry-leading noise cancellation with two processors and eight microphones. ' +
+        'List price $399, current price $328.',
       fetched_at: '2026-07-01T09:00:00.000Z',
       published_at: '2026-06-28T00:00:00.000Z',
     },
@@ -174,6 +178,7 @@ export const canonicalBrief: Brief = {
       final_url: null,
       host: 'bestbuy.com',
       title: 'Sony WH-1000XM5 | Best Buy',
+      excerpt: null,
       fetched_at: '2026-07-01T09:00:05.000Z',
       published_at: null,
     },
@@ -183,6 +188,7 @@ export const canonicalBrief: Brief = {
       final_url: null,
       host: 'walmart.com',
       title: 'Sony WH-1000XM5 Headphones - Walmart',
+      excerpt: null,
       fetched_at: '2026-07-01T09:00:10.000Z',
       published_at: null,
     },

@@ -28,6 +28,7 @@ function source(n: number, host: string, text: string): { source: BriefSource; t
       final_url: null,
       host,
       title: host,
+      excerpt: null,
       fetched_at: '2026-06-01T00:00:00.000Z',
       published_at: null,
     },

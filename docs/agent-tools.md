@@ -103,7 +103,12 @@ Every decision — allow or reject — is audited in full.
 | `browser_extract`  | Extract current-page content or the first table.                                                                                             | Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                                                                                                                         |
 | `script_run`       | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                        |
 | `workflow_run`     | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                       |
-| `result_publish`   | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; exactly one successful publication; closes the action phase.                                                                                                                                                                                                                                                                                                            |
+| `result_publish`   | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                                              |
+
+Web tool outcomes also feed Yantra's local domain-ranking signal: search hits
+add a positive observation, while blocked, failed, or unreadable pages add a
+negative one. Recording is best-effort and never changes the tool result. Only
+normalized domains are stored locally—never URLs, queries, or page content.
 
 Prefer `workflow_run` over ad-hoc browsing whenever a saved workflow matches the
 goal: it replays reliably and cheaply with no model involvement. The agent never
@@ -186,9 +191,8 @@ only when the agent calls `result_publish` with its result **content**:
 {
   "brief": {
     "title": "One-line answer title",
-    "overview": "Answer-first Markdown citing sources inline as [n].",
-    "key_findings": ["a plain string", { "text": "cited claim [1]", "citations": [1] }],
-    "sources": ["https://example.com/a", { "url": "https://example.com/b", "title": "B" }]
+    "overview": "Answer-first Markdown (1-3 paragraphs).",
+    "key_findings": ["an optional plain-string finding"]
   }
 }
 ```
@@ -196,18 +200,23 @@ only when the agent calls `result_publish` with its result **content**:
 `title` and `overview` are **schema-required**: a call without them (or with an
 empty title) is rejected as `INVALID_INPUT` naming the missing field before the
 publisher runs, so even small local models get a structured retry path.
-`key_findings` and `sources` are optional at the schema level and validated as
-content. The agent supplies only what it can know — title, overview, findings,
-and the URLs it actually used, in citation order (`[1]` is the first `sources`
-entry).
-Yantra deterministically assembles the formal protocol Brief around that content
-(document/task ids, contiguous source numbering, hosts, fetch timestamps,
-metadata) and validates the result, including citation integrity: a citation
-must resolve to a declared source, and an uncited finding is published as
-editorial commentary unless the agent explicitly claims it as fact
-(`editorial: false`), which is rejected. Internal callers may still pass a
-complete protocol Brief (detected by `brief_id`/`schema_version`); it is
-validated as-is.
+`key_findings` and `sources` are optional at the schema level.
+
+**Sources are ledger-authoritative.** Every site `web_search` and `web_fetch`
+return is recorded in the run's evidence ledger (URL, title, excerpt, fetch and
+publication timestamps, sanitized and bounded). When the ledger has entries,
+`result_publish` attaches those entries — with excerpts — as the Brief's
+sources in consulted order and **ignores** model-supplied `sources`; findings
+are published as editorial commentary (ad-hoc per-call citation numbers are
+stripped rather than mis-attributed against run-wide numbering). Small local
+models cannot reliably round-trip URLs from earlier tool results into a typed
+payload — observed failures include placeholder `"N/A"` sources and a
+completion-nudged re-search that changed the answer — so the model is never
+asked to courier data the runtime already owns. Model-supplied sources are
+honored only when the ledger is empty (for example browser-only `do` runs),
+where citation integrity is validated as before. Internal callers may still
+pass a complete protocol Brief (detected by `brief_id`/`schema_version`); it
+passes through untouched and is validated as-is.
 
 On success the tool writes `brief.json`, `brief.md`, and `brief.html` to the run
 directory and closes the run's **action phase**. Exactly one successful
@@ -216,6 +225,28 @@ content returns a structured, retryable `BRIEF_INVALID` error whose issue
 pointers match the submitted shape, and after a successful publish any later
 _mutating_ tool call is rejected with `ACTION_PHASE_CLOSED` (read-only tools
 remain available).
+
+### Completion nudge, evidence freeze, and the deterministic fallback
+
+When a session run ends in plain chat text with no publication, the runtime
+sends one **completion nudge**. The nudge is built from run state, not a static
+string: it recaps the consulted sources from the evidence ledger inline, states
+that sources attach automatically, anchors the model's previous message as the
+draft to publish, and instructs it not to gather more evidence. At the same
+moment the runtime **freezes the evidence phase**: further `web_search` /
+`web_fetch` calls are rejected with `EVIDENCE_FROZEN`, so the nudge turn is
+structurally publish-only and a model can never re-investigate its way to a
+different conclusion (the freeze is skipped when the ledger is empty, keeping a
+failed first search retryable).
+
+If the nudge turn still ends without a publication and the run holds both a
+draft answer and ledger evidence, the runtime **assembles the Brief itself**:
+the draft becomes the overview, the ledger becomes the sources, and the
+assembly is stamped honestly (`metadata.deterministic_fallback_used: true` plus
+a `notices` entry). The protocol invariant is unchanged — only a validated
+Brief is a published result — what relaxes is authorship: the model supplies
+prose, the runtime supplies structure. `AGENT_COMPLETION_MISSING` remains the
+outcome only when there is no draft or no evidence to package.
 
 ## Adding a tool (contributor checklist)
 

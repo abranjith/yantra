@@ -40,6 +40,19 @@ describe('@no-llm agent persistence protocol schemas', () => {
     expect(ToolAuditEntry.parse(makeAuditEntry())).toEqual(makeAuditEntry());
   });
 
+  it('accepts every shipped prompt version and rejects unknown ones', () => {
+    // Run-artifact compatibility: manifests persisted by older releases
+    // (agent-v1) must keep validating after a prompt version bump.
+    for (const prompt_version of ['agent-v1', 'agent-v2']) {
+      expect(AgentManifestSection.safeParse({ ...makeManifest(), prompt_version }).success).toBe(
+        true,
+      );
+    }
+    expect(
+      AgentManifestSection.safeParse({ ...makeManifest(), prompt_version: 'agent-v3' }).success,
+    ).toBe(false);
+  });
+
   it('rejects absolute and escaping session paths on every platform', () => {
     for (const session_file of [
       '/tmp/session.jsonl',

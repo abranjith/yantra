@@ -13,14 +13,16 @@
  * {@link runMigrations} applies every migration whose version is greater than
  * the DB's current `user_version`, in order, each inside a transaction.
  *
- * FEAT-021 (Scheduling) will add its `schedules` table as migration v2 — append
- * to {@link MIGRATIONS}; never edit a shipped migration.
+ * Scheduling is migration v2 and local domain ranking is migration v3. Append
+ * future steps to {@link MIGRATIONS}; never edit a shipped migration.
  */
+
+/** Migration v3 adds local-only domain ranking; future steps remain append-only. */
 
 import type { DatabaseSync } from './sqlite.js';
 
 /** The latest schema version this build knows how to produce. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** One forward-only migration step. */
 export interface Migration {
@@ -113,8 +115,34 @@ const migration002: Migration = {
   },
 };
 
+/**
+ * v3 — local domain-ranking observations and user-curated domains.
+ *
+ * Only normalized hostnames and aggregate counters are retained; URLs,
+ * queries, and page content never enter this table.
+ */
+const migration003: Migration = {
+  version: 3,
+  up: (db) => {
+    db.exec(`
+      CREATE TABLE domain_ranks (
+        domain           TEXT    PRIMARY KEY,
+        rank             INTEGER NOT NULL DEFAULT 0
+                                 CHECK (rank BETWEEN -100 AND 100),
+        positive_signals INTEGER NOT NULL DEFAULT 0,
+        negative_signals INTEGER NOT NULL DEFAULT 0,
+        origin           TEXT    NOT NULL CHECK (origin IN ('auto','user')),
+        first_seen_at    TEXT    NOT NULL,
+        last_signal_at   TEXT    NOT NULL
+      );
+
+      CREATE INDEX idx_domain_ranks_rank ON domain_ranks(rank DESC);
+    `);
+  },
+};
+
 /** All migrations, ascending by version. Append-only. */
-export const MIGRATIONS: readonly Migration[] = [migration001, migration002];
+export const MIGRATIONS: readonly Migration[] = [migration001, migration002, migration003];
 
 /**
  * Reads the DB's current schema version from `PRAGMA user_version`.

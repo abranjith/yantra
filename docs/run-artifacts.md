@@ -35,11 +35,16 @@ files under `captures/`; the model receives only a bounded preview and opaque
 `capture_ref`. Capture references are run-local and do not reveal filesystem
 paths to the model.
 
-When a run ends **without** a validated publication (failure class
-`validation_error`, error `AGENT_COMPLETION_MISSING`), the final sanitized
-assistant response is salvaged to `result.md` so the model's answer is not lost.
-It is diagnostic output — not a validated, citable Brief — and the run still
-fails; `report.md` and the CLI error note when it was written.
+When the completion nudge fails to produce a publication but the run holds both
+a draft answer and evidence-ledger sources, the runtime assembles and publishes
+the Brief itself (stamped `deterministic_fallback_used: true` with a `notices`
+entry), so the run completes with real artifacts. Only when there is no draft
+or no evidence does the run end **without** a validated publication (failure
+class `validation_error`, error `AGENT_COMPLETION_MISSING`); the final
+sanitized assistant response is then salvaged to `result.md` so the model's
+answer is not lost. It is diagnostic output — not a validated, citable Brief —
+and the run still fails; `report.md` and the CLI error note when it was
+written.
 
 `trace.json` records the ordered successful browser interactions of the run
 (navigate/click/fill/extract). Each interactive step carries a **candidate-chain
@@ -82,7 +87,7 @@ record for the provider session:
 | `auth_source`       | `managed`, `runtime-key`, or `environment`; never a credential. |
 | `session_id`        | Provider session identity.                                      |
 | `session_file`      | Relative pointer to the raw JSONL under `agent/`.               |
-| `prompt_version`    | Authoritative prompt version (`agent-v1`).                      |
+| `prompt_version`    | Authoritative prompt version (currently `agent-v2`).            |
 | `prompt_hash`       | SHA-256 of the exact system prompt text.                        |
 | `tool_catalog_hash` | SHA-256 of canonical tool names, schemas, and descriptions.     |
 

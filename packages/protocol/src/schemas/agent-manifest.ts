@@ -26,7 +26,11 @@ export const AgentManifestSection = z
       .describe('Credential source used to open the session; never credential material.'),
     session_id: z.string().min(1).describe('Provider-assigned session identifier.'),
     session_file: RelativeSessionFile,
-    prompt_version: z.literal('agent-v1').describe('Version of the authoritative agent prompt.'),
+    // Every version ever shipped stays listed so previously persisted run
+    // manifests keep validating (run-artifact compatibility).
+    prompt_version: z
+      .enum(['agent-v1', 'agent-v2'])
+      .describe('Version of the authoritative agent prompt.'),
     prompt_hash: z
       .string()
       .regex(/^[a-f0-9]{64}$/)

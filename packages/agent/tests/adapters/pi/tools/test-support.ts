@@ -25,6 +25,8 @@ import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middl
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import {
   ActionPhase,
+  EvidenceLedger,
+  EvidencePhase,
   type FetchToolDeps,
   type PublishToolDeps,
   type RunServices,
@@ -72,17 +74,21 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     publish: options.publish ?? nullPublisher(),
     browser: null,
     workflow: null,
+    rank: null,
     ...options.domain,
   };
 
+  const sanitizer = new DefaultSanitizer();
   return {
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
     budgets,
-    sanitizer: new DefaultSanitizer(),
+    sanitizer,
     urlPolicy: new UrlPolicy(budgets),
     confirmation: null,
     actionPhase: new ActionPhase(),
+    evidence: new EvidenceLedger(sanitizer),
+    evidencePhase: new EvidencePhase(),
     trace: options.trace ?? new AgentTrace(),
     abortSignal: options.abortSignal ?? new AbortController().signal,
     now: () => Date.now(),

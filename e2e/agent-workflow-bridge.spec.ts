@@ -213,6 +213,7 @@ function bridgeEnvironment(input: {
       search: {
         resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
         resultCap: 5,
+        fetchTop: 3,
       },
       fetch: {
         fetcher: new HttpFetcher({ maxBodyBytes: 1024 * 1024 }),
@@ -265,6 +266,7 @@ function bridgeEnvironment(input: {
         secretHosts: () => Promise.resolve([]),
         captureThresholdBytes: 16 * 1024,
       },
+      rank: null,
     },
   };
 }
@@ -292,11 +294,8 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
         sanitizer: new DefaultSanitizer(),
         urlPolicyConfig: { maxUrlLength: 2048, requireHttps: false },
         createEnvironment: (context) =>
-          Promise.resolve(
-            bridgeEnvironment({ ...context, workflowStore, nestedRunStore }),
-          ),
-        createProvider: (services) =>
-          new ScenarioProvider(services, promotionScenario()),
+          Promise.resolve(bridgeEnvironment({ ...context, workflowStore, nestedRunStore })),
+        createProvider: (services) => new ScenarioProvider(services, promotionScenario()),
       },
     );
 
@@ -396,9 +395,8 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
           ?.nested_run_id !== undefined,
     );
     expect(runEnd).toBeDefined();
-    const nestedRunId = (
-      runEnd?.output_sanitized as { details: { nested_run_id: string } }
-    ).details.nested_run_id;
+    const nestedRunId = (runEnd?.output_sanitized as { details: { nested_run_id: string } }).details
+      .nested_run_id;
     expect(typeof nestedRunId).toBe('string');
 
     // The nested run exists and carries zero agent-session artifacts (LLM-free).
@@ -489,6 +487,7 @@ function source(n: number, url: string): BriefSource {
     final_url: null,
     host: new URL(url).host,
     title: `Fixture source ${n}`,
+    excerpt: null,
     fetched_at: new Date().toISOString(),
     published_at: null,
   };

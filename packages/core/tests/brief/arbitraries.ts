@@ -118,10 +118,11 @@ const sourceAtIndexArb = (index: number, dangerous: boolean): fc.Arbitrary<Brief
     .record({
       url: sourceUrlArb(index, dangerous),
       title: fc.option(textArb(1, dangerous), { nil: null }),
+      excerpt: fc.option(textArb(1, dangerous), { nil: null }),
       fetched_at: isoDateArb,
       published_at: fc.option(isoDateArb, { nil: null }),
     })
-    .map(({ url, title, fetched_at, published_at }) => ({
+    .map(({ url, title, excerpt, fetched_at, published_at }) => ({
       n: index + 1,
       url,
       // final_url stays null so the normalized-URL uniqueness key is just `url`,
@@ -129,6 +130,7 @@ const sourceAtIndexArb = (index: number, dangerous: boolean): fc.Arbitrary<Brief
       final_url: null,
       host: `source-${index}.example.com`,
       title,
+      excerpt,
       fetched_at,
       published_at,
     }));

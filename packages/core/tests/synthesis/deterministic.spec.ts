@@ -624,3 +624,93 @@ describe('@no-llm synthesis/DeterministicSynthesizer consolidated sections (FEAT
     }
   });
 });
+
+describe('@no-llm synthesis/DeterministicSynthesizer sentiment opinion demotion (FEAT-WI-003)', () => {
+  /**
+   * Five neutral numeric claims, one strongly opinionated number claim
+   * (sentiment above the gate), one strongly opinionated fact claim, and
+   * three entity claims so `Additional findings` always renders. The
+   * opinionated claims must never surface under `Key facts`.
+   */
+  function opinionInput(): SynthesisInput {
+    const sentences = [
+      'The market shipped 41000 electric vehicle exports toward Europe.',
+      'The fleet averaged 320 electric vehicle miles per charge.',
+      'The programme recalled 7500 electric vehicle sedans recently.',
+      'The registry logged 28000 electric vehicle registrations this period.',
+      'The grid added 200000 electric vehicle chargers along highways.',
+      'The reviewers called the electric vehicle lineup fantastic, amazing and delightful.',
+      'A fantastic 90% of delighted owners praised the amazing electric vehicle lineup.',
+      'Tesla widened its electric vehicle lineup this season.',
+      'Rivian entered the electric vehicle pickup segment recently.',
+      'Hyundai reorganised its electric vehicle division here.',
+    ];
+    return {
+      query: 'electric vehicle market trends',
+      docs: sentences.map((text, i) =>
+        doc({ url: `https://ev-${i}.example.com/r`, title: 'EV market', text }),
+      ),
+      failures: [],
+    };
+  }
+
+  it('keeps strongly opinionated claims out of Key facts', async () => {
+    const result = await synth().synthesize(
+      opinionInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const keyFacts = result.value.brief.sections.find((section) => section.heading === 'Key facts');
+    expect(keyFacts).toBeDefined();
+    expect(keyFacts!.body_md).not.toMatch(/fantastic|amazing|delight/iu);
+  });
+
+  it('demotes rather than drops: the opinionated number claim lands in Additional findings with its citation', async () => {
+    const result = await synth().synthesize(
+      opinionInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    const additional = result.value.brief.sections.find(
+      (section) => section.heading === 'Additional findings',
+    );
+    expect(additional).toBeDefined();
+    expect(additional!.body_md).toContain(
+      'A fantastic 90% of delighted owners praised the amazing electric vehicle lineup.',
+    );
+    // The demoted claim keeps its citation — demote never severs evidence.
+    expect(additional!.body_md).toMatch(
+      /A fantastic 90% of delighted owners praised the amazing electric vehicle lineup\. \[\d+\]/u,
+    );
+  });
+
+  it('leaves opinionated claims eligible as key findings (demote is section-scoped)', async () => {
+    const result = await synth().synthesize(
+      opinionInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+
+    // The strongly opinionated fact claim may still be selected as a key
+    // finding — the sentiment gate governs only the Key facts section pool.
+    const findingTexts = result.value.brief.key_findings.map((finding) => finding.text);
+    expect(findingTexts).toContain(
+      'The reviewers called the electric vehicle lineup fantastic, amazing and delightful.',
+    );
+  });
+
+  it('never renders a sentiment score anywhere in the Brief', async () => {
+    const result = await synth().synthesize(
+      opinionInput(),
+      opts({ detail: 'full', length: 'short' }),
+    );
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(JSON.stringify(result.value.brief)).not.toMatch(/sentiment/iu);
+  });
+});

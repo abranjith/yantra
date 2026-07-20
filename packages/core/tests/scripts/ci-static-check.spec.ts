@@ -85,6 +85,18 @@ describe('@no-llm ci static check script', () => {
     expect(report.passed).toBe(false);
   });
 
+  it('flags a domain-rank store import reachable from an LLM-payload entrypoint', async () => {
+    const report = await runStaticCheck({
+      repoRoot,
+      roots: ['scripts/__fixtures__/domain-rank-violation'],
+      llmPayloadEntries: ['scripts/__fixtures__/domain-rank-violation/entry.ts'],
+    });
+
+    expect(report.historyImportViolations).toHaveLength(1);
+    expect(report.historyImportViolations[0]?.importPath).toContain('domain-rank-store');
+    expect(report.passed).toBe(false);
+  });
+
   it('passes when the LLM-payload closure touches preferences only (no history)', async () => {
     const report = await runStaticCheck({
       repoRoot,

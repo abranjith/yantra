@@ -22,6 +22,7 @@ import type {
   SearchResult,
   AgentBrowserController,
   OpaqueRefResolver,
+  RankSignalSink,
   WorkflowCatalogEntry,
 } from '@yantra/core';
 import type { Brief, BriefValidationError, Result } from '@yantra/protocol';
@@ -127,10 +128,17 @@ export interface PublishToolDeps {
    * Validate a candidate Brief (schema + citation/evidence) and, on success,
    * persist `brief.json/md/html` to the run directory.
    *
+   * @param brief The candidate content (agent-authored or complete Brief).
+   * @param options `assembledByRuntime` marks the deterministic fallback path
+   *   (the orchestrator packaging the agent's draft), stamped honestly into the
+   *   Brief's metadata and notices.
    * @returns `ok(paths+brief)` on a successful, validated publication, or
    *   `err(validationError)` listing offending references.
    */
-  readonly publish: (brief: unknown) => Promise<Result<PublishOutcome, BriefValidationError>>;
+  readonly publish: (
+    brief: unknown,
+    options?: { readonly assembledByRuntime?: boolean },
+  ) => Promise<Result<PublishOutcome, BriefValidationError>>;
 }
 
 /** Input for one nested deterministic workflow run. */
@@ -212,8 +220,103 @@ export interface ToolDomainDeps {
   readonly script: ScriptToolDeps;
   readonly publish: PublishToolDeps;
   readonly browser: BrowserToolDeps | null;
+  /** Local-only observation sink; null disables ranking with no behavior change. */
+  readonly rank: RankSignalSink | null;
   /** Deterministic saved-workflow discovery + invocation, or null when disabled. */
   readonly workflow: WorkflowToolDeps | null;
+}
+
+/** Ceilings keeping one evidence entry small enough for prompts and Briefs. */
+const MAX_EVIDENCE_TITLE_CHARS = 200;
+const MAX_EVIDENCE_EXCERPT_CHARS = 500;
+
+/** One consulted web source, recorded as its tool returned evidence. */
+export interface EvidenceEntry {
+  /** URL as fetched (absolute). */
+  readonly url: string;
+  /** Post-redirect landing URL, or null when no redirect was observed. */
+  readonly finalUrl: string | null;
+  /** Page title, or null when unavailable. */
+  readonly title: string | null;
+  /** Short content snippet, or null when none was extracted. */
+  readonly excerpt: string | null;
+  /** ISO-8601 UTC timestamp of the fetch. */
+  readonly fetchedAt: string;
+  /** Publication timestamp as extracted (best-effort), or null when unknown. */
+  readonly publishedAt: string | null;
+  /** The tool that consulted the source. */
+  readonly tool: 'web_search' | 'web_fetch';
+}
+
+/**
+ * Run-scoped record of every web source the agent consulted. The web tools
+ * append each successfully fetched site; `result_publish` and the runtime
+ * fallback publisher attach these entries as the Brief's sources, so the model
+ * never has to round-trip URLs through its own context (the observed failure
+ * mode behind placeholder sources, "publication impossible" blockers, and
+ * post-nudge re-searching).
+ *
+ * Title/excerpt text is page-derived (untrusted), so `add` runs it through the
+ * run's sanitizer and bounds it — the ledger is its own chokepoint because its
+ * entries flow into prompts (completion nudge) and artifacts (Brief sources)
+ * without passing the tool-result middleware again.
+ */
+export class EvidenceLedger {
+  private readonly byUrl = new Map<string, EvidenceEntry>();
+
+  public constructor(private readonly sanitizer: PayloadSanitizer) {}
+
+  /** Record one consulted source; first sighting of a URL wins (stable order). */
+  public add(entry: EvidenceEntry): void {
+    const key = entry.finalUrl ?? entry.url;
+    if (this.byUrl.has(key)) return;
+    this.byUrl.set(key, {
+      ...entry,
+      title: this.clean(entry.title, MAX_EVIDENCE_TITLE_CHARS),
+      excerpt: this.clean(entry.excerpt, MAX_EVIDENCE_EXCERPT_CHARS),
+    });
+  }
+
+  /** Consulted sources in first-consulted order. */
+  public entries(): readonly EvidenceEntry[] {
+    return [...this.byUrl.values()];
+  }
+
+  /** True when no source has been recorded yet. */
+  public isEmpty(): boolean {
+    return this.byUrl.size === 0;
+  }
+
+  private clean(text: string | null, maxChars: number): string | null {
+    if (text === null) return null;
+    const sanitized = this.sanitizer
+      .sanitize(text, 'public')
+      .text.replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, maxChars);
+    return sanitized.length > 0 ? sanitized : null;
+  }
+}
+
+/**
+ * Run-scoped evidence-phase latch. The orchestrator freezes it when the
+ * completion nudge fires with evidence already in the ledger; the middleware
+ * then rejects further evidence-gathering tool calls with `EVIDENCE_FROZEN`,
+ * so a nudged model can only package what it has, never re-investigate its way
+ * to a different conclusion.
+ */
+export class EvidencePhase {
+  private frozen = false;
+
+  /** True once evidence gathering has been closed for this run. */
+  public isFrozen(): boolean {
+    return this.frozen;
+  }
+
+  /** Close evidence gathering. Idempotent. */
+  public freeze(): void {
+    this.frozen = true;
+  }
 }
 
 /**
@@ -251,6 +354,10 @@ export interface RunServices {
   readonly confirmation: ConfirmationServices | null;
   /** Run-scoped action-phase latch (closed by `result_publish`). */
   readonly actionPhase: ActionPhase;
+  /** Run-scoped record of consulted web sources (attached to the Brief). */
+  readonly evidence: EvidenceLedger;
+  /** Latch closing evidence gathering at completion-nudge time. */
+  readonly evidencePhase: EvidencePhase;
   /**
    * Run-scoped successful-interaction trace, or null when promotion is not
    * wired for this run. Browser tools append on each successful action; the

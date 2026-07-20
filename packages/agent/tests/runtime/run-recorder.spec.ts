@@ -122,7 +122,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       expect(AgentManifestSection.parse(manifest.agent)).toMatchObject({
         auth_source: authSource,
         session_file: `agent/session-${authSource}.jsonl`,
-        prompt_version: 'agent-v1',
+        prompt_version: 'agent-v2',
       });
       expect(text).not.toContain(SECRET_CANARY);
     },

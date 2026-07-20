@@ -226,6 +226,7 @@ function createEnvironment(
             value: { name: 'duckduckgo', search: () => Promise.resolve(searchResults) },
           }),
         resultCap: 5,
+        fetchTop: 3,
       },
       fetch: {
         fetcher: new HttpFetcher({ maxBodyBytes: 1024 * 1024 }),
@@ -245,6 +246,7 @@ function createEnvironment(
         secretHosts: () => Promise.resolve([]),
         captureThresholdBytes: 16 * 1024,
       },
+      rank: null,
     },
   });
 }
@@ -434,6 +436,7 @@ function source(n: number, url: string): BriefSource {
     final_url: null,
     host: new URL(url).host,
     title: `Fixture source ${n}`,
+    excerpt: null,
     fetched_at: new Date().toISOString(),
     published_at: null,
   };

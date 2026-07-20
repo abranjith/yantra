@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runMigrations, currentSchemaVersion } from '../../src/index-db/migrations.js';
+import {
+  SCHEMA_VERSION,
+  currentSchemaVersion,
+  runMigrations,
+} from '../../src/index-db/migrations.js';
 import { SqliteScheduleStore } from '../../src/index-db/schedule-store.js';
 import { DatabaseSync } from '../../src/index-db/sqlite.js';
 
@@ -38,7 +42,7 @@ describe('@no-llm SqliteScheduleStore', () => {
   });
 
   it('applies migration v2, creating the schedules table and its index', () => {
-    expect(currentSchemaVersion(db)).toBe(2);
+    expect(currentSchemaVersion(db)).toBe(SCHEMA_VERSION);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as { name: string }[];

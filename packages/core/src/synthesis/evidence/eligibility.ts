@@ -14,6 +14,10 @@
  *    ("01:18:30 | …"), sentences that do not start with a capital/digit or
  *    end with terminal punctuation ("† denotes…", bare fragments), unbalanced
  *    parens/quotes, and editorial questions ("…turn on the style?").
+ * 0.6. **Analyzer junk score** — the analyzer's composite surface signal
+ *    (capitalization density / stopword deficit / long-word density; see
+ *    {@link JUNK_SCORE_THRESHOLD}) rejects boilerplate the shape regexes miss,
+ *    such as Title-Case nav runs with an imperative verb.
  * 1. **Grammaticality** — the sentence carries a finite verb
  *    ({@link DocAnalysis.hasFiniteVerb}). Headings and nav fragments
  *    ("State-Wise EV Sales & Adoption") are rejected outright.
@@ -95,6 +99,25 @@ export function isOpinionClaim(claim: Pick<EvidenceClaim, 'kind' | 'sentiment'>)
     Math.abs(claim.sentiment) > SENTIMENT_OPINION_THRESHOLD
   );
 }
+
+/**
+ * Analyzer junk score above which (exclusive) a candidate sentence is rejected
+ * at eligibility — the same silent failure class as the boilerplate and
+ * junk-shape gates (no notice is emitted; `metadata.evidence` counts shift).
+ *
+ * The score is the analyzer's composite surface signal (capitalization
+ * density, stopword deficit, long-word density — see `wink-analyzer.ts`;
+ * winkNLP's own `readabilityStats` is document-scoped, so this sentence-level
+ * derivation is used instead). Calibration (FEAT-WI-003 spike, tuned against
+ * the `ev-sales-messy`/`worldcup-hubs` corpora): SEO/nav link glue scores
+ * 0.60–0.90, but *legitimate* brand-word-dense prose ("Rail operators
+ * scheduled 150 extra trains for FIFA World Cup supporters") reaches ≈ 0.41 —
+ * a 0.4 threshold deleted cited factual claims from the worldcup corpus, so
+ * the gate sits at `0.5`, trading recall on mild footer glue for zero
+ * false-positive claim loss. The baseline analyzer always reports `0`, so
+ * this gate is a no-op there.
+ */
+export const JUNK_SCORE_THRESHOLD = 0.5;
 
 /** Numeric evidence kinds subject to the evidence-kind gate. */
 const NUMERIC_KINDS: ReadonlySet<EvidenceKind> = new Set(['money', 'percent', 'quantity', 'date']);
@@ -190,6 +213,8 @@ interface PreparedSentence {
   readonly negated: boolean;
   /** Sentence sentiment in [-1, 1] (analyzer `AnalyzedSentence.sentiment`). */
   readonly sentiment: number;
+  /** Analyzer junk score in [0, 1] (see {@link JUNK_SCORE_THRESHOLD}). */
+  readonly junkScore: number;
 }
 
 /** A relevance-passing document's prepared sentences. */
@@ -339,6 +364,7 @@ function prepareSentence(analyzed: AnalyzedSentence, analysis: DocAnalysis): Pre
     anaphoric: isAnaphoric(displayText),
     negated: analyzed.negated,
     sentiment: analyzed.sentiment,
+    junkScore: analysis.junkScore(index),
   };
 }
 
@@ -413,12 +439,14 @@ function stitchAnaphor(
     hasFiniteVerb: true,
     anaphoric: false,
     // The stitched claim is negated if either half is; its sentiment is the
-    // stronger (larger-magnitude) of the two, antecedent winning ties.
+    // stronger (larger-magnitude) of the two, antecedent winning ties; its
+    // junk score is the worse of the two halves.
     negated: antecedent.negated || sentence.negated,
     sentiment:
       Math.abs(sentence.sentiment) > Math.abs(antecedent.sentiment)
         ? sentence.sentiment
         : antecedent.sentiment,
+    junkScore: Math.max(antecedent.junkScore, sentence.junkScore),
   };
 }
 
@@ -486,6 +514,11 @@ function passesGates(sentence: PreparedSentence, profile: QueryProfile): boolean
   }
   // Gate 0.5: UI chrome and malformed sentence shapes.
   if (isJunkSentence(sentence.text)) {
+    return false;
+  }
+  // Gate 0.6: analyzer junk score — surface-signal boilerplate (Title-Case nav
+  // runs, stopword-free link glue) that the shape regexes above miss.
+  if (sentence.junkScore > JUNK_SCORE_THRESHOLD) {
     return false;
   }
   // Gate 1: grammaticality (kills headings and nav fragments).

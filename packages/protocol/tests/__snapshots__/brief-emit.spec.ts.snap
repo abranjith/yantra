@@ -406,6 +406,14 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
             "additionalProperties": false,
             "description": "A numbered, deduplicated source reference.",
             "properties": {
+              "excerpt": {
+                "default": null,
+                "description": "Short extracted snippet of the source content, or null when not captured.",
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
               "fetched_at": {
                 "description": "ISO-8601 UTC fetch timestamp.",
                 "format": "date-time",

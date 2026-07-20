@@ -22,6 +22,7 @@
       "final_url": null,
       "host": "investor.example.com",
       "title": "Acme Corp Q2 results",
+      "excerpt": null,
       "fetched_at": "2026-06-14T06:00:00.000Z",
       "published_at": "2026-06-12T21:00:00.000Z"
     }

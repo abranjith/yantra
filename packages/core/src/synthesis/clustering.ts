@@ -137,6 +137,9 @@ export function clusterSources(docs: readonly SynthesisDoc[]): ClusteringResult 
       final_url: representative.finalUrl,
       host: representative.host,
       title: representative.title,
+      // The deterministic pipeline carries evidence in key findings, not
+      // per-source snippets; agentic Briefs fill excerpt from the run ledger.
+      excerpt: null,
       fetched_at: representative.fetchedAt,
       published_at: representative.publishedAt,
     };

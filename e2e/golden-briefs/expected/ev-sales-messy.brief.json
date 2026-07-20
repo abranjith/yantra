@@ -66,6 +66,7 @@
       "final_url": null,
       "host": "coxauto.example.com",
       "title": "US EV sales report 2026",
+      "excerpt": null,
       "fetched_at": "2026-06-14T12:00:00.000Z",
       "published_at": "2026-06-10T00:00:00.000Z"
     },
@@ -75,6 +76,7 @@
       "final_url": null,
       "host": "autonews.example.com",
       "title": "EV registrations slid in 2026",
+      "excerpt": null,
       "fetched_at": "2026-06-14T12:00:05.000Z",
       "published_at": "2026-06-11T00:00:00.000Z"
     },
@@ -84,6 +86,7 @@
       "final_url": null,
       "host": "insideevs.example.com",
       "title": "US EV sales tracker",
+      "excerpt": null,
       "fetched_at": "2026-06-14T12:00:10.000Z",
       "published_at": "2026-06-12T00:00:00.000Z"
     },
@@ -93,6 +96,7 @@
       "final_url": null,
       "host": "momentum.example.com",
       "title": "EV sales momentum May 2026",
+      "excerpt": null,
       "fetched_at": "2026-06-14T12:00:12.000Z",
       "published_at": "2026-06-12T00:00:00.000Z"
     },
@@ -102,6 +106,7 @@
       "final_url": null,
       "host": "marketshare.example.com",
       "title": "US EV market share",
+      "excerpt": null,
       "fetched_at": "2026-06-14T12:00:13.000Z",
       "published_at": "2026-06-12T00:00:00.000Z"
     }

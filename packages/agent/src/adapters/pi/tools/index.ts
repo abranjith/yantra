@@ -29,7 +29,7 @@ import { webFetchSpec } from './web-fetch.js';
 import { webSearchSpec } from './web-search.js';
 import { workflowRunSpec } from './workflow-run.js';
 
-export { createBriefPublisher } from './result-publish.js';
+export { createBriefPublisher, evidenceToSourceRecords } from './result-publish.js';
 export { webSearchSpec } from './web-search.js';
 export { webFetchSpec } from './web-fetch.js';
 export { scriptRunSpec } from './script-run.js';
@@ -53,7 +53,9 @@ export function buildYantraWrappedTools(
   services: RunServices,
   profile?: Pick<CommandTaskProfile, 'toolNames' | 'workflowToolMode'>,
 ): WrappedTool[] {
-  const toolServices = profile ? { ...services, workflowToolMode: profile.workflowToolMode } : services;
+  const toolServices = profile
+    ? { ...services, workflowToolMode: profile.workflowToolMode }
+    : services;
   // Each spec has a distinct parameter schema, so wrap them individually (a
   // heterogeneous spec array would collapse the generic parameter to a union).
   const allWrapped: WrappedTool[] = [

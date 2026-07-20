@@ -145,6 +145,11 @@ export const BriefSource = z
       .describe('Post-redirect landing URL, or null when no redirect was observed.'),
     host: z.string().min(1).describe('Source host.'),
     title: z.string().nullable().describe('Page title, or null when unavailable.'),
+    excerpt: z
+      .string()
+      .nullable()
+      .default(null)
+      .describe('Short extracted snippet of the source content, or null when not captured.'),
     fetched_at: z.string().datetime().describe('ISO-8601 UTC fetch timestamp.'),
     published_at: z
       .string()

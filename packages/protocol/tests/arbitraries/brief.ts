@@ -100,16 +100,18 @@ const sourceAtIndexArb = (index: number): fc.Arbitrary<BriefSource> =>
     .record({
       withFinalUrl: fc.boolean(),
       title: fc.option(textArb(1), { nil: null }),
+      excerpt: fc.option(textArb(1), { nil: null }),
       fetched_at: isoDateArb,
       published_at: fc.option(isoDateArb, { nil: null }),
     })
-    .map(({ withFinalUrl, title, fetched_at, published_at }) => ({
+    .map(({ withFinalUrl, title, excerpt, fetched_at, published_at }) => ({
       n: index + 1,
       // Index-derived URLs guarantee normalized-URL uniqueness across sources.
       url: `https://source-${index}.example.com/page`,
       final_url: withFinalUrl ? `https://source-${index}.example.com/landing` : null,
       host: `source-${index}.example.com`,
       title,
+      excerpt,
       fetched_at,
       published_at,
     }));

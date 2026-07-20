@@ -239,6 +239,14 @@
                 ],
                 "description": "Page title, or null when unavailable."
               },
+              "excerpt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "default": null,
+                "description": "Short extracted snippet of the source content, or null when not captured."
+              },
               "fetched_at": {
                 "type": "string",
                 "format": "date-time",

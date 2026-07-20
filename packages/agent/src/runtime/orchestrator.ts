@@ -29,6 +29,7 @@ import {
   workflowsRoot,
   type AgentBrowserController as AgentBrowserControllerType,
   type PayloadSanitizer,
+  type RankSignalSink,
   type ReportBuilder,
   type WorkflowStore,
 } from '@yantra/core';
@@ -45,6 +46,7 @@ import { PiAgentProvider } from '../adapters/pi/provider.js';
 import {
   createBriefPublisher,
   createYantraTools,
+  evidenceToSourceRecords,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
 import { AgentStartupError, AgentSessionStartFailedError } from '../errors.js';
@@ -68,6 +70,9 @@ import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } fr
 import { RunRecorder } from './run-recorder.js';
 import {
   ActionPhase,
+  EvidenceLedger,
+  EvidencePhase,
+  type EvidenceEntry,
   type RunServices,
   type ToolDomainDeps,
   type WorkflowRunToolOutcome,
@@ -76,18 +81,61 @@ import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
 
+/** Maximum consulted sources recapped inline in the completion nudge. */
+const NUDGE_EVIDENCE_CAP = 10;
+
 /**
- * Sent once when a session run stops without a successful publication. Small
- * local models do not reliably map "terminal publication capability" onto the
- * registered tool, so the nudge names `result_publish` and its minimal payload
- * shape explicitly (this is a per-run user message, not the governed system
- * prompt — the no-tool-catalog rule applies to `AGENT_SYSTEM_PROMPT` only).
+ * Build the completion nudge sent once when a session run stops without a
+ * successful publication. Small local models do not reliably map "terminal
+ * publication capability" onto the registered tool, so the nudge names
+ * `result_publish` and its minimal payload shape explicitly (this is a per-run
+ * user message, not the governed system prompt — the no-tool-catalog rule
+ * applies to `AGENT_SYSTEM_PROMPT` only).
+ *
+ * The nudge closes the run, it never re-opens it: when the evidence ledger has
+ * entries, they are recapped inline with an explicit do-not-search-again
+ * instruction (the orchestrator freezes the evidence phase at the same moment),
+ * and a non-empty draft answer is anchored as the content to publish. The
+ * observed alternative — a generic "publish with exact URLs" demand — sent a
+ * small model on a second search trip that changed its conclusion.
  */
-const COMPLETION_NUDGE =
-  'Completion check: no validated result has been published, so the task is NOT complete. ' +
-  'Plain chat text is not a result. You MUST now call the result_publish tool exactly once, ' +
-  'passing {"brief": {...}} with your title, overview, key_findings, and sources. ' +
-  'If you cannot complete the goal, instead state the precise blocker and the safest next action.';
+function buildCompletionNudge(evidence: readonly EvidenceEntry[], draft: string): string {
+  const lines = [
+    'Completion check: no validated result has been published, so the task is NOT complete. ' +
+      'Plain chat text is not a result. You MUST now call the result_publish tool exactly ' +
+      'once, passing {"brief": {"title": "...", "overview": "..."}} (key_findings optional).',
+  ];
+  if (evidence.length > 0) {
+    lines.push(
+      '',
+      'You already consulted the sources below; they are attached to your published result ' +
+        'automatically. Do NOT call web_search or web_fetch again and do NOT re-type URLs — ' +
+        'publish now from the evidence you already have.',
+    );
+    evidence.slice(0, NUDGE_EVIDENCE_CAP).forEach((entry, index) => {
+      lines.push(`[${index + 1}] ${entry.url}${entry.title === null ? '' : ` — ${entry.title}`}`);
+    });
+    if (evidence.length > NUDGE_EVIDENCE_CAP) {
+      lines.push(`(+${evidence.length - NUDGE_EVIDENCE_CAP} more, also attached automatically)`);
+    }
+    if (draft.trim().length > 0) {
+      lines.push(
+        '',
+        'Your previous message is your draft answer: publish it by putting it in "overview" ' +
+          '(refine the wording only — do not change the conclusion).',
+      );
+    }
+  } else {
+    lines.push(
+      '',
+      'No user is available to answer questions, so a broad or ambiguous goal is NOT a ' +
+        'blocker: choose the most reasonable interpretation yourself and publish what you can ' +
+        'support. Only if publishing is genuinely impossible (for example, no source could be ' +
+        'fetched), state the precise blocker and the safest next action instead.',
+    );
+  }
+  return lines.join('\n');
+}
 
 /** Full enforced budget configuration for one agentic run. */
 export interface AgentBudgetConfig extends BudgetLimits, AgentPromptBudgets {
@@ -160,6 +208,7 @@ export interface AgenticTaskDependencies {
     readonly runId: string;
     readonly runDir: string;
     readonly taskId: string;
+    readonly rankSink: RankSignalSink | null;
   }) => Promise<AgenticRunEnvironment>;
   readonly createProvider?: (
     services: RunServices,
@@ -170,6 +219,8 @@ export interface AgenticTaskDependencies {
   readonly cwd?: string;
   /** Test/embedding override (for example, HTTP on a loopback fixture site). */
   readonly urlPolicyConfig?: UrlPolicyConfig;
+  /** CLI-composed local domain ranking sink; null/absent disables observation. */
+  readonly rankSink?: RankSignalSink | null;
 }
 
 /**
@@ -217,6 +268,7 @@ export async function runAgenticTask(
       runId: created.runId,
       runDir: created.runDir,
       taskId,
+      rankSink: dependencies.rankSink ?? null,
     });
     const runAbort = new AbortController();
     const budgetTracker = new BudgetTracker(budgetsConfig);
@@ -245,6 +297,8 @@ export async function runAgenticTask(
       }),
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
+      evidence: new EvidenceLedger(sanitizer),
+      evidencePhase: new EvidencePhase(),
       trace,
       abortSignal: runAbort.signal,
       now: () => now().getTime(),
@@ -265,6 +319,9 @@ export async function runAgenticTask(
       {
         goal: request.goal,
         budgets: budgetsConfig,
+        // Ambient facts use the injectable clock so hermetic tests can pin the
+        // rendered date; timezone/locale default to the host inside the builder.
+        ambient: { now: now() },
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(request.profileContext ? { profileContext: request.profileContext } : {}),
         promptAddendum: profile.promptAddendum,
@@ -304,10 +361,24 @@ export async function runAgenticTask(
     unsubscribe = session.subscribe((event) => state.onEvent(event));
 
     latestRunResult = await state.runPrompt(userPrompt);
+    // The pre-nudge response is the model's draft answer; capture it before
+    // runPrompt resets it — the nudge anchors to it, and the deterministic
+    // fallback publishes it when the nudge turn still does not publish.
+    let preNudgeDraft = '';
     if (!state.interrupted && !state.published && latestRunResult?.outcome === 'completed') {
-      latestRunResult = await state.runPrompt(COMPLETION_NUDGE);
+      preNudgeDraft = state.lastResponseText.trim();
+      const evidenceEntries = services.evidence.entries();
+      if (evidenceEntries.length > 0) {
+        // With evidence in hand, the nudge turn is publish-only: further
+        // web_search/web_fetch calls are rejected with EVIDENCE_FROZEN so the
+        // model cannot re-investigate its way to a different conclusion.
+        services.evidencePhase.freeze();
+      }
+      latestRunResult = await state.runPrompt(buildCompletionNudge(evidenceEntries, preNudgeDraft));
     }
-    terminal = await resolveTerminalOutcome(state, latestRunResult, created.runId, created.runDir);
+    terminal =
+      (await maybeAssembleUnpublishedResult(state, latestRunResult, services, preNudgeDraft)) ??
+      (await resolveTerminalOutcome(state, latestRunResult, created.runId, created.runDir));
   } catch (error) {
     if (session === undefined) {
       const startup = toStartupError(error);
@@ -535,6 +606,58 @@ function createExecutionState(input: {
       input.request.signal?.removeEventListener('abort', onUserAbort);
     },
   };
+}
+
+/**
+ * Deterministic fallback publication (zero-LLM): when the nudge turn still
+ * ends without a publish but the run holds both a draft answer and ledger
+ * evidence, the runtime assembles the Brief itself — the draft as overview,
+ * the consulted sources (with excerpts) attached, `deterministic_fallback_used`
+ * stamped, and an honest notice recording the assembly path. The protocol
+ * invariant is unchanged (only a validated Brief is a published result);
+ * what relaxes is authorship: the model supplies prose, the runtime supplies
+ * structure. Assembly failures fall through to the normal failure path.
+ *
+ * @returns The published outcome, or undefined when assembly does not apply
+ *   or did not produce a readable Brief.
+ */
+async function maybeAssembleUnpublishedResult(
+  state: ExecutionState,
+  result: AgentRunResult | undefined,
+  services: RunServices,
+  draft: string,
+): Promise<AgenticTaskOutcome | undefined> {
+  if (state.interrupted || state.published) return undefined;
+  if (result?.outcome !== 'completed') return undefined;
+  if (draft.length === 0 || services.evidence.isEmpty()) return undefined;
+
+  const published = await services.domain.publish.publish(
+    {
+      title: assembledTitle(draft),
+      overview: draft,
+      key_findings: [],
+      sources: evidenceToSourceRecords(services.evidence.entries()),
+    },
+    { assembledByRuntime: true },
+  );
+  if (!published.isOk) return undefined;
+  services.actionPhase.close();
+
+  const brief = await readPublishedBrief(services.runDir);
+  if (brief === undefined) return undefined;
+  return { kind: 'published', runId: services.runId, runDir: services.runDir, brief };
+}
+
+/** One-line title derived from the draft's first sentence-ish line (bounded). */
+function assembledTitle(draft: string): string {
+  const firstLine =
+    draft
+      .split(/\r?\n/u)
+      .map((line) => line.replace(/^[#>*\-\s]+/u, '').trim())
+      .find((line) => line.length > 0) ?? '';
+  const collapsed = firstLine.replace(/\s+/gu, ' ').trim();
+  if (collapsed.length === 0) return 'Task result';
+  return collapsed.length <= 120 ? collapsed : `${collapsed.slice(0, 117)}...`;
 }
 
 async function resolveTerminalOutcome(
@@ -796,6 +919,7 @@ async function createDefaultEnvironment(context: {
   readonly runId: string;
   readonly runDir: string;
   readonly taskId: string;
+  readonly rankSink: RankSignalSink | null;
 }): Promise<AgenticRunEnvironment> {
   const logger = {
     info: () => undefined,
@@ -920,6 +1044,7 @@ async function createDefaultEnvironment(context: {
         secretHosts: () => Promise.resolve([]),
         captureThresholdBytes: 16 * 1024,
       },
+      rank: context.rankSink,
     },
     resolveModelSecret: async (secretRef: string) => {
       const value = await keychain.get('yantra', secretRef);

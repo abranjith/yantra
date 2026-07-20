@@ -48,6 +48,7 @@
       "final_url": null,
       "host": "marketreport.example.com",
       "title": "Acme widget sales climb in 2026",
+      "excerpt": null,
       "fetched_at": "2026-06-14T06:00:00.000Z",
       "published_at": "2026-06-10T09:00:00.000Z"
     },
@@ -57,6 +58,7 @@
       "final_url": null,
       "host": "audit.example.org",
       "title": "Independent audit questions Acme widget growth",
+      "excerpt": null,
       "fetched_at": "2026-06-14T06:05:00.000Z",
       "published_at": "2026-06-12T15:00:00.000Z"
     }

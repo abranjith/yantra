@@ -9,6 +9,12 @@ import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-art
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
 import { JsonlEventBus } from '../executor/event-bus.js';
+import {
+  domainFromUrl,
+  rankReasonForFailureStage,
+  safeRecordRankSignal,
+} from '../ranking/recording.js';
+import type { RankSignalSink } from '../ranking/types.js';
 import type { Synthesizer } from '../synthesis/types.js';
 
 import { cacheKey, utcDayFrom } from './cache-key.js';
@@ -57,6 +63,8 @@ interface AskPipelineDependencies {
    * `selectSynthesizer` and pass the chosen instance here.
    */
   readonly synthesizer: Synthesizer;
+  /** Optional observation-only domain ranking sink. */
+  readonly rankSink?: RankSignalSink;
   readonly runRootDir?: string;
   readonly clock?: () => Date;
 }
@@ -75,6 +83,7 @@ export class AskPipeline {
   private readonly ethicsGate: AskEthicsGate;
   private readonly logger: Logger;
   private readonly synthesizer: Synthesizer;
+  private readonly rankSink: RankSignalSink | null;
   private readonly runRootDir: string;
   private readonly clock: () => Date;
 
@@ -86,6 +95,7 @@ export class AskPipeline {
     this.ethicsGate = deps.ethicsGate;
     this.logger = deps.logger;
     this.synthesizer = deps.synthesizer;
+    this.rankSink = deps.rankSink ?? null;
     this.runRootDir = deps.runRootDir ?? join(dataDir(), 'runs');
     this.clock = deps.clock ?? (() => new Date());
   }
@@ -155,6 +165,16 @@ export class AskPipeline {
           this.processSearchResult(result, query, runDir, taskId, emit, controller.signal),
         ),
       );
+
+      for (const entry of processed) {
+        if (entry.failure !== null) {
+          safeRecordRankSignal(this.rankSink, {
+            domain: entry.failure.host,
+            delta: -1,
+            reason: rankReasonForFailureStage(entry.failure.stage),
+          });
+        }
+      }
 
       const budgetExhausted = searchBudgetHit || controller.signal.aborted;
 
@@ -290,6 +310,16 @@ export class AskPipeline {
         limit: Math.max(1, query.limit) + 2,
         signal: controller.signal,
       });
+      for (const result of searchResults) {
+        const domain = domainFromUrl(result.url);
+        if (domain !== null) {
+          safeRecordRankSignal(this.rankSink, {
+            domain,
+            delta: 1,
+            reason: 'search_result',
+          });
+        }
+      }
     } catch (error) {
       // A budget abort during search is not a hard failure — degrade to a
       // partial (empty) Brief; any other search error propagates.

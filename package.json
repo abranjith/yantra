@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "turbo run clean",
-    "postinstall": "lefthook install"
+    "postinstall": "node scripts/install-git-hooks.mjs"
   },
   "lint-staged": {
     "*.ts": [

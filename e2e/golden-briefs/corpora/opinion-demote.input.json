@@ -1,0 +1,106 @@
+{
+  "query": "electric vehicle market trends",
+  "docs": [
+    {
+      "url": "https://ev-0.example.com/r",
+      "finalUrl": null,
+      "host": "ev-0.example.com",
+      "title": "EV exports",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The market shipped 41000 electric vehicle exports toward Europe.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-1.example.com/r",
+      "finalUrl": null,
+      "host": "ev-1.example.com",
+      "title": "EV range",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The fleet averaged 320 electric vehicle miles per charge.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-2.example.com/r",
+      "finalUrl": null,
+      "host": "ev-2.example.com",
+      "title": "EV recalls",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The programme recalled 7500 electric vehicle sedans recently.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-3.example.com/r",
+      "finalUrl": null,
+      "host": "ev-3.example.com",
+      "title": "EV registrations",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The registry logged 28000 electric vehicle registrations this period.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-4.example.com/r",
+      "finalUrl": null,
+      "host": "ev-4.example.com",
+      "title": "EV chargers",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The grid added 200000 electric vehicle chargers along highways.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-5.example.com/r",
+      "finalUrl": null,
+      "host": "ev-5.example.com",
+      "title": "EV review roundup",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "The reviewers called the electric vehicle lineup fantastic, amazing and delightful.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-6.example.com/r",
+      "finalUrl": null,
+      "host": "ev-6.example.com",
+      "title": "EV owner survey",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "A fantastic 90% of delighted owners praised the amazing electric vehicle lineup.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-7.example.com/r",
+      "finalUrl": null,
+      "host": "ev-7.example.com",
+      "title": "Tesla lineup",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "Tesla widened its electric vehicle lineup this season.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-8.example.com/r",
+      "finalUrl": null,
+      "host": "ev-8.example.com",
+      "title": "Rivian pickup",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "Rivian entered the electric vehicle pickup segment recently.",
+      "excerpt": null
+    },
+    {
+      "url": "https://ev-9.example.com/r",
+      "finalUrl": null,
+      "host": "ev-9.example.com",
+      "title": "Hyundai division",
+      "fetchedAt": "2026-06-14T06:00:00.000Z",
+      "publishedAt": null,
+      "text": "Hyundai reorganised its electric vehicle division here.",
+      "excerpt": null
+    }
+  ],
+  "failures": []
+}

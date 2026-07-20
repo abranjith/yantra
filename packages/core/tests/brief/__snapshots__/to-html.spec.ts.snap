@@ -55,6 +55,13 @@ table.comparison tbody tr:nth-child(even), section table tbody tr:nth-child(even
 ol.sources { padding-left: 1.5rem; }
 ol.sources li { margin: 0.35rem 0; }
 .src-meta { color: #6b675e; font-size: 0.85rem; }
+blockquote.src-excerpt {
+  margin: 0.25rem 0 0;
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  border-left: 3px solid #e0ddd5;
+  color: #4c4942;
+  font-size: 0.9rem;
+}
 ul.key-findings { padding-left: 1.5rem; }
 ul.key-findings li { margin: 0.35rem 0; }
 ul.children {
@@ -110,7 +117,8 @@ ul.notices li {
 </table>
 <h2>Sources</h2>
 <ol class="sources">
-<li id="src-1"><a href="https://www.amazon.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Wireless Headphones — Amazon</a> <span class="src-meta">amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z</span></li>
+<li id="src-1"><a href="https://www.amazon.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Wireless Headphones — Amazon</a> <span class="src-meta">amazon.com · fetched 2026-07-01T09:00:00.000Z · published 2026-06-28T00:00:00.000Z</span>
+<blockquote class="src-excerpt">Industry-leading noise cancellation with two processors and eight microphones. List price $399, current price $328.</blockquote></li>
 <li id="src-2"><a href="https://www.bestbuy.com/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 | Best Buy</a> <span class="src-meta">bestbuy.com · fetched 2026-07-01T09:00:05.000Z</span></li>
 <li id="src-3"><a href="https://www.walmart.com/ip/sony-wh-1000xm5" rel="noopener noreferrer">Sony WH-1000XM5 Headphones - Walmart</a> <span class="src-meta">walmart.com · fetched 2026-07-01T09:00:10.000Z</span></li>
 </ol>

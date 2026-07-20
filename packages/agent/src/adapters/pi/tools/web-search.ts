@@ -18,6 +18,9 @@
 
 import {
   createAskEthicsAdapter,
+  domainFromUrl,
+  rankReasonForFailureStage,
+  safeRecordRankSignal,
   webResearch,
   type AskEthicsGate,
   type ProcessedSource,
@@ -75,11 +78,13 @@ export function webSearchSpec(_services: RunServices): ToolWrapperSpec<typeof We
     description:
       'Search the public web and return the top results WITH their extracted page content and ' +
       'references — evidence in one call, not just links. Refine the user’s intent into a ' +
-      'focused search query before calling. Do NOT call it repeatedly for the same intent, and ' +
-      'do NOT use it for authenticated, private, or logged-in data; use web_fetch only for a ' +
-      'specific URL you already have.',
+      'focused search query before calling. Every fetched site is also recorded as a source ' +
+      'for your published result automatically. Do NOT call it repeatedly for the same intent, ' +
+      'and do NOT use it for authenticated, private, or logged-in data; use web_fetch only for ' +
+      'a specific URL you already have.',
     parameters: WebSearchParams,
     sanitizationProfile: 'public',
+    evidenceGathering: true,
     run: (params: WebSearchParamsType, ctx): Promise<DomainResult> =>
       runWebSearch(params, ctx.services, ctx.signal),
   };
@@ -135,7 +140,42 @@ async function runWebSearch(
     };
   }
 
+  recordOutcomeRanks(outcome, services);
+
   return mapOutcome(params.query, resolved.value.name, outcome, services);
+}
+
+/** Record every provider hit once, plus a negative observation for failures. */
+function recordOutcomeRanks(outcome: WebResearchOutcomeLike, services: RunServices): void {
+  for (const item of outcome.processed) {
+    const url = item.doc?.url ?? item.failure?.url;
+    if (url === undefined) continue;
+    const domain = domainFromUrl(url);
+    if (domain === null) continue;
+    safeRecordRankSignal(services.domain.rank, {
+      domain,
+      delta: 1,
+      reason: 'search_result',
+    });
+    if (item.failure !== null) {
+      safeRecordRankSignal(services.domain.rank, {
+        domain,
+        delta: -1,
+        reason: rankReasonForFailureStage(item.failure.stage),
+      });
+    }
+  }
+
+  for (const hit of outcome.remaining) {
+    const domain = domainFromUrl(hit.url);
+    if (domain !== null) {
+      safeRecordRankSignal(services.domain.rank, {
+        domain,
+        delta: 1,
+        reason: 'search_result',
+      });
+    }
+  }
 }
 
 /**
@@ -191,6 +231,17 @@ async function mapOutcome(
         published_at: doc.publishedAt,
         excerpt: doc.excerpt ?? doc.text.slice(0, 1000),
       };
+      // Every fetched site becomes ledger evidence: result_publish attaches
+      // these as the Brief's sources, so the model never re-types URLs.
+      services.evidence.add({
+        url: doc.url,
+        finalUrl: null,
+        title: doc.title,
+        excerpt: base.excerpt,
+        fetchedAt: services.nowIso(),
+        publishedAt: doc.publishedAt,
+        tool: 'web_search',
+      });
       const textBytes = Buffer.byteLength(doc.text, 'utf8');
       if (textBytes > threshold) {
         const captureRef = await writeCapture(services.runDir, doc.text);
@@ -216,7 +267,20 @@ async function mapOutcome(
 
   return {
     ok: true,
-    model: { query, sites, more_results: moreResults, failures },
+    model: {
+      query,
+      sites,
+      more_results: moreResults,
+      failures,
+      // Small local models cannot reliably round-trip URLs into a typed
+      // payload (observed: sources: [{url: "N/A"}], and a post-nudge re-search
+      // that changed the answer). Sources now attach from the run's evidence
+      // ledger, so the note steers the model straight to publishing prose.
+      note:
+        'These sites are recorded as your sources automatically. When you are done, call ' +
+        'result_publish with your title and overview — do not search again for the same topic ' +
+        'and do not re-type URLs.',
+    },
     details: {
       provider,
       fetched: sites.length,

@@ -10,6 +10,7 @@ import type { ContentFetcher } from '../../src/extraction/fetcher.js';
 import type { Extractor } from '../../src/extraction/readability.js';
 import type { SearchProvider } from '../../src/extraction/search/registry.js';
 import type { ExtractedArticle, FetchedDoc, SearchResult } from '../../src/extraction/types.js';
+import type { DomainRankSignal, RankSignalSink } from '../../src/ranking/types.js';
 import { FollowUpQueryGenerator } from '../../src/research/query-gen.js';
 import { ResearchLoop } from '../../src/research/research-loop.js';
 import type { ResearchOptions } from '../../src/research/types.js';
@@ -176,6 +177,7 @@ function makeLoop(deps: {
   extractor?: Extractor;
   runRootDir: string;
   budgetNow?: () => number;
+  rankSink?: RankSignalSink;
 }): ResearchLoop {
   return new ResearchLoop({
     searchProvider: deps.search ?? new FakeSearch(),
@@ -190,6 +192,7 @@ function makeLoop(deps: {
     runRootDir: deps.runRootDir,
     clock: () => new Date('2026-06-15T00:00:00.000Z'),
     ...(deps.budgetNow ? { budgetNow: deps.budgetNow } : {}),
+    ...(deps.rankSink ? { rankSink: deps.rankSink } : {}),
   });
 }
 
@@ -291,5 +294,38 @@ describe('@no-llm research/research-loop', () => {
     for (const query of hop2) {
       expect(hop1.has(query)).toBe(false);
     }
+  });
+
+  it('records search hits and extraction failures without duplicate synthesis signals', async () => {
+    const runRootDir = await makeRunRoot();
+    const signals: DomainRankSignal[] = [];
+    const loop = makeLoop({
+      runRootDir,
+      extractor: { extract: async () => null },
+      rankSink: { record: (signal) => signals.push(signal) },
+    });
+
+    await loop.run(baseOptions());
+
+    expect(signals.filter((signal) => signal.reason === 'search_result')).toHaveLength(3);
+    expect(signals.filter((signal) => signal.reason === 'extract_failed')).toHaveLength(3);
+    expect(signals).toHaveLength(6);
+  });
+
+  it('does not let a throwing rank sink alter research results', async () => {
+    const runRootDir = await makeRunRoot();
+    const loop = makeLoop({
+      runRootDir,
+      rankSink: {
+        record: () => {
+          throw new Error('rank sink unavailable');
+        },
+      },
+    });
+
+    const result = await loop.run(baseOptions());
+
+    expect(result.brief.sources.length).toBeGreaterThan(0);
+    expect(result.terminationReason).toBe('max_hops');
   });
 });

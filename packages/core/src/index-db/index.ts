@@ -56,3 +56,11 @@ export {
   type ScheduleStore,
   type SqliteScheduleStoreDeps,
 } from './schedule-store.js';
+export {
+  RANK_MAX,
+  RANK_MIN,
+  SqliteDomainRankStore,
+  type DomainRankRecord,
+  type DomainRankStore,
+  type SqliteDomainRankStoreDeps,
+} from './domain-rank-store.js';

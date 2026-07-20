@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   resolveCommandTaskProfile,
-  runAgenticTask,
+  type runAgenticTask,
   type AgenticTaskOutcome,
   type AgenticTaskRequest,
 } from '@yantra/agent';
@@ -39,6 +39,7 @@ import { openArtifact } from '../open-artifact.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
+import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -260,6 +261,7 @@ export async function createDefaultResearchLoop(
     httpFetcher: new HttpFetcher(),
     browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
   });
+  const rankSink = await createBestEffortRankSignalSink(logger);
 
   return new ResearchLoop({
     searchProvider: resolved.value,
@@ -269,6 +271,7 @@ export async function createDefaultResearchLoop(
     synthesizer: new DeterministicSynthesizer(),
     queryGen: new FollowUpQueryGenerator(),
     logger,
+    ...(rankSink === null ? {} : { rankSink }),
   });
 }
 
@@ -278,7 +281,7 @@ function runtimeWithDefaults(runtime?: Partial<ResearchRuntime>): ResearchRuntim
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,
     createLoop: runtime?.createLoop ?? createDefaultResearchLoop,
-    runTask: runtime?.runTask ?? runAgenticTask,
+    runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
   };
 }

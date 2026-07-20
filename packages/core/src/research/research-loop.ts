@@ -43,6 +43,12 @@ import { SearchProviderError } from '../extraction/search/errors.js';
 import type { SearchProvider } from '../extraction/search/registry.js';
 import { processSource } from '../extraction/source-processor.js';
 import type { SearchResult } from '../extraction/types.js';
+import {
+  domainFromUrl,
+  rankReasonForFailureStage,
+  safeRecordRankSignal,
+} from '../ranking/recording.js';
+import type { RankSignalSink } from '../ranking/types.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
 import type { SourceFailure, Synthesizer } from '../synthesis/types.js';
 
@@ -88,6 +94,8 @@ export interface ResearchLoopDependencies {
   readonly queryGen: FollowUpQueryGenerator;
   /** Logger. */
   readonly logger: Logger;
+  /** Optional observation-only domain ranking sink. */
+  readonly rankSink?: RankSignalSink;
   /**
    * Synthesizer used for cheap per-hop interim gap analysis. Defaults to a
    * fresh {@link DeterministicSynthesizer} so gap analysis never spends LLM
@@ -382,6 +390,11 @@ export class ResearchLoop {
         }
       } else if (processed.failure) {
         failures.push(processed.failure);
+        safeRecordRankSignal(this.deps.rankSink, {
+          domain: processed.failure.host,
+          delta: -1,
+          reason: rankReasonForFailureStage(processed.failure.stage),
+        });
       }
     }
 
@@ -409,6 +422,16 @@ export class ResearchLoop {
           limit: Math.max(1, options.perQueryLimit),
           signal,
         });
+        for (const result of results) {
+          const domain = domainFromUrl(result.url);
+          if (domain !== null) {
+            safeRecordRankSignal(this.deps.rankSink, {
+              domain,
+              delta: 1,
+              reason: 'search_result',
+            });
+          }
+        }
       } catch (error) {
         if (signal.aborted) {
           break;

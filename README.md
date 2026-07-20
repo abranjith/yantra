@@ -248,6 +248,26 @@ injected into a prompt (e.g. "Prefers metric units. Favors retailers: X, Y.").
 enforced three ways (input typing, a 500-run property test, and an import-graph
 guard). See [docs/personalization-and-privacy.md](docs/personalization-and-privacy.md).
 
+## Local site ranking
+
+Yantra collects a simple local quality signal for domains encountered during
+deterministic and agentic web research: search hits add `+1`, while blocked,
+failed, or unreadable pages add `-1`. Scores are bounded to `-100..100`; this
+release collects and exposes them but does not use them to reorder results.
+
+```bash
+yantra sites list
+yantra sites list --json
+yantra sites add example.com
+yantra sites remove example.com
+```
+
+`sites add` accepts hostname-shaped ASCII domains only (no schemes, paths,
+ports, or credentials) and promotes an automatically observed row to user
+curated. Ranking data is local-only in `index.db` and contains normalized
+domains plus aggregate counts—never full URLs, queries, or page content. See
+[docs/site-ranking.md](docs/site-ranking.md).
+
 ## Scheduling (unattended runs)
 
 Register a saved workflow to run on a cron schedule, and a lightweight local
@@ -307,6 +327,7 @@ The legacy internal `@yantra/agent` task-planning client has been removed. The s
 - Agentic runtime release notes: [docs/agentic-release-notes.md](docs/agentic-release-notes.md).
 - Release-gate coverage and evidence: [docs/release-gate.md](docs/release-gate.md).
 - Personalization & privacy: [docs/personalization-and-privacy.md](docs/personalization-and-privacy.md).
+- Local site ranking: [docs/site-ranking.md](docs/site-ranking.md).
 - Scheduling & the local daemon: [docs/scheduling.md](docs/scheduling.md).
 
 ## Continuous Integration

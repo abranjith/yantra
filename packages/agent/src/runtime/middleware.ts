@@ -134,6 +134,13 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
   /** True when this call must be rejected after the action phase closes. */
   readonly mutating?: boolean;
   /**
+   * True for tools that gather new web evidence (`web_search`, `web_fetch`).
+   * Once the orchestrator freezes the evidence phase at completion-nudge time,
+   * these calls are rejected with `EVIDENCE_FROZEN` so the model can only
+   * package the evidence it already collected.
+   */
+  readonly evidenceGathering?: boolean;
+  /**
    * Optional pre-domain policy hook (host/ethics/scope beyond the standard
    * budget/URL checks). Returns a structured failure to refuse, or null to
    * proceed.
@@ -228,6 +235,18 @@ async function runPipeline<TParams extends TSchema>(
         services,
         'ACTION_PHASE_CLOSED',
         'The result has already been published; mutating tools are no longer available.',
+        false,
+      );
+    }
+    // Evidence-phase latch: once the completion nudge closed evidence
+    // gathering, the only forward path is packaging what was already fetched.
+    if (spec.evidenceGathering && services.evidencePhase.isFrozen()) {
+      return failure(
+        spec,
+        services,
+        'EVIDENCE_FROZEN',
+        'Evidence gathering is closed for this run. Call result_publish now with your title ' +
+          'and overview — the sources you already fetched are attached automatically.',
         false,
       );
     }

@@ -51,9 +51,12 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'list',
     budgets: { totalToolCalls: 12, perToolCalls: 6 },
     promptAddendum:
-      'Answer the question directly, verify claims with cited sources, and publish an answer Brief. ' +
-      'Each web_search returns the top sources already fetched with their page content — read that ' +
-      'evidence rather than re-searching; use web_fetch only to follow a specific link.',
+      'Answer the question directly from the fetched evidence, then finish by calling ' +
+      'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish an answer ' +
+      'Brief — the pages you fetched are attached as sources automatically, so never re-search ' +
+      'for or re-type URLs. Each web_search returns the top sources already fetched with their ' +
+      'page content; read that evidence rather than re-searching, and use web_fetch only to ' +
+      'follow a specific link.',
     briefKind: 'answer',
   },
   research: {
@@ -62,9 +65,12 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     budgets: { totalToolCalls: 30, perToolCalls: 12 },
     promptAddendum:
-      'Research broadly before publishing: use independent sources, cover material gaps, cite the ' +
-      'evidence for every substantive conclusion, and publish a research Brief. Each web_search ' +
-      'returns fetched source content, not just links — follow specific leads with web_fetch.',
+      'Research broadly before publishing: use independent sources and cover material gaps, ' +
+      'then finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
+      '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
+      'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
+      'web_search returns fetched source content, not just links — follow specific leads with ' +
+      'web_fetch.',
     briefKind: 'research',
   },
   do: {
@@ -73,7 +79,8 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     budgets: {},
     promptAddendum:
-      'Complete the requested task safely, verify the outcome, and publish a task Brief.',
+      'Complete the requested task safely, verify the outcome, and finish by calling ' +
+      'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task Brief.',
     briefKind: 'task',
   },
 };

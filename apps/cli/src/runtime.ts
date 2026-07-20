@@ -6,6 +6,7 @@
  * run store) so individual subcommands don't repeat the wiring.
  */
 
+import { runAgenticTask } from '@yantra/agent';
 import {
   BlocklistImpl,
   DefaultSanitizer,
@@ -15,6 +16,7 @@ import {
   LocalProfileStore,
   RateLimiterImpl,
   RobotsCacheImpl,
+  SqliteDomainRankStore,
   SqliteRateLimitStore,
   createKeychainProvider,
   loadEthicsConfig,
@@ -23,6 +25,7 @@ import {
   type ConfirmationGateway,
   type KeychainProvider,
   type Logger,
+  type RankSignalSink,
   type RateLimitStore,
 } from '@yantra/core';
 import { LocalRunStore, RunOrchestrator } from '@yantra/core/workflow/replay';
@@ -33,6 +36,59 @@ const noopLogger: Logger = {
   error: () => undefined,
   debug: () => undefined,
 };
+
+let rankStoreFailureWarned = false;
+
+/**
+ * Opens the local rank store and adapts it to the fire-and-forget ranking port.
+ * Every failure is contained: the first is a process-level warning and later
+ * failures are debug-only, so observation can never fail a user task.
+ */
+export async function createBestEffortRankSignalSink(
+  logger: Logger,
+): Promise<RankSignalSink | null> {
+  try {
+    const { db } = await openIndexDb({ logger });
+    const store = new SqliteDomainRankStore({ db, logger });
+    return {
+      record: (signal) => {
+        try {
+          const result = store.applySignal(signal);
+          if (!result.isOk) {
+            logRankStoreFailure(logger, result.error);
+          }
+        } catch (error) {
+          logRankStoreFailure(logger, error);
+        }
+      },
+    };
+  } catch (error) {
+    logRankStoreFailure(logger, error);
+    return null;
+  }
+}
+
+/** Agentic runtime entrypoint with the same CLI-owned best-effort rank sink. */
+export const runAgenticTaskWithRankSink: typeof runAgenticTask = async (
+  request,
+  dependencies = {},
+) => {
+  const rankSink =
+    dependencies.rankSink === undefined
+      ? await createBestEffortRankSignalSink(noopLogger)
+      : dependencies.rankSink;
+  return runAgenticTask(request, { ...dependencies, rankSink });
+};
+
+function logRankStoreFailure(logger: Logger, error: unknown): void {
+  const details = { error: error instanceof Error ? error.message : String(error) };
+  if (!rankStoreFailureWarned) {
+    rankStoreFailureWarned = true;
+    logger.warn(details, 'domain ranking unavailable; continuing without rank updates');
+    return;
+  }
+  logger.debug(details, 'domain ranking update skipped');
+}
 
 export interface OrchestratorRuntime {
   readonly orchestrator: RunOrchestrator;

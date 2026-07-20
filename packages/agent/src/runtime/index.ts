@@ -9,6 +9,7 @@ export {
   AGENT_SYSTEM_PROMPT,
   PROMPT_VERSION,
   buildAgentUserPrompt,
+  type AgentAmbientContext,
   type AgentPromptBudgets,
   type AgentUserPromptInput,
 } from './prompt.js';

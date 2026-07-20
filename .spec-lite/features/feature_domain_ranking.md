@@ -121,10 +121,10 @@ interface RankSignalSink {
 
 ## 7. State Tracking
 
-- [ ] TASK-001: Core ranking port + domain normalization
-- [ ] TASK-002: Migration v3 + `SqliteDomainRankStore`
-- [ ] TASK-003: Deterministic-flow signal recording (ask + research)
-- [ ] TASK-004: Agentic-flow signal recording (web tools)
-- [ ] TASK-005: `yantra sites` CLI + static-check guard
+- [x] TASK-001: Core ranking port + domain normalization
+- [x] TASK-002: Migration v3 + `SqliteDomainRankStore`
+- [x] TASK-003: Deterministic-flow signal recording (ask + research)
+- [x] TASK-004: Agentic-flow signal recording (web tools)
+- [x] TASK-005: `yantra sites` CLI + static-check guard
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

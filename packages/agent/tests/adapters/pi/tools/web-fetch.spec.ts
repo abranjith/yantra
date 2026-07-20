@@ -2,7 +2,12 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { EthicsRefusedError, FetchError, HybridContentFetcher } from '@yantra/core';
+import {
+  EthicsRefusedError,
+  FetchError,
+  HybridContentFetcher,
+  type DomainRankSignal,
+} from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
@@ -40,6 +45,32 @@ describe('@no-llm web_fetch tool', () => {
     const result = await tool.execute({ url: 'https://example.com/a' }, undefined);
     expect(result.status).toBe('ok');
     expect(result.modelText).toContain('quick brown fox');
+    // The fetched page lands in the evidence ledger (ledger-authoritative
+    // sources for result_publish).
+    expect(services.evidence.entries()).toMatchObject([
+      { url: 'https://example.com/a', tool: 'web_fetch', title: 'Fixture Title' },
+    ]);
+  });
+
+  it('is rejected with EVIDENCE_FROZEN once the evidence phase is frozen', async () => {
+    // Regression: after the completion nudge, a small model re-searched the
+    // topic and published a different (wrong) conclusion. The freeze makes the
+    // nudge turn structurally publish-only.
+    const services = buildServices({
+      runDir,
+      fetch: {
+        fetcher: fetcherReturning(fetchedDoc()),
+        extractor: extractorReturning('unused'),
+      },
+    });
+    services.evidencePhase.freeze();
+    const tool = wrapTool(webFetchSpec(services), services);
+    const result = await tool.execute({ url: 'https://example.com/a' }, undefined);
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('EVIDENCE_FROZEN');
+    expect(result.retryable).toBe(false);
+    expect(result.modelText).toContain('result_publish');
+    expect(services.evidence.isEmpty()).toBe(true);
   });
 
   it('refuses a robots-blocked host with a typed refusal (no evasion path)', async () => {
@@ -169,5 +200,90 @@ describe('@no-llm web_fetch tool', () => {
     expect(payload.capture_ref).toMatch(/^cap-/);
     const files = await readdir(join(runDir, 'captures'));
     expect(files.length).toBe(1);
+  });
+
+  it('records blocked and fetch failures with the matching negative reason', async () => {
+    const blockedSignals: DomainRankSignal[] = [];
+    const refusal = new EthicsRefusedError(
+      {
+        host: 'blocked.example',
+        rule: 'robots.txt',
+        reason: 'Disallowed',
+        source: 'robots',
+      },
+      { taskId: 't', runId: 'r', stepId: 'web_fetch' },
+    );
+    const blockedServices = buildServices({
+      runDir,
+      domain: { rank: { record: (signal) => blockedSignals.push(signal) } },
+      fetch: { ethics: refusingEthics(refusal) },
+    });
+    const blocked = await wrapTool(webFetchSpec(blockedServices), blockedServices).execute(
+      { url: 'https://blocked.example/a' },
+      undefined,
+    );
+    expect(blocked.error_code).toBe('ETHICS_BLOCKED');
+    expect(blockedSignals).toEqual([{ domain: 'blocked.example', delta: -1, reason: 'blocked' }]);
+
+    const fetchSignals: DomainRankSignal[] = [];
+    const fetchServices = buildServices({
+      runDir,
+      domain: { rank: { record: (signal) => fetchSignals.push(signal) } },
+      fetch: {
+        fetcher: {
+          fetch: (url) => Promise.reject(new FetchError('timeout', { url, kind: 'timeout' })),
+        },
+      },
+    });
+    const failed = await wrapTool(webFetchSpec(fetchServices), fetchServices).execute(
+      { url: 'https://slow.example/a' },
+      undefined,
+    );
+    expect(failed.error_code).toBe('FETCH_TIMEOUT');
+    expect(fetchSignals).toEqual([{ domain: 'slow.example', delta: -1, reason: 'fetch_failed' }]);
+  });
+
+  it.each([
+    ['CONTENT_TYPE_REFUSED', 'application/pdf', false],
+    ['EXTRACTION_EMPTY', 'text/html', true],
+  ] as const)('records %s as an extraction failure', async (expectedCode, contentType, empty) => {
+    const signals: DomainRankSignal[] = [];
+    const services = buildServices({
+      runDir,
+      domain: { rank: { record: (signal) => signals.push(signal) } },
+      fetch: {
+        fetcher: fetcherReturning(fetchedDoc({ contentType })),
+        extractor: extractorReturning(empty ? null : 'body'),
+      },
+    });
+
+    const result = await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://content.example/a' },
+      undefined,
+    );
+
+    expect(result.error_code).toBe(expectedCode);
+    expect(signals).toEqual([{ domain: 'content.example', delta: -1, reason: 'extract_failed' }]);
+  });
+
+  it('does not let a throwing rank sink alter a fetch result', async () => {
+    const services = buildServices({
+      runDir,
+      domain: {
+        rank: {
+          record: () => {
+            throw new Error('rank sink unavailable');
+          },
+        },
+      },
+      fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning(null) },
+    });
+
+    const result = await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://example.com/a' },
+      undefined,
+    );
+
+    expect(result.error_code).toBe('EXTRACTION_EMPTY');
   });
 });

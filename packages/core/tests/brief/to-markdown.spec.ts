@@ -113,6 +113,7 @@ describe('@no-llm briefToMarkdown', () => {
       final_url: null,
       host: `s${i + 1}.example.com`,
       title: `Source ${i + 1}`,
+      excerpt: null,
       fetched_at: '2026-07-01T10:00:00.000Z',
       published_at: null,
     }));
@@ -140,6 +141,7 @@ describe('@no-llm briefToMarkdown', () => {
       final_url: null,
       host: `s${i + 1}.example.com`,
       title: `Source ${i + 1}`,
+      excerpt: null,
       fetched_at: '2026-07-01T10:00:00.000Z',
       published_at: null,
     }));

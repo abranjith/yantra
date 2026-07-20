@@ -24,6 +24,7 @@ import {
   makeUnscheduleCommand,
 } from './commands/schedule.js';
 import { makeShowCommand } from './commands/show.js';
+import { makeSitesCommand, type SitesRuntime } from './commands/sites.js';
 import { makeUsageCommand } from './commands/usage.js';
 
 // Re-exported so the consolidated FEAT-015 render suite can snapshot the
@@ -35,6 +36,7 @@ export interface CliRunOptions {
   readonly askRuntime?: Partial<AskRuntime>;
   readonly researchRuntime?: Partial<ResearchRuntime>;
   readonly doRuntime?: Partial<DoRuntime>;
+  readonly sitesRuntime?: Partial<SitesRuntime>;
 }
 
 /**
@@ -79,6 +81,7 @@ export const run = async (
   program.addCommand(makeUsageCommand());
   program.addCommand(makeProfileCommand());
   program.addCommand(makePrefsCommand());
+  program.addCommand(makeSitesCommand(options.sitesRuntime));
   program.addCommand(makeDoctorCommand());
   program.addCommand(makeAuditCommand());
   program.addCommand(makeReportCommand());

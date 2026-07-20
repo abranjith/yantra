@@ -113,15 +113,16 @@ Example:
 
 A numbered, deduplicated source reference.
 
-| Field        | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| n            | Citation number; contiguous 1..N in array order.                  |
-| url          | URL as fetched.                                                   |
-| final_url    | Post-redirect landing URL, or null when no redirect was observed. |
-| host         | Source host.                                                      |
-| title        | Page title, or null when unavailable.                             |
-| fetched_at   | ISO-8601 UTC fetch timestamp.                                     |
-| published_at | ISO-8601 publication timestamp, or null when unknown.             |
+| Field        | Description                                                               |
+| ------------ | ------------------------------------------------------------------------- |
+| n            | Citation number; contiguous 1..N in array order.                          |
+| url          | URL as fetched.                                                           |
+| final_url    | Post-redirect landing URL, or null when no redirect was observed.         |
+| host         | Source host.                                                              |
+| title        | Page title, or null when unavailable.                                     |
+| excerpt      | Short extracted snippet of the source content, or null when not captured. |
+| fetched_at   | ISO-8601 UTC fetch timestamp.                                             |
+| published_at | ISO-8601 publication timestamp, or null when unknown.                     |
 
 Example:
 
@@ -132,6 +133,7 @@ Example:
   "final_url": "<final_url>",
   "host": "<host>",
   "title": "<title>",
+  "excerpt": "<excerpt>",
   "fetched_at": "<fetched_at>",
   "published_at": "<published_at>"
 }

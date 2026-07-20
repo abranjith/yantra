@@ -6,6 +6,7 @@ export const makeSource = (n: number, overrides: Partial<BriefSource> = {}): Bri
   final_url: null,
   host: `source-${n}.example.com`,
   title: `Source ${n}`,
+  excerpt: null,
   fetched_at: '2026-07-01T10:00:00.000Z',
   published_at: null,
   ...overrides,

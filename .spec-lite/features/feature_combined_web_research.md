@@ -113,3 +113,30 @@ Core-side, the loop returns existing types: `ProcessedSource` (`doc: SynthesisDo
 - [x] TASK-005: Retune per-command caps and per-tool timeout
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 8. Post-implementation fix (2026-07-19): deterministic publish pipeline
+
+Live runs on `gemma4:e4b` exposed a completion-contract gap downstream of this
+feature: the combined tool delivered good evidence, but the model was still
+asked to courier source URLs into `result_publish` by hand, and the generic
+completion nudge sent it on a second search trip that changed its conclusion
+(full diagnosis: `.spec-lite/reviews/fix_publish_pipeline_determinism.md`).
+The fix makes the publish pipeline deterministic:
+
+- **Evidence ledger** (`RunServices.evidence`): every site `web_search`/
+  `web_fetch` returns is recorded (URL, title, excerpt, timestamps; sanitized
+  and bounded at append). `result_publish` is **ledger-authoritative** — the
+  model supplies prose only; ledger entries become the Brief's sources with
+  excerpts (protocol `BriefSource` gained a nullable `excerpt`, rendered in
+  `brief.md`/`brief.html`). Model-supplied sources apply only when the ledger
+  is empty; complete protocol Briefs pass through untouched.
+- **Publish-mode nudge + evidence freeze**: the nudge recaps consulted sources
+  inline, anchors the pre-nudge draft, and (with evidence present) the runtime
+  freezes evidence gathering — further `web_search`/`web_fetch` return
+  `EVIDENCE_FROZEN`, making the nudge turn structurally publish-only.
+- **Deterministic fallback publication**: if the nudge turn still does not
+  publish and the run holds a draft plus ledger evidence, the orchestrator
+  assembles the Brief itself (`deterministic_fallback_used: true` + notice).
+- **Front-loaded finishing contract**: ask/research/do prompt addenda state the
+  exact `result_publish` payload up front; the `web_search` result note steers
+  the model to publish rather than re-type URLs.

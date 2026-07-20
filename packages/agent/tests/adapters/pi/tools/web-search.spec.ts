@@ -6,6 +6,7 @@ import {
   EthicsRefusedError,
   FetchError,
   type ContentFetcher,
+  type DomainRankSignal,
   type EthicsGate,
   type Extractor,
   type FetchedDoc,
@@ -134,6 +135,36 @@ describe('@no-llm web_search combined tool', () => {
     expect(payload.sites[0]?.text).toBe('body for https://e0.com/');
     expect(payload.more_results.map((r) => r.url)).toEqual(['https://e3.com/', 'https://e4.com/']);
     expect(payload.failures).toEqual([]);
+    // Publish-steering note for small models: sources attach automatically,
+    // so the note must point at result_publish and warn against re-searching.
+    const withNote = JSON.parse(result.modelText) as { note?: string };
+    expect(withNote.note).toMatch(/sources automatically/i);
+    expect(withNote.note).toMatch(/result_publish/);
+    expect(withNote.note).toMatch(/do not search again/i);
+    // Every fetched site lands in the evidence ledger (ledger-authoritative
+    // sources for result_publish), in rank order, with excerpts.
+    expect(services.evidence.entries().map((entry) => entry.url)).toEqual([
+      'https://e0.com/',
+      'https://e1.com/',
+      'https://e2.com/',
+    ]);
+    expect(services.evidence.entries()[0]?.tool).toBe('web_search');
+    expect(services.evidence.entries()[0]?.excerpt).toBe(payload.sites[0]?.excerpt);
+  });
+
+  it('is rejected with EVIDENCE_FROZEN once the evidence phase is frozen', async () => {
+    // Regression: after the completion nudge, a small model re-searched the
+    // topic ("when was the 2022 world cup final") and published a different
+    // conclusion than its own evidence-backed draft. The freeze makes the
+    // nudge turn structurally publish-only.
+    const services = buildServices({ runDir });
+    services.evidencePhase.freeze();
+    const tool = wrapTool(webSearchSpec(services), services);
+    const result = await tool.execute({ query: 'best cameras' }, undefined);
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('EVIDENCE_FROZEN');
+    expect(result.retryable).toBe(false);
+    expect(result.modelText).toContain('result_publish');
   });
 
   it('honors an explicit limit but never exceeds fetch_top', async () => {
@@ -410,5 +441,74 @@ describe('@no-llm web_search combined tool', () => {
     const result = await tool.execute({ query: 'x' }, undefined);
 
     expect(Buffer.byteLength(result.modelText, 'utf8')).toBeLessThanOrEqual(4 * 1024);
+  });
+
+  it('records every search hit and stage-mapped negatives for combined failures', async () => {
+    const signals: DomainRankSignal[] = [];
+    const hits = [
+      hit({ url: 'https://ok.com/', rank: 1 }),
+      hit({ url: 'https://timeout.com/', rank: 2 }),
+      hit({ url: 'https://empty.com/', rank: 3 }),
+      hit({ url: 'https://tail.com/', rank: 4 }),
+    ];
+    const services = buildServices({
+      runDir,
+      domain: { rank: { record: (signal) => signals.push(signal) } },
+      search: {
+        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        resultCap: 4,
+        fetchTop: 3,
+      },
+      fetch: {
+        fetcher: keyedFetcher(),
+        extractor: textExtractor((url) => (url.includes('empty') ? null : `body ${url}`)),
+      },
+    });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(signals).toEqual([
+      { domain: 'ok.com', delta: 1, reason: 'search_result' },
+      { domain: 'timeout.com', delta: 1, reason: 'search_result' },
+      { domain: 'timeout.com', delta: -1, reason: 'fetch_failed' },
+      { domain: 'empty.com', delta: 1, reason: 'search_result' },
+      { domain: 'empty.com', delta: -1, reason: 'extract_failed' },
+      { domain: 'tail.com', delta: 1, reason: 'search_result' },
+    ]);
+  });
+
+  it('does not let a throwing rank sink alter the combined tool result', async () => {
+    const services = buildServices({
+      runDir,
+      domain: {
+        rank: {
+          record: () => {
+            throw new Error('rank sink unavailable');
+          },
+        },
+      },
+      search: {
+        resolveProvider: () =>
+          Promise.resolve({
+            isOk: true,
+            value: providerReturning([hit({ url: 'https://ok.com/' })]),
+          }),
+      },
+      fetch: {
+        fetcher: keyedFetcher(),
+        extractor: textExtractor(() => 'body'),
+      },
+    });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
   });
 });

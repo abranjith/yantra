@@ -8,7 +8,7 @@ The CLI never owns the reasoning loop. It parses the goal and flags, selects mod
 
 The production system prompt lives in `packages/agent/src/runtime/prompt.ts`. It has exactly five governed sections: role, operating loop, trust boundary, safety, and completion/failure. Tool names, schemas, and provider mechanics are intentionally absent because the registered tool catalog is authoritative.
 
-Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both that version and a SHA-256 hash of the exact prompt text, so audits can distinguish prompt revisions. The per-run user prompt contains only the sanitized goal, enforced constraints, allowed hosts/scope, and bounded approved profile context; page content and tool results remain untrusted data.
+Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both that version and a SHA-256 hash of the exact prompt text, so audits can distinguish prompt revisions. The per-run user prompt contains only the sanitized goal, an engine-derived ambient context block (current date, timezone, locale — from the run clock and host environment, framed as authoritative because small local models otherwise guess the date from their training prior), enforced constraints, allowed hosts/scope, and bounded approved profile context; page content and tool results remain untrusted data. User-specific facts such as location are never inferred automatically — they belong in the approved profile context.
 
 ## Command profiles and deterministic mode
 

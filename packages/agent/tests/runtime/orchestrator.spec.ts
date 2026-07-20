@@ -15,6 +15,7 @@ import { LocalRunStore } from '@yantra/core/workflow/replay';
 import { createBrief, type ConfirmationRequest } from '@yantra/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
 import {
@@ -23,6 +24,7 @@ import {
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
+import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -60,6 +62,7 @@ async function fixture(options: {
   readonly provider: AgentProvider;
   readonly signal?: AbortSignal;
   readonly budgets?: AgenticTaskRequest['budgets'];
+  readonly now?: () => Date;
 }): Promise<{
   readonly outcome: AgenticTaskOutcome;
   readonly connector: RecordingConnector;
@@ -84,6 +87,7 @@ async function fixture(options: {
       sanitizer: new DefaultSanitizer(),
       createEnvironment: () => Promise.resolve(environment),
       createProvider: () => options.provider,
+      ...(options.now ? { now: options.now } : {}),
     },
   );
   return { outcome, connector, teardown };
@@ -123,6 +127,7 @@ function buildEnvironment(teardown: ReturnType<typeof vi.fn>): AgenticRunEnviron
       },
       browser: null,
       workflow: null,
+      rank: null,
     },
   };
 }
@@ -135,6 +140,19 @@ const completed: AgentRunResult = {
 
 function event(type: AgentEvent['type'], fields: Record<string, unknown> = {}): AgentEvent {
   return { type, at: '2026-07-14T12:00:00.000Z', ...fields } as AgentEvent;
+}
+
+/** A ledger entry as the web tools would record it during a run. */
+function evidenceEntry(url: string, title: string): EvidenceEntry {
+  return {
+    url,
+    finalUrl: null,
+    title,
+    excerpt: 'An excerpt from the final report.',
+    fetchedAt: '2026-07-19T22:05:00.000Z',
+    publishedAt: null,
+    tool: 'web_search',
+  };
 }
 
 describe('@no-llm runAgenticTask lifecycle', () => {
@@ -188,6 +206,24 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(result.connector.outcomes).toEqual([result.outcome]);
   });
 
+  it('injects ambient date context from the run clock into the first user prompt', async () => {
+    // Regression: small local models answered date-sensitive goals from their
+    // training prior because nothing in the run told them the current date.
+    // The instant renders in the host timezone, so the calendar date may be
+    // July 19 or 20 depending on where the test runs — assert both.
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    await fixture({ provider, now: () => new Date('2026-07-19T12:00:00Z') });
+
+    const firstPrompt = provider.sessions[0]?.runPrompts[0] ?? '';
+    expect(firstPrompt).toContain(
+      'Ambient context (authoritative; prefer these values over your training data):',
+    );
+    expect(firstPrompt).toMatch(/- current date: [A-Z][a-z]+day, 2026-07-(19|20)/);
+    expect(firstPrompt).toMatch(/- timezone: \S+ \(UTC[+-]\d{2}:\d{2}\)/);
+    expect(firstPrompt).toMatch(/- locale: \S+/);
+  });
+
   it('issues exactly one structured nudge and returns AGENT_COMPLETION_MISSING', async () => {
     const provider = new FakeAgentProvider({ runResult: completed });
 
@@ -203,6 +239,191 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     // registered tool — the nudge must name result_publish and its payload key.
     expect(provider.sessions[0]?.runPrompts[1]).toContain('result_publish');
     expect(provider.sessions[0]?.runPrompts[1]).toContain('"brief"');
+    // Regression: a model that asked the user to clarify a broad goal ("FIFA
+    // World Cup") treated the vagueness as a sanctioned blocker and never
+    // published. The nudge must close that escape hatch explicitly.
+    expect(provider.sessions[0]?.runPrompts[1]).toMatch(/No user is available/i);
+    expect(provider.sessions[0]?.runPrompts[1]).toMatch(/NOT a blocker/);
+    expect(provider.sessions[0]?.runPrompts[1]).toMatch(/most reasonable interpretation/i);
+  });
+
+  it('recaps consulted sources in the nudge and freezes evidence tools (regression: post-nudge re-search changed the answer)', async () => {
+    // Observed (run 20260720T005518Z-ask-335d987c): the generic nudge sent a
+    // small model on a second web_search with a different query, and the
+    // published brief contradicted the fresh evidence of the first search.
+    let services: RunServices | undefined;
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [event('assistant_text', { text: 'Spain won the 2026 final against Argentina.' })],
+        [],
+      ],
+      onRun: (_prompt, runIndex) => {
+        if (runIndex === 0) {
+          services?.evidence.add(evidenceEntry('https://news.example.com/final', 'Final report'));
+        }
+      },
+    });
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+
+    const outcome = await runAgenticTask(
+      {
+        goal: 'latest world cup news',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: () => Promise.resolve(environment),
+        createProvider: (runServices) => {
+          services = runServices;
+          return provider;
+        },
+      },
+    );
+
+    const nudge = provider.sessions[0]?.runPrompts[1] ?? '';
+    expect(nudge).toContain('https://news.example.com/final');
+    expect(nudge).toContain('Final report');
+    expect(nudge).toMatch(/Do NOT call web_search or web_fetch again/);
+    expect(nudge).toMatch(/attached to your published result automatically/i);
+    // The draft answer is anchored so the nudge turn packages conclusion #1.
+    expect(nudge).toMatch(/previous message is your draft answer/i);
+    // The evidence branch drops the empty-ledger escape-hatch text.
+    expect(nudge).not.toMatch(/genuinely impossible/i);
+    expect(services?.evidencePhase.isFrozen()).toBe(true);
+    // The stub publisher cannot publish, so the run still ends failed here;
+    // the runtime-assembly path is covered by the next test.
+    expect(outcome.kind).toBe('failed');
+  });
+
+  it('publishes a runtime-assembled Brief when the nudge turn still does not publish (regression: model declared publication impossible with evidence in context)', async () => {
+    // Observed (run 20260720T004806Z-ask-1d48efc5): after one successful
+    // web_search the model claimed sources "cannot be generated", and a run
+    // holding a good draft plus good evidence ended AGENT_COMPLETION_MISSING.
+    let services: RunServices | undefined;
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          event('assistant_text', {
+            text: 'Spain beat Argentina in the 2026 World Cup final.\nThe match ended 2-1.',
+          }),
+        ],
+        [],
+      ],
+      onRun: (_prompt, runIndex) => {
+        if (runIndex === 0) {
+          services?.evidence.add(evidenceEntry('https://news.example.com/final', 'Final report'));
+        }
+      },
+    });
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+
+    const outcome = await runAgenticTask(
+      {
+        goal: 'latest world cup news',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: (context) =>
+          Promise.resolve({
+            ...environment,
+            domain: {
+              ...environment.domain,
+              publish: createBriefPublisher(context.runDir, {
+                taskId: context.taskId,
+                runId: context.runId,
+              }),
+            },
+          }),
+        createProvider: (runServices) => {
+          services = runServices;
+          return provider;
+        },
+      },
+    );
+
+    expect(outcome.kind).toBe('published');
+    const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
+      title: string;
+      overview: string;
+      sources: { url: string; excerpt: string | null }[];
+      metadata: Record<string, unknown>;
+      notices: { source: string; kind: string }[];
+    };
+    expect(brief.title).toBe('Spain beat Argentina in the 2026 World Cup final.');
+    expect(brief.overview).toContain('The match ended 2-1.');
+    expect(brief.sources).toMatchObject([
+      { url: 'https://news.example.com/final', excerpt: 'An excerpt from the final report.' },
+    ]);
+    // The assembly path is stamped honestly: fallback flag plus a notice.
+    expect(brief.metadata).toMatchObject({
+      synthesis: 'llm',
+      deterministic_fallback_used: true,
+    });
+    expect(brief.notices).toMatchObject([{ source: 'runtime', kind: 'other' }]);
+  });
+
+  it('keeps AGENT_COMPLETION_MISSING when there is no draft answer to assemble', async () => {
+    // Evidence without any draft text gives the runtime nothing to package:
+    // the honest outcome is still a completion failure, never an empty Brief.
+    let services: RunServices | undefined;
+    const provider = new FakeAgentProvider({
+      onRun: (_prompt, runIndex) => {
+        if (runIndex === 0) {
+          services?.evidence.add(evidenceEntry('https://news.example.com/final', 'Final report'));
+        }
+      },
+    });
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+
+    const outcome = await runAgenticTask(
+      {
+        goal: 'latest world cup news',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: (context) =>
+          Promise.resolve({
+            ...environment,
+            domain: {
+              ...environment.domain,
+              publish: createBriefPublisher(context.runDir, {
+                taskId: context.taskId,
+                runId: context.runId,
+              }),
+            },
+          }),
+        createProvider: (runServices) => {
+          services = runServices;
+          return provider;
+        },
+      },
+    );
+
+    expect(outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    await expect(access(join(outcome.runDir, 'brief.json'))).rejects.toThrow();
   });
 
   it('surfaces the post-nudge blocker statement in the AGENT_COMPLETION_MISSING message', async () => {

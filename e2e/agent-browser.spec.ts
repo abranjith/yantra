@@ -70,6 +70,7 @@ describe('@no-llm real Chrome browser tools', () => {
         search: {
           resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
           resultCap: 5,
+          fetchTop: 3,
         },
         fetch: {
           fetcher: { fetch: () => Promise.reject(new Error('unused')) },
@@ -89,6 +90,7 @@ describe('@no-llm real Chrome browser tools', () => {
           secretHosts: () => Promise.resolve(['127.0.0.1']),
           captureThresholdBytes: 1,
         },
+        rank: null,
       },
     };
     tools = buildYantraWrappedTools(services);

@@ -43,6 +43,7 @@
       "final_url": null,
       "host": "amazon.example.com",
       "title": "Sony WH-1000XM5 — Amazon",
+      "excerpt": null,
       "fetched_at": "2026-06-14T09:00:00.000Z",
       "published_at": "2026-06-13T12:00:00.000Z"
     },
@@ -52,6 +53,7 @@
       "final_url": null,
       "host": "bestbuy.example.com",
       "title": "Sony WH-1000XM5 — Best Buy",
+      "excerpt": null,
       "fetched_at": "2026-06-14T09:00:05.000Z",
       "published_at": null
     },
@@ -61,6 +63,7 @@
       "final_url": null,
       "host": "walmart.example.com",
       "title": "Sony WH-1000XM5 — Walmart",
+      "excerpt": null,
       "fetched_at": "2026-06-14T09:00:10.000Z",
       "published_at": null
     }
