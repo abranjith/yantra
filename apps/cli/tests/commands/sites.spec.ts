@@ -4,9 +4,8 @@ import type { DomainRankRecord, DomainRankStore } from '@yantra/core';
 import { ok } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { run } from '../index.js';
-
-import type { SitesRuntime } from './sites.js';
+import type { SitesRuntime } from '../../src/commands/sites.js';
+import { run } from '../../src/index.js';
 
 const AT = '2026-07-19T00:00:00.000Z';
 

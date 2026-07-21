@@ -4,12 +4,11 @@ import { validateBrief } from '@yantra/protocol';
 import { canonicalBrief } from '@yantra/test-helpers';
 import { describe, expect, it } from 'vitest';
 
-import { CLIConnectorIO } from '../connector-io.js';
-import { openerFor } from '../open-artifact.js';
-
-import { JSONRenderer } from './json.js';
-import { TerminalRenderer } from './terminal.js';
-import type { BriefArtifactPaths, ConnectorRenderOpts } from './types.js';
+import { CLIConnectorIO } from '../../src/connector-io.js';
+import { openerFor } from '../../src/open-artifact.js';
+import { JSONRenderer } from '../../src/render/json.js';
+import { TerminalRenderer } from '../../src/render/terminal.js';
+import type { BriefArtifactPaths, ConnectorRenderOpts } from '../../src/render/types.js';
 
 function captureStream() {
   let data = '';

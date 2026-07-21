@@ -50,29 +50,48 @@ describe('@no-llm agent-v1 prompt governance', () => {
     ]);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
-    expect(PROMPT_VERSION).toBe('agent-v2');
+    expect(PROMPT_VERSION).toBe('agent-v3');
   });
 
-  it('declares the session unattended and forbids clarifying questions (agent-v2)', () => {
+  it('keeps the completion section flow-neutral but anti-stall (agent-v3)', () => {
     // Regression: small local models given a broad goal (for example, "FIFA
     // World Cup") asked the user for clarification and stalled until
-    // AGENT_COMPLETION_MISSING. Nothing told them no user exists — the
-    // unattended rule must live in the governed Completion and failure section.
+    // AGENT_COMPLETION_MISSING — so the anti-stall rule must stay. But the
+    // system prompt is shared by attended and unattended runs, so it must NOT
+    // assert "no user exists"; that flow-specific fact lives in the per-run
+    // interaction line instead.
     const completionSection = AGENT_SYSTEM_PROMPT.split('## Completion and failure')[1] ?? '';
 
-    expect(completionSection).toMatch(/unattended/i);
-    expect(completionSection).toMatch(/never ask clarifying questions/i);
+    expect(completionSection).toMatch(/do not stall/i);
     expect(completionSection).toMatch(/most reasonable interpretation/i);
+    expect(completionSection).not.toMatch(/no user is available/i);
+    expect(completionSection).toMatch(/interaction line/i);
   });
 
-  it('repeats the unattended no-clarification rule in every per-run user prompt', () => {
+  it('states the unattended no-clarification rule in an unattended per-run prompt (default)', () => {
     // Small local models weight the user prompt most heavily, so the rule is
-    // also a fixed line of the assembled prompt, for every command profile.
+    // also a fixed line of the assembled prompt. Unattended is the default.
     const prompt = buildAgentUserPrompt({ goal: 'FIFA World Cup', budgets }, markerSanitizer);
 
     expect(prompt).toMatch(/unattended run/i);
     expect(prompt).toMatch(/never ask for clarification/i);
     expect(prompt).toMatch(/most reasonable interpretation/i);
+  });
+
+  it('states the interactive interaction line when the run is attended', () => {
+    // For an interactive `do` run a user IS present for consent, so the prompt
+    // must not claim "no user"; it may not ask open-ended questions either, and
+    // the anti-stall rule is preserved.
+    const prompt = buildAgentUserPrompt(
+      { goal: 'log in and check the balance', budgets, attended: true },
+      markerSanitizer,
+    );
+
+    expect(prompt).toMatch(/interactive run/i);
+    expect(prompt).toMatch(/approve protected actions/i);
+    expect(prompt).toMatch(/most reasonable interpretation/i);
+    expect(prompt).not.toMatch(/unattended run/i);
+    expect(prompt).not.toMatch(/no user can answer questions/i);
   });
 
   it('does not duplicate the active tool catalog or tool mechanics', () => {

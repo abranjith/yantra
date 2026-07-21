@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { run } from './index.js';
+import { run } from '../src/index.js';
 
 describe('@no-llm cli smoke', () => {
   it('prints a single-line protocol banner when invoked with no arguments', async () => {

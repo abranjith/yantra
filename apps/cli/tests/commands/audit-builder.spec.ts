@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { buildAuditReport } from './audit-builder.js';
+import { buildAuditReport } from '../../src/commands/audit-builder.js';
 
 async function makeRunDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'yantra-audit-builder-'));

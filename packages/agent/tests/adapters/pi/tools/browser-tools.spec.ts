@@ -37,7 +37,9 @@ describe('@no-llm browser tools', () => {
     await assertToolContract(browserNavigateSpec(services), { url: 42 });
     await assertToolContract(browserObserveSpec(services), { extra: true });
     await assertToolContract(browserClickSpec(services), { ref: 'button.css' });
-    await assertToolContract(browserFillSpec(services), { ref: 'e1', value: 'secret' });
+    // A bare string is now a valid literal value, so the invalid case must use a
+    // type the whole value union rejects (neither string nor tagged object).
+    await assertToolContract(browserFillSpec(services), { ref: 'e1', value: 42 });
     await assertToolContract(browserExtractSpec(services), { kind: 'html' });
   });
 
@@ -140,6 +142,63 @@ describe('@no-llm browser tools', () => {
     );
     expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
     expect(controller.fill).not.toHaveBeenCalled();
+  });
+
+  it('accepts a bare string value as a non-secret literal', async () => {
+    // Regression: the discriminated-union-only schema rejected the plain-string
+    // form small models emit ("value must be object"), so they looped on an
+    // impossible retry. A bare string must now fill the field as a literal.
+    const controller = fakeController();
+    controller.fill.mockResolvedValue({ url: 'https://example.com', title: 'Page' });
+    const services = browserServices(controller);
+    const result = await wrapTool(browserFillSpec(services), services).execute(
+      { ref: 'e1', value: 'tomsmith' },
+      undefined,
+    );
+    expect(result.status).toBe('ok');
+    expect(controller.fill).toHaveBeenCalledWith('e1', 'tomsmith');
+  });
+
+  it('rejects a credential-shaped bare string just like an object literal', async () => {
+    const controller = fakeController();
+    const services = browserServices(controller);
+    const result = await wrapTool(browserFillSpec(services), services).execute(
+      { ref: 'e1', value: 'sk-ABCDEFGHIJKLMNOPQRSTUV' },
+      undefined,
+    );
+    expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
+    expect(controller.fill).not.toHaveBeenCalled();
+  });
+
+  it('records a bare-string fill as a non-confirmation literal in the trace', async () => {
+    const controller = fakeController();
+    controller.fill.mockResolvedValue({ url: 'https://shop.example/login', title: 'Login' });
+    controller.host.mockReturnValue('shop.example');
+    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Username' });
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+    await wrapTool(browserFillSpec(services), services).execute(
+      { ref: 'e1', value: 'tomsmith' },
+      undefined,
+    );
+    const step = trace.steps()[0];
+    expect(step?.kind).toBe('fill');
+    if (step?.kind === 'fill') {
+      expect(step.value).toEqual({ kind: 'literal', value: 'tomsmith' });
+      expect(step.requires_confirmation).toBe(false);
+    }
   });
 
   it('extracts tables and stores oversized results as a capture reference', async () => {
@@ -268,15 +327,13 @@ function fakeSecretResolver(
   value: string,
 ): OpaqueRefResolver & { resolve: ReturnType<typeof vi.fn> } {
   return {
-    resolve: vi
-      .fn()
-      .mockResolvedValue({
-        value,
-        isSecret: true,
-        source: 'secret',
-        sourceKey: 'site.password',
-        dispose: vi.fn(),
-      }),
+    resolve: vi.fn().mockResolvedValue({
+      value,
+      isSecret: true,
+      source: 'secret',
+      sourceKey: 'site.password',
+      dispose: vi.fn(),
+    }),
   };
 }
 

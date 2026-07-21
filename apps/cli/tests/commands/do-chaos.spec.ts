@@ -4,7 +4,7 @@ import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
-import { registerDoCommand } from './do.js';
+import { registerDoCommand } from '../../src/commands/do.js';
 
 const sink = new Writable({ write: (_chunk, _encoding, callback) => callback() });
 

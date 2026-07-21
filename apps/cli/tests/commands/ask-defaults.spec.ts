@@ -1,7 +1,7 @@
 import type { EffectivePreference, EffectivePreferences } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
-import { resolveAskDefaults } from './ask.js';
+import { resolveAskDefaults } from '../../src/commands/ask.js';
 
 function prefs(entries: Record<string, unknown>): EffectivePreferences {
   const map = new Map<string, EffectivePreference>();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readGlobalFlags } from './global-flags.js';
+import { readGlobalFlags } from '../src/global-flags.js';
 
 describe('@no-llm cli/global-flags', () => {
   it('parses --json, --debug, --no-llm, --no-color from argv', () => {

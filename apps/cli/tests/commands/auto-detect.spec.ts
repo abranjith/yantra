@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { detectShowTarget } from './auto-detect.js';
+import { detectShowTarget } from '../../src/commands/auto-detect.js';
 
 describe('@no-llm cli/auto-detect', () => {
   it('classifies an ISO-prefixed run-id as a run', () => {

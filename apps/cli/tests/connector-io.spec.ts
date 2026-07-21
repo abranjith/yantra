@@ -4,16 +4,16 @@ import type { AgentProgressEvent } from '@yantra/agent';
 import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CLIConnectorIO, buildRenderOpts } from './connector-io.js';
-import { JSONRenderer } from './render/json.js';
-import { TerminalRenderer } from './render/terminal.js';
+import { CLIConnectorIO, buildRenderOpts } from '../src/connector-io.js';
+import { JSONRenderer } from '../src/render/json.js';
+import { TerminalRenderer } from '../src/render/terminal.js';
 import type {
   AuditRenderReport,
   ConnectorRenderOpts,
   DoctorRenderResult,
   ListItem,
   ShowItem,
-} from './render/types.js';
+} from '../src/render/types.js';
 
 function capture(): { stream: Writable; value: () => string } {
   let data = '';

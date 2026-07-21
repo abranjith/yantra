@@ -2,7 +2,7 @@ import { canonicalBrief, makeBrief, makeSource } from '@yantra/test-helpers';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { renderBriefTerminal, type BriefDetailLevel } from './brief-terminal.js';
+import { renderBriefTerminal, type BriefDetailLevel } from '../../src/render/brief-terminal.js';
 
 const ESC = String.fromCharCode(0x1b);
 const CSI = String.fromCharCode(0x9b);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EXIT, exitCodeFor, type CommandOutcome } from './exit-codes.js';
+import { EXIT, exitCodeFor, type CommandOutcome } from '../src/exit-codes.js';
 
 describe('@no-llm cli/exit-codes', () => {
   it('maps every CommandOutcome kind to its documented exit code', () => {

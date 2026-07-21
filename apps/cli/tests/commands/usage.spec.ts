@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseSince } from './usage.js';
+import { parseSince } from '../../src/commands/usage.js';
 
 describe('@no-llm usage parseSince', () => {
   const now = new Date('2026-07-10T12:00:00.000Z');

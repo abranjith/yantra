@@ -6,7 +6,7 @@ import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
-import { registerAskCommand, type AskRuntime } from './ask.js';
+import { registerAskCommand, type AskRuntime } from '../../src/commands/ask.js';
 
 function captureStream() {
   let data = '';

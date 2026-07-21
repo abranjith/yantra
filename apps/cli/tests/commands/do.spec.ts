@@ -5,7 +5,7 @@ import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
-import { registerDoCommand } from './do.js';
+import { registerDoCommand } from '../../src/commands/do.js';
 
 function capture(): { stream: Writable; value: () => string } {
   let output = '';
@@ -132,6 +132,37 @@ describe('@no-llm yantra do cutover', () => {
     expect((await invoke(['do', 'goal'], outcome(kind))).exitCode).toBe(expected);
   });
 
+  it('passes the explicit least-privilege do profile, not the runtime default', async () => {
+    const result = await invoke(['do', 'goal'], outcome('published'));
+
+    // Wiring the profile explicitly is what differentiates `do` from `ask`;
+    // relying on the runtime's implicit default hid the coupling.
+    expect(result.request.profile).toBeDefined();
+    expect(result.request.profile?.command).toBe('do');
+    expect(result.request.profile?.briefKind).toBe('task');
+  });
+
+  it('honors the YANTRA_AGENT_DO_* budget env overrides via the resolved profile', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let captured: AgenticTaskRequest | undefined;
+    const runTask = vi.fn((request: AgenticTaskRequest) => {
+      captured = request;
+      return Promise.resolve(outcome('published'));
+    });
+    const program = new Command().exitOverride();
+    registerDoCommand(program, {
+      runTask,
+      env: { YANTRA_AGENT_DO_MAX_TOOL_CALLS: '7' },
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      isTty: false,
+    });
+    await program.parseAsync(['do', 'goal'], { from: 'user' });
+
+    expect(captured?.profile?.budgets.totalToolCalls).toBe(7);
+  });
+
   it('surfaces AGENT_AUTH_UNAVAILABLE actionably without a null fallback', async () => {
     const result = await invoke(['do', 'goal'], outcome('failed'), { render: true });
 
@@ -147,6 +178,21 @@ describe('@no-llm yantra do cutover', () => {
     expect(line).toMatchObject({ kind: 'agent_outcome', outcome: { kind: 'failed' } });
   });
 
+  it('marks the request interactive only for an attended (TTY, non-JSON) run', async () => {
+    // Drives the flow-aware prompt: an attended run tells the agent a user can
+    // approve protected actions; --json and non-TTY runs stay unattended.
+    expect(
+      (await invoke(['do', 'goal'], outcome('published'), { isTty: true })).request.interactive,
+    ).toBe(true);
+    expect(
+      (await invoke(['do', 'goal'], outcome('published'), { isTty: false })).request.interactive,
+    ).toBe(false);
+    expect(
+      (await invoke(['do', 'goal', '--json'], outcome('published'), { isTty: true })).request
+        .interactive,
+    ).toBe(false);
+  });
+
   it('rejects malformed budget and host flags as validation errors', async () => {
     expect((await invoke(['do', 'goal', '--budget-ms', '0'], outcome('published'))).exitCode).toBe(
       1,
@@ -157,7 +203,7 @@ describe('@no-llm yantra do cutover', () => {
   });
 
   it('keeps the CLI free of manual discovery-loop imports and duplicate history', async () => {
-    const source = await readFile(new URL('./do.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../../src/commands/do.ts', import.meta.url), 'utf8');
 
     expect(source).not.toMatch(/runDiscoverySession|discovery\.jsonl|propose\(|buildObservation/);
     expect(source).toContain('runAgenticTask');

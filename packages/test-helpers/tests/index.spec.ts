@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { hasLlm, llmProvider } from './index.js';
+import { hasLlm, llmProvider } from '../src/index.js';
 
 describe('@no-llm test-helpers / llmProvider', () => {
   afterEach(() => {

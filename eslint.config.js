@@ -237,5 +237,14 @@ export default tseslint.config(
     },
   },
 
+  // CLI and test-helpers tests are outside package tsconfig includes.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['apps/cli/tests/**/*.ts', 'packages/test-helpers/tests/**/*.ts'],
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+
   prettierConfig,
 );

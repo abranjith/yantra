@@ -668,6 +668,70 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.closeCount).toBe(1);
   });
 
+  it('stops with a diagnostic failure after repeated identical tool failures (circuit breaker)', async () => {
+    // Regression: a weak model that cannot form a valid call retried the same
+    // impossible action until the per-tool budget was spent, failing for the
+    // wrong reason. The breaker stops it early with an accurate message.
+    const failure = (callId: string): AgentEvent =>
+      event('tool_finished', {
+        callId,
+        tool: 'browser_click',
+        output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
+        isError: true,
+      });
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[failure('c1'), failure('c2'), failure('c3'), failure('c4')]],
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_TOOL_FAILED' },
+    });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toMatch(/repeatedly failed the same action/i);
+    expect(message).toContain('browser_click');
+    expect(message).toContain('TOOL_EXECUTION_FAILED');
+    // The breaker interrupts the session and never reaches a completion nudge.
+    expect(provider.sessions[0]?.abortCount).toBe(1);
+    expect(provider.sessions[0]?.runPrompts).toHaveLength(1);
+  });
+
+  it('does not trip the breaker when a success interrupts the failure streak', async () => {
+    const fail = (id: string): AgentEvent =>
+      event('tool_finished', {
+        callId: id,
+        tool: 'browser_click',
+        output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
+        isError: true,
+      });
+    const ok = (id: string): AgentEvent =>
+      event('tool_finished', {
+        callId: id,
+        tool: 'browser_observe',
+        output: { status: 'ok' },
+        isError: false,
+      });
+    const provider = new FakeAgentProvider({
+      // Three failures, a success (resets the streak), then three more: the
+      // streak never reaches four in a row, so the run takes the normal path.
+      eventsByRun: [
+        [fail('a'), fail('b'), fail('c'), ok('d'), fail('e'), fail('f'), fail('g')],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+  });
+
   it('maps an already-aborted caller signal to aborted and still tears down once', async () => {
     const controller = new AbortController();
     controller.abort('ctrl-c');

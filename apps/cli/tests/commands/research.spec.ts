@@ -10,7 +10,7 @@ import {
   registerResearchCommand,
   type ResearchInvocation,
   type ResearchRuntime,
-} from './research.js';
+} from '../../src/commands/research.js';
 
 function captureStream() {
   let data = '';

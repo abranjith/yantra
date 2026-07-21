@@ -8,6 +8,7 @@
 
 import {
   exitCodeForAgenticOutcome,
+  resolveCommandTaskProfile,
   type runAgenticTask,
   type AgentBudgetConfig,
   type AgenticTaskOutcome,
@@ -107,14 +108,24 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
 
   try {
     const saveAs = options.saveAs?.trim();
+    // Resolve the least-privilege `do` profile explicitly (tool allowlist,
+    // workflow mode, budgets, task-Brief addendum) instead of relying on the
+    // runtime's implicit default. This also honors the documented
+    // `YANTRA_AGENT_DO_*` budget env overrides, matching the `ask` path.
+    const profile = resolveCommandTaskProfile('do', runtime.env);
     const outcome = await runtime.runTask({
       goal,
+      profile,
       model: selectModel(options, runtime.env),
       auth: options.authSecret
         ? { mode: 'runtime-key', secretRef: options.authSecret }
         : { mode: 'managed' },
       budgets: parseBudgets(options),
       allowedHosts: normalizeHosts(options.allowHost ?? []),
+      // A user is present only on an interactive TTY run (not --json / piped):
+      // the agent prompt then says a user can approve protected actions but
+      // cannot answer open-ended questions, instead of claiming "no user".
+      interactive: runtime.isTty && !json,
       ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
       connector,
       signal: abort.signal,

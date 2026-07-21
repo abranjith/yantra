@@ -3,7 +3,10 @@ import type { WorkflowFile, WorkflowStep, Result } from '@yantra/protocol';
 import { ok, err } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { validateRegistration, type WorkflowLoader } from './schedule-registration.js';
+import {
+  validateRegistration,
+  type WorkflowLoader,
+} from '../../src/commands/schedule-registration.js';
 
 /** Builds a fully-typed navigate WorkflowStep (all optional fields present). */
 function navigate(id: string, url: string): WorkflowStep {

@@ -43,13 +43,13 @@ describe('@no-llm agent persistence protocol schemas', () => {
   it('accepts every shipped prompt version and rejects unknown ones', () => {
     // Run-artifact compatibility: manifests persisted by older releases
     // (agent-v1) must keep validating after a prompt version bump.
-    for (const prompt_version of ['agent-v1', 'agent-v2']) {
+    for (const prompt_version of ['agent-v1', 'agent-v2', 'agent-v3']) {
       expect(AgentManifestSection.safeParse({ ...makeManifest(), prompt_version }).success).toBe(
         true,
       );
     }
     expect(
-      AgentManifestSection.safeParse({ ...makeManifest(), prompt_version: 'agent-v3' }).success,
+      AgentManifestSection.safeParse({ ...makeManifest(), prompt_version: 'agent-v4' }).success,
     ).toBe(false);
   });
 

@@ -85,6 +85,15 @@ import type { UrlPolicyConfig } from './url-policy.js';
 const NUDGE_EVIDENCE_CAP = 10;
 
 /**
+ * Consecutive identical tool failures (same tool + same error code, with no
+ * successful call in between) that trip the stuck-loop circuit breaker. A weak
+ * model that keeps retrying an impossible action would otherwise burn the whole
+ * per-tool budget; tripping here stops it early with a diagnostic failure. Sized
+ * to still allow a couple of good-faith retries of a transient error.
+ */
+const REPEATED_TOOL_FAILURE_LIMIT = 4;
+
+/**
  * Build the completion nudge sent once when a session run stops without a
  * successful publication. Small local models do not reliably map "terminal
  * publication capability" onto the registered tool, so the nudge names
@@ -167,6 +176,13 @@ export interface AgenticTaskRequest {
   readonly budgets?: Partial<AgentBudgetConfig>;
   readonly allowedHosts?: readonly string[];
   readonly profileContext?: string;
+  /**
+   * True when a user is present for this run (interactive TTY): the per-run
+   * prompt then states a user can approve protected actions but not answer
+   * open-ended questions. Defaults to false (unattended), matching non-TTY,
+   * `--json`, and scheduled surfaces.
+   */
+  readonly interactive?: boolean;
   readonly connector: AgentTaskConnector;
   /**
    * When set, a successful run promotes its browser trace into a saved workflow
@@ -324,6 +340,7 @@ export async function runAgenticTask(
         ambient: { now: now() },
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(request.profileContext ? { profileContext: request.profileContext } : {}),
+        attended: request.interactive === true,
         promptAddendum: profile.promptAddendum,
       },
       sanitizer,
@@ -449,6 +466,8 @@ interface ExecutionState {
   readonly userAborted: boolean;
   readonly lastError: AgentError | undefined;
   readonly handoff: { blocker: string; safestNextAction: string } | undefined;
+  /** Set when the stuck-loop breaker stopped the run on repeated identical failures. */
+  readonly repeatedFailure: { tool: string; errorCode: string } | undefined;
   /** Accumulated (post-sanitizer) assistant text of the most recent prompt run. */
   readonly lastResponseText: string;
   onEvent(event: AgentEvent): void;
@@ -475,6 +494,11 @@ function createExecutionState(input: {
   let handoff: { blocker: string; safestNextAction: string } | undefined;
   let abortPromise: Promise<void> | undefined;
   let lastResponseText = '';
+  // Stuck-loop breaker: the key of the current run of identical tool failures,
+  // its consecutive count, and the captured detail once the limit trips.
+  let failureStreakKey: string | undefined;
+  let failureStreakCount = 0;
+  let repeatedFailure: { tool: string; errorCode: string } | undefined;
 
   const interrupt = (reason: string): void => {
     if (reason === 'user') userAborted = true;
@@ -491,6 +515,29 @@ function createExecutionState(input: {
   const onUserAbort = (): void => interrupt('user');
   if (input.request.signal?.aborted) onUserAbort();
   else input.request.signal?.addEventListener('abort', onUserAbort, { once: true });
+
+  // Update the consecutive-identical-failure streak and trip the breaker once it
+  // reaches the limit. A successful call resets the streak (forward progress);
+  // a different failure key restarts the count. Denied/aborted results are
+  // ignored — they are not the impossible-retry pattern this guards against.
+  const trackFailureStreak = (tool: string, metadata: ReturnType<typeof toolMetadata>): void => {
+    if (metadata.status === 'ok') {
+      failureStreakKey = undefined;
+      failureStreakCount = 0;
+      return;
+    }
+    if (metadata.status !== 'error') return;
+    const key = `${tool}:${metadata.errorCode ?? metadata.summary}`;
+    if (key === failureStreakKey) failureStreakCount += 1;
+    else {
+      failureStreakKey = key;
+      failureStreakCount = 1;
+    }
+    if (failureStreakCount >= REPEATED_TOOL_FAILURE_LIMIT && repeatedFailure === undefined) {
+      repeatedFailure = { tool, errorCode: metadata.errorCode ?? 'TOOL_FAILED' };
+      interrupt('repeated-tool-failure');
+    }
+  };
 
   const onEvent = (event: AgentEvent): void => {
     switch (event.type) {
@@ -536,6 +583,7 @@ function createExecutionState(input: {
               'Resolve the site restriction manually, then retry only if policy permits.',
           };
         }
+        trackFailureStreak(event.tool, metadata);
         return;
       }
       case 'turn_finished':
@@ -595,6 +643,9 @@ function createExecutionState(input: {
     },
     get handoff() {
       return handoff;
+    },
+    get repeatedFailure() {
+      return repeatedFailure;
     },
     get lastResponseText() {
       return lastResponseText;
@@ -666,6 +717,18 @@ async function resolveTerminalOutcome(
   runId: string,
   runDir: string,
 ): Promise<AgenticTaskOutcome> {
+  // The stuck-loop breaker wins over the generic budget mapping it triggers, so
+  // the failure reads as "repeated the same failing action" rather than a bare
+  // budget-exhausted code.
+  if (state.repeatedFailure !== undefined) {
+    return failed(runId, runDir, {
+      code: 'AGENT_TOOL_FAILED',
+      message:
+        `The run was stopped after the agent repeatedly failed the same action ` +
+        `(${state.repeatedFailure.tool}: ${state.repeatedFailure.errorCode}) without making ` +
+        `progress. Re-run once the underlying cause is resolved.`,
+    });
+  }
   if (state.budgetReason !== undefined) {
     return {
       kind: 'budget_exhausted',
