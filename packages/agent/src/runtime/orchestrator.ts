@@ -18,6 +18,7 @@ import {
   ReadabilityExtractor,
   RobotsCacheImpl,
   ScriptRegistry,
+  UserInputVault,
   createAskEthicsAdapter,
   createConfirmationStore,
   createKeychainProvider,
@@ -297,11 +298,16 @@ export async function runAgenticTask(
       store: createConfirmationStore(created.runDir),
       nowIso: () => now().toISOString(),
     });
+    // One vault per run: the prompt builder tokenizes the user's own sensitive
+    // values into `{{user:...}}` placeholders (model-visible), and the tool
+    // middleware resolves them back to real values at the execution boundary.
+    const userInput = new UserInputVault();
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
       budgets: budgetTracker,
       sanitizer,
+      userInput,
       urlPolicy: new UrlPolicy(budgetTracker, {
         maxUrlLength: dependencies.urlPolicyConfig?.maxUrlLength ?? 2048,
         requireHttps: dependencies.urlPolicyConfig?.requireHttps ?? true,
@@ -344,6 +350,7 @@ export async function runAgenticTask(
         promptAddendum: profile.promptAddendum,
       },
       sanitizer,
+      userInput,
     );
 
     session = await provider.open({
@@ -682,10 +689,14 @@ async function maybeAssembleUnpublishedResult(
   if (result?.outcome !== 'completed') return undefined;
   if (draft.length === 0 || services.evidence.isEmpty()) return undefined;
 
+  // The draft is model text, so user-input values appear as placeholders;
+  // resolve them for the published Brief — the artifact is the user's own
+  // deliverable and must carry the real values (same contract as tool params).
+  const overview = services.userInput?.resolve(draft) ?? draft;
   const published = await services.domain.publish.publish(
     {
-      title: assembledTitle(draft),
-      overview: draft,
+      title: assembledTitle(overview),
+      overview,
       key_findings: [],
       sources: evidenceToSourceRecords(services.evidence.entries()),
     },

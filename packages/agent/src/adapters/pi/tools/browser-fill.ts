@@ -100,8 +100,9 @@ async function runFill(params: Params, services: RunServices): Promise<DomainRes
           message: 'Browser services are not configured.',
           retryable: false,
         };
-  // Capture role/name/host BEFORE the fill invalidates the observation. The
-  // trace records a candidate chain and, for secrets, only the reference key.
+  // Capture role/name/host up front so the trace reflects the element as it
+  // was observed even if the fill triggers navigation. The trace records a
+  // candidate chain and, for secrets, only the reference key.
   const described = controller.describeRef(params.ref);
   const host = controller.host();
   const recordTrace = (value: TraceFillValue): void =>
@@ -126,7 +127,11 @@ async function runFill(params: Params, services: RunServices): Promise<DomainRes
       };
     try {
       const result = await controller.fill(params.ref, literal);
-      recordTrace({ kind: 'literal', value: literal });
+      // The middleware resolves `{{user:...}}` placeholders before this op, so
+      // `literal` may be a real user-provided value. The trace is a long-lived,
+      // promotable artifact — record the masked (placeholder) form, never the
+      // raw value, mirroring the secret-ref rule.
+      recordTrace({ kind: 'literal', value: services.userInput?.mask(literal) ?? literal });
       return { ok: true, model: result };
     } catch (error) {
       return browserFailure(error);

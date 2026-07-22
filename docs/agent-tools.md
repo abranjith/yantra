@@ -19,11 +19,12 @@ stages **in order** (`packages/agent/src/runtime/middleware.ts`):
 ```text
 validated call
   -> input validation (closed schema)
+  -> user-input placeholder resolution ({{user:...}} -> real value)
   -> budget / timeout / abort check
   -> host + ethics + scope policy (+ action-phase latch)
   -> confirmation gateway (when the spec classifies risk)
   -> domain operation (AbortSignal threaded)
-  -> sanitizer + output bounding
+  -> user-input masking + sanitizer + output bounding
   -> stable tool result
   -> audit / event / usage persistence (via the run recorder)
 ```
@@ -42,6 +43,27 @@ validated call
 - **Cancellation:** a run-level abort (user interrupt or budget exhaustion) or a
   per-tool timeout aborts the domain operation's `AbortSignal` and returns a
   typed `aborted` / `TOOL_TIMEOUT` result promptly.
+
+### User-input placeholders (`{{user:...}}`)
+
+The user's own sensitive values (emails, phone numbers, SSNs, cards, API-key
+shapes, auth-shaped URL query values) never reach the model as raw text. At run
+start the goal and profile context are redacted through the run-scoped
+`UserInputVault` (`@yantra/core`), which replaces each value with an indexed
+placeholder such as `{{user:email:1}}` and remembers the mapping in memory.
+
+- **Tools act on real values.** The middleware resolves placeholders in tool
+  params at the execution boundary — a `browser_fill` of `{{user:email:1}}`
+  types the actual address into the page. This mirrors opaque secret refs:
+  values materialize at execution, never in model-visible text.
+- **The model only ever sees tokens.** Every model-visible result (success
+  payloads, failure messages, details) is masked back: an echoed real value
+  becomes its stable placeholder again before the profile sanitizer runs.
+- **Guards still apply.** A credential-shaped user value resolved from a
+  placeholder is rejected by `browser_fill` exactly like a raw credential
+  literal (`SECRET_SHAPED_LITERAL`); URL policy scans the resolved URL.
+- **Artifacts stay redacted.** The trace (`trace.json`) and tool-call audit
+  records keep the placeholder form, never the raw value.
 
 ### Confirmation semantics
 
@@ -98,9 +120,9 @@ Every decision — allow or reject — is audited in full.
 | `web_fetch`        | Fetch + extract readable article text from **one specific public URL** you already have.                                                     | Secondary to `web_search` (which already returns page content for a query): use it only for a direct link or a link discovered inside previously fetched content. URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                                                         |
 | `browser_navigate` | Lazily open the single run page at a policy-checked URL.                                                                                     | URL/host budgets and ethics checks run before navigation.                                                                                                                                                                                                                                                                                                                                                                                |
 | `browser_observe`  | Return bounded readable text and ranked opaque refs.                                                                                         | Side-effect free; creates a new ref generation and invalidates the prior one.                                                                                                                                                                                                                                                                                                                                                            |
-| `browser_click`    | Click an actionable opaque ref.                                                                                                              | Hidden, disabled, occluded, and stale targets return structured errors; protected actions require confirmation.                                                                                                                                                                                                                                                                                                                          |
-| `browser_fill`     | Fill an observed field with a literal or website secret reference.                                                                           | Credential-shaped literals are rejected; secret refs require confirmation and trusted host metadata.                                                                                                                                                                                                                                                                                                                                     |
-| `browser_extract`  | Extract current-page content or the first table.                                                                                             | Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                                                                                                                         |
+| `browser_click`    | Click an actionable opaque ref.                                                                                                              | Hidden, disabled, and stale targets return structured errors; a covered target is clicked through to whatever covers it, exactly as a real user's click would be — re-observe to see the outcome. Protected actions require confirmation.                                                                                                                                                                                                |
+| `browser_fill`     | Fill an observed field with a literal, a `{{user:...}}` placeholder, or a website secret reference.                                          | `{{user:...}}` placeholders resolve to the real user-provided value at the execution boundary; credential-shaped literals (raw or resolved) are rejected; secret refs require confirmation and trusted host metadata.                                                                                                                                                                                                                    |
+| `browser_extract`  | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                       |
 | `script_run`       | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                        |
 | `workflow_run`     | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                       |
 | `result_publish`   | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                                              |

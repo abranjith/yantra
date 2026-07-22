@@ -1,4 +1,4 @@
-import { DefaultSanitizer } from '@yantra/core';
+import { DefaultSanitizer, UserInputVault } from '@yantra/core';
 import type { ConfirmationGateway, ConfirmationOutcome, ConfirmationRequest } from '@yantra/core';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,7 @@ interface ServicesOverrides {
   readonly abortSignal?: AbortSignal;
   readonly gateway?: ConfirmationGateway;
   readonly actionPhase?: ActionPhase;
+  readonly userInput?: UserInputVault;
 }
 
 function makeServices(overrides: ServicesOverrides = {}): RunServices {
@@ -29,6 +30,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     runDir: '/tmp/run',
     budgets,
     sanitizer,
+    ...(overrides.userInput ? { userInput: overrides.userInput } : {}),
     urlPolicy: new UrlPolicy(budgets),
     confirmation: overrides.gateway ? { gateway: overrides.gateway, store: null } : null,
     actionPhase: overrides.actionPhase ?? new ActionPhase(),
@@ -289,5 +291,93 @@ describe('@no-llm middleware error genericization and sanitization', () => {
     );
     const result = await tool.execute({ q: 'a' }, undefined);
     expect(['ok', 'error', 'denied', 'aborted']).toContain(result.status);
+  });
+});
+
+describe('@no-llm middleware user-input placeholder boundary', () => {
+  const EMAIL = 'john.doe@example.com';
+
+  function vaultWithEmail(): UserInputVault {
+    const vault = new UserInputVault();
+    // Simulates the prompt builder redacting the goal at run start.
+    vault.redact(`sign up with ${EMAIL}`);
+    return vault;
+  }
+
+  it('resolves placeholders in tool params so the domain op receives the REAL value', async () => {
+    // Regression: irreversible '[redacted-email]' markers reached the domain
+    // ops, so browser fills typed junk into pages. The vault placeholder must
+    // resolve at the execution boundary.
+    const received: string[] = [];
+    const run = async (params: { q: string }): Promise<DomainResult> => {
+      received.push(params.q);
+      return OK;
+    };
+    const services = makeServices({ userInput: vaultWithEmail() });
+    const tool = wrapTool(spec(run as ToolWrapperSpec['run']), services);
+
+    const result = await tool.execute({ q: 'register {{user:email:1}} now' }, undefined);
+
+    expect(result.status).toBe('ok');
+    expect(received).toEqual([`register ${EMAIL} now`]);
+  });
+
+  it('masks the real value back to its placeholder in model-visible output', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: true,
+      model: { confirmation: `We emailed ${EMAIL}` },
+    });
+    const services = makeServices({ userInput: vaultWithEmail() });
+    const tool = wrapTool(spec(run), services);
+
+    const result = await tool.execute({ q: 'a' }, undefined);
+
+    expect(result.modelText).not.toContain(EMAIL);
+    expect(result.modelText).toContain('{{user:email:1}}');
+  });
+
+  it('masks the real value in structured failure messages and details', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: false,
+      errorCode: 'FIELD_REJECTED',
+      message: `The site rejected ${EMAIL}.`,
+      retryable: true,
+      details: { rejected: EMAIL },
+    });
+    const services = makeServices({ userInput: vaultWithEmail() });
+    const tool = wrapTool(spec(run), services);
+
+    const result = await tool.execute({ q: 'a' }, undefined);
+
+    expect(result.modelText).not.toContain(EMAIL);
+    expect(result.modelText).toContain('{{user:email:1}}');
+    expect(JSON.stringify(result.details)).not.toContain(EMAIL);
+  });
+
+  it('passes params through untouched when no vault is wired (vault-less fixtures)', async () => {
+    const received: string[] = [];
+    const run = async (params: { q: string }): Promise<DomainResult> => {
+      received.push(params.q);
+      return OK;
+    };
+    const tool = wrapTool(spec(run as ToolWrapperSpec['run']), makeServices());
+
+    await tool.execute({ q: 'plain {{user:email:1}} text' }, undefined);
+
+    expect(received).toEqual(['plain {{user:email:1}} text']);
+  });
+
+  it('leaves model-invented placeholders unresolved (nothing to leak)', async () => {
+    const received: string[] = [];
+    const run = async (params: { q: string }): Promise<DomainResult> => {
+      received.push(params.q);
+      return OK;
+    };
+    const services = makeServices({ userInput: vaultWithEmail() });
+    const tool = wrapTool(spec(run as ToolWrapperSpec['run']), services);
+
+    await tool.execute({ q: 'try {{user:ssn:9}}' }, undefined);
+
+    expect(received).toEqual(['try {{user:ssn:9}}']);
   });
 });

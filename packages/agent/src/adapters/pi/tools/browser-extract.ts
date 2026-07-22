@@ -9,15 +9,58 @@ import type { RunServices } from '../../../runtime/run-services.js';
 
 import { browserController, browserFailure, isDomainFailure } from './browser-common.js';
 
+/** The two extractions the controller supports. */
+type ExtractionKind = 'content' | 'table';
+
+/**
+ * Canonical kinds plus the near-miss words models actually emit.
+ *
+ * The Pi SDK validates tool arguments against this schema BEFORE the Yantra
+ * middleware runs, so a closed literal union fails there with "kind: must be
+ * equal to constant" — an error that never names the accepted values. A small
+ * model then has no recovery path (observed: `kind:"text"` rejected, retried,
+ * and the run finally invented a result). Accepting a plain string keeps the
+ * decision inside the tool, where an unknown kind is refused with a message
+ * that lists what IS accepted and the obvious synonyms simply resolve.
+ */
+const EXTRACTION_KINDS: Readonly<Record<string, ExtractionKind>> = {
+  content: 'content',
+  text: 'content',
+  page: 'content',
+  body: 'content',
+  article: 'content',
+  readable: 'content',
+  readable_content: 'content',
+  page_content: 'content',
+  table: 'table',
+  tables: 'table',
+  first_table: 'table',
+};
+
 const BrowserExtractParams = Type.Object(
   {
-    kind: Type.Union([Type.Literal('content'), Type.Literal('table')], {
-      description: 'Typed extraction kind for the current page.',
-    }),
+    kind: Type.Optional(
+      Type.String({
+        maxLength: 64,
+        description:
+          'What to extract: "content" for the page title plus readable text (the default), ' +
+          'or "table" for the first table as headers/rows. Omit it to get "content".',
+      }),
+    ),
   },
   { additionalProperties: false },
 );
 type Params = Static<typeof BrowserExtractParams>;
+
+/** Resolve a model-supplied kind to a canonical one; null when unsupported. */
+function resolveKind(raw: string | undefined): ExtractionKind | null {
+  if (raw === undefined) return 'content';
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return EXTRACTION_KINDS[normalized] ?? null;
+}
 
 /** Build the typed current-page extraction tool. */
 export function browserExtractSpec(
@@ -27,7 +70,7 @@ export function browserExtractSpec(
     name: 'browser_extract',
     label: 'Browser Extract',
     description:
-      'Extract readable content or the first table from the current page with a validated result shape. Use it after navigation/observation. Do NOT use it to request arbitrary selectors or unsanitized page source.',
+      'Extract readable content or the first table from the current page with a validated result shape. Call it after navigation/observation with kind:"content" (page title + readable text, also the default when kind is omitted) or kind:"table" (first table as headers/rows). Do NOT pass any other kind, arbitrary selectors, or ask for unsanitized page source.',
     parameters: BrowserExtractParams,
     sanitizationProfile: 'public',
     run: (params: Params, ctx): Promise<DomainResult> => runExtract(params, ctx.services),
@@ -35,6 +78,19 @@ export function browserExtractSpec(
 }
 
 async function runExtract(params: Params, services: RunServices): Promise<DomainResult> {
+  // Input first: an unsupported kind is the model's mistake to correct, and it
+  // must be reported the same way whether or not a browser is configured.
+  const kind = resolveKind(params.kind);
+  if (kind === null)
+    return {
+      ok: false,
+      errorCode: 'INVALID_INPUT',
+      message:
+        `"${params.kind?.slice(0, 40) ?? ''}" is not a supported extraction kind. ` +
+        'Retry with kind:"content" for the page title and readable text, or kind:"table" ' +
+        'for the first table.',
+      retryable: true,
+    };
   const deps = services.domain.browser;
   const controller = browserController(services);
   if (!deps || isDomainFailure(controller))
@@ -49,21 +105,21 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
   const host = controller.host();
   let extracted: unknown;
   try {
-    extracted = await controller.extract(params.kind);
+    extracted = await controller.extract(kind);
   } catch (error) {
     return browserFailure(error);
   }
-  if (!validExtraction(params.kind, extracted))
+  if (!validExtraction(kind, extracted))
     return {
       ok: false,
       errorCode: 'EXTRACTION_SCHEMA_INVALID',
-      message: `The page did not produce a valid ${params.kind} extraction.`,
+      message: `The page did not produce a valid ${kind} extraction.`,
       retryable: true,
     };
   services.trace?.append({
     kind: 'extract',
     host,
-    extractionKind: params.kind,
+    extractionKind: kind,
     requires_confirmation: false,
   });
   const serialized = JSON.stringify(extracted);
@@ -78,12 +134,12 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
   });
   return {
     ok: true,
-    model: { capture_ref: captureRef, preview: previewExtraction(params.kind, extracted) },
+    model: { capture_ref: captureRef, preview: previewExtraction(kind, extracted) },
     details: { capture_ref: captureRef },
   };
 }
 
-function validExtraction(kind: Params['kind'], value: unknown): boolean {
+function validExtraction(kind: ExtractionKind, value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
   if (kind === 'content')
@@ -96,7 +152,7 @@ function validExtraction(kind: Params['kind'], value: unknown): boolean {
   );
 }
 
-function previewExtraction(kind: Params['kind'], value: unknown): unknown {
+function previewExtraction(kind: ExtractionKind, value: unknown): unknown {
   const record = value as { title?: string; text?: string; headers?: unknown[]; rows?: unknown[] };
   return kind === 'content'
     ? { title: record.title, text: record.text?.slice(0, 1_000) }

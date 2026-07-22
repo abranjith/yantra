@@ -4,24 +4,38 @@ import {
   normalizeHost,
   type HostOverride,
 } from './host-overrides.js';
+import type { ExtraRedactorTag } from './host-overrides.js';
 import { getProfile, type SanitizationProfile } from './profiles.js';
 import {
+  redactAccountNumber,
   redactApiKeyShapes,
   redactCaseNumber,
   redactCreditCards,
   redactCurrencyUsd,
   redactDateOfBirth,
+  redactDriversLicense,
   redactEmails,
+  redactIban,
+  redactMedicalRecordNumber,
+  redactMemberId,
+  redactPassportNumber,
   redactPhones,
   redactSsn,
+  redactTaxId,
   stripAuthQueryParams,
   stripFormValues,
   stripQueryStrings,
+  type TransformResult,
 } from './strippers.js';
 import { truncateUtf8 } from './truncate.js';
 
 export type { SanitizationProfile } from './profiles.js';
 export { brandSanitized, type Sanitized } from './brand.js';
+export {
+  UserInputVault,
+  containsUserInputPlaceholder,
+  type UserInputValueTag,
+} from './user-input.js';
 
 export type TransformationTag =
   | 'form-value-strip'
@@ -35,7 +49,36 @@ export type TransformationTag =
   | 'host-override-currency-usd'
   | 'host-override-date-of-birth'
   | 'host-override-case-number'
+  | 'host-override-account-number'
+  | 'host-override-iban'
+  | 'host-override-member-id'
+  | 'host-override-medical-record-number'
+  | 'host-override-tax-id'
+  | 'host-override-passport-number'
+  | 'host-override-drivers-license'
   | 'truncate';
+
+/** Per-host extra redactors, keyed by their config tag (single dispatch table). */
+const EXTRA_REDACTORS: Readonly<
+  Record<
+    ExtraRedactorTag,
+    { readonly run: (text: string) => TransformResult; readonly tag: TransformationTag }
+  >
+> = Object.freeze({
+  currency_usd: { run: redactCurrencyUsd, tag: 'host-override-currency-usd' },
+  date_of_birth: { run: redactDateOfBirth, tag: 'host-override-date-of-birth' },
+  case_number: { run: redactCaseNumber, tag: 'host-override-case-number' },
+  account_number: { run: redactAccountNumber, tag: 'host-override-account-number' },
+  iban: { run: redactIban, tag: 'host-override-iban' },
+  member_id: { run: redactMemberId, tag: 'host-override-member-id' },
+  medical_record_number: {
+    run: redactMedicalRecordNumber,
+    tag: 'host-override-medical-record-number',
+  },
+  tax_id: { run: redactTaxId, tag: 'host-override-tax-id' },
+  passport_number: { run: redactPassportNumber, tag: 'host-override-passport-number' },
+  drivers_license: { run: redactDriversLicense, tag: 'host-override-drivers-license' },
+});
 
 export interface SanitizedPayload {
   readonly text: string;
@@ -169,28 +212,11 @@ function sanitizeWithOverrides(
       const override = matchHostOverride(host, hostOverrides);
       if (override) {
         for (const extraRedactor of override.extraRedactors) {
-          if (extraRedactor === 'currency_usd') {
-            const result = redactCurrencyUsd(text);
-            text = result.text;
-            if (result.hits > 0) {
-              transformations.push('host-override-currency-usd');
-            }
-          }
-
-          if (extraRedactor === 'date_of_birth') {
-            const result = redactDateOfBirth(text);
-            text = result.text;
-            if (result.hits > 0) {
-              transformations.push('host-override-date-of-birth');
-            }
-          }
-
-          if (extraRedactor === 'case_number') {
-            const result = redactCaseNumber(text);
-            text = result.text;
-            if (result.hits > 0) {
-              transformations.push('host-override-case-number');
-            }
+          const redactor = EXTRA_REDACTORS[extraRedactor];
+          const result = redactor.run(text);
+          text = result.text;
+          if (result.hits > 0) {
+            transformations.push(redactor.tag);
           }
         }
       }

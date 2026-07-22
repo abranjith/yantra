@@ -47,8 +47,8 @@ export function browserClickSpec(
     run: async (params: Params, ctx): Promise<DomainResult> => {
       const controller = browserController(ctx.services);
       if (isDomainFailure(controller)) return controller;
-      // Capture the element's role/name and host BEFORE clicking — the click
-      // invalidates the observation (refs are cleared) and may navigate away.
+      // Capture the element's role/name and host BEFORE clicking — a click
+      // that navigates clears the refs along with the old document.
       const described = controller.describeRef(params.ref);
       const host = controller.host();
       const name = described?.name ?? '';

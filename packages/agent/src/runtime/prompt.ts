@@ -1,4 +1,4 @@
-import type { PayloadSanitizer } from '@yantra/core';
+import type { PayloadSanitizer, UserInputVault } from '@yantra/core';
 
 /** The version recorded in agentic run manifests for the authoritative prompt. */
 export const PROMPT_VERSION = 'agent-v3' as const;
@@ -79,22 +79,46 @@ export interface AgentUserPromptInput {
   readonly attended?: boolean;
 }
 
+/** Byte bound applied to the redacted goal (mirrors the sanitizer profile cap). */
+const MAX_GOAL_BYTES = 20_480;
+
 /**
- * Builds the bounded per-run prompt from the sanitized goal and approved
+ * Builds the bounded per-run prompt from the redacted goal and approved
  * constraints. This is the only production user-prompt assembly path.
  *
+ * When a {@link UserInputVault} is supplied (every production run), the goal
+ * and profile context are redacted through it: sensitive values become
+ * indexed, resolvable placeholders (`{{user:email:1}}`) that the middleware
+ * substitutes with the real value at the tool execution boundary. This keeps
+ * the model blind to the values while keeping them USABLE — the prior
+ * irreversible `[redacted-email]` markers broke form fills, searches, and
+ * signed-URL navigation. The vault path also never HTML-parses the goal, so
+ * plain text with `&`/`<` is no longer mangled by the cheerio round trip.
+ *
+ * Without a vault (legacy/test callers), the payload sanitizer is applied as
+ * before, so the goal is still never sent raw.
+ *
  * @param input Goal, budget, host, and optional approved profile context.
- * @param sanitizer The single LLM-bound sanitizer chokepoint.
+ * @param sanitizer The single LLM-bound sanitizer chokepoint (vault-less path).
+ * @param userInput Run-scoped vault backing placeholder resolution.
  * @returns Plain text containing no tool catalog or provider mechanics.
  */
 export function buildAgentUserPrompt(
   input: AgentUserPromptInput,
   sanitizer: PayloadSanitizer,
+  userInput?: UserInputVault,
 ): string {
-  const goal = sanitizer.sanitize(input.goal, 'public').text.trim();
+  const goal = userInput
+    ? truncateUtf8(userInput.redact(input.goal), MAX_GOAL_BYTES).trim()
+    : sanitizer.sanitize(input.goal, 'public').text.trim();
   const maxProfileBytes = Math.max(0, Math.floor(input.maxProfileContextBytes ?? 4096));
   const profile = input.profileContext
-    ? truncateUtf8(sanitizer.sanitize(input.profileContext, 'authenticated').text, maxProfileBytes)
+    ? truncateUtf8(
+        userInput
+          ? userInput.redact(input.profileContext)
+          : sanitizer.sanitize(input.profileContext, 'authenticated').text,
+        maxProfileBytes,
+      )
     : '';
   const hosts = normalizeHosts(input.allowedHosts ?? []);
 
@@ -129,6 +153,20 @@ export function buildAgentUserPrompt(
       : 'Interaction: unattended run — no user can answer questions. Never ask for clarification; ' +
         'if the goal is broad, pick the most reasonable interpretation and complete it.',
   ];
+
+  // The placeholder contract must be stated or small models treat the tokens
+  // as junk text: pass them VERBATIM to tools; the runtime substitutes the real
+  // user-provided value at execution. Stated only when placeholders exist.
+  if (userInput !== undefined && userInput.size > 0) {
+    lines.push(
+      '',
+      'Redacted values: some user-provided values in this prompt appear as placeholders ' +
+        'like {{user:email:1}}. Each placeholder stands for a real value the user supplied. ' +
+        'When a task step needs such a value (typing into a field, a URL, a search), pass the ' +
+        'placeholder EXACTLY as written — the runtime replaces it with the real value at ' +
+        'execution time. Never guess the hidden value and never alter placeholder text.',
+    );
+  }
 
   if (profile.length > 0) {
     lines.push('', 'Approved profile context:', profile);

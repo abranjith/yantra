@@ -23,6 +23,7 @@ import type {
   AgentBrowserController,
   OpaqueRefResolver,
   RankSignalSink,
+  UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
 import type { Brief, BriefValidationError, Result } from '@yantra/protocol';
@@ -348,6 +349,14 @@ export interface RunServices {
   readonly budgets: BudgetTracker;
   /** The single LLM-bound sanitizer chokepoint. */
   readonly sanitizer: PayloadSanitizer;
+  /**
+   * Run-scoped vault of the user's own sensitive input values behind resolvable
+   * placeholders. The middleware resolves placeholders in tool params at the
+   * execution boundary (tools act on REAL values) and masks the values back to
+   * placeholders in every model-visible result (the model only ever sees
+   * tokens). Absent in vault-less test fixtures — resolution then no-ops.
+   */
+  readonly userInput?: UserInputVault;
   /** Outbound URL controls (§8.13). */
   readonly urlPolicy: UrlPolicy;
   /** Confirmation gateway + persistence, or null when no connector is wired. */

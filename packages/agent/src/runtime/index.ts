@@ -90,6 +90,9 @@ export {
 } from './trace.js';
 export {
   ActionPhase,
+  EvidenceLedger,
+  EvidencePhase,
+  type EvidenceEntry,
   type ConfirmationServices,
   type FetchToolDeps,
   type PublishOutcome,

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { PayloadSanitizer } from '@yantra/core';
+import { UserInputVault, type PayloadSanitizer } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -229,6 +229,63 @@ describe('@no-llm agent-v1 prompt governance', () => {
     const prompt = buildAgentUserPrompt({ goal: 'g', budgets }, markerSanitizer);
 
     expect(prompt).not.toContain('Ambient context');
+  });
+
+  it('redacts goal values into resolvable placeholders when a vault is supplied', async () => {
+    // Regression: the 'public' sanitizer profile replaced goal PII with the
+    // irreversible '[redacted-email]' marker, so the model could never use the
+    // value in a tool call (fills typed the marker into real forms). The vault
+    // path must produce a resolvable placeholder plus the usage instruction.
+    const vault = new UserInputVault();
+
+    const prompt = buildAgentUserPrompt(
+      { goal: 'sign up for the newsletter using john.doe@example.com', budgets },
+      markerSanitizer,
+      vault,
+    );
+
+    expect(prompt).toContain('{{user:email:1}}');
+    expect(prompt).not.toContain('john.doe@example.com');
+    expect(prompt).not.toContain('[redacted-email]');
+    expect(prompt).toContain('Redacted values:');
+    expect(vault.resolve('{{user:email:1}}')).toBe('john.doe@example.com');
+  });
+
+  it('omits the placeholder instruction when the goal has no sensitive values', () => {
+    const prompt = buildAgentUserPrompt(
+      { goal: 'compare the top three 4K monitors', budgets },
+      markerSanitizer,
+      new UserInputVault(),
+    );
+
+    expect(prompt).not.toContain('Redacted values:');
+    expect(prompt).toContain('compare the top three 4K monitors');
+  });
+
+  it('does not HTML-mangle plain goal text on the vault path (regression: cheerio)', () => {
+    // The 'public' profile's stripFormValues pass round-tripped the goal
+    // through an HTML parser: '&' became '&amp;' and '<best value>' became a
+    // stripped tag. The vault path must leave plain text byte-identical.
+    const goal = 'find laptops under $1500 & compare <best value> models';
+
+    const prompt = buildAgentUserPrompt({ goal, budgets }, markerSanitizer, new UserInputVault());
+
+    expect(prompt).toContain(goal);
+    expect(prompt).not.toContain('&amp;');
+  });
+
+  it('redacts profile context through the same vault', () => {
+    const vault = new UserInputVault();
+
+    const prompt = buildAgentUserPrompt(
+      { goal: 'renew my plan', budgets, profileContext: 'Backup contact: jane@example.org' },
+      markerSanitizer,
+      vault,
+    );
+
+    expect(prompt).toContain('Approved profile context:');
+    expect(prompt).not.toContain('jane@example.org');
+    expect(prompt).toContain('{{user:email:1}}');
   });
 
   it('declares the authoritative runtime prompt version only once', async () => {

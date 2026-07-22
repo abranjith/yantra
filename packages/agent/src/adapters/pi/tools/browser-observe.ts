@@ -15,7 +15,7 @@ export function browserObserveSpec(
     name: 'browser_observe',
     label: 'Browser Observe',
     description:
-      'Observe the current page as bounded sanitized text and opaque interactable refs. Use it before each action and again to verify changes. Do NOT invent or reuse refs from older observations.',
+      'Observe the current page as bounded sanitized text and opaque interactable refs. Use it after navigating and to verify changes; refs stay valid across actions on the same page. Do NOT invent refs or reuse them after a navigation.',
     parameters: BrowserObserveParams,
     sanitizationProfile: 'public',
     run: async (_params, ctx): Promise<DomainResult> => {

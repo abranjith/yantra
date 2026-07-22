@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   AgentBrowserController,
   type BrowserActionabilityError,
+  isNavigationRaceError,
+  isNoLayoutBoxError,
   StaleElementRefError,
 } from '../../src/browser/agent-controller.js';
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
@@ -19,6 +21,43 @@ const logger: Logger = {
   debug: () => undefined,
 };
 
+describe('@no-llm isNavigationRaceError', () => {
+  it('classifies document-changed races and rejects other failures', () => {
+    expect(
+      isNavigationRaceError(
+        new Error('Execution context was destroyed, most likely because of a navigation.'),
+      ),
+    ).toBe(true);
+    expect(isNavigationRaceError(new Error('Node is detached from document'))).toBe(true);
+    expect(
+      isNavigationRaceError(
+        new Error('Protocol error (Runtime.callFunctionOn): Cannot find context with specified id'),
+      ),
+    ).toBe(true);
+    expect(isNavigationRaceError(new Error('Attempted to use detached Frame "AB12".'))).toBe(true);
+    expect(isNavigationRaceError(new Error('JSHandle is disposed!'))).toBe(true);
+    expect(isNavigationRaceError(new Error('net::ERR_NAME_NOT_RESOLVED at https://x'))).toBe(false);
+    expect(isNavigationRaceError(new Error('Navigation timeout of 3000 ms exceeded'))).toBe(false);
+    expect(isNavigationRaceError('Execution context was destroyed')).toBe(false);
+  });
+});
+
+describe('@no-llm isNoLayoutBoxError', () => {
+  // Pinned to the literal strings puppeteer-core throws from ElementHandle;
+  // if a version bump reworders them this test is the early warning.
+  it('classifies puppeteer no-box failures and rejects other failures', () => {
+    expect(isNoLayoutBoxError(new Error('Node is either not clickable or not an Element'))).toBe(
+      true,
+    );
+    expect(isNoLayoutBoxError(new Error('Node is either not visible or not an HTMLElement'))).toBe(
+      true,
+    );
+    expect(isNoLayoutBoxError(new Error('Execution context was destroyed'))).toBe(false);
+    expect(isNoLayoutBoxError(new Error('Navigation timeout of 3000 ms exceeded'))).toBe(false);
+    expect(isNoLayoutBoxError('Node is either not clickable or not an Element')).toBe(false);
+  });
+});
+
 describe('@no-llm AgentBrowserController', () => {
   let server: Server;
   let baseUrl: string;
@@ -26,9 +65,16 @@ describe('@no-llm AgentBrowserController', () => {
   beforeAll(async () => {
     server = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' });
-      const path = request.url ?? '/';
+      const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       if (path === '/popup-target') {
         response.end('<title>Popup</title><p>popup target</p>');
+        return;
+      }
+      if (path === '/tall') {
+        response.end(`<!doctype html><title>Tall</title>
+          <div style="height:3000px"></div>
+          <button onclick="document.title='Tall';document.body.append(' clicked below fold')">Below fold</button>
+          <input aria-label="Below fold field">`);
         return;
       }
       if (path === '/next') {
@@ -45,7 +91,16 @@ describe('@no-llm AgentBrowserController', () => {
           <a href="/popup-target" target="_blank">Open target</a>
           <button onclick="window.open('/popup-target')">Open window</button>
           <button onclick="document.querySelector('#state').textContent='changed'">Mutate</button>
+          <button onclick="this.remove()">Vanish</button>
           <button disabled>Disabled action</button>
+          <button aria-disabled="true">Aria disabled action</button>
+          <button onclick="document.querySelector('#hideable').style.visibility='hidden'">Hide it</button>
+          <input id="hideable" aria-label="Hideable field">
+          <form action="/next">
+            <input aria-label="Username" name="u">
+            <input aria-label="Password" name="p" type="password">
+            <button type="submit">Sign in</button>
+          </form>
         </div>
         <button id="covered" style="position:absolute;left:10px;top:10px">Covered action</button>
         <div id="overlay">overlay</div>
@@ -85,7 +140,7 @@ describe('@no-llm AgentBrowserController', () => {
     await expect(access(profileDir)).rejects.toThrow();
   }, 45_000);
 
-  it('intercepts target=_blank and window.open without retaining extra pages', async () => {
+  it('intercepts popups from one observation without staling sibling refs', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({
       runId: 'popup-run',
@@ -94,13 +149,14 @@ describe('@no-llm AgentBrowserController', () => {
     });
     await controller.navigate(`${baseUrl}/`);
 
-    let observation = await controller.observe();
+    // Both clicks use the same observation: intercepting the first popup must
+    // leave the second element's ref usable without re-observing.
+    const observation = await controller.observe();
     const target = observation.interactables.find((entry) => entry.name === 'Open target')!;
+    const windowButton = observation.interactables.find((entry) => entry.name === 'Open window')!;
     const targetResult = await controller.click(target.ref);
     expect(targetResult.popup_intercepted).toBe(`${baseUrl}/popup-target`);
 
-    observation = await controller.observe();
-    const windowButton = observation.interactables.find((entry) => entry.name === 'Open window')!;
     const windowResult = await controller.click(windowButton.ref);
     expect(windowResult.popup_intercepted).toBe(`${baseUrl}/popup-target`);
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -108,7 +164,7 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
-  it('invalidates refs after a newer observation, DOM action, reload, and navigation', async () => {
+  it('keeps ref ids stable and refs live until the document actually changes', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({
       runId: 'refs-run',
@@ -117,15 +173,21 @@ describe('@no-llm AgentBrowserController', () => {
     });
     await controller.navigate(`${baseUrl}/`);
     const first = await controller.observe();
-    const oldRef = first.interactables.find((entry) => entry.name === 'Mutate')!.ref;
-    await controller.observe();
-    expect(() => controller.resolveRef(oldRef)).toThrow(StaleElementRefError);
+    const mutateRef = first.interactables.find((entry) => entry.name === 'Mutate')!.ref;
 
-    const current = await controller.observe();
-    const mutationRef = current.interactables.find((entry) => entry.name === 'Mutate')!.ref;
-    await controller.click(mutationRef);
-    expect(() => controller.resolveRef(mutationRef)).toThrow(StaleElementRefError);
+    // Re-observing the same document refreshes handles but keeps the ids.
+    const second = await controller.observe();
+    expect(second.interactables).toEqual(first.interactables);
+    expect(() => controller.resolveRef(mutateRef)).not.toThrow();
 
+    // A successful DOM action no longer invalidates the acted-on ref or its
+    // siblings (regression: fill(e1) used to make fill(e2) report stale).
+    await controller.click(mutateRef);
+    expect(() => controller.resolveRef(mutateRef)).not.toThrow();
+    const third = await controller.observe();
+    expect(third.interactables).toEqual(first.interactables);
+
+    // A reload replaces the document, so refs from before it are stale.
     const beforeReload = (await controller.observe()).interactables[0]!.ref;
     await tracked.page!.puppeteerPage!.reload({ waitUntil: 'load' });
     expect(() => controller.resolveRef(beforeReload)).toThrow(StaleElementRefError);
@@ -134,6 +196,68 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.navigate(`${baseUrl}/next`);
     expect(() => controller.resolveRef(beforeNavigation)).toThrow(StaleElementRefError);
     expect(() => controller.resolveRef('e-never')).toThrow(StaleElementRefError);
+    await controller.teardown();
+  }, 45_000);
+
+  it('fills sibling fields and submits a form from a single observation', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'login-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const username = observation.interactables.find((entry) => entry.name === 'Username')!;
+    const password = observation.interactables.find((entry) => entry.name === 'Password')!;
+    const submit = observation.interactables.find((entry) => entry.name === 'Sign in')!;
+
+    await controller.fill(username.ref, 'tomsmith');
+    // Regression: this second fill used to throw STALE_ELEMENT_REF because the
+    // first fill invalidated every ref from the observation.
+    await controller.fill(password.ref, 'swordfish');
+    // Regression: this click used to race the form-submit navigation and
+    // surface as an unexpected tool failure even though the click landed. It
+    // must return the destination page.
+    const result = await controller.click(submit.ref);
+    expect(result.url).toContain('/next');
+    expect(result.url).toContain('u=tomsmith');
+    expect(result.url).toContain('p=swordfish');
+    expect(result.title).toBe('Next');
+    await controller.teardown();
+  }, 45_000);
+
+  it('mints fresh ids for a new document instead of aliasing old ones', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'alias-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const first = await controller.observe();
+    await controller.navigate(`${baseUrl}/next`);
+    const next = await controller.observe();
+    expect(next.interactables.length).toBeGreaterThan(0);
+    const firstIds = new Set(first.interactables.map((entry) => entry.ref));
+    for (const entry of next.interactables) {
+      expect(firstIds.has(entry.ref)).toBe(false);
+    }
+    await controller.teardown();
+  }, 45_000);
+
+  it('reports an element that left the DOM as stale at action time', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'vanish-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const vanish = observation.interactables.find((entry) => entry.name === 'Vanish')!;
+    await controller.click(vanish.ref);
+    await expect(controller.click(vanish.ref)).rejects.toThrow(StaleElementRefError);
     await controller.teardown();
   }, 45_000);
 
@@ -159,7 +283,7 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
-  it('returns structured actionability errors for disabled and occluded refs', async () => {
+  it('returns structured actionability errors for disabled and hidden refs', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({
       runId: 'action-run',
@@ -169,13 +293,70 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.navigate(`${baseUrl}/`);
     const observation = await controller.observe();
     const disabled = observation.interactables.find((entry) => entry.name === 'Disabled action')!;
-    const covered = observation.interactables.find((entry) => entry.name === 'Covered action')!;
+    const ariaDisabled = observation.interactables.find(
+      (entry) => entry.name === 'Aria disabled action',
+    )!;
+    const hide = observation.interactables.find((entry) => entry.name === 'Hide it')!;
+    const hideable = observation.interactables.find((entry) => entry.name === 'Hideable field')!;
     await expect(controller.click(disabled.ref)).rejects.toMatchObject({
       code: 'ELEMENT_DISABLED',
     } satisfies Partial<BrowserActionabilityError>);
-    await expect(controller.click(covered.ref)).rejects.toMatchObject({
-      code: 'ELEMENT_OCCLUDED',
+    await expect(controller.click(ariaDisabled.ref)).rejects.toMatchObject({
+      code: 'ELEMENT_DISABLED',
     } satisfies Partial<BrowserActionabilityError>);
+    // Hidden after the observation that minted the ref — the realistic path,
+    // since the observer never reports an already-invisible element.
+    await controller.click(hide.ref);
+    await expect(controller.click(hideable.ref)).rejects.toMatchObject({
+      code: 'ELEMENT_HIDDEN',
+    } satisfies Partial<BrowserActionabilityError>);
+    await expect(controller.fill(hideable.ref, 'x')).rejects.toMatchObject({
+      code: 'ELEMENT_HIDDEN',
+    } satisfies Partial<BrowserActionabilityError>);
+    await controller.teardown();
+  }, 45_000);
+
+  // Regression: actionability used to hit-test the element's centre point with
+  // document.elementFromPoint, whose coordinates are viewport-relative. Every
+  // element below the fold scored as intercepted and was rejected as occluded,
+  // even though Puppeteer scrolls the target into view before acting.
+  it('acts on elements far below the fold instead of rejecting them', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'fold-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/tall`);
+    const observation = await controller.observe();
+    const button = observation.interactables.find((entry) => entry.name === 'Below fold')!;
+    const field = observation.interactables.find((entry) => entry.name === 'Below fold field')!;
+    expect(button).toBeDefined();
+    expect(field).toBeDefined();
+    await expect(controller.click(button.ref)).resolves.toMatchObject({ title: 'Tall' });
+    await expect(controller.fill(field.ref, 'typed')).resolves.toMatchObject({ title: 'Tall' });
+    expect(await controller.extract('content')).toMatchObject({
+      text: expect.stringContaining('clicked below fold') as string,
+    });
+    await controller.teardown();
+  }, 45_000);
+
+  // A covered element is clicked through to whatever covers it, exactly as a
+  // real user's click would be. The agent sees that outcome by re-observing;
+  // it is not a tool error, so the action must not fail.
+  it('clicks a covered element through to the overlay without erroring', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'covered-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const covered = observation.interactables.find((entry) => entry.name === 'Covered action')!;
+    await expect(controller.click(covered.ref)).resolves.toMatchObject({
+      title: 'Controller fixture',
+    });
     await controller.teardown();
   }, 45_000);
 });

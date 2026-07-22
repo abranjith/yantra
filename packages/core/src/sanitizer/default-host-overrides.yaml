@@ -1,18 +1,160 @@
+# Packaged production defaults for per-host sanitizer overrides.
+# MUST stay in sync (same entries, same order) with DEFAULT_HOST_OVERRIDES in
+# host-overrides.ts — the in-process sanitizer uses the constant while the file
+# store falls back to this YAML when no user config exists.
 version: 1
 hosts:
+  # Banking & payments.
   '*.chase.com':
     inherits: authenticated
-    extra_redactors:
-      - currency_usd
+    extra_redactors: [currency_usd, account_number, iban]
   '*.bankofamerica.com':
     inherits: authenticated
-    extra_redactors:
-      - currency_usd
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.wellsfargo.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.citi.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.capitalone.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.usbank.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.pnc.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.truist.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.ally.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.americanexpress.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.discover.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.paypal.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.venmo.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  '*.wise.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, iban]
+  # Brokerage & retirement.
+  '*.fidelity.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number]
+  '*.schwab.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number]
+  '*.vanguard.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number]
+  '*.robinhood.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number]
+  # Credit bureaus.
+  '*.experian.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, account_number]
+  '*.equifax.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, account_number]
+  '*.transunion.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, account_number]
+  '*.creditkarma.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, account_number]
+  '*.annualcreditreport.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, account_number]
+  # Health portals, pharmacies, and insurers.
   '*.mychart.com':
     inherits: authenticated
-    extra_redactors:
-      - date_of_birth
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.kaiserpermanente.org':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.uhc.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.aetna.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.cigna.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.anthem.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.humana.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.express-scripts.com':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.healthcare.gov':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.medicare.gov':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  '*.va.gov':
+    inherits: authenticated
+    extra_redactors: [date_of_birth, member_id, medical_record_number]
+  # Government.
   '*.uscis.gov':
     inherits: authenticated
-    extra_redactors:
-      - case_number
+    extra_redactors: [case_number, date_of_birth]
+  '*.irs.gov':
+    inherits: authenticated
+    extra_redactors: [tax_id, currency_usd]
+  '*.ssa.gov':
+    inherits: authenticated
+    extra_redactors: [date_of_birth]
+  '*.state.gov':
+    inherits: authenticated
+    extra_redactors: [passport_number]
+  '*.studentaid.gov':
+    inherits: authenticated
+    extra_redactors: [account_number, currency_usd]
+  # Payroll, HR, and tax preparation.
+  '*.adp.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, date_of_birth]
+  '*.gusto.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, date_of_birth]
+  '*.paychex.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, date_of_birth]
+  '*.myworkday.com':
+    inherits: authenticated
+    extra_redactors: [currency_usd, account_number, date_of_birth]
+  '*.intuit.com':
+    inherits: authenticated
+    extra_redactors: [tax_id, currency_usd]
+  '*.hrblock.com':
+    inherits: authenticated
+    extra_redactors: [tax_id, currency_usd]
+  # Auto insurance.
+  '*.geico.com':
+    inherits: authenticated
+    extra_redactors: [member_id, drivers_license]
+  '*.progressive.com':
+    inherits: authenticated
+    extra_redactors: [member_id, drivers_license]
+  '*.statefarm.com':
+    inherits: authenticated
+    extra_redactors: [member_id, drivers_license]
+  '*.allstate.com':
+    inherits: authenticated
+    extra_redactors: [member_id, drivers_license]

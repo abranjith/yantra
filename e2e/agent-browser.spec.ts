@@ -6,6 +6,8 @@ import {
   ActionPhase,
   BudgetTracker,
   DEFAULT_BUDGET_LIMITS,
+  EvidenceLedger,
+  EvidencePhase,
   UrlPolicy,
   buildYantraWrappedTools,
   type RunServices,
@@ -54,14 +56,17 @@ describe('@no-llm real Chrome browser tools', () => {
         isAvailable: () => Promise.resolve(true),
       },
     });
+    const sanitizer = new DefaultSanitizer();
     const services: RunServices = {
       runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       runDir,
       budgets,
-      sanitizer: new DefaultSanitizer(),
+      sanitizer,
       urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
       confirmation: { gateway: grantingGateway(), store: null },
       actionPhase: new ActionPhase(),
+      evidence: new EvidenceLedger(sanitizer),
+      evidencePhase: new EvidencePhase(),
       trace: null,
       abortSignal: new AbortController().signal,
       now: () => Date.now(),

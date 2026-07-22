@@ -11,7 +11,7 @@ import type {
   FetchedDoc,
   SearchProvider,
 } from '@yantra/core';
-import { DefaultSanitizer } from '@yantra/core';
+import { DefaultSanitizer, type UserInputVault } from '@yantra/core';
 import { ScriptRegistry } from '@yantra/core';
 import type { TObject } from 'typebox';
 import { expect } from 'vitest';
@@ -45,6 +45,7 @@ export interface BuildServicesOptions {
   readonly publish?: PublishToolDeps;
   readonly domain?: Partial<ToolDomainDeps>;
   readonly trace?: AgentTrace;
+  readonly userInput?: UserInputVault;
 }
 
 /** Build a RunServices with sensible fakes and overridable domain deps. */
@@ -84,6 +85,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     runDir,
     budgets,
     sanitizer,
+    ...(options.userInput ? { userInput: options.userInput } : {}),
     urlPolicy: new UrlPolicy(budgets),
     confirmation: null,
     actionPhase: new ActionPhase(),

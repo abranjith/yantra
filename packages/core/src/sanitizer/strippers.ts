@@ -25,6 +25,36 @@ const API_KEY_PATTERNS: readonly RegExp[] = [
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
 ];
 
+// Context-anchored production redactors for per-host overrides. Each requires a
+// labelling keyword (or an unambiguous format such as IBAN/EIN) so ordinary
+// prose numbers are not swallowed — over-redaction breaks task functionality.
+const ACCOUNT_NUMBER_RE = /\b(?:account|acct|a\/c)\s*(?:no\.?|number|#|id)?\s*[:#]?\s*\d{6,17}\b/gi;
+const IBAN_RE = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g;
+const MEMBER_ID_RE =
+  /\b(?:member|policy|group|subscriber)\s*(?:id|no\.?|number|#)\s*[:#]?\s*[A-Za-z0-9][A-Za-z0-9-]{4,19}\b/gi;
+const MEDICAL_RECORD_NUMBER_RE =
+  /\b(?:mrn|medical\s*record\s*(?:no\.?|number))\s*[:#]?\s*[A-Za-z0-9][A-Za-z0-9-]{3,14}\b/gi;
+const TAX_ID_RE = /\b\d{2}-\d{7}\b/g;
+const PASSPORT_NUMBER_RE =
+  /\bpassport\s*(?:no\.?|number|#)?\s*[:#]?\s*(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,9}\b/gi;
+const DRIVERS_LICENSE_RE =
+  /\b(?:driver'?s?\s*licen[cs]e|dl)\s*(?:no\.?|number|#)?\s*[:#]?\s*(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{4,20}\b/gi;
+
+/**
+ * Shared sensitive-value detection patterns. Reused by the user-input vault so
+ * goal/profile-context redaction and payload sanitization agree on what counts
+ * as a sensitive shape. The regexes carry stateful flags — consumers must
+ * construct a fresh `RegExp` from `.source` rather than reusing these directly.
+ */
+export const SENSITIVE_VALUE_PATTERNS = Object.freeze({
+  email: EMAIL_RE,
+  ssn: SSN_RE,
+  cardCandidate: CARD_CANDIDATE_RE,
+  phoneCandidate: PHONE_CANDIDATE_RE,
+  apiKey: API_KEY_PATTERNS,
+  authQueryParam: AUTH_QUERY_PARAM_RE,
+});
+
 /**
  * Remove input-like value content while preserving element structure.
  */
@@ -192,6 +222,34 @@ export function redactDateOfBirth(text: string): TransformResult {
 
 export function redactCaseNumber(text: string): TransformResult {
   return replaceWithRegex(text, CASE_NUMBER_RE, '[redacted-case-number]');
+}
+
+export function redactAccountNumber(text: string): TransformResult {
+  return replaceWithRegex(text, ACCOUNT_NUMBER_RE, '[redacted-account-number]');
+}
+
+export function redactIban(text: string): TransformResult {
+  return replaceWithRegex(text, IBAN_RE, '[redacted-iban]');
+}
+
+export function redactMemberId(text: string): TransformResult {
+  return replaceWithRegex(text, MEMBER_ID_RE, '[redacted-member-id]');
+}
+
+export function redactMedicalRecordNumber(text: string): TransformResult {
+  return replaceWithRegex(text, MEDICAL_RECORD_NUMBER_RE, '[redacted-medical-record-number]');
+}
+
+export function redactTaxId(text: string): TransformResult {
+  return replaceWithRegex(text, TAX_ID_RE, '[redacted-tax-id]');
+}
+
+export function redactPassportNumber(text: string): TransformResult {
+  return replaceWithRegex(text, PASSPORT_NUMBER_RE, '[redacted-passport-number]');
+}
+
+export function redactDriversLicense(text: string): TransformResult {
+  return replaceWithRegex(text, DRIVERS_LICENSE_RE, '[redacted-drivers-license]');
 }
 
 export function isLuhnValid(digits: string): boolean {

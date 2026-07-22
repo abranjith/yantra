@@ -24,7 +24,7 @@
  * definitions.
  */
 
-import { isParked, type SanitizationProfile } from '@yantra/core';
+import { isParked, type SanitizationProfile, type UserInputVault } from '@yantra/core';
 import { generateUlid, type ConfirmationRequest } from '@yantra/protocol';
 import pino from 'pino';
 import type { Static, TSchema } from 'typebox';
@@ -216,7 +216,17 @@ async function runPipeline<TParams extends TSchema>(
         true,
       );
     }
-    const params = rawParams;
+    // 1.5. User-input placeholder resolution — the execution boundary. The
+    //      model deals only in `{{user:...}}` tokens; the REAL user-provided
+    //      values materialize here, after schema validation and before policy,
+    //      confirmation, and the domain op (mirroring opaque secret refs).
+    //      Model-visible output re-masks the values below, so they never
+    //      round-trip back into the session.
+    const params = (
+      services.userInput !== undefined
+        ? resolveUserInputDeep(rawParams, services.userInput)
+        : rawParams
+    ) as typeof rawParams;
 
     // 2. Budget / timeout / abort check.
     if (isAborted(services, callSignal)) {
@@ -328,7 +338,7 @@ async function runPipeline<TParams extends TSchema>(
     return {
       status: 'ok',
       modelText: bounded.text,
-      details: domain.details ?? null,
+      details: maskUserInputDeep(domain.details ?? null, services.userInput),
       ...(domain.terminate ? { terminate: true } : {}),
       ...(confirmationId ? { confirmation_id: confirmationId } : {}),
     };
@@ -351,14 +361,20 @@ async function runPipeline<TParams extends TSchema>(
 /** Standard structured-failure result builder (secret-free by construction). */
 function failure<TParams extends TSchema>(
   _spec: ToolWrapperSpec<TParams>,
-  _services: RunServices,
+  services: RunServices,
   errorCode: string,
   message: string,
   retryable: boolean,
 ): YantraToolResult {
+  const safeMessage = services.userInput?.mask(message) ?? message;
   return {
     status: 'error',
-    modelText: jsonText({ status: 'error', error_code: errorCode, message, retryable }),
+    modelText: jsonText({
+      status: 'error',
+      error_code: errorCode,
+      message: safeMessage,
+      retryable,
+    }),
     details: null,
     error_code: errorCode,
     retryable,
@@ -368,19 +384,22 @@ function failure<TParams extends TSchema>(
 /** Convert a DomainFailure into a stable tool result. */
 function fromFailure<TParams extends TSchema>(
   _spec: ToolWrapperSpec<TParams>,
-  _services: RunServices,
+  services: RunServices,
   domain: DomainFailure,
   confirmationId: string | null = null,
 ): YantraToolResult {
+  // Domain ops run on RESOLVED user values, so their failure messages may echo
+  // one — mask them back to placeholders before the model or audit sees them.
+  const safeMessage = services.userInput?.mask(domain.message) ?? domain.message;
   return {
     status: 'error',
     modelText: jsonText({
       status: 'error',
       error_code: domain.errorCode,
-      message: domain.message,
+      message: safeMessage,
       retryable: domain.retryable,
     }),
-    details: domain.details ?? null,
+    details: maskUserInputDeep(domain.details ?? null, services.userInput),
     error_code: domain.errorCode,
     retryable: domain.retryable,
     ...(confirmationId ? { confirmation_id: confirmationId } : {}),
@@ -552,13 +571,45 @@ function sanitizeAndBound(
   profile: SanitizationProfile,
   services: RunServices,
 ): BoundedText {
-  const sanitized = services.sanitizer.sanitize(payload, profile);
+  // Mask user-input values BEFORE the profile sanitizer: a page that echoes a
+  // resolved value comes back as the stable `{{user:...}}` token the model
+  // already knows (and never as the raw value, even under a bypass profile).
+  const masked = maskUserInputDeep(payload, services.userInput);
+  const sanitized = services.sanitizer.sanitize(masked, profile);
   const capped = truncateToBytes(sanitized.text, services.budgets.maxBytesPerResult);
   return {
     text: capped.text,
     bytes: Buffer.byteLength(capped.text, 'utf8'),
     truncated: sanitized.truncated || capped.truncated,
   };
+}
+
+/**
+ * Deep-resolve `{{user:...}}` placeholders in every string leaf of a validated
+ * tool-params value. Structure and non-string leaves are preserved.
+ */
+function resolveUserInputDeep(value: unknown, vault: UserInputVault): unknown {
+  if (typeof value === 'string') return vault.resolve(value);
+  if (Array.isArray(value)) return value.map((entry) => resolveUserInputDeep(entry, vault));
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, resolveUserInputDeep(entry, vault)]),
+    );
+  }
+  return value;
+}
+
+/** Deep-mask stored user-input values back to placeholders in string leaves. */
+function maskUserInputDeep(value: unknown, vault: UserInputVault | undefined): unknown {
+  if (vault === undefined || vault.size === 0) return value;
+  if (typeof value === 'string') return vault.mask(value);
+  if (Array.isArray(value)) return value.map((entry) => maskUserInputDeep(entry, vault));
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, maskUserInputDeep(entry, vault)]),
+    );
+  }
+  return value;
 }
 
 /** UTF-8-safe truncation to at most `maxBytes` bytes (no split multibyte char). */

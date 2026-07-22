@@ -86,7 +86,13 @@ function textExtractor(body: (url: string) => string | null): Extractor {
 }
 
 interface SitePayload {
-  readonly sites: { n: number; url: string; text?: string; capture_ref?: string }[];
+  readonly sites: {
+    n: number;
+    url: string;
+    excerpt?: string;
+    text?: string;
+    capture_ref?: string;
+  }[];
   readonly more_results: { url: string }[];
   readonly failures: { url: string; stage: string; reason: string }[];
 }

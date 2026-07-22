@@ -5,11 +5,13 @@ import { join } from 'node:path';
 import {
   EthicsRefusedError,
   StaleElementRefError,
+  UserInputVault,
   type AgentBrowserController,
   type OpaqueRefResolver,
 } from '@yantra/core';
 import type { ConfirmationGateway, ConfirmationOutcome } from '@yantra/core';
 import type { ConfirmationRequest } from '@yantra/protocol';
+import { Compile } from 'typebox/compile';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { browserClickSpec } from '../../../../src/adapters/pi/tools/browser-click.js';
@@ -40,7 +42,10 @@ describe('@no-llm browser tools', () => {
     // A bare string is now a valid literal value, so the invalid case must use a
     // type the whole value union rejects (neither string nor tagged object).
     await assertToolContract(browserFillSpec(services), { ref: 'e1', value: 42 });
-    await assertToolContract(browserExtractSpec(services), { kind: 'html' });
+    // `kind` is a plain string (small models cannot recover from a literal-union
+    // rejection raised before the middleware), so the schema-invalid case must
+    // use a non-string value.
+    await assertToolContract(browserExtractSpec(services), { kind: 42 });
   });
 
   it('navigates through URL/ethics policy and exposes popup interception', async () => {
@@ -201,6 +206,81 @@ describe('@no-llm browser tools', () => {
     }
   });
 
+  it('fills the REAL user value when the model passes a vault placeholder', async () => {
+    // Regression: the goal sanitizer produced irreversible '[redacted-email]'
+    // markers, so the model could only type the marker into the field — the
+    // fill "succeeded" with junk. The vault placeholder must resolve to the
+    // real user-provided value at the execution boundary, while the model-visible
+    // result and the persisted trace keep only the placeholder.
+    const controller = fakeController();
+    controller.fill.mockResolvedValue({ url: 'https://shop.example/signup', title: 'Signup' });
+    controller.host.mockReturnValue('shop.example');
+    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Email' });
+    const vault = new UserInputVault();
+    expect(vault.redact('sign up with john@example.com')).toContain('{{user:email:1}}');
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      userInput: vault,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    const result = await wrapTool(browserFillSpec(services), services).execute(
+      { ref: 'e1', value: '{{user:email:1}}' },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(controller.fill).toHaveBeenCalledWith('e1', 'john@example.com');
+    expect(JSON.stringify(result)).not.toContain('john@example.com');
+    const step = trace.steps()[0];
+    expect(step?.kind).toBe('fill');
+    if (step?.kind === 'fill') {
+      expect(step.value).toEqual({ kind: 'literal', value: '{{user:email:1}}' });
+    }
+  });
+
+  it('still rejects a credential-shaped user value resolved from a placeholder', async () => {
+    // The vault must not become a bypass around the credential-literal guard:
+    // an API-key-shaped value in the goal resolves at the boundary and is then
+    // rejected exactly like a raw credential literal, without echoing it.
+    const controller = fakeController();
+    const vault = new UserInputVault();
+    const redacted = vault.redact('use key sk-ABCDEFGHIJKLMNOPQRSTUV');
+    expect(redacted).toContain('{{user:api_key:1}}');
+    const services = buildServices({
+      runDir,
+      userInput: vault,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    const result = await wrapTool(browserFillSpec(services), services).execute(
+      { ref: 'e1', value: '{{user:api_key:1}}' },
+      undefined,
+    );
+
+    expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
+    expect(controller.fill).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('sk-ABCDEFGHIJKLMNOPQRSTUV');
+  });
+
   it('extracts tables and stores oversized results as a capture reference', async () => {
     const controller = fakeController();
     controller.extract.mockResolvedValue({
@@ -217,6 +297,127 @@ describe('@no-llm browser tools', () => {
     expect(
       await readFile(join(runDir, 'captures', `${parsed.capture_ref}.json`), 'utf8'),
     ).toContain('long value');
+  });
+
+  // The Pi SDK compiles the same TypeBox schema and rejects the call BEFORE the
+  // Yantra middleware runs, with an error that never names the accepted values.
+  // Anything the tool can explain must therefore pass this gate first.
+  it.each([{}, { kind: 'content' }, { kind: 'table' }, { kind: 'text' }, { kind: 'screenshot' }])(
+    'accepts %o at the provider-side schema gate',
+    (args) => {
+      const schema = browserExtractSpec(buildServices()).parameters;
+      expect(Compile(schema).Check(args)).toBe(true);
+    },
+  );
+
+  it('extracts readable content when kind is omitted', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({
+      title: 'Secure Area',
+      text: 'Welcome to the Secure Area.',
+    });
+    const services = browserServices(controller);
+    const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
+    expect(result.status).toBe('ok');
+    expect(controller.extract).toHaveBeenCalledWith('content');
+    expect(result.modelText).toContain('Welcome to the Secure Area.');
+  });
+
+  it.each([
+    ['text', 'content'],
+    ['TEXT', 'content'],
+    ['  readable content ', 'content'],
+    ['page-content', 'content'],
+    ['content', 'content'],
+    ['tables', 'table'],
+    ['table', 'table'],
+  ])('resolves kind "%s" to the %s extraction', async (requested, expected) => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue(
+      expected === 'content'
+        ? { title: 'T', text: 'body text' }
+        : { headers: ['A'], rows: [['1']] },
+    );
+    const services = browserServices(controller);
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: requested },
+      undefined,
+    );
+    expect(result.status).toBe('ok');
+    expect(controller.extract).toHaveBeenCalledWith(expected);
+  });
+
+  it('refuses an unsupported kind with a retryable message naming the valid kinds', async () => {
+    const controller = fakeController();
+    const services = browserServices(controller);
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'screenshot' },
+      undefined,
+    );
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.retryable).toBe(true);
+    expect(result.modelText).toContain('kind:\\"content\\"');
+    expect(result.modelText).toContain('kind:\\"table\\"');
+    // The refusal is an input decision: no extraction was attempted.
+    expect(controller.extract).not.toHaveBeenCalled();
+  });
+
+  it('bounds the echoed kind in the unsupported-kind refusal', async () => {
+    const controller = fakeController();
+    const services = browserServices(controller);
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'z'.repeat(64) },
+      undefined,
+    );
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.modelText).toContain('z'.repeat(40));
+    expect(result.modelText).not.toContain('z'.repeat(41));
+  });
+
+  it('reports an unsupported kind even when no browser is configured', async () => {
+    const services = buildServices({ runDir });
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'html' },
+      undefined,
+    );
+    expect(result.error_code).toBe('INVALID_INPUT');
+  });
+
+  it('records the resolved kind in the run trace for an aliased request', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'T', text: 'body text' });
+    controller.host.mockReturnValue('shop.example');
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+    await wrapTool(browserExtractSpec(services), services).execute({ kind: 'text' }, undefined);
+    const step = trace.steps()[0];
+    expect(step?.kind).toBe('extract');
+    if (step?.kind === 'extract') expect(step.extractionKind).toBe('content');
+  });
+
+  it('rejects a content extraction whose shape does not validate', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'T' });
+    const services = browserServices(controller);
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'text' },
+      undefined,
+    );
+    expect(result.error_code).toBe('EXTRACTION_SCHEMA_INVALID');
+    expect(result.modelText).toContain('content');
   });
 
   it('records successful navigate/fill/click into the run trace with candidate chains', async () => {
