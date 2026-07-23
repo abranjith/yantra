@@ -81,6 +81,59 @@ describe('@no-llm AgentBrowserController', () => {
         response.end('<title>Next</title><button>Arrived</button>');
         return;
       }
+      if (path === '/delayed') {
+        // The reported real-world failure shape: the site starts its
+        // navigation on a timer well after the click handler returns.
+        response.end(`<!doctype html><title>Delayed</title>
+          <button onclick="setTimeout(() => { location.href = '/next'; }, 150)">Go later</button>`);
+        return;
+      }
+      if (path === '/chain') {
+        response.end('<!doctype html><title>Chain</title><a href="/hop">Begin chain</a>');
+        return;
+      }
+      if (path === '/hop') {
+        response.end(`<!doctype html><title>Hop</title>
+          <script>setTimeout(() => location.replace('/next'), 100)</script><p>hopping</p>`);
+        return;
+      }
+      if (path === '/dialog') {
+        response.end(`<!doctype html><title>Dialog</title>
+          <button onclick="alert('Heads up'); document.title='Alerted'">Alert me</button>
+          <button onclick="document.title = confirm('Proceed?') ? 'Accepted' : 'Declined'">Confirm me</button>`);
+        return;
+      }
+      if (path === '/dynamic-popup') {
+        response.end(`<!doctype html><title>Dynamic popup</title>
+          <button id="opener">Open dynamic</button>
+          <script>document.getElementById('opener')
+            .addEventListener('click', () => window.open('/popup-target'));</script>`);
+        return;
+      }
+      if (path === '/spa') {
+        response.end(`<!doctype html><title>Spa</title>
+          <button id="load">Load data</button><p id="out">empty</p>
+          <script>document.getElementById('load').addEventListener('click', async () => {
+            const res = await fetch('/slow-fragment');
+            document.getElementById('out').textContent = await res.text();
+          });</script>`);
+        return;
+      }
+      if (path === '/slow-fragment') {
+        // Slower than the post-click navigation grace window so only the
+        // network-quiet wait can cover it.
+        setTimeout(() => response.end('fragment loaded'), 1_500);
+        return;
+      }
+      if (path === '/select-form') {
+        response.end(`<!doctype html><title>Select</title>
+          <select aria-label="Country" onchange="document.title='picked:'+this.value">
+            <option value="">Choose</option>
+            <option value="us">United States</option>
+            <option value="de">Germany</option>
+          </select>`);
+        return;
+      }
       const many = Array.from({ length: 45 }, (_, index) => `<button>Item ${index}</button>`).join(
         '',
       );
@@ -224,6 +277,146 @@ describe('@no-llm AgentBrowserController', () => {
     expect(result.url).toContain('u=tomsmith');
     expect(result.url).toContain('p=swordfish');
     expect(result.title).toBe('Next');
+    await controller.teardown();
+  }, 45_000);
+
+  // Regression for the reported real-world failure: the click returned the
+  // old page because the site started its navigation ~150ms later, and the
+  // agent's next tool call then raced (and lost to) the navigation.
+  it('waits for a navigation the site starts well after the click', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'delayed-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/delayed`);
+    const observation = await controller.observe();
+    const button = observation.interactables.find((entry) => entry.name === 'Go later')!;
+    const result = await controller.click(button.ref);
+    expect(result.url).toContain('/next');
+    expect(result.title).toBe('Next');
+    await controller.teardown();
+  }, 45_000);
+
+  it('follows client-side redirect chains before reporting the result', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'chain-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/chain`);
+    const observation = await controller.observe();
+    const link = observation.interactables.find((entry) => entry.name === 'Begin chain')!;
+    // /chain -> /hop commits first; /hop then JS-redirects to /next. The
+    // click must report the document that will stay, not the hop.
+    const result = await controller.click(link.ref);
+    expect(result.url).toContain('/next');
+    expect(result.title).toBe('Next');
+    await controller.teardown();
+  }, 45_000);
+
+  it('auto-dismisses JS dialogs and surfaces them on the action result', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'dialog-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/dialog`);
+    const observation = await controller.observe();
+    const alertButton = observation.interactables.find((entry) => entry.name === 'Alert me')!;
+    const confirmButton = observation.interactables.find((entry) => entry.name === 'Confirm me')!;
+    // An unhandled alert() freezes every evaluate on the page; the click must
+    // resolve, report the dialog, and leave the page responsive.
+    const alerted = await controller.click(alertButton.ref);
+    expect(alerted.dialog_intercepted).toBe('alert: Heads up');
+    expect(alerted.title).toBe('Alerted');
+    // confirm() is dismissed (never silently accepted): the handler sees false.
+    const confirmed = await controller.click(confirmButton.ref);
+    expect(confirmed.dialog_intercepted).toBe('confirm: Proceed?');
+    expect(confirmed.title).toBe('Declined');
+    await controller.teardown();
+  }, 45_000);
+
+  it('intercepts popups opened by dynamic event listeners, not just declared ones', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'dynamic-popup-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/dynamic-popup`);
+    const observation = await controller.observe();
+    const opener = observation.interactables.find((entry) => entry.name === 'Open dynamic')!;
+    // No target=_blank and no inline onclick: only the background capture can
+    // attribute this popup, and the click result must still carry it.
+    const result = await controller.click(opener.ref);
+    expect(result.popup_intercepted).toBe(`${baseUrl}/popup-target`);
+    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+    await controller.teardown();
+  }, 45_000);
+
+  it('reports only after fetch-driven DOM updates have landed', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'spa-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/spa`);
+    const observation = await controller.observe();
+    const load = observation.interactables.find((entry) => entry.name === 'Load data')!;
+    // The fetch takes longer than the navigation grace window; only the
+    // network-quiet wait keeps the very next extract from seeing stale DOM.
+    await controller.click(load.ref);
+    expect(await controller.extract('content')).toMatchObject({
+      text: expect.stringContaining('fragment loaded') as string,
+    });
+    await controller.teardown();
+  }, 45_000);
+
+  it('selects dropdown options by label or value and rejects unknown options', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'select-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/select-form`);
+    const observation = await controller.observe();
+    const country = observation.interactables.find((entry) => entry.name === 'Country')!;
+    // Visible label resolves to the option's value, with change events fired.
+    const byLabel = await controller.fill(country.ref, 'United States');
+    expect(byLabel.title).toBe('picked:us');
+    const byValue = await controller.fill(country.ref, 'de');
+    expect(byValue.title).toBe('picked:de');
+    await expect(controller.fill(country.ref, 'France')).rejects.toMatchObject({
+      code: 'OPTION_NOT_FOUND',
+    } satisfies Partial<BrowserActionabilityError>);
+    await controller.teardown();
+  }, 45_000);
+
+  it('replaces an existing value and types long values within budget', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'overtype-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const username = observation.interactables.find((entry) => entry.name === 'Username')!;
+    await controller.fill(username.ref, 'first value');
+    // Long values drop the per-key delay (the old fixed 100ms/char made a
+    // large fill take minutes) and must still fully replace what was there.
+    const long = 'x'.repeat(300);
+    await controller.fill(username.ref, long);
+    const typed = await tracked.page!.puppeteerPage!.evaluate(
+      () => document.querySelector<HTMLInputElement>('input[name="u"]')!.value,
+    );
+    expect(typed).toBe(long);
     await controller.teardown();
   }, 45_000);
 
