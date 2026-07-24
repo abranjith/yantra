@@ -6,6 +6,7 @@ import type {
   EngineLocatorChain,
   InjectedScriptHost,
   LocatorEventSink,
+  ResolveResult,
   SuccessResolveResult,
 } from './types.js';
 
@@ -66,7 +67,23 @@ export async function resolveActionable(
 
     if (Date.now() >= deadline) break;
 
-    const result = await resolver.resolve(chain, options);
+    let result: ResolveResult;
+    try {
+      result = await resolver.resolve(chain, options);
+    } catch (err) {
+      // A click/navigate on a previous step may still be tearing down the old
+      // document. While that happens, injected-script calls throw
+      // "Execution context was destroyed" (or the injection wrapper carrying
+      // it). That is a transient condition: keep polling until the new document
+      // settles, exactly as `not_found` is retried. Genuinely fatal errors
+      // (e.g. the page closed) still propagate.
+      if (isTransientNavigationError(err)) {
+        lastState = undefined;
+        prevRect = undefined;
+        continue;
+      }
+      throw err;
+    }
 
     if (result.kind === 'failure') {
       if (result.reason === 'ambiguous') {
@@ -92,33 +109,43 @@ export async function resolveActionable(
       continue;
     }
 
-    // Element found — check actionability
-    const frameId = options.frameId ?? 'main';
-    const state = await host.call<ActionableState>(frameId, 'checkActionableState', []);
-    lastState = state;
+    // Element found — check actionability. These injected-script calls can also
+    // race an in-flight navigation, so the same transient-error handling applies.
+    try {
+      const frameId = options.frameId ?? 'main';
+      const state = await host.call<ActionableState>(frameId, 'checkActionableState', []);
+      lastState = state;
 
-    if (!state.attached) {
-      // Element detached between resolve and check — retry
-      continue;
-    }
-
-    if (!state.visible || !state.enabled) {
-      continue;
-    }
-
-    // Stability check: compare bounding rect across two snapshots (STABILITY_WINDOW_MS apart)
-    const currentRect = await host.call<BoundingRect>(frameId, 'getBoundingRect', []);
-    if (prevRect !== undefined && areSameRect(prevRect, currentRect)) {
-      // Rect stable — check events
-      if (state.receivesEvents) {
-        // All conditions met — element is actionable
-        return result;
+      if (!state.attached) {
+        // Element detached between resolve and check — retry
+        continue;
       }
-    }
-    prevRect = currentRect;
 
-    // Wait stability window before next check
-    await sleep(Math.min(STABILITY_WINDOW_MS, deadline - Date.now()));
+      if (!state.visible || !state.enabled) {
+        continue;
+      }
+
+      // Stability check: compare bounding rect across two snapshots (STABILITY_WINDOW_MS apart)
+      const currentRect = await host.call<BoundingRect>(frameId, 'getBoundingRect', []);
+      if (prevRect !== undefined && areSameRect(prevRect, currentRect)) {
+        // Rect stable — check events
+        if (state.receivesEvents) {
+          // All conditions met — element is actionable
+          return result;
+        }
+      }
+      prevRect = currentRect;
+
+      // Wait stability window before next check
+      await sleep(Math.min(STABILITY_WINDOW_MS, deadline - Date.now()));
+    } catch (err) {
+      if (isTransientNavigationError(err)) {
+        lastState = undefined;
+        prevRect = undefined;
+        continue;
+      }
+      throw err;
+    }
   }
 
   throw new LocatorNotActionableError({
@@ -132,6 +159,24 @@ export async function resolveActionable(
     },
     deadlineMs: totalDeadlineMs,
   });
+}
+
+/**
+ * Detects errors that arise from an in-flight page navigation tearing down the
+ * document mid-resolution (e.g. a preceding click that submits a form). These
+ * are transient: once the new document loads, the injected runtime is
+ * re-installed and the element resolves. The auto-wait loop retries them until
+ * the deadline instead of surfacing them as a fatal `unexpected` failure.
+ */
+function isTransientNavigationError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const message = err.message.toLowerCase();
+  return (
+    message.includes('execution context was destroyed') ||
+    message.includes('execution context is not available') ||
+    message.includes('cannot find context') ||
+    message.includes('most likely because of a navigation')
+  );
 }
 
 function getNextDelay(index: number): number {

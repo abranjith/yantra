@@ -164,4 +164,88 @@ describe('@no-llm resolveActionable', () => {
     const result = await resultPromise;
     expect(result.kind).toBe('success');
   });
+
+  // ── Regression: navigation race after a preceding click/navigate ──────────
+  // A step that triggers navigation (e.g. a Login-button click) leaves the page
+  // tearing down its old document. The next step's resolution then races that
+  // navigation and the injected-script call throws "Execution context was
+  // destroyed" (bare, or wrapped by the injection host). These must be treated
+  // as transient and polled through — not surfaced as a fatal `unexpected`.
+
+  it('retries a transient navigation error thrown while resolving and succeeds once the page settles', async () => {
+    // ensureInjected throws a wrapped navigation error on the first poll (the
+    // old document is being destroyed), then succeeds once the new doc loads.
+    let ensureCalls = 0;
+    const navError = new Error(
+      'Unable to inject locator runtime into frame "main": Execution context was destroyed, most likely because of a navigation.',
+    );
+    const host: InjectedScriptHost = {
+      ensureInjected: vi.fn().mockImplementation(async () => {
+        ensureCalls += 1;
+        if (ensureCalls === 1) throw navError;
+      }),
+      call: vi.fn().mockImplementation(async (_frameId: string, fn: string) => {
+        if (fn === 'resolveCandidate') return { count: 1, slotKey: 'default' };
+        if (fn === 'checkActionableState') return makeActionableState();
+        if (fn === 'getBoundingRect') return { top: 10, left: 10, width: 100, height: 40 };
+        return undefined;
+      }),
+      callHandle: vi.fn().mockResolvedValue(makeFakeHandle()),
+    };
+    const chain = makeChain();
+
+    const resultPromise = resolveActionable(chain, host, { timeoutMs: 30_000 });
+    await vi.runAllTimersAsync();
+
+    const result = await resultPromise;
+    expect(result.kind).toBe('success');
+    expect(ensureCalls).toBeGreaterThan(1); // proves it retried past the nav error
+  });
+
+  it('retries a transient navigation error thrown during the actionability check', async () => {
+    let stateCalls = 0;
+    const navError = new Error(
+      'Execution context was destroyed, most likely because of a navigation.',
+    );
+    const host: InjectedScriptHost = {
+      ensureInjected: vi.fn().mockResolvedValue(undefined),
+      call: vi.fn().mockImplementation(async (_frameId: string, fn: string) => {
+        if (fn === 'resolveCandidate') return { count: 1, slotKey: 'default' };
+        if (fn === 'checkActionableState') {
+          stateCalls += 1;
+          if (stateCalls === 1) throw navError;
+          return makeActionableState();
+        }
+        if (fn === 'getBoundingRect') return { top: 10, left: 10, width: 100, height: 40 };
+        return undefined;
+      }),
+      callHandle: vi.fn().mockResolvedValue(makeFakeHandle()),
+    };
+    const chain = makeChain();
+
+    const resultPromise = resolveActionable(chain, host, { timeoutMs: 30_000 });
+    await vi.runAllTimersAsync();
+
+    const result = await resultPromise;
+    expect(result.kind).toBe('success');
+    expect(stateCalls).toBeGreaterThan(1);
+  });
+
+  it('propagates a non-transient error instead of retrying it', async () => {
+    // "Target closed" is a genuinely fatal condition — it must not be mistaken
+    // for a recoverable navigation race and polled until the deadline.
+    const fatal = new Error('Target closed');
+    const host: InjectedScriptHost = {
+      ensureInjected: vi.fn().mockRejectedValue(fatal),
+      call: vi.fn().mockResolvedValue(undefined),
+      callHandle: vi.fn().mockResolvedValue(null),
+    };
+    const chain = makeChain();
+
+    const resultPromise = resolveActionable(chain, host, { timeoutMs: 5_000 });
+    void resultPromise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).rejects.toThrow('Target closed');
+  });
 });

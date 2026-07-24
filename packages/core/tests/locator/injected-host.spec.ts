@@ -1,11 +1,13 @@
 import { createServer, type Server } from 'node:http';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Page as PuppeteerPage } from 'puppeteer-core';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
 import type { BrowserSession, Logger, Page } from '../../src/browser/types.js';
 import { resolveActionable } from '../../src/locator/auto-wait.js';
+import { PuppeteerInjectedScriptHost } from '../../src/locator/injected-host.js';
 import { LocatorResolverImpl } from '../../src/locator/resolver.js';
 
 const logger: Logger = {
@@ -103,5 +105,30 @@ describe('@no-llm production InjectedScriptHost', () => {
       { timeoutMs: 3_000 },
     );
     expect(result.kind).toBe('success');
+  });
+});
+
+describe('@no-llm InjectedScriptHost error surfacing', () => {
+  // Regression: when a step triggers a navigation, the *next* step's injection
+  // check races the old document being torn down and Puppeteer throws
+  // "Execution context was destroyed". ensureInjected must surface that cause
+  // (so the auto-wait layer can classify it as transient and retry) rather than
+  // masking it behind a generic, unclassifiable "Unable to inject" message —
+  // which is what turned this workflow's extract step into a fatal `unexpected`.
+  it('surfaces the underlying navigation cause instead of masking it', async () => {
+    const navError = new Error(
+      'Execution context was destroyed, most likely because of a navigation.',
+    );
+    const frame = { evaluate: vi.fn().mockRejectedValue(navError) };
+    const fakePage = {
+      evaluateOnNewDocument: vi.fn().mockResolvedValue(undefined),
+      mainFrame: () => frame,
+      frames: () => [frame],
+    } as unknown as PuppeteerPage;
+
+    const host = new PuppeteerInjectedScriptHost(fakePage, 'STUB_BUNDLE_SOURCE');
+
+    await expect(host.ensureInjected('main')).rejects.toThrow(/Execution context was destroyed/);
+    await expect(host.ensureInjected('main')).rejects.toMatchObject({ cause: navError });
   });
 });

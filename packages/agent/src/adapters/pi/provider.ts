@@ -420,7 +420,7 @@ function addOptional(current: number | undefined, extra: number | undefined): nu
  */
 function normalizeThinkingLevel(thinking: string | undefined): PiThinkingLevel | undefined {
   if (thinking === undefined) {
-    return undefined;
+    return THINKING_LEVELS[4]; // default to "high" if not specified
   }
   const match = THINKING_LEVELS.find((level) => level === thinking);
   if (match === undefined) {

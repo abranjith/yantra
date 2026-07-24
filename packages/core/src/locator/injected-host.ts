@@ -41,11 +41,19 @@ export class PuppeteerInjectedScriptHost implements InjectedScriptHost {
           Boolean((globalThis as { __yantra?: unknown }).__yantra),
         );
         if (!installed) await frame.evaluate(source);
-      } catch {
-        // Detached/cross-origin frames are best effort. Calls against the
-        // requested frame still fail below with useful Puppeteer diagnostics.
-        if (frame === requested)
-          throw new Error(`Unable to inject locator runtime into frame "${frameId}".`);
+      } catch (err) {
+        // Detached/cross-origin frames are best effort. For the requested
+        // frame, surface the underlying Puppeteer cause (often a mid-navigation
+        // "Execution context was destroyed") instead of masking it — the
+        // auto-wait layer classifies that message as transient and keeps
+        // polling until the new document settles. Swallowing it here would turn
+        // a recoverable navigation race into a fatal, unclassifiable failure.
+        if (frame === requested) {
+          const detail = err instanceof Error ? err.message : String(err);
+          throw new Error(`Unable to inject locator runtime into frame "${frameId}": ${detail}`, {
+            cause: err,
+          });
+        }
       }
     }
   }
