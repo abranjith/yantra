@@ -29,7 +29,7 @@
  * serialized into run artifacts or prompts.
  */
 
-import { isLuhnValid, SENSITIVE_VALUE_PATTERNS } from './strippers.js';
+import { isLuhnValid, isStandalonePosition, SENSITIVE_VALUE_PATTERNS } from './strippers.js';
 
 /** Classification tags rendered into placeholder tokens. */
 export type UserInputValueTag =
@@ -42,6 +42,18 @@ export type UserInputValueTag =
 
 /** Matches any vault placeholder token, e.g. `{{user:email:1}}`. */
 const PLACEHOLDER_RE = /\{\{user:[a-z_]+:\d+\}\}/g;
+
+/**
+ * Words that mark a nearby bare digit run as a phone number rather than an
+ * identifier. Only a closed set of connective fillers may sit between the
+ * keyword and the number ("my phone is 555...", "call me at 555..."), so an
+ * unrelated noun phrase ("call the courier about 8744...") does not qualify.
+ */
+const PHONE_CONTEXT_RE =
+  /(?:phone|mobile|cell|tel(?:ephone)?|call|text|sms|whatsapp|fax|contact|reach)(?:\W+(?:is|are|was|no|nr|num|number|at|on|me|us|my|our|the|to))*\W*$/i;
+
+/** A number written like a phone: leading `+`, or internal grouping/separators. */
+const PHONE_SHAPED_RE = /^\+|[()\s.-]/;
 
 /** Auth-shaped query parameter assignments inside URL-ish text (string-level). */
 const AUTH_PARAM_ASSIGNMENT_RE = new RegExp(
@@ -102,11 +114,25 @@ export class UserInputVault {
       },
     );
 
+    // Phone numbers need more than a digit-length gate here. The shared
+    // candidate pattern is deliberately greedy for untrusted PAGE content
+    // (over-redaction is free there), but in the user's OWN goal a 10-15 digit
+    // run is far more often a tracking/order/account/invoice id — and
+    // tokenizing one breaks the task the user actually asked for (observed:
+    // a 12-digit FedEx tracking number became `{{user:phone:1}}`). So a bare
+    // digit run is only treated as a phone when the surrounding words say so;
+    // a `+`-prefixed or grouped number still tokenizes on shape alone.
     out = out.replace(
       new RegExp(SENSITIVE_VALUE_PATTERNS.phoneCandidate.source, 'g'),
-      (candidate) => {
+      (candidate: string, offset: number, whole: string) => {
         const digits = candidate.replace(/\D/g, '');
         if (digits.length < 10 || digits.length > 15) return candidate;
+        // Never tokenize the middle of a larger token: the candidate pattern
+        // carries no word boundaries, so a UPS id like `1Z999AA10123456784`
+        // would otherwise be mangled into `1Z999AA{{user:phone:1}}`.
+        if (!isStandalonePosition(whole, offset, candidate.length)) return candidate;
+        if (!PHONE_SHAPED_RE.test(candidate) && !PHONE_CONTEXT_RE.test(whole.slice(0, offset)))
+          return candidate;
         return this.placeholderFor('phone', candidate);
       },
     );

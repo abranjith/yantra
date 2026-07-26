@@ -19,6 +19,7 @@ stages **in order** (`packages/agent/src/runtime/middleware.ts`):
 ```text
 validated call
   -> input validation (closed schema)
+  -> record model-supplied values (never re-redacted from its own results)
   -> user-input placeholder resolution ({{user:...}} -> real value)
   -> budget / timeout / abort check
   -> host + ethics + scope policy (+ action-phase latch)
@@ -44,13 +45,33 @@ validated call
   per-tool timeout aborts the domain operation's `AbortSignal` and returns a
   typed `aborted` / `TOOL_TIMEOUT` result promptly.
 
-### User-input placeholders (`{{user:...}}`)
+### Hiding sensitive data from the model
 
-The user's own sensitive values (emails, phone numbers, SSNs, cards, API-key
-shapes, auth-shaped URL query values) never reach the model as raw text. At run
-start the goal and profile context are redacted through the run-scoped
-`UserInputVault` (`@yantra/core`), which replaces each value with an indexed
-placeholder such as `{{user:email:1}}` and remembers the mapping in memory.
+Three layers decide what the model sees, and they are separated by **who owns
+the value**, not by what shape it has. Every model-visible tool result passes
+through all three, in this order, inside `sanitizeAndBound`:
+
+| Provenance                            | Mechanism             | Token the model sees | Reversible |
+| ------------------------------------- | --------------------- | -------------------- | ---------- |
+| The **user's** values (goal, profile) | `UserInputVault`      | `{{user:email:1}}`   | yes        |
+| The **model's** own tool-call inputs  | `ModelSuppliedValues` | the value, unchanged | n/a        |
+| **Third-party** page/document content | profile strippers     | `[redacted-email]`   | no         |
+
+The middle layer is what keeps the other two honest. A value the model typed
+into a tool call is already in its context window, so redacting it out of the
+result of that call — or out of a page it observes later in the same run —
+protects nothing and destroys the agent's ability to verify its own work. The
+observed failure: an agent navigated to `?tracknumbers=874426145172`, got
+`?tracknumbers=[redacted-phone]` back, could not tell success from failure,
+retried, and published a false claim that the runtime had broken. Preservation
+is run-scoped for the same reason: `browser_observe` takes no parameters, and
+the page carrying the answer is read several calls after the value was typed.
+
+Preservation can never widen what the model learns: entries come only from
+tool-call parameters the model itself authored, recorded **before** placeholder
+resolution, and are shielded only where they occupy a whole token (so a
+preserved fragment can never blunt a redactor matching a longer number around
+it).
 
 - **Tools act on real values.** The middleware resolves placeholders in tool
   params at the execution boundary — a `browser_fill` of `{{user:email:1}}`
@@ -58,12 +79,25 @@ placeholder such as `{{user:email:1}}` and remembers the mapping in memory.
   values materialize at execution, never in model-visible text.
 - **The model only ever sees tokens.** Every model-visible result (success
   payloads, failure messages, details) is masked back: an echoed real value
-  becomes its stable placeholder again before the profile sanitizer runs.
+  becomes its stable placeholder again before the profile sanitizer runs. The
+  per-run prompt states this round trip explicitly, because a placeholder
+  echoed in an observed URL or field is easily misread as proof that the
+  runtime failed to substitute — it is proof of the opposite.
+- **Only genuinely sensitive values are tokenized.** Redaction that swallows an
+  identifier the task is _about_ (a tracking, order, or invoice number) breaks
+  the task, so the vault is stricter than the page-content sanitizer: a bare
+  10–15 digit run is treated as a phone number only when the surrounding
+  wording says so, and a digit run glued into a larger id (`1Z999AA10123456784`,
+  `ORD-2024-889912`) is never tokenized in part.
 - **Guards still apply.** A credential-shaped user value resolved from a
   placeholder is rejected by `browser_fill` exactly like a raw credential
   literal (`SECRET_SHAPED_LITERAL`); URL policy scans the resolved URL.
 - **Artifacts stay redacted.** The trace (`trace.json`) and tool-call audit
   records keep the placeholder form, never the raw value.
+- **The model is told all of this.** The per-run prompt carries a short
+  `Hidden values:` block naming both vocabularies and the self-supplied
+  exemption. It is not optional politeness: a model that meets either token
+  unexplained treats it as a runtime bug and spends its budget on it.
 
 ### Confirmation semantics
 
@@ -80,16 +114,16 @@ exists for the browser tools (FEAT-025).
 Budgets are configuration, not prompt promises (`runtime/budget.ts`,
 `DEFAULT_BUDGET_LIMITS`). The `BudgetTracker` enforces, per run:
 
-| Budget              | Default   | Meaning                                                                                                                                                      |
-| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `wallClockMs`       | unlimited | Total wall-clock time for the run. Unbounded by default (local models are slow); cap it explicitly with `--budget-ms` or `YANTRA_AGENT_<COMMAND>_BUDGET_MS`. |
-| `totalToolCalls`    | 60        | Tool calls across all tools.                                                                                                                                 |
-| `perToolCalls`      | 25        | Calls to any single tool (overridable per tool).                                                                                                             |
-| `perToolTimeoutMs`  | 45 s      | Execution timeout for one tool call.                                                                                                                         |
-| `maxBytesPerResult` | 24 KB     | Agent-visible bytes in one tool result.                                                                                                                      |
-| `maxBytesPerRun`    | 512 KB    | Cumulative agent-visible bytes for the run.                                                                                                                  |
-| `maxNavigations`    | 30        | Browser navigations (FEAT-025).                                                                                                                              |
-| `maxHosts`          | 20        | Distinct outbound hosts.                                                                                                                                     |
+| Budget              | Default                                            | Meaning                                                                                                                                                                                                                 |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wallClockMs`       | unlimited                                          | Total wall-clock time for the run. Unbounded by default (local models are slow); cap it explicitly with `--budget-ms` or `YANTRA_AGENT_<COMMAND>_BUDGET_MS`.                                                            |
+| `totalToolCalls`    | 60                                                 | Tool calls across all tools.                                                                                                                                                                                            |
+| `perToolCalls`      | 25                                                 | Calls to any single tool (overridable per tool).                                                                                                                                                                        |
+| `perToolTimeoutMs`  | 45 s (90 s for agentic `do`/`ask`/`research` runs) | Execution timeout for one tool call. The agentic orchestrator overrides the base default (`DEFAULT_AGENT_BUDGETS` in `runtime/orchestrator.ts`) with headroom above the browser tools' own ~60s page-settle caps below. |
+| `maxBytesPerResult` | 24 KB                                              | Agent-visible bytes in one tool result.                                                                                                                                                                                 |
+| `maxBytesPerRun`    | 512 KB                                             | Cumulative agent-visible bytes for the run.                                                                                                                                                                             |
+| `maxNavigations`    | 30                                                 | Browser navigations (FEAT-025).                                                                                                                                                                                         |
+| `maxHosts`          | 20                                                 | Distinct outbound hosts.                                                                                                                                                                                                |
 
 Exhaustion returns a typed `BUDGET_EXHAUSTED` decision that the orchestrator maps
 to a clean run abort.
@@ -160,6 +194,16 @@ DOMContentLoaded, follows client-side redirect chains, and finishes with a
 bounded network-quiet wait so fetch/XHR-driven updates land before the next
 observation. A page that never settles degrades to a result after the caps
 rather than an error.
+
+These caps are sized to ~60s (`packages/core/src/browser/agent-controller.ts`):
+`browser_navigate`'s own page load, the post-action settle cap
+(`POST_ACTION_TOTAL_WAIT_MS`), the read-settle cap for `browser_observe`/
+`browser_extract` (`READ_SETTLE_TOTAL_MS`), and the network-quiet tail
+(`NETWORK_QUIET_TIMEOUT_MS`, always clamped to whatever remains of the caller's
+overall deadline) are all ~60s — a real-world result page (for example, a
+carrier tracking page) commonly takes 10-30s to populate its content via an
+async fetch after the initial load, and a shorter cap reports the empty/loading
+shell as the final result instead of waiting for the real one.
 
 Browser interaction follows an **observe → act → re-observe** loop.
 `browser_observe` returns sanitized bounded text plus ranked

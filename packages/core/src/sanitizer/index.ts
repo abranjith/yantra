@@ -22,6 +22,7 @@ import {
   redactPhones,
   redactSsn,
   redactTaxId,
+  isStandalonePosition,
   stripAuthQueryParams,
   stripFormValues,
   stripQueryStrings,
@@ -31,6 +32,7 @@ import { truncateUtf8 } from './truncate.js';
 
 export type { SanitizationProfile } from './profiles.js';
 export { brandSanitized, type Sanitized } from './brand.js';
+export { ModelSuppliedValues } from './model-values.js';
 export {
   UserInputVault,
   containsUserInputPlaceholder,
@@ -88,8 +90,25 @@ export interface SanitizedPayload {
   readonly originalByteLength: number;
 }
 
+/** Optional per-call controls layered on top of the profile. */
+export interface SanitizeOptions {
+  /**
+   * Values that must survive redaction verbatim: strings the model itself
+   * supplied this run (see `ModelSuppliedValues`). Redacting a value already in
+   * the model's context protects nothing and breaks its ability to verify its
+   * own actions, so these are shielded from the shape-based redactors and
+   * restored before truncation.
+   */
+  readonly preserve?: readonly string[];
+}
+
 export interface Sanitizer {
-  sanitize(payload: unknown, profile: SanitizationProfile, hostHint?: string): SanitizedPayload;
+  sanitize(
+    payload: unknown,
+    profile: SanitizationProfile,
+    hostHint?: string,
+    options?: SanitizeOptions,
+  ): SanitizedPayload;
 }
 
 interface CoercedPayload {
@@ -111,8 +130,9 @@ export class DefaultSanitizer implements Sanitizer {
     payload: unknown,
     profile: SanitizationProfile,
     hostHint?: string,
+    options?: SanitizeOptions,
   ): SanitizedPayload {
-    return sanitizeWithOverrides(payload, profile, this.hostOverrides, hostHint);
+    return sanitizeWithOverrides(payload, profile, this.hostOverrides, hostHint, options);
   }
 }
 
@@ -127,8 +147,9 @@ export function sanitize(
   payload: unknown,
   profile: SanitizationProfile,
   hostHint?: string,
+  options?: SanitizeOptions,
 ): SanitizedPayload {
-  return sanitizeWithOverrides(payload, profile, DEFAULT_HOST_OVERRIDES, hostHint);
+  return sanitizeWithOverrides(payload, profile, DEFAULT_HOST_OVERRIDES, hostHint, options);
 }
 
 function sanitizeWithOverrides(
@@ -136,6 +157,7 @@ function sanitizeWithOverrides(
   profile: SanitizationProfile,
   hostOverrides: readonly HostOverride[],
   hostHint?: string,
+  options?: SanitizeOptions,
 ): SanitizedPayload {
   const profileDef = getProfile(profile);
   const transformations: TransformationTag[] = [];
@@ -143,6 +165,13 @@ function sanitizeWithOverrides(
   const coerced = coercePayload(payload);
   let text = coerced.text;
   const originalByteLength = Buffer.byteLength(text, 'utf8');
+
+  // Shield model-supplied values before any redactor runs, and restore them
+  // after. Swapping them for sentinels no pattern can match is what makes the
+  // preservation total: no redactor, host override, or future pattern can
+  // partially consume a value the model already holds.
+  const shield = shieldPreserved(text, options?.preserve ?? []);
+  text = shield.text;
 
   if (!profileDef.bypassForLlmInput) {
     const formResult = profileDef.stripFormValues ? stripFormValues(text) : null;
@@ -223,6 +252,10 @@ function sanitizeWithOverrides(
     }
   }
 
+  // Restore before truncation so the profile's byte cap applies to the text the
+  // model actually receives.
+  text = shield.restore(text);
+
   const truncatedResult = truncateUtf8(text, profileDef.truncateBytes);
   text = truncatedResult.text;
 
@@ -237,6 +270,78 @@ function sanitizeWithOverrides(
     truncated: truncatedResult.truncated,
     originalByteLength,
   };
+}
+
+/**
+ * Sentinel wrapper for shielded values. Constraints, all of them load-bearing:
+ *
+ * - **URL-safe unreserved ASCII.** `stripAuthQueryParams` round-trips URLs
+ *   through `new URL().toString()`, which percent-encodes anything else — a
+ *   non-ASCII sentinel came back as `%EE%80%80` and could no longer be restored.
+ * - **Lowercase letters around the index.** Keeps the sentinel clear of every
+ *   redactor pattern, including the uppercase-anchored IBAN and case-number
+ *   shapes and the digit-run phone/card shapes.
+ * - **Distinctive enough never to occur in real content.**
+ */
+const SHIELD_MARK = 'yantrakeep';
+
+interface Shield {
+  readonly text: string;
+  readonly restore: (text: string) => string;
+}
+
+/**
+ * Replace each preserved value with an inert sentinel, returning the shielded
+ * text plus the inverse operation.
+ *
+ * @param text Coerced payload text.
+ * @param preserve Values to shield, longest first (the caller's ordering is
+ *   honored so a short value nested in a longer one cannot claim it first).
+ */
+function shieldPreserved(text: string, preserve: readonly string[]): Shield {
+  if (preserve.length === 0) return { text, restore: (value) => value };
+  const restorations: { readonly sentinel: string; readonly value: string }[] = [];
+  let shielded = text;
+  for (const value of preserve) {
+    if (value.length === 0 || !shielded.includes(value)) continue;
+    const sentinel = `${SHIELD_MARK}${restorations.length}${SHIELD_MARK}`;
+    const next = shieldStandaloneOccurrences(shielded, value, sentinel);
+    if (next === shielded) continue;
+    shielded = next;
+    restorations.push({ sentinel, value });
+  }
+  if (restorations.length === 0) return { text, restore: (value) => value };
+  return {
+    text: shielded,
+    restore: (value) => {
+      let restored = value;
+      for (const entry of restorations) {
+        restored = restored.split(entry.sentinel).join(entry.value);
+      }
+      return restored;
+    },
+  };
+}
+
+/**
+ * Replace only the STANDALONE occurrences of a preserved value.
+ *
+ * A preserved value sitting inside a longer number belongs to that number, not
+ * to the model: shielding it there would break the run of digits a redactor
+ * needs to match and leak the surrounding value. Requiring a token boundary
+ * keeps preservation from ever weakening redaction of data the model does not
+ * already hold.
+ */
+function shieldStandaloneOccurrences(text: string, value: string, sentinel: string): string {
+  let out = '';
+  let cursor = 0;
+  for (;;) {
+    const found = text.indexOf(value, cursor);
+    if (found === -1) return out + text.slice(cursor);
+    out += text.slice(cursor, found);
+    out += isStandalonePosition(text, found, value.length) ? sentinel : value;
+    cursor = found + value.length;
+  }
 }
 
 function coercePayload(payload: unknown): CoercedPayload {

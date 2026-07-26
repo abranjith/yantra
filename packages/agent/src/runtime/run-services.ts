@@ -23,6 +23,7 @@ import type {
   AgentBrowserController,
   OpaqueRefResolver,
   RankSignalSink,
+  ModelSuppliedValues,
   UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
@@ -357,6 +358,14 @@ export interface RunServices {
    * tokens). Absent in vault-less test fixtures — resolution then no-ops.
    */
   readonly userInput?: UserInputVault;
+  /**
+   * Run-scoped record of strings the MODEL supplied in tool calls. Those values
+   * are already in its context, so they are shielded from the page-content
+   * redactors in every model-visible result — otherwise the agent watches its
+   * own tracking number come back as `[redacted-phone]` and cannot tell whether
+   * its action worked. Absent in test fixtures — preservation then no-ops.
+   */
+  readonly modelValues?: ModelSuppliedValues;
   /** Outbound URL controls (§8.13). */
   readonly urlPolicy: UrlPolicy;
   /** Confirmation gateway + persistence, or null when no connector is wired. */

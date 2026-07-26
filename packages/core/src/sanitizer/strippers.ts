@@ -1,3 +1,40 @@
+/**
+ * Shape-based redactors for UNTRUSTED inbound content (pages, documents, search
+ * results). These produce irreversible `[redacted-*]` markers.
+ *
+ * Yantra hides sensitive data from the model in exactly two ways, and they are
+ * deliberately different because they protect different things:
+ *
+ * | Layer                     | Token               | Covers                     | Reversible |
+ * | ------------------------- | ------------------- | -------------------------- | ---------- |
+ * | `UserInputVault`          | `{{user:email:1}}`  | the USER's own values       | yes        |
+ * | these strippers           | `[redacted-email]`  | third-party data on a page  | no         |
+ *
+ * The split is what keeps both correct. A value the user supplied must stay
+ * USABLE (a tool has to type it into a form), so it is tokenized reversibly and
+ * resolved at the execution boundary. A value that arrived from an untrusted
+ * page must never reach the model at all, so it is destroyed outright.
+ *
+ * Two rules keep the layers from fighting each other:
+ *
+ * 1. **The vault runs first.** `sanitizeAndBound` masks user values into their
+ *    placeholders before these redactors see the text, so a user value is never
+ *    destroyed by a shape guess — it comes back as its stable token instead.
+ * 2. **Values the model already holds are preserved.** Anything the model itself
+ *    supplied in a tool call this run is passed to `sanitize()` as `preserve`
+ *    and survives verbatim. Redacting a value the model just typed protects
+ *    nothing (it is already in the context window) while destroying the
+ *    feedback loop — the observed failure was a tracking number the agent had
+ *    typed itself coming back as `[redacted-phone]` in its own navigation
+ *    result, leaving it unable to tell success from failure.
+ *
+ * Because these redactors face untrusted input, they stay deliberately greedy:
+ * over-redaction of page content is cheap, under-redaction is a leak. The one
+ * exception is {@link isStandalonePosition} — a match glued into a longer
+ * alphanumeric token is not the PII shape it looks like, and splitting it only
+ * corrupts an identifier.
+ */
+
 import { load } from 'cheerio';
 
 export interface TransformResult {
@@ -54,6 +91,32 @@ export const SENSITIVE_VALUE_PATTERNS = Object.freeze({
   apiKey: API_KEY_PATTERNS,
   authQueryParam: AUTH_QUERY_PARAM_RE,
 });
+
+/**
+ * Characters that glue a match into a longer identifier. Hyphens, underscores
+ * and slashes are included because they SEGMENT ids (`ORD-2024-889912`,
+ * `INV/2024/889912`).
+ */
+const TOKEN_CHAR_RE = /[A-Za-z0-9_/-]/;
+
+/**
+ * True when a match occupies a whole token rather than sitting inside a longer
+ * one. The phone candidate pattern carries no word boundaries, so without this
+ * a UPS id (`1Z999AA10123456784`) is redacted in part — `1Z999AA[redacted-phone]`
+ * — which leaks nothing and corrupts an identifier the task may depend on.
+ *
+ * Shared by the payload strippers and the user-input vault so both layers agree
+ * on where a candidate legitimately begins and ends.
+ *
+ * @param whole The full text being scanned.
+ * @param offset Index where the match starts.
+ * @param length Length of the match.
+ */
+export function isStandalonePosition(whole: string, offset: number, length: number): boolean {
+  const before = whole.slice(Math.max(0, offset - 1), offset);
+  const after = whole.slice(offset + length, offset + length + 1);
+  return !TOKEN_CHAR_RE.test(before) && !TOKEN_CHAR_RE.test(after);
+}
 
 /**
  * Remove input-like value content while preserving element structure.
@@ -184,14 +247,21 @@ export function redactCreditCards(text: string): TransformResult {
 
 export function redactPhones(text: string): TransformResult {
   let hits = 0;
-  const redacted = text.replace(PHONE_CANDIDATE_RE, (candidate) => {
-    const digits = candidate.replace(/\D/g, '');
-    if (digits.length < 10 || digits.length > 15) {
-      return candidate;
-    }
-    hits += 1;
-    return '[redacted-phone]';
-  });
+  const redacted = text.replace(
+    PHONE_CANDIDATE_RE,
+    (candidate: string, offset: number, whole: string) => {
+      const digits = candidate.replace(/\D/g, '');
+      if (digits.length < 10 || digits.length > 15) {
+        return candidate;
+      }
+      // Never split a longer identifier; see isStandalonePosition.
+      if (!isStandalonePosition(whole, offset, candidate.length)) {
+        return candidate;
+      }
+      hits += 1;
+      return '[redacted-phone]';
+    },
+  );
 
   return { text: redacted, hits };
 }

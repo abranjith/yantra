@@ -125,6 +125,22 @@ describe('@no-llm AgentBrowserController', () => {
         setTimeout(() => response.end('fragment loaded'), 1_500);
         return;
       }
+      if (path === '/spa-verylate') {
+        // Same shape as /spa, but the fetch is slower than the OLD 3s
+        // network-quiet cap (regression: a carrier tracking page that
+        // populates its result 5-30s after the initial click/load).
+        response.end(`<!doctype html><title>Spa verylate</title>
+          <button id="load">Load data</button><p id="out">empty</p>
+          <script>document.getElementById('load').addEventListener('click', async () => {
+            const res = await fetch('/slow-fragment-verylate');
+            document.getElementById('out').textContent = await res.text();
+          });</script>`);
+        return;
+      }
+      if (path === '/slow-fragment-verylate') {
+        setTimeout(() => response.end('very late fragment loaded'), 6_000);
+        return;
+      }
       if (path === '/select-form') {
         response.end(`<!doctype html><title>Select</title>
           <select aria-label="Country" onchange="document.title='picked:'+this.value">
@@ -373,6 +389,28 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.click(load.ref);
     expect(await controller.extract('content')).toMatchObject({
       text: expect.stringContaining('fragment loaded') as string,
+    });
+    await controller.teardown();
+  }, 45_000);
+
+  // Regression for the reported real-world failure: a carrier tracking page
+  // whose result populates 10-30s after the click was read as empty/loading
+  // because the network-quiet wait was capped at 3s regardless of the larger
+  // overall settle budget. The fetch here (6s) is well past that old cap but
+  // comfortably inside the current ~60s settle budgets.
+  it('waits out a slow (multi-second) fetch-driven update before reporting content', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'spa-verylate-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/spa-verylate`);
+    const observation = await controller.observe();
+    const load = observation.interactables.find((entry) => entry.name === 'Load data')!;
+    await controller.click(load.ref);
+    expect(await controller.extract('content')).toMatchObject({
+      text: expect.stringContaining('very late fragment loaded') as string,
     });
     await controller.teardown();
   }, 45_000);

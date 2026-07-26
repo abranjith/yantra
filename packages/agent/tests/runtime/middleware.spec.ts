@@ -1,4 +1,4 @@
-import { DefaultSanitizer, UserInputVault } from '@yantra/core';
+import { DefaultSanitizer, ModelSuppliedValues, UserInputVault } from '@yantra/core';
 import type { ConfirmationGateway, ConfirmationOutcome, ConfirmationRequest } from '@yantra/core';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ interface ServicesOverrides {
   readonly gateway?: ConfirmationGateway;
   readonly actionPhase?: ActionPhase;
   readonly userInput?: UserInputVault;
+  readonly modelValues?: ModelSuppliedValues;
 }
 
 function makeServices(overrides: ServicesOverrides = {}): RunServices {
@@ -31,6 +32,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     budgets,
     sanitizer,
     ...(overrides.userInput ? { userInput: overrides.userInput } : {}),
+    ...(overrides.modelValues ? { modelValues: overrides.modelValues } : {}),
     urlPolicy: new UrlPolicy(budgets),
     confirmation: overrides.gateway ? { gateway: overrides.gateway, store: null } : null,
     actionPhase: overrides.actionPhase ?? new ActionPhase(),
@@ -379,5 +381,70 @@ describe('@no-llm middleware user-input placeholder boundary', () => {
     await tool.execute({ q: 'try {{user:ssn:9}}' }, undefined);
 
     expect(received).toEqual(['try {{user:ssn:9}}']);
+  });
+});
+
+describe('@no-llm middleware model-supplied value preservation', () => {
+  const TRACKING = '874426145172';
+
+  it('does not redact a value the model supplied in the same call', async () => {
+    // Regression: browser_navigate to `?tracknumbers=874426145172` returned
+    // `?tracknumbers=[redacted-phone]`. The agent could not confirm its own
+    // action had worked, retried, and finally reported a substitution failure
+    // that had never happened.
+    const run = async (): Promise<DomainResult> => ({
+      ok: true,
+      model: { url: `https://www.fedex.com/wtrk/track/?tracknumbers=${TRACKING}` },
+    });
+    const services = makeServices({ modelValues: new ModelSuppliedValues() });
+    const tool = wrapTool(spec(run), services);
+
+    const result = await tool.execute(
+      { q: `https://www.fedex.com/fedextrack/?tracknumbers=${TRACKING}` },
+      undefined,
+    );
+
+    expect(result.modelText).toContain(TRACKING);
+    expect(result.modelText).not.toContain('[redacted-phone]');
+  });
+
+  it('preserves the value across later calls that never mention it', async () => {
+    // Run scope, not call scope: the page carrying the answer is observed
+    // several calls after the number was typed, and browser_observe takes no
+    // parameters at all.
+    const modelValues = new ModelSuppliedValues();
+    const services = makeServices({ modelValues });
+    const navigate = wrapTool(
+      spec(async (): Promise<DomainResult> => OK),
+      services,
+    );
+    await navigate.execute({ q: `https://example.com/track?id=${TRACKING}` }, undefined);
+
+    const observe = wrapTool(
+      spec(
+        async (): Promise<DomainResult> => ({
+          ok: true,
+          model: { digest: `Package ${TRACKING} was delivered.` },
+        }),
+      ),
+      services,
+    );
+    const result = await observe.execute({ q: 'observe' }, undefined);
+
+    expect(result.modelText).toContain(TRACKING);
+  });
+
+  it('still redacts third-party PII the model never supplied', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: true,
+      model: { digest: `Signed for by john.doe@example.com, call 415-555-0142.` },
+    });
+    const services = makeServices({ modelValues: new ModelSuppliedValues() });
+    const tool = wrapTool(spec(run), services);
+
+    const result = await tool.execute({ q: `track ${TRACKING}` }, undefined);
+
+    expect(result.modelText).not.toContain('john.doe@example.com');
+    expect(result.modelText).not.toContain('415-555-0142');
   });
 });

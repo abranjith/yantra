@@ -14,6 +14,7 @@ import {
   LocalBrowserProvider,
   LocalProfileStore,
   MarkdownReportBuilder,
+  ModelSuppliedValues,
   RateLimiterImpl,
   ReadabilityExtractor,
   RobotsCacheImpl,
@@ -160,10 +161,15 @@ export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
   // The combined `web_search` tool does a provider search then fetches the top-N
   // hits in PARALLEL, so its wall time is ≈ search + one fetch round (not N×
   // fetches). Each parallel fetch is allotted a fraction of this budget
-  // (web-search.ts FETCH_TIMEOUT_FRACTION), leaving headroom for the search and
-  // extraction within the single per-tool timeout — sized a little above the
-  // base 45s so a slow SERP plus one fetch round still completes.
-  perToolTimeoutMs: 60 * 1000,
+  // (web-search.ts FETCH_TIMEOUT_FRACTION).
+  //
+  // The browser tools (`browser-navigate`/`observe`/`click`/`fill`/`extract`)
+  // internally wait up to ~60s for a slow-loading page (agent-controller.ts
+  // NAVIGATE_TIMEOUT_MS / POST_ACTION_TOTAL_WAIT_MS / READ_SETTLE_TOTAL_MS), so
+  // this ceiling is set with headroom above that, not equal to it — otherwise
+  // the outer TOOL_TIMEOUT would race the controller's own bounded wait and
+  // usually win, discarding its more specific result.
+  perToolTimeoutMs: 120 * 1000,
   confirmationWaitMs: 3 * 60 * 1000,
 };
 
@@ -302,12 +308,18 @@ export async function runAgenticTask(
     // values into `{{user:...}}` placeholders (model-visible), and the tool
     // middleware resolves them back to real values at the execution boundary.
     const userInput = new UserInputVault();
+    // The other half of the same contract: values the MODEL supplies in tool
+    // calls are already in its context, so they are never re-redacted out of
+    // its own results. Together the two make every value the run legitimately
+    // handles round-trip, leaving `[redacted-*]` for untrusted page data only.
+    const modelValues = new ModelSuppliedValues();
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
       budgets: budgetTracker,
       sanitizer,
       userInput,
+      modelValues,
       urlPolicy: new UrlPolicy(budgetTracker, {
         maxUrlLength: dependencies.urlPolicyConfig?.maxUrlLength ?? 2048,
         requireHttps: dependencies.urlPolicyConfig?.requireHttps ?? true,

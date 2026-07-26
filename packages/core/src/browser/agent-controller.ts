@@ -13,7 +13,14 @@ const DEFAULT_DIGEST_BYTES = 16 * 1024;
 const DEFAULT_INTERACTABLE_CAP = 30;
 const POPUP_CAPTURE_WAIT_MS = 5_000;
 const POPUP_URL_WAIT_MS = 3_000;
-const NAVIGATION_COMMIT_WAIT_MS = 10_000;
+/** Time to wait for a navigation that has already started (request fired) to
+ * commit (server responds, frame swaps). This is response-header latency, not
+ * full page load — content settling after commit is bounded separately below. */
+const NAVIGATION_COMMIT_WAIT_MS = 20_000;
+/** Hard cap on `page.goto()` itself, overriding Puppeteer's 30s default: real
+ * sites (e.g. carrier tracking pages) can take up to ~60s to reach
+ * `domcontentloaded` under load. */
+const NAVIGATE_TIMEOUT_MS = 60_000;
 const TITLE_READ_ATTEMPTS = 5;
 
 /** Pause between mousedown and mouseup: real sites are written against a held
@@ -27,15 +34,37 @@ const CLICK_NAV_DETECT_MS = 800;
 const FILL_NAV_DETECT_MS = 250;
 /** Follow-up client-side redirects re-trigger quickly on the new document. */
 const REDIRECT_CHAIN_DETECT_MS = 300;
-/** Hard cap on one action's whole stabilization (redirect chains included). */
-const POST_ACTION_TOTAL_WAIT_MS = 15_000;
+/**
+ * Hard cap on one action's whole stabilization (redirect chains included).
+ * Sized to ~60s so a click/fill that triggers a slow-loading result page (a
+ * carrier tracking page can take 10-30s to populate) is not reported back to
+ * the agent before the content actually exists.
+ */
+const POST_ACTION_TOTAL_WAIT_MS = 60_000;
+/**
+ * Hard cap on settling a READ (observe/extract). Reads are the agent's only
+ * view of the page, so one taken while a document is still loading shows a
+ * blank or half-built DOM — the agent concludes the field it needs is missing
+ * and retries or gives up. Matches the post-action cap: a page that is still
+ * populating when the agent happens to read it (rather than immediately after
+ * the action that started the load) deserves the same ~60s of patience.
+ */
+const READ_SETTLE_TOTAL_MS = 60_000;
 const STABILITY_POLL_MS = 25;
 const DOM_READY_POLL_MS = 100;
-/** Network-quiet window and cap. Strict idle (0 in-flight): a single fetch
+/**
+ * Network-quiet window and cap. Strict idle (0 in-flight): a single fetch
  * carrying the action's outcome must be waited for. Pages that hold a
- * connection open (SSE, long-poll) degrade at the cap, never error. */
+ * connection open (SSE, long-poll) degrade at the cap, never error.
+ *
+ * The cap is sized to ~60s, not a few seconds: it is always clamped to
+ * whatever remains of the caller's overall deadline (`Math.min` at each call
+ * site), so it never lengthens a fast page — but a slow one (a tracking page
+ * whose result loads via one long-running fetch) needs this window to be as
+ * large as the overall budget, not a small fraction of it.
+ */
 const NETWORK_QUIET_IDLE_MS = 300;
-const NETWORK_QUIET_TIMEOUT_MS = 3_000;
+const NETWORK_QUIET_TIMEOUT_MS = 60_000;
 const NETWORK_QUIET_MAX_INFLIGHT = 0;
 /** Human-scale per-key delay so debounced validators keep up; dropped for
  * long values so a large fill cannot blow the tool budget. */
@@ -212,7 +241,7 @@ export class AgentBrowserController {
    */
   public async navigate(url: string): Promise<BrowserActionResult> {
     await this.ensureLaunched();
-    await this.page!.goto(url, { waitUntil: 'domcontentloaded' });
+    await this.page!.goto(url, { waitUntil: 'domcontentloaded', timeout: NAVIGATE_TIMEOUT_MS });
     // Real pages often bounce once more right after DOMContentLoaded (JS or
     // meta-refresh redirects, client-side routers). Settle those before the
     // agent observes, so refs are minted on the document that will stay.
@@ -232,6 +261,7 @@ export class AgentBrowserController {
    */
   public async observe(): Promise<AgentBrowserObservation> {
     this.assertLaunched();
+    await this.awaitReadable();
     const snapshot = await buildAgentPageSnapshot(
       this.pageFacade!,
       { extractor: this.extractor },
@@ -410,6 +440,7 @@ export class AgentBrowserController {
   /** Extract readable page content or the first table as typed rows. */
   public async extract(kind: 'content' | 'table'): Promise<unknown> {
     this.assertLaunched();
+    await this.awaitReadable();
     if (kind === 'content') {
       return this.page!.evaluate(() => ({
         title: document.title,
@@ -631,6 +662,29 @@ export class AgentBrowserController {
       await sleep(STABILITY_POLL_MS);
     }
     return this.navigationEpoch !== watch.epoch();
+  }
+
+  /**
+   * Hold a READ (observe/extract) until the page is done loading.
+   *
+   * Actions settle themselves before returning, but a read is not preceded by
+   * an action: the agent may call `browser_observe` while a load started
+   * elsewhere is still in flight — a slow first paint, a redirect chain the
+   * action's own window did not outlast, or an SPA route still fetching. The
+   * snapshot then shows a document that no longer exists a moment later, and
+   * the agent acts on refs for elements that were never really there.
+   *
+   * Waiting on `document.readyState` rather than a navigation watch is what
+   * makes this work for a load already in flight: a freshly installed watch
+   * only hears requests that start after it, whereas `readyState` reports the
+   * document's actual state right now. The network-quiet tail then lets
+   * fetch/XHR-driven content land. Both phases are bounded, so a page that
+   * never settles degrades to a read rather than an error.
+   */
+  private async awaitReadable(): Promise<void> {
+    const deadline = Date.now() + READ_SETTLE_TOTAL_MS;
+    await this.awaitDomReady(READ_SETTLE_TOTAL_MS);
+    await this.awaitNetworkQuiet(deadline);
   }
 
   /** Wait (bounded) for the current document to leave `loading`. */

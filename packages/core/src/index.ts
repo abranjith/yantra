@@ -19,11 +19,13 @@ export * from './ranking/index.js';
 
 export {
   DefaultSanitizer,
+  ModelSuppliedValues,
   UserInputVault,
   brandSanitized,
   containsUserInputPlaceholder,
   sanitize,
   type SanitizationProfile,
+  type SanitizeOptions,
   type Sanitized,
   type SanitizedPayload,
   type Sanitizer as PayloadSanitizer,

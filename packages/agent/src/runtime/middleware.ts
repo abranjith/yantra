@@ -216,6 +216,13 @@ async function runPipeline<TParams extends TSchema>(
         true,
       );
     }
+    // 1.4. Record what the model itself supplied, BEFORE resolution, so the
+    //      registry can only ever hold values the model already had. These are
+    //      shielded from the page-content redactors in every later result:
+    //      redacting a value the model just typed hides nothing and destroys
+    //      its ability to verify its own action (see ModelSuppliedValues).
+    services.modelValues?.record(rawParams);
+
     // 1.5. User-input placeholder resolution — the execution boundary. The
     //      model deals only in `{{user:...}}` tokens; the REAL user-provided
     //      values materialize here, after schema validation and before policy,
@@ -565,7 +572,17 @@ interface BoundedText {
   readonly truncated: boolean;
 }
 
-/** Sanitize a model payload and hard-bound it to the per-result byte budget. */
+/**
+ * Sanitize a model payload and hard-bound it to the per-result byte budget.
+ *
+ * The three redaction layers meet here, in this order:
+ *
+ * 1. The user's own values are masked to `{{user:...}}` tokens (reversible).
+ * 2. Values the model supplied this run are declared `preserve`, so no
+ *    shape-based redactor can consume them (they are already in its context).
+ * 3. The profile sanitizer redacts whatever remains — genuine third-party page
+ *    data — into irreversible `[redacted-*]` markers.
+ */
 function sanitizeAndBound(
   payload: unknown,
   profile: SanitizationProfile,
@@ -575,7 +592,8 @@ function sanitizeAndBound(
   // resolved value comes back as the stable `{{user:...}}` token the model
   // already knows (and never as the raw value, even under a bypass profile).
   const masked = maskUserInputDeep(payload, services.userInput);
-  const sanitized = services.sanitizer.sanitize(masked, profile);
+  const preserve = services.modelValues?.list() ?? [];
+  const sanitized = services.sanitizer.sanitize(masked, profile, undefined, { preserve });
   const capped = truncateToBytes(sanitized.text, services.budgets.maxBytesPerResult);
   return {
     text: capped.text,
