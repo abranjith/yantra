@@ -33,42 +33,42 @@ function makeOpts(overrides: Record<string, unknown> = {}) {
 describe('@no-llm launcher buildLaunchArgs', () => {
   it('snapshot: default headless args', () => {
     const opts = makeOpts();
-    const args = buildLaunchArgs(opts);
+    const args = buildLaunchArgs(opts, stubChrome, { platform: 'linux', locale: 'en-US' });
     expect(args).toMatchSnapshot();
   });
 
   it('always includes hardened base args', () => {
-    const args = buildLaunchArgs(makeOpts());
+    const args = buildLaunchArgs(makeOpts(), stubChrome);
     expect(args).toContain('--no-first-run');
     expect(args).toContain('--no-default-browser-check');
     expect(args).toContain('--disable-sync');
   });
 
   it('never includes --remote-debugging-port', () => {
-    const args = buildLaunchArgs(makeOpts());
+    const args = buildLaunchArgs(makeOpts(), stubChrome);
     const hasPort = args.some((a) => a.startsWith('--remote-debugging-port'));
     expect(hasPort).toBe(false);
   });
 
   it('never includes --user-data-dir (handled by userDataDir option)', () => {
-    const args = buildLaunchArgs(makeOpts());
+    const args = buildLaunchArgs(makeOpts(), stubChrome);
     const hasDataDir = args.some((a) => a.startsWith('--user-data-dir'));
     expect(hasDataDir).toBe(false);
   });
 
   it('adds --window-size when viewport specified', () => {
-    const args = buildLaunchArgs(makeOpts({ viewport: { width: 1920, height: 1080 } }));
+    const args = buildLaunchArgs(makeOpts({ viewport: { width: 1920, height: 1080 } }), stubChrome);
     expect(args).toContain('--window-size=1920,1080');
   });
 
   it('omits --window-size when viewport is null', () => {
-    const args = buildLaunchArgs(makeOpts({ viewport: null }));
+    const args = buildLaunchArgs(makeOpts({ viewport: null }), stubChrome);
     const hasWindowSize = args.some((a) => a.startsWith('--window-size'));
     expect(hasWindowSize).toBe(false);
   });
 
   it('appends extraArgs after base args', () => {
-    const args = buildLaunchArgs(makeOpts({ extraArgs: ['--disable-gpu'] }));
+    const args = buildLaunchArgs(makeOpts({ extraArgs: ['--disable-gpu'] }), stubChrome);
     expect(args).toContain('--disable-gpu');
     // extraArgs come after the hardened base
     const baseEnd = args.indexOf('--disable-sync');
@@ -78,7 +78,7 @@ describe('@no-llm launcher buildLaunchArgs', () => {
 
   it('default viewport args snapshot', () => {
     const opts = makeOpts({ viewport: DEFAULT_VIEWPORT });
-    const args = buildLaunchArgs(opts);
+    const args = buildLaunchArgs(opts, stubChrome);
     expect(args).toContain(`--window-size=${DEFAULT_VIEWPORT.width},${DEFAULT_VIEWPORT.height}`);
   });
 

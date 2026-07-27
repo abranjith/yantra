@@ -90,6 +90,19 @@ describe('@no-llm launch-options', () => {
       ).toThrow(BrowserLaunchError);
     });
 
+    it.each([
+      '--user-agent=custom',
+      '--disable-blink-features=AutomationControlled',
+      '--lang=fr-CA',
+    ])('rejects launcher-managed compatibility arg %s', (arg) => {
+      expect(() =>
+        parseLaunchOptions({
+          profile: ephemeralProfile,
+          extraArgs: [arg],
+        }),
+      ).toThrow(BrowserLaunchError);
+    });
+
     it('accepts safe extra args', () => {
       const opts = parseLaunchOptions({
         profile: ephemeralProfile,

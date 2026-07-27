@@ -15,14 +15,22 @@
  * two are structurally identical; `apps/cli`'s `do.ts` passes its real
  * session state in directly.
  *
- * Note on locator richness: the spec's ideal is "the engine-resolved winning
- * candidate chain" from a live `LocatorResolutionEvent` — richer than the
- * model's own proposed intent. No production code path yet constructs a real
- * `InjectedScriptHost` from a live page (see `do.ts`'s module doc and
- * `.spec-lite/TODO.md`), so no such event is ever emitted for a discovery
- * cycle today; this promotes the model's own `intent` locator faithfully
- * instead. Once that gap closes, this is the one place to wire the richer
- * candidate in.
+ * Note on locator richness: the two promotion paths differ, and the difference
+ * is load-bearing.
+ *
+ * `promoteAgentTrace` receives a chain the locator engine's own ranker derived
+ * from the live element (`AgentBrowserController.locatorFor`) — testid, then
+ * role + accessible name, then label/placeholder, then unique CSS, terminated
+ * by an absolute XPath. That chain is expressed in the exact terms the replay
+ * resolver uses, so a recorded role can never be one the resolver would not
+ * compute for that element, and a single miss falls through to a narrower
+ * candidate instead of failing the run.
+ *
+ * `promoteDiscoverySession` still promotes the model's own proposed `intent`
+ * (role + name_match) as a one-entry chain: a discovery proposal names an
+ * element it has not yet resolved, so there is no live element to rank. That
+ * is the weaker of the two and is the remaining place to enrich once discovery
+ * carries a resolved handle.
  */
 
 import type {
@@ -58,7 +66,7 @@ export type PromotableFillValue =
  * agent passes its real trace steps in directly.
  */
 export interface PromotableTraceStep {
-  readonly kind: 'navigate' | 'click' | 'fill' | 'extract';
+  readonly kind: 'navigate' | 'click' | 'fill' | 'extract' | 'observe';
   readonly host: string;
   readonly url?: string;
   readonly locator?: readonly LocatorCandidate[];
@@ -66,6 +74,41 @@ export interface PromotableTraceStep {
   readonly submit?: boolean;
   readonly extractionKind?: 'content' | 'table';
   readonly requires_confirmation: boolean;
+}
+
+/**
+ * Collapses the trace's trailing run of reads into at most one, and drops every
+ * read taken mid-run.
+ *
+ * An agentic run observes constantly — after each action, to decide the next
+ * one. Those observations are navigation aids and must not each become a step.
+ * The run's *final* read is different in kind: it is where the agent collected
+ * the answer it reported back, and it is the step a replayed workflow needs in
+ * order to produce anything at all.
+ *
+ * A run that ended by observing (rather than extracting) previously promoted to
+ * a workflow that clicked through and captured nothing, because only extracts
+ * became steps. Keeping the trailing read — as an extract, since replay has no
+ * "observe" verb — is what gives the workflow an output.
+ */
+function withTerminalReadOnly(
+  steps: readonly PromotableTraceStep[],
+): readonly PromotableTraceStep[] {
+  const isRead = (step: PromotableTraceStep): boolean =>
+    step.kind === 'observe' || step.kind === 'extract';
+
+  let end = steps.length;
+  while (end > 0 && isRead(steps[end - 1]!)) end -= 1;
+
+  const actions = steps.slice(0, end).filter((step) => !isRead(step));
+  const trailing = steps.slice(end);
+  if (trailing.length === 0) return actions;
+
+  // Several trailing reads collapse to one. Prefer a real `browser_extract`
+  // over an observation: the model asked for a typed extraction, and its
+  // `extractionKind` says whether it wanted the content or the first table.
+  const chosen = trailing.find((step) => step.kind === 'extract') ?? trailing[trailing.length - 1]!;
+  return [...actions, { ...chosen, kind: 'extract' as const }];
 }
 
 /** Options for {@link promoteAgentTrace}. */
@@ -108,7 +151,7 @@ export async function promoteAgentTrace(
   let stepCounter = 1;
   let extractCounter = 0;
 
-  for (const step of steps) {
+  for (const step of withTerminalReadOnly(steps)) {
     const id = `s${stepCounter}`;
     const converted = convertTraceStep(step, id, locators, secrets, () => (extractCounter += 1));
     if (converted !== null) {
@@ -134,7 +177,7 @@ export async function promoteAgentTrace(
     secrets: [...secrets].sort(),
     cookies: 'none',
     steps: workflowSteps,
-    outputs: [],
+    outputs: declareOutputs(workflowSteps),
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: locators,
@@ -223,25 +266,55 @@ function convertTraceStep(
       // deterministic locator: the whole body for content, the first table for a
       // table. Replay re-extracts from the live page.
       locators[name] =
-        kind === 'table'
-          ? [{ kind: 'css', value: 'table' }]
-          : [{ kind: 'css', value: 'body' }];
+        kind === 'table' ? [{ kind: 'css', value: 'table' }] : [{ kind: 'css', value: 'body' }];
       return {
         id,
         verb: 'extract',
         scope: null,
         requires_confirmation: false,
         locator: name,
+        // Content pairs the page-level locator with `readable`, not `string`:
+        // the raw text of `body` is nav, cookie banner, footer, and inline
+        // script source, which is not what the agent read and not what the user
+        // asked for. `readable` runs the same Readability pass the agent's own
+        // page digest uses.
         extraction_schema:
           kind === 'table'
             ? { type: 'array', items: { type: 'primitive', kind: 'string' } }
-            : { type: 'primitive', kind: 'string' },
+            : { type: 'primitive', kind: 'readable' },
         capture_as: `extracted_${kind}_${index}`,
       };
     }
     default:
       return null;
   }
+}
+
+/**
+ * Declares one workflow output per captured extraction.
+ *
+ * Without this a promoted workflow captured its data and then discarded it:
+ * `outputs` was always empty, so nothing reached `outputs.json` and `yantra
+ * run` had nothing to show. A run that completes and reports nothing is
+ * indistinguishable from one that did nothing.
+ *
+ * The binding unwraps the `ExtractionResultEnvelope` the executor stores, so
+ * the output is the extracted value rather than `{rows, metadata}`: a
+ * single-value extraction binds `rows[0]`, a table binds the whole `rows`
+ * array. Both are ordinary JSONata against the `capture` scope, so the emitted
+ * YAML stays readable and hand-editable.
+ */
+function declareOutputs(steps: readonly WorkflowStep[]): { name: string; from: string }[] {
+  const outputs: { name: string; from: string }[] = [];
+  for (const step of steps) {
+    if (step.verb !== 'extract') continue;
+    const rows = `capture.${step.capture_as}.rows`;
+    outputs.push({
+      name: step.capture_as,
+      from: `{{ ${step.extraction_schema.type === 'array' ? rows : `${rows}[0]`} }}`,
+    });
+  }
+  return outputs;
 }
 
 /** Registers a candidate chain under a fresh name and returns that name. */

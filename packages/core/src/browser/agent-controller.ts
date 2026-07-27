@@ -1,9 +1,26 @@
-import type { ElementHandle, HTTPRequest, Page as PuppeteerPage, Target } from 'puppeteer-core';
+import type { LocatorCandidate } from '@yantra/protocol';
+import type { ElementHandle, Page as PuppeteerPage, Target } from 'puppeteer-core';
 
 import { buildAgentPageSnapshot } from '../discovery/observe.js';
 import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
+import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
+import type { ElementDescription } from '../locator/types.js';
 
+import {
+  CLICK_NAV_DETECT_MS,
+  FILL_NAV_DETECT_MS,
+  isNavigationRaceError,
+  PageSettler,
+  REDIRECT_CHAIN_DETECT_MS,
+  type NavigationWatch,
+} from './page-settle.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
+
+// Note: page settling (navigation watching, redirect chains, network quiet)
+// and its error classifiers moved to `page-settle.ts` so that deterministic
+// workflow replay waits exactly the way the agent does. They are deliberately
+// NOT re-exported here — two `export *` barrels exposing the same name make it
+// ambiguous, and ESM then silently omits it from the package entry point.
 
 const INTERACTABLE_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
@@ -13,10 +30,6 @@ const DEFAULT_DIGEST_BYTES = 16 * 1024;
 const DEFAULT_INTERACTABLE_CAP = 30;
 const POPUP_CAPTURE_WAIT_MS = 5_000;
 const POPUP_URL_WAIT_MS = 3_000;
-/** Time to wait for a navigation that has already started (request fired) to
- * commit (server responds, frame swaps). This is response-header latency, not
- * full page load — content settling after commit is bounded separately below. */
-const NAVIGATION_COMMIT_WAIT_MS = 20_000;
 /** Hard cap on `page.goto()` itself, overriding Puppeteer's 30s default: real
  * sites (e.g. carrier tracking pages) can take up to ~60s to reach
  * `domcontentloaded` under load. */
@@ -26,64 +39,15 @@ const TITLE_READ_ATTEMPTS = 5;
 /** Pause between mousedown and mouseup: real sites are written against a held
  * press, and some handlers (and bot heuristics) mis-fire on a 0ms one. */
 const CLICK_HOLD_MS = 40;
-/** How long after a click to keep watching for a navigation the site starts
- * late — async handlers, setTimeout redirects, validation-then-submit. */
-const CLICK_NAV_DETECT_MS = 800;
-/** Fills navigate far more rarely (search-as-you-type, auto-submit), so their
- * watch window is shorter. */
-const FILL_NAV_DETECT_MS = 250;
-/** Follow-up client-side redirects re-trigger quickly on the new document. */
-const REDIRECT_CHAIN_DETECT_MS = 300;
-/**
- * Hard cap on one action's whole stabilization (redirect chains included).
- * Sized to ~60s so a click/fill that triggers a slow-loading result page (a
- * carrier tracking page can take 10-30s to populate) is not reported back to
- * the agent before the content actually exists.
- */
-const POST_ACTION_TOTAL_WAIT_MS = 60_000;
-/**
- * Hard cap on settling a READ (observe/extract). Reads are the agent's only
- * view of the page, so one taken while a document is still loading shows a
- * blank or half-built DOM — the agent concludes the field it needs is missing
- * and retries or gives up. Matches the post-action cap: a page that is still
- * populating when the agent happens to read it (rather than immediately after
- * the action that started the load) deserves the same ~60s of patience.
- */
-const READ_SETTLE_TOTAL_MS = 60_000;
+/** Brief hover dwell before a pointer action, allowing real hover states and
+ * menus to react before the trusted click/focus events arrive. */
+const POINTER_SETTLE_MS = 75;
 const STABILITY_POLL_MS = 25;
-const DOM_READY_POLL_MS = 100;
-/**
- * Network-quiet window and cap. Strict idle (0 in-flight): a single fetch
- * carrying the action's outcome must be waited for. Pages that hold a
- * connection open (SSE, long-poll) degrade at the cap, never error.
- *
- * The cap is sized to ~60s, not a few seconds: it is always clamped to
- * whatever remains of the caller's overall deadline (`Math.min` at each call
- * site), so it never lengthens a fast page — but a slow one (a tracking page
- * whose result loads via one long-running fetch) needs this window to be as
- * large as the overall budget, not a small fraction of it.
- */
-const NETWORK_QUIET_IDLE_MS = 300;
-const NETWORK_QUIET_TIMEOUT_MS = 60_000;
-const NETWORK_QUIET_MAX_INFLIGHT = 0;
+
 /** Human-scale per-key delay so debounced validators keep up; dropped for
  * long values so a large fill cannot blow the tool budget. */
-const FILL_TYPE_DELAY_MS = 20;
+const FILL_TYPE_DELAY_MS = 45;
 const FILL_TYPE_DELAY_MAX_CHARS = 128;
-
-/**
- * Puppeteer failures caused by the document changing underneath an in-flight
- * call (navigation committing, a node being detached, or a handle disposed by
- * the navigation listener). These are races with the page, not tool bugs, and
- * are resolved by re-checking what the page actually did.
- */
-const NAVIGATION_RACE_MESSAGE_RE =
-  /execution context was destroyed|cannot find context with specified id|node is detached|detached frame|frame got detached|jshandle is disposed/i;
-
-/** True for Puppeteer errors caused by the document changing mid-call. */
-export function isNavigationRaceError(error: unknown): error is Error {
-  return error instanceof Error && NAVIGATION_RACE_MESSAGE_RE.test(error.message);
-}
 
 /**
  * Puppeteer failures raised when Chrome could not produce a box for the node
@@ -120,20 +84,6 @@ export interface BrowserActionResult {
 
 interface InteractableRecord extends AgentInteractable {
   readonly handle: ElementHandle<Element>;
-}
-
-/** Live view of whether an action set a main-frame navigation in motion. */
-interface NavigationWatch {
-  /** A main-frame navigation request is in flight or a commit has landed. */
-  sawNavigation(): boolean;
-  /** A main-frame navigation request is in flight and not yet aborted. */
-  navigationPending(): boolean;
-  /** The navigation epoch the watch is currently baselined against. */
-  epoch(): number;
-  /** Forget the handled navigation and re-baseline on the current document. */
-  rebase(): void;
-  /** Remove the page listeners. Must be called exactly once, in a finally. */
-  dispose(): void;
 }
 
 /** Expected stale-ref failure that directs the agent back to observation. */
@@ -208,7 +158,7 @@ export class AgentBrowserController {
   private nextRef = 1;
   private refs = new Map<string, InteractableRecord>();
   private refIdByIdentity = new Map<string, string>();
-  private navigationEpoch = 0;
+  private settler: PageSettler | null = null;
   private popupUrls: string[] = [];
   private dialogMessages: string[] = [];
   private readonly popupCaptureTasks = new Set<Promise<void>>();
@@ -318,6 +268,62 @@ export class AgentBrowserController {
     return record ? { ref: record.ref, role: record.role, name: record.name } : undefined;
   }
 
+  /**
+   * Derive the durable locator chain for a ref, ranked best-first, so a
+   * promoted workflow can find this element again on a later run.
+   *
+   * The chain is computed by the locator engine's own ranker running against
+   * the live element (`window.__yantra.describeElement`), which matters more
+   * than it looks: replay resolves role and accessible name with that engine's
+   * tables and precedence rules. A locator derived from any other computation —
+   * the observation scanner's simplified role map, for instance, which reports
+   * `<select>` as `combobox` where the engine computes `listbox`, and
+   * `input[type=search]` as `textbox` where the engine computes `searchbox` —
+   * pins a role that can never match at replay. Sharing the implementation
+   * removes that whole class of failure by construction.
+   *
+   * Best-effort: if the injected runtime is unavailable (a provider that
+   * exposes no locator host, a page mid-navigation) this returns an empty
+   * chain and the caller falls back to the observed role/name.
+   *
+   * @param ref - A live opaque ref from the latest observation.
+   * @returns Ranked persistable candidates, or `[]` when they cannot be derived.
+   */
+  public async locatorFor(ref: string): Promise<LocatorCandidate[]> {
+    const host = this.pageFacade?.locatorHost;
+    if (!host) return [];
+    let handle: ElementHandle<Element>;
+    try {
+      handle = this.resolveRef(ref);
+    } catch {
+      return [];
+    }
+    try {
+      await host.ensureInjected('main');
+      const described = await handle.evaluate((element) => {
+        // Serialized into the page, so the injected runtime is reached through
+        // the global rather than an import.
+        const api = (
+          globalThis as unknown as {
+            __yantra?: { describeElement(el: Element): unknown };
+          }
+        ).__yantra;
+        return api ? api.describeElement(element) : null;
+      });
+      if (described === null) return [];
+      const { candidates } = described as ElementDescription;
+      return intentsToWorkflowCandidates(candidates);
+    } catch (error) {
+      // A locator is a nice-to-have for the trace, never a reason to fail the
+      // action the agent is performing.
+      this.logger?.debug?.(
+        { ref, err: error instanceof Error ? error.message : String(error) },
+        'locator derivation failed; falling back to observed role/name',
+      );
+      return [];
+    }
+  }
+
   /** Click a current ref after deterministic visibility/hit-target checks. */
   public async click(ref: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
@@ -344,9 +350,10 @@ export class AgentBrowserController {
     const watch = this.watchNavigation();
     try {
       try {
-        // A held press (down, pause, up) is what real sites are written
-        // against; Puppeteer scrolls into view and issues trusted CDP mouse
-        // events, so this is a user-shaped click end to end.
+        // Hover first so the pointer scrolls into view and any hover state has
+        // time to settle, then dispatch a held press (down, pause, up).
+        await handle.hover();
+        await sleep(POINTER_SETTLE_MS);
         await handle.click({ delay: CLICK_HOLD_MS });
       } catch (error) {
         // The element lost its layout box between the pre-flight and the click.
@@ -380,18 +387,20 @@ export class AgentBrowserController {
     await assertActionable(handle, ref);
     const watch = this.watchNavigation();
     try {
-      if (!(await this.fillSelect(handle, ref, value))) {
-        try {
+      try {
+        await handle.hover();
+        await sleep(POINTER_SETTLE_MS);
+        if (!(await this.fillSelect(handle, ref, value))) {
           await handle.focus();
           // Select-all via triple-click, then overtype: replaces any existing
-          // value with real key events, which framework listeners require.
-          await handle.click({ clickCount: 3 });
+          // value with real mouse/key events, which framework listeners require.
+          await handle.click({ clickCount: 3, delay: CLICK_HOLD_MS });
           await handle.type(value, { delay: typeDelayFor(value) });
-        } catch (error) {
-          if (isNoLayoutBoxError(error)) throw hiddenError();
-          if (isNavigationRaceError(error)) throw new StaleElementRefError(ref);
-          throw error;
         }
+      } catch (error) {
+        if (isNoLayoutBoxError(error)) throw hiddenError();
+        if (isNavigationRaceError(error)) throw new StaleElementRefError(ref);
+        throw error;
       }
       // Fills can navigate too (search-as-you-type, auto-submitting forms);
       // settle before the agent's next call the same way clicks do.
@@ -494,16 +503,18 @@ export class AgentBrowserController {
   }
 
   private installPagePolicies(page: PuppeteerPage): void {
-    page.on('framenavigated', (frame) => {
-      if (frame !== page.mainFrame()) return;
-      // A committed main-frame navigation is the one moment refs are truly
-      // dead: the old document is gone. Identity-based id reuse resets with
-      // them so an id from the previous document can never alias an element
-      // on the new one.
-      this.navigationEpoch += 1;
-      this.invalidateObservation();
-      this.refIdByIdentity.clear();
+    // The settler owns navigation-epoch and in-flight bookkeeping; the
+    // controller only needs to know when a navigation commits, because that is
+    // the one moment refs are truly dead — the old document is gone. Identity-
+    // based id reuse resets with them so an id from the previous document can
+    // never alias an element on the new one.
+    this.settler = new PageSettler(page, {
+      onNavigationCommitted: () => {
+        this.invalidateObservation();
+        this.refIdByIdentity.clear();
+      },
     });
+
     page.browser().on('targetcreated', (target) => {
       if (target.opener() !== page.target()) return;
       // Intercepting a popup does not change the main document, so the main
@@ -570,150 +581,22 @@ export class AgentBrowserController {
    * cannot slip between the action and the watch.
    */
   private watchNavigation(): NavigationWatch {
-    const page = this.page!;
-    let baseline = this.navigationEpoch;
-    let pending: HTTPRequest | null = null;
-    const onRequest = (request: HTTPRequest): void => {
-      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) pending = request;
-    };
-    const onRequestFailed = (request: HTTPRequest): void => {
-      // An aborted main-frame navigation request (download, superseded
-      // redirect) will never commit; forgetting it keeps the wait short.
-      if (request === pending) pending = null;
-    };
-    page.on('request', onRequest);
-    page.on('requestfailed', onRequestFailed);
-    return {
-      sawNavigation: () => pending !== null || this.navigationEpoch !== baseline,
-      navigationPending: () => pending !== null,
-      epoch: () => baseline,
-      rebase: () => {
-        pending = null;
-        baseline = this.navigationEpoch;
-      },
-      dispose: () => {
-        page.off('request', onRequest);
-        page.off('requestfailed', onRequestFailed);
-      },
-    };
+    return this.settler!.watch();
   }
 
-  /**
-   * Hold an action's result until the page has stopped moving:
-   *
-   * 1. Grace window — watch for a main-frame navigation triggered by the
-   *    action, however the site schedules it (sync handler, microtask,
-   *    setTimeout, async validation then submit). This catches the real-world
-   *    "the click navigated 200ms later" case that a fixed post-action pause
-   *    misses.
-   * 2. When a navigation starts, wait (bounded) for the new document to
-   *    commit and reach DOMContentLoaded, then re-arm a shorter grace window
-   *    so chained client-side redirects are followed too.
-   * 3. Finish with a bounded network-quiet wait so fetch/XHR-driven updates
-   *    (SPA actions that never navigate) have landed before the agent's next
-   *    observation.
-   *
-   * Every phase is bounded; a page that never settles degrades to a result
-   * after the caps rather than an error.
-   */
-  private async awaitPageStable(watch: NavigationWatch, graceMs: number): Promise<void> {
-    const overallDeadline = Date.now() + POST_ACTION_TOTAL_WAIT_MS;
-    let grace = graceMs;
-    for (;;) {
-      const graceDeadline = Math.min(Date.now() + grace, overallDeadline);
-      while (!watch.sawNavigation() && Date.now() < graceDeadline) {
-        await sleep(STABILITY_POLL_MS);
-      }
-      if (!watch.sawNavigation()) break;
-      // Wait for the commit (framenavigated bumps the epoch). A pending
-      // request that aborts instead of committing releases the wait early.
-      const commitDeadline = Math.min(Date.now() + NAVIGATION_COMMIT_WAIT_MS, overallDeadline);
-      while (
-        this.navigationEpoch === watch.epoch() &&
-        watch.navigationPending() &&
-        Date.now() < commitDeadline
-      ) {
-        await sleep(STABILITY_POLL_MS);
-      }
-      if (this.navigationEpoch !== watch.epoch()) {
-        await this.awaitDomReady(Math.min(NAVIGATION_COMMIT_WAIT_MS, overallDeadline - Date.now()));
-      }
-      watch.rebase();
-      grace = REDIRECT_CHAIN_DETECT_MS;
-      if (Date.now() >= overallDeadline) break;
-    }
-    await this.awaitNetworkQuiet(overallDeadline);
+  /** @see PageSettler.settleAfterAction */
+  private awaitPageStable(watch: NavigationWatch, graceMs: number): Promise<void> {
+    return this.settler!.settleAfterAction(watch, graceMs);
   }
 
-  /**
-   * Resolve whether a click that threw a context-destroyed error actually
-   * landed. That error only arises while a new document is committing, so wait
-   * (bounded) for the commit to register as a navigation-epoch bump. Waiting
-   * continues only while a main-frame request is still in flight; once it
-   * aborts — or if there was never one (a coincidental node detach) — no commit
-   * is coming, so the click did not land and the ref is stale. Requiring the
-   * commit, not a mere in-flight request, keeps an unrelated navigation from
-   * being mistaken for the click's outcome.
-   */
-  private async awaitCommit(watch: NavigationWatch): Promise<boolean> {
-    const deadline = Date.now() + NAVIGATION_COMMIT_WAIT_MS;
-    while (this.navigationEpoch === watch.epoch()) {
-      if (!watch.navigationPending() || Date.now() >= deadline) break;
-      await sleep(STABILITY_POLL_MS);
-    }
-    return this.navigationEpoch !== watch.epoch();
+  /** @see PageSettler.awaitCommit */
+  private awaitCommit(watch: NavigationWatch): Promise<boolean> {
+    return this.settler!.awaitCommit(watch);
   }
 
-  /**
-   * Hold a READ (observe/extract) until the page is done loading.
-   *
-   * Actions settle themselves before returning, but a read is not preceded by
-   * an action: the agent may call `browser_observe` while a load started
-   * elsewhere is still in flight — a slow first paint, a redirect chain the
-   * action's own window did not outlast, or an SPA route still fetching. The
-   * snapshot then shows a document that no longer exists a moment later, and
-   * the agent acts on refs for elements that were never really there.
-   *
-   * Waiting on `document.readyState` rather than a navigation watch is what
-   * makes this work for a load already in flight: a freshly installed watch
-   * only hears requests that start after it, whereas `readyState` reports the
-   * document's actual state right now. The network-quiet tail then lets
-   * fetch/XHR-driven content land. Both phases are bounded, so a page that
-   * never settles degrades to a read rather than an error.
-   */
-  private async awaitReadable(): Promise<void> {
-    const deadline = Date.now() + READ_SETTLE_TOTAL_MS;
-    await this.awaitDomReady(READ_SETTLE_TOTAL_MS);
-    await this.awaitNetworkQuiet(deadline);
-  }
-
-  /** Wait (bounded) for the current document to leave `loading`. */
-  private async awaitDomReady(timeoutMs: number): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        if (await this.page!.evaluate(() => document.readyState !== 'loading')) return;
-      } catch (error) {
-        // Another navigation tore down the context mid-check; the next lap
-        // asks the new document.
-        if (!isNavigationRaceError(error)) throw error;
-      }
-      await sleep(DOM_READY_POLL_MS);
-    }
-  }
-
-  /**
-   * Best-effort wait for in-flight fetch/XHR work to finish so the DOM the
-   * agent observes next reflects the action's outcome.
-   */
-  private async awaitNetworkQuiet(overallDeadline: number): Promise<void> {
-    const budget = Math.min(NETWORK_QUIET_TIMEOUT_MS, overallDeadline - Date.now());
-    if (budget <= 0) return;
-    await this.page!.waitForNetworkIdle({
-      idleTime: NETWORK_QUIET_IDLE_MS,
-      timeout: budget,
-      concurrency: NETWORK_QUIET_MAX_INFLIGHT,
-    }).catch(() => undefined);
+  /** @see PageSettler.settleBeforeRead */
+  private awaitReadable(): Promise<void> {
+    return this.settler!.settleBeforeRead();
   }
 
   /** Read the title, riding out mid-navigation context teardown. */
@@ -737,6 +620,8 @@ export class AgentBrowserController {
   private async performTeardown(): Promise<void> {
     this.invalidateObservation();
     this.refIdByIdentity.clear();
+    this.settler?.dispose();
+    this.settler = null;
     const session = this.session;
     this.session = null;
     this.page = null;

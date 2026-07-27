@@ -6,6 +6,8 @@ export * from './launch-options.js';
 export * from './launcher.js';
 export * from './paths.js';
 export * from './profile-store.js';
+export * from './page-settle.js';
 export * from './provider.js';
 export * from './session.js';
+export * from './user-simulation.js';
 export type * from './types.js';

@@ -100,7 +100,7 @@ describe('@no-llm resolveActionable', () => {
     expect(result.usedCandidateIndex).toBe(0);
   });
 
-  it('throws LocatorAmbiguousError immediately when candidate is ambiguous', async () => {
+  it('throws LocatorAmbiguousError when a candidate stays ambiguous through the deadline', async () => {
     const host = makeHost({
       resolveResults: [{ count: 3 }], // ambiguous
     });
@@ -113,6 +113,129 @@ describe('@no-llm resolveActionable', () => {
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).rejects.toThrow(LocatorAmbiguousError);
+  });
+
+  it('keeps polling through a transient ambiguity and succeeds once the duplicate goes away', async () => {
+    // A mid-render page routinely shows a skeleton row beside its loaded
+    // replacement. Failing the instant that happens made a self-healing page
+    // state fatal.
+    const handle = makeFakeHandle();
+    const host = makeHost({
+      resolveResults: [{ count: 2 }, { count: 2 }, { count: 1, slotKey: 'default' }],
+      handle,
+    });
+    const chain = makeChain();
+
+    const resultPromise = resolveActionable(chain, host, { timeoutMs: 5000 });
+    await vi.runAllTimersAsync();
+
+    const result = await resultPromise;
+    expect(result.kind).toBe('success');
+    expect(result.elementHandle).toBe(handle);
+  });
+
+  it('resolves a read-only locator whose centre never wins the hit test', async () => {
+    // Regression: `receivesEvents` hit-tests the element's centre against the
+    // viewport, so `body` on any page taller than one screen — the locator that
+    // `do --save-as` records for an extract step — can never satisfy it. Under
+    // the default `actionable` requirement that step burned its whole deadline
+    // and reported "locator not found" on a page that was perfectly fine.
+    const handle = makeFakeHandle();
+    const host = makeHost({
+      actionableStates: [makeActionableState({ receivesEvents: false })],
+      handle,
+    });
+    const chain = makeChain('body');
+
+    const resultPromise = resolveActionable(chain, host, {
+      timeoutMs: 5000,
+      requirement: 'visible',
+    });
+    await vi.runAllTimersAsync();
+
+    const result = await resultPromise;
+    expect(result.kind).toBe('success');
+    expect(result.elementHandle).toBe(handle);
+  });
+
+  it('still refuses to click an element whose centre never wins the hit test', async () => {
+    // The mirror of the previous test: relaxing reads must not relax clicks.
+    const host = makeHost({
+      actionableStates: [makeActionableState({ receivesEvents: false })],
+    });
+    const chain = makeChain();
+
+    const resultPromise = resolveActionable(chain, host, {
+      timeoutMs: 5000,
+      requirement: 'actionable',
+    });
+    void resultPromise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).rejects.toThrow(LocatorNotActionableError);
+  });
+
+  it('defaults to the full actionable contract when no requirement is given', async () => {
+    const host = makeHost({
+      actionableStates: [makeActionableState({ receivesEvents: false })],
+    });
+
+    const resultPromise = resolveActionable(makeChain(), host, { timeoutMs: 5000 });
+    void resultPromise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).rejects.toThrow(LocatorNotActionableError);
+  });
+
+  it('satisfies the attached requirement for an element that is present but hidden', async () => {
+    // `wait_for: attached` must not secretly demand visibility.
+    const handle = makeFakeHandle();
+    const host = makeHost({
+      actionableStates: [
+        makeActionableState({ visible: false, receivesEvents: false, attached: true }),
+      ],
+      handle,
+    });
+
+    const resultPromise = resolveActionable(makeChain(), host, {
+      timeoutMs: 5000,
+      requirement: 'attached',
+    });
+    await vi.runAllTimersAsync();
+
+    const result = await resultPromise;
+    expect(result.kind).toBe('success');
+    expect(result.elementHandle).toBe(handle);
+  });
+
+  it('rejects a detached element even under the attached requirement', async () => {
+    const host = makeHost({
+      actionableStates: [makeActionableState({ attached: false })],
+    });
+
+    const resultPromise = resolveActionable(makeChain(), host, {
+      timeoutMs: 5000,
+      requirement: 'attached',
+    });
+    void resultPromise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).rejects.toThrow(LocatorNotActionableError);
+  });
+
+  it('still requires visibility and enablement under the visible requirement', async () => {
+    const host = makeHost({
+      actionableStates: [makeActionableState({ visible: true, enabled: false })],
+    });
+
+    const resultPromise = resolveActionable(makeChain(), host, {
+      timeoutMs: 5000,
+      requirement: 'visible',
+    });
+    void resultPromise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).rejects.toThrow(LocatorNotActionableError);
   });
 
   it('throws FrameDetachedError when frame detaches', async () => {

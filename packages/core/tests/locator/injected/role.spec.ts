@@ -148,3 +148,49 @@ describe('@no-llm getAccessibleName', () => {
     expect(getAccessibleName(inp)).toBe('First Last');
   });
 });
+
+describe('@no-llm getRole/getAccessibleName termination', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  // Regression: `getRole` asked `getAccessibleName` whether a <section> was
+  // named, and `getAccessibleName` asked `getRole` whether to fall back to text
+  // content. For an unnamed <section> — present on most real pages — the two
+  // called each other until the stack blew, taking down locator resolution for
+  // the whole document.
+  it('does not recurse on an unnamed <section>', () => {
+    const el = makeElement('<section>Some content</section>');
+
+    expect(() => getRole(el)).not.toThrow();
+    expect(getRole(el)).toBeNull();
+    expect(() => getAccessibleName(el)).not.toThrow();
+    expect(getAccessibleName(el)).toBe('');
+  });
+
+  it('does not recurse on an unnamed <section> nested inside another', () => {
+    document.body.innerHTML = '<section><section><p>Deep</p></section></section>';
+    const inner = document.querySelectorAll('section')[1]!;
+
+    expect(() => getAccessibleName(inner)).not.toThrow();
+    expect(getRole(inner)).toBeNull();
+  });
+
+  it('still promotes a named <section> to region', () => {
+    expect(getRole(makeElement('<section aria-label="Results">x</section>'))).toBe('region');
+    expect(getRole(makeElement('<section title="Results">x</section>'))).toBe('region');
+  });
+
+  it('resolves a whole document containing unnamed sections', () => {
+    // The end state that mattered: every element on the page can be classified.
+    document.body.innerHTML =
+      '<section><h1>Title</h1><button>Go</button></section><section><p>More</p></section>';
+
+    expect(() =>
+      Array.from(document.querySelectorAll('*')).forEach((el) => {
+        getRole(el);
+        getAccessibleName(el);
+      }),
+    ).not.toThrow();
+  });
+});

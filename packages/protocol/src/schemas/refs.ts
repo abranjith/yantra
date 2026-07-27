@@ -134,6 +134,7 @@ export const RoleEnum = z
     'button',
     'link',
     'textbox',
+    'searchbox',
     'table',
     'heading',
     'region',
@@ -143,6 +144,9 @@ export const RoleEnum = z
     'checkbox',
     'radio',
     'combobox',
+    'listbox',
+    'slider',
+    'spinbutton',
     'option',
     'tab',
     'tabpanel',
@@ -150,7 +154,9 @@ export const RoleEnum = z
     'row',
     'grid',
   ])
-  .describe('Supported ARIA role intents.');
+  .describe(
+    'Supported ARIA role intents. Must stay a subset of the roles the locator engine can compute (`getRole`), or a recorded role can never match at replay: `<select>` computes `listbox`, `input[type=search]` computes `searchbox`, and `input[type=number|date|time|month|week]` computes `spinbutton`.',
+  );
 
 export type RoleEnum = z.infer<typeof RoleEnum>;
 

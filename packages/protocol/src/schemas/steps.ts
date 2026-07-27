@@ -43,8 +43,14 @@ export const StepHeader = {
 } as const;
 
 export const PrimitiveExtractionKind = z
-  .enum(['string', 'number', 'boolean', 'date', 'money'])
-  .describe('Primitive extraction output kind.');
+  .enum(['string', 'number', 'boolean', 'date', 'money', 'readable'])
+  .describe(
+    "Primitive extraction output kind. `string` is the element's raw text — on a page-level " +
+      'locator that means nav, footer, and inline script text too. `readable` runs the same ' +
+      'Readability pass the agent uses for its own page digest, yielding the article-like ' +
+      'content with boilerplate stripped, and falls back to visible text when a page (an app ' +
+      'shell, a tracking result) has no article for Readability to find.',
+  );
 
 export const ExtractionSchema: z.ZodType<
   | { type: 'primitive'; kind: z.infer<typeof PrimitiveExtractionKind> }

@@ -28,6 +28,9 @@ const FORBIDDEN_EXTRA_ARGS = [
   '--remote-debugging-pipe',
   '--remote-debugging-port',
   '--user-data-dir',
+  '--user-agent',
+  '--disable-blink-features',
+  '--lang',
 ];
 
 export const ProfileSpecSchema = z.discriminatedUnion('kind', [

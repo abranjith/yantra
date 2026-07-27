@@ -130,24 +130,48 @@ function exprToBranchCondition(raw: string, context: string): BranchCondition {
 // LocatorCandidate → EngineLocatorCandidate
 // ---------------------------------------------------------------------------
 
-function workflowCandidateToEngine(c: LocatorCandidate): EngineLocatorCandidate {
+/**
+ * Converts one persisted candidate to its engine intent, or null when the
+ * candidate carries no usable signal.
+ *
+ * An empty string is the workflow schema's only way to say "no name
+ * constraint" — `LocatorCandidate.name` is required on a role candidate, so
+ * both the discovery promoter (`name_match === null`) and the agent-trace
+ * fallback write `''`. Passing that through as a matcher inverts its meaning:
+ * the resolver would demand an element whose accessible name is *empty*,
+ * matching every unnamed element of that role and then failing strict mode as
+ * ambiguous. Omitting `name` is what "unconstrained" actually means to the
+ * engine. The same reasoning drops empty text on the label/placeholder
+ * candidates and empty selectors on css/xpath.
+ */
+function workflowCandidateToEngine(c: LocatorCandidate): EngineLocatorCandidate | null {
   switch (c.kind) {
     case 'role': {
       const name = typeof c.name === 'string' ? c.name : new RegExp(c.name.pattern, c.name.flags);
+      const constrained = typeof name === 'string' ? name.trim().length > 0 : true;
       return {
-        intent: { kind: 'role', role: c.role as AriaRole, name },
+        intent: {
+          kind: 'role',
+          role: c.role as AriaRole,
+          ...(constrained ? { name, exact: true } : {}),
+        },
         source: 'authored',
       };
     }
     case 'testid':
+      if (c.value.length === 0) return null;
       return { intent: { kind: 'testid', value: c.value }, source: 'authored' };
     case 'label':
-      return { intent: { kind: 'label', text: c.value }, source: 'authored' };
+      if (c.value.trim().length === 0) return null;
+      return { intent: { kind: 'label', text: c.value, exact: true }, source: 'authored' };
     case 'placeholder':
-      return { intent: { kind: 'placeholder', text: c.value }, source: 'authored' };
+      if (c.value.trim().length === 0) return null;
+      return { intent: { kind: 'placeholder', text: c.value, exact: true }, source: 'authored' };
     case 'css':
+      if (c.value.trim().length === 0) return null;
       return { intent: { kind: 'css', selector: c.value }, source: 'authored' };
     case 'xpath':
+      if (c.value.trim().length === 0) return null;
       return { intent: { kind: 'xpath', expression: c.value }, source: 'authored' };
   }
 }
@@ -157,7 +181,13 @@ function buildLocatorTable(locators: Record<string, LocatorCandidate[]>): Locato
   for (const [name, candidates] of Object.entries(locators)) {
     const engineCandidates: EngineLocatorChain = {
       name,
-      candidates: candidates.map(workflowCandidateToEngine),
+      candidates: candidates
+        .map(workflowCandidateToEngine)
+        .filter((candidate): candidate is EngineLocatorCandidate => candidate !== null),
+      // Strict: an ambiguous candidate must never resolve to an arbitrary
+      // element. The resolver falls through to the next candidate in the
+      // ranked chain instead of aborting, so ambiguity costs a fallback rather
+      // than the run.
       strict: true,
     };
     table[name] = engineCandidates;

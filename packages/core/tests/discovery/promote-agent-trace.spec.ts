@@ -3,10 +3,7 @@ import type { WorkflowFile } from '@yantra/protocol';
 import { WorkflowFile as WorkflowFileSchema } from '@yantra/protocol';
 import { describe, it, expect, vi } from 'vitest';
 
-import {
-  promoteAgentTrace,
-  type PromotableTraceStep,
-} from '../../src/discovery/promote.js';
+import { promoteAgentTrace, type PromotableTraceStep } from '../../src/discovery/promote.js';
 import { lint } from '../../src/workflow/lint/index.js';
 import { WorkflowCollisionError } from '../../src/workflow/store.js';
 import type { WorkflowStore } from '../../src/workflow/store.types.js';
@@ -75,12 +72,7 @@ describe('@no-llm promoteAgentTrace', () => {
     // Semantic/lint-clean (strict).
     expect(lint(result.value, { strict: true }).errors).toHaveLength(0);
     // Steps preserved in order.
-    expect(result.value.steps.map((s) => s.verb)).toEqual([
-      'navigate',
-      'fill',
-      'click',
-      'extract',
-    ]);
+    expect(result.value.steps.map((s) => s.verb)).toEqual(['navigate', 'fill', 'click', 'extract']);
     expect(store.saved).toHaveLength(1);
   });
 
@@ -149,5 +141,135 @@ describe('@no-llm promoteAgentTrace', () => {
     expect(result.isOk).toBe(false);
     if (result.isOk) return;
     expect(result.error.kind).toBe('name_collision');
+  });
+});
+
+const click = (name: string): PromotableTraceStep => ({
+  kind: 'click',
+  host: 'shop.example',
+  locator: [{ kind: 'role', role: 'button', name }],
+  requires_confirmation: false,
+});
+
+const observe: PromotableTraceStep = {
+  kind: 'observe',
+  host: 'shop.example',
+  requires_confirmation: false,
+};
+
+/** Promotes and returns the saved workflow, failing the test on a promote error. */
+async function promoted(steps: PromotableTraceStep[]): Promise<WorkflowFile> {
+  const store = makeFakeStore();
+  const result = await promoteAgentTrace(steps, { workflowName: 'terminal-read', store });
+  expect(result.isOk).toBe(true);
+  if (!result.isOk) throw new Error(result.error.message);
+  return result.value;
+}
+
+describe('@no-llm promoteAgentTrace terminal read', () => {
+  it('promotes a trailing observe into a terminal extract step', async () => {
+    // The reported gap: an agentic run routinely *ends* by observing — the
+    // digest already answers the question, so `browser_extract` is never
+    // called. Only extracts became steps, so the workflow clicked through and
+    // captured nothing, and `yantra run` had nothing to report.
+    const workflow = await promoted([navigate, click('Track'), observe]);
+
+    expect(workflow.steps.map((s) => s.verb)).toEqual(['navigate', 'click', 'extract']);
+    const extract = workflow.steps.at(-1);
+    expect(extract?.verb).toBe('extract');
+    if (extract?.verb !== 'extract') return;
+    expect(extract.extraction_schema).toEqual({ type: 'primitive', kind: 'readable' });
+  });
+
+  it('drops observations taken mid-run, which are navigation aids not data', async () => {
+    // The agent observes after every action to decide the next one. Turning
+    // each into a step would bloat the workflow with reads nobody asked for.
+    const workflow = await promoted([
+      navigate,
+      observe,
+      click('Track'),
+      observe,
+      click('Show details'),
+      observe,
+    ]);
+
+    expect(workflow.steps.map((s) => s.verb)).toEqual(['navigate', 'click', 'click', 'extract']);
+  });
+
+  it('collapses a run of trailing reads into exactly one extract', async () => {
+    const workflow = await promoted([navigate, click('Track'), observe, observe, observe]);
+
+    expect(workflow.steps.filter((s) => s.verb === 'extract')).toHaveLength(1);
+  });
+
+  it('prefers a real extract over an observation among trailing reads', async () => {
+    // `browser_extract` carries the model's declared intent — it asked for a
+    // table, not the page text — so it outranks an incidental observation.
+    const workflow = await promoted([
+      navigate,
+      click('Track'),
+      observe,
+      {
+        kind: 'extract',
+        host: 'shop.example',
+        extractionKind: 'table',
+        requires_confirmation: false,
+      },
+      observe,
+    ]);
+
+    const extract = workflow.steps.at(-1);
+    expect(extract?.verb).toBe('extract');
+    if (extract?.verb !== 'extract') return;
+    expect(extract.extraction_schema).toEqual({
+      type: 'array',
+      items: { type: 'primitive', kind: 'string' },
+    });
+  });
+
+  it('leaves a trace with no trailing read unchanged', async () => {
+    const workflow = await promoted([navigate, click('Track')]);
+
+    expect(workflow.steps.map((s) => s.verb)).toEqual(['navigate', 'click']);
+    expect(workflow.outputs).toEqual([]);
+  });
+
+  it('promotes an observe-only trace rather than discarding it', async () => {
+    const workflow = await promoted([navigate, observe]);
+
+    expect(workflow.steps.map((s) => s.verb)).toEqual(['navigate', 'extract']);
+  });
+
+  it('declares an output that unwraps the extraction envelope', async () => {
+    // Captures hold an `ExtractionResultEnvelope` ({rows, metadata}); binding
+    // the raw capture would surface that wrapper instead of the value.
+    const workflow = await promoted([navigate, click('Track'), observe]);
+
+    expect(workflow.outputs).toEqual([
+      { name: 'extracted_content_1', from: '{{ capture.extracted_content_1.rows[0] }}' },
+    ]);
+  });
+
+  it('binds a table output to the whole rows array', async () => {
+    const workflow = await promoted([
+      navigate,
+      {
+        kind: 'extract',
+        host: 'shop.example',
+        extractionKind: 'table',
+        requires_confirmation: false,
+      },
+    ]);
+
+    expect(workflow.outputs).toEqual([
+      { name: 'extracted_table_1', from: '{{ capture.extracted_table_1.rows }}' },
+    ]);
+  });
+
+  it('keeps the promoted workflow schema-valid and lint-clean', async () => {
+    const workflow = await promoted([navigate, click('Track'), observe]);
+
+    expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
+    expect(lint(workflow, { strict: true }).errors).toEqual([]);
   });
 });

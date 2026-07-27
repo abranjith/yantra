@@ -8,7 +8,7 @@ import { fakeBrowserProvider, passGate, refuseGate, silentLogger } from './helpe
 const SERP_URL = 'https://html.duckduckgo.com/html/?q=ai+news';
 
 describe('@no-llm extraction/search/scrape-transport', () => {
-  it('returns the rendered SERP html through a masked headless session', async () => {
+  it('returns the rendered SERP html through the shared browser launcher', async () => {
     const browser = fakeBrowserProvider('<html><body>results</body></html>');
     const transport = new ScrapeTransport({
       browserProvider: browser.provider,
@@ -25,7 +25,7 @@ describe('@no-llm extraction/search/scrape-transport', () => {
     expect(browser.launches()).toBe(1);
   });
 
-  it('launches with a realistic User-Agent matching the detected Chrome major, never HeadlessChrome', async () => {
+  it('leaves compatibility identity to the core launcher instead of overriding it per transport', async () => {
     const browser = fakeBrowserProvider('<html></html>');
     const transport = new ScrapeTransport({
       browserProvider: browser.provider,
@@ -39,29 +39,8 @@ describe('@no-llm extraction/search/scrape-transport', () => {
     });
 
     const args = browser.lastExtraArgs();
-    const uaArg = args.find((a) => a.startsWith('--user-agent='));
-    expect(uaArg).toBeDefined();
-    expect(uaArg).not.toContain('HeadlessChrome');
-    expect(uaArg).toContain('Chrome/130.0.0.0');
-    expect(args).toContain('--disable-blink-features=AutomationControlled');
-  });
-
-  it('falls back to a default Chrome major when detection returns null', async () => {
-    const browser = fakeBrowserProvider('<html></html>', { detectChrome: null });
-    const transport = new ScrapeTransport({
-      browserProvider: browser.provider,
-      ethicsGate: passGate,
-      logger: silentLogger,
-    });
-
-    await transport.fetchSerp(SERP_URL, {
-      signal: new AbortController().signal,
-      provider: 'duckduckgo',
-    });
-
-    const uaArg = browser.lastExtraArgs().find((a) => a.startsWith('--user-agent='));
-    expect(uaArg).toContain('Chrome/124.0.0.0');
-    expect(uaArg).not.toContain('HeadlessChrome');
+    expect(args).toEqual([]);
+    expect(browser.lastHeadless()).toBe(true);
   });
 
   it('refuses before browser launch when the ethics gate blocks the url', async () => {

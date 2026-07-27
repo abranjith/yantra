@@ -467,6 +467,138 @@ describe('@no-llm browser tools', () => {
     }
   });
 
+  it('prefers the engine-derived locator chain over the observed role and name', async () => {
+    // The observed role/name comes from the observation scanner, whose role map
+    // is a simplification of the locator engine's. When the engine can describe
+    // the live element, that ranked chain is the authority — it is expressed in
+    // the exact terms replay resolves, and it carries fallbacks.
+    const controller = fakeController();
+    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'combobox', name: 'Country' });
+    controller.locatorFor.mockResolvedValue([
+      { kind: 'testid', value: 'country-select' },
+      { kind: 'role', role: 'listbox', name: 'Country' },
+      { kind: 'xpath', value: '/html[1]/body[1]/select[1]' },
+    ]);
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    await wrapTool(browserClickSpec(services), services).execute({ ref: 'e1' }, undefined);
+
+    const click = trace.steps()[0];
+    expect(click?.kind).toBe('click');
+    if (click?.kind === 'click') {
+      expect(click.locator).toEqual([
+        { kind: 'testid', value: 'country-select' },
+        { kind: 'role', role: 'listbox', name: 'Country' },
+        { kind: 'xpath', value: '/html[1]/body[1]/select[1]' },
+      ]);
+    }
+  });
+
+  it('records the click even when locator derivation throws', async () => {
+    // A locator is a nice-to-have for the trace; it must never turn a
+    // successful action into a tool failure.
+    const controller = fakeController();
+    controller.locatorFor.mockRejectedValue(new Error('injected runtime unavailable'));
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    const result = await wrapTool(browserClickSpec(services), services).execute(
+      { ref: 'e1' },
+      undefined,
+    );
+
+    expect(result.error_code).toBeUndefined();
+    expect(controller.click).toHaveBeenCalledWith('e1');
+    const click = trace.steps()[0];
+    if (click?.kind === 'click') {
+      // Degraded to the observed role/name rather than losing the step.
+      expect(click.locator).toEqual([{ kind: 'role', role: 'button', name: 'Continue' }]);
+    }
+  });
+
+  it('records an observation in the trace so promotion can see the run read the page', async () => {
+    // An agentic run routinely ends by observing: the digest already answers
+    // the question, so `browser_extract` is never called. Only extracts were
+    // traced, so promotion produced a workflow that clicked through and
+    // captured nothing.
+    const controller = fakeController();
+    controller.observe.mockResolvedValue({
+      url: 'https://shop.example/status',
+      title: 'Status',
+      digest: 'Delivered',
+      interactables: [],
+    });
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    const result = await wrapTool(browserObserveSpec(services), services).execute({}, undefined);
+
+    expect(result.error_code).toBeUndefined();
+    expect(trace.steps()).toEqual([
+      { kind: 'observe', host: 'example.com', requires_confirmation: false },
+    ]);
+  });
+
+  it('does not record an observation that failed', async () => {
+    const controller = fakeController();
+    controller.observe.mockRejectedValue(new StaleElementRefError('e1'));
+    const trace = new AgentTrace();
+    const services = buildServices({
+      runDir,
+      trace,
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 1024,
+        },
+      },
+    });
+
+    await wrapTool(browserObserveSpec(services), services).execute({}, undefined);
+
+    expect(trace.steps()).toHaveLength(0);
+  });
+
   it('excludes a failed interaction from the trace', async () => {
     const controller = fakeController();
     controller.click.mockRejectedValue(new StaleElementRefError('e1'));
@@ -521,6 +653,10 @@ function fakeController() {
     extract: vi.fn(),
     host: vi.fn().mockReturnValue('example.com'),
     describeRef: vi.fn().mockReturnValue({ ref: 'e1', role: 'button', name: 'Continue' }),
+    // The real controller derives the persisted locator from the live element
+    // via the locator engine's ranker. Default to the degraded (empty) result
+    // so tests exercise the observed-role fallback unless they opt in.
+    locatorFor: vi.fn().mockResolvedValue([]),
   };
 }
 

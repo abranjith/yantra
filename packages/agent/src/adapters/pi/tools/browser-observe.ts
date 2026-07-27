@@ -22,7 +22,17 @@ export function browserObserveSpec(
       const controller = browserController(ctx.services);
       if (isDomainFailure(controller)) return controller;
       try {
-        return { ok: true, model: await controller.observe() };
+        const observation = await controller.observe();
+        // Recorded so promotion can tell that this run *ended* by reading the
+        // page. A run whose last act is an observation has collected its answer
+        // from the digest and never calls `browser_extract`; without this the
+        // promoted workflow clicks through and captures nothing.
+        ctx.services.trace?.append({
+          kind: 'observe',
+          host: controller.host(),
+          requires_confirmation: false,
+        });
+        return { ok: true, model: observation };
       } catch (error) {
         return browserFailure(error);
       }

@@ -181,10 +181,24 @@ export interface ResolveOptions {
   readonly candidateTimeoutMs?: number;
 }
 
+/**
+ * How much of the actionable contract a caller actually needs.
+ *
+ * `actionable` is the full four-condition check and is required only for
+ * synthesized pointer input (click/fill). Read-only verbs must NOT demand it:
+ * `receivesEvents` hit-tests the element's *centre* against the viewport, so
+ * any element taller than the viewport — `body`, a page-length results
+ * container — is permanently "not actionable" and times out, even though
+ * reading its text is perfectly valid.
+ */
+export type ActionableRequirement = 'attached' | 'visible' | 'actionable';
+
 /** Options for resolveActionable. */
 export interface ActionableOptions extends ResolveOptions {
   /** Total deadline for the auto-wait loop in ms. Defaults to 30000. */
   readonly timeoutMs?: number;
+  /** Conditions the element must satisfy. Defaults to `actionable`. */
+  readonly requirement?: ActionableRequirement;
 }
 
 /** Record-time ranking output consumed by the recorder (FEAT-008). */
@@ -249,12 +263,20 @@ export interface InjectedScriptHost {
   callHandle(frameId: string, expression: string): Promise<ElementHandle | null>;
 }
 
+/** Ranked, JSON-safe candidate set derived from a live element at record time. */
+export interface ElementDescription {
+  readonly role: string | null;
+  readonly name: string;
+  readonly candidates: readonly JsonLocatorIntent[];
+}
+
 /** The injected bundle's public API surface. Shared as .d.ts only. */
 export interface InjectedAPI {
   resolveCandidate(encodedIntent: JsonLocatorIntent, strict: boolean): CandidateResolution;
   checkActionableState(): ActionableState;
   checkHitTarget(): HitTargetCheckResult;
   getBoundingRect(): { top: number; left: number; width: number; height: number };
+  describeElement(element: Element): ElementDescription;
 }
 
 /** JSON-safe form of LocatorIntent (RegExp → { __isRegExp, pattern, flags }). */

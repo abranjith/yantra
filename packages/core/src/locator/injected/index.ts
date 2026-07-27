@@ -7,6 +7,8 @@
  * This file runs in the browser page context — no Node.js imports.
  */
 
+import { encodeIntent } from '../intent-codec.js';
+import { rankCandidates } from '../ranking.js';
 import type {
   ActionableState,
   CandidateResolution,
@@ -14,7 +16,7 @@ import type {
   JsonLocatorIntent,
 } from '../types.js';
 
-import { checkActionableState, isBoundingRectStable, isAttached } from './actionable.js';
+import { checkActionableState, isBoundingRectStable, isAttached, isVisible } from './actionable.js';
 import { queryCss } from './css.js';
 import { checkHitTarget } from './hit-target.js';
 import { findByLabel } from './label.js';
@@ -30,7 +32,7 @@ let resolvedSlot: Element | null = null;
 
 /** Resolves a single candidate intent against the current document. */
 function resolveCandidate(encodedIntent: JsonLocatorIntent, strict: boolean): CandidateResolution {
-  const elements = findElements(encodedIntent);
+  const elements = preferVisible(findElements(encodedIntent));
 
   if (elements.length === 0) {
     resolvedSlot = null;
@@ -118,6 +120,50 @@ function findElements(intent: JsonLocatorIntent): Element[] {
   }
 }
 
+/**
+ * Narrows a match set to its visible members when any are visible.
+ *
+ * Real pages carry duplicate markup that is never on screen: a mobile copy of
+ * the desktop nav, a collapsed menu, an off-screen template. Record time only
+ * ever sees the visible element (the scanner filters on it), so a chain pinned
+ * from a recording resolves against a strictly larger set at replay and trips
+ * the strict-mode ambiguity guard — a hard, non-retriable failure for a locator
+ * that is not actually ambiguous to a human.
+ *
+ * This is a preference, not a filter: when every match is hidden the full set
+ * is returned unchanged, so `wait_for: hidden` / `detached` still observe the
+ * element they are waiting on.
+ */
+function preferVisible(elements: Element[]): Element[] {
+  if (elements.length < 2) return elements;
+  const visible = elements.filter((el) => isVisible(el));
+  return visible.length > 0 ? visible : elements;
+}
+
+/**
+ * Record-time candidate generation, run against a live element.
+ *
+ * Exposed here so that recording and replay share one implementation of role,
+ * accessible-name, CSS, and XPath derivation. A recorder that computes these
+ * itself will drift from the resolver (different role tables, different
+ * accessible-name precedence) and pin locators that can never match.
+ *
+ * @param element - The element being acted on.
+ * @returns Ranked, JSON-safe candidate intents, best first.
+ */
+function describeElement(element: Element): {
+  role: string | null;
+  name: string;
+  candidates: JsonLocatorIntent[];
+} {
+  const ranking = rankCandidates(element);
+  return {
+    role: getRole(element),
+    name: getAccessibleName(element),
+    candidates: ranking.candidates.map((candidate) => encodeIntent(candidate.intent)),
+  };
+}
+
 /** Decodes a JSON text matcher (string or JsonRegex) back to string | RegExp. */
 function decodeTextMatcher(
   matcher: string | { __isRegExp: true; pattern: string; flags: string } | undefined,
@@ -174,6 +220,7 @@ const api = {
   clearSlot,
   getSlotElement,
   getBoundingRect,
+  describeElement,
   // Internal helpers exported for test access
   isBoundingRectStable,
   isAttached,

@@ -26,33 +26,12 @@ export interface FetchSerpOptions {
 }
 
 /**
- * Chrome flags that make the headless session look like an ordinary desktop
- * browser. Search engines' anomaly detectors challenge requests whose
- * User-Agent advertises "HeadlessChrome" or that expose `navigator.webdriver`
- * (set by puppeteer's default `--enable-automation`). Without these, the SERP
- * endpoint serves a CAPTCHA/consent page with zero result rows instead of
- * results. This is the *only* fingerprint concession we make — no cloaking
- * beyond a realistic UA (memory §Security: honesty over cleverness).
- */
-function antiFingerprintArgs(chromeMajor: number | undefined): readonly string[] {
-  const major = chromeMajor && chromeMajor > 0 ? chromeMajor : 124;
-  const userAgent =
-    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ` +
-    `(KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
-  return [
-    `--user-agent=${userAgent}`,
-    '--disable-blink-features=AutomationControlled',
-    '--lang=en-US,en',
-  ];
-}
-
-/**
  * The shared browser-scrape transport for search providers. Owns the mechanical
- * concerns — ethics-gate enforcement, headless Chrome launch with a realistic
- * User-Agent, navigation, and full-HTML capture — while leaving SERP parsing and
- * anomaly interpretation to the individual providers (`google.ts`,
- * `duckduckgo.ts`) that compose it. This is a composition seam, not a base class
- * (memory §Architecture: composition over inheritance).
+ * concerns — ethics-gate enforcement, browser launch, navigation, and full-HTML
+ * capture — while leaving SERP parsing and anomaly interpretation to the
+ * individual providers (`google.ts`, `duckduckgo.ts`) that compose it. The core
+ * browser launcher owns the shared user-simulation policy, so this path cannot
+ * drift from agentic or deterministic browser work.
  */
 export class ScrapeTransport {
   private readonly browserProvider: BrowserProvider;
@@ -66,9 +45,9 @@ export class ScrapeTransport {
   }
 
   /**
-   * Fetches the rendered HTML of a SERP URL through a masked headless Chrome
-   * session. Runs the ethics gate before any browser launch and honors the
-   * abort signal. Returns the page's full HTML; providers parse it themselves.
+   * Fetches the rendered HTML of a SERP URL through Chrome. Runs the ethics gate
+   * before any browser launch and honors the abort signal. Returns the page's
+   * full HTML; providers parse it themselves.
    *
    * @throws {ScrapeSearchError} when the ethics gate refuses the URL, the fetch
    *   is aborted, or the browser navigation fails.
@@ -95,11 +74,9 @@ export class ScrapeTransport {
       });
     }
 
-    const detected = await this.browserProvider.detectChrome().catch(() => null);
     const session = await this.browserProvider.launch({
       profile: { kind: 'ephemeral' },
       headless: true,
-      extraArgs: [...antiFingerprintArgs(detected?.majorVersion)],
     });
 
     try {

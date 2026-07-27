@@ -304,17 +304,33 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
     if (outcome.kind !== 'published') return;
     expect(outcome.promotion).toEqual({ saved: true, workflowName: 'fixture-login' });
 
-    // trace.json was persisted with the ordered interactions.
+    // trace.json is the raw record of what the run did, observations included:
+    // promotion needs them to tell whether a run *ended* by reading the page.
     const trace = JSON.parse(await readFile(join(outcome.runDir, 'trace.json'), 'utf8')) as {
       steps: { kind: string }[];
     };
-    expect(trace.steps.map((s) => s.kind)).toEqual(['navigate', 'fill', 'click', 'extract']);
+    expect(trace.steps.map((s) => s.kind)).toEqual([
+      'navigate',
+      'observe',
+      'fill',
+      'observe',
+      'click',
+      'observe',
+      'extract',
+    ]);
 
-    // The saved workflow exists and has the four promoted steps.
+    // The saved workflow exists and has the four promoted steps. The three
+    // mid-run observations are navigation aids, not data collection, so
+    // promotion drops them and keeps only the terminal read.
     const saved = await workflowStore.load('fixture-login');
     expect(saved.isOk).toBe(true);
     if (!saved.isOk) return;
     expect(saved.value.steps.map((s) => s.verb)).toEqual(['navigate', 'fill', 'click', 'extract']);
+    // The terminal read is bound to an output, so the replay below reports the
+    // data it captured instead of only a status.
+    expect(saved.value.outputs).toEqual([
+      { name: 'extracted_content_1', from: '{{ capture.extracted_content_1.rows[0] }}' },
+    ]);
 
     // Replay it deterministically with LLM disabled — no llmClient is wired.
     const priorProvider = process.env.LLM_PROVIDER;

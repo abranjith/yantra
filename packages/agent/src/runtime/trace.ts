@@ -61,6 +61,21 @@ export type AgentTraceStep =
       readonly host: string;
       readonly extractionKind: 'content' | 'table';
       readonly requires_confirmation: boolean;
+    }
+  | {
+      /**
+       * A page read via `browser_observe`. Recorded because an agentic run
+       * routinely *ends* by observing — the digest already answers the user's
+       * question, so the model never calls `browser_extract`. Promotion turned
+       * such a run into a workflow that clicked through and captured nothing,
+       * because only extracts became steps.
+       *
+       * Observes made mid-run are navigation aids, not data collection, so
+       * promotion keeps only a trailing one. See `promoteAgentTrace`.
+       */
+      readonly kind: 'observe';
+      readonly host: string;
+      readonly requires_confirmation: boolean;
     };
 
 /** The persisted `trace.json` document. */
@@ -109,6 +124,13 @@ const AgentTraceStepSchema = z.discriminatedUnion('kind', [
       requires_confirmation: z.boolean(),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('observe'),
+      host: z.string(),
+      requires_confirmation: z.boolean(),
+    })
+    .strict(),
 ]);
 
 /** Closed schema for the persisted `trace.json` document. */
@@ -122,28 +144,28 @@ export const AgentTraceFileSchema = z
 /** Valid ARIA role intents accepted by the workflow locator schema. */
 const VALID_ROLES = new Set<string>(RoleEnum.options);
 
-/** Close-enough aliases for scanner roles the schema does not model directly. */
-const ROLE_ALIASES: Readonly<Record<string, string>> = {
-  searchbox: 'textbox',
-  listbox: 'combobox',
-};
-
 /**
- * Builds a candidate-chain locator from an observed element's role and name.
- * Prefers a role candidate (role + accessible name); falls back to a label
- * candidate when the role is not a modelled ARIA intent but a name is known.
- * This is the single place trace and promotion agree on how an interactable
- * becomes a durable locator.
+ * Degraded fallback used only when the locator engine cannot derive a chain
+ * from the live element (`AgentBrowserController.locatorFor`). Prefers a role
+ * candidate (role + accessible name); falls back to a label candidate when the
+ * role is not a modelled ARIA intent but a name is known.
  *
- * @param role - The observed ARIA role (may be a scanner alias).
+ * The observed role comes from the observation scanner, whose role map is a
+ * simplification of the locator engine's — so a chain built here is a
+ * best-effort guess, not the authority. Roles are passed through verbatim
+ * rather than aliased: rewriting `searchbox`→`textbox` or `listbox`→`combobox`
+ * (as this once did) produces a role the engine never computes for that
+ * element, guaranteeing a replay miss. An unrepresentable role now degrades to
+ * a name-based candidate, which at least has a chance of matching.
+ *
+ * @param role - The observed ARIA role.
  * @param name - The observed accessible name (may be empty).
  * @returns A one-entry candidate chain suitable for a workflow `_locators` block.
  */
 export function toCandidateChain(role: string, name: string): LocatorCandidateType[] {
-  const normalized = ROLE_ALIASES[role] ?? role;
-  if (VALID_ROLES.has(normalized)) {
-    // `normalized` is a verified RoleEnum member; the cast narrows the literal.
-    return [{ kind: 'role', role: normalized, name } as LocatorCandidateType];
+  if (VALID_ROLES.has(role)) {
+    // `role` is a verified RoleEnum member; the cast narrows the literal.
+    return [{ kind: 'role', role, name } as LocatorCandidateType];
   }
   if (name.length > 0) {
     return [{ kind: 'label', value: name }];

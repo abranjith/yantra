@@ -8,6 +8,9 @@ exports[`@no-llm launcher buildLaunchArgs > snapshot: default headless args 1`] 
   "--disable-background-networking",
   "--disable-default-apps",
   "--disable-sync",
+  "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "--disable-blink-features=AutomationControlled",
+  "--lang=en-US",
   "--window-size=1280,800",
 ]
 `;

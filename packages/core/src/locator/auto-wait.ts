@@ -2,6 +2,7 @@ import { LocatorAmbiguousError, LocatorNotActionableError, FrameDetachedError } 
 import { LocatorResolverImpl } from './resolver.js';
 import type {
   ActionableOptions,
+  ActionableRequirement,
   ActionableState,
   EngineLocatorChain,
   InjectedScriptHost,
@@ -35,9 +36,19 @@ const STABILITY_WINDOW_MS = 100;
  *   enabled:       no [disabled] or aria-disabled="true"
  *   receivesEvents: elementFromPoint(cx,cy) lands on element or descendant
  *
+ * `options.requirement` narrows that contract for callers that are not about to
+ * synthesize pointer input. Only click/fill need the full check: the
+ * `receivesEvents` probe hit-tests the element's centre against the viewport,
+ * so an element taller than the viewport (`body`, a page-length results
+ * container) never passes it and a read of that element would time out.
+ *   - `actionable` (default) — all four conditions. Click/fill.
+ *   - `visible` — attached + visible + enabled + stable. Extract/assert and
+ *     `wait_for: visible`.
+ *   - `attached` — present in the document only. `wait_for: attached`.
+ *
  * @param chain - The chain to resolve
  * @param host - InjectedScriptHost for CDP communication
- * @param options - Timeout (defaults to 30s) and frame override
+ * @param options - Timeout (defaults to 30s), requirement level, frame override
  * @param eventSink - Optional telemetry sink
  * @returns The success result carrying the ElementHandle
  * @throws {LocatorNotFoundError} when chain exhausted
@@ -53,9 +64,11 @@ export async function resolveActionable(
 ): Promise<SuccessResolveResult> {
   const resolver = new LocatorResolverImpl(host, eventSink);
   const totalDeadlineMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const requirement: ActionableRequirement = options.requirement ?? 'actionable';
   const deadline = Date.now() + totalDeadlineMs;
 
   let lastState: ActionableState | undefined;
+  let lastAmbiguity: Extract<ResolveResult, { kind: 'failure' }> | undefined;
   let prevRect: BoundingRect | undefined;
   let backoffIndex = 0;
 
@@ -87,14 +100,15 @@ export async function resolveActionable(
 
     if (result.kind === 'failure') {
       if (result.reason === 'ambiguous') {
-        // Ambiguous is non-retriable — throw immediately
-        throw new LocatorAmbiguousError({
-          chainName: chain.name,
-          candidateIndex: result.candidatesTried.findIndex((a) => a.outcome === 'ambiguous'),
-          matchCount:
-            result.candidatesTried.find((a) => a.outcome === 'ambiguous')?.matchCount ?? 2,
-          candidatesTried: result.candidatesTried,
-        });
+        // The chain was exhausted with at least one candidate matching several
+        // elements. Keep polling rather than failing outright: mid-render pages
+        // routinely show a duplicate for a few frames (a skeleton row beside
+        // its loaded replacement) that resolves itself. The remembered result
+        // is what gets thrown if the deadline arrives first, so the author is
+        // told about the ambiguity instead of a misleading "not found".
+        lastAmbiguity = result;
+        lastState = undefined;
+        continue;
       }
 
       if (result.reason === 'frame_detached') {
@@ -104,7 +118,9 @@ export async function resolveActionable(
         });
       }
 
-      // not_found or other — continue polling
+      // not_found or other — continue polling. The page has since stopped
+      // showing a duplicate, so an earlier ambiguity is no longer the story.
+      lastAmbiguity = undefined;
       lastState = undefined;
       continue;
     }
@@ -121,6 +137,12 @@ export async function resolveActionable(
         continue;
       }
 
+      // `attached` asks for nothing beyond presence: a hidden or zero-box
+      // element still satisfies it.
+      if (requirement === 'attached') {
+        return result;
+      }
+
       if (!state.visible || !state.enabled) {
         continue;
       }
@@ -128,9 +150,9 @@ export async function resolveActionable(
       // Stability check: compare bounding rect across two snapshots (STABILITY_WINDOW_MS apart)
       const currentRect = await host.call<BoundingRect>(frameId, 'getBoundingRect', []);
       if (prevRect !== undefined && areSameRect(prevRect, currentRect)) {
-        // Rect stable — check events
-        if (state.receivesEvents) {
-          // All conditions met — element is actionable
+        // Rect stable. `visible` stops here; only pointer input additionally
+        // requires the centre-point hit test to land on the element.
+        if (requirement === 'visible' || state.receivesEvents) {
           return result;
         }
       }
@@ -146,6 +168,16 @@ export async function resolveActionable(
       }
       throw err;
     }
+  }
+
+  if (lastAmbiguity !== undefined) {
+    const ambiguous = lastAmbiguity.candidatesTried.find((a) => a.outcome === 'ambiguous');
+    throw new LocatorAmbiguousError({
+      chainName: chain.name,
+      candidateIndex: ambiguous?.index ?? 0,
+      matchCount: ambiguous?.matchCount ?? 2,
+      candidatesTried: lastAmbiguity.candidatesTried,
+    });
   }
 
   throw new LocatorNotActionableError({

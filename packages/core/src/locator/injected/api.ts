@@ -50,4 +50,15 @@ export interface InjectedAPI {
 
   /** Returns the current slot's viewport rect for stability checks. */
   getBoundingRect(): { top: number; left: number; width: number; height: number };
+
+  /**
+   * Ranks durable locator candidates for a live element, using the same role,
+   * accessible-name, CSS, and XPath derivation the resolver uses. Called at
+   * record time so a pinned locator is expressed in the resolver's own terms.
+   */
+  describeElement(element: Element): {
+    role: string | null;
+    name: string;
+    candidates: JsonLocatorIntent[];
+  };
 }

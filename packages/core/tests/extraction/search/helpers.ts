@@ -89,33 +89,34 @@ export interface FakeBrowserProviderHandle {
   launches(): number;
   /** The `extraArgs` passed to the most recent launch. */
   lastExtraArgs(): readonly string[];
+  /** The headless mode requested by the transport. */
+  lastHeadless(): boolean | undefined;
 }
 
 /**
  * A BrowserProvider double whose single page returns the given HTML string as
- * its SERP content. Records launch count and the launch args so tests can assert
- * on the anti-fingerprint User-Agent.
+ * its SERP content. Records launch count and the transport-owned launch options;
+ * core launcher compatibility is covered by browser launcher tests.
  */
-export function fakeBrowserProvider(
-  html: string,
-  opts: { detectChrome?: ChromeInstall | null } = {},
-): FakeBrowserProviderHandle {
+export function fakeBrowserProvider(html: string): FakeBrowserProviderHandle {
   let launchCount = 0;
   let lastArgs: readonly string[] = [];
-  const detected = opts.detectChrome === undefined ? CHROME_130 : opts.detectChrome;
+  let lastHeadless: boolean | undefined;
 
   const provider: BrowserProvider = {
     launch: async (launchOpts) => {
       launchCount += 1;
       lastArgs = launchOpts.extraArgs ?? [];
+      lastHeadless = launchOpts.headless;
       return new FakeSession(html);
     },
-    detectChrome: async () => detected,
+    detectChrome: async () => CHROME_130,
   };
 
   return {
     provider,
     launches: () => launchCount,
     lastExtraArgs: () => lastArgs,
+    lastHeadless: () => lastHeadless,
   };
 }

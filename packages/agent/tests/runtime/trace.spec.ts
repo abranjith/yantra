@@ -19,14 +19,28 @@ describe('@no-llm toCandidateChain', () => {
     ]);
   });
 
-  it('normalizes scanner aliases to modelled roles', () => {
+  it('records searchbox and listbox verbatim instead of aliasing them away', () => {
+    // Regression: these were rewritten to `textbox` and `combobox` because the
+    // schema did not model them. The locator engine computes `searchbox` for
+    // `input[type=search]` and `listbox` for `<select>`, so the rewritten role
+    // could never match at replay — every recorded search field and dropdown
+    // failed with "locator not found" on an unchanged page.
     expect(toCandidateChain('searchbox', 'Search')).toEqual([
-      { kind: 'role', role: 'textbox', name: 'Search' },
+      { kind: 'role', role: 'searchbox', name: 'Search' },
     ]);
     expect(toCandidateChain('listbox', 'Options')).toEqual([
-      { kind: 'role', role: 'combobox', name: 'Options' },
+      { kind: 'role', role: 'listbox', name: 'Options' },
     ]);
   });
+
+  it.each(['spinbutton', 'slider'])(
+    'records the %s role the engine computes for numeric and range inputs',
+    (role) => {
+      expect(toCandidateChain(role, 'Quantity')).toEqual([
+        { kind: 'role', role, name: 'Quantity' },
+      ]);
+    },
+  );
 
   it('falls back to a label candidate for an unmodelled role with a name', () => {
     expect(toCandidateChain('tooltip', 'Info')).toEqual([{ kind: 'label', value: 'Info' }]);
@@ -49,7 +63,12 @@ describe('@no-llm AgentTrace', () => {
   it('preserves append order (execution order)', () => {
     const trace = new AgentTrace();
     const steps: AgentTraceStep[] = [
-      { kind: 'navigate', host: 'a.example', url: 'https://a.example/', requires_confirmation: false },
+      {
+        kind: 'navigate',
+        host: 'a.example',
+        url: 'https://a.example/',
+        requires_confirmation: false,
+      },
       {
         kind: 'fill',
         host: 'a.example',

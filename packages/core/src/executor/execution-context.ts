@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import type { Plan } from '@yantra/protocol';
 
+import { PageSettler } from '../browser/page-settle.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 
 import { InMemoryCaptureStore } from './capture-store.js';
@@ -94,6 +95,7 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     browser: opts.browser ?? null,
     page: opts.page ?? null,
     locatorHost: opts.page?.locatorHost ?? null,
+    settler: makeSettler(opts.page ?? null),
     events,
     budgets,
     ethics: opts.ethics,
@@ -108,18 +110,37 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
 }
 
 /**
- * Lazily attaches the run's single browser page and its production locator
- * host. Deterministic replay calls this before dispatching its first step.
+ * Builds the page settler for a run.
+ *
+ * Returns null when the provider exposes no Puppeteer page — every test fake
+ * and any non-Puppeteer provider. Steps then run with no settling, exactly as
+ * they did before settling existed, rather than failing.
+ *
+ * The settler must be attached as soon as the page exists: its request
+ * listeners only hear what starts after they are installed, so one created
+ * mid-run would under-count the very load it is meant to wait for.
+ */
+function makeSettler(page: Page | null): PageSettler | null {
+  const puppeteerPage = page?.puppeteerPage;
+  return puppeteerPage ? new PageSettler(puppeteerPage) : null;
+}
+
+/**
+ * Lazily attaches the run's single browser page, its production locator host,
+ * and its page settler. Deterministic replay calls this before dispatching its
+ * first step.
  */
 export async function ensureExecutionBrowser(ctx: ExecutionContext): Promise<void> {
   if (ctx.page !== null) {
     ctx.locatorHost ??= ctx.page.locatorHost ?? null;
+    ctx.settler ??= makeSettler(ctx.page);
     return;
   }
   if (ctx.browser === null) return;
   const page = await ctx.browser.newPage();
   ctx.page = page;
   ctx.locatorHost = page.locatorHost ?? null;
+  ctx.settler = makeSettler(page);
 }
 
 /**
@@ -153,5 +174,8 @@ export function restoreExecutionContext(
     budgets,
     page: null,
     locatorHost: null,
+    // A resumed run gets a freshly launched page; the old page's settler is
+    // bound to listeners on a page that no longer exists.
+    settler: null,
   };
 }

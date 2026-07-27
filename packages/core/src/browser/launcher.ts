@@ -6,10 +6,15 @@ import puppeteer from 'puppeteer-core';
 import { BrowserLaunchError } from './errors.js';
 import { HARDENED_BASE_ARGS } from './launch-options.js';
 import type { ChromeInstall, LaunchOptions, ResolvedProfile } from './types.js';
+import { buildUserSimulationArgs, type UserSimulationEnvironment } from './user-simulation.js';
 
 /** @internal Exported for snapshot testing only */
-export function buildLaunchArgs(opts: LaunchOptions): readonly string[] {
-  const args: string[] = [...HARDENED_BASE_ARGS];
+export function buildLaunchArgs(
+  opts: LaunchOptions,
+  chrome: ChromeInstall,
+  environment: UserSimulationEnvironment = {},
+): readonly string[] {
+  const args: string[] = [...HARDENED_BASE_ARGS, ...buildUserSimulationArgs(chrome, environment)];
 
   if (opts.viewport) {
     args.push(`--window-size=${opts.viewport.width},${opts.viewport.height}`);
@@ -34,7 +39,7 @@ export async function launchChrome(
   chrome: ChromeInstall,
   profile: ResolvedProfile,
 ): Promise<{ browser: Browser; child: ChildProcess }> {
-  const args = buildLaunchArgs(opts);
+  const args = buildLaunchArgs(opts, chrome);
 
   const launchPromise = puppeteer
     .launch({

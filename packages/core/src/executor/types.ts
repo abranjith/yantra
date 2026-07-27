@@ -13,6 +13,7 @@ import type {
 } from '@yantra/protocol';
 import type { ElementHandle } from 'puppeteer-core';
 
+import type { PageSettler } from '../browser/page-settle.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
 import type { SanitizedPayload } from '../sanitizer/index.js';
@@ -195,6 +196,12 @@ export interface ExecutionContext {
   page: Page | null;
   /** CDP host for locator resolution. Null when browser is absent. */
   locatorHost: InjectedScriptHost | null;
+  /**
+   * Bounded post-action / pre-read page settling, shared with the agentic
+   * browser tools. Null when the provider exposes no Puppeteer page (test
+   * fakes), in which case steps run without settling exactly as before.
+   */
+  settler: PageSettler | null;
   readonly events: EventBus;
   readonly budgets: RetryBudget;
   readonly ethics: EthicsGate;

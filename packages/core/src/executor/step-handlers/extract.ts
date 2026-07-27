@@ -3,11 +3,14 @@ import type {
   ExtractionSchema,
   ExtractStep,
 } from '@yantra/protocol';
+import type { ElementHandle } from 'puppeteer-core';
 
+import { ReadabilityExtractor } from '../../extraction/readability.js';
 import { ExecutorLocatorNotFoundError } from '../errors.js';
-import type { StepHandler, StepResult } from '../types.js';
+import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
 
 import { resolveLocatorChain } from './locator-helpers.js';
+import { settleBeforeRead } from './settle-helpers.js';
 
 export type ExtractionRow = Record<string, unknown>;
 export interface ExtractionErrorRow {
@@ -34,10 +37,26 @@ export const handleExtract: StepHandler<ExtractStep> = async (step, ctx): Promis
     };
   }
 
-  const chainResult = await resolveLocatorChain(step.locator, step.id, ctx);
+  // Hold until the page has finished loading and its fetch-driven content has
+  // landed. An extract is usually the step right after the click that produces
+  // the result, and on a real site that result arrives seconds later.
+  await settleBeforeRead(ctx);
+
+  // Extraction reads the element; it never points at it. Demanding the full
+  // actionable contract would require the element's centre to be inside the
+  // viewport and to win a hit test — which a page-length container such as the
+  // `body` locator that `do --save-as` records for an extract step can never
+  // do, so every such step timed out as "locator not found".
+  const chainResult = await resolveLocatorChain(step.locator, step.id, ctx, {
+    requirement: 'visible',
+  });
   if (chainResult.kind === 'not_found') {
     const locErr = new ExecutorLocatorNotFoundError(
-      { chainName: chainResult.chainName, candidatesCount: chainResult.candidatesCount },
+      {
+        chainName: chainResult.chainName,
+        candidatesCount: chainResult.candidatesCount,
+        diagnostics: chainResult.diagnostics,
+      },
       { taskId: ctx.taskId, runId: ctx.runId, stepId: step.id },
     );
     if (ctx.budgets.canRetry('step')) {
@@ -53,7 +72,9 @@ export const handleExtract: StepHandler<ExtractStep> = async (step, ctx): Promis
 
   let rawData: unknown;
   try {
-    const evaluated = await elementHandle.evaluate(extractFromDom, step.extraction_schema);
+    const evaluated = isReadable(step.extraction_schema)
+      ? await extractReadable(elementHandle, ctx)
+      : await elementHandle.evaluate(extractFromDom, step.extraction_schema);
     rawData = toUnknown(evaluated);
   } catch (err) {
     return {
@@ -72,6 +93,72 @@ export const handleExtract: StepHandler<ExtractStep> = async (step, ctx): Promis
     captureKeys: [captureKey],
   };
 };
+
+// ---------------------------------------------------------------------------
+// Readable extraction (Node-side, via the shared Readability pipeline)
+// ---------------------------------------------------------------------------
+
+/** True for the `primitive/readable` schema, which bypasses DOM extraction. */
+function isReadable(schema: ExtractionSchema): boolean {
+  return schema.type === 'primitive' && schema.kind === 'readable';
+}
+
+const readabilityExtractor = new ReadabilityExtractor();
+
+/**
+ * Extracts the element's article-like content with boilerplate stripped.
+ *
+ * Runs the same `ReadabilityExtractor` the agent uses to build its own page
+ * digest, so a replayed workflow captures what the agent read rather than what
+ * `textContent` happens to concatenate — which on a page-level locator means
+ * nav, cookie banners, footers, and the text inside `<script>`/`<style>`.
+ *
+ * Falls back to the element's rendered text when Readability finds no article.
+ * That is not an edge case: Readability targets prose documents, and the pages
+ * workflows are recorded against — a tracking result, an order summary, an app
+ * shell — frequently have none. Returning empty there would make the terminal
+ * extract step useless on exactly the sites it exists for. `innerText` is used
+ * for the fallback rather than `textContent` because it reflects rendering:
+ * hidden elements and script bodies are excluded, and block boundaries survive
+ * as newlines.
+ */
+async function extractReadable(
+  elementHandle: ElementHandle,
+  ctx: ExecutionContext,
+): Promise<string> {
+  const { html, text } = await elementHandle.evaluate((el) => ({
+    html: (el as unknown as { outerHTML: string }).outerHTML,
+    text: (el as unknown as { innerText?: string; textContent: string | null }).innerText ?? '',
+  }));
+
+  const url = ctx.page?.url() ?? 'about:blank';
+  const article = await readabilityExtractor.extract({
+    url,
+    finalUrl: url,
+    fetchedAt: new Date(ctx.clock.now()).toISOString(),
+    contentType: 'text/html',
+    html,
+    statusCode: 200,
+    fetchMode: 'browser',
+    elapsedMs: 0,
+  });
+
+  const readable = article?.contentText.trim() ?? '';
+  return readable.length > 0 ? readable : normalizeVisibleText(text);
+}
+
+/**
+ * Collapses the runs of blank lines `innerText` leaves between blocks, and the
+ * non-breaking spaces real pages are full of, without losing the line breaks
+ * that carry the layout's meaning.
+ */
+function normalizeVisibleText(text: string): string {
+  return text
+    .replace(/[^\S\n]+/gu, ' ')
+    .replace(/ *\n */gu, '\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+}
 
 // ---------------------------------------------------------------------------
 // DOM extraction (runs in page context via elementHandle.evaluate)

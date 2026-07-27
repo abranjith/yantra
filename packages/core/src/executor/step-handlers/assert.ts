@@ -4,6 +4,7 @@ import { AssertFailedError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
 
 import { resolveLocatorChain } from './locator-helpers.js';
+import { settleBeforeRead } from './settle-helpers.js';
 
 /**
  * Assert step handler.
@@ -20,13 +21,28 @@ export const handleAssert: StepHandler<AssertStep> = async (step, ctx): Promise<
     };
   }
 
-  const chainResult = await resolveLocatorChain(step.locator, step.id, ctx);
-
   const condition = step.condition;
+
+  // An assertion is a determinism check, so it must run against the settled
+  // page: asserting while the result is still loading fails a workflow that is
+  // working, and `hidden`/`count_equals` would read a half-built DOM.
+  await settleBeforeRead(ctx);
+
+  // Assertions inspect the element, never point at it: `visible` is the right
+  // bar, and demanding the full actionable contract would fail an assertion on
+  // any element whose centre lies outside the viewport.
+  const chainResult = await resolveLocatorChain(step.locator, step.id, ctx, {
+    requirement: 'visible',
+  });
 
   if (condition.kind === 'visible') {
     if (chainResult.kind === 'not_found') {
-      return assertFail(step.id, ctx, 'visible', 'Element was not found / not visible.');
+      return assertFail(
+        step.id,
+        ctx,
+        'visible',
+        `Element was not found / not visible. ${chainResult.diagnostics}`,
+      );
     }
     if (chainResult.kind === 'error') {
       return { kind: 'failed', failureClass: 'unexpected', error: chainResult.error };
@@ -43,7 +59,14 @@ export const handleAssert: StepHandler<AssertStep> = async (step, ctx): Promise<
 
   if (condition.kind === 'text_matches') {
     if (chainResult.kind !== 'found') {
-      return assertFail(step.id, ctx, 'text_matches', 'Element not found for text assertion.');
+      const detail =
+        chainResult.kind === 'not_found' ? chainResult.diagnostics : chainResult.error.message;
+      return assertFail(
+        step.id,
+        ctx,
+        'text_matches',
+        `Element not found for text assertion. ${detail}`,
+      );
     }
     const text = await chainResult.elementHandle.evaluate(
       (el) => (el as unknown as { textContent: string | null }).textContent?.trim() ?? '',

@@ -205,6 +205,17 @@ carrier tracking page) commonly takes 10-30s to populate its content via an
 async fetch after the initial load, and a shorter cap reports the empty/loading
 shell as the final result instead of waiting for the real one.
 
+These are ceilings, not the cost of a call: a settled page returns in well
+under a second. Keeping them ceilings is why the network-quiet wait counts
+in-flight requests itself rather than reading Puppeteer's counter. Two kinds of
+request would otherwise never clear and would make every call pay the full cap:
+renderer-served URLs (`blob:`, `data:`, `filesystem:`), whose completion is
+reported to the consuming context rather than the page — the blob-backed
+workers that bot-protection and analytics bundles spawn on most commercial
+sites — and requests still open after `INFLIGHT_STALE_MS`, which are streams
+the page is holding open (SSE, long-poll, a hanging beacon) rather than the
+action's outcome.
+
 Browser interaction follows an **observe → act → re-observe** loop.
 `browser_observe` returns sanitized bounded text plus ranked
 `{ref, role, name}` entries. Refs are opaque and belong only to the current

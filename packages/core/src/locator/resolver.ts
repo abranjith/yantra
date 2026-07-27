@@ -78,14 +78,18 @@ export class LocatorResolverImpl {
 
         matchCount = resolution.count;
 
-        if (matchCount === 1) {
+        // A non-strict chain deliberately tolerates >1 match: the injected side
+        // has already parked the first match in the slot, so accept it rather
+        // than treating the candidate as a miss and walking past a locator that
+        // did in fact find the element.
+        if (matchCount === 1 || (matchCount > 1 && !chain.strict)) {
           outcome = 'matched';
           const candidateDuration = Date.now() - candidateStart;
 
           candidatesTried.push({
             index: i,
             intent: candidate.intent,
-            matchCount: 1,
+            matchCount,
             outcome: 'matched',
             durationMs: candidateDuration,
           });
@@ -121,28 +125,17 @@ export class LocatorResolverImpl {
         }
 
         if (matchCount > 1 && chain.strict) {
+          // Ambiguous: refuse to resolve to an arbitrary element, but keep
+          // walking. A ranked chain exists precisely so a broad candidate
+          // (role+name shared with a duplicate) can hand off to a narrower one
+          // (unique CSS, XPath). Aborting here discarded those fallbacks and
+          // failed a chain that could still identify the element uniquely.
+          // Ambiguity is only reported if nothing further resolves.
           outcome = 'ambiguous';
-          candidatesTried.push({
-            index: i,
-            intent: candidate.intent,
-            matchCount,
-            outcome: 'ambiguous',
-            durationMs: Date.now() - candidateStart,
-          });
-
-          const durationMs = Date.now() - startTime;
-          this.emitEvent(chain, null, 'ambiguous', candidatesTried, durationMs, frameId);
-
-          return {
-            kind: 'failure',
-            reason: 'ambiguous',
-            candidatesTried: [...candidatesTried],
-            durationMs,
-          };
+        } else {
+          // count === 0: no match, continue
+          outcome = 'no_match';
         }
-
-        // count === 0 (or count > 1 non-strict): no match, continue
-        outcome = 'no_match';
       } catch (err) {
         if (this.isFrameDetachedError(err)) {
           const durationMs = Date.now() - startTime;
@@ -179,11 +172,18 @@ export class LocatorResolverImpl {
     }
 
     const durationMs = Date.now() - startTime;
-    this.emitEvent(chain, null, 'not_found', candidatesTried, durationMs, frameId);
+    // The chain is exhausted. Report ambiguity in preference to not-found when
+    // any candidate did match multiple elements: "your locator matches 3
+    // elements" is actionable, "nothing matched" is misleading and sends the
+    // author looking for a page that changed.
+    const reason = candidatesTried.some((attempt) => attempt.outcome === 'ambiguous')
+      ? 'ambiguous'
+      : 'not_found';
+    this.emitEvent(chain, null, reason, candidatesTried, durationMs, frameId);
 
     return {
       kind: 'failure',
-      reason: 'not_found',
+      reason,
       candidatesTried: [...candidatesTried],
       durationMs,
     };

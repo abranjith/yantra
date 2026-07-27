@@ -1,15 +1,15 @@
 import { access } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   AgentBrowserController,
   type BrowserActionabilityError,
-  isNavigationRaceError,
   isNoLayoutBoxError,
   StaleElementRefError,
 } from '../../src/browser/agent-controller.js';
+import { isNavigationRaceError, isUnsettleableRequestUrl } from '../../src/browser/page-settle.js';
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from '../../src/browser/types.js';
@@ -58,9 +58,33 @@ describe('@no-llm isNoLayoutBoxError', () => {
   });
 });
 
+describe('@no-llm isUnsettleableRequestUrl', () => {
+  // These schemes are why the network-quiet wait cannot read a raw in-flight
+  // count: the page hears the request start and never hears it end, so one of
+  // them makes strict idle unreachable for the life of the document.
+  it('classifies renderer-served URLs and rejects network ones', () => {
+    expect(
+      isUnsettleableRequestUrl('blob:https://www.ups.com/6cdf9851-830c-4ce4-a3ad-4e10f34'),
+    ).toBe(true);
+    expect(isUnsettleableRequestUrl('data:text/javascript,console.log(1)')).toBe(true);
+    expect(isUnsettleableRequestUrl('filesystem:https://example.com/temporary/worker.js')).toBe(
+      true,
+    );
+    expect(isUnsettleableRequestUrl('BLOB:https://example.com/abc')).toBe(true);
+    expect(isUnsettleableRequestUrl('https://example.com/app.js')).toBe(false);
+    expect(isUnsettleableRequestUrl('http://127.0.0.1:8080/api')).toBe(false);
+    expect(isUnsettleableRequestUrl('about:blank')).toBe(false);
+    // Only the scheme counts — a network URL that merely mentions one does not.
+    expect(isUnsettleableRequestUrl('https://example.com/blob:worker')).toBe(false);
+    expect(isUnsettleableRequestUrl('')).toBe(false);
+  });
+});
+
 describe('@no-llm AgentBrowserController', () => {
   let server: Server;
   let baseUrl: string;
+  /** Deliberately unanswered responses; released in afterAll so close() can. */
+  const hangingResponses: ServerResponse[] = [];
 
   beforeAll(async () => {
     server = createServer((request, response) => {
@@ -141,6 +165,16 @@ describe('@no-llm AgentBrowserController', () => {
         setTimeout(() => response.end('very late fragment loaded'), 6_000);
         return;
       }
+      if (path === '/hanging-fetch') {
+        response.end(`<!doctype html><title>Hanging fetch</title><button>Ready</button>
+          <script>fetch('/never-responds').catch(() => {});</script>`);
+        return;
+      }
+      if (path === '/never-responds') {
+        // Headers never sent, so no response/failure/finish event ever fires.
+        hangingResponses.push(response);
+        return;
+      }
       if (path === '/select-form') {
         response.end(`<!doctype html><title>Select</title>
           <select aria-label="Country" onchange="document.title='picked:'+this.value">
@@ -184,6 +218,7 @@ describe('@no-llm AgentBrowserController', () => {
   });
 
   afterAll(async () => {
+    for (const response of hangingResponses) response.destroy();
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
@@ -203,6 +238,15 @@ describe('@no-llm AgentBrowserController', () => {
     const profileDir = controller.profileDir!;
     await expect(access(profileDir)).resolves.toBeUndefined();
     expect(tracked.launch).toHaveBeenCalledOnce();
+    const runtimeIdentity = await tracked.page!.puppeteerPage!.evaluate(() => ({
+      userAgent: navigator.userAgent,
+      webdriver: navigator.webdriver,
+      language: navigator.language,
+    }));
+    expect(runtimeIdentity.userAgent).toContain('Chrome/');
+    expect(runtimeIdentity.userAgent).not.toContain('HeadlessChrome');
+    expect(runtimeIdentity.webdriver).toBe(false);
+    expect(runtimeIdentity.language).toMatch(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i);
 
     await controller.teardown();
     await controller.teardown();
@@ -415,6 +459,44 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
+  // Regression for the ~60s floor every browser tool call paid. A request that
+  // never reports completion (here a hung endpoint; in the field, the
+  // blob-backed workers on ups.com) pinned the in-flight count above zero for
+  // the life of the document, so strict network idle was unreachable and every
+  // call ran to the ~60s cap. Measured on ups.com before the fix: navigate
+  // 61.6s, observe 60.4s, extract 60.0s.
+  //
+  // The bounds are far above the real cost and far below the cap, so they fail
+  // decisively either way, and the test timeout leaves the broken path room to
+  // finish and report its number rather than time out opaquely.
+  it('stops waiting on a request that never responds, and does not re-pay it', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'hanging-fetch-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+
+    // The hung request is younger than the stale window here, so this first
+    // call still waits it out — bounded by that window, not by the cap.
+    const navigateStart = Date.now();
+    await controller.navigate(`${baseUrl}/hanging-fetch`);
+    expect(Date.now() - navigateStart).toBeLessThan(30_000);
+
+    // By now it has aged out, so it costs the run nothing further: this is the
+    // part that made every subsequent tool call in a session pay 60s.
+    const observeStart = Date.now();
+    const observation = await controller.observe();
+    expect(Date.now() - observeStart).toBeLessThan(10_000);
+    expect(observation.interactables.map((entry) => entry.name)).toContain('Ready');
+
+    const extractStart = Date.now();
+    await controller.extract('content');
+    expect(Date.now() - extractStart).toBeLessThan(10_000);
+
+    await controller.teardown();
+  }, 240_000);
+
   it('selects dropdown options by label or value and rejects unknown options', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({
@@ -433,6 +515,69 @@ describe('@no-llm AgentBrowserController', () => {
     await expect(controller.fill(country.ref, 'France')).rejects.toMatchObject({
       code: 'OPTION_NOT_FOUND',
     } satisfies Partial<BrowserActionabilityError>);
+    await controller.teardown();
+  }, 45_000);
+
+  it('derives a ranked locator chain from the live element', async () => {
+    // The chain a promoted workflow replays. It must come from the locator
+    // engine's own ranker, not from the observation scanner's simplified role
+    // map — see `locatorFor`.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'locator-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(baseUrl);
+    const observation = await controller.observe();
+    const signIn = observation.interactables.find((entry) => entry.name === 'Sign in')!;
+
+    const chain = await controller.locatorFor(signIn.ref);
+
+    // Ranked best-first, more than one candidate, terminated by a structural
+    // last resort so a single miss is survivable.
+    expect(chain.length).toBeGreaterThan(1);
+    expect(chain).toContainEqual({ kind: 'role', role: 'button', name: 'Sign in' });
+    expect(chain.at(-1)?.kind).toBe('xpath');
+    await controller.teardown();
+  }, 45_000);
+
+  it('derives a listbox role for a <select>, matching what replay computes', async () => {
+    // Regression: the observation scanner calls `<select>` a `combobox`, but
+    // the locator engine computes `listbox`. A chain built from the scanner's
+    // role pinned a role that could never match, so every recorded dropdown
+    // failed replay with "locator not found" on an unchanged page.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'locator-select-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/select-form`);
+    const observation = await controller.observe();
+    const country = observation.interactables.find((entry) => entry.name === 'Country')!;
+
+    // The model-facing observation still reports the scanner's simpler role...
+    expect(country.role).toBe('combobox');
+    // ...but the persisted locator is expressed in the resolver's terms.
+    const chain = await controller.locatorFor(country.ref);
+    expect(chain).toContainEqual({ kind: 'role', role: 'listbox', name: 'Country' });
+    await controller.teardown();
+  }, 45_000);
+
+  it('returns an empty chain for a stale ref instead of throwing', async () => {
+    // A locator is a nice-to-have for the trace; it must never fail the action
+    // the agent is performing.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'locator-stale-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(baseUrl);
+    await controller.observe();
+
+    await expect(controller.locatorFor('e9999')).resolves.toEqual([]);
     await controller.teardown();
   }, 45_000);
 

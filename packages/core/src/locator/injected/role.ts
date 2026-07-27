@@ -187,10 +187,16 @@ export function getRole(el: Element): AriaRole | null {
     return INPUT_TYPE_ROLE_MAP.get(inputType) ?? 'textbox';
   }
 
-  // <section> is only "region" when it has an accessible name
+  // <section> is only "region" when it has an accessible name.
+  //
+  // This must consult the *explicit* name only. Asking for the full accessible
+  // name would re-enter `getAccessibleName`, whose content branch calls back
+  // into `getRole` — unbounded mutual recursion that blew the stack on any
+  // page containing an unnamed `<section>`, which is most of them. Per
+  // accname, a section is never named by its own content anyway, so the
+  // explicit name is the correct input here as well as the terminating one.
   if (tag === 'SECTION') {
-    const name = getAccessibleName(el);
-    return name ? 'region' : null;
+    return explicitAccessibleName(el) ? 'region' : null;
   }
 
   return IMPLICIT_ROLE_MAP.get(tag) ?? null;
@@ -207,6 +213,33 @@ export function getRole(el: Element): AriaRole | null {
  * @returns The accessible name string (may be empty)
  */
 export function getAccessibleName(el: Element): string {
+  const explicit = explicitAccessibleName(el);
+  if (explicit) return explicit;
+
+  // For buttons, headings, links — inner text content
+  const role = getRole(el);
+  if (
+    role === 'button' ||
+    role === 'link' ||
+    role === 'heading' ||
+    role === 'tab' ||
+    role === 'menuitem'
+  ) {
+    return (el.textContent ?? '').trim();
+  }
+
+  return '';
+}
+
+/**
+ * The accessible name an element declares, independent of its role:
+ * aria-labelledby > aria-label > native label > placeholder > title.
+ *
+ * Split out from {@link getAccessibleName} so `getRole` can ask "is this
+ * element named?" without triggering the role → name → role cycle. Every
+ * source here is declarative, so this function never consults the role.
+ */
+function explicitAccessibleName(el: Element): string {
   // aria-labelledby: space-separated IDs, concatenated text content
   const labelledBy = el.getAttribute('aria-labelledby');
   if (labelledBy) {
@@ -236,18 +269,6 @@ export function getAccessibleName(el: Element): string {
   // title attribute
   const title = el.getAttribute('title')?.trim();
   if (title) return title;
-
-  // For buttons, headings, links — inner text content
-  const role = getRole(el);
-  if (
-    role === 'button' ||
-    role === 'link' ||
-    role === 'heading' ||
-    role === 'tab' ||
-    role === 'menuitem'
-  ) {
-    return (el.textContent ?? '').trim();
-  }
 
   return '';
 }

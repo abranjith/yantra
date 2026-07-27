@@ -25,11 +25,19 @@ export class ExecutorLocatorNotFoundError extends ExecutorError {
     public readonly locatorContext: {
       readonly chainName: string;
       readonly candidatesCount: number;
+      /**
+       * What the engine actually observed — matched nothing, matched several,
+       * or matched but never became usable — plus the candidates it walked.
+       * Without it every locator failure reads the same and none is
+       * diagnosable from the run report.
+       */
+      readonly diagnostics?: string;
     },
     base: { readonly taskId: string; readonly runId: string; readonly stepId: string },
   ) {
     super(
-      `Locator chain "${locatorContext.chainName}" exhausted ${locatorContext.candidatesCount} candidate(s).`,
+      `Locator chain "${locatorContext.chainName}" exhausted ${locatorContext.candidatesCount} candidate(s).` +
+        (locatorContext.diagnostics !== undefined ? ` ${locatorContext.diagnostics}` : ''),
       base,
     );
   }

@@ -134,4 +134,45 @@ describe('@no-llm rankCandidates', () => {
       expect(ranking.candidates[i - 1]!.score).toBeGreaterThanOrEqual(ranking.candidates[i]!.score);
     }
   });
+
+  // Ranking now runs on every recorded interaction against the live page, so
+  // "read-only" is a hard requirement, not a nicety.
+  it('does not mutate the page when reading a label[for] association', () => {
+    // Regression: the label[for] branch stripped form controls out of the LIVE
+    // label instead of its clone, deleting the very input being recorded.
+    document.body.innerHTML =
+      '<label for="email">Email <input id="nested" type="hidden"></label>' +
+      '<input id="email" type="text">';
+    const target = document.getElementById('email')!;
+
+    rankCandidates(target);
+
+    expect(document.getElementById('nested')).not.toBeNull();
+    expect(document.getElementById('email')).not.toBeNull();
+    expect(document.querySelectorAll('input')).toHaveLength(2);
+  });
+
+  it('excludes nested control text from a label[for] name', () => {
+    document.body.innerHTML =
+      '<label for="pick">Choose one <select id="inner"><option>A</option></select></label>' +
+      '<input id="pick" type="text">';
+    const ranking = rankCandidates(document.getElementById('pick')!);
+
+    const label = ranking.candidates.find((c) => c.intent.kind === 'label');
+    expect(label?.intent).toEqual({ kind: 'label', text: 'Choose one', exact: true });
+  });
+
+  it('does not mutate the page when reading an ancestor label', () => {
+    document.body.innerHTML = '<label>Full name <input id="name" type="text"></label>';
+
+    rankCandidates(document.getElementById('name')!);
+
+    expect(document.getElementById('name')).not.toBeNull();
+  });
+
+  it('ranks an element inside an unnamed <section> without blowing the stack', () => {
+    document.body.innerHTML = '<section><button id="go">Go</button></section>';
+
+    expect(() => rankCandidates(document.getElementById('go')!)).not.toThrow();
+  });
 });

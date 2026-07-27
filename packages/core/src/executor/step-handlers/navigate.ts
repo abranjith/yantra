@@ -4,6 +4,8 @@ import { EthicsRefusedError, NavigationTimeoutError, RemoteRefusedError } from '
 import type { StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
 
+import { settleAfterNavigation } from './settle-helpers.js';
+
 const DEFAULT_NAV_TIMEOUT_MS = 30_000;
 
 /**
@@ -87,6 +89,12 @@ export const handleNavigate: StepHandler<NavigateStep> = async (step, ctx): Prom
     }
     return fail('unexpected', err);
   }
+
+  // Real pages often bounce once more right after load (JS or meta-refresh
+  // redirects, client-side routers) and keep fetching their content. Settle
+  // those before the next step acts, so it does not resolve locators against a
+  // document that is about to be replaced.
+  await settleAfterNavigation(ctx);
 
   return { kind: 'completed' };
 };

@@ -110,6 +110,9 @@ export function makeRunCommand(): Command {
         } else {
           const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
           process.stdout.write(`${icon} Run ${outcome.runId}: ${outcome.kind}\n`);
+          if (outcome.kind === 'success') {
+            process.stdout.write(renderOutputs(outcome.outputs));
+          }
         }
 
         closeRuntime();
@@ -130,4 +133,52 @@ export function makeRunCommand(): Command {
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+/** Longest output body shown inline; the rest is in the run's `outputs.json`. */
+const MAX_OUTPUT_CHARS = 4_000;
+
+/**
+ * Renders a successful run's outputs beneath the status line.
+ *
+ * A run that completes and prints only `✓ Run <id>: success` is
+ * indistinguishable from one that did nothing — the whole point of replaying a
+ * workflow is the data it collects, and until now that data was reachable only
+ * by opening `outputs.json` or re-running with `--json`.
+ *
+ * Long values are truncated with a pointer to the full artifact rather than
+ * flooding the terminal; `--json` remains the lossless surface for scripting.
+ */
+export function renderOutputs(outputs: Readonly<Record<string, unknown>>): string {
+  const entries = Object.entries(outputs);
+  if (entries.length === 0) {
+    return (
+      '\nThis workflow declares no outputs, so the run captured nothing to show.\n' +
+      'Add an `extract` step (or re-save the workflow with `yantra do --save-as`) to collect data.\n'
+    );
+  }
+  const lines: string[] = [''];
+  for (const [name, value] of entries) {
+    const rendered = renderOutputValue(value);
+    const truncated =
+      rendered.length > MAX_OUTPUT_CHARS
+        ? `${rendered.slice(0, MAX_OUTPUT_CHARS)}\n… truncated — see outputs.json for the full value`
+        : rendered;
+    lines.push(`${name}:`);
+    for (const line of truncated.split('\n')) lines.push(`  ${line}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function renderOutputValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return value.toString();
+  }
+  // Objects, arrays, and anything else an extraction can produce. `JSON.stringify`
+  // rather than `String(value)`, which renders every object as `[object Object]`.
+  return JSON.stringify(value, null, 2) ?? String(typeof value);
 }

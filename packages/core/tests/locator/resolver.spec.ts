@@ -104,27 +104,84 @@ describe('@no-llm LocatorResolverImpl.resolve', () => {
     }
   });
 
-  it('returns ambiguous when strict mode and count > 1, and stops walking', async () => {
-    const callMock = vi.fn().mockResolvedValueOnce({ count: 3 }); // first candidate returns 3 matches
+  it('reports ambiguous when strict mode exhausts the chain and a candidate matched >1', async () => {
+    const callMock = vi
+      .fn()
+      .mockResolvedValueOnce({ count: 3 }) // candidate 0: ambiguous
+      .mockResolvedValueOnce({ count: 0 }); // candidate 1: no match
 
     const host = makeHost({ call: callMock });
     const resolver = new LocatorResolverImpl(host);
-    const chain = makeChain(
-      [makeCssCandidate('.ambiguous'), makeCssCandidate('.would-not-be-tried')],
-      { strict: true },
-    );
+    const chain = makeChain([makeCssCandidate('.ambiguous'), makeCssCandidate('.also-misses')], {
+      strict: true,
+    });
 
     const result = await resolver.resolve(chain);
 
     expect(result.kind).toBe('failure');
     if (result.kind === 'failure') {
+      // Ambiguity outranks not_found in the report: "matches 3 elements" tells
+      // the author what to fix, "nothing matched" sends them hunting a page change.
       expect(result.reason).toBe('ambiguous');
-      // Walk stopped at candidate 0 — candidate 1 never tried
-      expect(result.candidatesTried).toHaveLength(1);
+      expect(result.candidatesTried).toHaveLength(2);
       expect(result.candidatesTried[0]?.outcome).toBe('ambiguous');
+      expect(result.candidatesTried[0]?.matchCount).toBe(3);
+      expect(result.candidatesTried[1]?.outcome).toBe('no_match');
     }
-    // call was only invoked once (not twice)
-    expect(callMock).toHaveBeenCalledTimes(1);
+    expect(callMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls through an ambiguous strict candidate to a narrower one that resolves', async () => {
+    const handle = makeFakeHandle();
+    const callMock = vi
+      .fn()
+      .mockResolvedValueOnce({ count: 4 }) // role+name also matches hidden duplicates
+      .mockResolvedValueOnce({ count: 1, slotKey: 'default' }); // unique CSS pins it
+
+    const host = makeHost({
+      call: callMock,
+      callHandle: vi.fn().mockResolvedValue(handle),
+    });
+    const resolver = new LocatorResolverImpl(host);
+    const chain = makeChain([makeCssCandidate('.broad'), makeCssCandidate('#unique')], {
+      strict: true,
+    });
+
+    const result = await resolver.resolve(chain);
+
+    // The whole point of a ranked chain: a broad candidate that cannot pick a
+    // single element hands off to a narrower one instead of failing the run.
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.usedCandidateIndex).toBe(1);
+      expect(result.elementHandle).toBe(handle);
+      expect(result.candidatesTried[0]?.outcome).toBe('ambiguous');
+      expect(result.candidatesTried[1]?.outcome).toBe('matched');
+    }
+  });
+
+  it('accepts the first match for a non-strict chain that matches several elements', async () => {
+    const handle = makeFakeHandle();
+    const host = makeHost({
+      call: vi.fn().mockResolvedValue({ count: 3, slotKey: 'default' }),
+      callHandle: vi.fn().mockResolvedValue(handle),
+    });
+
+    const resolver = new LocatorResolverImpl(host);
+    const chain = makeChain([makeCssCandidate('.many')], { strict: false });
+
+    const result = await resolver.resolve(chain);
+
+    // Non-strict means "several matches are acceptable, take the first" — it
+    // previously meant "several matches count as no match", which walked past
+    // a candidate that had in fact found the element.
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.usedCandidateIndex).toBe(0);
+      expect(result.elementHandle).toBe(handle);
+      expect(result.candidatesTried[0]?.matchCount).toBe(3);
+      expect(result.candidatesTried[0]?.outcome).toBe('matched');
+    }
   });
 
   it('returns frame_detached when host throws frame-detached error', async () => {

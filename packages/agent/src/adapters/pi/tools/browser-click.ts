@@ -9,6 +9,7 @@ import {
   browserFailure,
   isDomainFailure,
   PROTECTED_ACTION_RE,
+  safeLocatorFor,
 } from './browser-common.js';
 
 const BrowserClickParams = Type.Object(
@@ -47,17 +48,19 @@ export function browserClickSpec(
     run: async (params: Params, ctx): Promise<DomainResult> => {
       const controller = browserController(ctx.services);
       if (isDomainFailure(controller)) return controller;
-      // Capture the element's role/name and host BEFORE clicking — a click
-      // that navigates clears the refs along with the old document.
+      // Capture the element's role/name, durable locator, and host BEFORE
+      // clicking — a click that navigates clears the refs along with the old
+      // document, and the locator can only be derived from the live element.
       const described = controller.describeRef(params.ref);
       const host = controller.host();
       const name = described?.name ?? '';
+      const ranked = await safeLocatorFor(controller, params.ref);
       try {
         const result = await controller.click(params.ref);
         ctx.services.trace?.append({
           kind: 'click',
           host,
-          locator: toCandidateChain(described?.role ?? '', name),
+          locator: ranked.length > 0 ? ranked : toCandidateChain(described?.role ?? '', name),
           requires_confirmation: PROTECTED_ACTION_RE.test(name),
         });
         return { ok: true, model: result };

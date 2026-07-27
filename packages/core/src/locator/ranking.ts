@@ -162,28 +162,37 @@ function kindOrder(intent: LocatorIntent): number {
   return ORDER[intent.kind] ?? 99;
 }
 
-/** Finds the text of a <label> associated with this element. */
+/**
+ * Finds the text of a <label> associated with this element, excluding the text
+ * of any form controls nested inside it.
+ *
+ * Strictly read-only. The `label[for]` branch used to strip controls from the
+ * *live* label while reading text from an unstripped clone — so it both
+ * returned the wrong text and deleted real inputs from the page. Harmless while
+ * ranking was unused; now that it runs on every recorded interaction it would
+ * mutate the page mid-run.
+ */
 function findLabelText(el: Element): string | null {
   const id = el.getAttribute('id');
   if (id) {
     const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
-    if (label) {
-      const clone = label.cloneNode(true) as HTMLElement;
-      label.querySelectorAll('input, select, textarea').forEach((n) => n.remove());
-      const text = (clone.textContent ?? '').trim();
-      if (text) return text;
-    }
-  }
-
-  const parent = el.closest('label');
-  if (parent) {
-    const clone = parent.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('input, select, textarea').forEach((n) => n.remove());
-    const text = (clone.textContent ?? '').trim();
+    const text = labelTextWithoutControls(label);
     if (text) return text;
   }
 
+  const text = labelTextWithoutControls(el.closest('label'));
+  if (text) return text;
+
   return null;
+}
+
+/** Text content of a label with nested form controls removed, from a clone. */
+function labelTextWithoutControls(label: Element | null): string | null {
+  if (!label) return null;
+  const clone = label.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('input, select, textarea').forEach((node) => node.remove());
+  const text = (clone.textContent ?? '').trim();
+  return text.length > 0 ? text : null;
 }
 
 /** Counts stable (non-hash) class names on the element. */

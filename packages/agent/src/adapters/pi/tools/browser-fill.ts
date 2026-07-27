@@ -5,7 +5,12 @@ import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.
 import type { RunServices } from '../../../runtime/run-services.js';
 import { toCandidateChain, type TraceFillValue } from '../../../runtime/trace.js';
 
-import { browserController, browserFailure, isDomainFailure } from './browser-common.js';
+import {
+  browserController,
+  browserFailure,
+  isDomainFailure,
+  safeLocatorFor,
+} from './browser-common.js';
 
 const BrowserFillParams = Type.Object(
   {
@@ -100,16 +105,21 @@ async function runFill(params: Params, services: RunServices): Promise<DomainRes
           message: 'Browser services are not configured.',
           retryable: false,
         };
-  // Capture role/name/host up front so the trace reflects the element as it
-  // was observed even if the fill triggers navigation. The trace records a
+  // Capture role/name/host and the durable locator up front so the trace
+  // reflects the element as it was observed even if the fill triggers
+  // navigation. The locator engine's own ranker derives the chain from the live
+  // element, so a promoted workflow searches for it in exactly the terms replay
+  // resolves; the observed role/name is only a fallback. The trace records a
   // candidate chain and, for secrets, only the reference key.
   const described = controller.describeRef(params.ref);
   const host = controller.host();
+  const ranked = await safeLocatorFor(controller, params.ref);
   const recordTrace = (value: TraceFillValue): void =>
     services.trace?.append({
       kind: 'fill',
       host,
-      locator: toCandidateChain(described?.role ?? '', described?.name ?? ''),
+      locator:
+        ranked.length > 0 ? ranked : toCandidateChain(described?.role ?? '', described?.name ?? ''),
       value,
       submit: false,
       requires_confirmation: value.kind === 'secret_ref',
