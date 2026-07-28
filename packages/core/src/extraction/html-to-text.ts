@@ -30,6 +30,11 @@
  *   variation selectors, and pictographs (emoji, ™/©-class symbols) are
  *   dropped; horizontal whitespace collapses per line.
  *
+ * That normalization pass is exported on its own as
+ * {@link normalizeExtractedText} for callers holding text that never was HTML
+ * — a live DOM's rendered `innerText` — so every extraction path in the
+ * codebase cleans its text the same way.
+ *
  * Pure and deterministic: same HTML in, same text out. Never throws on
  * malformed HTML (cheerio's parser is tolerant).
  */
@@ -137,8 +142,28 @@ export function htmlToText(html: string): string {
     serializeNode(node, parts);
   }
 
-  const normalized = parts
-    .join('')
+  return normalizeExtractedText(parts.join(''));
+}
+
+/**
+ * Applies the normalization half of {@link htmlToText} to text that is already
+ * plain — a browser's rendered `innerText`, for instance.
+ *
+ * Callers that read text out of a live DOM get the same character hygiene,
+ * footnote stripping, and duplicate-block collapse as the HTML path, so a
+ * fallback read and a Readability read produce comparably clean output instead
+ * of each inventing its own whitespace rules.
+ *
+ * `\n\n` is the block separator here as it is in the serializer: `innerText`
+ * already emits a blank line between block elements, so the input arrives in
+ * the shape this pass expects.
+ *
+ * @param text - Plain text, with blank lines separating blocks.
+ * @returns Normalized blocks separated by blank lines; empty string for
+ *   empty/blank input.
+ */
+export function normalizeExtractedText(text: string): string {
+  const normalized = text
     .replace(/\r\n?/gu, '\n')
     .replace(NBSP_PATTERN, ' ')
     .replace(ZERO_WIDTH_PATTERN, '')

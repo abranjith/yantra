@@ -3,6 +3,8 @@ export * from './cache-key.js';
 export * from './cache.js';
 export * from './ethics-adapter.js';
 export * from './fetcher.js';
+export * from './html-to-text.js';
+export * from './live-page.js';
 export * from './readability.js';
 export * from './search/config.js';
 export * from './search/errors.js';

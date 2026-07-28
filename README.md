@@ -324,6 +324,7 @@ The legacy internal `@yantra/agent` task-planning client has been removed. The s
 - Run directory layout & the provider session artifact: [docs/run-artifacts.md](docs/run-artifacts.md).
 - Diagnostics & agent startup error codes: [docs/diagnostics.md](docs/diagnostics.md).
 - Agent tool runtime, budgets & tool safety: [docs/agent-tools.md](docs/agent-tools.md).
+- The `extract` step, extraction schemas & the shared read pipeline: [docs/workflow-extraction.md](docs/workflow-extraction.md).
 - Agentic runtime release notes: [docs/agentic-release-notes.md](docs/agentic-release-notes.md).
 - Release-gate coverage and evidence: [docs/release-gate.md](docs/release-gate.md).
 - Personalization & privacy: [docs/personalization-and-privacy.md](docs/personalization-and-privacy.md).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlToText } from '../../src/extraction/html-to-text.js';
+import { htmlToText, normalizeExtractedText } from '../../src/extraction/html-to-text.js';
 
 describe('@no-llm extraction/html-to-text', () => {
   it('separates sibling block elements instead of gluing them', () => {
@@ -115,5 +115,31 @@ describe('@no-llm extraction/html-to-text', () => {
   it('is deterministic: same HTML yields identical output', () => {
     const html = '<div><h1>Title</h1><p>Body one.</p><p>Body two.</p></div>';
     expect(htmlToText(html)).toBe(htmlToText(html));
+  });
+
+  describe('normalizeExtractedText', () => {
+    it('applies the same hygiene to text that never was HTML', () => {
+      // A browser `innerText` read: NBSP, a footnote marker, ragged blank
+      // lines, and a card title the page rendered twice.
+      const text = normalizeExtractedText(
+        '  Shipment status[3]  \n\n\n\nDelivered Monday\n\nDelivered Monday\n',
+      );
+
+      expect(text).toBe('Shipment status\n\nDelivered Monday');
+    });
+
+    it('is the normalization half of htmlToText', () => {
+      // Pins the two as one pass: if the serializer's normalization ever
+      // diverges from the exported one, live-page fallback reads silently stop
+      // matching article reads.
+      expect(htmlToText('<p>MUST READS \u{1F525}️ News | FIFA​ World Cup 2026™</p>')).toBe(
+        normalizeExtractedText('MUST READS \u{1F525}️ News | FIFA​ World Cup 2026™'),
+      );
+    });
+
+    it('returns empty string for blank input', () => {
+      expect(normalizeExtractedText('')).toBe('');
+      expect(normalizeExtractedText('  \n\n  ')).toBe('');
+    });
   });
 });

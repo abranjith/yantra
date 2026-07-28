@@ -22,8 +22,8 @@ import type { DiscoveryObservation, DiscoveryStepOutcome } from '@yantra/protoco
 import { DiscoveryObservation as DiscoveryObservationSchema } from '@yantra/protocol';
 
 import type { Page } from '../browser/types.js';
+import { extractLivePageText } from '../extraction/live-page.js';
 import type { Extractor } from '../extraction/readability.js';
-import type { FetchedDoc } from '../extraction/types.js';
 import { brandSanitized, type Sanitized } from '../sanitizer/brand.js';
 import { sanitize } from '../sanitizer/index.js';
 
@@ -164,26 +164,17 @@ export function mapRunOutcomeToStepOutcome(outcome: {
   return { outcome: 'failed', reason: `Step failed: ${outcome.failureClass ?? 'unexpected'}` };
 }
 
-async function buildDigest(url: string, html: string, extractor: Extractor): Promise<string> {
-  if (html.length === 0) {
-    return '';
-  }
-  const doc: FetchedDoc = {
-    url,
-    finalUrl: url,
-    fetchedAt: new Date().toISOString(),
-    contentType: 'text/html',
-    html,
-    statusCode: 200,
-    fetchMode: 'browser',
-    elapsedMs: 0,
-  };
-  try {
-    const article = await extractor.extract(doc);
-    return article?.contentText ?? '';
-  } catch {
-    return '';
-  }
+/**
+ * Reads the page's article text via the shared live-page stage.
+ *
+ * No `visibleText` is passed, so a page Readability finds no article in still
+ * digests to `''` exactly as before. The stage supports a rendered-text
+ * fallback (the replayed `extract` step uses it); wiring one in here would
+ * change what every agent run sees, so it stays a deliberate follow-up rather
+ * than a side effect of sharing the code.
+ */
+function buildDigest(url: string, html: string, extractor: Extractor): Promise<string> {
+  return extractLivePageText({ extractor }, { url, html });
 }
 
 /** Runs `page.evaluate(fn)`, degrading to null on any failure (best-effort). */

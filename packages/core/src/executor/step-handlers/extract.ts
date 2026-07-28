@@ -5,6 +5,7 @@ import type {
 } from '@yantra/protocol';
 import type { ElementHandle } from 'puppeteer-core';
 
+import { extractLivePageText } from '../../extraction/live-page.js';
 import { ReadabilityExtractor } from '../../extraction/readability.js';
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
@@ -103,24 +104,20 @@ function isReadable(schema: ExtractionSchema): boolean {
   return schema.type === 'primitive' && schema.kind === 'readable';
 }
 
+/** Stateless and shared, matching `AgentBrowserController`'s default. */
 const readabilityExtractor = new ReadabilityExtractor();
 
 /**
  * Extracts the element's article-like content with boilerplate stripped.
  *
- * Runs the same `ReadabilityExtractor` the agent uses to build its own page
- * digest, so a replayed workflow captures what the agent read rather than what
- * `textContent` happens to concatenate — which on a page-level locator means
- * nav, cookie banners, footers, and the text inside `<script>`/`<style>`.
- *
- * Falls back to the element's rendered text when Readability finds no article.
- * That is not an edge case: Readability targets prose documents, and the pages
- * workflows are recorded against — a tracking result, an order summary, an app
- * shell — frequently have none. Returning empty there would make the terminal
- * extract step useless on exactly the sites it exists for. `innerText` is used
- * for the fallback rather than `textContent` because it reflects rendering:
- * hidden elements and script bodies are excluded, and block boundaries survive
- * as newlines.
+ * Delegates to the shared `extractLivePageText` stage — the same one that
+ * builds the agent's observation digest — so a replayed workflow captures what
+ * the agent read rather than what `textContent` happens to concatenate, which
+ * on a page-level locator means nav, cookie banners, footers, and the text
+ * inside `<script>`/`<style>`. Everything the two paths need to agree on
+ * (Readability's pre-clean, the fallback rule, text normalization) lives there;
+ * this function's only job is getting the element's markup and rendered text
+ * out of the browser.
  */
 async function extractReadable(
   elementHandle: ElementHandle,
@@ -131,33 +128,16 @@ async function extractReadable(
     text: (el as unknown as { innerText?: string; textContent: string | null }).innerText ?? '',
   }));
 
-  const url = ctx.page?.url() ?? 'about:blank';
-  const article = await readabilityExtractor.extract({
-    url,
-    finalUrl: url,
-    fetchedAt: new Date(ctx.clock.now()).toISOString(),
-    contentType: 'text/html',
-    html,
-    statusCode: 200,
-    fetchMode: 'browser',
-    elapsedMs: 0,
-  });
-
-  const readable = article?.contentText.trim() ?? '';
-  return readable.length > 0 ? readable : normalizeVisibleText(text);
-}
-
-/**
- * Collapses the runs of blank lines `innerText` leaves between blocks, and the
- * non-breaking spaces real pages are full of, without losing the line breaks
- * that carry the layout's meaning.
- */
-function normalizeVisibleText(text: string): string {
-  return text
-    .replace(/[^\S\n]+/gu, ' ')
-    .replace(/ *\n */gu, '\n')
-    .replace(/\n{3,}/gu, '\n\n')
-    .trim();
+  return extractLivePageText(
+    { extractor: readabilityExtractor },
+    {
+      url: ctx.page?.url() ?? 'about:blank',
+      html,
+      visibleText: text,
+      // The run's clock, not wall time: a replay's artifacts stay reproducible.
+      fetchedAt: new Date(ctx.clock.now()).toISOString(),
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
