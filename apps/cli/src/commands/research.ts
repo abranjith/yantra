@@ -4,7 +4,6 @@ import {
   resolveCommandTaskProfile,
   type runAgenticTask,
   type AgenticTaskOutcome,
-  type AgenticTaskRequest,
 } from '@yantra/agent';
 import {
   BlocklistImpl,
@@ -34,6 +33,12 @@ import {
 import { validateBrief } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
+import {
+  addAgentModelOptions,
+  selectAgentSession,
+  type AgentModelOptions,
+  type AgentSelection,
+} from '../agent-model.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { openArtifact } from '../open-artifact.js';
 import { JSONRenderer } from '../render/json.js';
@@ -48,7 +53,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface ResearchCommandOptions {
+interface ResearchCommandOptions extends AgentModelOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly color?: boolean;
@@ -91,10 +96,14 @@ export function registerResearchCommand(
 ): void {
   const resolvedRuntime = runtimeWithDefaults(runtime);
 
-  program
+  const researchCommand = program
     .command('research')
     .description('Deep, multi-hop research on a topic, returned as a long-form Brief.')
-    .argument('<topic>', 'topic to research from web sources')
+    .argument('<topic>', 'topic to research from web sources');
+  // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
+  // `--auth-secret`), identical to `ask` and `do`. These bind the LLM provider;
+  // `--search-provider` below is the unrelated web-search backend.
+  addAgentModelOptions(researchCommand)
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option('--depth <hops>', 'number of research hops (1-3)')
@@ -142,30 +151,37 @@ export function registerResearchCommand(
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
 
+      // Resolved before the try so a bad --provider/--model is a validation
+      // failure (exit 1) rather than being reclassified as an execution failure
+      // by the catch below. Skipped entirely in deterministic mode, which never
+      // constructs a provider session.
+      const agentSelection: AgentSelection | null = invocation.options.noLlm
+        ? null
+        : selectAgentSession('research', options, resolvedRuntime.env);
+
       resolvedRuntime.stderr.write(
-        `research: provider=${invocation.searchProvider ?? 'auto'} ` +
+        `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
           `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
-          `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}\n`,
+          `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
+          (agentSelection === null
+            ? ''
+            : ` model=${agentSelection.model.provider}/${agentSelection.model.id}`) +
+          '\n',
       );
 
       try {
         // Deterministic selection is resolved before any agent/provider setup.
-        if (!invocation.options.noLlm) {
+        if (agentSelection !== null) {
           // Agentic wall clock is unlimited unless --budget-ms was passed
           // explicitly; the deterministic loop below keeps its bounded default.
           const explicitWallClockMs =
             command.getOptionValueSource('budgetMs') === 'cli'
               ? invocation.options.budget.maxWallClockMs
               : null;
-          await runAgenticResearch(
-            topicArg,
-            invocation,
-            format,
-            detail,
-            options,
-            resolvedRuntime,
-            explicitWallClockMs,
-          );
+          await runAgenticResearch(topicArg, invocation, format, detail, options, resolvedRuntime, {
+            ...agentSelection,
+            wallClockMs: explicitWallClockMs,
+          });
           return;
         }
         const loop = await resolvedRuntime.createLoop(invocation);
@@ -293,7 +309,7 @@ async function runAgenticResearch(
   detail: BriefDetailLevel,
   options: ResearchCommandOptions,
   runtime: ResearchRuntime,
-  explicitWallClockMs: number | null,
+  agent: AgentSelection & { readonly wallClockMs: number | null },
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -317,11 +333,11 @@ async function runAgenticResearch(
   const profile = resolveCommandTaskProfile('research', runtime.env);
   const outcome = await runtime.runTask({
     goal: topic,
-    model: selectAgentModel(runtime.env),
-    auth: { mode: 'managed' },
+    model: agent.model,
+    auth: agent.auth,
     profile,
     budgets: {
-      ...(explicitWallClockMs === null ? {} : { wallClockMs: explicitWallClockMs }),
+      ...(agent.wallClockMs === null ? {} : { wallClockMs: agent.wallClockMs }),
       totalToolCalls: invocation.options.budget.maxLlmCalls,
     },
     connector,
@@ -351,13 +367,6 @@ function agentFailureMessage(
   return outcome.kind === 'handoff'
     ? `${outcome.blocker}: ${outcome.safestNextAction}`
     : `${outcome.error.code}: ${outcome.error.message}`;
-}
-
-function selectAgentModel(env: NodeJS.ProcessEnv): AgenticTaskRequest['model'] {
-  return {
-    provider: (env.YANTRA_AGENT_PROVIDER ?? 'anthropic').trim(),
-    id: (env.YANTRA_AGENT_MODEL ?? 'claude-haiku-4-5').trim(),
-  };
 }
 
 function buildInvocation(

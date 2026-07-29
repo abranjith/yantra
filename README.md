@@ -139,7 +139,7 @@ yantra research "state of grid-scale battery storage in 2026" --depth 2
 ```
 
 ```
-research: provider=auto depth=2 max-sources=24 no-llm=false detail=standard format=terminal
+research: search-provider=auto depth=2 max-sources=24 no-llm=false detail=standard format=terminal model=anthropic/claude-haiku-4-5
 
 State of grid-scale battery storage in 2026
 ╭──────────────────────────────────────────────────────────────╮
@@ -179,6 +179,8 @@ honest partial Brief with a `budget_exhausted` notice:
 Output flags mirror `ask`: `--detail {overview|standard|full}`,
 `--format {terminal|md|html|json}` (`--json` shorthand), `--length`, `--open`,
 `--search-provider`, `--fetch-timeout`, `--per-query-limit`, `--no-color`.
+Model-selection flags mirror `do` — see
+[Selecting the model](#selecting-the-model).
 
 Alongside the Brief artifacts, each hop writes a `research-state.json` snapshot
 (queries, kept/fetched counts, coverage, remaining budget) to the run dir for
@@ -215,6 +217,35 @@ time-bounding a run is opt-in via `--budget-ms` (or
 published Brief, `2` for failure or budget exhaustion, `4` for human handoff,
 and `130` for an interrupt. `--save-as` is reserved for workflow promotion;
 deterministic saved workflows continue to use `yantra run` without an LLM loop.
+
+## Selecting the model
+
+`ask`, `research`, and `do` all open one provider session, so they share one
+model-selection surface — whatever you can point `do` at, you can point `ask`
+and `research` at too:
+
+| Flag                  | Purpose                                              | Environment fallback    |
+| --------------------- | ---------------------------------------------------- | ----------------------- |
+| `--provider <name>`   | Provider key, e.g. `anthropic` or `ollama`           | `YANTRA_AGENT_PROVIDER` |
+| `--model <id>`        | Provider-scoped model id                             | `YANTRA_AGENT_MODEL`    |
+| `--thinking <level>`  | Reasoning level (adapters clamp to model capability) | —                       |
+| `--auth-secret <ref>` | Keychain reference resolved to a runtime-only key    | —                       |
+
+Precedence is **explicit flag > environment > pinned default**
+(`anthropic` / `claude-haiku-4-5`). A blank provider, model, or secret
+reference is a validation failure (exit 1), never a silent fallback.
+
+```bash
+yantra ask "what changed in the EU AI Act" --provider ollama --model llama3.1:8b
+yantra research "grid-scale storage" --provider ollama --model llama3.1:8b
+yantra do "research this topic" --provider anthropic --model claude-haiku-4-5
+```
+
+On `ask` and `research`, `--provider` selects the **LLM**; the unrelated
+`--search-provider` selects the web-search backend. These flags have no effect
+on `--no-llm` runs, which never construct a provider session. See
+[docs/model-configuration.md](docs/model-configuration.md) for credentials and
+local-model setup.
 
 ## History & personalization
 

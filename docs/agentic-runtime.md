@@ -20,6 +20,14 @@ Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both tha
 | `research` | `web_search`, `web_fetch`, `script_run`, `workflow_run`, `result_publish`             | Requires broad multi-source evidence before publication. Set `YANTRA_AGENT_RESEARCH_BROWSE=1` to add read-only browser navigation, observation, and extraction; browser mutations remain unavailable. |
 | `do`       | Full registered catalog                                                               | Includes browser actions and deterministic workflow execution, still guarded by policy and confirmation.                                                                                              |
 
+Model selection is uniform across the three: `--provider`, `--model`,
+`--thinking`, and `--auth-secret` are registered from one shared CLI module
+(`apps/cli/src/agent-model.ts`), so the override surface cannot drift per
+command. Resolution is explicit flag > `YANTRA_AGENT_PROVIDER` /
+`YANTRA_AGENT_MODEL` > pinned default, and an empty value is a validation
+failure (exit 1) rather than a silent substitution. See
+[model-configuration.md](model-configuration.md).
+
 Command-budget defaults are configuration keys: `YANTRA_AGENT_ASK_*`, `YANTRA_AGENT_RESEARCH_*`, and `YANTRA_AGENT_DO_*` accept `BUDGET_MS`, `MAX_TOOL_CALLS`, and `MAX_CALLS_PER_TOOL` suffixes. The defaults intentionally increase from ask to research to do.
 
 | Command    | Total tool calls    | Calls per tool      |

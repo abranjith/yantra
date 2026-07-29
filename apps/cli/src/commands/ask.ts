@@ -5,7 +5,6 @@ import {
   resolveCommandTaskProfile,
   type runAgenticTask,
   type AgenticTaskOutcome,
-  type AgenticTaskRequest,
 } from '@yantra/agent';
 import {
   AskPipeline,
@@ -39,6 +38,12 @@ import {
 import { validateBrief } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
+import {
+  addAgentModelOptions,
+  selectAgentSession,
+  type AgentModelOptions,
+  type AgentSelection,
+} from '../agent-model.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -55,7 +60,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface AskOptions {
+interface AskOptions extends AgentModelOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly cache?: boolean;
@@ -92,10 +97,14 @@ export interface AskRuntime {
 export function registerAskCommand(program: Command, runtime?: Partial<AskRuntime>): void {
   const resolvedRuntime = runtimeWithDefaults(runtime);
 
-  program
+  const askCommand = program
     .command('ask')
     .description('Answer a question from the web as a synthesized Brief.')
-    .argument('<query>', 'question to answer from web sources')
+    .argument('<query>', 'question to answer from web sources');
+  // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
+  // `--auth-secret`), identical to `research` and `do`. These bind the LLM
+  // provider; `--search-provider` below is the unrelated web-search backend.
+  addAgentModelOptions(askCommand)
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option(
@@ -146,15 +155,27 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       const format = resolveFormat(options);
       const detail = resolved.detail;
 
+      // Resolved before the try so a bad --provider/--model is a validation
+      // failure (exit 1) rather than being reclassified as an execution failure
+      // by the catch below. Skipped entirely in deterministic mode, which never
+      // constructs a provider session.
+      const agentSelection: AgentSelection | null = query.noLlm
+        ? null
+        : selectAgentSession('ask', options, resolvedRuntime.env);
+
       resolvedRuntime.stderr.write(
-        `ask: provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
-          `no-llm=${query.noLlm} detail=${detail} format=${format}\n`,
+        `ask: search-provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
+          `no-llm=${query.noLlm} detail=${detail} format=${format}` +
+          (agentSelection === null
+            ? ''
+            : ` model=${agentSelection.model.provider}/${agentSelection.model.id}`) +
+          '\n',
       );
 
       try {
         // Selection happens before the agent runtime/provider is constructed.
         // The deterministic pipeline below is deliberately untouched.
-        if (!query.noLlm) {
+        if (agentSelection !== null) {
           // The agentic wall clock is unlimited by default; only an explicit
           // --budget-ms bounds it (and it is not clamped to the deterministic
           // pipeline's 300s ceiling — local models legitimately need longer).
@@ -162,15 +183,10 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
             command.getOptionValueSource('budgetMs') === 'cli'
               ? parseNullablePositiveInt(options.budgetMs)
               : null;
-          await runAgenticAsk(
-            queryArg,
-            query,
-            format,
-            detail,
-            options,
-            resolvedRuntime,
-            explicitWallClockMs,
-          );
+          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime, {
+            ...agentSelection,
+            wallClockMs: explicitWallClockMs,
+          });
           return;
         }
         const pipeline = await resolvedRuntime.createPipeline(query);
@@ -309,7 +325,7 @@ async function runAgenticAsk(
   detail: BriefDetailLevel,
   options: AskOptions,
   runtime: AskRuntime,
-  explicitWallClockMs: number | null,
+  agent: AgentSelection & { readonly wallClockMs: number | null },
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
   const connector = new CLIConnectorIO(
@@ -323,11 +339,11 @@ async function runAgenticAsk(
   const profile = resolveCommandTaskProfile('ask', runtime.env);
   const outcome = await runtime.runTask({
     goal: question,
-    model: selectAgentModel(runtime.env),
-    auth: { mode: 'managed' },
+    model: agent.model,
+    auth: agent.auth,
     profile,
     budgets: {
-      ...(explicitWallClockMs === null ? {} : { wallClockMs: explicitWallClockMs }),
+      ...(agent.wallClockMs === null ? {} : { wallClockMs: agent.wallClockMs }),
       ...(query.budgetCalls === null ? {} : { totalToolCalls: query.budgetCalls }),
     },
     ...(query.personalization ? { profileContext: query.personalization } : {}),
@@ -382,13 +398,6 @@ function agentFailureMessage(
   return outcome.kind === 'handoff'
     ? `${outcome.blocker}: ${outcome.safestNextAction}`
     : `${outcome.error.code}: ${outcome.error.message}`;
-}
-
-function selectAgentModel(env: NodeJS.ProcessEnv): AgenticTaskRequest['model'] {
-  return {
-    provider: (env.YANTRA_AGENT_PROVIDER ?? 'anthropic').trim(),
-    id: (env.YANTRA_AGENT_MODEL ?? 'claude-haiku-4-5').trim(),
-  };
 }
 
 /** Resolved presentation/synthesis defaults (explicit flag > prefs > hardcoded). */

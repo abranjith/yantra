@@ -12,25 +12,22 @@ import {
   type runAgenticTask,
   type AgentBudgetConfig,
   type AgenticTaskOutcome,
-  type AgenticTaskRequest,
 } from '@yantra/agent';
 import { CommanderError, Option, type Command } from 'commander';
 
+import {
+  addAgentModelOptions,
+  selectAgentSession,
+  type AgentModelOptions,
+} from '../agent-model.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
 import { runAgenticTaskWithRankSink } from '../runtime.js';
 
-const DEFAULT_PROVIDER = 'anthropic';
-const DEFAULT_MODEL = 'claude-haiku-4-5';
-
-interface DoOptions {
+interface DoOptions extends AgentModelOptions {
   readonly json?: boolean;
-  readonly provider?: string;
-  readonly model?: string;
-  readonly thinking?: string;
-  readonly authSecret?: string;
   readonly allowHost?: string[];
   readonly budgetMs?: string;
   readonly maxToolCalls?: string;
@@ -55,15 +52,12 @@ export interface DoRuntime {
 /** Register `do`/`discover` without introducing any agent loop in the CLI. */
 export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>): void {
   const resolved = runtimeWithDefaults(runtime);
-  program
+  const command = program
     .command('do')
     .alias('discover')
     .description('Run a multi-turn web agent that uses Yantra tools and publishes a Brief.')
-    .argument('<goal>', 'browser or web goal to accomplish')
-    .addOption(new Option('--provider <name>', 'agent model provider'))
-    .addOption(new Option('--model <id>', 'provider-scoped model id'))
-    .addOption(new Option('--thinking <level>', 'provider reasoning level'))
-    .addOption(new Option('--auth-secret <ref>', 'runtime model-key secret reference'))
+    .argument('<goal>', 'browser or web goal to accomplish');
+  addAgentModelOptions(command)
     .addOption(
       new Option('--allow-host <host>', 'restrict outbound work to a host (repeatable)')
         .argParser(collect)
@@ -113,13 +107,12 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     // runtime's implicit default. This also honors the documented
     // `YANTRA_AGENT_DO_*` budget env overrides, matching the `ask` path.
     const profile = resolveCommandTaskProfile('do', runtime.env);
+    const agent = selectAgentSession('do', options, runtime.env);
     const outcome = await runtime.runTask({
       goal,
       profile,
-      model: selectModel(options, runtime.env),
-      auth: options.authSecret
-        ? { mode: 'runtime-key', secretRef: options.authSecret }
-        : { mode: 'managed' },
+      model: agent.model,
+      auth: agent.auth,
       budgets: parseBudgets(options),
       allowedHosts: normalizeHosts(options.allowHost ?? []),
       // A user is present only on an interactive TTY run (not --json / piped):
@@ -143,21 +136,6 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
   } finally {
     process.removeListener('SIGINT', onInterrupt);
   }
-}
-
-function selectModel(options: DoOptions, env: NodeJS.ProcessEnv): AgenticTaskRequest['model'] {
-  const provider = clean(options.provider ?? env.YANTRA_AGENT_PROVIDER ?? DEFAULT_PROVIDER);
-  const model = clean(options.model ?? env.YANTRA_AGENT_MODEL ?? DEFAULT_MODEL);
-  if (provider.length === 0 || model.length === 0) {
-    throw new CommanderError(1, 'yantra.do.invalid-model', 'Provider and model must be non-empty.');
-  }
-  return {
-    provider,
-    id: model,
-    ...(options.thinking && clean(options.thinking).length > 0
-      ? { thinking: clean(options.thinking) }
-      : {}),
-  };
 }
 
 function parseBudgets(options: DoOptions): Partial<AgentBudgetConfig> {

@@ -5,6 +5,24 @@ Yantra's agentic commands run on a provider session backed by the
 the agent runtime's credentials and model definitions, and how credential
 resolution is audited.
 
+## Selecting provider and model
+
+`yantra ask`, `yantra research`, and `yantra do` each open exactly one provider
+session, so all three accept the same selection flags:
+
+| Flag                  | Meaning                                                          | Environment fallback    |
+| --------------------- | ---------------------------------------------------------------- | ----------------------- |
+| `--provider <name>`   | Provider key, e.g. `anthropic` or `ollama`.                      | `YANTRA_AGENT_PROVIDER` |
+| `--model <id>`        | Provider-scoped model identifier.                                | `YANTRA_AGENT_MODEL`    |
+| `--thinking <level>`  | Reasoning level; adapters clamp it to the model's capability.    | —                       |
+| `--auth-secret <ref>` | Secret reference selecting `runtime-key` auth (see table below). | —                       |
+
+Resolution order is **explicit flag > environment > pinned default**
+(`anthropic` / `claude-haiku-4-5`). A blank provider, model, or secret
+reference is a typed validation failure (exit 1) — the CLI never quietly
+substitutes a different model or downgrades the credential mode. Deterministic
+`--no-llm` runs ignore these flags because they never build a session.
+
 ## Pinned, Yantra-owned Pi paths
 
 Yantra never uses your interactive `~/.pi` installation or any project-local
@@ -63,8 +81,8 @@ Yantra does not maintain a bespoke direct-fetch client; local models flow
 through the same session runtime and the same audit trail.
 
 For a local Ollama server, create that file with the following non-secret
-configuration, then select the matching provider/model with your normal
-`yantra do` model flags:
+configuration, then select the matching provider/model with the shared model
+flags above — on `ask` and `research` as well as `do`:
 
 ```json
 {
@@ -105,6 +123,9 @@ To run agentic `ask`/`research`/`do` against a local model:
    server after changing it.
 2. **Declare the same value in `models.json`** as `contextWindow` (see the
    example above) so compaction engages before the server's limit is hit.
+3. **Point the command at it**, e.g.
+   `yantra ask "..." --provider ollama --model llama3.1:8b` (or export
+   `YANTRA_AGENT_PROVIDER` / `YANTRA_AGENT_MODEL` to make it the default).
 
 Models served with a 4k window are generally too small for web tasks: a
 single fetched page plus the prompt can exceed the whole window, which no
