@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -118,8 +118,22 @@ describe('@no-llm command task profiles', () => {
     expect(configured.budgets).toMatchObject({ totalToolCalls: 40, perToolCalls: 18 });
   });
 
-  it('removes the superseded ask and research prompt stacks', () => {
-    expect(existsSync(new URL('../../src/synthesis/prompt.ts', import.meta.url))).toBe(false);
+  it('keeps the superseded research prompt stack removed', () => {
     expect(existsSync(new URL('../../src/research/prompt.ts', import.meta.url))).toBe(false);
+  });
+
+  it('keeps src/synthesis/prompt.ts an injected template, not a prompt stack', () => {
+    // FEAT-FP-001 reinstated this file deliberately: it is the concrete
+    // `SynthesisPromptTemplate` core declares as a port and `apps/cli` injects
+    // as data. That is the opposite of the removed ask/research prompt stacks,
+    // which assembled task-shaped prompts inside the agent package. The
+    // narrower assertions below encode the distinction the old absence check
+    // was standing in for.
+    const promptUrl = new URL('../../src/synthesis/prompt.ts', import.meta.url);
+    expect(existsSync(promptUrl)).toBe(true);
+
+    const source = readFileSync(promptUrl, 'utf8');
+    expect(source).not.toMatch(/from\s+['"]@yantra\/core/);
+    expect(source).toContain('YANTRA_SYNTHESIS_PROMPT');
   });
 });

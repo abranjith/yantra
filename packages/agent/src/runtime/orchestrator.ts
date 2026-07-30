@@ -924,10 +924,14 @@ function finalizationFor(outcome: AgenticTaskOutcome): {
  * failure (no store, lint error, name collision, save error) is reported on the
  * outcome but never changes a published run into a failure (plan §6).
  *
+ * Exported for direct testing: the terminal path that reaches it requires a
+ * provider that actually executes browser tools (only those populate the trace),
+ * so the promotion contract is covered here rather than through a full run.
+ *
  * @returns The outcome, annotated with a {@link PromotionResult} when promotion
  *   was attempted; otherwise the outcome unchanged.
  */
-async function maybePromoteTrace(input: {
+export async function maybePromoteTrace(input: {
   readonly request: AgenticTaskRequest;
   readonly environment: AgenticRunEnvironment | undefined;
   readonly trace: AgentTrace;
@@ -955,6 +959,11 @@ async function maybePromoteTrace(input: {
       workflowName,
       store,
       description: `Promoted from: ${request.goal}`,
+      // Carry the goal into the workflow's `synthesis:` block so replaying it
+      // reproduces the Brief this run published rather than the raw trailing
+      // capture (FEAT-FP-001). Reaching here already implies a published Brief:
+      // the guard above returns early for every other outcome kind.
+      synthesisGoal: request.goal,
     });
     return {
       ...outcome,
@@ -1098,6 +1107,13 @@ async function createDefaultEnvironment(context: {
           // Each nested run gets its own run directory (RunOrchestrator owns
           // the run lifecycle). Confirmation checkpoints inside the workflow use
           // the bridged gateway; a null gateway fails those steps closed.
+          //
+          // Hard zero-LLM: a workflow invoked by an agent replays
+          // deterministically inside the agent's own run. The parent session is
+          // the run's one model, and a nested run must not open a second — the
+          // nested run directory is asserted to carry no agent-session artifacts.
+          // `synthesis` is omitted entirely (not merely `noLlm`), so the nested
+          // run also writes no Brief of its own; the agent publishes the result.
           const orchestrator = new RunOrchestrator({
             workflowStore,
             runStore: new LocalRunStore(),
@@ -1107,6 +1123,7 @@ async function createDefaultEnvironment(context: {
             ethicsGate: ethics,
             logger,
             confirmationGateway: ctx.confirmationGateway,
+            synthesis: null,
           });
           let stepCount = 0;
           const loaded = await workflowStore.load(input.workflow);

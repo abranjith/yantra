@@ -193,6 +193,10 @@ function makeContext(
     browser: null,
     page: null,
     locatorHost: null,
+    // No Puppeteer page in this fixture, so no settler; and scheduling asserts
+    // run lifecycle, not source provenance, so no evidence ledger.
+    settler: null,
+    evidence: null,
     events: new FakeEventBus(),
     budgets: new RetryBudgetImpl({}, { taskId: 'task-sched', runId: 'run-sched' }),
     ethics: { check: () => Promise.resolve() },

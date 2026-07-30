@@ -1,4 +1,5 @@
 // @no-llm
+import { createBrief } from '@yantra/protocol';
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -194,5 +195,96 @@ describe('renderJsonSummary', () => {
     const report = makeReport({ outputs: undefined });
     const json = renderJsonSummary(report);
     expect(json.outputs).toEqual([]);
+  });
+});
+
+describe('@no-llm Brief section (FEAT-FP-001)', () => {
+  const brief = createBrief({
+    task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    title: 'Revenue rose 12%',
+    overview: 'Revenue rose 12% year over year. [1]',
+    key_findings: [
+      {
+        text: 'Revenue reached $4.2B',
+        citations: [1],
+        editorial: false,
+        facet: null,
+        children: [],
+      },
+    ],
+    sources: [
+      {
+        n: 1,
+        url: 'https://example.com/investors',
+        final_url: null,
+        host: 'example.com',
+        title: 'Investor relations',
+        excerpt: null,
+        fetched_at: '2026-07-28T12:00:00.000Z',
+        published_at: null,
+      },
+    ],
+    notices: [{ source: 'yantra', reason: '2 reads dropped', kind: 'extract_failed' }],
+    metadata: { synthesis: 'deterministic' },
+  });
+
+  it('renders the title, overview, findings, and numbered sources', () => {
+    const md = renderRunReport(makeReport({ brief }));
+
+    expect(md).toContain('## Brief');
+    expect(md).toContain('Revenue rose 12%');
+    expect(md).toContain('Revenue reached $4.2B [1]');
+    expect(md).toContain('1. [Investor relations](https://example.com/investors)');
+  });
+
+  it('renders honest notices and the strategy used', () => {
+    const md = renderRunReport(makeReport({ brief }));
+
+    expect(md).toContain('`extract_failed` yantra: 2 reads dropped');
+    expect(md).toContain('_Synthesis: deterministic._');
+  });
+
+  it('flags a deterministic fallback from the LLM path', () => {
+    const fellBack = {
+      ...brief,
+      metadata: { ...brief.metadata, deterministic_fallback_used: true },
+    };
+
+    const md = renderRunReport(makeReport({ brief: fellBack }));
+
+    expect(md).toContain('fell back from the LLM path');
+  });
+
+  it('omits the Brief section entirely when no synthesis ran', () => {
+    const md = renderRunReport(makeReport());
+
+    expect(md).not.toContain('## Brief');
+  });
+
+  it('reports synthesis provenance in the JSON summary when the manifest has it', () => {
+    const json = renderJsonSummary(
+      makeReport({
+        manifest: makeManifest({
+          synthesis: {
+            strategy: 'llm',
+            fallbackUsed: false,
+            briefPath: '/runs/run-001/brief.json',
+          },
+        }),
+        brief,
+      }),
+    );
+
+    expect(json.synthesis).toEqual({
+      strategy: 'llm',
+      fallbackUsed: false,
+      briefPath: '/runs/run-001/brief.json',
+    });
+  });
+
+  it('omits synthesis from the JSON summary when the stage never ran', () => {
+    const json = renderJsonSummary(makeReport());
+
+    expect(json.synthesis).toBeUndefined();
   });
 });

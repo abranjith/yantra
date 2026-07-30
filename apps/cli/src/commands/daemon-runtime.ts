@@ -104,6 +104,11 @@ function makeOrchestratorDriver(logger: Logger): {
       const runtime = await buildOrchestratorRuntime({
         logger,
         confirmationGateway: request.confirmationGateway,
+        // Hard zero-LLM: a scheduled fire is unattended, so it never opens a
+        // provider session regardless of how the workflow or environment is
+        // configured. A workflow declaring `synthesis:` still gets a Brief —
+        // composed deterministically.
+        synthesis: { llm: null, noLlm: true },
       });
       try {
         const runRequest: RunRequest = {
@@ -141,6 +146,9 @@ function makeResumeDriver(logger: Logger): {
       const runtime = await buildOrchestratorRuntime({
         logger,
         confirmationGateway: new PreGrantedConfirmationGateway({ logger }),
+        // Hard zero-LLM, as on the fire path: resuming a parked scheduled run is
+        // still an unattended surface.
+        synthesis: { llm: null, noLlm: true },
       });
       try {
         const outcome = await runtime.orchestrator.resume(runId);

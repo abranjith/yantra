@@ -9,6 +9,8 @@
  * - Appends "Resume with: yantra resume <run-id>" footer for failed/paused runs.
  */
 
+import type { Brief } from '@yantra/protocol';
+
 import type {
   EvaluatedOutputs,
   FailureDetail,
@@ -32,6 +34,10 @@ export function renderRunReport(report: RunReport): string {
 
   if (report.outputs !== undefined) {
     sections.push(renderOutputsSection(report.outputs));
+  }
+
+  if (report.brief !== undefined) {
+    sections.push(renderBriefSection(report.brief));
   }
 
   if (report.failure !== undefined) {
@@ -125,6 +131,49 @@ function renderOutputsSection(outputs: EvaluatedOutputs): string {
   return lines.join('\n');
 }
 
+/**
+ * Renders the synthesized Brief's headline content (FEAT-FP-001).
+ *
+ * Deliberately a summary, not the whole document: `brief.md` already holds the
+ * full detail, and duplicating it here would bury the step log the report exists
+ * for. What earns its place is the answer, the numbered sources it rests on, and
+ * the strategy that produced it.
+ */
+function renderBriefSection(brief: Brief): string {
+  const lines = ['## Brief', '', `**${brief.title}**`, '', brief.overview];
+
+  if (brief.key_findings.length > 0) {
+    lines.push('', '### Key findings', '');
+    for (const finding of brief.key_findings) {
+      const citations =
+        finding.citations.length === 0 ? '' : ` ${finding.citations.map((n) => `[${n}]`).join('')}`;
+      lines.push(`- ${finding.text}${citations}`);
+    }
+  }
+
+  if (brief.sources.length > 0) {
+    lines.push('', '### Sources', '');
+    for (const source of brief.sources) {
+      const title = source.title ?? source.host;
+      lines.push(`${source.n}. [${title}](${source.url})`);
+    }
+  }
+
+  if (brief.notices.length > 0) {
+    lines.push('', '### Notices', '');
+    for (const notice of brief.notices) {
+      lines.push(`- \`${notice.kind}\` ${notice.source}: ${notice.reason}`);
+    }
+  }
+
+  const fallback = brief.metadata.deterministic_fallback_used
+    ? ' (fell back from the LLM path)'
+    : '';
+  lines.push('', `_Synthesis: ${brief.metadata.synthesis}${fallback}._`);
+
+  return lines.join('\n');
+}
+
 function renderFailureSection(failure: FailureDetail): string {
   const lines = ['## Failure Detail', ''];
 
@@ -181,6 +230,18 @@ export function renderJsonSummary(report: RunReport): RunJsonSummary {
     failedSteps,
     failureClass: report.manifest.failureClass,
     outputs: report.outputs ? Object.keys(report.outputs.persisted) : [],
+    // FEAT-FP-001: the machine surface reports that a Brief exists and how it
+    // was produced. The document itself lives in `brief.json` — repeating it
+    // here would make every `--json` consumer pay for it.
+    ...(report.manifest.synthesis === undefined
+      ? {}
+      : {
+          synthesis: {
+            strategy: report.manifest.synthesis.strategy,
+            fallbackUsed: report.manifest.synthesis.fallbackUsed,
+            briefPath: report.manifest.synthesis.briefPath,
+          },
+        }),
   };
 }
 

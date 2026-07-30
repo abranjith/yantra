@@ -48,6 +48,17 @@ export const TaskEvent = z
     }),
     z.object({
       ...TaskEventBase,
+      kind: z
+        .literal('llm_step_skipped')
+        .describe(
+          'An llm_summarize step passed its input through unchanged because no model was configured.',
+        ),
+      step_id: z.string().min(1).describe('Step id that was passed through.'),
+      output_as: z.string().min(1).describe('Capture key the raw input was bound to.'),
+      reason: z.string().min(1).describe('Why the model path was unavailable.'),
+    }),
+    z.object({
+      ...TaskEventBase,
       kind: z.literal('checkpoint_saved').describe('Checkpoint persisted after a step.'),
       after_step_id: z.string().min(1).describe('Last successful step id.'),
     }),

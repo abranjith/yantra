@@ -19,6 +19,7 @@ import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js
 import type { SanitizedPayload } from '../sanitizer/index.js';
 
 import type { ConfirmationGateway, ConfirmationStore } from './confirmation-gateway.js';
+import type { ReplayEvidenceLedger } from './evidence-ledger.js';
 
 // ---------------------------------------------------------------------------
 // Clock abstraction for testability
@@ -214,6 +215,13 @@ export interface ExecutionContext {
   readonly confirmationGateway: ConfirmationGateway | null;
   /** Confirmation persistence (confirmations.jsonl). Null in test contexts that don't need disk. */
   readonly confirmationStore: ConfirmationStore | null;
+  /**
+   * Append-only provenance record of the sources this run read (FEAT-FP-001).
+   * `extract` appends one entry per successful read; the replay Synthesize
+   * stage turns them into the Brief's numbered sources. Null in contexts that
+   * do not collect evidence.
+   */
+  readonly evidence: ReplayEvidenceLedger | null;
 }
 
 // ---------------------------------------------------------------------------

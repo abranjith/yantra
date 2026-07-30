@@ -156,11 +156,70 @@ content, `table` for a table — and pairs the content case with `readable`:
 `promoteDiscoverySession` (the `/discover` path) does not yet emit a terminal
 read or outputs.
 
+## The `synthesis:` block
+
+An `extract` step yields raw captured data. A workflow that declares an optional
+top-level `synthesis:` block asks `yantra run` to go one step further and
+synthesize those reads into a **Brief** — the same `brief.json` / `brief.md` /
+`brief.html` trio that `ask`, `research`, and `do` produce:
+
+```yaml
+name: quarterly-report
+steps:
+  - id: s1
+    verb: navigate
+    url: https://example.com/investors
+  - id: s2
+    verb: extract
+    locator: s2_locator
+    extraction_schema: { type: primitive, kind: readable }
+    capture_as: extracted_content_1
+
+synthesis:
+  goal: What did the quarterly report say about revenue?
+  length: medium # short | medium | long   (3 / 6 / 10 key findings)
+  detail: standard # overview | standard | full
+```
+
+| Field    | Default    | Meaning                                                          |
+| -------- | ---------- | ---------------------------------------------------------------- |
+| `goal`   | _required_ | The question the Brief answers (1–512 chars). Becomes the query. |
+| `length` | `medium`   | Findings/sections budget.                                        |
+| `detail` | `standard` | `overview` omits sections; `full` adds a comparison facet table. |
+
+Omitting the block (the default, `synthesis: null`) leaves the run behaving
+exactly as before: declared outputs only, no Brief. Every workflow saved before
+the block existed therefore replays unchanged.
+
+**Where the sources come from.** Each successful `extract` appends one entry to
+the run's bounded evidence ledger
+(`packages/core/src/executor/evidence-ledger.ts`) recording the page URL, host,
+title, extracted text, and a clock-derived `fetchedAt`. The Synthesize stage
+turns those entries into the Brief's numbered sources — the model never supplies
+a URL. The ledger keeps at most 32 entries and 256 KB of text, dropping
+oldest-first, so a loop that extracts a thousand times cannot exhaust memory or
+the prompt budget; any loss is reported as a Brief notice.
+
+Because the Brief is built from extract provenance, declaring `synthesis:` with
+no `extract` step produces a sourceless document. `yantra lint` emits a
+`SynthesisWithoutExtract` **warning** for that shape — it does not block saving,
+since an author may add the read next.
+
+By default the Brief is composed deterministically: no provider session is
+opened and replay stays byte-for-byte reproducible. `yantra run --llm <workflow>`
+upgrades the wording through the LLM synthesizer, which validates citations and
+falls back to the deterministic Brief on any failure. See
+[agentic-runtime.md](agentic-runtime.md) for the never-steers invariant that
+governs LLM use in replay.
+
 ## Tests
 
-| File                                                        | Covers                                                                                                                                       |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core/tests/extraction/live-page.spec.ts`          | The shared stage: article preferred over chrome, the fallback and its normalization, the empty-digest contract, never throwing.              |
-| `packages/core/tests/extraction/html-to-text.spec.ts`       | Serialization and the normalization pass, including that both halves stay one pass.                                                          |
-| `packages/core/tests/extraction/readability.spec.ts`        | The pre-clean and article parsing.                                                                                                           |
-| `packages/core/tests/executor/replay-page-settling.spec.ts` | Real Chrome, end to end: settling before the read, `readable` vs `string`, the article-less fallback, and the value reaching `outputs.json`. |
+| File                                                         | Covers                                                                                                                                       |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/tests/extraction/live-page.spec.ts`           | The shared stage: article preferred over chrome, the fallback and its normalization, the empty-digest contract, never throwing.              |
+| `packages/core/tests/extraction/html-to-text.spec.ts`        | Serialization and the normalization pass, including that both halves stay one pass.                                                          |
+| `packages/core/tests/extraction/readability.spec.ts`         | The pre-clean and article parsing.                                                                                                           |
+| `packages/core/tests/executor/replay-page-settling.spec.ts`  | Real Chrome, end to end: settling before the read, `readable` vs `string`, the article-less fallback, and the value reaching `outputs.json`. |
+| `packages/core/tests/executor/step-handlers/extract.spec.ts` | Evidence recording: the appended entry's fields, row serialization, the injected clock, and that a ledger failure never fails the step.      |
+| `packages/core/tests/executor/evidence-ledger.spec.ts`       | The ledger's caps: oldest-first eviction, the byte budget, and overflow accounting.                                                          |
+| `packages/core/tests/workflow/replay/synthesize.spec.ts`     | The Synthesize stage: strategy selection, ledger → sources mapping, and best-effort failure containment.                                     |

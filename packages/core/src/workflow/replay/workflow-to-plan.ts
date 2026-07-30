@@ -411,6 +411,10 @@ export function translate(
     profileSpec,
     outputBindings,
     declaredSecretKeys,
+    // Step 8: Carry the declared synthesis intent through to the orchestrator's
+    // post-execution Synthesize stage (FEAT-FP-001). Absent on every workflow
+    // saved before the block existed, which is exactly "no Brief".
+    synthesisSpec: workflow.synthesis ?? null,
   };
 }
 

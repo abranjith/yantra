@@ -89,11 +89,92 @@ export const handleExtract: StepHandler<ExtractStep> = async (step, ctx): Promis
 
   ctx.captures.set(captureKey, envelope);
 
+  await recordEvidence(step, ctx, rawData, envelope);
+
   return {
     kind: 'completed',
     captureKeys: [captureKey],
   };
 };
+
+// ---------------------------------------------------------------------------
+// Evidence provenance (FEAT-FP-001)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records where this extract read from, so the replay Synthesize stage can
+ * cite it.
+ *
+ * Strictly best-effort: the capture is already stored and the step has
+ * succeeded, so a ledger or page-title failure must never turn a good extract
+ * into a failed one — the run's data matters more than its provenance.
+ */
+async function recordEvidence(
+  step: ExtractStep,
+  ctx: ExecutionContext,
+  rawData: unknown,
+  envelope: ExtractionResultEnvelopeUnknown,
+): Promise<void> {
+  const ledger = ctx.evidence;
+  if (!ledger) return;
+
+  try {
+    // `page.url()` is already the post-redirect address, so there is no
+    // separate pre-redirect URL to record here.
+    const url = ctx.page?.url() ?? 'about:blank';
+    ledger.append({
+      url,
+      finalUrl: null,
+      host: hostOf(url),
+      title: await pageTitle(ctx),
+      text: evidenceText(rawData, envelope),
+      // The run's clock, not wall time: replay artifacts stay reproducible.
+      fetchedAt: new Date(ctx.clock.now()).toISOString(),
+      stepId: step.id,
+    });
+  } catch (error) {
+    ctx.logger.debug(
+      { stepId: step.id, error: error instanceof Error ? error.message : String(error) },
+      'extract evidence not recorded',
+    );
+  }
+}
+
+/** Best-effort `document.title`; null whenever the page cannot report one. */
+async function pageTitle(ctx: ExecutionContext): Promise<string | null> {
+  if (!ctx.page) return null;
+  try {
+    const title = await ctx.page.evaluate<string | null>(
+      () => (globalThis as unknown as { document?: { title?: string } }).document?.title ?? null,
+    );
+    return typeof title === 'string' && title.length > 0 ? title : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The citable text of an extract. A `readable` extract already produced clean
+ * article text; a structured extract is serialized row-by-row so a table still
+ * contributes real content to the Brief rather than an opaque `[object Object]`.
+ */
+function evidenceText(rawData: unknown, envelope: ExtractionResultEnvelopeUnknown): string {
+  if (typeof rawData === 'string') return rawData;
+
+  return envelope.rows
+    .map((row) => (typeof row === 'string' ? row : (JSON.stringify(row) ?? '')))
+    .filter((line) => line.length > 0)
+    .join('\n');
+}
+
+/** Host of a URL, or the raw value when it does not parse. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Readable extraction (Node-side, via the shared Readability pipeline)

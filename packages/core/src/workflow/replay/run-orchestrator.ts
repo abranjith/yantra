@@ -2,7 +2,11 @@
  * RunOrchestrator — end-to-end workflow run lifecycle manager.
  *
  * Drives the full run pipeline:
- *   params → translate → preflight → store → browser → executor → outputs → report
+ *   params → translate → preflight → store → browser → executor → outputs →
+ *   synthesize → report
+ *
+ * The `synthesize` stage is opt-in (a workflow declaring `synthesis:`) and
+ * best-effort: it never changes a run's outcome, only enriches it with a Brief.
  *
  * Dependencies are injected to keep this class testable without a live browser.
  */
@@ -10,7 +14,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Plan, SecretRef } from '@yantra/protocol';
+import type { Brief, Plan, SecretRef, SecurityScope } from '@yantra/protocol';
 
 import { runsRoot } from '../../browser/paths.js';
 import type { BrowserProvider } from '../../browser/types.js';
@@ -37,14 +41,17 @@ import { resolveParams } from './params-resolver.js';
 import { preflightEthics, preflightSecrets, preflightWorkflow } from './preflight.js';
 import { MarkdownReportRenderer } from './report-renderer.js';
 import { loadResumePoint } from './resume.js';
+import { runSynthesizeStage, synthesizeGate, type SynthesisStrategies } from './synthesize.js';
 import type { RunStore } from './types.js';
 import type {
+  BriefRunArtifacts,
   FailureDetail,
   OrchestratorRunOutcome,
   ParamArg,
   RunManifest,
   RunReport,
   RunRequest,
+  TranslatedWorkflow,
 } from './types.js';
 import { translate } from './workflow-to-plan.js';
 
@@ -70,6 +77,16 @@ export interface RunOrchestratorOptions {
    * unattended surfaces leave it null so they cannot self-authorize (plan §6).
    */
   readonly confirmationGateway?: ConfirmationGateway | null;
+  /**
+   * Synthesize-stage strategies (FEAT-FP-001). Supplied by `apps/cli` for
+   * `yantra run`; omitted (or null) disables the stage entirely, which is what
+   * every caller that must stay zero-LLM *and* artifact-free relies on.
+   *
+   * Providing `{ deterministic, llm: null, noLlm: true }` is the hard zero-LLM
+   * configuration: a Brief is still produced, but no provider session is ever
+   * opened. Scheduled runs and nested `workflow_run` calls use exactly that.
+   */
+  readonly synthesis?: SynthesisStrategies | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +161,8 @@ export class RunOrchestrator {
 
     // 3. Translate workflow → plan
     const translated = translate(workflow, params);
-    const { plan, locatorTable, profileSpec, outputBindings, declaredSecretKeys } = translated;
+    const { plan, locatorTable, profileSpec, outputBindings, declaredSecretKeys, synthesisSpec } =
+      translated;
 
     // 4. Preflight checks
     await preflightSecrets(declaredSecretKeys, this.opts.keychain);
@@ -265,7 +283,26 @@ export class RunOrchestrator {
       });
 
       // 15. Map executor outcome → orchestrator outcome + update manifest
-      const outcome = this.mapExecutorOutcome(executorOutcome, runId, evaluated.persisted);
+      const baseOutcome = this.mapExecutorOutcome(executorOutcome, runId, evaluated.persisted);
+
+      // 15b. Synthesize stage — only for a completed run that declared the
+      // block and a caller that wired strategies. Best-effort throughout: the
+      // outcome above is already final, and this can only add a Brief to it.
+      const brief = await this.maybeSynthesize({
+        synthesisSpec,
+        securityClass: workflow.security_class,
+        completed: baseOutcome.kind === 'success',
+        ctx,
+        manifest,
+        runDir,
+        runId,
+        taskId,
+      });
+
+      const outcome: OrchestratorRunOutcome =
+        baseOutcome.kind === 'success' && brief.artifacts !== null
+          ? { ...baseOutcome, brief: brief.artifacts }
+          : baseOutcome;
 
       manifest.status = outcome.kind === 'success' ? 'completed' : 'failed';
       manifest.endedAt = endedAt;
@@ -279,10 +316,14 @@ export class RunOrchestrator {
       const stepLog = buildStepLog(plan, ctx);
       const reportFailure: FailureDetail | undefined =
         outcome.kind === 'failure' ? outcome.failureDetail : undefined;
-      const report: RunReport =
-        reportFailure === undefined
-          ? { manifest, stepLog, outputs: evaluated, auditEntries: [] }
-          : { manifest, stepLog, outputs: evaluated, failure: reportFailure, auditEntries: [] };
+      const report: RunReport = {
+        manifest,
+        stepLog,
+        outputs: evaluated,
+        auditEntries: [],
+        ...(reportFailure === undefined ? {} : { failure: reportFailure }),
+        ...(brief.brief === null ? {} : { brief: brief.brief }),
+      };
 
       const markdown = this.renderer.render(report);
       const jsonSummary = this.renderer.renderJson(report);
@@ -419,6 +460,55 @@ export class RunOrchestrator {
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
+
+  /**
+   * Runs the Synthesize stage when this run both declared it and earned it.
+   *
+   * Skipped — returning the empty result — when the workflow declares no
+   * `synthesis:` block, when the caller wired no strategies, or when the run did
+   * not complete (a failed run's evidence is partial by definition, and a Brief
+   * over it would read as an answer). Records `manifest.synthesis` as a side
+   * effect so `resume` can inherit the strategy.
+   */
+  private async maybeSynthesize(input: {
+    readonly synthesisSpec: TranslatedWorkflow['synthesisSpec'];
+    readonly securityClass: SecurityScope;
+    readonly completed: boolean;
+    readonly ctx: ExecutionContext;
+    readonly manifest: RunManifest;
+    readonly runDir: string;
+    readonly runId: string;
+    readonly taskId: string;
+  }): Promise<{ brief: Brief | null; artifacts: BriefRunArtifacts | null }> {
+    const gate = synthesizeGate({
+      synthesisSpec: input.synthesisSpec,
+      strategies: this.opts.synthesis ?? null,
+      completed: input.completed,
+    });
+    if (!gate.run) {
+      return { brief: null, artifacts: null };
+    }
+
+    const ledger = input.ctx.evidence;
+    const stage = await runSynthesizeStage(
+      {
+        spec: gate.spec,
+        evidence: ledger?.entries() ?? [],
+        overflowCount: ledger?.overflowCount() ?? 0,
+        scope: input.securityClass,
+        taskId: input.taskId,
+        runId: input.runId,
+        runDir: input.runDir,
+        strategies: gate.strategies,
+      },
+      this.opts.logger,
+    );
+
+    if (stage.record !== null) {
+      input.manifest.synthesis = stage.record;
+    }
+    return { brief: stage.brief, artifacts: stage.artifacts };
+  }
 
   private mapExecutorOutcome(
     outcome: ExecutorRunOutcome,

@@ -8,7 +8,9 @@ resolution is audited.
 ## Selecting provider and model
 
 `yantra ask`, `yantra research`, and `yantra do` each open exactly one provider
-session, so all three accept the same selection flags:
+session, so all three accept the same selection flags. `yantra run --llm` accepts
+the identical surface for writing a replayed workflow's Brief (see
+[Model selection in replay](#model-selection-in-replay) below):
 
 | Flag                  | Meaning                                                          | Environment fallback    |
 | --------------------- | ---------------------------------------------------------------- | ----------------------- |
@@ -22,6 +24,36 @@ Resolution order is **explicit flag > environment > pinned default**
 reference is a typed validation failure (exit 1) — the CLI never quietly
 substitutes a different model or downgrades the credential mode. Deterministic
 `--no-llm` runs ignore these flags because they never build a session.
+
+## Model selection in replay
+
+`yantra run` replays a saved workflow. It is deterministic and model-free by
+default, and stays that way even if model flags or `YANTRA_AGENT_*` variables are
+present — a replay never opens a provider session unless you ask for one:
+
+```bash
+yantra run quarterly-report                 # deterministic Brief, no session
+yantra run quarterly-report --llm           # model-written Brief, pinned default
+yantra run quarterly-report --llm --provider ollama --model llama3.1:8b
+yantra run quarterly-report --no-llm        # explicit deterministic
+```
+
+`--llm` affects **only** how the run's Brief is worded, and only for a workflow
+that declares a `synthesis:` block. It never influences which steps run: step
+selection, branch conditions, loop bounds, and locator resolution are fixed and
+validated before execution. See
+[agentic-runtime.md](agentic-runtime.md#llm-in-replay) for the full invariant.
+
+Two surfaces ignore `--llm` entirely and are always zero-LLM:
+
+- **Scheduled / daemon runs** — an unattended fire never opens a session.
+- **Nested `workflow_run` calls** — a workflow invoked by an agent replays
+  deterministically inside the agent's own run.
+
+Because the model only writes prose, a synthesis failure is never fatal: an
+unreachable provider, an unusable credential, or output that never validates
+falls back to the deterministic Brief, and the run still succeeds with its
+outputs intact.
 
 ## Pinned, Yantra-owned Pi paths
 

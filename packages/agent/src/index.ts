@@ -31,6 +31,15 @@ export {
   yantraToolCatalog,
 } from './adapters/pi/tools/index.js';
 
+export { SYNTHESIS_PROMPT_VERSION, YANTRA_SYNTHESIS_PROMPT } from './synthesis/prompt.js';
+export type {
+  SynthesisPromptDetail,
+  SynthesisPromptIssue,
+  SynthesisPromptLength,
+  SynthesisPromptSourceInput,
+  SynthesisUserPromptInput,
+} from './synthesis/prompt.js';
+
 export {
   AgentAbortedError,
   AgentAuthUnavailableError,

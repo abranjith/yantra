@@ -345,6 +345,9 @@ export class AnnotateSession {
       cookies: hasLoginUrl ? 'auto' : 'none',
       steps,
       outputs: [],
+      // A recorded workflow declares no synthesis intent; the author adds the
+      // block (or `do --save-as` carries it) when a Brief is wanted.
+      synthesis: null,
       outputs_unredacted: false,
       _unrecorded_frames: metadata.unrecorded_frame_origins,
       _locators: locators,

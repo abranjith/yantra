@@ -11,6 +11,7 @@ export type {
   AgentStartupFailure,
   AgentStartupFailureCode,
   AgentStartupFailureRecord,
+  BriefRunArtifacts,
   EvaluatedOutputs,
   FailureDetail,
   LocatorTable,
@@ -28,9 +29,22 @@ export type {
   RunStatus,
   RunStore,
   RunSummary,
+  RunSynthesisRecord,
   TranslatedWorkflow,
   WorkflowParamsSpec,
 } from './types.js';
+
+// Synthesize stage (FEAT-FP-001)
+export { runSynthesizeStage, synthesizeGate, synthesizeRun } from './synthesize.js';
+export type {
+  SynthesisRunContext,
+  SynthesisSpec,
+  SynthesisStrategies,
+  SynthesizeGate,
+  SynthesizeGateInput,
+  SynthesizeRunOptions,
+  SynthesizeStageResult,
+} from './synthesize.js';
 
 // Errors
 export {

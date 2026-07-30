@@ -86,6 +86,7 @@ export const makeWorkflow = (overrides: Partial<WorkflowFile> = {}): WorkflowFil
         from: '{{ capture:transactions }}',
       },
     ],
+    synthesis: null,
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: {

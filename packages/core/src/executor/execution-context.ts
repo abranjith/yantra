@@ -11,6 +11,7 @@ import { FilesystemCheckpointStore } from './checkpoint-store.js';
 import { createConfirmationStore } from './confirmation-gateway.js';
 import type { ConfirmationGateway } from './confirmation-gateway.js';
 import { JsonlEventBus } from './event-bus.js';
+import { ReplayEvidenceLedger } from './evidence-ledger.js';
 import { RetryBudgetImpl } from './retry-budget.js';
 import { buildScopeChain } from './scope-enforcer.js';
 import type {
@@ -46,6 +47,11 @@ export interface ExecutionContextOptions {
   readonly clock?: Clock;
   readonly budgets?: Partial<RetryBudgetLevels>;
   readonly confirmationGateway?: ConfirmationGateway | null;
+  /**
+   * Provenance ledger for the run's source reads. Omit to get a fresh bounded
+   * ledger; pass `null` for a context that must not collect evidence.
+   */
+  readonly evidence?: ReplayEvidenceLedger | null;
 }
 
 /**
@@ -106,6 +112,7 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     runDir: opts.runDir,
     confirmationGateway: opts.confirmationGateway ?? null,
     confirmationStore: createConfirmationStore(opts.runDir),
+    evidence: opts.evidence === undefined ? new ReplayEvidenceLedger() : opts.evidence,
   };
 }
 

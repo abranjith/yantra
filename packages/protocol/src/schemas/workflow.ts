@@ -214,6 +214,37 @@ export const WorkflowOutput = z
 
 export type WorkflowOutput = z.infer<typeof WorkflowOutput>;
 
+/**
+ * Optional post-execution synthesis intent (FEAT-FP-001).
+ *
+ * Declaring this block asks `yantra run` to turn the run's recorded source
+ * reads into a Brief (`brief.json` / `brief.md` / `brief.html`) after the last
+ * step. It is a declared, validated leaf of a finite plan — it never influences
+ * which steps run, so replay stays deterministic in shape whether or not a model
+ * is involved in the wording.
+ */
+export const WorkflowSynthesis = z
+  .object({
+    goal: z
+      .string()
+      .min(1)
+      .max(512)
+      .describe('The question or topic the synthesized Brief must answer.'),
+    length: z
+      .enum(['short', 'medium', 'long'])
+      .default('medium')
+      .describe('Findings/sections budget for the Brief: short=3, medium=6, long=10 findings.'),
+    detail: z
+      .enum(['overview', 'standard', 'full'])
+      .default('standard')
+      .describe(
+        'Brief depth: overview omits sections, standard adds them, full adds comparison facets.',
+      ),
+  })
+  .describe('Optional post-execution synthesis intent producing a Brief from recorded reads.');
+
+export type WorkflowSynthesis = z.infer<typeof WorkflowSynthesis>;
+
 export const WorkflowFile = z
   .object({
     version: z.literal(1).describe('Workflow format major version.'),
@@ -243,6 +274,11 @@ export const WorkflowFile = z
     cookies: z.enum(['auto', 'none']).default('none').describe('Cookie/profile handling mode.'),
     steps: z.array(WorkflowStep).min(1).max(64).describe('Ordered workflow steps.'),
     outputs: z.array(WorkflowOutput).default([]).describe('Workflow output declarations.'),
+    synthesis: WorkflowSynthesis.nullable()
+      .default(null)
+      .describe(
+        'Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only.',
+      ),
     outputs_unredacted: z
       .boolean()
       .default(false)

@@ -10,6 +10,7 @@ import { orphanedLocator } from './rules/orphaned-locator.js';
 import { outputsUnredactedWithoutReadOnly } from './rules/outputs-unredacted-without-read-only.js';
 import { scopeMutatingVerb } from './rules/scope-mutating-verb.js';
 import { secretShapedLiteral } from './rules/secret-shaped-literal.js';
+import { synthesisWithoutExtract } from './rules/synthesis-without-extract.js';
 import { undeclaredParamRef } from './rules/undeclared-param-ref.js';
 import { undeclaredSecretRef } from './rules/undeclared-secret-ref.js';
 import { unrecordedFramesOnAuthenticated } from './rules/unrecorded-frames-on-authenticated.js';
@@ -56,6 +57,7 @@ const DEFAULT_RULES: LintRule[] = [
   outputsUnredactedWithoutReadOnly,
   unrecordedFramesOnAuthenticated,
   criticalActionWithoutConfirmation,
+  synthesisWithoutExtract,
 ];
 
 /** Run all lint rules against a workflow. */

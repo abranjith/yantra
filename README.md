@@ -218,11 +218,53 @@ published Brief, `2` for failure or budget exhaustion, `4` for human handoff,
 and `130` for an interrupt. `--save-as` is reserved for workflow promotion;
 deterministic saved workflows continue to use `yantra run` without an LLM loop.
 
+## Saved workflows (`yantra run`)
+
+`yantra run <workflow>` replays a saved workflow deterministically — finite,
+validated steps, no model in the loop:
+
+```bash
+yantra run bank-statement --params month=2026-04
+yantra run bank-statement --params-file ./params.yaml
+yantra run bank-statement --json
+```
+
+A successful run prints the outputs the workflow declared. If the workflow also
+declares a `synthesis:` block, the run ends in a **Brief** instead — the same
+`brief.json` / `brief.md` / `brief.html` trio `ask` and `do` produce, built from
+the pages the run's `extract` steps actually read:
+
+```yaml
+synthesis:
+  goal: What did the quarterly report say about revenue?
+  length: medium # short | medium | long
+  detail: standard # overview | standard | full
+```
+
+This happens **with no model by default**: the deterministic synthesizer composes
+the document and no provider session is opened, so replay stays reproducible.
+`--llm` upgrades the wording through a model, and falls back to the deterministic
+Brief on any failure:
+
+```bash
+yantra run quarterly-report          # deterministic Brief
+yantra run quarterly-report --llm    # model-written Brief
+```
+
+A model may write the Brief; it never steers the replay. Step selection, branch
+conditions, loop bounds, and locator resolution are fixed before execution and
+cannot change based on model output. Scheduled runs and workflows invoked by an
+agent are always zero-LLM regardless of flags. `yantra do "<goal>" --save-as
+<name>` carries the original goal into the saved workflow's `synthesis:` block, so
+a promoted workflow keeps producing the document that made the first run useful.
+See [docs/workflow-extraction.md](docs/workflow-extraction.md#the-synthesis-block).
+
 ## Selecting the model
 
 `ask`, `research`, and `do` all open one provider session, so they share one
 model-selection surface — whatever you can point `do` at, you can point `ask`
-and `research` at too:
+and `research` at too. `yantra run --llm` accepts the same flags for writing a
+replayed workflow's Brief:
 
 | Flag                  | Purpose                                              | Environment fallback    |
 | --------------------- | ---------------------------------------------------- | ----------------------- |
@@ -243,7 +285,9 @@ yantra do "research this topic" --provider anthropic --model claude-haiku-4-5
 
 On `ask` and `research`, `--provider` selects the **LLM**; the unrelated
 `--search-provider` selects the web-search backend. These flags have no effect
-on `--no-llm` runs, which never construct a provider session. See
+on `--no-llm` runs, which never construct a provider session — and on `yantra
+run` they have no effect at all unless `--llm` is also passed, so a replay is
+never quietly opted into a model. See
 [docs/model-configuration.md](docs/model-configuration.md) for credentials and
 local-model setup.
 

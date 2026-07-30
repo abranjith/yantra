@@ -5,7 +5,13 @@
  * through `RunManifest` on disk to the final `OrchestratorRunOutcome`.
  */
 
-import type { AgentManifestSection, FailureClass, Plan } from '@yantra/protocol';
+import type {
+  AgentManifestSection,
+  Brief,
+  FailureClass,
+  Plan,
+  WorkflowSynthesis,
+} from '@yantra/protocol';
 
 import type { ProfileSpec } from '../../browser/types.js';
 import type { Checkpoint } from '../../executor/types.js';
@@ -69,12 +75,35 @@ export interface FailureDetail {
 // Orchestrator RunOutcome (distinct from executor's RunOutcome)
 // ---------------------------------------------------------------------------
 
+/** On-disk locations of a run's Brief artifacts. */
+export interface BriefRunArtifacts {
+  readonly jsonPath: string;
+  readonly mdPath: string;
+  readonly htmlPath: string;
+}
+
+/** Provenance of one Synthesize stage, recorded in `manifest.json`. */
+export interface RunSynthesisRecord {
+  /** Which strategy actually produced the Brief. */
+  readonly strategy: 'deterministic' | 'llm';
+  /** True when the LLM path failed and the deterministic strategy took over. */
+  readonly fallbackUsed: boolean;
+  /** Path of `brief.json`, or null when the artifact write failed. */
+  readonly briefPath: string | null;
+}
+
 /** Returned by RunOrchestrator.run() — the CLI maps these to exit codes. */
 export type OrchestratorRunOutcome =
   | {
       readonly kind: 'success';
       readonly runId: string;
       readonly outputs: Readonly<Record<string, unknown>>;
+      /**
+       * Paths of the Brief artifacts the Synthesize stage wrote (FEAT-FP-001),
+       * present only when the workflow declared `synthesis:` and the stage
+       * succeeded. Absent is normal — synthesis is opt-in and best-effort.
+       */
+      readonly brief?: BriefRunArtifacts;
     }
   | {
       readonly kind: 'failure';
@@ -129,6 +158,12 @@ export interface TranslatedWorkflow {
   readonly profileSpec: ProfileSpec;
   readonly outputBindings: readonly OutputBinding[];
   readonly declaredSecretKeys: readonly string[];
+  /**
+   * The workflow's declared synthesis intent, or null when it declares none
+   * (FEAT-FP-001). Carried through translation because the Synthesize stage runs
+   * after the executor, by which point the `WorkflowFile` is out of scope.
+   */
+  readonly synthesisSpec: WorkflowSynthesis | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +202,12 @@ export interface RunManifest {
   agent?: Partial<AgentManifestSection>;
   /** Typed, render-safe startup failure when the provider session never opened. */
   agentError?: AgentStartupFailureRecord;
+  /**
+   * Synthesize-stage provenance (FEAT-FP-001). Present only when the workflow
+   * declared `synthesis:` and the stage ran, so `resume` can inherit the
+   * original run's strategy instead of silently changing it.
+   */
+  synthesis?: RunSynthesisRecord;
 }
 
 /** Stable agent startup codes persisted without importing the agent package into core. */
@@ -242,6 +283,12 @@ export interface RunReport {
   readonly outputs?: EvaluatedOutputs;
   readonly failure?: FailureDetail;
   readonly auditEntries: readonly Record<string, unknown>[];
+  /**
+   * The Brief the Synthesize stage produced, when it ran (FEAT-FP-001). The
+   * report shows its title, overview, and sources so `report.md` is readable
+   * without opening `brief.md`.
+   */
+  readonly brief?: Brief;
 }
 
 export interface RunJsonSummary {
@@ -255,6 +302,8 @@ export interface RunJsonSummary {
   readonly failedSteps: number;
   readonly failureClass: FailureClass | undefined;
   readonly outputs: readonly string[];
+  /** Synthesize-stage provenance, present only when the stage produced a Brief. */
+  readonly synthesis?: RunSynthesisRecord;
 }
 
 // ---------------------------------------------------------------------------

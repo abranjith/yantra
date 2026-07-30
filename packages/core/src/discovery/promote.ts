@@ -41,6 +41,7 @@ import type {
   ValueRef,
   WorkflowFile,
   WorkflowStep,
+  WorkflowSynthesis,
 } from '@yantra/protocol';
 import { err, ok, type Result } from '@yantra/protocol';
 
@@ -120,6 +121,38 @@ export interface PromoteTraceOptions {
   readonly description?: string;
   /** Overwrite an existing workflow of the same name (default false). */
   readonly force?: boolean;
+  /**
+   * The run's goal, carried into the promoted workflow's `synthesis:` block so
+   * replaying it reproduces the *document* the original run published — not just
+   * the raw capture the trailing read collected (FEAT-FP-001).
+   *
+   * Supply this only when the run actually published a Brief: a run that
+   * published nothing had no synthesis step to reproduce, and declaring one
+   * would promise a document the workflow was never shown how to produce.
+   */
+  readonly synthesisGoal?: string;
+}
+
+/** Schema cap on `synthesis.goal`; a longer goal is truncated, never rejected. */
+const MAX_SYNTHESIS_GOAL_CHARS = 512;
+
+/**
+ * Builds the promoted workflow's synthesis block from the run's goal.
+ *
+ * Returns null when no goal was supplied or it is blank. An over-long goal is
+ * truncated rather than dropped: promotion is best-effort and must never fail a
+ * published run, and a clipped goal still describes the document far better than
+ * no block at all.
+ */
+function synthesisFor(goal: string | undefined): WorkflowSynthesis | null {
+  const trimmed = goal?.trim() ?? '';
+  if (trimmed.length === 0) return null;
+
+  return {
+    goal: trimmed.slice(0, MAX_SYNTHESIS_GOAL_CHARS),
+    length: 'medium',
+    detail: 'standard',
+  };
 }
 
 /**
@@ -130,8 +163,13 @@ export interface PromoteTraceOptions {
  * The result is linted (strict) before saving — a lint failure returns a typed
  * error and never partially saves.
  *
+ * When `synthesisGoal` is supplied, the promoted workflow also carries a
+ * `synthesis:` block, so `yantra run <name>` ends in a Brief the way the original
+ * `yantra do` run did instead of reporting the raw trailing capture.
+ *
  * @param steps - The ordered successful interactions from an agentic run.
- * @param opts - Target workflow name, store, description, and overwrite flag.
+ * @param opts - Target workflow name, store, description, overwrite flag, and
+ *   optional synthesis goal.
  * @returns The saved `WorkflowFile`, or a typed error (never throws).
  */
 export async function promoteAgentTrace(
@@ -178,6 +216,7 @@ export async function promoteAgentTrace(
     cookies: 'none',
     steps: workflowSteps,
     outputs: declareOutputs(workflowSteps),
+    synthesis: synthesisFor(opts.synthesisGoal),
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: locators,
@@ -405,6 +444,7 @@ export async function promoteDiscoverySession(
     cookies: 'none',
     steps,
     outputs: [],
+    synthesis: null,
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: locators,

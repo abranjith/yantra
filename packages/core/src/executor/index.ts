@@ -5,6 +5,7 @@ export * from './capture-store.js';
 export * from './event-bus.js';
 export * from './checkpoint-store.js';
 export * from './confirmation-gateway.js';
+export * from './evidence-ledger.js';
 export * from './value-resolver.js';
 export * from './scope-enforcer.js';
 export * from './report-writer.js';

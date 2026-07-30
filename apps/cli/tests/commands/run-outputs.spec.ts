@@ -61,6 +61,12 @@ describe('@no-llm renderOutputs', () => {
     expect(rendered).toContain('extract');
   });
 
+  it('points an empty result at the synthesis block as well', () => {
+    const rendered = renderOutputs({});
+
+    expect(rendered).toContain('synthesis:');
+  });
+
   it('renders null and non-string scalars without throwing', () => {
     const rendered = renderOutputs({ missing: null, count: 3, ok: true });
 

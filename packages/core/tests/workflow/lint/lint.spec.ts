@@ -16,6 +16,7 @@ function makeWorkflow(overrides: Partial<WorkflowFile> = {}): WorkflowFile {
     cookies: 'none',
     steps: [{ id: 's1', verb: 'navigate', url: 'https://example.com', scope: null }],
     outputs: [],
+    synthesis: null,
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: {},
@@ -520,5 +521,61 @@ describe('UnrecordedFramesOnAuthenticated', () => {
     const report = lint(workflow);
     const warnings = report.warnings.filter((f) => f.code === 'UnrecordedFramesOnAuthenticated');
     expect(warnings).toHaveLength(0);
+  });
+});
+
+describe('SynthesisWithoutExtract', () => {
+  const synthesis = { goal: 'what happened?', length: 'medium', detail: 'standard' } as const;
+
+  const extractStep = {
+    id: 's2',
+    verb: 'extract',
+    scope: null,
+    locator: 'Body',
+    extraction_schema: { type: 'primitive', kind: 'readable' },
+    capture_as: 'body',
+  } as const;
+
+  it('warns when synthesis is declared but no extract step exists', () => {
+    const workflow = makeWorkflow({ synthesis });
+
+    const report = lint(workflow);
+
+    const warnings = report.warnings.filter((f) => f.code === 'SynthesisWithoutExtract');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.path).toBe('synthesis');
+    expect(warnings[0]?.suggestion).not.toBeNull();
+  });
+
+  it('reports warning severity, so a default save is never blocked', () => {
+    // The rule's own severity is `warning`; only `lint(..., { strict: true })`
+    // promotes it, and that promotion is the framework's uniform policy for
+    // every warning rather than anything specific to synthesis.
+    const report = lint(makeWorkflow({ synthesis }));
+
+    expect(report.errors).toHaveLength(0);
+    expect(report.warnings.filter((f) => f.code === 'SynthesisWithoutExtract')).toHaveLength(1);
+    expect(report.warnings[0]?.severity).toBe('warning');
+  });
+
+  it('does not warn when an extract step is present', () => {
+    const workflow = makeWorkflow({
+      synthesis,
+      steps: [
+        { id: 's1', verb: 'navigate', url: 'https://example.com', scope: null },
+        extractStep,
+      ] as never,
+      _locators: { Body: [{ kind: 'label', value: 'Body' }] },
+    });
+
+    const report = lint(workflow);
+
+    expect(report.warnings.filter((f) => f.code === 'SynthesisWithoutExtract')).toHaveLength(0);
+  });
+
+  it('does not warn when no synthesis block is declared', () => {
+    const report = lint(makeWorkflow());
+
+    expect(report.warnings.filter((f) => f.code === 'SynthesisWithoutExtract')).toHaveLength(0);
   });
 });

@@ -158,9 +158,16 @@ const observe: PromotableTraceStep = {
 };
 
 /** Promotes and returns the saved workflow, failing the test on a promote error. */
-async function promoted(steps: PromotableTraceStep[]): Promise<WorkflowFile> {
+async function promoted(
+  steps: PromotableTraceStep[],
+  extra: { readonly synthesisGoal?: string } = {},
+): Promise<WorkflowFile> {
   const store = makeFakeStore();
-  const result = await promoteAgentTrace(steps, { workflowName: 'terminal-read', store });
+  const result = await promoteAgentTrace(steps, {
+    workflowName: 'terminal-read',
+    store,
+    ...extra,
+  });
   expect(result.isOk).toBe(true);
   if (!result.isOk) throw new Error(result.error.message);
   return result.value;
@@ -271,5 +278,65 @@ describe('@no-llm promoteAgentTrace terminal read', () => {
 
     expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
     expect(lint(workflow, { strict: true }).errors).toEqual([]);
+  });
+});
+
+describe('@no-llm promoteAgentTrace synthesis block', () => {
+  const extractTrace: PromotableTraceStep[] = [
+    navigate,
+    {
+      kind: 'extract',
+      host: 'shop.example',
+      extractionKind: 'content',
+      requires_confirmation: false,
+    },
+  ];
+
+  it('carries the run goal into synthesis.goal with medium/standard defaults', async () => {
+    const workflow = await promoted(extractTrace, {
+      synthesisGoal: 'When will my package arrive?',
+    });
+
+    expect(workflow.synthesis).toEqual({
+      goal: 'When will my package arrive?',
+      length: 'medium',
+      detail: 'standard',
+    });
+  });
+
+  it('keeps a workflow promoted with a goal schema-valid and lint-clean', async () => {
+    // Load-bearing: promotion lints strictly, which promotes warnings to
+    // errors. A synthesis block paired with a terminal extract must stay clean,
+    // or `do --save-as` would start failing to promote.
+    const workflow = await promoted(extractTrace, { synthesisGoal: 'the goal' });
+
+    expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
+    expect(lint(workflow, { strict: true }).errors).toEqual([]);
+  });
+
+  it('leaves synthesis null when no goal is supplied (existing behavior)', async () => {
+    const workflow = await promoted(extractTrace);
+
+    expect(workflow.synthesis).toBeNull();
+  });
+
+  it('leaves synthesis null for a blank or whitespace-only goal', async () => {
+    expect((await promoted(extractTrace, { synthesisGoal: '' })).synthesis).toBeNull();
+    expect((await promoted(extractTrace, { synthesisGoal: '   ' })).synthesis).toBeNull();
+  });
+
+  it('trims the goal it carries', async () => {
+    const workflow = await promoted(extractTrace, { synthesisGoal: '  padded goal  ' });
+
+    expect(workflow.synthesis?.goal).toBe('padded goal');
+  });
+
+  it('truncates an over-long goal rather than failing promotion', async () => {
+    // Promotion is best-effort and must never fail a published run, so a goal
+    // beyond the schema's 512-char cap is clipped, not rejected.
+    const workflow = await promoted(extractTrace, { synthesisGoal: 'g'.repeat(900) });
+
+    expect(workflow.synthesis?.goal).toHaveLength(512);
+    expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
   });
 });

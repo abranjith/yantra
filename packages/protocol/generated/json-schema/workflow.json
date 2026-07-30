@@ -913,6 +913,51 @@
           "default": [],
           "description": "Workflow output declarations."
         },
+        "synthesis": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "goal": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "description": "The question or topic the synthesized Brief must answer."
+                },
+                "length": {
+                  "type": "string",
+                  "enum": [
+                    "short",
+                    "medium",
+                    "long"
+                  ],
+                  "default": "medium",
+                  "description": "Findings/sections budget for the Brief: short=3, medium=6, long=10 findings."
+                },
+                "detail": {
+                  "type": "string",
+                  "enum": [
+                    "overview",
+                    "standard",
+                    "full"
+                  ],
+                  "default": "standard",
+                  "description": "Brief depth: overview omits sections, standard adds them, full adds comparison facets."
+                }
+              },
+              "required": [
+                "goal"
+              ],
+              "additionalProperties": false,
+              "description": "Optional post-execution synthesis intent producing a Brief from recorded reads."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only.",
+          "default": null
+        },
         "outputs_unredacted": {
           "type": "boolean",
           "default": false,

@@ -6,12 +6,14 @@
  * run store) so individual subcommands don't repeat the wiring.
  */
 
-import { runAgenticTask } from '@yantra/agent';
+import { runAgenticTask, YANTRA_SYNTHESIS_PROMPT } from '@yantra/agent';
 import {
   BlocklistImpl,
   DefaultSanitizer,
+  DeterministicSynthesizer,
   EthicsGateImpl,
   FileWorkflowStore,
+  LlmSynthesizer,
   LocalBrowserProvider,
   LocalProfileStore,
   RateLimiterImpl,
@@ -27,7 +29,9 @@ import {
   type Logger,
   type RankSignalSink,
   type RateLimitStore,
+  type SynthesisLlm,
 } from '@yantra/core';
+import type { SynthesisRunContext, SynthesisStrategies } from '@yantra/core/workflow/replay';
 import { LocalRunStore, RunOrchestrator } from '@yantra/core/workflow/replay';
 
 const noopLogger: Logger = {
@@ -100,6 +104,56 @@ export interface OrchestratorRuntime {
 }
 
 /**
+ * Synthesis wiring for `yantra run` (FEAT-FP-001).
+ *
+ * Omitting this disables the Synthesize stage entirely. Passing it with
+ * `llm: null` (the default when `--llm` was not given) still produces a Brief —
+ * deterministically, opening no provider session.
+ */
+export interface OrchestratorSynthesisOptions {
+  /**
+   * Builds the LLM port for one run, or null to stay deterministic.
+   *
+   * A factory because the port needs the run's id and directory (its session log
+   * is an artifact of that run), and neither exists until the orchestrator
+   * creates the run. Callers supply this only when the user asked for `--llm`.
+   */
+  readonly llm?: ((ctx: SynthesisRunContext) => SynthesisLlm) | null;
+  /** True when the user passed `--no-llm`; forces the deterministic path. */
+  readonly noLlm?: boolean;
+}
+
+/**
+ * Builds the Synthesize-stage strategies for one run.
+ *
+ * The deterministic synthesizer is always constructed — determinism must always
+ * be reachable — and the LLM strategy is layered on top only when a port was
+ * supplied, with the deterministic instance as its fallback target.
+ */
+function buildSynthesisStrategies(
+  opts: OrchestratorSynthesisOptions,
+  logger: Logger,
+): SynthesisStrategies {
+  const deterministic = new DeterministicSynthesizer();
+  const portFor = opts.llm ?? null;
+
+  return {
+    deterministic,
+    llm:
+      portFor === null
+        ? null
+        : (ctx): LlmSynthesizer =>
+            new LlmSynthesizer({
+              llm: portFor(ctx),
+              prompt: YANTRA_SYNTHESIS_PROMPT,
+              deterministic,
+              logger,
+            }),
+    noLlm: opts.noLlm === true,
+  };
+}
+
+/**
  * Builds the default orchestrator + supporting stores used by `yantra run` /
  * `yantra resume`. Pure side-effect-free factory — actual launches happen
  * when the caller invokes `orchestrator.run()`.
@@ -114,6 +168,12 @@ export async function buildOrchestratorRuntime(
      * unattended surfaces cannot self-authorize (plan §6).
      */
     readonly confirmationGateway?: ConfirmationGateway | null;
+    /**
+     * Synthesize-stage wiring (FEAT-FP-001). Omit to disable the stage — which
+     * is what every caller that must produce no Brief at all relies on. Pass
+     * `{}` for the deterministic-only stage; add `llm` for `--llm`.
+     */
+    readonly synthesis?: OrchestratorSynthesisOptions;
   } = {},
 ): Promise<OrchestratorRuntime> {
   const logger = opts.logger ?? noopLogger;
@@ -153,6 +213,8 @@ export async function buildOrchestratorRuntime(
     ethicsGate,
     logger,
     confirmationGateway: opts.confirmationGateway ?? null,
+    synthesis:
+      opts.synthesis === undefined ? null : buildSynthesisStrategies(opts.synthesis, logger),
   });
 
   return {

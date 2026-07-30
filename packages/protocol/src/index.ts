@@ -102,6 +102,7 @@ export {
   WorkflowFile,
   WorkflowOutput,
   WorkflowStep,
+  WorkflowSynthesis,
   WorkflowValueExpression,
 } from './schemas/workflow.js';
 export {

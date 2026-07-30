@@ -34,7 +34,8 @@
 ## Architecture
 
 - Live agentic work uses direct, policy-wrapped Yantra tools through exactly one fresh provider session per top-level run. Cross-run memory is explicit sanitized profile context.
-- Saved workflow replay stays finite, validated, deterministic, and LLM-free; deterministic modes are selected before agent construction.
+- Saved workflow replay stays finite, validated, and **LLM-free by default**; deterministic modes are selected before agent construction. An LLM may **transform a declared capture or synthesize the run's output document** — it may **never steer replay**: not step selection, not branch conditions, not loop bounds, not locator repair. Plan shape is fixed and validated before execution and cannot change based on model output.
+- Scheduled/daemon runs and nested `workflow_run` invocations are **hard zero-LLM** regardless of flags or environment.
 - Pi paths are Yantra-owned and pinned. Application sessions load no ambient Pi settings, extensions, resources, prompts, skills, or context files.
 - No unrestricted filesystem or shell tools exist. `script_run` accepts only registered, validated transformations with time, memory, and output limits.
 - Keep sanitizer, secret resolution, ethics, consent, budgets, output validation, and audit enforcement outside prompt text.

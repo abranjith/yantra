@@ -1665,21 +1665,22 @@ Example:
 
 Workflow YAML schema source used by parser, linter, and editor integrations.
 
-| Field               | Description                                           |
-| ------------------- | ----------------------------------------------------- |
-| version             | Workflow format major version.                        |
-| name                | Workflow slug name.                                   |
-| description         | Optional workflow description.                        |
-| security_class      | Workflow security class.                              |
-| recorded_with       | Optional recording metadata.                          |
-| params              | Workflow parameter declarations.                      |
-| secrets             | Declared workflow secret keys.                        |
-| cookies             | Cookie/profile handling mode.                         |
-| steps               | Ordered workflow steps.                               |
-| outputs             | Workflow output declarations.                         |
-| outputs_unredacted  | Whether outputs bypass redaction safeguards.          |
-| \_unrecorded_frames | Cross-origin frames not instrumented at record time.  |
-| \_locators          | Named locator chains captured or authored for replay. |
+| Field               | Description                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| version             | Workflow format major version.                                                                                |
+| name                | Workflow slug name.                                                                                           |
+| description         | Optional workflow description.                                                                                |
+| security_class      | Workflow security class.                                                                                      |
+| recorded_with       | Optional recording metadata.                                                                                  |
+| params              | Workflow parameter declarations.                                                                              |
+| secrets             | Declared workflow secret keys.                                                                                |
+| cookies             | Cookie/profile handling mode.                                                                                 |
+| steps               | Ordered workflow steps.                                                                                       |
+| outputs             | Workflow output declarations.                                                                                 |
+| synthesis           | Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only. |
+| outputs_unredacted  | Whether outputs bypass redaction safeguards.                                                                  |
+| \_unrecorded_frames | Cross-origin frames not instrumented at record time.                                                          |
+| \_locators          | Named locator chains captured or authored for replay.                                                         |
 
 Example:
 
@@ -1695,6 +1696,7 @@ Example:
   "cookies": "<cookies>",
   "steps": "<steps>",
   "outputs": "<outputs>",
+  "synthesis": "<synthesis>",
   "outputs_unredacted": "<outputs_unredacted>",
   "_unrecorded_frames": "<_unrecorded_frames>",
   "_locators": "<_locators>"
@@ -1727,6 +1729,26 @@ Example:
 
 ```json
 "<value>"
+```
+
+## WorkflowSynthesis
+
+Optional post-execution synthesis intent producing a Brief from recorded reads.
+
+| Field  | Description                                                                            |
+| ------ | -------------------------------------------------------------------------------------- |
+| goal   | The question or topic the synthesized Brief must answer.                               |
+| length | Findings/sections budget for the Brief: short=3, medium=6, long=10 findings.           |
+| detail | Brief depth: overview omits sections, standard adds them, full adds comparison facets. |
+
+Example:
+
+```json
+{
+  "goal": "<goal>",
+  "length": "<length>",
+  "detail": "<detail>"
+}
 ```
 
 ## WorkflowValueExpression

@@ -198,6 +198,46 @@
             },
             "kind": {
               "type": "string",
+              "const": "llm_step_skipped",
+              "description": "An llm_summarize step passed its input through unchanged because no model was configured."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id that was passed through."
+            },
+            "output_as": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Capture key the raw input was bound to."
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Why the model path was unavailable."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "output_as",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/TaskEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
               "const": "checkpoint_saved",
               "description": "Checkpoint persisted after a step."
             },
@@ -900,7 +940,7 @@
                               "expected_cost": {
                                 "anyOf": [
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/15/properties/request/properties/expected_cost/anyOf/0"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/16/properties/request/properties/expected_cost/anyOf/0"
                                   },
                                   {
                                     "type": "null"
@@ -912,7 +952,7 @@
                               "consequence": {
                                 "anyOf": [
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/15/properties/request/properties/consequence"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/16/properties/request/properties/consequence"
                                   },
                                   {
                                     "type": "null"
@@ -1052,19 +1092,19 @@
                                         "additionalProperties": {
                                           "anyOf": [
                                             {
-                                              "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                              "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
                                             },
                                             {
-                                              "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                              "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
                                             },
                                             {
-                                              "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                              "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
                                             },
                                             {
-                                              "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                              "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
                                             },
                                             {
-                                              "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                              "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
                                             }
                                           ],
                                           "description": "Any value reference that can flow through a plan or workflow."
@@ -1097,22 +1137,22 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "confirmation_description": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
                               },
                               "expected_cost": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
                               },
                               "consequence": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
                               },
                               "type": {
                                 "type": "string",
@@ -1336,7 +1376,7 @@
                                                   "name_match": {
                                                     "anyOf": [
                                                       {
-                                                        "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                                        "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                                       },
                                                       {
                                                         "type": "null"
@@ -1347,7 +1387,7 @@
                                                   "near": {
                                                     "anyOf": [
                                                       {
-                                                        "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                                        "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
                                                       },
                                                       {
                                                         "type": "null"
@@ -1435,22 +1475,22 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "confirmation_description": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
                               },
                               "expected_cost": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
                               },
                               "consequence": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
                               },
                               "type": {
                                 "type": "string",
@@ -1538,7 +1578,7 @@
                                       "name_match": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -1549,7 +1589,7 @@
                                       "near": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -1572,19 +1612,19 @@
                               "value": {
                                 "anyOf": [
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
                                   },
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
                                   },
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
                                   },
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
                                   },
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
                                   }
                                 ],
                                 "description": "Value inserted into the target input."
@@ -1609,13 +1649,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -1703,7 +1743,7 @@
                                       "name_match": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -1714,7 +1754,7 @@
                                       "near": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -1809,7 +1849,7 @@
                                                 "description": "Array extraction schema node."
                                               },
                                               "items": {
-                                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items",
+                                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items",
                                                 "description": "Item schema for extracted arrays."
                                               }
                                             },
@@ -1830,7 +1870,7 @@
                                               "fields": {
                                                 "type": "object",
                                                 "additionalProperties": {
-                                                  "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                                  "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
                                                 },
                                                 "description": "Field mapping for extracted object rows."
                                               }
@@ -1862,7 +1902,7 @@
                                       "fields": {
                                         "type": "object",
                                         "additionalProperties": {
-                                          "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                          "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
                                         },
                                         "description": "Field mapping for extracted object rows."
                                       }
@@ -1897,13 +1937,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -1991,7 +2031,7 @@
                                       "name_match": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -2002,7 +2042,7 @@
                                       "near": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -2060,13 +2100,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -2154,7 +2194,7 @@
                                       "name_match": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -2165,7 +2205,7 @@
                                       "near": {
                                         "anyOf": [
                                           {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
                                           },
                                           {
                                             "type": "null"
@@ -2277,13 +2317,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -2318,13 +2358,13 @@
                                         "type": "object",
                                         "properties": {
                                           "kind": {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
                                           },
                                           "step_id": {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
                                           },
                                           "field": {
-                                            "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
+                                            "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
                                           }
                                         },
                                         "required": [
@@ -2378,13 +2418,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -2394,10 +2434,10 @@
                               "over": {
                                 "anyOf": [
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
                                   },
                                   {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
                                   }
                                 ],
                                 "description": "Collection reference iterated by loop."
@@ -2438,13 +2478,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -2459,7 +2499,7 @@
                               "params": {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4/properties/bindings/additionalProperties"
+                                  "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4/properties/bindings/additionalProperties"
                                 },
                                 "default": {},
                                 "description": "Param values passed to called workflow."
@@ -2491,13 +2531,13 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
                               },
                               "scope": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
                               },
                               "requires_confirmation": {
-                                "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                                "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                               },
                               "type": {
                                 "type": "string",
@@ -2508,13 +2548,13 @@
                                 "type": "object",
                                 "properties": {
                                   "kind": {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
                                   },
                                   "step_id": {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
                                   },
                                   "field": {
-                                    "$ref": "#/definitions/TaskEvent/anyOf/17/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
+                                    "$ref": "#/definitions/TaskEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
                                   }
                                 },
                                 "required": [

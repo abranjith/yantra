@@ -55,7 +55,47 @@ With `--json`, every progress item and the final outcome is one independently pa
 The runtime bridges to Yantra's deterministic workflow engine in both directions:
 
 - **Discover and run** a saved workflow with the `workflow_run` tool. The agent chooses a saved workflow when one matches the goal; it replays deterministically (no LLM inside the workflow) in its own nested run directory, and the agent sees only a sanitized status/outputs summary — never the workflow's secrets or internal locators. See [agent-tools.md](agent-tools.md).
-- **Promote** a successful ad-hoc browser run into a reusable workflow with `yantra do "<goal>" --save-as <name>`. On a published outcome, the run's `trace.json` (see [run-artifacts.md](run-artifacts.md)) is converted into a saved, lint-clean workflow with candidate-chain locators; secret fills become declared `{{ secret:key }}` references and confirmation flags are preserved. `yantra run <name>` then replays it with no model credentials. Promotion failure is reported but never fails the run.
+- **Promote** a successful ad-hoc browser run into a reusable workflow with `yantra do "<goal>" --save-as <name>`. On a published outcome, the run's `trace.json` (see [run-artifacts.md](run-artifacts.md)) is converted into a saved, lint-clean workflow with candidate-chain locators; secret fills become declared `{{ secret:key }}` references and confirmation flags are preserved. The workflow also inherits the run's goal as a `synthesis:` block, so replaying it reproduces the Brief the original run published. `yantra run <name>` then replays it with no model credentials. Promotion failure is reported but never fails the run.
+
+## LLM in replay
+
+Replay is **finite, validated, and LLM-free by default**. `yantra run --llm` lets a
+model write the run's output document, and an `llm_summarize` step lets one
+transform a declared capture. Neither can steer the run.
+
+> **The never-steers invariant.** An LLM may transform a declared capture or
+> synthesize the run's output document. It may **never** influence step selection,
+> branch conditions, loop bounds, or locator repair. The plan's shape is fixed and
+> validated _before_ execution and cannot change based on model output.
+
+This is what keeps the determinism guarantee intact rather than weakened: a
+`synthesis:` block and an `llm_summarize` step are declared, validated **leaves**
+of a finite plan. The same steps run in the same order with or without a model —
+only the wording of the final document differs.
+
+Two surfaces are **hard zero-LLM**, regardless of flags or environment:
+
+| Surface                         | Behavior                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Scheduled / daemon runs**     | Never open a provider session. A workflow declaring `synthesis:` still gets a Brief — composed deterministically.             |
+| **Nested `workflow_run` calls** | Replay deterministically inside the agent's run and write no Brief of their own; the nested run dir has no session artifacts. |
+
+Supporting guarantees:
+
+- **Best-effort throughout.** A provider failure, model output that never
+  validates, or an unwritable artifact degrades to the deterministic Brief or to
+  no Brief. Synthesis never turns a successful run into a failed one, and exit
+  codes are unchanged.
+- **Validation stays validation.** An invalid `--provider`/`--model` is resolved
+  before execution begins, so it exits 1 rather than failing a started run.
+- **`llm_summarize` passes through** when no model is configured, binding its raw
+  input to `output_as` and publishing an `llm_step_skipped` event. A workflow
+  containing one therefore stays runnable _and_ schedulable without a model.
+- **Sanitized before send.** Every payload reaching the model passes the
+  sanitizer at the workflow's `security_class` profile, enforced by the
+  `scripts/ci-static-check.ts` sanitize-before-send guard.
+- **Resume inherits the strategy.** A resumed run reproduces its Brief the way
+  the first attempt did, read from `manifest.synthesis.strategy`.
 
 ## Release gate
 
