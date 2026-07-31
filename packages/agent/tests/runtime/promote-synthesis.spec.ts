@@ -100,7 +100,26 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       goal: 'When will my package arrive?',
       length: 'medium',
       detail: 'standard',
+      // A model wrote this run's Brief, so the workflow says so — that is what
+      // lets `yantra run package-eta` reproduce it with no mode flag.
+      use_llm: true,
     });
+  });
+
+  it('records use_llm because a published Brief is always model-authored', async () => {
+    // Reaching promotion means the agent published; the agent *is* the model.
+    // Promoting without this would save a workflow that quietly produces a
+    // plainer document than the run the user just watched succeed.
+    const store = recordingStore();
+
+    await maybePromoteTrace({
+      request: request({ saveAs: 'package-eta' }),
+      environment: environment(store),
+      trace: populatedTrace(),
+      outcome: published,
+    });
+
+    expect(store.saved[0]?.synthesis?.use_llm).toBe(true);
   });
 
   it('still records the trailing extract and its output alongside the block', async () => {

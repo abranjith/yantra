@@ -943,6 +943,11 @@
                   ],
                   "default": "standard",
                   "description": "Brief depth: overview omits sections, standard adds them, full adds comparison facets."
+                },
+                "use_llm": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Whether a model may write this Brief. Set when promoting a run whose report a model authored; false (the default) keeps replay model-free. `yantra run --no-llm`, scheduled runs, and nested workflow_run calls override it to false."
                 }
               },
               "required": [

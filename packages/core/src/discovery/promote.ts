@@ -131,6 +131,16 @@ export interface PromoteTraceOptions {
    * would promise a document the workflow was never shown how to produce.
    */
   readonly synthesisGoal?: string;
+  /**
+   * Whether a model authored the report this workflow is being promoted from.
+   *
+   * Recorded on the workflow as `synthesis.use_llm`, which is what makes replay
+   * reproduce the run rather than a plainer imitation of it: `yantra run <name>`
+   * then needs no extra flag to produce the document `yantra do` produced.
+   * Ignored without {@link PromoteTraceOptions.synthesisGoal} — there is no
+   * synthesis to describe.
+   */
+  readonly synthesisUsedLlm?: boolean;
 }
 
 /** Schema cap on `synthesis.goal`; a longer goal is truncated, never rejected. */
@@ -144,7 +154,7 @@ const MAX_SYNTHESIS_GOAL_CHARS = 512;
  * published run, and a clipped goal still describes the document far better than
  * no block at all.
  */
-function synthesisFor(goal: string | undefined): WorkflowSynthesis | null {
+function synthesisFor(goal: string | undefined, usedLlm: boolean): WorkflowSynthesis | null {
   const trimmed = goal?.trim() ?? '';
   if (trimmed.length === 0) return null;
 
@@ -152,6 +162,7 @@ function synthesisFor(goal: string | undefined): WorkflowSynthesis | null {
     goal: trimmed.slice(0, MAX_SYNTHESIS_GOAL_CHARS),
     length: 'medium',
     detail: 'standard',
+    use_llm: usedLlm,
   };
 }
 
@@ -165,11 +176,13 @@ function synthesisFor(goal: string | undefined): WorkflowSynthesis | null {
  *
  * When `synthesisGoal` is supplied, the promoted workflow also carries a
  * `synthesis:` block, so `yantra run <name>` ends in a Brief the way the original
- * `yantra do` run did instead of reporting the raw trailing capture.
+ * `yantra do` run did instead of reporting the raw trailing capture. Pairing it
+ * with `synthesisUsedLlm` records *how* that document was written, so the replay
+ * needs no flag to reproduce it.
  *
  * @param steps - The ordered successful interactions from an agentic run.
  * @param opts - Target workflow name, store, description, overwrite flag, and
- *   optional synthesis goal.
+ *   optional synthesis goal + model provenance.
  * @returns The saved `WorkflowFile`, or a typed error (never throws).
  */
 export async function promoteAgentTrace(
@@ -216,7 +229,7 @@ export async function promoteAgentTrace(
     cookies: 'none',
     steps: workflowSteps,
     outputs: declareOutputs(workflowSteps),
-    synthesis: synthesisFor(opts.synthesisGoal),
+    synthesis: synthesisFor(opts.synthesisGoal, opts.synthesisUsedLlm === true),
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: locators,

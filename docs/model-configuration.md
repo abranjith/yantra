@@ -8,8 +8,8 @@ resolution is audited.
 ## Selecting provider and model
 
 `yantra ask`, `yantra research`, and `yantra do` each open exactly one provider
-session, so all three accept the same selection flags. `yantra run --llm` accepts
-the identical surface for writing a replayed workflow's Brief (see
+session, so all three accept the same selection flags. `yantra run` accepts the
+identical surface for writing a replayed workflow's Brief (see
 [Model selection in replay](#model-selection-in-replay) below):
 
 | Flag                  | Meaning                                                          | Environment fallback    |
@@ -27,33 +27,43 @@ substitutes a different model or downgrades the credential mode. Deterministic
 
 ## Model selection in replay
 
-`yantra run` replays a saved workflow. It is deterministic and model-free by
-default, and stays that way even if model flags or `YANTRA_AGENT_*` variables are
-present — a replay never opens a provider session unless you ask for one:
+`yantra run` replays a saved workflow. **The workflow decides whether a model
+writes its Brief** — via `synthesis.use_llm`, recorded when the workflow was
+saved — so there is no mode flag to remember and `yantra run <name>` behaves the
+same way every time it is typed. Model flags and `YANTRA_AGENT_*` variables
+select _which_ model that workflow gets; they never opt a workflow in:
 
 ```bash
-yantra run quarterly-report                 # deterministic Brief, no session
-yantra run quarterly-report --llm           # model-written Brief, pinned default
-yantra run quarterly-report --llm --provider ollama --model llama3.1:8b
-yantra run quarterly-report --no-llm        # explicit deterministic
+yantra run quarterly-report                             # whatever the workflow declares
+yantra run quarterly-report --provider ollama --model llama3.1:8b
+yantra run quarterly-report --no-llm                    # force deterministic
 ```
 
-`--llm` affects **only** how the run's Brief is worded, and only for a workflow
+A workflow whose `synthesis.use_llm` is false — the default, and the state of
+every workflow saved before the field existed — opens no provider session no
+matter which model flags are present.
+
+The model affects **only** how the run's Brief is worded, and only for a workflow
 that declares a `synthesis:` block. It never influences which steps run: step
 selection, branch conditions, loop bounds, and locator resolution are fixed and
 validated before execution. See
 [agentic-runtime.md](agentic-runtime.md#llm-in-replay) for the full invariant.
 
-Two surfaces ignore `--llm` entirely and are always zero-LLM:
+Three things force the deterministic path regardless of what a workflow declares:
 
+- **`--no-llm`** — the same flag `ask` and `research` use; `LLM_PROVIDER=none`
+  works the same way.
 - **Scheduled / daemon runs** — an unattended fire never opens a session.
 - **Nested `workflow_run` calls** — a workflow invoked by an agent replays
   deterministically inside the agent's own run.
 
 Because the model only writes prose, a synthesis failure is never fatal: an
-unreachable provider, an unusable credential, or output that never validates
-falls back to the deterministic Brief, and the run still succeeds with its
-outputs intact.
+unreachable provider, an unusable credential, an adapter that cannot even be
+constructed, or output that never validates falls back to the deterministic
+Brief, and the run still succeeds with its outputs intact. The degradation is
+logged as a warning and recorded in `manifest.synthesis` as
+`{"strategy": "deterministic", "fallbackUsed": true}`, which is also what lets
+`yantra resume` re-offer the model rather than inheriting the downgrade.
 
 ## Pinned, Yantra-owned Pi paths
 

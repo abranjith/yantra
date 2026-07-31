@@ -35,7 +35,12 @@ export type {
 } from './types.js';
 
 // Synthesize stage (FEAT-FP-001)
-export { runSynthesizeStage, synthesizeGate, synthesizeRun } from './synthesize.js';
+export {
+  runSynthesizeStage,
+  synthesizeGate,
+  synthesizeRun,
+  toSynthesisSpec,
+} from './synthesize.js';
 export type {
   SynthesisRunContext,
   SynthesisSpec,

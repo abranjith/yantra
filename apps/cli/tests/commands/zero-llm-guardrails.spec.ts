@@ -60,17 +60,28 @@ describe('@no-llm nested workflow_run is hard zero-LLM', () => {
   });
 });
 
-describe('@no-llm the interactive run path is opt-in only', () => {
+describe('@no-llm the interactive run path is workflow-declared only', () => {
   const source = read('apps/cli/src/commands/run.ts');
 
   it('gates the provider adapter behind a resolved selection', () => {
     // The adapter is constructed inside the `selection === null ? null : ...`
-    // branch, so an absent `--llm` cannot reach it.
+    // branch, so `--no-llm` cannot reach it.
     expect(source).toContain('selection === null');
     expect(source).toContain('createSynthesisLlm');
   });
 
-  it('defaults the --llm flag to off', () => {
-    expect(source).toMatch(/'--llm'[\s\S]{0,200}\.default\(false\)/);
+  it('offers --no-llm as a veto and no --llm opt-in', () => {
+    expect(source).toContain("'--no-llm'");
+    expect(source).not.toMatch(/new Option\(\s*'--llm'/);
+  });
+});
+
+describe('@no-llm the synthesize stage never opts a workflow in', () => {
+  const source = read('packages/core/src/workflow/replay/synthesize.ts');
+
+  it('requires the workflow to have declared use_llm', () => {
+    // Both halves are load-bearing: a caller-supplied port alone must never be
+    // enough, or `--model` would quietly turn every replay into a model run.
+    expect(source).toContain('opts.spec.useLlm && !opts.strategies.noLlm');
   });
 });

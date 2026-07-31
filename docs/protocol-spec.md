@@ -1735,11 +1735,12 @@ Example:
 
 Optional post-execution synthesis intent producing a Brief from recorded reads.
 
-| Field  | Description                                                                            |
-| ------ | -------------------------------------------------------------------------------------- |
-| goal   | The question or topic the synthesized Brief must answer.                               |
-| length | Findings/sections budget for the Brief: short=3, medium=6, long=10 findings.           |
-| detail | Brief depth: overview omits sections, standard adds them, full adds comparison facets. |
+| Field   | Description                                                                                                                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| goal    | The question or topic the synthesized Brief must answer.                                                                                                                                                                              |
+| length  | Findings/sections budget for the Brief: short=3, medium=6, long=10 findings.                                                                                                                                                          |
+| detail  | Brief depth: overview omits sections, standard adds them, full adds comparison facets.                                                                                                                                                |
+| use_llm | Whether a model may write this Brief. Set when promoting a run whose report a model authored; false (the default) keeps replay model-free. `yantra run --no-llm`, scheduled runs, and nested workflow_run calls override it to false. |
 
 Example:
 
@@ -1747,7 +1748,8 @@ Example:
 {
   "goal": "<goal>",
   "length": "<length>",
-  "detail": "<detail>"
+  "detail": "<detail>",
+  "use_llm": "<use_llm>"
 }
 ```
 

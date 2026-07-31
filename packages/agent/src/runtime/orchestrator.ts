@@ -964,6 +964,10 @@ export async function maybePromoteTrace(input: {
       // capture (FEAT-FP-001). Reaching here already implies a published Brief:
       // the guard above returns early for every other outcome kind.
       synthesisGoal: request.goal,
+      // That Brief was written by this run's model, so the saved workflow says
+      // so. `yantra run <name>` then reproduces the document with no extra
+      // flag — the replay inherits the run's shape *and* its authorship.
+      synthesisUsedLlm: true,
     });
     return {
       ...outcome,

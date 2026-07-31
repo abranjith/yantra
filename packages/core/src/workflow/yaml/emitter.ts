@@ -27,6 +27,7 @@ const KEY_ORDER = [
   'cookies',
   'steps',
   'outputs',
+  'synthesis',
   'outputs_unredacted',
   '_locators',
   '_locators_ref',
@@ -65,6 +66,15 @@ export function emitWorkflow(workflow: WorkflowFile, opts?: EmitOptions): EmitRe
   }
 
   obj.steps = workflow.steps.map((step) => toShortForm(step));
+
+  // Emitted whole, including `use_llm`: the block is the workflow's record of
+  // *what document it produces and how it is written*. Dropping any of it here
+  // would let a promoted workflow reload as `synthesis: null` and silently
+  // replay as a raw capture dump — the exact regression the block exists to fix.
+  const synthesis = workflow.synthesis ?? null;
+  if (synthesis !== null) {
+    obj.synthesis = synthesis;
+  }
 
   if (workflow.outputs.length > 0) {
     obj.outputs = workflow.outputs;

@@ -57,7 +57,7 @@ describe('@no-llm workflow synthesis block', () => {
     expect(parsed.synthesis).toBeNull();
   });
 
-  it('applies length and detail defaults when only goal is given', () => {
+  it('applies length, detail, and use_llm defaults when only goal is given', () => {
     const parsed = WorkflowFile.parse({
       ...makeWorkflow(),
       synthesis: { goal: 'What did the statement show?' },
@@ -67,13 +67,36 @@ describe('@no-llm workflow synthesis block', () => {
       goal: 'What did the statement show?',
       length: 'medium',
       detail: 'standard',
+      // Model-free unless the workflow says otherwise: declaring a Brief must
+      // never be the same act as opting into a provider session.
+      use_llm: false,
     });
   });
 
   it('accepts explicit length and detail values', () => {
     const parsed = WorkflowSynthesis.parse({ goal: 'g', length: 'long', detail: 'full' });
 
-    expect(parsed).toEqual({ goal: 'g', length: 'long', detail: 'full' });
+    expect(parsed).toEqual({ goal: 'g', length: 'long', detail: 'full', use_llm: false });
+  });
+
+  it('accepts an explicit use_llm opt-in', () => {
+    const parsed = WorkflowSynthesis.parse({ goal: 'g', use_llm: true });
+
+    expect(parsed).toEqual({ goal: 'g', length: 'medium', detail: 'standard', use_llm: true });
+  });
+
+  it('rejects a non-boolean use_llm', () => {
+    expect(WorkflowSynthesis.safeParse({ goal: 'g', use_llm: 'yes' }).success).toBe(false);
+  });
+
+  it('parses a pre-use_llm workflow with the block model-free (back-compat)', () => {
+    // Every workflow saved before the field existed must keep replaying exactly
+    // as it did — which means deterministically.
+    const parsed = WorkflowFile.parse(
+      makeWorkflow({ synthesis: { goal: 'g', length: 'short', detail: 'overview' } }),
+    );
+
+    expect(parsed.synthesis?.use_llm).toBe(false);
   });
 
   it('rejects an empty goal', () => {

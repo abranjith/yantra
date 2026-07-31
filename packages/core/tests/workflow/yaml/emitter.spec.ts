@@ -155,4 +155,68 @@ describe('emitWorkflow', () => {
       expect(reparsed.value.name).toBe(workflow.name);
     }
   });
+
+  describe('the synthesis block', () => {
+    const synthesis = {
+      goal: 'When will my package arrive?',
+      length: 'medium',
+      detail: 'standard',
+      use_llm: true,
+    } as const;
+
+    it('omits synthesis when the workflow declares none', () => {
+      const { yaml } = emitWorkflow(makeMinimalWorkflow({ synthesis: null }));
+
+      expect(yaml).not.toContain('synthesis:');
+    });
+
+    it('emits the declared synthesis block', () => {
+      // Without this the block was built in memory, passed lint, and then
+      // vanished at save time — a promoted workflow reloaded as
+      // `synthesis: null` and replayed as a raw capture dump.
+      const { yaml } = emitWorkflow(makeMinimalWorkflow({ synthesis }));
+
+      expect(yaml).toContain('synthesis:');
+      expect(yaml).toContain('goal: When will my package arrive?');
+    });
+
+    it('emits use_llm so the saved workflow remembers how its Brief is written', () => {
+      const { yaml } = emitWorkflow(makeMinimalWorkflow({ synthesis }));
+
+      expect(yaml).toContain('use_llm: true');
+    });
+
+    it('survives an emit → parse round trip intact', () => {
+      const { yaml } = emitWorkflow(makeMinimalWorkflow({ synthesis }));
+      const reparsed = parseWorkflowYaml(yaml);
+
+      expect(reparsed.isOk).toBe(true);
+      if (reparsed.isOk) {
+        expect(reparsed.value.synthesis).toEqual(synthesis);
+      }
+    });
+
+    it('round-trips a deterministic block without acquiring use_llm', () => {
+      const { yaml } = emitWorkflow(
+        makeMinimalWorkflow({ synthesis: { ...synthesis, use_llm: false } }),
+      );
+      const reparsed = parseWorkflowYaml(yaml);
+
+      expect(reparsed.isOk && reparsed.value.synthesis?.use_llm).toBe(false);
+    });
+
+    it('places synthesis after steps and outputs in the emitted key order', () => {
+      const { yaml } = emitWorkflow(
+        makeMinimalWorkflow({
+          synthesis,
+          outputs: [{ name: 'captured', from: '{{ capture.x.rows[0] }}' }],
+          outputs_unredacted: true,
+        }),
+      );
+
+      expect(yaml.indexOf('steps:')).toBeLessThan(yaml.indexOf('outputs:'));
+      expect(yaml.indexOf('outputs:')).toBeLessThan(yaml.indexOf('synthesis:'));
+      expect(yaml.indexOf('synthesis:')).toBeLessThan(yaml.indexOf('outputs_unredacted:'));
+    });
+  });
 });

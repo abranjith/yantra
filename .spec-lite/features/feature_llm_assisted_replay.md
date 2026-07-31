@@ -18,15 +18,19 @@ This feature closes that gap. `yantra run` gains a post-execution **Synthesize s
 the same `brief.json` / `brief.md` / `brief.html` artifacts `ask`, `research`, and `do` produce — by
 reusing the existing `packages/core/src/synthesis/` stage rather than inventing a second one.
 
-The stage runs in **both** modes:
+The stage runs in **both** modes, and **the workflow — not the invocation — selects which**
+(amended 2026-07-30; see §9):
 
-- **Default (no LLM)** — `DeterministicSynthesizer` produces a real, schema-valid Brief. Replay stays
-  byte-for-byte deterministic and opens no provider session.
-- **`--llm`** — `LlmSynthesizer` produces a citation-validated Brief, with a bounded re-prompt loop and
-  an automatic fall back to the deterministic strategy on any failure.
+- **`synthesis.use_llm: false`** (the default, and every workflow saved before the field existed) —
+  `DeterministicSynthesizer` produces a real, schema-valid Brief. Replay stays byte-for-byte
+  deterministic and opens no provider session.
+- **`synthesis.use_llm: true`** (what `do --save-as` records) — `LlmSynthesizer` produces a
+  citation-validated Brief, with a bounded re-prompt loop and an automatic fall back to the
+  deterministic strategy on any failure.
 
-So "with or without LLM" is not "document vs. raw dump" — it is "synthesized document, richer or
-plainer". The LLM upgrades quality; it never gates whether the run produces a document.
+`yantra run` therefore carries **no opt-in mode flag**; `--no-llm` is a veto only. So "with or
+without LLM" is not "document vs. raw dump" — it is "synthesized document, richer or plainer". The
+LLM upgrades quality; it never gates whether the run produces a document.
 
 ## 2. Technical Context
 
@@ -102,6 +106,8 @@ No relational data model. Three structural additions:
 - `goal` (string, min 1) — the question/topic the Brief answers; becomes `SynthesisInput.query`.
 - `length` (`'short' | 'medium' | 'long'`, default `'medium'`) — findings/sections budget.
 - `detail` (`'overview' | 'standard' | 'full'`, default `'standard'`) — Brief depth.
+- `use_llm` (boolean, default `false`) — whether a model writes the Brief. **The only thing that can
+  opt a replay into a provider session** (§9). Set by promotion from a model-authored run.
 
 Added to `WorkflowFile` as `synthesis: WorkflowSynthesis | null`, `.default(null)`. **Optional by
 construction** — every existing workflow parses unchanged and behaves exactly as today.
@@ -287,6 +293,10 @@ construction** — every existing workflow parses unchanged and behaves exactly 
 
 ### TASK-006: `run` CLI flags and Brief rendering
 
+> **AMENDED 2026-07-30 (§9)**: `--llm` was removed. The mode is declared by the workflow
+> (`synthesis.use_llm`); `run` registers `--no-llm` as a veto only, and resolves the model selection
+> on every run (it is pure — the adapter is still built lazily, and only for a workflow that asked).
+
 - [ ] **Implementation**: In [run.ts](../../apps/cli/src/commands/run.ts), add `--llm` / `--no-llm`
       (**default off**) and register the shared model options via `addAgentModelOptions(cmd)`. Resolve
       `selectAgentSession('run', options, env)` **before** the try block so a bad `--provider`/`--model` is a
@@ -388,5 +398,42 @@ demo` then produces a deterministic Brief and `yantra run demo --llm` an LLM Bri
 - [x] TASK-007: `llm_summarize` pass-through without an LLM
 - [x] TASK-008: Promotion emits the synthesis block
 - [x] TASK-009: Zero-LLM guardrails and memory update
+- [x] TASK-010: Workflow-declared synthesis mode (UX consistency amendment)
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Amendment (2026-07-30): the workflow declares the mode, not the flag
+
+`--llm` was an opt-in mode flag no sibling command had. `ask`, `research`, and `do` all produce their
+normal output with no mode flag; requiring one on `run` meant a workflow promoted from `yantra do`
+silently produced a plainer document than the run it came from until the user remembered `--llm`.
+Consistent CLI UX is a standing Yantra requirement (`.spec-lite/memory.md` → General), so the mode
+moved into the artifact.
+
+**What changed**
+
+| Before                                    | After                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------ |
+| `yantra run wf --llm`                     | `yantra run wf` — the workflow's `synthesis.use_llm` decides             |
+| `--llm` opt-in + `--no-llm` veto          | `--no-llm` veto only; no opt-in flag exists                              |
+| Model flags inert without `--llm`         | Model flags choose _which_ model a declaring workflow gets               |
+| Promotion recorded `synthesis.goal`       | Promotion also records `use_llm: true` (the agent authored that Brief)   |
+| `strategies.noLlm` was the whole decision | Decision is `spec.useLlm && !strategies.noLlm` — a veto can never opt in |
+
+**Files touched beyond §4**: `packages/protocol/src/schemas/workflow.ts` (`use_llm`),
+`packages/core/src/workflow/replay/synthesize.ts` (`SynthesisSpec.useLlm`, `toSynthesisSpec`,
+construction-failure fallback), `packages/core/src/discovery/promote.ts` (`synthesisUsedLlm`),
+`packages/agent/src/runtime/orchestrator.ts`, `apps/cli/src/commands/run.ts`,
+`apps/cli/src/commands/resume.ts`, plus regenerated `docs/protocol-spec.md` and
+`packages/protocol/generated/json-schema/workflow.json`.
+
+**Fallback hardening.** `LlmSynthesizer` already fell back on provider/validation failure. The
+uncovered case was the strategy _factory_ throwing — before any synthesizer exists — which failed the
+whole run. `synthesizeRun` now contains that, and reports `fallbackUsed: true` whenever a workflow
+asked for a model and could not have one, so `manifest.synthesis` stays honest and `resume` re-offers
+the model instead of inheriting a transient downgrade.
+
+**Guarantees preserved verbatim**: scheduled/daemon runs and nested `workflow_run` stay hard
+zero-LLM (they pass `noLlm: true` / `synthesis: null`, which the veto rule makes unconditional); an
+`authenticated` `security_class` still stays deterministic via `selectSynthesizer`; the real-Chrome
+promotion e2e still replays green with no LLM.

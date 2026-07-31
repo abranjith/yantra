@@ -107,8 +107,9 @@ export interface OrchestratorRuntime {
  * Synthesis wiring for `yantra run` (FEAT-FP-001).
  *
  * Omitting this disables the Synthesize stage entirely. Passing it with
- * `llm: null` (the default when `--llm` was not given) still produces a Brief —
- * deterministically, opening no provider session.
+ * `llm: null` still produces a Brief — deterministically, opening no provider
+ * session. Supplying a port does *not* mean a model will be used: the stage
+ * calls the factory only for a workflow whose `synthesis.use_llm` is set.
  */
 export interface OrchestratorSynthesisOptions {
   /**
@@ -116,10 +117,13 @@ export interface OrchestratorSynthesisOptions {
    *
    * A factory because the port needs the run's id and directory (its session log
    * is an artifact of that run), and neither exists until the orchestrator
-   * creates the run. Callers supply this only when the user asked for `--llm`.
+   * creates the run — and because most runs never call it at all.
    */
   readonly llm?: ((ctx: SynthesisRunContext) => SynthesisLlm) | null;
-  /** True when the user passed `--no-llm`; forces the deterministic path. */
+  /**
+   * True when the caller vetoed the model (`--no-llm`, a scheduled fire);
+   * forces the deterministic path regardless of what the workflow declares.
+   */
   readonly noLlm?: boolean;
 }
 
@@ -171,7 +175,8 @@ export async function buildOrchestratorRuntime(
     /**
      * Synthesize-stage wiring (FEAT-FP-001). Omit to disable the stage — which
      * is what every caller that must produce no Brief at all relies on. Pass
-     * `{}` for the deterministic-only stage; add `llm` for `--llm`.
+     * `{}` for a deterministic-only stage; add `llm` to let a workflow that
+     * declared `synthesis.use_llm` reach a model.
      */
     readonly synthesis?: OrchestratorSynthesisOptions;
   } = {},

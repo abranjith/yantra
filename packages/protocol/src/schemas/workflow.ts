@@ -222,6 +222,12 @@ export type WorkflowOutput = z.infer<typeof WorkflowOutput>;
  * step. It is a declared, validated leaf of a finite plan — it never influences
  * which steps run, so replay stays deterministic in shape whether or not a model
  * is involved in the wording.
+ *
+ * `use_llm` makes the *workflow* — not the invocation — the place that records
+ * whether the document is model-written. A workflow promoted from a run whose
+ * report a model authored carries `use_llm: true`, so replaying it reproduces
+ * that run rather than silently downgrading to a plainer document, and a
+ * hand-authored workflow that never asked for a model never gets one.
  */
 export const WorkflowSynthesis = z
   .object({
@@ -239,6 +245,12 @@ export const WorkflowSynthesis = z
       .default('standard')
       .describe(
         'Brief depth: overview omits sections, standard adds them, full adds comparison facets.',
+      ),
+    use_llm: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Whether a model may write this Brief. Set when promoting a run whose report a model authored; false (the default) keeps replay model-free. `yantra run --no-llm`, scheduled runs, and nested workflow_run calls override it to false.',
       ),
   })
   .describe('Optional post-execution synthesis intent producing a Brief from recorded reads.');

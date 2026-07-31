@@ -8,6 +8,7 @@
 ## General
 
 - Yantra is a local-first browser-automation and web-research platform, not a general desktop, file-management, code-generation, or unrestricted agent platform.
+- **Consistent CLI/command-line UX is a first-class product requirement.** Commands share one flag vocabulary and spelling (`--json`, `--no-llm`, `--provider`/`--model`/`--thinking`/`--auth-secret`, `--detail`/`--format`/`--length`) with identical semantics; a new flag must match how sibling commands already spell the same idea. Getting a command's ordinary output must never require remembering a mode flag — record the mode in the saved artifact (e.g. `synthesis.use_llm`) and reserve flags for overrides, spelled as negations (`--no-llm`) rather than opt-ins.
 - Honor bot detection, CAPTCHA, robots, and rate limits; hand off rather than evade.
 - Preserve user-owned workflow YAML and run-artifact compatibility. Internal pre-release APIs may make clean breaks.
 
@@ -34,7 +35,7 @@
 ## Architecture
 
 - Live agentic work uses direct, policy-wrapped Yantra tools through exactly one fresh provider session per top-level run. Cross-run memory is explicit sanitized profile context.
-- Saved workflow replay stays finite, validated, and **LLM-free by default**; deterministic modes are selected before agent construction. An LLM may **transform a declared capture or synthesize the run's output document** — it may **never steer replay**: not step selection, not branch conditions, not loop bounds, not locator repair. Plan shape is fixed and validated before execution and cannot change based on model output.
+- Saved workflow replay stays finite, validated, and **LLM-free unless the workflow declares otherwise** (`synthesis.use_llm`, persisted at save/promotion time — never a per-invocation opt-in flag); deterministic modes are selected before agent construction. An LLM may **transform a declared capture or synthesize the run's output document** — it may **never steer replay**: not step selection, not branch conditions, not loop bounds, not locator repair. Plan shape is fixed and validated before execution and cannot change based on model output.
 - Scheduled/daemon runs and nested `workflow_run` invocations are **hard zero-LLM** regardless of flags or environment.
 - Pi paths are Yantra-owned and pinned. Application sessions load no ambient Pi settings, extensions, resources, prompts, skills, or context files.
 - No unrestricted filesystem or shell tools exist. `script_run` accepts only registered, validated transformations with time, memory, and output limits.

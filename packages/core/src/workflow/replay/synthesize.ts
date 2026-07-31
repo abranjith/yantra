@@ -14,17 +14,23 @@
  * synthesisSpec   ──► SynthesisOptions ──────────────────┴─► selectSynthesizer ──► Brief
  * ```
  *
- * Two invariants govern the stage:
+ * Three invariants govern the stage:
  *
  * - **Sources are engine-owned.** They derive from what `extract` actually read;
  *   a model may author prose but never couriers a URL into the document.
+ * - **The workflow decides, the caller may only veto.** Whether a model writes
+ *   the Brief is declared by the workflow (`synthesis.use_llm`), not by the
+ *   invocation. A caller can force the deterministic path (`--no-llm`, a
+ *   scheduled fire) but can never opt a workflow into a model it did not ask
+ *   for. This is what makes `yantra run <name>` behave the same way every time
+ *   it is typed, whoever types it.
  * - **It is best-effort.** A workflow's value is the data it collected. A
  *   synthesis failure — no evidence, a dead provider, output that never
  *   validates, an unwritable run directory — degrades to a plainer Brief or to
  *   no Brief, and must never turn a green run red.
  */
 
-import type { Brief } from '@yantra/protocol';
+import type { Brief, WorkflowSynthesis } from '@yantra/protocol';
 
 import type { BriefArtifactPaths } from '../../brief/write-artifacts.js';
 import { writeBriefArtifacts } from '../../brief/write-artifacts.js';
@@ -64,7 +70,11 @@ export interface SynthesisStrategies {
    * whatever directory the user happened to be standing in.
    */
   readonly llm: ((ctx: SynthesisRunContext) => Synthesizer) | null;
-  /** True when the caller forced the deterministic path (`--no-llm`, daemon). */
+  /**
+   * True when the caller forced the deterministic path (`--no-llm`, a scheduled
+   * fire). A **veto only**: it can turn a workflow's declared `use_llm` off, and
+   * never turns it on.
+   */
   readonly noLlm: boolean;
 }
 
@@ -73,6 +83,30 @@ export interface SynthesisSpec {
   readonly goal: string;
   readonly length: 'short' | 'medium' | 'long';
   readonly detail: 'overview' | 'standard' | 'full';
+  /**
+   * Whether the workflow asked for a model-written Brief. The only thing that
+   * can opt a replay into a provider session — no flag adds one.
+   */
+  readonly useLlm: boolean;
+}
+
+/**
+ * Projects the workflow's declared `synthesis:` block onto the stage's spec.
+ *
+ * The two shapes are near-identical; the mapping exists so the on-disk protocol
+ * field names (`use_llm`) stay a YAML concern and the stage keeps core's
+ * camelCase convention.
+ *
+ * @param block - The workflow's parsed `synthesis:` block.
+ * @returns The stage's spec.
+ */
+export function toSynthesisSpec(block: WorkflowSynthesis): SynthesisSpec {
+  return {
+    goal: block.goal,
+    length: block.length,
+    detail: block.detail,
+    useLlm: block.use_llm,
+  };
 }
 
 /** Inputs to {@link synthesizeRun}. */
@@ -137,18 +171,46 @@ export async function synthesizeRun(
     searchProvider: null,
   };
 
-  // The LLM strategy is built only if it might actually be selected, so a
-  // `--no-llm` run never even constructs a provider adapter.
+  // The workflow declares the intent; the caller may only veto it. Both must
+  // agree before a provider session is even considered.
+  const wantsLlm = opts.spec.useLlm && !opts.strategies.noLlm;
+
+  // The LLM strategy is built only if it might actually be selected, so a run
+  // whose workflow never asked for one constructs no provider adapter at all.
   const llmFactory = opts.strategies.llm;
-  const llm =
-    llmFactory === null || opts.strategies.noLlm
-      ? null
-      : llmFactory({ runId: opts.runId, runDir: opts.runDir });
+  let llm: Synthesizer | null = null;
+  if (wantsLlm && llmFactory !== null) {
+    try {
+      llm = llmFactory({ runId: opts.runId, runDir: opts.runDir });
+    } catch (error) {
+      // Constructing the adapter is the one LLM failure the synthesizer's own
+      // fallback cannot cover, because it happens before the synthesizer
+      // exists. Containing it here is what makes "a model is an upgrade, never
+      // a dependency" true for every failure mode.
+      logger?.warn(
+        {
+          runId: opts.runId,
+          reason: error instanceof Error ? error.message : String(error),
+        },
+        'replay synthesis could not construct the llm strategy; using the deterministic synthesizer',
+      );
+    }
+  }
+
+  // The workflow asked for a model and none is reachable — the Brief is still
+  // written, one grade plainer, and the manifest says so.
+  const degraded = wantsLlm && llm === null;
+  if (degraded) {
+    logger?.warn(
+      { runId: opts.runId },
+      'workflow declares synthesis.use_llm but no llm strategy is available; falling back to the deterministic synthesizer',
+    );
+  }
 
   const synthesizer = selectSynthesizer(synthesisOptions, {
     deterministic: opts.strategies.deterministic,
     llm,
-    noLlm: opts.strategies.noLlm,
+    noLlm: !wantsLlm,
   });
 
   try {
@@ -160,17 +222,24 @@ export async function synthesizeRun(
       );
       return null;
     }
+    // A degraded run reports `fallbackUsed` even though the synthesizer itself
+    // never fell back: from the workflow's point of view the model path was
+    // taken away, and `resume` reads this to re-attempt it.
+    const outcome: SynthesisOutcome =
+      degraded && !result.value.fallbackUsed
+        ? { ...result.value, fallbackUsed: true }
+        : result.value;
     logger?.info(
       {
         runId: opts.runId,
-        strategy: result.value.strategyUsed,
-        fallbackUsed: result.value.fallbackUsed,
-        sources: result.value.brief.sources.length,
+        strategy: outcome.strategyUsed,
+        fallbackUsed: outcome.fallbackUsed,
+        sources: outcome.brief.sources.length,
         overflowCount: opts.overflowCount,
       },
       'replay synthesis complete',
     );
-    return result.value;
+    return outcome;
   } catch (error) {
     // A synthesizer is contracted to return errors, not throw. Containing a
     // contract violation here is what keeps the stage from failing the run.
@@ -188,8 +257,8 @@ export async function synthesizeRun(
 
 /** The three conditions a run must meet before the Synthesize stage may run. */
 export interface SynthesizeGateInput {
-  /** The workflow's declared intent, or null when it declared none. */
-  readonly synthesisSpec: SynthesisSpec | null;
+  /** The workflow's declared `synthesis:` block, or null when it declared none. */
+  readonly synthesisSpec: WorkflowSynthesis | null;
   /** The strategies the caller wired, or null when the caller disabled the stage. */
   readonly strategies: SynthesisStrategies | null;
   /** True only when the executor ran every step to completion. */
@@ -228,7 +297,11 @@ export function synthesizeGate(input: SynthesizeGateInput): SynthesizeGate {
   if (input.synthesisSpec === null || input.strategies === null || !input.completed) {
     return { run: false };
   }
-  return { run: true, spec: input.synthesisSpec, strategies: input.strategies };
+  return {
+    run: true,
+    spec: toSynthesisSpec(input.synthesisSpec),
+    strategies: input.strategies,
+  };
 }
 
 /** What {@link runSynthesizeStage} produced, for the outcome and manifest. */

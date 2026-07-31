@@ -10,7 +10,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Brief, Result } from '@yantra/protocol';
+import type { Brief, Result, WorkflowSynthesis } from '@yantra/protocol';
 import { createBrief, err, ok, validateBrief } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,6 +28,7 @@ import {
   runSynthesizeStage,
   synthesizeGate,
   synthesizeRun,
+  toSynthesisSpec,
   type SynthesisSpec,
   type SynthesisStrategies,
 } from '../../../src/workflow/replay/synthesize.js';
@@ -40,6 +41,18 @@ const spec: SynthesisSpec = {
   goal: 'What did the quarterly report say about revenue?',
   length: 'medium',
   detail: 'standard',
+  useLlm: false,
+};
+
+/** The same intent, but declaring that a model should write the document. */
+const llmSpec: SynthesisSpec = { ...spec, useLlm: true };
+
+/** The protocol-shaped block as it appears in a workflow file. */
+const block: WorkflowSynthesis = {
+  goal: spec.goal,
+  length: 'medium',
+  detail: 'standard',
+  use_llm: false,
 };
 
 function entry(overrides: Partial<ReplayEvidenceEntry> = {}): ReplayEvidenceEntry {
@@ -120,14 +133,24 @@ function baseOptions(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('@no-llm toSynthesisSpec', () => {
+  it('projects the workflow block onto the stage spec', () => {
+    expect(toSynthesisSpec(block)).toEqual(spec);
+  });
+
+  it('carries use_llm through as the stage-level intent', () => {
+    expect(toSynthesisSpec({ ...block, use_llm: true })).toEqual(llmSpec);
+  });
+});
+
 describe('@no-llm synthesizeGate', () => {
-  const all = { synthesisSpec: spec, strategies: strategies(), completed: true };
+  const all = { synthesisSpec: block, strategies: strategies(), completed: true };
 
   it('runs and narrows its inputs when every condition holds', () => {
     const gate = synthesizeGate(all);
 
     expect(gate.run).toBe(true);
-    expect(gate.run && gate.spec).toBe(spec);
+    expect(gate.run && gate.spec).toEqual(spec);
     expect(gate.run && gate.strategies).not.toBeNull();
   });
 
@@ -218,7 +241,7 @@ describe('@no-llm synthesizeRun', () => {
 
     await synthesizeRun(
       baseOptions({
-        spec: { goal: 'the question', length: 'long', detail: 'full' },
+        spec: { goal: 'the question', length: 'long', detail: 'full', useLlm: false },
         strategies: strategies({ deterministic }),
       }),
       logger,
@@ -235,11 +258,11 @@ describe('@no-llm synthesizeRun', () => {
     });
   });
 
-  it('selects the LLM strategy when a port is wired and noLlm is false', async () => {
+  it('selects the LLM strategy when the workflow declared useLlm and a port is wired', async () => {
     const llm = spySynthesizer('llm');
 
     const outcome = await synthesizeRun(
-      baseOptions({ strategies: strategies({ llm, noLlm: false }) }),
+      baseOptions({ spec: llmSpec, strategies: strategies({ llm, noLlm: false }) }),
       logger,
     );
 
@@ -247,12 +270,48 @@ describe('@no-llm synthesizeRun', () => {
     expect(outcome?.strategyUsed).toBe('llm');
   });
 
-  it('forces the deterministic strategy when noLlm is true even with a port wired', async () => {
+  it('stays deterministic when the workflow did not declare useLlm, port or no port', async () => {
+    // The central UX property: wiring a port is the CLI saying "a model is
+    // available", never "use one". Only the workflow opts in.
     const llm = spySynthesizer('llm');
     const deterministic = spySynthesizer('deterministic');
 
     const outcome = await synthesizeRun(
-      baseOptions({ strategies: { deterministic, llm: llmFactory(llm), noLlm: true } }),
+      baseOptions({ strategies: { deterministic, llm: llmFactory(llm), noLlm: false } }),
+      logger,
+    );
+
+    expect(llm.calls).toHaveLength(0);
+    expect(deterministic.calls).toHaveLength(1);
+    expect(outcome?.strategyUsed).toBe('deterministic');
+    // Not a degradation — nobody asked for a model — so no fallback is recorded.
+    expect(outcome?.fallbackUsed).toBe(false);
+  });
+
+  it('never constructs the LLM strategy for a workflow that did not declare useLlm', async () => {
+    // The factory exists precisely so an ordinary replay pays nothing for the
+    // provider adapter it will not use.
+    const build = vi.fn(() => spySynthesizer('llm'));
+
+    await synthesizeRun(
+      baseOptions({
+        strategies: { deterministic: new DeterministicSynthesizer(), llm: build, noLlm: false },
+      }),
+      logger,
+    );
+
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  it('forces the deterministic strategy when noLlm vetoes a workflow that declared useLlm', async () => {
+    const llm = spySynthesizer('llm');
+    const deterministic = spySynthesizer('deterministic');
+
+    const outcome = await synthesizeRun(
+      baseOptions({
+        spec: llmSpec,
+        strategies: { deterministic, llm: llmFactory(llm), noLlm: true },
+      }),
       logger,
     );
 
@@ -261,13 +320,12 @@ describe('@no-llm synthesizeRun', () => {
     expect(outcome?.strategyUsed).toBe('deterministic');
   });
 
-  it('never even constructs the LLM strategy when noLlm is true', async () => {
-    // The factory exists precisely so a deterministic run pays nothing for the
-    // provider adapter it will not use.
+  it('never even constructs the LLM strategy when noLlm vetoes the run', async () => {
     const build = vi.fn(() => spySynthesizer('llm'));
 
     await synthesizeRun(
       baseOptions({
+        spec: llmSpec,
         strategies: { deterministic: new DeterministicSynthesizer(), llm: build, noLlm: true },
       }),
       logger,
@@ -281,6 +339,7 @@ describe('@no-llm synthesizeRun', () => {
 
     await synthesizeRun(
       baseOptions({
+        spec: llmSpec,
         runId: 'run-42',
         runDir: '/runs/run-42',
         strategies: { deterministic: new DeterministicSynthesizer(), llm: build, noLlm: false },
@@ -291,12 +350,13 @@ describe('@no-llm synthesizeRun', () => {
     expect(build).toHaveBeenCalledWith({ runId: 'run-42', runDir: '/runs/run-42' });
   });
 
-  it('keeps an authenticated-scope workflow deterministic even with a port wired', async () => {
+  it('keeps an authenticated-scope workflow deterministic even when it declared useLlm', async () => {
     const llm = spySynthesizer('llm');
     const deterministic = spySynthesizer('deterministic');
 
     await synthesizeRun(
       baseOptions({
+        spec: llmSpec,
         scope: 'authenticated',
         strategies: { deterministic, llm: llmFactory(llm), noLlm: false },
       }),
@@ -305,6 +365,87 @@ describe('@no-llm synthesizeRun', () => {
 
     expect(llm.calls).toHaveLength(0);
     expect(deterministic.calls).toHaveLength(1);
+  });
+
+  it('falls back to the deterministic Brief when the LLM strategy cannot be built', async () => {
+    // The one LLM failure the synthesizer's own fallback cannot cover: the
+    // adapter throws before a synthesizer exists. The run must still get its
+    // document.
+    const deterministic = spySynthesizer('deterministic');
+    const build = vi.fn(() => {
+      throw new Error('provider binary missing');
+    });
+
+    const outcome = await synthesizeRun(
+      baseOptions({ spec: llmSpec, strategies: { deterministic, llm: build, noLlm: false } }),
+      logger,
+    );
+
+    expect(deterministic.calls).toHaveLength(1);
+    expect(outcome?.strategyUsed).toBe('deterministic');
+    expect(outcome?.fallbackUsed).toBe(true);
+  });
+
+  it('logs a warning naming the reason the LLM strategy was unavailable', async () => {
+    const warn = vi.fn();
+    const build = vi.fn(() => {
+      throw new Error('provider binary missing');
+    });
+
+    await synthesizeRun(
+      baseOptions({
+        spec: llmSpec,
+        strategies: { deterministic: new DeterministicSynthesizer(), llm: build, noLlm: false },
+      }),
+      { ...logger, warn },
+    );
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'provider binary missing' }),
+      expect.stringContaining('could not construct the llm strategy'),
+    );
+  });
+
+  it('falls back and records it when the workflow declared useLlm but no port is wired', async () => {
+    // e.g. a stage wired without a port for a workflow that wants one. The run
+    // keeps its Brief, and the manifest stays honest about the downgrade so
+    // `resume` can re-offer the model.
+    const deterministic = spySynthesizer('deterministic');
+    const warn = vi.fn();
+
+    const outcome = await synthesizeRun(
+      baseOptions({ spec: llmSpec, strategies: { deterministic, llm: null, noLlm: false } }),
+      { ...logger, warn },
+    );
+
+    expect(outcome?.strategyUsed).toBe('deterministic');
+    expect(outcome?.fallbackUsed).toBe(true);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('preserves a fallback the LLM synthesizer already reported', async () => {
+    // The synthesizer's own provider failure path — already covered by
+    // `LlmSynthesizer` — must not be double-counted or overwritten.
+    const fallingBack: Synthesizer = {
+      strategy: 'llm',
+      synthesize: (_input, opts) =>
+        Promise.resolve(
+          ok({
+            brief: createBrief({ task_id: opts.taskId, title: 't', overview: 'o' }),
+            verdict: { claimsChecked: 0, flagged: 0, stripped: 0 },
+            strategyUsed: 'deterministic' as const,
+            fallbackUsed: true,
+          }),
+        ),
+    };
+
+    const outcome = await synthesizeRun(
+      baseOptions({ spec: llmSpec, strategies: strategies({ llm: fallingBack }) }),
+      logger,
+    );
+
+    expect(outcome?.strategyUsed).toBe('deterministic');
+    expect(outcome?.fallbackUsed).toBe(true);
   });
 
   it('reports ledger overflow as an honest extract_failed notice', async () => {
@@ -439,7 +580,10 @@ describe('@no-llm runSynthesizeStage', () => {
     };
 
     const stage = await runSynthesizeStage(
-      { ...baseOptions({ strategies: strategies({ llm: fallingBack }) }), runDir },
+      {
+        ...baseOptions({ spec: llmSpec, strategies: strategies({ llm: fallingBack }) }),
+        runDir,
+      },
       logger,
     );
 

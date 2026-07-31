@@ -179,17 +179,20 @@ synthesis:
   goal: What did the quarterly report say about revenue?
   length: medium # short | medium | long   (3 / 6 / 10 key findings)
   detail: standard # overview | standard | full
+  use_llm: false # write the Brief with a model?
 ```
 
-| Field    | Default    | Meaning                                                          |
-| -------- | ---------- | ---------------------------------------------------------------- |
-| `goal`   | _required_ | The question the Brief answers (1–512 chars). Becomes the query. |
-| `length` | `medium`   | Findings/sections budget.                                        |
-| `detail` | `standard` | `overview` omits sections; `full` adds a comparison facet table. |
+| Field     | Default    | Meaning                                                                  |
+| --------- | ---------- | ------------------------------------------------------------------------ |
+| `goal`    | _required_ | The question the Brief answers (1–512 chars). Becomes the query.         |
+| `length`  | `medium`   | Findings/sections budget.                                                |
+| `detail`  | `standard` | `overview` omits sections; `full` adds a comparison facet table.         |
+| `use_llm` | `false`    | Whether a model writes the Brief. See [Who decides](#who-decides) below. |
 
 Omitting the block (the default, `synthesis: null`) leaves the run behaving
 exactly as before: declared outputs only, no Brief. Every workflow saved before
-the block existed therefore replays unchanged.
+the block existed therefore replays unchanged — including workflows saved before
+`use_llm` existed, which parse as `use_llm: false` and stay model-free.
 
 **Where the sources come from.** Each successful `extract` appends one entry to
 the run's bounded evidence ledger
@@ -205,10 +208,30 @@ no `extract` step produces a sourceless document. `yantra lint` emits a
 `SynthesisWithoutExtract` **warning** for that shape — it does not block saving,
 since an author may add the read next.
 
-By default the Brief is composed deterministically: no provider session is
-opened and replay stays byte-for-byte reproducible. `yantra run --llm <workflow>`
-upgrades the wording through the LLM synthesizer, which validates citations and
-falls back to the deterministic Brief on any failure. See
+### Who decides
+
+`use_llm` puts the choice in the **workflow**, so `yantra run <name>` never takes
+a mode flag and produces the same kind of document every time it is typed:
+
+| `use_llm` | Where it comes from                                              | What `yantra run` does                                                                             |
+| --------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `false`   | The default; hand-authored workflows and every pre-existing one. | Composes the Brief deterministically. No provider session, byte-for-byte reproducible.             |
+| `true`    | Set by `yantra do --save-as` — a model wrote that run's report.  | Writes the Brief through the LLM synthesizer, which validates citations and falls back on failure. |
+
+The flags stay a veto, never an opt-in:
+
+- `--no-llm` (or `LLM_PROVIDER=none`) forces the deterministic path even for a
+  workflow that declared `use_llm: true`, matching `ask` and `research`.
+- `--provider` / `--model` / `--thinking` / `--auth-secret` choose _which_ model a
+  workflow that asked for one gets; they never opt a workflow in.
+- Scheduled runs and nested `workflow_run` calls are always deterministic.
+- An `authenticated` `security_class` stays deterministic regardless, because the
+  strict sanitizer profile keeps that content away from a model.
+
+Reaching a model is an upgrade, never a dependency: if the provider is
+unreachable, the adapter cannot be built, or the output never validates, the run
+still gets its deterministic Brief, logs a warning, and records
+`fallbackUsed: true` in `manifest.synthesis`. See
 [agentic-runtime.md](agentic-runtime.md) for the never-steers invariant that
 governs LLM use in replay.
 

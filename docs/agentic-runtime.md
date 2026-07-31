@@ -55,13 +55,21 @@ With `--json`, every progress item and the final outcome is one independently pa
 The runtime bridges to Yantra's deterministic workflow engine in both directions:
 
 - **Discover and run** a saved workflow with the `workflow_run` tool. The agent chooses a saved workflow when one matches the goal; it replays deterministically (no LLM inside the workflow) in its own nested run directory, and the agent sees only a sanitized status/outputs summary — never the workflow's secrets or internal locators. See [agent-tools.md](agent-tools.md).
-- **Promote** a successful ad-hoc browser run into a reusable workflow with `yantra do "<goal>" --save-as <name>`. On a published outcome, the run's `trace.json` (see [run-artifacts.md](run-artifacts.md)) is converted into a saved, lint-clean workflow with candidate-chain locators; secret fills become declared `{{ secret:key }}` references and confirmation flags are preserved. The workflow also inherits the run's goal as a `synthesis:` block, so replaying it reproduces the Brief the original run published. `yantra run <name>` then replays it with no model credentials. Promotion failure is reported but never fails the run.
+- **Promote** a successful ad-hoc browser run into a reusable workflow with `yantra do "<goal>" --save-as <name>`. On a published outcome, the run's `trace.json` (see [run-artifacts.md](run-artifacts.md)) is converted into a saved, lint-clean workflow with candidate-chain locators; secret fills become declared `{{ secret:key }}` references and confirmation flags are preserved. The workflow also inherits the run's goal as a `synthesis:` block with `use_llm: true` — a model wrote that run's report — so `yantra run <name>` reproduces the Brief the original run published without being told to. Promotion failure is reported but never fails the run.
 
 ## LLM in replay
 
-Replay is **finite, validated, and LLM-free by default**. `yantra run --llm` lets a
-model write the run's output document, and an `llm_summarize` step lets one
-transform a declared capture. Neither can steer the run.
+Replay is **finite, validated, and LLM-free unless the workflow says otherwise**.
+A workflow's `synthesis.use_llm` lets a model write the run's output document,
+and an `llm_summarize` step lets one transform a declared capture. Neither can
+steer the run.
+
+The decision lives in the **workflow**, not the invocation: `yantra run <name>`
+takes no mode flag and reproduces whatever the workflow was saved to produce, the
+way `ask` and `do` need no flag to do what they do. `yantra do --save-as` records
+`use_llm: true` because a model authored that run's report; a hand-written
+workflow leaves it false and never reaches a provider. `--no-llm` is a veto and
+never an opt-in — it can turn a workflow's declaration off, never on.
 
 > **The never-steers invariant.** An LLM may transform a declared capture or
 > synthesize the run's output document. It may **never** influence step selection,
@@ -73,7 +81,7 @@ This is what keeps the determinism guarantee intact rather than weakened: a
 of a finite plan. The same steps run in the same order with or without a model —
 only the wording of the final document differs.
 
-Two surfaces are **hard zero-LLM**, regardless of flags or environment:
+Two surfaces are **hard zero-LLM**, regardless of what the workflow declares:
 
 | Surface                         | Behavior                                                                                                                      |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -82,10 +90,11 @@ Two surfaces are **hard zero-LLM**, regardless of flags or environment:
 
 Supporting guarantees:
 
-- **Best-effort throughout.** A provider failure, model output that never
-  validates, or an unwritable artifact degrades to the deterministic Brief or to
-  no Brief. Synthesis never turns a successful run into a failed one, and exit
-  codes are unchanged.
+- **Best-effort throughout.** A provider failure, an adapter that cannot be
+  constructed at all, model output that never validates, or an unwritable
+  artifact degrades to the deterministic Brief or to no Brief, logging a warning
+  and recording `fallbackUsed` in `manifest.synthesis`. Synthesis never turns a
+  successful run into a failed one, and exit codes are unchanged.
 - **Validation stays validation.** An invalid `--provider`/`--model` is resolved
   before execution begins, so it exits 1 rather than failing a started run.
 - **`llm_summarize` passes through** when no model is configured, binding its raw
@@ -95,7 +104,9 @@ Supporting guarantees:
   sanitizer at the workflow's `security_class` profile, enforced by the
   `scripts/ci-static-check.ts` sanitize-before-send guard.
 - **Resume inherits the strategy.** A resumed run reproduces its Brief the way
-  the first attempt did, read from `manifest.synthesis.strategy`.
+  the first attempt did, read from `manifest.synthesis`. A run that _wanted_ a
+  model and had to fall back (`fallbackUsed: true`) is offered one again, so a
+  single transient provider failure does not permanently downgrade a workflow.
 
 ## Release gate
 

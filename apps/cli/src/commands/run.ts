@@ -6,17 +6,25 @@
  * preflight, browser launch, plan execution, output evaluation, synthesis, and
  * report writing; this command is the CLI shell on top of it.
  *
- * A workflow declaring a `synthesis:` block ends in a Brief. That happens with
- * **no** LLM by default — the deterministic synthesizer composes it and no
- * provider session is opened. `--llm` upgrades the wording through the model,
- * reusing the same `--provider` / `--model` / `--thinking` / `--auth-secret`
- * surface as `ask`, `research`, and `do`.
+ * A workflow declaring a `synthesis:` block ends in a Brief. **The workflow, not
+ * the command line, decides how that Brief is written**: `synthesis.use_llm`
+ * (set when the workflow was promoted from a model-authored run) selects the LLM
+ * synthesizer; anything else composes the document deterministically, opening no
+ * provider session. So `yantra run <name>` reproduces what the workflow was
+ * saved as, the way `ask` and `do` need no mode flag to do what they do.
+ *
+ * `--no-llm` is the escape hatch — it forces the deterministic path even for a
+ * workflow that asked for a model — and mirrors the same flag on `ask` and
+ * `research`. The shared `--provider` / `--model` / `--thinking` /
+ * `--auth-secret` surface picks *which* model, exactly as on the agentic
+ * commands.
  *
  * @example
  *   yantra run bank-statement --params month=2026-04
  *   yantra run bank-statement --params-file ./params.yaml
  *   yantra run bank-statement --json
- *   yantra run quarterly-report --llm --model claude-sonnet-5
+ *   yantra run quarterly-report --model claude-sonnet-5
+ *   yantra run quarterly-report --no-llm
  */
 
 import { readFile } from 'node:fs/promises';
@@ -47,7 +55,10 @@ interface RunOptions extends AgentModelOptions {
   readonly paramsFile?: string;
   readonly json?: boolean;
   readonly debug?: boolean;
-  /** `--llm` / `--no-llm`; commander stores both on this one key. Default off. */
+  /**
+   * `--no-llm`; commander stores it as `llm: false`. Undefined (the default)
+   * leaves the decision to the workflow's `synthesis.use_llm`.
+   */
   readonly llm?: boolean;
 }
 
@@ -80,11 +91,10 @@ export function makeRunCommand(): Command {
     .option('--debug', 'Emit verbose debug logging to stderr', false)
     .addOption(
       new Option(
-        '--llm',
-        "use a model to write the run's Brief (default: deterministic, no model)",
-      ).default(false),
-    )
-    .addOption(new Option('--no-llm', 'force the deterministic (no-model) Brief'));
+        '--no-llm',
+        "force the deterministic (no-model) Brief even if the workflow's synthesis block asks for a model",
+      ),
+    );
 
   addAgentModelOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
     const logger = makeStderrLogger(options.debug === true);
@@ -120,8 +130,9 @@ export function makeRunCommand(): Command {
         logger,
         confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
         // The stage is always wired for `run`, so a workflow declaring
-        // `synthesis:` always gets a Brief. Only the *strategy* depends on
-        // `--llm`; without it no provider session is ever opened.
+        // `synthesis:` always gets a Brief. The *strategy* is the workflow's
+        // call: the port below is only ever built for a workflow whose
+        // `synthesis.use_llm` is set, so an ordinary replay opens no session.
         synthesis: {
           noLlm: wiring.noLlm,
           llm:
@@ -220,16 +231,21 @@ function collect(value: string, previous: string[]): string[] {
 /**
  * The Synthesize-stage wiring implied by the run's flags.
  *
- * Extracted as a pure function because it encodes the feature's central safety
- * property — **no model unless explicitly asked for** — and that deserves direct
- * test coverage rather than being buried in the command action.
+ * Extracted as a pure function because it encodes the command's central
+ * property — **the workflow decides, the flag can only veto** — and that
+ * deserves direct test coverage rather than being buried in the command action.
  */
 export interface RunSynthesisWiring {
-  /** True whenever the deterministic path is forced (i.e. `--llm` absent). */
+  /**
+   * True when the user vetoed the model (`--no-llm` / `LLM_PROVIDER=none`).
+   * A veto only: `false` does not mean a model *will* be used, it means the
+   * workflow's `synthesis.use_llm` is allowed to decide.
+   */
   readonly noLlm: boolean;
   /**
-   * The resolved provider session coordinates, or null when no model is to be
-   * used. Null is the signal that no provider adapter is ever constructed.
+   * The resolved provider session coordinates, or null when the user vetoed the
+   * model. These are *coordinates only* — the adapter is constructed lazily, and
+   * only for a workflow that declared `synthesis.use_llm`.
    */
   readonly selection: AgentSelection | null;
 }
@@ -238,21 +254,22 @@ export interface RunSynthesisWiring {
  * Resolves whether this run may use a model, and with what coordinates.
  *
  * Resolution happens before execution starts so an invalid `--provider` or
- * `--model` is a *validation* failure (exit 1), matching `ask`. Model flags are
- * deliberately ignored without `--llm`: passing `--model` alone must not quietly
- * opt a replay into a provider session it never requested.
+ * `--model` is a *validation* failure (exit 1), matching `ask` — which resolves
+ * the same surface up front for the same reason. Resolving is pure: it reads
+ * flags and environment, contacts nothing, and opens no session.
  *
  * @param options - The parsed `run` flags.
- * @param env - Process environment, consulted for `YANTRA_AGENT_*` defaults.
- * @returns The wiring; `selection` is null unless `--llm` was passed.
- * @throws CommanderError (exit code 1) when `--llm` is combined with an invalid
- *   provider/model/auth reference.
+ * @param env - Process environment, consulted for `YANTRA_AGENT_*` defaults and
+ *   the `LLM_PROVIDER=none` opt-out that `ask` and `research` already honor.
+ * @returns The wiring; `selection` is null exactly when the model was vetoed.
+ * @throws CommanderError (exit code 1) on an invalid provider/model/auth
+ *   reference, unless the model was vetoed (nothing to validate then).
  */
 export function resolveRunSynthesis(
   options: RunOptions,
   env: NodeJS.ProcessEnv,
 ): RunSynthesisWiring {
-  if (options.llm !== true) {
+  if (options.llm === false || env.LLM_PROVIDER === 'none') {
     return { noLlm: true, selection: null };
   }
   return { noLlm: false, selection: selectAgentSession('run', options, env) };

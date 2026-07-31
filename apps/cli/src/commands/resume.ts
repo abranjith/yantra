@@ -124,6 +124,11 @@ export function makeResumeCommand(): Command {
  * run that started deterministic must not acquire a model on resume, and a run
  * that used one must not silently downgrade to a plainer document.
  *
+ * `fallbackUsed` is read as *intent*, not outcome: a run that reached for a
+ * model and had to settle for the deterministic Brief still wanted the model, so
+ * the resume offers it one again. Only a run that was deterministic by decision
+ * — the workflow never asked, or `--no-llm` vetoed it — resumes model-free.
+ *
  * `manifest.synthesis` is absent when the first attempt never reached the stage
  * (it failed before completing, or the workflow declares no `synthesis:` block).
  * That returns `undefined`, which disables the stage — the resumed run then
@@ -139,7 +144,9 @@ export function synthesisForResume(
 ): OrchestratorSynthesisOptions | undefined {
   const record = manifest.synthesis;
   if (record === undefined) return undefined;
-  if (record.strategy === 'deterministic') return { llm: null, noLlm: true };
+  if (record.strategy === 'deterministic' && !record.fallbackUsed) {
+    return { llm: null, noLlm: true };
+  }
 
   // The manifest records the strategy, not the model, so the model resolves the
   // documented way (flag absent here → environment → pinned default).

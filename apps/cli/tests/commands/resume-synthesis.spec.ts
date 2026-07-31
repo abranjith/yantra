@@ -55,9 +55,11 @@ describe('@no-llm synthesisForResume', () => {
     expect(wiring).toEqual({ llm: null, noLlm: true });
   });
 
-  it('stays deterministic when the original run fell back to deterministic', () => {
-    // A run whose LLM path failed recorded `strategy: 'deterministic'`. Resuming
-    // it must not re-attempt the model and produce a differently-worded Brief.
+  it('re-offers the model when the original run wanted one and had to fall back', () => {
+    // `fallbackUsed` records intent, not outcome: the workflow declared
+    // `synthesis.use_llm` and the model was unreachable that time. Pinning the
+    // resume to deterministic would let one transient provider failure quietly
+    // rewrite what the workflow produces from then on.
     const wiring = synthesisForResume(
       manifest({
         synthesis: { strategy: 'deterministic', fallbackUsed: true, briefPath: '/b.json' },
@@ -65,8 +67,22 @@ describe('@no-llm synthesisForResume', () => {
       logger,
     );
 
-    expect(wiring?.noLlm).toBe(true);
-    expect(wiring?.llm).toBeNull();
+    expect(wiring?.noLlm).toBe(false);
+    expect(typeof wiring?.llm).toBe('function');
+  });
+
+  it('stays deterministic when the run was deterministic by decision, not by failure', () => {
+    // No fallback recorded means nothing was taken away: the workflow never
+    // declared `use_llm`, or `--no-llm` vetoed it. Either way the resume must
+    // not acquire a provider session the first attempt deliberately lacked.
+    const wiring = synthesisForResume(
+      manifest({
+        synthesis: { strategy: 'deterministic', fallbackUsed: false, briefPath: null },
+      }),
+      logger,
+    );
+
+    expect(wiring).toEqual({ llm: null, noLlm: true });
   });
 
   it('re-selects the LLM strategy when the original run used one', () => {

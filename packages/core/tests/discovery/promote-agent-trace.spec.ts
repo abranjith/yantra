@@ -160,7 +160,7 @@ const observe: PromotableTraceStep = {
 /** Promotes and returns the saved workflow, failing the test on a promote error. */
 async function promoted(
   steps: PromotableTraceStep[],
-  extra: { readonly synthesisGoal?: string } = {},
+  extra: { readonly synthesisGoal?: string; readonly synthesisUsedLlm?: boolean } = {},
 ): Promise<WorkflowFile> {
   const store = makeFakeStore();
   const result = await promoteAgentTrace(steps, {
@@ -301,6 +301,7 @@ describe('@no-llm promoteAgentTrace synthesis block', () => {
       goal: 'When will my package arrive?',
       length: 'medium',
       detail: 'standard',
+      use_llm: false,
     });
   });
 
@@ -338,5 +339,45 @@ describe('@no-llm promoteAgentTrace synthesis block', () => {
 
     expect(workflow.synthesis?.goal).toHaveLength(512);
     expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
+  });
+
+  it('records use_llm when the promoted run had a model write its report', async () => {
+    // This is what removes the mode flag from `yantra run`: the saved workflow
+    // remembers how its document was authored, so replaying it reproduces the
+    // document rather than a plainer imitation.
+    const workflow = await promoted(extractTrace, {
+      synthesisGoal: 'the goal',
+      synthesisUsedLlm: true,
+    });
+
+    expect(workflow.synthesis?.use_llm).toBe(true);
+  });
+
+  it('keeps a workflow promoted with use_llm schema-valid and lint-clean', async () => {
+    const workflow = await promoted(extractTrace, {
+      synthesisGoal: 'the goal',
+      synthesisUsedLlm: true,
+    });
+
+    expect(() => WorkflowFileSchema.parse(workflow)).not.toThrow();
+    expect(lint(workflow, { strict: true }).errors).toEqual([]);
+  });
+
+  it('leaves use_llm false when the promoted run wrote its report deterministically', async () => {
+    const workflow = await promoted(extractTrace, {
+      synthesisGoal: 'the goal',
+      synthesisUsedLlm: false,
+    });
+
+    expect(workflow.synthesis?.use_llm).toBe(false);
+  });
+
+  it('declares no synthesis at all when only model provenance is supplied', async () => {
+    // `synthesisUsedLlm` describes a document; with no goal there is no document
+    // to describe, and promising one the workflow cannot produce would be worse
+    // than promising nothing.
+    const workflow = await promoted(extractTrace, { synthesisUsedLlm: true });
+
+    expect(workflow.synthesis).toBeNull();
   });
 });
