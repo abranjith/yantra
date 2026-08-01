@@ -58,6 +58,7 @@ describe('@no-llm real Chrome browser tools', () => {
     });
     const sanitizer = new DefaultSanitizer();
     const services: RunServices = {
+      template: null,
       runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       runDir,
       budgets,

@@ -4,6 +4,7 @@ import {
   exitCodeForAgenticOutcome,
   resolveCommandTaskProfile,
   type runAgenticTask,
+  type ActiveReportTemplate,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
 import {
@@ -35,7 +36,7 @@ import {
   type SearchProviderName,
   type SynthesisLength,
 } from '@yantra/core';
-import { validateBrief } from '@yantra/protocol';
+import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import {
@@ -52,6 +53,11 @@ import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
+import {
+  TEMPLATE_LLM_GUARD,
+  TEMPLATE_OPTION_DESCRIPTION,
+  resolveTemplateRef,
+} from '../template-ref.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -74,6 +80,7 @@ interface AskOptions extends AgentModelOptions {
   readonly length?: string;
   readonly fetchTimeout?: string;
   readonly budgetMs?: string;
+  readonly template?: string;
 }
 
 export interface AskRuntime {
@@ -88,6 +95,7 @@ export interface AskRuntime {
   /** Shared agentic runtime; only selected after deterministic mode is ruled out. */
   readonly runTask: typeof runAgenticTask;
   readonly isTty: boolean;
+  readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
 }
 
 /**
@@ -124,6 +132,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       ).choices(['short', 'medium', 'long']),
     )
     .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
+    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
     .addOption(new Option('--no-llm', 'force the deterministic (no-LLM) synthesizer'))
     .addOption(new Option('--no-cache', 'disable cache reads/writes'))
     .addOption(new Option('--no-color', 'disable ANSI color output'))
@@ -154,6 +163,28 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       const query: AskQuery = personalization ? { ...baseQuery, personalization } : baseQuery;
       const format = resolveFormat(options);
       const detail = resolved.detail;
+      if (options.template !== undefined && query.noLlm) {
+        resolvedRuntime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+        throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+      }
+      const template =
+        options.template === undefined
+          ? undefined
+          : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
+              resolvedRuntime.stderr.write(
+                `${error instanceof Error ? error.message : String(error)}\n`,
+              );
+              throw error;
+            });
+      if (
+        template !== undefined &&
+        (command.getOptionValueSource('detail') === 'cli' ||
+          command.getOptionValueSource('length') === 'cli')
+      ) {
+        resolvedRuntime.stderr.write(
+          'warning: --detail and --length do not affect template-defined report structure\n',
+        );
+      }
 
       // Resolved before the try so a bad --provider/--model is a validation
       // failure (exit 1) rather than being reclassified as an execution failure
@@ -183,7 +214,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
             command.getOptionValueSource('budgetMs') === 'cli'
               ? parseNullablePositiveInt(options.budgetMs)
               : null;
-          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime, {
+          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime, template, {
             ...agentSelection,
             wallClockMs: explicitWallClockMs,
           });
@@ -235,6 +266,38 @@ function renderBrief(
   };
 
   io.renderResult({ kind: 'brief', brief: result.brief, artifacts: result.artifacts }, opts);
+}
+
+function renderTemplated(
+  runtime: AskRuntime,
+  report: TemplatedReport,
+  view: { format: BriefOutputFormat; detail: BriefDetailLevel; options: AskOptions },
+  artifacts: { jsonPath: string; markdownPath: string; htmlPath: string },
+): void {
+  const renderer = view.format === 'json' ? new JSONRenderer() : new TerminalRenderer();
+  const io = new CLIConnectorIO(renderer);
+  const stdout = runtime.stdout as NodeJS.WriteStream;
+  io.renderResult(
+    {
+      kind: 'templated_report',
+      report,
+      artifacts: {
+        jsonPath: artifacts.jsonPath,
+        mdPath: artifacts.markdownPath,
+        htmlPath: artifacts.htmlPath,
+      },
+    },
+    {
+      json: view.format === 'json',
+      debug: false,
+      noColor: resolveNoColor(view.options, runtime),
+      stream: runtime.stdout,
+      errStream: runtime.stderr,
+      briefDetail: view.detail,
+      briefFormat: view.format,
+      ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    },
+  );
 }
 
 /**
@@ -315,6 +378,9 @@ function runtimeWithDefaults(runtime?: Partial<AskRuntime>): AskRuntime {
     recordHistory: runtime?.recordHistory ?? ((runId: string) => recordTaskHistory(runId)),
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
+    resolveTemplate:
+      runtime?.resolveTemplate ??
+      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
   };
 }
 
@@ -325,6 +391,7 @@ async function runAgenticAsk(
   detail: BriefDetailLevel,
   options: AskOptions,
   runtime: AskRuntime,
+  template: ActiveReportTemplate | undefined,
   agent: AgentSelection & { readonly wallClockMs: number | null },
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
@@ -347,6 +414,7 @@ async function runAgenticAsk(
       ...(query.budgetCalls === null ? {} : { totalToolCalls: query.budgetCalls }),
     },
     ...(query.personalization ? { profileContext: query.personalization } : {}),
+    ...(template === undefined ? {} : { template }),
     connector,
   });
   await renderAgenticOutcome(outcome, runtime, format, detail, options);
@@ -381,11 +449,16 @@ async function renderAgenticOutcome(
   if (outcome.kind !== 'published') {
     throw new Error(agentFailureMessage(outcome));
   }
-  const parsed = validateBrief(
-    JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,
-  );
-  if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
-  renderBrief(runtime, { brief: parsed.value, artifacts: null }, { format, detail, options });
+  const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
+  if (outcome.brief.kind === 'templated_report') {
+    const parsed = validateTemplatedReport(raw);
+    if (!parsed.isOk) throw new Error('The agent published an invalid templated report artifact.');
+    renderTemplated(runtime, parsed.value, { format, detail, options }, outcome.brief);
+  } else {
+    const parsed = validateBrief(raw);
+    if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
+    renderBrief(runtime, { brief: parsed.value, artifacts: null }, { format, detail, options });
+  }
   await runtime.recordHistory(outcome.runId);
   if (options.open === true) openArtifact(outcome.brief.htmlPath);
   const exitCode = exitCodeForAgenticOutcome(outcome);

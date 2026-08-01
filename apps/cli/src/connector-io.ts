@@ -27,7 +27,7 @@
 import { createInterface } from 'node:readline/promises';
 
 import type { AgentProgressEvent, AgentTaskConnector, AgenticTaskOutcome } from '@yantra/agent';
-import type { Brief, ConfirmationRequest, TaskEvent } from '@yantra/protocol';
+import type { Brief, ConfirmationRequest, TaskEvent, TemplatedReport } from '@yantra/protocol';
 import { SCHEMA_VERSION } from '@yantra/protocol';
 
 import type { GlobalFlags } from './global-flags.js';
@@ -56,6 +56,11 @@ export type ConnectorResult =
   | {
       readonly kind: 'brief';
       readonly brief: Brief;
+      readonly artifacts: BriefArtifactPaths | null;
+    }
+  | {
+      readonly kind: 'templated_report';
+      readonly report: TemplatedReport;
       readonly artifacts: BriefArtifactPaths | null;
     };
 
@@ -145,6 +150,9 @@ export class CLIConnectorIO implements ConnectorIO {
       case 'brief':
         this.renderer.renderBrief(result.brief, result.artifacts, opts);
         return;
+      case 'templated_report':
+        this.renderer.renderTemplatedReport(result.report, result.artifacts, opts);
+        return;
     }
   }
 
@@ -203,6 +211,9 @@ export class CLIConnectorIO implements ConnectorIO {
   /** Render the finalized terminal state exactly once. */
   public renderAgentOutcome(outcome: AgenticTaskOutcome): void {
     const opts = this.requireAgentOptions();
+    if (outcome.kind === 'published' && this.agentOptions?.suppressPublishedOutcome === true) {
+      return;
+    }
     if (opts.json) {
       opts.stream.write(
         `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_outcome', outcome })}\n`,
@@ -211,8 +222,9 @@ export class CLIConnectorIO implements ConnectorIO {
     }
     switch (outcome.kind) {
       case 'published':
-        if (this.agentOptions?.suppressPublishedOutcome === true) return;
-        opts.stream.write(`\nPublished Brief: ${outcome.brief.htmlPath}\nRun: ${outcome.runId}\n`);
+        opts.stream.write(
+          `\nPublished ${outcome.brief.kind === 'templated_report' ? 'report' : 'Brief'}: ${outcome.brief.htmlPath}\nRun: ${outcome.runId}\n`,
+        );
         return;
       case 'handoff':
         opts.errStream.write(

@@ -92,6 +92,13 @@ export interface RunSynthesisRecord {
   readonly briefPath: string | null;
 }
 
+/** Non-secret template provenance recorded for an agentic report run. */
+export interface RunTemplateRecord {
+  readonly name: string | null;
+  readonly hash: string;
+  readonly source: 'saved' | 'path';
+}
+
 /** Returned by RunOrchestrator.run() — the CLI maps these to exit codes. */
 export type OrchestratorRunOutcome =
   | {
@@ -208,6 +215,8 @@ export interface RunManifest {
    * original run's strategy instead of silently changing it.
    */
   synthesis?: RunSynthesisRecord;
+  /** Active report-template revision, when the agent published `document.*`. */
+  template?: RunTemplateRecord;
 }
 
 /** Stable agent startup codes persisted without importing the agent package into core. */
@@ -234,6 +243,7 @@ export interface AgentRunRequest {
   readonly taskId: string;
   readonly command: string;
   readonly partialAgent?: Partial<AgentManifestSection>;
+  readonly template?: RunTemplateRecord;
 }
 
 /** Run-store operations used by agentic commands before and during startup. */

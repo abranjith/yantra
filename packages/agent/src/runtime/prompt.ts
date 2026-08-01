@@ -1,7 +1,11 @@
 import type { PayloadSanitizer, UserInputVault } from '@yantra/core';
 
-/** The version recorded in agentic run manifests for the authoritative prompt. */
-export const PROMPT_VERSION = 'agent-v4' as const;
+/**
+ * The version recorded in agentic run manifests. `agent-v5` marks the
+ * template-aware per-run completion semantics; the system prompt text itself
+ * intentionally remains output-shape agnostic.
+ */
+export const PROMPT_VERSION = 'agent-v5' as const;
 
 /**
  * The complete production system prompt for agentic Yantra runs.

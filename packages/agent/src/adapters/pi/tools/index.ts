@@ -29,11 +29,19 @@ import { webFetchSpec } from './web-fetch.js';
 import { webSearchSpec } from './web-search.js';
 import { workflowRunSpec } from './workflow-run.js';
 
-export { createBriefPublisher, evidenceToSourceRecords } from './result-publish.js';
+export {
+  createBriefPublisher,
+  createTemplatedReportPublisher,
+  evidenceToSourceRecords,
+  type BriefPublisherContext,
+  type TemplatedReportPublisherContext,
+} from './result-publish.js';
 export { webSearchSpec } from './web-search.js';
 export { webFetchSpec } from './web-fetch.js';
 export { scriptRunSpec } from './script-run.js';
 export { resultPublishSpec } from './result-publish.js';
+export { templateParamsFor } from './template-params.js';
+export { validateSlots, type TemplateSlotIssue } from './template-validate.js';
 export { browserClickSpec } from './browser-click.js';
 export { browserExtractSpec } from './browser-extract.js';
 export { browserFillSpec } from './browser-fill.js';

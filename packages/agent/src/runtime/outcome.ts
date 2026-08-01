@@ -2,6 +2,7 @@ import type { AgentError } from '../provider/types.js';
 
 /** Stable reference to the validated Brief created by `result_publish`. */
 export interface PublishedBriefRef {
+  readonly kind: 'brief' | 'templated_report';
   readonly briefId: string;
   readonly jsonPath: string;
   readonly markdownPath: string;

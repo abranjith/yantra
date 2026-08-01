@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import {
   resolveCommandTaskProfile,
   type runAgenticTask,
+  type ActiveReportTemplate,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
 import {
@@ -30,7 +31,7 @@ import {
   type SearchProviderName,
   type SynthesisLength,
 } from '@yantra/core';
-import { validateBrief } from '@yantra/protocol';
+import { validateBrief, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import {
@@ -40,11 +41,17 @@ import {
   type AgentSelection,
 } from '../agent-model.js';
 import { CLIConnectorIO } from '../connector-io.js';
+import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
+import {
+  TEMPLATE_LLM_GUARD,
+  TEMPLATE_OPTION_DESCRIPTION,
+  resolveTemplateRef,
+} from '../template-ref.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -68,6 +75,7 @@ interface ResearchCommandOptions extends AgentModelOptions {
   readonly fetchTimeout?: string;
   readonly budgetMs?: string;
   readonly perQueryLimit?: string;
+  readonly template?: string;
 }
 
 /** The parsed inputs a research invocation needs. */
@@ -83,6 +91,8 @@ export interface ResearchRuntime {
   readonly createLoop: (invocation: ResearchInvocation) => Promise<ResearchLoop>;
   readonly runTask: typeof runAgenticTask;
   readonly isTty: boolean;
+  readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
+  readonly recordHistory: (runId: string) => Promise<void>;
 }
 
 /**
@@ -127,6 +137,7 @@ export function registerResearchCommand(
         .default('long'),
     )
     .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
+    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
     .addOption(new Option('--no-llm', 'force the deterministic (no-LLM) path'))
     .addOption(new Option('--no-color', 'disable ANSI color output'))
     .addOption(
@@ -150,6 +161,28 @@ export function registerResearchCommand(
       const invocation = buildInvocation(topicArg, options, resolvedRuntime.env);
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
+      if (options.template !== undefined && invocation.options.noLlm) {
+        resolvedRuntime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+        throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+      }
+      const template =
+        options.template === undefined
+          ? undefined
+          : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
+              resolvedRuntime.stderr.write(
+                `${error instanceof Error ? error.message : String(error)}\n`,
+              );
+              throw error;
+            });
+      if (
+        template !== undefined &&
+        (command.getOptionValueSource('detail') === 'cli' ||
+          command.getOptionValueSource('length') === 'cli')
+      ) {
+        resolvedRuntime.stderr.write(
+          'warning: --detail and --length do not affect template-defined report structure\n',
+        );
+      }
 
       // Resolved before the try so a bad --provider/--model is a validation
       // failure (exit 1) rather than being reclassified as an execution failure
@@ -178,10 +211,19 @@ export function registerResearchCommand(
             command.getOptionValueSource('budgetMs') === 'cli'
               ? invocation.options.budget.maxWallClockMs
               : null;
-          await runAgenticResearch(topicArg, invocation, format, detail, options, resolvedRuntime, {
-            ...agentSelection,
-            wallClockMs: explicitWallClockMs,
-          });
+          await runAgenticResearch(
+            topicArg,
+            invocation,
+            format,
+            detail,
+            options,
+            resolvedRuntime,
+            template,
+            {
+              ...agentSelection,
+              wallClockMs: explicitWallClockMs,
+            },
+          );
           return;
         }
         const loop = await resolvedRuntime.createLoop(invocation);
@@ -299,6 +341,10 @@ function runtimeWithDefaults(runtime?: Partial<ResearchRuntime>): ResearchRuntim
     createLoop: runtime?.createLoop ?? createDefaultResearchLoop,
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
+    resolveTemplate:
+      runtime?.resolveTemplate ??
+      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
+    recordHistory: runtime?.recordHistory ?? ((runId) => recordTaskHistory(runId)),
   };
 }
 
@@ -309,6 +355,7 @@ async function runAgenticResearch(
   detail: BriefDetailLevel,
   options: ResearchCommandOptions,
   runtime: ResearchRuntime,
+  template: ActiveReportTemplate | undefined,
   agent: AgentSelection & { readonly wallClockMs: number | null },
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
@@ -340,24 +387,39 @@ async function runAgenticResearch(
       ...(agent.wallClockMs === null ? {} : { wallClockMs: agent.wallClockMs }),
       totalToolCalls: invocation.options.budget.maxLlmCalls,
     },
+    ...(template === undefined ? {} : { template }),
     connector,
   });
   if (outcome.kind !== 'published') {
     throw new Error(agentFailureMessage(outcome));
   }
-  const parsed = validateBrief(
-    JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,
-  );
-  if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
-  renderBrief(
-    runtime,
-    { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' },
-    {
-      format,
-      detail,
-      options,
-    },
-  );
+  const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
+  if (outcome.brief.kind === 'templated_report') {
+    const parsed = validateTemplatedReport(raw);
+    if (!parsed.isOk) throw new Error('The agent published an invalid templated report artifact.');
+    const renderer = format === 'json' ? new JSONRenderer() : new TerminalRenderer();
+    new CLIConnectorIO(renderer).renderResult(
+      {
+        kind: 'templated_report',
+        report: parsed.value,
+        artifacts: {
+          jsonPath: outcome.brief.jsonPath,
+          mdPath: outcome.brief.markdownPath,
+          htmlPath: outcome.brief.htmlPath,
+        },
+      },
+      renderOpts,
+    );
+  } else {
+    const parsed = validateBrief(raw);
+    if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
+    renderBrief(
+      runtime,
+      { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' },
+      { format, detail, options },
+    );
+  }
+  await runtime.recordHistory(outcome.runId);
   if (options.open === true) openArtifact(outcome.brief.htmlPath);
 }
 

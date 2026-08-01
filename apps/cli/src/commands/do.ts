@@ -6,13 +6,17 @@
  * `runAgenticTask()` inside `@yantra/agent`.
  */
 
+import { readFile } from 'node:fs/promises';
+
 import {
   exitCodeForAgenticOutcome,
   resolveCommandTaskProfile,
   type runAgenticTask,
+  type ActiveReportTemplate,
   type AgentBudgetConfig,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
+import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import {
@@ -21,13 +25,21 @@ import {
   type AgentModelOptions,
 } from '../agent-model.js';
 import { CLIConnectorIO } from '../connector-io.js';
+import { recordTaskHistory } from '../history.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
 import { runAgenticTaskWithRankSink } from '../runtime.js';
+import {
+  TEMPLATE_LLM_GUARD,
+  TEMPLATE_OPTION_DESCRIPTION,
+  resolveTemplateRef,
+} from '../template-ref.js';
 
 interface DoOptions extends AgentModelOptions {
   readonly json?: boolean;
+  readonly llm?: boolean;
+  readonly template?: string;
   readonly allowHost?: string[];
   readonly budgetMs?: string;
   readonly maxToolCalls?: string;
@@ -47,6 +59,8 @@ export interface DoRuntime {
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly isTty: boolean;
+  readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
+  readonly recordHistory: (runId: string) => Promise<void>;
 }
 
 /** Register `do`/`discover` without introducing any agent loop in the CLI. */
@@ -77,6 +91,8 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
       ),
     )
     .addOption(new Option('--json', 'emit progress and outcome as NDJSON').default(false))
+    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
+    .addOption(new Option('--no-llm', 'disable LLM mode'))
     .action((goal: string, options: DoOptions) => executeDo(goal, options, resolved));
 }
 
@@ -84,6 +100,18 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
 export const exitCodeForDoOutcome = exitCodeForAgenticOutcome;
 
 async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
+  const noLlm = options.llm === false || runtime.env.LLM_PROVIDER === 'none';
+  if (options.template !== undefined && noLlm) {
+    runtime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+    throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+  }
+  const template =
+    options.template === undefined
+      ? undefined
+      : await runtime.resolveTemplate(options.template).catch((error: unknown) => {
+          runtime.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+          throw error;
+        });
   const json = options.json === true;
   const renderOpts: ConnectorRenderOpts = {
     json,
@@ -95,6 +123,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
   const connector = new CLIConnectorIO(json ? new JSONRenderer() : new TerminalRenderer(), {
     renderOpts,
     interactive: runtime.isTty && !json,
+    suppressPublishedOutcome: template !== undefined,
   });
   const abort = new AbortController();
   const onInterrupt = (): void => abort.abort('user-interrupt');
@@ -120,9 +149,35 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
       // cannot answer open-ended questions, instead of claiming "no user".
       interactive: runtime.isTty && !json,
       ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
+      ...(template === undefined ? {} : { template }),
       connector,
       signal: abort.signal,
     });
+    if (template !== undefined && outcome.kind === 'published') {
+      const parsed = validateTemplatedReport(
+        JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,
+      );
+      if (!parsed.isOk) {
+        throw new CommanderError(
+          2,
+          'yantra.do.invalid-templated-report',
+          'The agent published an invalid templated report artifact.',
+        );
+      }
+      connector.renderResult(
+        {
+          kind: 'templated_report',
+          report: parsed.value,
+          artifacts: {
+            jsonPath: outcome.brief.jsonPath,
+            mdPath: outcome.brief.markdownPath,
+            htmlPath: outcome.brief.htmlPath,
+          },
+        },
+        renderOpts,
+      );
+      await runtime.recordHistory(outcome.runId);
+    }
     if (!json && outcome.kind === 'published' && outcome.promotion) {
       const line = outcome.promotion.saved
         ? `✓ Saved workflow "${outcome.promotion.workflowName}". Replay it with: yantra run ${outcome.promotion.workflowName}\n`
@@ -207,6 +262,10 @@ function runtimeWithDefaults(runtime?: Partial<DoRuntime>): DoRuntime {
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
+    resolveTemplate:
+      runtime?.resolveTemplate ??
+      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
+    recordHistory: runtime?.recordHistory ?? ((runId) => recordTaskHistory(runId)),
   };
 }
 

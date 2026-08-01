@@ -60,6 +60,8 @@ interface RunOptions extends AgentModelOptions {
    * leaves the decision to the workflow's `synthesis.use_llm`.
    */
   readonly llm?: boolean;
+  /** Registered only to provide a pointed unsupported-surface error. */
+  readonly template?: string;
 }
 
 function parseParams(raw: readonly string[] | undefined): Record<string, string> {
@@ -89,6 +91,7 @@ export function makeRunCommand(): Command {
     .option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs')
     .option('--json', 'Emit JSON summary to stdout instead of a terminal card', false)
     .option('--debug', 'Emit verbose debug logging to stderr', false)
+    .option('--template <ref>', 'report templates are supported on ask, research, and do')
     .addOption(
       new Option(
         '--no-llm',
@@ -97,6 +100,12 @@ export function makeRunCommand(): Command {
     );
 
   addAgentModelOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
+    if (options.template !== undefined) {
+      process.stderr.write(
+        'templates are not yet supported on run; see docs/report-templates.md\n',
+      );
+      process.exit(1);
+    }
     const logger = makeStderrLogger(options.debug === true);
     logger.info({ workflowName }, 'yantra run: starting');
     let closeRuntime = (): void => undefined;

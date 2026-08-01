@@ -19,6 +19,18 @@ export {
   type BriefValidationIssue,
   type CreateBriefInput,
 } from './schemas/brief-builder.js';
+export {
+  ReportTemplateReference,
+  TemplateManifest,
+  TemplateSlot,
+  TemplateSlotConstraints,
+  TemplateSlotKind,
+  TemplateSlotValue,
+  TemplatedReport,
+  TemplatedReportValidationError,
+  validateTemplatedReport,
+  type TemplatedReportValidationIssue,
+} from './schemas/report-template.js';
 export { TaskEvent, HandoffReason } from './schemas/events.js';
 export { AgentManifestSection } from './schemas/agent-manifest.js';
 export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';

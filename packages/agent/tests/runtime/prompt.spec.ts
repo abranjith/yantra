@@ -56,7 +56,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     ]);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
-    expect(PROMPT_VERSION).toBe('agent-v4');
+    expect(PROMPT_VERSION).toBe('agent-v5');
   });
 
   it('keeps the completion section flow-neutral but anti-stall (agent-v4)', () => {

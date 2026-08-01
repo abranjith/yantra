@@ -1,4 +1,8 @@
 /**
+ * Brief-only composition over the shared inert machinery in `html-shell.ts`.
+ * The extraction lets templated reports use the identical escape-before-parse
+ * and scheme-filtered document shell without changing Brief output.
+ *
  * `briefToHtml` — the inert, self-contained `brief.html` artifact renderer.
  *
  * ## Inertness contract (plan §6, FEAT-015 TASK-003)
@@ -38,28 +42,8 @@
  */
 
 import type { Brief, BriefSource, KeyFinding, Section } from '@yantra/protocol';
-import { Marked } from 'marked';
 
-/**
- * A Markdown renderer whose only override is a hardened link renderer: it
- * drops any non-`http(s)` href to plain text and stamps `rel` on the rest.
- * Constructed once (pure, stateless) and reused across calls.
- */
-const markdown = new Marked({ gfm: true });
-markdown.use({
-  renderer: {
-    link(token): string {
-      // `token.tokens` is the already-escaped link text (fields are escaped
-      // before parsing), so parseInline cannot reintroduce markup.
-      const text = this.parser.parseInline(token.tokens);
-      const href = safeHref(String(token.href ?? ''));
-      if (href === null) {
-        return text;
-      }
-      return `<a href="${escapeHtml(href)}" rel="noopener noreferrer">${text}</a>`;
-    },
-  },
-});
+import { escapeHtml, hardenedMarkdown, inertDocument, safeHref } from './html-shell.js';
 
 /**
  * Renders a {@link Brief} as a self-contained, inert HTML document.
@@ -112,17 +96,17 @@ export function briefToHtml(brief: Brief): string {
     body.push(noticesHtml(brief.notices));
   }
 
-  return document(brief.title, body.join('\n'));
+  return inertDocument(brief.title, body.join('\n'));
 }
 
 /** Renders a Brief Markdown field to inert HTML (fields escaped pre-parse). */
 function renderMarkdown(text: string): string {
-  return (markdown.parse(escapeHtml(text)) as string).trim();
+  return (hardenedMarkdown.parse(escapeHtml(text)) as string).trim();
 }
 
 /** Renders a Brief field as inline HTML (no block wrapper), escaped pre-parse. */
 function renderInline(text: string): string {
-  return (markdown.parseInline(escapeHtml(text)) as string).trim();
+  return (hardenedMarkdown.parseInline(escapeHtml(text)) as string).trim();
 }
 
 /** Max citation superscripts shown inline before collapsing to a `+k` affordance. */
@@ -277,118 +261,4 @@ function cell(value: string | number | boolean | null): string {
   return escapeHtml(String(value));
 }
 
-/** Returns the url when it is an http(s) URL, else null (inertness gate). */
-function safeHref(url: string): string | null {
-  return /^https?:\/\//i.test(url) ? url : null;
-}
-
-/** HTML-escapes a string for both element-content and attribute contexts. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/** Wraps rendered body HTML in the full self-contained document + theme. */
-function document(title: string, body: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>
-${THEME_CSS}
-</style>
-</head>
-<body>
-<main class="brief">
-${body}
-</main>
-</body>
-</html>
-`;
-}
-
 /** Inlined, framework-free theme — self-contained, no remote fonts or assets. */
-const THEME_CSS = `:root { color-scheme: light dark; }
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  padding: 2rem 1rem;
-  font-family: Georgia, "Times New Roman", serif;
-  line-height: 1.6;
-  color: #1a1a1a;
-  background: #fafaf8;
-}
-.brief { max-width: 46rem; margin: 0 auto; }
-h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 1rem; }
-h2 {
-  font-size: 1.3rem;
-  margin: 2rem 0 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid #e0ddd5;
-}
-a { color: #1256a3; }
-.overview {
-  background: #fff;
-  border: 1px solid #e0ddd5;
-  border-left: 4px solid #1256a3;
-  border-radius: 6px;
-  padding: 0.75rem 1.25rem;
-  margin: 1rem 0 1.5rem;
-  font-size: 1.05rem;
-}
-.overview p:first-child { margin-top: 0; }
-.overview p:last-child { margin-bottom: 0; }
-table.comparison, section table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0.5rem 0 1rem;
-  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-  font-size: 0.95rem;
-}
-table.comparison th, table.comparison td, section table th, section table td {
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #e0ddd5;
-}
-table.comparison thead th, section table thead th { border-bottom: 2px solid #cfc9bd; }
-table.comparison tbody tr:nth-child(even), section table tbody tr:nth-child(even) { background: #f2efe9; }
-ol.sources { padding-left: 1.5rem; }
-ol.sources li { margin: 0.35rem 0; }
-.src-meta { color: #6b675e; font-size: 0.85rem; }
-blockquote.src-excerpt {
-  margin: 0.25rem 0 0;
-  padding: 0.1rem 0 0.1rem 0.75rem;
-  border-left: 3px solid #e0ddd5;
-  color: #4c4942;
-  font-size: 0.9rem;
-}
-ul.key-findings { padding-left: 1.5rem; }
-ul.key-findings li { margin: 0.35rem 0; }
-ul.children {
-  margin: 0.35rem 0 0;
-  padding-left: 1.25rem;
-  color: #4c4942;
-}
-ul.children li { margin: 0.2rem 0; }
-sup.cite { font-size: 0.7em; margin-left: 1px; line-height: 0; }
-sup.cite a, sup.cite span { color: #8a8578; text-decoration: none; }
-sup.cite a:hover { text-decoration: underline; color: #1256a3; }
-ul.notices {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
-}
-ul.notices li {
-  background: #fff8e6;
-  border: 1px solid #eadfb8;
-  border-radius: 4px;
-  padding: 0.4rem 0.75rem;
-  margin: 0.35rem 0;
-  font-size: 0.9rem;
-}`;

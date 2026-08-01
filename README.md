@@ -26,6 +26,28 @@ pnpm test
 | `pnpm typecheck`   | Type-check all workspaces          |
 | `pnpm format`      | Format repository files            |
 | `pnpm clean`       | Clean build outputs                |
+| `yantra template`  | Manage reusable report templates   |
+
+## Report templates
+
+Use a Markdown report template when an agentic result must follow your own
+headings and sections. Create or import templates with `yantra template`, then
+pass the same `--template <name|tag|path>` flag to `ask`, `research`, or `do`:
+
+```bash
+yantra template new weekly --tags work
+yantra template lint weekly
+yantra ask "summarize this week's status" --template weekly
+yantra research "compare the vendors" --template tag:work --format html --open
+yantra do "prepare a launch review" --template ./launch-review.md
+```
+
+The model fills typed slots while Yantra preserves the Markdown structure,
+attaches fetched sources, validates the result, and writes `document.json`,
+`document.md`, and inert `document.html`. Templates require LLM mode, so
+`--template` cannot be combined with `--no-llm` or `LLM_PROVIDER=none`.
+`yantra run` does not support templates yet. See the complete
+[report-template authoring guide](docs/report-templates.md).
 
 ## Ask (the Brief)
 
@@ -277,6 +299,12 @@ when the workflow it replays declared `synthesis.use_llm`:
 | `--model <id>`        | Provider-scoped model id                             | `YANTRA_AGENT_MODEL`    |
 | `--thinking <level>`  | Reasoning level (adapters clamp to model capability) | —                       |
 | `--auth-secret <ref>` | Keychain reference resolved to a runtime-only key    | —                       |
+
+Report-template selection uses the same spelling on every agentic command:
+
+| Flag               | Purpose                                             | Supported commands      |
+| ------------------ | --------------------------------------------------- | ----------------------- |
+| `--template <ref>` | Select a saved name, tag, or Markdown template path | `ask`, `research`, `do` |
 
 Precedence is **explicit flag > environment > pinned default**
 (`anthropic` / `claude-haiku-4-5`). A blank provider, model, or secret

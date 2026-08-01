@@ -349,26 +349,39 @@ export class SqliteHistoryStore implements HistoryStore {
     return deriveHistoryEntry(dir, raw, briefMeta);
   }
 
-  /** Best-effort read of brief.json for `brief_id` + cost. */
+  /** Best-effort read of `brief.json` or templated `document.json` metadata. */
   private async readBriefMeta(runDir: string): Promise<BriefMeta | null> {
-    try {
-      const brief = JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8')) as {
-        brief_id?: unknown;
-        metadata?: { usage?: { cost_usd?: unknown } | null };
-      };
-      const briefId = typeof brief.brief_id === 'string' ? brief.brief_id : null;
-      const costUsd =
-        typeof brief.metadata?.usage?.cost_usd === 'number' ? brief.metadata.usage.cost_usd : null;
-      return { briefId, costUsd };
-    } catch {
-      return null;
+    for (const filename of ['brief.json', 'document.json']) {
+      try {
+        const document = JSON.parse(await readFile(join(runDir, filename), 'utf8')) as {
+          brief_id?: unknown;
+          report_id?: unknown;
+          title?: unknown;
+          metadata?: { usage?: { cost_usd?: unknown } | null };
+        };
+        const id = document.brief_id ?? document.report_id;
+        const briefId = typeof id === 'string' ? id : null;
+        const costUsd =
+          typeof document.metadata?.usage?.cost_usd === 'number'
+            ? document.metadata.usage.cost_usd
+            : null;
+        return {
+          briefId,
+          costUsd,
+          title: typeof document.title === 'string' ? document.title : null,
+        };
+      } catch {
+        // Try the other supported artifact family.
+      }
     }
+    return null;
   }
 }
 
 interface BriefMeta {
   readonly briefId: string | null;
   readonly costUsd: number | null;
+  readonly title?: string | null;
 }
 
 /** Raw `history` row shape as returned by node:sqlite. */
@@ -453,17 +466,28 @@ export function deriveHistoryEntry(
       return null; // running/queued/paused-without-mapping → not terminal history
     }
     const finishedAt = asString(raw.endedAt);
+    const agenticTaskType =
+      raw.runKind === 'agentic' && ASK_TASK_TYPES.has(workflowName as TaskType)
+        ? (workflowName as TaskType)
+        : null;
     return {
       runId: asString(raw.runId) ?? dirName,
-      taskType: 'run',
-      intentText: workflowName,
+      taskType: agenticTaskType ?? 'run',
+      intentText: agenticTaskType === null ? workflowName : (briefMeta?.title ?? workflowName),
       briefId: briefMeta?.briefId ?? null,
       status,
       startedAt,
       finishedAt,
       durationMs: asNumber(raw.durationMs) ?? durationBetween(startedAt, finishedAt),
       costUsd: briefMeta?.costUsd ?? null,
-      provider: null,
+      provider:
+        agenticTaskType === null
+          ? null
+          : asString(
+              typeof raw.agent === 'object' && raw.agent !== null
+                ? (raw.agent as Record<string, unknown>).provider
+                : null,
+            ),
     };
   }
 

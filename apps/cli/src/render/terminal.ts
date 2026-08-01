@@ -11,8 +11,8 @@
  * `--no-color` / `NO_COLOR` / non-TTY conditions.
  */
 
-import { briefToHtml, briefToMarkdown } from '@yantra/core';
-import type { Brief, TaskEvent } from '@yantra/protocol';
+import { briefToHtml, briefToMarkdown, templatedReportToHtml } from '@yantra/core';
+import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 import { renderBriefTerminal } from './brief-terminal.js';
 import type {
@@ -183,6 +183,18 @@ export class TerminalRenderer implements OutputRenderer {
     if (artifacts !== null) {
       opts.stream.write(`\nSaved: ${artifacts.mdPath} · ${artifacts.htmlPath}\n`);
     }
+  }
+
+  renderTemplatedReport(
+    report: TemplatedReport,
+    _artifacts: BriefArtifactPaths | null,
+    opts: ConnectorRenderOpts,
+  ): void {
+    if ((opts.briefFormat ?? 'terminal') === 'html') {
+      opts.stream.write(templatedReportToHtml(report));
+      return;
+    }
+    this.renderReport(report.rendered_md, opts);
   }
 
   renderEvent(event: TaskEvent, opts: ConnectorRenderOpts): void {

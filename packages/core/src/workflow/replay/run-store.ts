@@ -103,6 +103,7 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       chromeDriftWarning: undefined,
       runKind: 'agentic',
       ...(request.partialAgent === undefined ? {} : { agent: request.partialAgent }),
+      ...(request.template === undefined ? {} : { template: request.template }),
     };
     await writeManifest(runDir, manifest);
     return { runId, runDir };

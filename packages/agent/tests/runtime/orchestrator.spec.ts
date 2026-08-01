@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import {
   DefaultSanitizer,
+  parseTemplate,
   ScriptRegistry,
   type AgentBrowserController,
   type ContentFetcher,
@@ -63,6 +64,7 @@ async function fixture(options: {
   readonly signal?: AbortSignal;
   readonly budgets?: AgenticTaskRequest['budgets'];
   readonly now?: () => Date;
+  readonly template?: AgenticTaskRequest['template'];
 }): Promise<{
   readonly outcome: AgenticTaskOutcome;
   readonly connector: RecordingConnector;
@@ -79,6 +81,7 @@ async function fixture(options: {
       model: { provider: 'fixture', id: 'fixture-model' },
       auth: { mode: 'managed' },
       connector,
+      ...(options.template ? { template: options.template } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.budgets ? { budgets: options.budgets } : {}),
     },
@@ -156,6 +159,32 @@ function evidenceEntry(url: string, title: string): EvidenceEntry {
 }
 
 describe('@no-llm runAgenticTask lifecycle', () => {
+  it('does not assemble an unpublished draft in template mode', async () => {
+    const parsed = parseTemplate(
+      '# {{ title | text }}\n\n## Summary\n{{ summary }}\n\n{{ sources }}',
+    );
+    if (!parsed.isOk) throw new Error('fixture template did not parse');
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [event('assistant_text', { text: 'A draft that must not be auto-assembled.' })],
+        [],
+      ],
+      resultsByRun: [completed, completed],
+    });
+    const result = await fixture({
+      provider,
+      template: { manifest: parsed.value, source: 'saved', path: null, name: 'fixture' },
+    });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    await expect(access(join(result.outcome.runDir, 'document.json'))).rejects.toThrow();
+    await expect(access(join(result.outcome.runDir, 'document.md'))).rejects.toThrow();
+    await expect(access(join(result.outcome.runDir, 'document.html'))).rejects.toThrow();
+  });
+
   it('returns published, fans every seam event to audit and connector, and tears down once', async () => {
     const provider = new FakeAgentProvider({
       eventsOnRun: [

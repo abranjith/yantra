@@ -42,11 +42,18 @@ import {
   type OrchestratorRunOutcome,
   type RunStatus,
 } from '@yantra/core/workflow/replay';
-import { generateUlid, validateBrief, type FailureClass } from '@yantra/protocol';
+import {
+  generateUlid,
+  validateBrief,
+  validateTemplatedReport,
+  type FailureClass,
+  type TemplateManifest,
+} from '@yantra/protocol';
 
 import { PiAgentProvider } from '../adapters/pi/provider.js';
 import {
   createBriefPublisher,
+  createTemplatedReportPublisher,
   createYantraTools,
   evidenceToSourceRecords,
   yantraToolCatalog,
@@ -67,7 +74,7 @@ import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
-import { COMMAND_TASK_PROFILES, type CommandTaskProfile } from './profiles.js';
+import { COMMAND_TASK_PROFILES, promptAddendumFor, type CommandTaskProfile } from './profiles.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
 import { RunRecorder } from './run-recorder.js';
 import {
@@ -110,7 +117,12 @@ const REPEATED_TOOL_FAILURE_LIMIT = 4;
  * observed alternative — a generic "publish with exact URLs" demand — sent a
  * small model on a second search trip that changed its conclusion.
  */
-function buildCompletionNudge(evidence: readonly EvidenceEntry[], draft: string): string {
+export function buildCompletionNudge(
+  evidence: readonly EvidenceEntry[],
+  draft: string,
+  manifest: TemplateManifest | null = null,
+): string {
+  if (manifest !== null) return buildTemplateCompletionNudge(evidence, draft, manifest);
   const lines = [
     'Completion check: no validated result has been published, so the task is NOT complete. ' +
       'Plain chat text is not a result. You MUST now call the result_publish tool exactly ' +
@@ -143,6 +155,52 @@ function buildCompletionNudge(evidence: readonly EvidenceEntry[], draft: string)
         'blocker: choose the most reasonable interpretation yourself and publish what you can ' +
         'support. Only if publishing is genuinely impossible (for example, no source could be ' +
         'fetched), state the precise blocker and the safest next action instead.',
+    );
+  }
+  return lines.join('\n');
+}
+
+function buildTemplateCompletionNudge(
+  evidence: readonly EvidenceEntry[],
+  draft: string,
+  manifest: TemplateManifest,
+): string {
+  const keys = manifest.slots
+    .filter((slot) => slot.kind !== 'sources')
+    .map((slot) => `"${slot.key}"`);
+  const shape = keys.map((key) => `${key}: ...`).join(', ');
+  const lines = [
+    'Completion check: no validated result has been published, so the task is NOT complete. ' +
+      'Plain chat text is not a result. You MUST now call the result_publish tool exactly once, ' +
+      `passing {"report": {${shape}}}. Yantra renders the surrounding template; supply every ` +
+      `required slot (${keys.join(', ')}) and no layout Markdown.`,
+  ];
+  if (evidence.length > 0) {
+    lines.push(
+      '',
+      'You already consulted the sources below; they are attached to the rendered document ' +
+        'automatically. Do NOT call web_search or web_fetch again and do NOT re-type URLs - ' +
+        'publish now from the evidence you already have.',
+    );
+    evidence.slice(0, NUDGE_EVIDENCE_CAP).forEach((entry, index) => {
+      lines.push(`[${index + 1}] ${entry.url}${entry.title === null ? '' : ` - ${entry.title}`}`);
+    });
+    if (evidence.length > NUDGE_EVIDENCE_CAP) {
+      lines.push(`(+${evidence.length - NUDGE_EVIDENCE_CAP} more, also attached automatically)`);
+    }
+    if (draft.trim().length > 0) {
+      lines.push(
+        '',
+        'Your previous message is your draft answer: adapt it across the matching template slots ' +
+          'without changing its conclusion, then publish now.',
+      );
+    }
+  } else {
+    lines.push(
+      '',
+      'No user is available to answer questions, so choose the most reasonable interpretation ' +
+        'and publish what you can support. State a precise blocker only when publication is ' +
+        'genuinely impossible.',
     );
   }
   return lines.join('\n');
@@ -191,6 +249,8 @@ export interface AgenticTaskRequest {
    */
   readonly interactive?: boolean;
   readonly connector: AgentTaskConnector;
+  /** Resolved report template; absent preserves the historical Brief path. */
+  readonly template?: ActiveReportTemplate;
   /**
    * When set, a successful run promotes its browser trace into a saved workflow
    * of this name (`yantra do --save-as <name>`). Promotion failure is reported
@@ -199,6 +259,14 @@ export interface AgenticTaskRequest {
   readonly saveAs?: string;
   /** User interrupt/caller cancellation. */
   readonly signal?: AbortSignal;
+}
+
+/** Resolved template content and non-secret reference provenance for one run. */
+export interface ActiveReportTemplate {
+  readonly manifest: TemplateManifest;
+  readonly source: 'saved' | 'path';
+  readonly path: string | null;
+  readonly name: string | null;
 }
 
 /** Run-store operations needed beyond the startup-only core interface. */
@@ -272,6 +340,15 @@ export async function runAgenticTask(
     taskId,
     command: profile.command,
     partialAgent: { provider: request.model.provider, model: request.model.id },
+    ...(request.template === undefined
+      ? {}
+      : {
+          template: {
+            name: request.template.name,
+            hash: request.template.manifest.hash,
+            source: request.template.source,
+          },
+        }),
   });
 
   let environment: AgenticRunEnvironment | undefined;
@@ -313,9 +390,26 @@ export async function runAgenticTask(
     // its own results. Together the two make every value the run legitimately
     // handles round-trip, leaving `[redacted-*]` for untrusted page data only.
     const modelValues = new ModelSuppliedValues();
+    const evidence = new EvidenceLedger(sanitizer);
+    const domain: ToolDomainDeps =
+      request.template === undefined
+        ? environment.domain
+        : {
+            ...environment.domain,
+            publish: createTemplatedReportPublisher(created.runDir, request.template.manifest, {
+              taskId,
+              runId: created.runId,
+              source: request.template.source,
+              path: request.template.path,
+              name: request.template.name,
+              evidence: () => evidence.entries(),
+              now,
+            }),
+          };
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
+      template: request.template?.manifest ?? null,
       budgets: budgetTracker,
       sanitizer,
       userInput,
@@ -331,13 +425,13 @@ export async function runAgenticTask(
       }),
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
-      evidence: new EvidenceLedger(sanitizer),
+      evidence,
       evidencePhase: new EvidencePhase(),
       trace,
       abortSignal: runAbort.signal,
       now: () => now().getTime(),
       nowIso: () => now().toISOString(),
-      domain: environment.domain,
+      domain,
       workflowToolMode: profile.workflowToolMode,
     };
     const tools = createYantraTools(services, profile);
@@ -359,7 +453,7 @@ export async function runAgenticTask(
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(request.profileContext ? { profileContext: request.profileContext } : {}),
         attended: request.interactive === true,
-        promptAddendum: profile.promptAddendum,
+        promptAddendum: promptAddendumFor(profile, services.template),
       },
       sanitizer,
       userInput,
@@ -410,11 +504,14 @@ export async function runAgenticTask(
         // model cannot re-investigate its way to a different conclusion.
         services.evidencePhase.freeze();
       }
-      latestRunResult = await state.runPrompt(buildCompletionNudge(evidenceEntries, preNudgeDraft));
+      latestRunResult = await state.runPrompt(
+        buildCompletionNudge(evidenceEntries, preNudgeDraft, services.template),
+      );
     }
     terminal =
-      (await maybeAssembleUnpublishedResult(state, latestRunResult, services, preNudgeDraft)) ??
-      (await resolveTerminalOutcome(state, latestRunResult, created.runId, created.runDir));
+      (services.template === null
+        ? await maybeAssembleUnpublishedResult(state, latestRunResult, services, preNudgeDraft)
+        : undefined) ?? (await resolveTerminalOutcome(state, latestRunResult, services));
   } catch (error) {
     if (session === undefined) {
       const startup = toStartupError(error);
@@ -737,9 +834,9 @@ function assembledTitle(draft: string): string {
 async function resolveTerminalOutcome(
   state: ExecutionState,
   result: AgentRunResult | undefined,
-  runId: string,
-  runDir: string,
+  services: RunServices,
 ): Promise<AgenticTaskOutcome> {
+  const { runId, runDir } = services;
   // The stuck-loop breaker wins over the generic budget mapping it triggers, so
   // the failure reads as "repeated the same failing action" rather than a bare
   // budget-exhausted code.
@@ -772,7 +869,7 @@ async function resolveTerminalOutcome(
     };
   }
   if (state.published) {
-    const brief = await readPublishedBrief(runDir);
+    const brief = await readPublishedBrief(runDir, services.template !== null);
     if (brief !== undefined) return { kind: 'published', runId, runDir, brief };
   }
   if (result?.outcome === 'failed' || state.lastError !== undefined) {
@@ -827,17 +924,30 @@ function excerptText(text: string, maxChars: number): string | undefined {
   return collapsed.length <= maxChars ? collapsed : `${collapsed.slice(0, maxChars)}...`;
 }
 
-async function readPublishedBrief(runDir: string): Promise<PublishedBriefRef | undefined> {
+async function readPublishedBrief(
+  runDir: string,
+  templated = false,
+): Promise<PublishedBriefRef | undefined> {
   try {
-    const raw = JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8')) as unknown;
+    const basename = templated ? 'document' : 'brief';
+    const raw = JSON.parse(await readFile(join(runDir, `${basename}.json`), 'utf8')) as unknown;
+    const artifactPaths = {
+      jsonPath: join(runDir, `${basename}.json`),
+      markdownPath: join(runDir, `${basename}.md`),
+      htmlPath: join(runDir, `${basename}.html`),
+    };
+    if (templated) {
+      const result = validateTemplatedReport(raw);
+      if (!result.isOk) return undefined;
+      return {
+        kind: 'templated_report',
+        briefId: result.value.report_id,
+        ...artifactPaths,
+      };
+    }
     const result = validateBrief(raw);
     if (!result.isOk) return undefined;
-    return {
-      briefId: result.value.brief_id,
-      jsonPath: join(runDir, 'brief.json'),
-      markdownPath: join(runDir, 'brief.md'),
-      htmlPath: join(runDir, 'brief.html'),
-    };
+    return { kind: 'brief', briefId: result.value.brief_id, ...artifactPaths };
   } catch {
     return undefined;
   }

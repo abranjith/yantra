@@ -7,7 +7,7 @@
  * outcomes are emitted as a single JSON object.
  */
 
-import type { Brief, TaskEvent } from '@yantra/protocol';
+import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 import { SCHEMA_VERSION } from '@yantra/protocol';
 
 import type {
@@ -62,6 +62,21 @@ export class JSONRenderer implements OutputRenderer {
   renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void {
     opts.stream.write(
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'brief', brief, artifacts })}\n`,
+    );
+  }
+
+  renderTemplatedReport(
+    report: TemplatedReport,
+    artifacts: BriefArtifactPaths | null,
+    opts: ConnectorRenderOpts,
+  ): void {
+    opts.stream.write(
+      `${JSON.stringify({
+        schemaVersion: CLI_JSON_SCHEMA_VERSION,
+        kind: 'templated_report',
+        ...report,
+        artifacts,
+      })}\n`,
     );
   }
 

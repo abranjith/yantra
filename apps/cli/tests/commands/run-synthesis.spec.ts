@@ -15,7 +15,7 @@
  */
 
 import { CommanderError } from 'commander';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { makeRunCommand, resolveRunSynthesis } from '../../src/commands/run.js';
 
@@ -119,6 +119,7 @@ describe('@no-llm resolveRunSynthesis', () => {
 });
 
 describe('@no-llm yantra run flag surface', () => {
+  afterEach(() => vi.restoreAllMocks());
   const optionNames = (): string[] =>
     makeRunCommand()
       .options.map((option) => option.long ?? option.short ?? '')
@@ -126,6 +127,22 @@ describe('@no-llm yantra run flag surface', () => {
 
   it('registers --no-llm', () => {
     expect(optionNames()).toContain('--no-llm');
+  });
+
+  it('rejects --template with the pointed documentation message before execution', async () => {
+    let stderr = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+    vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit:1');
+    }) as never);
+
+    await expect(
+      makeRunCommand().parseAsync(['weekly', '--template', 'exec-brief'], { from: 'user' }),
+    ).rejects.toThrow('exit:1');
+    expect(stderr).toBe('templates are not yet supported on run; see docs/report-templates.md\n');
   });
 
   it('registers no --llm opt-in flag', () => {

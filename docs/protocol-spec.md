@@ -1335,6 +1335,28 @@ Example:
 }
 ```
 
+## ReportTemplateReference
+
+Template identity and content hash recorded with a rendered report.
+
+| Field  | Description |
+| ------ | ----------- |
+| name   |             |
+| source |             |
+| path   |             |
+| hash   |             |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "source": "<source>",
+  "path": "<path>",
+  "hash": "<hash>"
+}
+```
+
 ## RoleEnum
 
 Supported ARIA role intents. Must stay a subset of the roles the locator engine can compute (`getRole`), or a recorded role can never match at replay: `<select>` computes `listbox`, `input[type=search]` computes `searchbox`, and `input[type=number|date|time|month|week]` computes `spinbutton`.
@@ -1477,6 +1499,32 @@ Example:
 }
 ```
 
+## TemplateManifest
+
+Validated slot manifest produced from a report template.
+
+| Field       | Description                                                  |
+| ----------- | ------------------------------------------------------------ |
+| name        | Normalized template name, or null when frontmatter omits it. |
+| description | One-line author description, or null.                        |
+| tags        | Normalized, deduplicated, sorted template tags.              |
+| slots       | Slots in declaration order.                                  |
+| body        | Markdown below YAML frontmatter, retained verbatim.          |
+| hash        | SHA-256 of the complete raw template text.                   |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "description": "<description>",
+  "tags": "<tags>",
+  "slots": "<slots>",
+  "body": "<body>",
+  "hash": "<hash>"
+}
+```
+
 ## TemplateRef
 
 Templated value with explicit typed bindings.
@@ -1494,6 +1542,112 @@ Example:
   "kind": "<kind>",
   "template": "<template>",
   "bindings": "<bindings>"
+}
+```
+
+## TemplateSlot
+
+A validated placeholder declaration and its render location.
+
+| Field       | Description                                                             |
+| ----------- | ----------------------------------------------------------------------- |
+| key         | Unique model-facing slot key.                                           |
+| kind        | Value shape rendered into this placeholder.                             |
+| headingPath | Enclosing ATX headings, outermost first, used as the model description. |
+| columns     | Table column labels, or null for non-table slots.                       |
+| constraints | Optional character, word, item, or row bounds declared on a slot.       |
+| offset      | Character offset of the opening placeholder in manifest.body.           |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "kind": "<kind>",
+  "headingPath": "<headingPath>",
+  "columns": "<columns>",
+  "constraints": "<constraints>",
+  "offset": "<offset>"
+}
+```
+
+## TemplateSlotConstraints
+
+Optional character, word, item, or row bounds declared on a slot.
+
+| Field    | Description |
+| -------- | ----------- |
+| minChars |             |
+| maxChars |             |
+| minWords |             |
+| maxWords |             |
+| min      |             |
+| max      |             |
+
+Example:
+
+```json
+{
+  "minChars": "<minChars>",
+  "maxChars": "<maxChars>",
+  "minWords": "<minWords>",
+  "maxWords": "<maxWords>",
+  "min": "<min>",
+  "max": "<max>"
+}
+```
+
+## TemplateSlotKind
+
+No description provided.
+
+Example:
+
+```json
+"text"
+```
+
+## TemplateSlotValue
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## TemplatedReport
+
+A runtime-rendered report backed by a user-authored Markdown template.
+
+| Field          | Description                                                         |
+| -------------- | ------------------------------------------------------------------- |
+| report_id      | Unique report document id (ULID).                                   |
+| task_id        | Originating task id (ULID).                                         |
+| schema_version |                                                                     |
+| template       | Template identity and content hash recorded with a rendered report. |
+| title          | Display title used by history and HTML.                             |
+| slots          | Validated model-filled slot values.                                 |
+| rendered_md    | Canonical Markdown rendered by the runtime.                         |
+| sources        | Engine-owned evidence ledger sources.                               |
+| metadata       | Reused Brief provenance and usage metadata.                         |
+| notices        | Reused Brief notices.                                               |
+
+Example:
+
+```json
+{
+  "report_id": "<report_id>",
+  "task_id": "<task_id>",
+  "schema_version": "<schema_version>",
+  "template": "<template>",
+  "title": "<title>",
+  "slots": "<slots>",
+  "rendered_md": "<rendered_md>",
+  "sources": "<sources>",
+  "metadata": "<metadata>",
+  "notices": "<notices>"
 }
 ```
 

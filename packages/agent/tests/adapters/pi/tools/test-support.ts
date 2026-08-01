@@ -13,6 +13,7 @@ import type {
 } from '@yantra/core';
 import { DefaultSanitizer, type UserInputVault } from '@yantra/core';
 import { ScriptRegistry } from '@yantra/core';
+import type { TemplateManifest } from '@yantra/protocol';
 import type { TObject } from 'typebox';
 import { expect } from 'vitest';
 
@@ -46,6 +47,7 @@ export interface BuildServicesOptions {
   readonly domain?: Partial<ToolDomainDeps>;
   readonly trace?: AgentTrace;
   readonly userInput?: UserInputVault;
+  readonly template?: TemplateManifest | null;
 }
 
 /** Build a RunServices with sensible fakes and overridable domain deps. */
@@ -83,6 +85,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
   return {
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
+    template: options.template ?? null,
     budgets,
     sanitizer,
     ...(options.userInput ? { userInput: options.userInput } : {}),

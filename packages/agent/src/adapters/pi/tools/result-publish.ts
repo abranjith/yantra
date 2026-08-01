@@ -1,4 +1,9 @@
 /**
+ * Briefs and templated reports deliberately share this terminal tool: the
+ * orchestration latch, correction loop, audit trail, and success rule remain
+ * identical. An active manifest replaces the static Brief parameters with
+ * generated slot parameters, and Yantra renders the `document.*` artifacts.
+ *
  * `result_publish` tool spec (FEAT-024 TASK-007, plan_agentic.md §5/§8.9/§13).
  *
  * The terminal completion contract: raw prose is not success. The agent must
@@ -21,26 +26,36 @@
  * `do` runs).
  */
 
-import { writeBriefArtifacts } from '@yantra/core';
+import { renderTemplate, writeBriefArtifacts, writeReportArtifacts } from '@yantra/core';
 import {
+  BRIEF_SCHEMA_VERSION,
+  TemplatedReportValidationError,
   createBrief,
   generateUlid,
   validateBrief,
+  validateTemplatedReport,
   type Brief,
   type BriefSource,
   type BriefValidationError,
   type KeyFinding,
   type Result,
+  type TemplateManifest,
+  type TemplateSlotValue,
+  type TemplatedReport,
 } from '@yantra/protocol';
-import { Type, type Static } from 'typebox';
+import { Type, type Static, type TObject } from 'typebox';
 
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
   EvidenceEntry,
   PublishOutcome,
   PublishToolDeps,
+  PublishValidationError,
   RunServices,
 } from '../../../runtime/run-services.js';
+
+import { templateParamsFor } from './template-params.js';
+import { validateSlots } from './template-validate.js';
 
 /**
  * The agent-authored content shape. `title`/`overview` are structurally
@@ -87,38 +102,40 @@ const ResultPublishParams = Type.Object(
   { additionalProperties: false },
 );
 
-type ResultPublishParamsType = Static<typeof ResultPublishParams>;
-
 /**
  * Build the `result_publish` tool spec for one run.
  *
- * @param _services Reserved for symmetry with the other tool factories.
+ * @param services Per-run services carrying the optional active template.
  * @returns The provider-neutral tool spec consumed by `wrapTool`.
  */
-export function resultPublishSpec(
-  _services: RunServices,
-): ToolWrapperSpec<typeof ResultPublishParams> {
+export function resultPublishSpec(services: RunServices): ToolWrapperSpec<TObject> {
+  const parameters =
+    services.template === null ? ResultPublishParams : templateParamsFor(services.template);
   return {
     name: 'result_publish',
     label: 'Publish Result',
     description:
-      'Publish the final answer as a validated Brief. This is the ONLY way to complete a task — ' +
-      'raw chat text is not a completed result. Call it once, when your answer is ready, with ' +
-      '{"brief": {"title": ..., "overview": ...}}; the web pages you consulted are attached as ' +
-      'sources automatically, so you never need to list URLs. Do NOT call it before gathering ' +
-      'the evidence you need, and do NOT invent facts or URLs; invalid Briefs are rejected with ' +
-      'the specific problems to fix.',
-    parameters: ResultPublishParams,
+      services.template === null
+        ? 'Publish the final answer as a validated Brief. This is the ONLY way to complete a task — ' +
+          'raw chat text is not a completed result. Call it once, when your answer is ready, with ' +
+          '{"brief": {"title": ..., "overview": ...}}; the web pages you consulted are attached as ' +
+          'sources automatically, so you never need to list URLs. Do NOT call it before gathering ' +
+          'the evidence you need, and do NOT invent facts or URLs; invalid Briefs are rejected with ' +
+          'the specific problems to fix.'
+        : `Publish the final values for template "${services.template.name ?? 'unnamed'}". ` +
+          `Fill the report slots (${services.template.slots
+            .filter((slot) => slot.kind !== 'sources')
+            .map((slot) => slot.key)
+            .join(', ')}); Yantra renders the surrounding document and attaches consulted ` +
+          'sources automatically. Do not supply layout Markdown or URLs. Invalid values are ' +
+          'returned with exact issues to fix.',
+    parameters,
     sanitizationProfile: 'public',
-    run: (params: ResultPublishParamsType, ctx): Promise<DomainResult> =>
-      runPublish(params, ctx.services),
+    run: (params: Static<TObject>, ctx): Promise<DomainResult> => runPublish(params, ctx.services),
   };
 }
 
-async function runPublish(
-  params: ResultPublishParamsType,
-  services: RunServices,
-): Promise<DomainResult> {
+async function runPublish(params: unknown, services: RunServices): Promise<DomainResult> {
   // The action phase closing is the single-successful-publication latch.
   if (services.actionPhase.isClosed()) {
     return {
@@ -129,14 +146,37 @@ async function runPublish(
     };
   }
 
+  const paramsRecord = asRecord(params) ?? {};
+  if (services.template !== null) {
+    const result = await services.domain.publish.publish(paramsRecord.report);
+    if (!result.isOk) {
+      return {
+        ok: false,
+        errorCode: 'REPORT_INVALID',
+        message: result.error.message,
+        retryable: true,
+        details: { issues: result.error.issues },
+      };
+    }
+    services.actionPhase.close();
+    const report = result.value.brief as TemplatedReport;
+    return {
+      ok: true,
+      model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
+      details: { report_id: report.report_id },
+      terminate: true,
+    };
+  }
+
   // Ledger-authoritative composition applies to agent-authored content only:
   // a complete protocol Brief (internal/scripted callers) owns its sources and
   // typed findings, so it passes through untouched.
+  const briefInput = paramsRecord.brief;
   const evidence = services.evidence.entries();
   const content =
-    evidence.length > 0 && !isCompleteBrief(params.brief)
-      ? withLedgerEvidence(params.brief, evidence)
-      : params.brief;
+    evidence.length > 0 && !isCompleteBrief(briefInput)
+      ? withLedgerEvidence(briefInput, evidence)
+      : briefInput;
   const result = await services.domain.publish.publish(content);
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
@@ -158,7 +198,7 @@ async function runPublish(
   return {
     ok: true,
     model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
-    details: { brief_id: result.value.brief.brief_id },
+    details: { brief_id: (result.value.brief as Brief).brief_id },
     terminate: true,
   };
 }
@@ -295,6 +335,122 @@ export function createBriefPublisher(
       };
     },
   };
+}
+
+/** Run identity and template provenance stamped into a templated report. */
+export interface TemplatedReportPublisherContext {
+  /** Owning task ULID; generated when omitted. */
+  readonly taskId?: string;
+  /** Owning run id recorded in reused Brief metadata. */
+  readonly runId?: string;
+  /** Whether the active reference came from the saved library or a file path. */
+  readonly source?: 'saved' | 'path';
+  /** Absolute source path for path references, otherwise null. */
+  readonly path?: string | null;
+  /** Resolved display name when frontmatter omitted one. */
+  readonly name?: string | null;
+  /** Lazy evidence-ledger view evaluated at publication time. */
+  readonly evidence?: () => readonly EvidenceEntry[];
+  /** Clock override for source defaults and tests. */
+  readonly now?: () => Date;
+}
+
+/**
+ * Create the publisher used by a generated report-template schema.
+ *
+ * The model supplies slot values only. Sources are rebuilt from the run ledger,
+ * values pass content validation, the runtime renders the manifest, the final
+ * protocol document is validated, and `document.json/md/html` are persisted.
+ *
+ * @param runDir Owning run directory.
+ * @param manifest Active parsed template.
+ * @param context Run identity, template reference, and lazy evidence view.
+ * @returns A publication dependency compatible with the existing tool loop.
+ */
+export function createTemplatedReportPublisher(
+  runDir: string,
+  manifest: TemplateManifest,
+  context: TemplatedReportPublisherContext = {},
+): PublishToolDeps {
+  return {
+    publish: async (raw: unknown): Promise<Result<PublishOutcome, PublishValidationError>> => {
+      const valuesRecord = asRecord(raw) ?? {};
+      // The generated provider schema excludes sources; direct/internal callers
+      // get the same invariant by having any supplied value ignored here.
+      const values = Object.fromEntries(
+        Object.entries(valuesRecord).filter(([key]) => key !== 'sources'),
+      );
+      const nowIso = (context.now?.() ?? new Date()).toISOString();
+      const sourceRecords = evidenceToSourceRecords(context.evidence?.() ?? []);
+      const sources = sourceRecords.map((entry, index) => toSource(entry, index, nowIso));
+      const slotIssues = validateSlots(manifest, values, sources);
+      if (slotIssues.length > 0) {
+        return { isOk: false, error: new TemplatedReportValidationError(slotIssues) };
+      }
+
+      const slotValues = values as Record<string, TemplateSlotValue>;
+      const titleValue = slotValues.title;
+      const title =
+        typeof titleValue === 'string' && titleValue.trim().length > 0
+          ? titleValue.trim()
+          : titleFromName(context.name ?? manifest.name);
+      const report: TemplatedReport = {
+        report_id: generateUlid(),
+        task_id: context.taskId ?? generateUlid(),
+        schema_version: BRIEF_SCHEMA_VERSION,
+        template: {
+          name: context.name ?? manifest.name,
+          source: context.source ?? 'saved',
+          path: context.path ?? null,
+          hash: manifest.hash,
+        },
+        title,
+        slots: slotValues,
+        rendered_md: renderTemplate(manifest, slotValues, sources),
+        sources,
+        metadata: {
+          search_provider: null,
+          synthesis: 'llm',
+          deterministic_fallback_used: false,
+          coverage: null,
+          freshness: null,
+          citation_verdict: null,
+          usage: null,
+          evidence: null,
+          run_id: context.runId ?? null,
+        },
+        notices: [],
+      };
+      const validated = validateTemplatedReport(report);
+      if (!validated.isOk) return validated;
+      const written = await writeReportArtifacts(runDir, validated.value);
+      if (!written.isOk) {
+        return {
+          isOk: false,
+          error: new TemplatedReportValidationError([
+            { path: [], pointer: '', message: written.error.message },
+          ]),
+        };
+      }
+      return {
+        isOk: true,
+        value: {
+          brief: validated.value,
+          htmlPath: written.value.htmlPath,
+          summary: `Published "${validated.value.title}" with ${sources.length} source(s).`,
+        },
+      };
+    },
+  };
+}
+
+function titleFromName(name: string | null): string {
+  if (name === null || name.length === 0) return 'Templated report';
+  return name
+    .split('-')
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }
 
 /** One-line human summary for the model-visible publish result. */

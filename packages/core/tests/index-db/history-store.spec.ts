@@ -175,12 +175,17 @@ describe('@no-llm SqliteHistoryStore.rebuildFromRuns', () => {
     await rm(runsDir, { recursive: true, force: true });
   });
 
-  async function writeRun(name: string, manifest: unknown, brief?: unknown): Promise<void> {
+  async function writeRun(
+    name: string,
+    manifest: unknown,
+    brief?: unknown,
+    artifactName = 'brief.json',
+  ): Promise<void> {
     const runDir = join(runsDir, name);
     await mkdir(runDir, { recursive: true });
     await writeFile(join(runDir, 'manifest.json'), JSON.stringify(manifest), 'utf8');
     if (brief !== undefined) {
-      await writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8');
+      await writeFile(join(runDir, artifactName), JSON.stringify(brief), 'utf8');
     }
   }
 
@@ -250,6 +255,38 @@ describe('@no-llm SqliteHistoryStore.rebuildFromRuns', () => {
     const listed = await store.list();
     if (!listed.isOk) return;
     expect(listed.value).toHaveLength(1);
+  });
+
+  it('indexes an agentic templated report under its title and report id', async () => {
+    await writeRun(
+      'templated-run',
+      {
+        runId: 'templated-run',
+        runKind: 'agentic',
+        workflowName: 'research',
+        status: 'completed',
+        startedAt: '2026-07-31T10:00:00.000Z',
+        endedAt: '2026-07-31T10:00:02.000Z',
+        agent: { provider: 'fixture' },
+      },
+      {
+        report_id: 'report-1',
+        title: 'Weekly executive update',
+        metadata: { usage: { cost_usd: 0.12 } },
+      },
+      'document.json',
+    );
+    const store = new SqliteHistoryStore({ db, runsDir });
+    expect((await store.rebuildFromRuns()).isOk).toBe(true);
+    const listed = await store.list();
+    if (!listed.isOk) throw new Error('list failed');
+    expect(listed.value[0]).toMatchObject({
+      taskType: 'research',
+      intentText: 'Weekly executive update',
+      briefId: 'report-1',
+      costUsd: 0.12,
+      provider: 'fixture',
+    });
   });
 
   it('records a single completed run from its run dir (record-on-completion path)', async () => {

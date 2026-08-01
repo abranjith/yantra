@@ -78,6 +78,15 @@ export function workflowsRoot(): string {
 }
 
 /**
+ * Returns the root directory for saved Markdown report templates.
+ *
+ * @example templatesRoot() // â†’ "/home/user/.local/share/yantra/templates"
+ */
+export function templatesRoot(): string {
+  return join(dataDir(), 'templates');
+}
+
+/**
  * Returns the directory where Yantra configuration files live.
  *
  * Honors XDG_CONFIG_HOME on Linux/macOS; uses %APPDATA%/yantra on Windows.

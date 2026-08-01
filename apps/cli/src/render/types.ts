@@ -9,7 +9,7 @@
  * {@link JSONRenderer}) live in adjacent modules.
  */
 
-import type { Brief, TaskEvent } from '@yantra/protocol';
+import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 import type { GlobalFlags } from '../global-flags.js';
 
@@ -165,6 +165,12 @@ export interface OutputRenderer {
    * best-effort artifact write failed.
    */
   renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void;
+  /** Render one runtime-filled report template in the selected output format. */
+  renderTemplatedReport(
+    report: TemplatedReport,
+    artifacts: BriefArtifactPaths | null,
+    opts: ConnectorRenderOpts,
+  ): void;
   /** Streamed per-event rendering. Terminal: one-line tick. JSON: JSON Line. */
   renderEvent(event: TaskEvent, opts: ConnectorRenderOpts): void;
 }

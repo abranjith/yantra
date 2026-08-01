@@ -1,11 +1,16 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import { parseTemplate } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
 import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
-import { COMMAND_TASK_PROFILES, resolveCommandTaskProfile } from '../../src/runtime/profiles.js';
+import {
+  COMMAND_TASK_PROFILES,
+  promptAddendumFor,
+  resolveCommandTaskProfile,
+} from '../../src/runtime/profiles.js';
 import { buildServices } from '../adapters/pi/tools/test-support.js';
 
 describe('@no-llm command task profiles', () => {
@@ -69,6 +74,23 @@ describe('@no-llm command task profiles', () => {
     for (const profile of Object.values(COMMAND_TASK_PROFILES)) {
       expect(profile.promptAddendum).not.toMatch(/\b(schema|typebox|parameters)\b/i);
       expect(profile.promptAddendum).toMatch(/publish/i);
+    }
+  });
+
+  it('derives template completion addenda for all profiles without changing the defaults', () => {
+    const parsed = parseTemplate(
+      '# {{ title | text }}\n\n## Summary\n{{ summary }}\n\n{{ sources }}',
+    );
+    if (!parsed.isOk) throw new Error('fixture template did not parse');
+
+    for (const profile of Object.values(COMMAND_TASK_PROFILES)) {
+      expect(promptAddendumFor(profile, null)).toBe(profile.promptAddendum);
+      const templated = promptAddendumFor(profile, parsed.value);
+      expect(templated).toContain('"title"');
+      expect(templated).toContain('"summary"');
+      expect(templated).not.toContain('"brief"');
+      expect(templated).not.toMatch(/overview/i);
+      expect(templated).toMatch(/Yantra renders/i);
     }
   });
 

@@ -27,7 +27,7 @@ import type {
   UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
-import type { Brief, BriefValidationError, Result } from '@yantra/protocol';
+import type { Brief, Result, TemplateManifest, TemplatedReport } from '@yantra/protocol';
 
 import type { BudgetTracker } from './budget.js';
 import type { WorkflowToolMode } from './profiles.js';
@@ -140,7 +140,17 @@ export interface PublishToolDeps {
   readonly publish: (
     brief: unknown,
     options?: { readonly assembledByRuntime?: boolean },
-  ) => Promise<Result<PublishOutcome, BriefValidationError>>;
+  ) => Promise<Result<PublishOutcome, PublishValidationError>>;
+}
+
+/** Shared structural validation error consumed by the publication retry loop. */
+export interface PublishValidationError extends Error {
+  /** Pointer-addressed issues safe to return to the model for correction. */
+  readonly issues: readonly {
+    readonly path: readonly (string | number)[];
+    readonly pointer: string;
+    readonly message: string;
+  }[];
 }
 
 /** Input for one nested deterministic workflow run. */
@@ -207,9 +217,9 @@ export interface BrowserToolDeps {
 
 /** Successful publication artifacts. */
 export interface PublishOutcome {
-  /** The validated, persisted Brief. */
-  readonly brief: Brief;
-  /** Absolute path to the rendered `brief.html`. */
+  /** The validated persisted document; field name retained for compatibility. */
+  readonly brief: Brief | TemplatedReport;
+  /** Absolute path to the rendered `brief.html` or `document.html`. */
   readonly htmlPath: string;
   /** One-line human summary for the model-visible result. */
   readonly summary: string;
@@ -346,6 +356,8 @@ export interface RunServices {
   readonly runId: string;
   /** Absolute path of the owning run directory. */
   readonly runDir: string;
+  /** Active report-template manifest, or null for the default Brief path. */
+  readonly template: TemplateManifest | null;
   /** Run budget accountant (wall-clock, calls, bytes, hosts). */
   readonly budgets: BudgetTracker;
   /** The single LLM-bound sanitizer chokepoint. */

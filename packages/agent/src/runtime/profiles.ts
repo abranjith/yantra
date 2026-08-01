@@ -1,3 +1,5 @@
+import type { TemplateManifest } from '@yantra/protocol';
+
 import type { AgentBudgetConfig } from './orchestrator.js';
 
 /** Commands that can start an agentic Yantra session. */
@@ -84,6 +86,35 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     briefKind: 'task',
   },
 };
+
+/**
+ * Resolve the per-run completion addendum for the active output contract.
+ *
+ * The stored profile strings remain the compatibility-locked Brief prompts.
+ * Template mode replaces only the tool mechanics with manifest-derived slot
+ * names; the authoritative system prompt remains output-shape agnostic.
+ */
+export function promptAddendumFor(
+  profile: CommandTaskProfile,
+  manifest: TemplateManifest | null,
+): string {
+  if (manifest === null) return profile.promptAddendum;
+  const slots = manifest.slots
+    .filter((slot) => slot.kind !== 'sources')
+    .map((slot) => `"${slot.key}"`)
+    .join(', ');
+  const researchDirection =
+    profile.command === 'ask'
+      ? 'Answer the question directly from the fetched evidence.'
+      : profile.command === 'research'
+        ? 'Research broadly, use independent sources, and cover material gaps before publishing.'
+        : 'Complete the requested task safely and verify the outcome.';
+  return (
+    `${researchDirection} Finish by calling result_publish with a report object containing ` +
+    `these required template slots: ${slots}. Yantra renders the surrounding Markdown document ` +
+    'and attaches every page you fetched as sources automatically; supply slot values only.'
+  );
+}
 
 /**
  * Returns a configured profile. Environment keys are the CLI configuration

@@ -11,6 +11,7 @@ export * from './extraction/index.js';
 export * from './synthesis/index.js';
 export * from './research/index.js';
 export * from './brief/index.js';
+export * from './report-template/index.js';
 export * from './index-db/index.js';
 export * from './profile/index.js';
 export * from './discovery/index.js';

@@ -29,6 +29,7 @@ export {
   DEFAULT_AGENT_BUDGETS,
   runAgenticTask,
   type AgentBudgetConfig,
+  type ActiveReportTemplate,
   type AgenticRunEnvironment,
   type AgenticRunStore,
   type AgenticTaskDependencies,
@@ -36,6 +37,7 @@ export {
 } from './orchestrator.js';
 export {
   COMMAND_TASK_PROFILES,
+  promptAddendumFor,
   resolveCommandTaskProfile,
   type AgenticCommand,
   type BriefKind,
@@ -97,6 +99,7 @@ export {
   type FetchToolDeps,
   type PublishOutcome,
   type PublishToolDeps,
+  type PublishValidationError,
   type RunServices,
   type ScriptExecutorLike,
   type ScriptRunOutcome,
