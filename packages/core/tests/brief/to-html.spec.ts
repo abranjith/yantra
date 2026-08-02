@@ -195,4 +195,98 @@ describe('@no-llm briefToHtml', () => {
     expect(html).toContain('[9]');
     expect(html).not.toContain('href="#src-9"');
   });
+
+  it('renders a code block in a section as readable code, not entity text', () => {
+    const doc = new JSDOM(
+      briefToHtml(
+        makeBrief({
+          sections: [
+            { heading: 'Snippet', body_md: '```ts\nif (a < b && c) f("x");\n```', citations: [] },
+          ],
+        }),
+      ),
+    ).window.document;
+
+    expect(doc.querySelector('pre > code')?.textContent?.trim()).toBe('if (a < b && c) f("x");');
+    expect(doc.querySelectorAll('script').length).toBe(0);
+  });
+
+  it('scopes every table in a scroll container so wide output cannot stretch the page', () => {
+    // canonicalBrief carries the comparison facet; the section adds a GFM table,
+    // so both table paths — hand-built and Markdown-rendered — are covered.
+    const doc = new JSDOM(
+      briefToHtml({
+        ...canonicalBrief,
+        sections: [
+          { heading: 'Grid', body_md: '| A | B |\n| --- | --- |\n| 1 | 2 |', citations: [] },
+        ],
+      }),
+    ).window.document;
+
+    const tables = Array.from(doc.querySelectorAll('table'));
+    expect(tables.length).toBe(2);
+    for (const table of tables) {
+      expect(table.parentElement?.className).toBe('table-wrap');
+    }
+    expect(doc.querySelector('.table-wrap > table.comparison')).not.toBeNull();
+  });
+
+  it('codes comparison booleans and blanks so a cell is readable at a glance', () => {
+    const html = briefToHtml(
+      makeBrief({
+        facets: {
+          comparison: {
+            columns: ['Retailer', 'In stock', 'Note'],
+            rows: [['Amazon', true, null] as const, ['Best Buy', false, 'backorder'] as const].map(
+              (row) => [...row],
+            ),
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain('<span class="yes">✓</span>');
+    expect(html).toContain('<span class="no">✗</span>');
+    expect(html).toContain('<span class="nil">—</span>');
+  });
+
+  it('marks an editorial finding with a chip instead of inline parentheses', () => {
+    const html = briefToHtml(
+      makeBrief({
+        key_findings: [{ text: 'A judgement call.', citations: [], editorial: true, facet: null }],
+      }),
+    );
+    expect(html).toContain('<em class="editorial">editorial</em>');
+  });
+
+  it('renders source timestamps as readable dates that keep the exact instant', () => {
+    const html = briefToHtml(canonicalBrief);
+    expect(html).toContain('<time datetime="2026-07-01T09:00:00.000Z">2026-07-01</time>');
+    expect(html).toContain('<span class="src-host">amazon.com</span>');
+  });
+
+  it('colour-codes notices by severity and humanizes the kind', () => {
+    const html = briefToHtml(
+      makeBrief({
+        notices: [
+          { kind: 'blocked', source: 'a.test', reason: 'robots.txt disallows' },
+          { kind: 'fetch_failed', source: 'b.test', reason: 'timed out' },
+          { kind: 'other', source: 'c.test', reason: 'note' },
+        ],
+      }),
+    );
+
+    expect(html).toContain('<li class="notice--danger">');
+    expect(html).toContain('<li class="notice--warn">');
+    expect(html).toContain('<li class="notice--info">');
+    expect(html).toContain('<strong class="notice-kind">fetch failed</strong>');
+    expect(html).not.toContain('fetch_failed');
+  });
+
+  it('gives every citation target a scroll anchor that resolves in the document', () => {
+    const doc = new JSDOM(briefToHtml(canonicalBrief)).window.document;
+    // The `:target` highlight is what makes a citation click legible.
+    expect(doc.querySelector('style')?.textContent).toContain('ol.sources li:target');
+    expect(doc.getElementById('src-1')?.tagName).toBe('LI');
+  });
 });

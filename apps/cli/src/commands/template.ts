@@ -9,6 +9,7 @@ import {
   normalizeTemplateSlug,
   normalizeTemplateTags,
   parseTemplate,
+  templateBody,
   templatesRoot,
   type TemplateParseError,
   type TemplateSummary,
@@ -88,6 +89,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
             slots,
           });
         } else {
+          const documentGuidance = renderDocumentGuidance(parsed.value);
+          if (documentGuidance !== null) resolved.stdout.write(`${documentGuidance}\n`);
           resolved.stdout.write(`${renderSlotTable(slots)}\n`);
         }
       } catch (error) {
@@ -142,7 +145,13 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
           options.description === undefined
             ? parsed.value.description
             : options.description.replace(/\s+/gu, ' ').trim() || null;
-        const normalized = serializeTemplate(name, description, tags, parsed.value.body);
+        const normalized = serializeTemplate(
+          name,
+          description,
+          parsed.value.guidance,
+          tags,
+          templateBody(text!),
+        );
 
         try {
           const savedPath = await resolved.store.save(name, normalized, {
@@ -231,7 +240,10 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
       } else {
         resolved.stdout.write(text);
         if (!text.endsWith('\n')) resolved.stdout.write('\n');
-        resolved.stdout.write(`\n${renderSlotTable(slots)}\n`);
+        resolved.stdout.write('\n');
+        const documentGuidance = renderDocumentGuidance(parsed.value);
+        if (documentGuidance !== null) resolved.stdout.write(`${documentGuidance}\n`);
+        resolved.stdout.write(`${renderSlotTable(slots)}\n`);
       }
     });
 
@@ -271,10 +283,12 @@ function starterTemplate(name: string, tags: readonly string[]): string {
   return serializeTemplate(
     name,
     'Describe the purpose of this report.',
+    'Write for a busy reader and stay grounded in the collected sources.',
     tags,
     `# {{ title | text }}
 
 ## Summary
+<!-- guidance: Lead with the main result and explain why it matters. -->
 {{ summary | markdown, max_words=200 }}
 
 ## Highlights
@@ -292,14 +306,19 @@ function starterTemplate(name: string, tags: readonly string[]): string {
 function serializeTemplate(
   name: string,
   description: string | null,
+  guidance: string | null,
   tags: readonly string[],
   body: string,
 ): string {
-  const frontmatter = stringify({
-    name,
-    ...(description === null ? {} : { description }),
-    tags: [...tags],
-  }).trimEnd();
+  const frontmatter = stringify(
+    {
+      name,
+      ...(description === null ? {} : { description }),
+      ...(guidance === null ? {} : { guidance }),
+      tags: [...tags],
+    },
+    { lineWidth: 0 },
+  ).trimEnd();
   return `---\n${frontmatter}\n---\n${body.replace(/^\r?\n/u, '')}`;
 }
 
@@ -309,6 +328,7 @@ interface SlotRow {
   readonly heading: string;
   readonly constraints: TemplateSlot['constraints'];
   readonly columns: TemplateSlot['columns'];
+  readonly guidance: string | null;
 }
 
 function slotRows(manifest: TemplateManifest): SlotRow[] {
@@ -318,12 +338,20 @@ function slotRows(manifest: TemplateManifest): SlotRow[] {
     heading: slot.headingPath.join(' > ') || '(document root)',
     constraints: slot.constraints,
     columns: slot.columns,
+    guidance: slot.guidance,
   }));
 }
 
 function renderSlotTable(rows: ReturnType<typeof slotRows>): string {
-  const headings = ['KEY', 'KIND', 'HEADING', 'CONSTRAINTS'];
-  const values = rows.map((row) => [row.key, row.kind, row.heading, formatConstraints(row)]);
+  const showGuidance = rows.some((row) => row.guidance !== null);
+  const headings = ['KEY', 'KIND', 'HEADING', 'CONSTRAINTS', ...(showGuidance ? ['GUIDANCE'] : [])];
+  const values = rows.map((row) => [
+    row.key,
+    row.kind,
+    row.heading,
+    formatConstraints(row),
+    ...(showGuidance ? [formatGuidance(row.guidance)] : []),
+  ]);
   const widths = headings.map((heading, index) =>
     Math.max(heading.length, ...values.map((row) => row[index]?.length ?? 0)),
   );
@@ -337,6 +365,21 @@ function renderSlotTable(rows: ReturnType<typeof slotRows>): string {
     .join('\n');
 }
 
+function formatGuidance(guidance: string | null): string {
+  return guidance === null ? '-' : truncateCodePoints(guidance, 32);
+}
+
+function renderDocumentGuidance(manifest: TemplateManifest): string | null {
+  return manifest.guidance === null
+    ? null
+    : `GUIDANCE (document): ${truncateCodePoints(manifest.guidance, 72)}`;
+}
+
+function truncateCodePoints(text: string, maximum: number): string {
+  const characters = [...text];
+  return characters.length <= maximum ? text : `${characters.slice(0, maximum - 1).join('')}…`;
+}
+
 function formatConstraints(slot: Pick<SlotRow, 'constraints' | 'columns'>): string {
   const values = Object.entries(slot.constraints).map(([key, value]) => `${key}=${value}`);
   if (slot.columns !== null) values.unshift(`columns=${slot.columns.join('|')}`);
@@ -347,6 +390,7 @@ function manifestMetadata(manifest: TemplateManifest): Record<string, unknown> {
   return {
     name: manifest.name,
     description: manifest.description,
+    guidance: manifest.guidance,
     tags: manifest.tags,
     hash: manifest.hash,
     slotCount: manifest.slots.length,

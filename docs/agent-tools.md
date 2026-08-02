@@ -125,8 +125,22 @@ Budgets are configuration, not prompt promises (`runtime/budget.ts`,
 | `maxNavigations`    | 30                                                 | Browser navigations (FEAT-025).                                                                                                                                                                                         |
 | `maxHosts`          | 20                                                 | Distinct outbound hosts.                                                                                                                                                                                                |
 
-Exhaustion returns a typed `BUDGET_EXHAUSTED` decision that the orchestrator maps
-to a clean run abort.
+Exhaustion returns a typed `BUDGET_EXHAUSTED` decision carrying the specific
+limit that tripped.
+
+**A budget bounds tool use, not the run.** Two rules follow from that, and both
+exist because the alternative throws away completed work:
+
+- **`result_publish` is exempt from the run-wide cumulative caps**
+  (`totalToolCalls`, `maxBytesPerRun`). It is the run's only exit, so charging it
+  against the pool the exploration tools drain lets a fully-researched run be
+  denied its own publication. Its `perToolCalls` cap still bounds the
+  correction-retry loop, and the wall clock still applies.
+- **Only `wall-clock` exhaustion aborts the run.** Every count-based cap
+  (`total-calls`, `per-tool-calls`, `cumulative-bytes`, `navigations`, `hosts`)
+  fails that call and leaves the session alive, so the agent can publish what it
+  already gathered. The denial message says exactly that, and the repeated-failure
+  circuit breaker still stops an agent that ignores it.
 
 ## Outbound URL policy (`web_fetch`, `browser_navigate`)
 

@@ -12,12 +12,18 @@ A template is a Markdown file with optional YAML frontmatter:
 ---
 name: exec-brief
 description: Weekly executive brief
+guidance: British English. CFO audience. Never speculate beyond the sources.
 tags: [work, weekly]
 ---
 
 # {{ title | text }}
 
 ## Executive Summary
+
+<!-- guidance:
+Lead with the headline revenue number, then explain the driver
+in one sentence. Name the segment, not the region.
+-->
 
 {{ summary | markdown, max_words=200 }}
 
@@ -35,6 +41,8 @@ tags: [work, weekly]
 ```
 
 Names and tags are stored as lowercase slugs. Tags are deduplicated and sorted.
+`description` is for humans browsing `template list`; `guidance` is for the model
+writing the report. Both are optional.
 The `sources` key is reserved: Yantra fills it from the evidence ledger, and the
 model cannot supply or replace source URLs.
 
@@ -92,6 +100,9 @@ yantra template remove exec-brief
 
 Every subcommand accepts `--json`. `save` refuses an existing name unless
 `--force` is passed, and an invalid input file is never copied into the library.
+When guidance is present, human `lint` and `show` output truncates slot guidance
+to 32 code points and the document note to about 72. Their `--json` envelopes
+always carry the complete, untruncated guidance text.
 
 ## Constraints
 
@@ -129,6 +140,61 @@ Slot keys start with a lowercase letter, contain only lowercase letters,
 digits, and underscores, and are at most 48 characters. Every key is unique.
 Templates need at least one slot. `sources` may appear once and cannot be given
 another kind; a table needs at least one named column.
+
+The parser applies the same rules throughout the Markdown body. It does not
+special-case fenced code blocks: headings, placeholders, and guidance directives
+inside a fence are parsed as real template syntax. Ordinary HTML comments such
+as `<!-- TODO -->` remain in the renderable body.
+
+## Author guidance
+
+Guidance gives the model advisory writing instructions without changing the
+rendered structure or adding runtime validation. Use numeric constraints when a
+length or item count must be enforced.
+
+There are two forms:
+
+- Frontmatter `guidance:` applies once to the whole document. It is useful for
+  audience, voice, locale, and evidence rules.
+- A whole-line `<!-- guidance: ... -->` directive applies to the next
+  placeholder. It can be single-line or span several lines as in the example
+  above. Blank lines and headings between the directive and slot do not break
+  the binding; when a line has several placeholders, only the first receives it.
+
+A directive must occupy its own complete line or lines. Only horizontal
+whitespace may precede `<!--` or follow the closing `-->`. A directive cannot
+bind to the engine-owned `sources` slot; use frontmatter guidance for a note that
+concerns the evidence ledger or the document as a whole.
+
+Yantra collapses whitespace before sending guidance to the model. Slot guidance
+is limited to 500 Unicode code points and document guidance to 1,000. Guidance
+cannot contain `{{` or `}}`, or raw ANSI escape bytes. These rules prevent
+guidance from looking like an unresolved placeholder or injecting terminal
+control data into the generated model schema.
+
+Guidance is never report content. The parser removes directive lines before it
+stores the renderable body, and only the stripped body reaches the Markdown and
+HTML renderers. Editing guidance still changes the template provenance hash.
+
+`template lint` reports guidance errors with these messages (the character count
+`N` is the normalized Unicode code-point length):
+
+- `guidance directive is not followed by a slot; move it above a model-filled slot or use frontmatter guidance for document-level notes`
+- `guidance cannot be attached to the reserved sources slot; use frontmatter guidance for document-level notes`
+- `unterminated guidance directive: expected "-->"`
+- `guidance directive must end its line at "-->"`
+- `guidance directives must occupy their own line(s)`
+- `guidance text must not be empty`
+- `guidance exceeds the 500 character limit (N)` for slot guidance, or
+  `guidance exceeds the 1000 character limit (N)` for document guidance
+- `guidance must not contain template placeholder syntax ("{{" or "}}")`
+- `guidance must not contain raw ANSI escape bytes`
+- `a second guidance directive precedes the same slot (first on line N)`
+- `frontmatter guidance must be a string`
+
+Because fenced code blocks are not a separate parser mode, a guidance directive
+inside one is also stripped and binds positionally. Avoid template-looking
+syntax in examples that should render literally.
 
 ## Using a template
 
@@ -181,6 +247,15 @@ The model returns slot values, not a rewritten Markdown document. Yantra keeps
 the authored headings and labels stable, inserts lists and tables
 deterministically, attaches the engine-owned evidence ledger, validates citation
 numbers and URLs, and rejects leftover placeholders or terminal control bytes.
+Author guidance directives are removed at parse time, so their text is
+structurally absent from both `document.md` and `document.html`.
 HTML is escaped before Markdown parsing, allows only HTTP(S) links, and loads no
 remote resources. This division makes structural drift unrepresentable and
 prevents a model from replacing the evidence section or the surrounding layout.
+
+`document.html` uses the same self-contained theme as `brief.html`: no scripts,
+no remote fonts or images, one inlined stylesheet that adapts to the reader's
+light or dark scheme, and a print stylesheet that expands source links to their
+full URLs. Blockquotes, fenced code, and multi-line table cells render as
+authored. When the template body opens without a heading, the report title is
+promoted to an `<h1>` so the page is not untitled on screen.

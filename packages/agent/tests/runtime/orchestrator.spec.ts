@@ -659,7 +659,20 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
   it.each([
     [
-      'tool-call/host/navigation/byte cap',
+      'wall clock',
+      event('tool_finished', {
+        callId: 'budget',
+        tool: 'web_fetch',
+        output: {
+          status: 'error',
+          error_code: 'BUDGET_EXHAUSTED',
+          details: { budget_limit: 'wall-clock' },
+        },
+        isError: true,
+      }),
+    ],
+    [
+      'an unreported budget limit (fail safe)',
       event('tool_finished', {
         callId: 'budget',
         tool: 'web_fetch',
@@ -695,6 +708,87 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(result.outcome.kind).toBe('budget_exhausted');
     expect(provider.sessions[0]?.abortCount).toBe(1);
     expect(provider.sessions[0]?.closeCount).toBe(1);
+  });
+
+  it.each(['total-calls', 'per-tool-calls', 'cumulative-bytes', 'navigations', 'hosts'])(
+    'keeps the run alive so it can still publish when the %s budget is spent',
+    async (limit) => {
+      // Regression (run 20260801T222532Z-research-b99efc18): a spent tool budget
+      // aborted the whole run, so a run holding twelve successfully fetched
+      // sources was thrown away instead of publishing them. A budget bounds tool
+      // use; only the wall clock ends the run itself.
+      const provider = new FakeAgentProvider({
+        eventsOnRun: [
+          event('tool_finished', {
+            callId: 'budget',
+            tool: 'web_fetch',
+            output: {
+              status: 'error',
+              error_code: 'BUDGET_EXHAUSTED',
+              details: { budget_limit: limit },
+            },
+            isError: true,
+          }),
+        ],
+        runResult: completed,
+      });
+
+      const result = await fixture({ provider });
+
+      expect(result.outcome.kind).not.toBe('budget_exhausted');
+      expect(provider.sessions[0]?.abortCount).toBe(0);
+      // The run survives to the completion nudge — its chance to publish.
+      expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+    },
+  );
+
+  it('publishes after exhausting the total tool-call budget on evidence gathering', async () => {
+    // The full reported failure, end to end: every total tool call is spent on
+    // successful web_fetch calls, and the terminal publication still lands.
+    const budgetDenial = (callId: string): AgentEvent =>
+      event('tool_finished', {
+        callId,
+        tool: 'web_fetch',
+        output: {
+          status: 'error',
+          error_code: 'BUDGET_EXHAUSTED',
+          details: { budget_limit: 'total-calls' },
+        },
+        isError: true,
+      });
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [budgetDenial('c1')],
+        [
+          event('tool_finished', {
+            callId: 'publish',
+            tool: 'result_publish',
+            output: { status: 'ok', details: { brief_id: 'fixture' } },
+            isError: false,
+          }),
+        ],
+      ],
+      resultsByRun: [completed, completed],
+      onRun: async (_prompt, runIndex, session) => {
+        if (runIndex !== 1) return;
+        const runDir = join(session.logPath, '..', '..');
+        await mkdir(runDir, { recursive: true });
+        const brief = createBrief({
+          task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          title: 'Published despite a spent budget',
+          overview: 'The evidence gathered before the budget ran out was published.',
+        });
+        await Promise.all([
+          writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8'),
+          writeFile(join(runDir, 'brief.md'), '# Published\n', 'utf8'),
+          writeFile(join(runDir, 'brief.html'), '<h1>Published</h1>', 'utf8'),
+        ]);
+      },
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome.kind).toBe('published');
   });
 
   it('stops with a diagnostic failure after repeated identical tool failures (circuit breaker)', async () => {

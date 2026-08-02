@@ -3,9 +3,13 @@
  *
  * Grammar: an optional YAML frontmatter block is followed by Markdown carrying
  * `{{ key }}` or `{{ key | kind, constraint=value }}` placeholders. Table kinds
- * use `table(Column A, Column B)`. While scanning, the parser records the
- * enclosing ATX heading path because that path becomes the model's only
- * semantic description of each otherwise-arbitrary slot key.
+ * use `table(Column A, Column B)`. A whole-line `<!-- guidance: ... -->`
+ * directive binds to the next placeholder, even across blank lines and
+ * headings. Directives are stripped during parsing so author guidance cannot
+ * leak into rendered output. Document-level guidance is declared separately in
+ * YAML frontmatter. While scanning, the parser records the enclosing ATX
+ * heading path because that path becomes the model's only semantic description
+ * of each otherwise-arbitrary slot key.
  */
 
 import { createHash } from 'node:crypto';
@@ -25,9 +29,15 @@ export interface TemplateParseError {
 interface ParsedFrontmatter {
   readonly name: string | null;
   readonly description: string | null;
+  readonly guidance: string | null;
   readonly tags: readonly string[];
   readonly body: string;
   readonly bodyStartLine: number;
+}
+
+interface PendingGuidance {
+  readonly text: string;
+  readonly line: number;
 }
 
 const TEMPLATE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -43,6 +53,8 @@ const CONSTRAINT_KEYS = new Map<string, ConstraintField>([
   ['min', 'min'],
   ['max', 'max'],
 ]);
+const MAX_GUIDANCE_CHARS = 500;
+const MAX_DOCUMENT_GUIDANCE_CHARS = 1000;
 
 /**
  * Normalize a user-facing name or tag to Yantra's lowercase slug form.
@@ -69,6 +81,67 @@ export function normalizeTemplateTags(values: readonly string[]): string[] {
 }
 
 /**
+ * Collapse author guidance to one model-facing line.
+ *
+ * @param raw Guidance text collected from one directive.
+ * @returns Trimmed guidance with every whitespace run collapsed to one space.
+ */
+function normalizeGuidance(raw: string): string {
+  return raw.replace(/\s+/gu, ' ').trim();
+}
+
+/**
+ * Append every safety and size violation for normalized author guidance.
+ *
+ * @param text Normalized guidance text.
+ * @param line One-based source line where the guidance begins.
+ * @param limit Maximum number of Unicode code points.
+ * @param errors Mutable parser error accumulator.
+ */
+function checkGuidance(
+  text: string,
+  line: number,
+  limit: number,
+  errors: TemplateParseError[],
+): void {
+  if (text.length === 0) {
+    errors.push({ line, message: 'guidance text must not be empty' });
+  }
+  const length = [...text].length;
+  if (length > limit) {
+    errors.push({ line, message: `guidance exceeds the ${limit} character limit (${length})` });
+  }
+  if (/\{\{|\}\}/u.test(text)) {
+    errors.push({
+      line,
+      message: 'guidance must not contain template placeholder syntax ("{{" or "}}")',
+    });
+  }
+  // eslint-disable-next-line no-control-regex
+  if (/[\u001b\u009b]/u.test(text)) {
+    errors.push({ line, message: 'guidance must not contain raw ANSI escape bytes' });
+  }
+}
+
+function queueGuidance(
+  raw: string,
+  line: number,
+  current: PendingGuidance | null,
+  errors: TemplateParseError[],
+): PendingGuidance {
+  const text = normalizeGuidance(raw);
+  checkGuidance(text, line, MAX_GUIDANCE_CHARS, errors);
+  if (current !== null) {
+    errors.push({
+      line,
+      message: `a second guidance directive precedes the same slot (first on line ${current.line})`,
+    });
+    return current;
+  }
+  return { text, line };
+}
+
+/**
  * Parse raw Markdown template text into a validated slot manifest.
  *
  * This function performs no I/O and never throws. All YAML, grammar, duplicate,
@@ -85,14 +158,63 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
   const slots: TemplateSlot[] = [];
   const seen = new Map<string, number>();
   const headings: string[] = [];
+  const rawBody = frontmatter.value.body;
+  const parts: string[] = [];
+  let bodyOffset = 0;
+  let open: { text: string[]; line: number } | null = null;
+  let pending: PendingGuidance | null = null;
 
-  for (const line of sourceLines(frontmatter.value.body)) {
+  for (const line of sourceLines(rawBody)) {
     const lineNumber = frontmatter.value.bodyStartLine + line.index;
+
+    if (open !== null) {
+      const closing = line.content.indexOf('-->');
+      if (closing < 0) {
+        open.text.push(line.content);
+        continue;
+      }
+      open.text.push(line.content.slice(0, closing));
+      if (line.content.slice(closing + 3).trim().length > 0) {
+        errors.push({ line: lineNumber, message: 'guidance directive must end its line at "-->"' });
+      }
+      pending = queueGuidance(open.text.join('\n'), open.line, pending, errors);
+      open = null;
+      continue;
+    }
+
+    const directive = /^[ \t]*<!--[ \t]*guidance[ \t]*:/iu.exec(line.content);
+    if (directive !== null) {
+      const remainder = line.content.slice(directive[0].length);
+      const closing = remainder.indexOf('-->');
+      if (closing < 0) {
+        open = { text: [remainder], line: lineNumber };
+      } else {
+        if (remainder.slice(closing + 3).trim().length > 0) {
+          errors.push({
+            line: lineNumber,
+            message: 'guidance directive must end its line at "-->"',
+          });
+        }
+        pending = queueGuidance(remainder.slice(0, closing), lineNumber, pending, errors);
+      }
+      continue;
+    }
+
+    if (/<!--[ \t]*guidance\b/iu.test(line.content)) {
+      errors.push({
+        line: lineNumber,
+        message: 'guidance directives must occupy their own line(s)',
+      });
+    }
+
+    parts.push(rawBody.slice(line.start, line.end));
     const heading = /^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/u.exec(line.content);
     if (heading !== null) {
       const depth = heading[1]?.length ?? 1;
-      const staticHeading = (heading[2] ?? '')
-        .replace(/\{\{.*?\}\}/gu, '')
+      const headingWithoutSlots = (heading[2] ?? '').replace(/\{\{.*?\}\}/gu, '');
+      const staticHeading = headingWithoutSlots
+        .replaceAll('\u001b', '')
+        .replaceAll('\u009b', '')
         .replace(/\s+/gu, ' ')
         .trim();
       headings.length = Math.min(headings.length, depth - 1);
@@ -104,6 +226,8 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
     for (const match of line.content.matchAll(placeholder)) {
       const index = match.index ?? 0;
       matchedRanges.push({ start: index, end: index + match[0].length });
+      const bound = pending;
+      pending = null;
       const parsed = parseSlot(match[1] ?? '', lineNumber, headings.filter(Boolean));
       if (!parsed.isOk) {
         errors.push(...parsed.error);
@@ -118,7 +242,18 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
         continue;
       }
       seen.set(parsed.value.key, lineNumber);
-      slots.push({ ...parsed.value, offset: line.start + index });
+      if (parsed.value.key === 'sources' && bound !== null) {
+        errors.push({
+          line: bound.line,
+          message:
+            'guidance cannot be attached to the reserved sources slot; use frontmatter guidance for document-level notes',
+        });
+      }
+      slots.push({
+        ...parsed.value,
+        guidance: parsed.value.key === 'sources' ? null : (bound?.text ?? null),
+        offset: bodyOffset + index,
+      });
     }
 
     const unmatched = maskRanges(line.content, matchedRanges);
@@ -133,6 +268,21 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
         message: 'malformed placeholder: closing "}}" has no opening',
       });
     }
+    bodyOffset += line.end - line.start;
+  }
+
+  if (open !== null) {
+    errors.push({
+      line: open.line,
+      message: 'unterminated guidance directive: expected "-->"',
+    });
+  }
+  if (pending !== null) {
+    errors.push({
+      line: pending.line,
+      message:
+        'guidance directive is not followed by a slot; move it above a model-filled slot or use frontmatter guidance for document-level notes',
+    });
   }
 
   if (slots.length === 0) {
@@ -147,9 +297,10 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
   const candidate = {
     name: frontmatter.value.name,
     description: frontmatter.value.description,
+    guidance: frontmatter.value.guidance,
     tags: [...frontmatter.value.tags],
     slots,
-    body: frontmatter.value.body,
+    body: parts.join(''),
     hash: createHash('sha256').update(text, 'utf8').digest('hex'),
   };
   const validated = TemplateManifest.safeParse(candidate);
@@ -162,10 +313,32 @@ export function parseTemplate(text: string): Result<TemplateManifest, TemplatePa
   );
 }
 
+/**
+ * Return the raw Markdown body exactly as authored below optional frontmatter.
+ *
+ * This exists because `manifest.body` has guidance directives stripped for
+ * safe rendering and therefore must never be written back to template storage.
+ * Invalid or absent frontmatter leaves the complete input unchanged.
+ *
+ * @param text Complete raw template file contents.
+ * @returns The raw body below valid frontmatter, or the original text.
+ */
+export function templateBody(text: string): string {
+  const frontmatter = parseFrontmatter(text);
+  return frontmatter.isOk ? frontmatter.value.body : text;
+}
+
 function parseFrontmatter(text: string): Result<ParsedFrontmatter, TemplateParseError[]> {
   const lines = sourceLines(text);
   if (lines.length === 0 || lines[0]?.content.replace(/^\uFEFF/u, '').trim() !== '---') {
-    return ok({ name: null, description: null, tags: [], body: text, bodyStartLine: 1 });
+    return ok({
+      name: null,
+      description: null,
+      guidance: null,
+      tags: [],
+      body: text,
+      bodyStartLine: 1,
+    });
   }
 
   const closingIndex = lines.slice(1).findIndex((line) => line.content.trim() === '---');
@@ -222,6 +395,19 @@ function parseFrontmatter(text: string): Result<ParsedFrontmatter, TemplateParse
     }
   }
 
+  const rawGuidance = record?.guidance;
+  let guidance: string | null = null;
+  if (rawGuidance !== undefined && rawGuidance !== null) {
+    if (typeof rawGuidance !== 'string') {
+      errors.push({ line: 2, message: 'frontmatter guidance must be a string' });
+    } else {
+      guidance = normalizeGuidance(rawGuidance) || null;
+      if (guidance !== null) {
+        checkGuidance(guidance, 2, MAX_DOCUMENT_GUIDANCE_CHARS, errors);
+      }
+    }
+  }
+
   const rawTags = record?.tags;
   let tags: string[] = [];
   if (rawTags !== undefined && rawTags !== null) {
@@ -246,6 +432,7 @@ function parseFrontmatter(text: string): Result<ParsedFrontmatter, TemplateParse
   return ok({
     name,
     description,
+    guidance,
     tags,
     body: text.slice(closingLine.end),
     bodyStartLine: closing + 2,
@@ -256,7 +443,7 @@ function parseSlot(
   raw: string,
   line: number,
   headingPath: readonly string[],
-): Result<Omit<TemplateSlot, 'offset'>, TemplateParseError[]> {
+): Result<Omit<TemplateSlot, 'offset' | 'guidance'>, TemplateParseError[]> {
   const pieces = raw.split('|');
   if (pieces.length > 2) {
     return err([{ line, message: 'slot syntax may contain only one "|" qualifier separator' }]);

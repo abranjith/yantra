@@ -11,5 +11,8 @@ packages/protocol/generated/
 # Intentionally malformed fixtures for extraction tests.
 packages/core/tests/extraction/__fixtures__/malformed.html
 
+# Golden template twin preserves directive placement for byte-identical rendering.
+packages/core/tests/report-template/fixtures/exec-brief-guidance.md
+
 # Stale agent worktrees managed outside the repo.
 .claude/

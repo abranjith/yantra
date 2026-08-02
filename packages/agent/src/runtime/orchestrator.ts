@@ -689,9 +689,12 @@ function createExecutionState(input: {
           at: event.at,
         });
         if (event.tool === 'result_publish' && metadata.status === 'ok') published = true;
-        if (metadata.errorCode === 'BUDGET_EXHAUSTED' || metadata.errorCode === 'TOOL_TIMEOUT') {
-          interrupt(metadata.errorCode === 'TOOL_TIMEOUT' ? 'per-tool-timeout' : 'tool-budget');
-        }
+        if (metadata.errorCode === 'TOOL_TIMEOUT') interrupt('per-tool-timeout');
+        else if (
+          metadata.errorCode === 'BUDGET_EXHAUSTED' &&
+          isRunFatalBudget(metadata.budgetLimit)
+        )
+          interrupt('tool-budget');
         if (metadata.handoff) {
           handoff = {
             blocker: metadata.summary,
@@ -1292,6 +1295,29 @@ function summarizeInput(input: unknown): string {
   return keys.length > 0 ? `fields: ${keys.join(', ')}` : 'no input fields';
 }
 
+/**
+ * Budget limits whose exhaustion ends the RUN rather than just the call.
+ *
+ * A budget bounds tool use; it is not a verdict on the run. Aborting the moment
+ * any cap is hit destroys a run that may already hold everything it needs and
+ * only lacks the final publication — the observed failure where twelve
+ * successful fetches were discarded because the thirteenth call had no budget.
+ * Every count-based cap therefore stops that tool and leaves the run alive to
+ * publish (`result_publish` is exempt from the cumulative caps, so it always
+ * can). The wall clock is the exception: an out-of-time run is genuinely over.
+ */
+const RUN_FATAL_BUDGET_LIMITS: ReadonlySet<string> = new Set(['wall-clock']);
+
+/**
+ * Whether a `BUDGET_EXHAUSTED` tool result should abort the whole run.
+ *
+ * @param limit The specific budget limit reported by the middleware, when known.
+ * @returns True for run-fatal limits, and for an unreported limit (fail safe).
+ */
+function isRunFatalBudget(limit: string | undefined): boolean {
+  return limit === undefined || RUN_FATAL_BUDGET_LIMITS.has(limit);
+}
+
 function toolMetadata(
   output: unknown,
   isError: boolean,
@@ -1300,6 +1326,7 @@ function toolMetadata(
   readonly errorCode: string | undefined;
   readonly summary: string;
   readonly handoff: boolean;
+  readonly budgetLimit: string | undefined;
 } {
   const record = asRecord(output);
   const details = asRecord(record?.details);
@@ -1314,6 +1341,7 @@ function toolMetadata(
     status,
     errorCode,
     summary: errorCode ? `${status}: ${errorCode}` : status,
+    budgetLimit: stringValue(details?.budget_limit),
     handoff:
       details?.handoff === true ||
       errorCode === 'CONFIRMATION_DENIED' ||

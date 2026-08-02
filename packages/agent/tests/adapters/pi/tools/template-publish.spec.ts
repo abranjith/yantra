@@ -9,6 +9,7 @@ import {
   createTemplatedReportPublisher,
   resultPublishSpec,
 } from '../../../../src/adapters/pi/tools/result-publish.js';
+import type { BudgetLimits } from '../../../../src/runtime/budget.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 
 import { buildServices } from './test-support.js';
@@ -55,9 +56,9 @@ describe('@no-llm templated result_publish', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
-  function setup(withEvidence = true) {
+  function setup(withEvidence = true, limits: Partial<BudgetLimits> = {}) {
     const template = manifest();
-    let services = buildServices({ runDir, template });
+    let services = buildServices({ runDir, template, limits });
     if (withEvidence) {
       services.evidence.add({
         url: 'https://example.com/evidence',
@@ -138,6 +139,20 @@ describe('@no-llm templated result_publish', () => {
     expect(services.actionPhase.isClosed()).toBe(false);
 
     expect((await tool.execute(validReport(), undefined)).status).toBe('ok');
+  });
+
+  it('publishes the document after the total tool-call budget is spent', async () => {
+    // The reported failure was on the templated path: without the terminal-call
+    // exemption, `result_publish` is denied and no document.* is ever written.
+    const { services, tool } = setup(true, { totalToolCalls: 1, perToolCalls: 4 });
+    expect(services.budgets.reserveCall('web_fetch').isOk).toBe(true);
+    expect(services.budgets.reserveCall('web_fetch').isOk).toBe(false);
+
+    const result = await tool.execute(validReport(), undefined);
+
+    expect(result.status).toBe('ok');
+    expect(result.terminate).toBe(true);
+    await expect(access(join(runDir, 'document.json'))).resolves.toBeUndefined();
   });
 
   it('ignores supplied sources and permits an empty evidence ledger', async () => {

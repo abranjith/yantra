@@ -44,7 +44,8 @@ yantra do "prepare a launch review" --template ./launch-review.md
 
 The model fills typed slots while Yantra preserves the Markdown structure,
 attaches fetched sources, validates the result, and writes `document.json`,
-`document.md`, and inert `document.html`. Templates require LLM mode, so
+`document.md`, and inert `document.html`. Authors can add model-only document and
+slot guidance that never appears in rendered reports. Templates require LLM mode, so
 `--template` cannot be combined with `--no-llm` or `LLM_PROVIDER=none`.
 `yantra run` does not support templates yet. See the complete
 [report-template authoring guide](docs/report-templates.md).

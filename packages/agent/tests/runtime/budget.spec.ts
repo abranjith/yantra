@@ -74,6 +74,83 @@ describe('@no-llm BudgetTracker call reservation', () => {
   });
 });
 
+describe('@no-llm BudgetTracker terminal-call exemption', () => {
+  // Regression (run 20260801T222532Z-research-b99efc18): an agentic research run
+  // spent all 12 of its total tool calls on 2 web_search + 10 web_fetch calls,
+  // every one successful. The 13th call was `result_publish` — the ONLY way to
+  // complete a run — and it was denied with "Total tool-call budget of 12 calls
+  // is exhausted". The run finalized as budget_exhausted and every fetched
+  // source was discarded, with the tool result reading as though publishing
+  // itself were too expensive.
+  it('grants the terminal call after the total-call budget is spent', () => {
+    const budgets = new BudgetTracker({ ...TIGHT_LIMITS, perToolCalls: 10 });
+    expect(budgets.reserveCall('web_search').isOk).toBe(true);
+    expect(budgets.reserveCall('web_fetch').isOk).toBe(true);
+    expect(budgets.reserveCall('web_fetch').isOk).toBe(true);
+    // Exploration is now closed...
+    const explore = budgets.reserveCall('web_fetch');
+    expect(explore.isOk).toBe(false);
+    if (!explore.isOk) expect(explore.error.limit).toBe('total-calls');
+
+    // ...but the exit is not.
+    expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+    expect(budgets.snapshot().totalCalls).toBe(4);
+  });
+
+  it('grants the terminal call after the cumulative byte budget is spent', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    budgets.accountResultBytes(300); // over the 250 cap
+
+    expect(budgets.reserveCall('web_fetch').isOk).toBe(false);
+    expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+  });
+
+  it('still binds the terminal call to its per-tool cap', () => {
+    // The exemption must not turn an invalid-payload correction loop into an
+    // unbounded one: per-tool calls remain the loop's ceiling.
+    const budgets = new BudgetTracker({ ...TIGHT_LIMITS, totalToolCalls: 1, perToolCalls: 2 });
+    expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+    expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+
+    const over = budgets.reserveCall('result_publish', { terminal: true });
+    expect(over.isOk).toBe(false);
+    if (!over.isOk) expect(over.error.limit).toBe('per-tool-calls');
+  });
+
+  it('still binds the terminal call to the wall clock', () => {
+    // An out-of-time run is genuinely over; the exemption covers only the
+    // cumulative caps a run can legitimately have spent on useful work.
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+    clock.advance(1_000);
+
+    const denied = budgets.reserveCall('result_publish', { terminal: true });
+    expect(denied.isOk).toBe(false);
+    if (!denied.isOk) expect(denied.error.limit).toBe('wall-clock');
+  });
+
+  it('records but never rejects the terminal call result bytes', () => {
+    // The publication already happened by the time its bytes are measured, so
+    // failing here would report a successful publish as an error.
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    budgets.accountResultBytes(200);
+
+    expect(budgets.accountResultBytes(100, { terminal: true }).isOk).toBe(true);
+    expect(budgets.snapshot().cumulativeBytes).toBe(300);
+  });
+
+  it('leaves non-terminal calls fully bound by every cap', () => {
+    const budgets = new BudgetTracker({ ...TIGHT_LIMITS, perToolCalls: 10 });
+    budgets.reserveCall('a');
+    budgets.reserveCall('b');
+    budgets.reserveCall('c');
+
+    // An explicit `terminal: false` is not a loophole either.
+    expect(budgets.reserveCall('d', { terminal: false }).isOk).toBe(false);
+    expect(budgets.reserveCall('d').isOk).toBe(false);
+  });
+});
+
 describe('@no-llm BudgetTracker wall-clock', () => {
   it('is unlimited by default: no elapsed time exhausts the default wall clock', () => {
     const clock = fakeClock();

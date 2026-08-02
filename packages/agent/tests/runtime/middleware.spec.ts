@@ -124,6 +124,72 @@ describe('@no-llm middleware stage short-circuiting', () => {
     expect(policy).toHaveBeenCalledTimes(1);
   });
 
+  it('reports which budget limit tripped so the orchestrator can classify it', async () => {
+    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const tool = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+
+    await tool.execute({ q: 'a' }, undefined);
+    const denied = await tool.execute({ q: 'b' }, undefined);
+
+    expect(denied.error_code).toBe('BUDGET_EXHAUSTED');
+    expect(denied.details).toMatchObject({ budget_limit: 'total-calls' });
+  });
+
+  it('tells a starved non-terminal tool to publish what it already gathered', async () => {
+    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const tool = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+
+    await tool.execute({ q: 'a' }, undefined);
+    const denied = await tool.execute({ q: 'b' }, undefined);
+
+    expect(denied.modelText).toContain('Publish your result now');
+  });
+
+  it('runs a terminal tool after the total-call budget is spent', async () => {
+    // Regression: `result_publish` is the only way to complete a run. Charging
+    // it against the exploration pool let a fully-researched run be denied its
+    // own publication and finalize as budget_exhausted.
+    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const explore = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+    const publishRun = vi.fn(async () => OK);
+    const publish = wrapTool(
+      spec(publishRun, { name: 'result_publish', terminal: true }),
+      services,
+    );
+
+    expect((await explore.execute({ q: 'a' }, undefined)).status).toBe('ok');
+    expect((await explore.execute({ q: 'b' }, undefined)).error_code).toBe('BUDGET_EXHAUSTED');
+    const published = await publish.execute({ q: 'c' }, undefined);
+
+    expect(published.status).toBe('ok');
+    expect(publishRun).toHaveBeenCalledTimes(1);
+    expect(published.modelText).not.toContain('Publish your result now');
+  });
+
+  it('does not fail a terminal tool whose own result overruns the run byte cap', async () => {
+    // The publish has already happened when its bytes are counted; erroring
+    // here would strand a written artifact behind an error result.
+    const services = makeServices({ limits: { maxBytesPerRun: 1 } });
+    const publish = wrapTool(
+      spec(async () => OK, { name: 'result_publish', terminal: true }),
+      services,
+    );
+
+    const published = await publish.execute({ q: 'c' }, undefined);
+
+    expect(published.status).toBe('ok');
+    expect(published.error_code).toBeUndefined();
+  });
+
   it('short-circuits on a policy refusal before the domain op', async () => {
     const run = vi.fn(async () => OK);
     const services = makeServices();

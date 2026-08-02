@@ -134,6 +134,12 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
   /** True when this call must be rejected after the action phase closes. */
   readonly mutating?: boolean;
   /**
+   * True for the run's terminal publication tool. Its call is exempt from the
+   * run-wide cumulative budgets (see `BudgetTracker`): the exit from a run must
+   * never be starved by the exploration that preceded it.
+   */
+  readonly terminal?: boolean;
+  /**
    * True for tools that gather new web evidence (`web_search`, `web_fetch`).
    * Once the orchestrator freezes the evidence phase at completion-nudge time,
    * these calls are rejected with `EVIDENCE_FROZEN` so the model can only
@@ -239,9 +245,24 @@ async function runPipeline<TParams extends TSchema>(
     if (isAborted(services, callSignal)) {
       return abortedResult(spec, services);
     }
-    const reserved = services.budgets.reserveCall(spec.name);
+    const terminal = spec.terminal === true;
+    const reserved = services.budgets.reserveCall(spec.name, { terminal });
     if (!reserved.isOk) {
-      return failure(spec, services, reserved.error.code, reserved.error.message, false);
+      // The remedy only makes sense for the tools that can be starved; the
+      // terminal tool itself has nowhere else to go.
+      const remedy = terminal
+        ? ''
+        : ' Publish your result now with the evidence you already gathered — it is attached automatically.';
+      return failure(
+        spec,
+        services,
+        reserved.error.code,
+        `${reserved.error.message}${remedy}`,
+        false,
+        // The orchestrator needs the specific limit to decide whether the RUN
+        // is over or only this tool is; the prose message is not a contract.
+        { budget_limit: reserved.error.limit },
+      );
     }
 
     // 3. Host + ethics + scope policy, plus the action-phase latch: after a
@@ -326,7 +347,7 @@ async function runPipeline<TParams extends TSchema>(
 
     // 6. Sanitizer + output bounding, then 7. stable tool result.
     const bounded = sanitizeAndBound(domain.model, spec.sanitizationProfile, services);
-    const account = services.budgets.accountResultBytes(bounded.bytes);
+    const account = services.budgets.accountResultBytes(bounded.bytes, { terminal });
     if (!account.isOk) {
       return {
         status: 'error',
@@ -336,7 +357,7 @@ async function runPipeline<TParams extends TSchema>(
           message: account.error.message,
           retryable: false,
         }),
-        details: domain.details ?? null,
+        details: { ...asDetailsRecord(domain.details), budget_limit: account.error.limit },
         error_code: account.error.code,
         retryable: false,
         ...(confirmationId ? { confirmation_id: confirmationId } : {}),
@@ -372,6 +393,7 @@ function failure<TParams extends TSchema>(
   errorCode: string,
   message: string,
   retryable: boolean,
+  details: unknown = null,
 ): YantraToolResult {
   const safeMessage = services.userInput?.mask(message) ?? message;
   return {
@@ -382,10 +404,17 @@ function failure<TParams extends TSchema>(
       message: safeMessage,
       retryable,
     }),
-    details: null,
+    details,
     error_code: errorCode,
     retryable,
   };
+}
+
+/** Spread-safe view of a domain `details` payload (non-objects become empty). */
+function asDetailsRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 /** Convert a DomainFailure into a stable tool result. */

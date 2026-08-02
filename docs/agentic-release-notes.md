@@ -16,6 +16,16 @@ Anthropic remains the default provider. Managed credentials, runtime-key injecti
 
 The internal `@yantra/agent` task-shaped client, null-provider fallback, manual discovery loop, and generated step-tool catalog were removed. This is a clean break for internal package consumers only: existing version-1 workflow YAML and pre-agentic run directories continue to load, replay, and audit.
 
+### Report-template guidance compatibility
+
+Report templates now reserve whole-line `<!-- guidance: ... -->` comments for
+model-only author instructions. An existing template that used that exact form
+as an ordinary comment, such as `<!-- guidance: see the wiki -->`, now parses as
+a directive and fails if no later model-filled slot consumes it. Because
+`yantra template list` omits invalid saved templates, an affected template can
+disappear from the listing without an inline explanation; run
+`yantra template lint <name-or-path>` to see and correct the positional error.
+
 ## Safety defaults
 
 The provider SDK is confined to its adapter. Model code has no unrestricted filesystem or shell tool and cannot bypass URL policy, sanitization, secret host binding, ethics checks, budgets, or confirmation. Non-interactive confirmation requests fail closed, while CAPTCHA and other human-only situations produce a typed handoff.

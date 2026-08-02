@@ -48,11 +48,18 @@ export const TemplateSlot = z
       .nullable()
       .describe('Table column labels, or null for non-table slots.'),
     constraints: TemplateSlotConstraints,
+    guidance: z
+      .string()
+      .min(1)
+      .nullable()
+      .describe("Optional author guidance appended to this slot's model description, or null."),
     offset: z
       .number()
       .int()
       .nonnegative()
-      .describe('Character offset of the opening placeholder in manifest.body.'),
+      .describe(
+        'Character offset of the opening placeholder in manifest.body after guidance directives are removed.',
+      ),
   })
   .superRefine((slot, ctx) => {
     if (slot.kind === 'table' && slot.columns === null) {
@@ -98,6 +105,11 @@ export const TemplateManifest = z
       .nullable()
       .describe('Normalized template name, or null when frontmatter omits it.'),
     description: z.string().nullable().describe('One-line author description, or null.'),
+    guidance: z
+      .string()
+      .min(1)
+      .nullable()
+      .describe('Optional document-level author guidance appended to the model schema, or null.'),
     tags: z
       .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/))
       .describe('Normalized, deduplicated, sorted template tags.'),

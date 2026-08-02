@@ -14,7 +14,9 @@
  *   assembly* — before it enters the Markdown→HTML path — so a source that
  *   smuggled `<script>`, `<img onerror=…>`, or `<svg onload=…>` renders as
  *   inert text, never as a live tag. `marked` passes raw HTML through
- *   verbatim, so escaping first (not sanitizing after) is the guarantee.
+ *   verbatim, so escaping first (not sanitizing after) is the guarantee. On the
+ *   Markdown path the escape is `escapeForMarkdown`, which still encodes `<`
+ *   (no tag can open without it) but leaves `>` so blockquotes keep working.
  * - **No dangerous URLs.** Links are scheme-filtered: only `http:`/`https:`
  *   hrefs survive (as real anchors carrying `rel="noopener noreferrer"`);
  *   `javascript:`, `data:`, and everything else collapse to plain text. This
@@ -41,9 +43,15 @@
  * deterministic, exactly like {@link briefToMarkdown}.
  */
 
-import type { Brief, BriefSource, KeyFinding, Section } from '@yantra/protocol';
+import type { Brief, BriefNotice, BriefSource, KeyFinding, Section } from '@yantra/protocol';
 
-import { escapeHtml, hardenedMarkdown, inertDocument, safeHref } from './html-shell.js';
+import {
+  escapeForMarkdown,
+  escapeHtml,
+  hardenedMarkdown,
+  inertDocument,
+  safeHref,
+} from './html-shell.js';
 
 /**
  * Renders a {@link Brief} as a self-contained, inert HTML document.
@@ -101,12 +109,12 @@ export function briefToHtml(brief: Brief): string {
 
 /** Renders a Brief Markdown field to inert HTML (fields escaped pre-parse). */
 function renderMarkdown(text: string): string {
-  return (hardenedMarkdown.parse(escapeHtml(text)) as string).trim();
+  return (hardenedMarkdown.parse(escapeForMarkdown(text)) as string).trim();
 }
 
 /** Renders a Brief field as inline HTML (no block wrapper), escaped pre-parse. */
 function renderInline(text: string): string {
-  return (hardenedMarkdown.parseInline(escapeHtml(text)) as string).trim();
+  return (hardenedMarkdown.parseInline(escapeForMarkdown(text)) as string).trim();
 }
 
 /** Max citation superscripts shown inline before collapsing to a `+k` affordance. */
@@ -162,7 +170,7 @@ function subtleizeCitations(html: string, declared: ReadonlySet<number>): string
 function keyFindingsHtml(findings: readonly KeyFinding[], declared: ReadonlySet<number>): string {
   const items = findings
     .map((finding) => {
-      const editorial = finding.editorial ? ' <em>(editorial)</em>' : '';
+      const editorial = finding.editorial ? ' <em class="editorial">editorial</em>' : '';
       // The deterministic path carries citations only in the structured array;
       // the LLM path may inline [n] in the text — transform those in place.
       const body = /\[\d+\]/u.test(finding.text)
@@ -207,7 +215,9 @@ function comparisonHtml(
   const rows = comparison.rows
     .map((row) => `<tr>${row.map((value) => `<td>${cell(value)}</td>`).join('')}</tr>`)
     .join('\n');
-  return `<table class="comparison">\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows}\n</tbody>\n</table>`;
+  // The wrapper matches what the Markdown table renderer emits, so a wide
+  // comparison scrolls in its own box instead of stretching the page.
+  return `<div class="table-wrap">\n<table class="comparison">\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows}\n</tbody>\n</table>\n</div>`;
 }
 
 /** The numbered source list as an escaped `<ol>` with scheme-filtered links. */
@@ -220,9 +230,12 @@ function sourcesHtml(sources: readonly BriefSource[]): string {
         href === null
           ? `<span class="src-title">${label}</span>`
           : `<a href="${escapeHtml(href)}" rel="noopener noreferrer">${label}</a>`;
-      const meta = [escapeHtml(source.host), `fetched ${escapeHtml(source.fetched_at)}`];
+      const meta = [
+        `<span class="src-host">${escapeHtml(source.host)}</span>`,
+        timestamp('fetched', source.fetched_at),
+      ];
       if (source.published_at !== null) {
-        meta.push(`published ${escapeHtml(source.published_at)}`);
+        meta.push(timestamp('published', source.published_at));
       }
       // typeof-guard rather than a null check: pre-excerpt Briefs read from
       // disk without a schema re-parse carry no excerpt property at all.
@@ -237,15 +250,47 @@ function sourcesHtml(sources: readonly BriefSource[]): string {
   return `<ol class="sources">\n${items}\n</ol>`;
 }
 
-/** The honest notices block as an escaped list. */
+/**
+ * Renders an ISO-8601 timestamp as a readable date, keeping the full instant in
+ * the machine-readable `datetime` attribute. A value that is not ISO-shaped
+ * (possible for a Brief read from disk without a schema re-parse) falls back to
+ * escaped text rather than emitting an invalid `<time>`.
+ */
+function timestamp(label: string, iso: string): string {
+  const day = /^\d{4}-\d{2}-\d{2}/u.exec(iso);
+  if (day === null) {
+    return `${label} ${escapeHtml(iso)}`;
+  }
+  return `${label} <time datetime="${escapeHtml(iso)}">${escapeHtml(day[0])}</time>`;
+}
+
+/**
+ * Visual severity per notice kind, driving the colour and glyph of the notice
+ * card. Unknown kinds (a Brief written by a newer schema) degrade to `info`.
+ */
+const NOTICE_SEVERITY: Readonly<Record<BriefNotice['kind'], 'danger' | 'warn' | 'info'>> = {
+  fetch_failed: 'warn',
+  extract_failed: 'warn',
+  blocked: 'danger',
+  source_excluded: 'info',
+  uncited_claim_stripped: 'danger',
+  uncited_claim_flagged: 'warn',
+  budget_exhausted: 'warn',
+  limited_evidence: 'warn',
+  other: 'info',
+};
+
+/** The honest notices block as an escaped, severity-coded list. */
 function noticesHtml(notices: Brief['notices']): string {
   const items = notices
-    .map(
-      (notice) =>
-        `<li><strong>${escapeHtml(notice.kind)}</strong> — ${escapeHtml(notice.source)}: ${escapeHtml(
-          notice.reason,
-        )}</li>`,
-    )
+    .map((notice) => {
+      const severity = NOTICE_SEVERITY[notice.kind] ?? 'info';
+      // `fetch_failed` reads as machinery; `fetch failed` reads as English.
+      const kind = escapeHtml(notice.kind.replace(/_/gu, ' '));
+      return `<li class="notice--${severity}"><span><strong class="notice-kind">${kind}</strong> — ${escapeHtml(
+        notice.source,
+      )}: ${escapeHtml(notice.reason)}</span></li>`;
+    })
     .join('\n');
   return `<ul class="notices">\n${items}\n</ul>`;
 }
@@ -253,12 +298,11 @@ function noticesHtml(notices: Brief['notices']): string {
 /** Formats a facet scalar for a table cell. */
 function cell(value: string | number | boolean | null): string {
   if (value === null) {
-    return '';
+    // An em dash reads as "no value here"; an empty cell reads as a bug.
+    return '<span class="nil">—</span>';
   }
   if (typeof value === 'boolean') {
-    return value ? '✓' : '✗';
+    return value ? '<span class="yes">✓</span>' : '<span class="no">✗</span>';
   }
   return escapeHtml(String(value));
 }
-
-/** Inlined, framework-free theme — self-contained, no remote fonts or assets. */

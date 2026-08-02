@@ -194,13 +194,17 @@ const noticeArb = (dangerous: boolean): fc.Arbitrary<BriefNotice> =>
   fc.record({
     source: textArb(0, dangerous),
     reason: textArb(1, dangerous),
+    // Every kind in the schema, so the renderers' per-kind handling (severity
+    // classes) is exercised in full rather than on a stale subset.
     kind: fc.constantFrom<BriefNotice['kind']>(
       'fetch_failed',
       'extract_failed',
       'blocked',
+      'source_excluded',
       'uncited_claim_stripped',
       'uncited_claim_flagged',
       'budget_exhausted',
+      'limited_evidence',
       'other',
     ),
   });

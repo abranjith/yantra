@@ -1503,14 +1503,15 @@ Example:
 
 Validated slot manifest produced from a report template.
 
-| Field       | Description                                                  |
-| ----------- | ------------------------------------------------------------ |
-| name        | Normalized template name, or null when frontmatter omits it. |
-| description | One-line author description, or null.                        |
-| tags        | Normalized, deduplicated, sorted template tags.              |
-| slots       | Slots in declaration order.                                  |
-| body        | Markdown below YAML frontmatter, retained verbatim.          |
-| hash        | SHA-256 of the complete raw template text.                   |
+| Field       | Description                                                                    |
+| ----------- | ------------------------------------------------------------------------------ |
+| name        | Normalized template name, or null when frontmatter omits it.                   |
+| description | One-line author description, or null.                                          |
+| guidance    | Optional document-level author guidance appended to the model schema, or null. |
+| tags        | Normalized, deduplicated, sorted template tags.                                |
+| slots       | Slots in declaration order.                                                    |
+| body        | Markdown below YAML frontmatter, retained verbatim.                            |
+| hash        | SHA-256 of the complete raw template text.                                     |
 
 Example:
 
@@ -1518,6 +1519,7 @@ Example:
 {
   "name": "<name>",
   "description": "<description>",
+  "guidance": "<guidance>",
   "tags": "<tags>",
   "slots": "<slots>",
   "body": "<body>",
@@ -1549,14 +1551,15 @@ Example:
 
 A validated placeholder declaration and its render location.
 
-| Field       | Description                                                             |
-| ----------- | ----------------------------------------------------------------------- |
-| key         | Unique model-facing slot key.                                           |
-| kind        | Value shape rendered into this placeholder.                             |
-| headingPath | Enclosing ATX headings, outermost first, used as the model description. |
-| columns     | Table column labels, or null for non-table slots.                       |
-| constraints | Optional character, word, item, or row bounds declared on a slot.       |
-| offset      | Character offset of the opening placeholder in manifest.body.           |
+| Field       | Description                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| key         | Unique model-facing slot key.                                                                       |
+| kind        | Value shape rendered into this placeholder.                                                         |
+| headingPath | Enclosing ATX headings, outermost first, used as the model description.                             |
+| columns     | Table column labels, or null for non-table slots.                                                   |
+| constraints | Optional character, word, item, or row bounds declared on a slot.                                   |
+| guidance    | Optional author guidance appended to this slot's model description, or null.                        |
+| offset      | Character offset of the opening placeholder in manifest.body after guidance directives are removed. |
 
 Example:
 
@@ -1567,6 +1570,7 @@ Example:
   "headingPath": "<headingPath>",
   "columns": "<columns>",
   "constraints": "<constraints>",
+  "guidance": "<guidance>",
   "offset": "<offset>"
 }
 ```

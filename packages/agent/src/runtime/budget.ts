@@ -7,8 +7,18 @@
  * timeout, agent-visible bytes per result, cumulative agent-visible bytes per
  * run, and browser navigations/hosts (consumed later by FEAT-025). Exhaustion
  * never throws — it returns a typed {@link BudgetDecision} that the middleware
- * surfaces as a stable `BUDGET_EXHAUSTED` tool result and the orchestrator
- * (FEAT-026) maps to a run abort.
+ * surfaces as a stable `BUDGET_EXHAUSTED` tool result.
+ *
+ * **Terminal calls are exempt from the run-wide cumulative caps.** A budget
+ * exists to bound *exploration*; the terminal publication tool is the run's
+ * exit, not exploration. Charging it against the same pool the exploration
+ * tools drain means a run that gathered everything it needed can be denied the
+ * one call that turns that work into an artifact — observed in the field as
+ * `result_publish` failing with "Total tool-call budget of 12 calls is
+ * exhausted" after twelve successful searches and fetches, losing the whole
+ * run. Terminal calls therefore skip the total-call and cumulative-byte caps
+ * (both trivially small for a publication) while remaining bound by the
+ * per-tool cap, which is what actually bounds a correction-retry loop.
  *
  * The tracker is intentionally a plain in-memory accountant with an injectable
  * clock so tests can assert exact boundary behaviour without real time passing.
@@ -85,6 +95,17 @@ export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
   maxHosts: 20,
 };
 
+/** Per-call accounting options shared by reservation and byte accounting. */
+export interface BudgetCallOptions {
+  /**
+   * True for the run's terminal publication call. Exempts it from the run-wide
+   * cumulative caps (total calls, cumulative bytes) so a run can always convert
+   * the work it already did into a published artifact. Consumption is still
+   * recorded, and the per-tool cap still applies.
+   */
+  readonly terminal?: boolean;
+}
+
 /** A point-in-time snapshot of consumption, for audit/report rendering. */
 export interface BudgetSnapshot {
   readonly elapsedMs: number;
@@ -154,9 +175,13 @@ export class BudgetTracker {
    * either the call is fully reserved or nothing is consumed.
    *
    * @param tool The tool name being invoked.
+   * @param options Set `terminal` for the run's publication call, which skips
+   *   the run-wide cumulative caps (see the module header).
    * @returns `ok()` when the call fits every budget, else `err(decision)`.
    */
-  public reserveCall(tool: string): Result<void, BudgetDecision> {
+  public reserveCall(tool: string, options: BudgetCallOptions = {}): Result<void, BudgetDecision> {
+    // The wall clock binds every call, terminal included: an out-of-time run is
+    // over regardless, and the orchestrator's own timer has already fired.
     if (this.isWallClockExhausted()) {
       return err(
         this.decide(
@@ -165,7 +190,8 @@ export class BudgetTracker {
         ),
       );
     }
-    if (this.cumulativeBytes >= this.limits.maxBytesPerRun) {
+    const terminal = options.terminal === true;
+    if (!terminal && this.cumulativeBytes >= this.limits.maxBytesPerRun) {
       return err(
         this.decide(
           'cumulative-bytes',
@@ -173,7 +199,7 @@ export class BudgetTracker {
         ),
       );
     }
-    if (this.totalCalls >= this.limits.totalToolCalls) {
+    if (!terminal && this.totalCalls >= this.limits.totalToolCalls) {
       return err(
         this.decide(
           'total-calls',
@@ -203,12 +229,20 @@ export class BudgetTracker {
    * {@link maxBytesPerResult} *before* calling this, so a single call cannot
    * exceed the per-result cap; this guards the run-wide total.
    *
+   * A terminal call's bytes are recorded but never rejected: the publication
+   * already happened by the time its result is measured, so failing here would
+   * report a successful publish as an error and strand the artifact.
+   *
    * @param bytes Byte length of the sanitized, bounded model-visible result.
+   * @param options Set `terminal` for the run's publication call.
    * @returns `ok()` if the run cap still holds, else `err(decision)`.
    */
-  public accountResultBytes(bytes: number): Result<void, BudgetDecision> {
+  public accountResultBytes(
+    bytes: number,
+    options: BudgetCallOptions = {},
+  ): Result<void, BudgetDecision> {
     this.cumulativeBytes += Math.max(0, bytes);
-    if (this.cumulativeBytes > this.limits.maxBytesPerRun) {
+    if (options.terminal !== true && this.cumulativeBytes > this.limits.maxBytesPerRun) {
       return err(
         this.decide(
           'cumulative-bytes',

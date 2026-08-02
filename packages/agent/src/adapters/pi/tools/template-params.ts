@@ -47,8 +47,7 @@ export function templateParamsFor(manifest: TemplateManifest): TObject {
     {
       report: Type.Object(properties, {
         additionalProperties: false,
-        description:
-          'Values for the active report template. Yantra renders the surrounding document.',
+        description: reportDescription(manifest),
       }),
     },
     { additionalProperties: false },
@@ -56,9 +55,15 @@ export function templateParamsFor(manifest: TemplateManifest): TObject {
 }
 
 function slotDescription(slot: TemplateSlot): string {
-  if (slot.key === 'title') return 'Document title. Required.';
-  const heading = slot.headingPath.length > 0 ? slot.headingPath.join(' > ') : slot.key;
-  const details: string[] = [`Content for "${heading}".`];
+  const details: string[] = [];
+  if (slot.key === 'title') {
+    // The canonical title heading becomes empty after placeholder removal, so
+    // title uses a stable prefix and deliberately skips the heading sentence.
+    details.push('Document title. Required.');
+  } else {
+    const heading = slot.headingPath.length > 0 ? slot.headingPath.join(' > ') : slot.key;
+    details.push(`Content for "${heading}".`);
+  }
   switch (slot.kind) {
     case 'text':
       details.push('Plain text.');
@@ -86,5 +91,19 @@ function slotDescription(slot: TemplateSlot): string {
     details.push(`At least ${min} ${slot.kind === 'table' ? 'rows' : 'items'}.`);
   if (max !== undefined)
     details.push(`At most ${max} ${slot.kind === 'table' ? 'rows' : 'items'}.`);
+  // Guidance goes last so the stable structural and constraint prefix remains scannable.
+  if (slot.guidance !== null) details.push(slot.guidance);
   return details.join(' ');
+}
+
+/**
+ * Build the enclosing report-object description with optional document guidance.
+ *
+ * @param manifest Active parsed template.
+ * @returns Stable rendering contract followed by author guidance when present.
+ */
+function reportDescription(manifest: TemplateManifest): string {
+  const description =
+    'Values for the active report template. Yantra renders the surrounding document.';
+  return manifest.guidance === null ? description : `${description} ${manifest.guidance}`;
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { BRIEF_SCHEMA_VERSION, TemplatedReport, validateTemplatedReport } from '../src/index.js';
+import {
+  BRIEF_SCHEMA_VERSION,
+  TemplateManifest,
+  TemplateSlot,
+  TemplatedReport,
+  validateTemplatedReport,
+} from '../src/index.js';
 
 const report = {
   report_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -53,5 +59,51 @@ describe('@no-llm templated report protocol', () => {
   it('rejects arbitrary nested slot values', () => {
     const validated = validateTemplatedReport({ ...report, slots: { bad: { nested: true } } });
     expect(validated.isOk).toBe(false);
+  });
+});
+
+describe('@no-llm report template manifest protocol', () => {
+  const slot = {
+    key: 'body',
+    kind: 'markdown',
+    headingPath: ['Report'],
+    columns: null,
+    constraints: {},
+    guidance: null,
+    offset: 0,
+  } as const;
+  const manifest = {
+    name: 'weekly',
+    description: 'Weekly report',
+    guidance: null,
+    tags: ['work'],
+    slots: [slot],
+    body: '{{ body }}',
+    hash: 'a'.repeat(64),
+  } as const;
+
+  it('accepts nullable and non-empty guidance on manifests and slots', () => {
+    expect(TemplateManifest.safeParse(manifest).success).toBe(true);
+    expect(
+      TemplateManifest.safeParse({
+        ...manifest,
+        guidance: 'Use British English.',
+        slots: [{ ...slot, guidance: 'Lead with the outcome.' }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects empty guidance strings', () => {
+    expect(TemplateManifest.safeParse({ ...manifest, guidance: '' }).success).toBe(false);
+    expect(TemplateSlot.safeParse({ ...slot, guidance: '' }).success).toBe(false);
+  });
+
+  it('requires the slot guidance field even when its value is null', () => {
+    const { guidance: _guidance, ...missingGuidance } = slot;
+    expect(TemplateSlot.safeParse(missingGuidance).success).toBe(false);
+  });
+
+  it('keeps the manifest object strict', () => {
+    expect(TemplateManifest.safeParse({ ...manifest, unexpected: true }).success).toBe(false);
   });
 });

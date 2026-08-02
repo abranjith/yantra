@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { BriefSource, TemplateManifest, TemplatedReport } from '@yantra/protocol';
+import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { parseTemplate } from '../../src/report-template/parse.js';
@@ -27,6 +28,9 @@ name: exec-brief
 ## Sources
 {{ sources }}
 `;
+
+const execFixtureUrl = new URL('./fixtures/exec-brief.md', import.meta.url);
+const guidedExecFixtureUrl = new URL('./fixtures/exec-brief-guidance.md', import.meta.url);
 
 function manifest(text = TEMPLATE): TemplateManifest {
   const parsed = parseTemplate(text);
@@ -124,6 +128,32 @@ describe('@no-llm report-template rendering', () => {
     expect(rendered).toContain('| A\\|B | line<br>two | C |');
   });
 
+  it('renders guided and unguided template twins byte-identically without comments', async () => {
+    const [plainText, guidedText] = await Promise.all([
+      readFile(execFixtureUrl, 'utf8'),
+      readFile(guidedExecFixtureUrl, 'utf8'),
+    ]);
+    const values = {
+      title: 'Weekly Brief',
+      summary: 'Revenue increased because enterprise renewals accelerated.',
+      risks: ['Supply delay', 'Budget pressure', 'Hiring capacity'],
+      comparison: [['Acme', '$10', 'Preferred']],
+    };
+    const plain = renderTemplate(manifest(plainText), values, sources);
+    const guided = renderTemplate(manifest(guidedText), values, sources);
+    expect(guided).toBe(plain);
+    expect(guided).not.toContain('<!--');
+  });
+
+  it('removes the directive line and its terminator before rendering', () => {
+    const rendered = renderTemplate(
+      manifest('## H\n<!-- guidance: Keep it short. -->\n{{ x }}'),
+      { x: '<value>' },
+      [],
+    );
+    expect(rendered).toBe('## H\n<value>');
+  });
+
   it('renders script input inert and collapses javascript links and remote images', () => {
     const html = templatedReportToHtml(
       document(
@@ -135,6 +165,44 @@ describe('@no-llm report-template rendering', () => {
     expect(html).not.toContain('javascript:');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('https://bad.test/x.png');
+  });
+
+  it('promotes the report title to an h1 only when the template supplies none', () => {
+    expect(templatedReportToHtml(document('Body with no heading.'))).toContain(
+      '<h1>Weekly Brief</h1>',
+    );
+
+    const titled = templatedReportToHtml(document('# Own Title\n\nBody.'));
+    expect(titled).toContain('<h1>Own Title</h1>');
+    expect(titled).not.toContain('<h1>Weekly Brief</h1>');
+  });
+
+  it('renders a multi-line table cell as a line break, not as literal markup', () => {
+    // renderTemplate encodes an in-cell newline as <br>; the HTML path has to
+    // honor exactly that one tag or the reader sees "one<br>two".
+    const rendered = renderTemplate(
+      manifest(),
+      {
+        title: 'Weekly Brief',
+        summary: 'Summary.',
+        risks: [],
+        comparison: [['Acme', '$10', 'Ships fast\nWarranty differs']],
+      },
+      sources,
+    );
+    expect(rendered).toContain('Ships fast<br>Warranty differs');
+
+    const cell = new JSDOM(templatedReportToHtml(document(rendered))).window.document.querySelector(
+      'tbody tr td:last-child',
+    );
+    expect(cell?.querySelectorAll('br').length).toBe(1);
+    expect(cell?.textContent).toBe('Ships fastWarranty differs');
+  });
+
+  it('renders a rendered-Markdown table inside the shared scroll container', () => {
+    const doc = new JSDOM(templatedReportToHtml(document('| A | B |\n| --- | --- |\n| 1 | 2 |')))
+      .window.document;
+    expect(doc.querySelector('.table-wrap > table')).not.toBeNull();
   });
 });
 

@@ -131,6 +131,11 @@ export function resultPublishSpec(services: RunServices): ToolWrapperSpec<TObjec
           'returned with exact issues to fix.',
     parameters,
     sanitizationProfile: 'public',
+    // The run's only exit. Exempt from the run-wide cumulative budgets so a run
+    // that spent its exploration budget can still publish what it gathered
+    // instead of discarding the whole run (its per-tool cap still bounds the
+    // correction-retry loop).
+    terminal: true,
     run: (params: Static<TObject>, ctx): Promise<DomainResult> => runPublish(params, ctx.services),
   };
 }

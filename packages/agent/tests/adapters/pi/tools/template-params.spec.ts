@@ -29,6 +29,22 @@ function manifest(): TemplateManifest {
   return parsed.value;
 }
 
+function reportSchema(template: TemplateManifest): {
+  readonly description: string;
+  readonly properties: Record<string, { readonly description: string }>;
+} {
+  return (
+    templateParamsFor(template) as unknown as {
+      properties: {
+        report: {
+          description: string;
+          properties: Record<string, { description: string }>;
+        };
+      };
+    }
+  ).properties.report;
+}
+
 const sources: BriefSource[] = [
   {
     n: 1,
@@ -96,6 +112,60 @@ describe('@no-llm generated template parameters', () => {
       properties: { report: { properties: Record<string, { description: string }> } };
     };
     expect(schema.properties.report.properties.choice?.description).toContain('Area > Decisions');
+  });
+
+  it('appends slot and document guidance after stable schema descriptions', () => {
+    const parsed = parseTemplate(
+      '---\n' +
+        'guidance: Use British English for a CFO audience.\n' +
+        '---\n' +
+        '# {{ title | text }}\n' +
+        '## Executive Summary\n' +
+        '<!-- guidance: Lead with the headline revenue number. -->\n' +
+        '{{ summary | markdown, max_words=200 }}\n' +
+        '{{ sources }}\n',
+    );
+    expect(parsed.isOk).toBe(true);
+    if (!parsed.isOk) return;
+    const schema = reportSchema(parsed.value);
+    expect(schema.properties.summary?.description).toMatch(/^Content for "Executive Summary"\./u);
+    expect(schema.properties.summary?.description).toMatch(
+      /Lead with the headline revenue number\.$/u,
+    );
+    expect(schema.description).toBe(
+      'Values for the active report template. Yantra renders the surrounding document. ' +
+        'Use British English for a CFO audience.',
+    );
+    expect(schema.properties.sources).toBeUndefined();
+  });
+
+  it('describes title constraints that runtime validation enforces', () => {
+    const parsed = parseTemplate('{{ title | text, min_chars=5, max_chars=100 }}');
+    expect(parsed.isOk).toBe(true);
+    if (!parsed.isOk) return;
+    const description = reportSchema(parsed.value).properties.title?.description;
+    expect(description).toContain('Document title. Required.');
+    expect(description).toContain('At least 5 characters.');
+    expect(description).toContain('At most 100 characters.');
+    expect(validateSlots(parsed.value, { title: 'Bad' }, [])).toEqual([
+      expect.objectContaining({
+        pointer: 'report/title',
+        message: expect.stringContaining('minimum is 5'),
+      }),
+    ]);
+  });
+
+  it('keeps existing unguided non-title and report descriptions byte-identical', () => {
+    const schema = reportSchema(manifest());
+    expect(schema.description).toBe(
+      'Values for the active report template. Yantra renders the surrounding document.',
+    );
+    expect(schema.properties.summary?.description).toBe(
+      'Content for "Executive Summary". Markdown prose. At most 4 words.',
+    );
+    expect(schema.properties.risks?.description).toBe(
+      'Content for "Key Risks". Array of short plain-text items. At least 3 items. At most 5 items.',
+    );
   });
 });
 
