@@ -26,6 +26,16 @@ describe('@no-llm profile-file schema', () => {
       interests: [],
       favorite_retailers: [],
     });
+    expect(profile.agent).toEqual({
+      provider: null,
+      model: null,
+      thinking: null,
+      max_duration: '15m',
+      max_tokens: 2_000_000,
+      tool_timeout: '3m',
+      tool_retries: 3,
+      confirm_timeout: '3m',
+    });
   });
 
   it('flattens into the dotted preference key space', () => {
@@ -34,6 +44,16 @@ describe('@no-llm profile-file schema', () => {
     expect(flat.get('locale.units')).toBe('metric');
     expect(flat.get('personalization.enabled')).toBe(true);
     expect(flat.get('personalization.favorite_retailers')).toEqual([]);
+    expect(Object.fromEntries(flat)).toMatchObject({
+      'agent.provider': null,
+      'agent.model': null,
+      'agent.thinking': null,
+      'agent.max_duration': '15m',
+      'agent.max_tokens': 2_000_000,
+      'agent.tool_timeout': '3m',
+      'agent.tool_retries': 3,
+      'agent.confirm_timeout': '3m',
+    });
   });
 });
 
@@ -61,6 +81,13 @@ describe('@no-llm profile-file load/save', () => {
       ...profile,
       defaults: { ...profile.defaults, detail: 'full' as const },
       personalization: { ...profile.personalization, favorite_retailers: ['amazon', 'bestbuy'] },
+      agent: {
+        ...profile.agent,
+        provider: 'ollama',
+        model: 'llama3.1:8b',
+        max_duration: '20m',
+        tool_retries: 5,
+      },
     };
     await saveProfile(edited, path);
 
@@ -69,6 +96,12 @@ describe('@no-llm profile-file load/save', () => {
     if (reloaded.isOk) {
       expect(reloaded.value.defaults.detail).toBe('full');
       expect(reloaded.value.personalization.favorite_retailers).toEqual(['amazon', 'bestbuy']);
+      expect(reloaded.value.agent).toMatchObject({
+        provider: 'ollama',
+        model: 'llama3.1:8b',
+        max_duration: '20m',
+        tool_retries: 5,
+      });
     }
   });
 
@@ -78,6 +111,14 @@ describe('@no-llm profile-file load/save', () => {
     const result = await loadProfile(path);
     expect(result.isOk).toBe(false);
     if (!result.isOk) expect(result.error).toContain('defaults.detail');
+  });
+
+  it('names an invalid agent duration field', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'agent:\n  max_duration: nope\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) expect(result.error).toContain('agent.max_duration');
   });
 
   it('rejects unknown top-level keys (strict schema)', async () => {
@@ -128,5 +169,14 @@ describe('@no-llm validatePreference', () => {
     const result = validatePreference('locale.region', 'null');
     expect(result.isOk).toBe(true);
     if (result.isOk) expect(result.value).toBeNull();
+  });
+
+  it('validates agent duration and integer preferences at write time', () => {
+    expect(validatePreference('agent.max_duration', '20m').isOk).toBe(true);
+    expect(validatePreference('agent.max_duration', 'nope').isOk).toBe(false);
+    expect(validatePreference('agent.max_tokens', '2000000').isOk).toBe(true);
+    expect(validatePreference('agent.max_tokens', '0').isOk).toBe(false);
+    expect(validatePreference('agent.tool_retries', '0').isOk).toBe(true);
+    expect(validatePreference('agent.tool_retries', '-1').isOk).toBe(false);
   });
 });

@@ -2,13 +2,26 @@
 
 ## `yantra doctor`
 
-Runs offline environment checks (Chrome, data directory, keychain, disk
-space). Exit code `3` signals an environment failure.
+Runs offline environment checks (Chrome, data directory, keychain, disk space)
+and reports what the agent will do by default without opening a provider
+session:
 
-## `yantra doctor --agent-smoke [provider/model]`
+| Check id            | What it proves                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent.model`       | Effective provider/model/thinking selection and whether each value came from a flag, environment variable, profile, or pinned default. |
+| `agent.credentials` | Which credential source is present. No source is a `warn`, not an error: a deterministic-only installation is valid.                   |
+| `agent.budgets`     | Effective duration, token, tool-timeout, retry, and confirmation values plus their source; user-entered duration units are preserved.  |
 
-Runs a **live** agent provider smoke test (default target:
-`anthropic/claude-haiku-4-5`):
+An environmental error exits `3`. Warnings alone do not fail the command.
+
+## `yantra doctor --agent-smoke`
+
+Runs a **live** agent provider smoke test. Select its target with the shared
+agent flags, for example:
+
+```bash
+yantra doctor --agent-smoke --provider ollama --model llama3.1:8b
+```
 
 1. opens a real provider session against Yantra's pinned Pi environment
    (see [model-configuration.md](model-configuration.md));
@@ -20,14 +33,17 @@ Runs a **live** agent provider smoke test (default target:
 
 The command prints the effective environment enumeration (pinned paths,
 resource counts — all zeros) as evidence that nothing ambient was loaded.
+Unlike the ordinary offline doctor report, a missing credential on this live
+path is `AGENT_AUTH_UNAVAILABLE` (exit `3`).
 
 Exit codes: `0` smoke passed; `3` typed startup failure or failed round-trip;
 `130` aborted with Ctrl+C (clean teardown).
 
 ## Agent startup error codes
 
-Agentic startup problems are **typed failures** — never a silent fallback to
-a non-LLM implementation.
+Agentic startup problems use stable typed codes. `do` and the live smoke path
+surface them directly; `ask`, `research`, and `run` warn before taking their
+documented deterministic fallback.
 
 | Code                         | Meaning                                                                                                  | Fix                                                                                                                                                                 |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

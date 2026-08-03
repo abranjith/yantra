@@ -22,7 +22,11 @@ import {
   SettingsManager,
   type ResourceLoader,
 } from '@earendil-works/pi-coding-agent';
-import { dataDir as yantraDataDir } from '@yantra/core';
+import {
+  createKeychainProvider,
+  dataDir as yantraDataDir,
+  type KeychainProvider,
+} from '@yantra/core';
 import pino from 'pino';
 
 import { AgentAuthUnavailableError } from '../../errors.js';
@@ -105,6 +109,75 @@ export interface PiEnvironment {
   readonly authSource: PiAuthSource;
   /** Enumerate effective paths/resources — the §8 enforcement surface. */
   enumerate(): PiEnvironmentEnumeration;
+}
+
+/** Offline credential-presence result; never contains credential material. */
+export interface PiCredentialProbe {
+  readonly available: boolean;
+  readonly authSource: PiAuthSource;
+}
+
+/** Inputs for {@link probePiCredential}. */
+export interface PiCredentialProbeOptions {
+  readonly provider: string;
+  readonly auth: AgentAuthSelection;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly dataDir?: string;
+  readonly personalPiAuthPath?: string;
+  readonly keychain?: KeychainProvider;
+}
+
+/**
+ * Checks whether the selected credential source exists without opening a
+ * provider session or reading a secret value into Yantra code. Runtime-key
+ * references are checked through keychain account enumeration; managed,
+ * environment, and models-config sources use Pi's status-only registry API.
+ * Any unreadable source is treated as unavailable.
+ */
+export async function probePiCredential(
+  options: PiCredentialProbeOptions,
+): Promise<PiCredentialProbe> {
+  try {
+    if (options.auth.mode === 'runtime-key') {
+      const { secretRef } = options.auth;
+      const keychain = options.keychain ?? (await createKeychainProvider());
+      const entries = await keychain.list('yantra');
+      const available = entries.some((entry) => entry.account === secretRef);
+      return { available, authSource: available ? 'runtime-key' : 'unavailable' };
+    }
+
+    const env = options.env ?? process.env;
+    if (providerEnvironmentCredential(options.provider, env)) {
+      return { available: true, authSource: 'environment' };
+    }
+
+    const baseDataDir = options.dataDir ?? yantraDataDir();
+    const agentDir = join(baseDataDir, 'pi');
+    const authPath = options.personalPiAuthPath ?? join(agentDir, 'auth.json');
+    const modelsPath = join(agentDir, 'models.json');
+    const authStorage = AuthStorage.create(authPath);
+    const registry = ModelRegistry.create(authStorage, modelsPath);
+    const status = registry.getProviderAuthStatus(options.provider);
+
+    if (status.source === 'stored' || (status.configured && status.source === undefined)) {
+      return { available: true, authSource: 'managed' };
+    }
+    if (status.source === 'models_json_key' || status.source === 'models_json_command') {
+      return { available: true, authSource: 'models-config' };
+    }
+    // Pi consults the real process environment internally. Only report that
+    // source when it also exists in the caller-supplied environment, keeping
+    // injected diagnostic/test environments hermetic.
+    if (
+      (status.source === 'environment' || status.source === 'fallback') &&
+      providerEnvironmentCredential(options.provider, env)
+    ) {
+      return { available: true, authSource: 'environment' };
+    }
+  } catch {
+    // Presence probing is deliberately best-effort.
+  }
+  return { available: false, authSource: 'unavailable' };
 }
 
 /**
@@ -279,6 +352,25 @@ export async function checkCustomModelContextWindow(
   return typeof contextWindow === 'number' && contextWindow > 0
     ? { kind: 'declared', contextWindow }
     : { kind: 'undeclared' };
+}
+
+/** True when the provider's documented environment credential is present. */
+function providerEnvironmentCredential(provider: string, env: NodeJS.ProcessEnv): boolean {
+  const normalized = provider
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/gu, '_');
+  const candidates = new Set<string>([`${normalized}_API_KEY`]);
+  if (provider === 'anthropic') candidates.add('ANTHROPIC_API_KEY');
+  if (provider === 'openai') candidates.add('OPENAI_API_KEY');
+  if (provider === 'google' || provider === 'gemini' || provider === 'google-gemini') {
+    candidates.add('GOOGLE_API_KEY');
+    candidates.add('GEMINI_API_KEY');
+  }
+  return [...candidates].some((key) => {
+    const value = env[key];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
 }
 
 /**

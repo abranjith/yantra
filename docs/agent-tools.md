@@ -41,9 +41,11 @@ validated call
 - **Unexpected exceptions are caught, audited, and genericized** to
   `TOOL_EXECUTION_FAILED` — no secret or raw page content ever leaks through an
   error message.
-- **Cancellation:** a run-level abort (user interrupt or budget exhaustion) or a
-  per-tool timeout aborts the domain operation's `AbortSignal` and returns a
-  typed `aborted` / `TOOL_TIMEOUT` result promptly.
+- **Cancellation:** a run-level abort (user interrupt or fatal budget
+  exhaustion) aborts the run. A per-tool timeout aborts only that operation's
+  `AbortSignal` and returns a retryable `TOOL_TIMEOUT` result; the model may use
+  other tools or retry. Repetition of the same tool/error pair is bounded by
+  `--tool-retries`.
 
 ### Hiding sensitive data from the model
 
@@ -111,36 +113,36 @@ exists for the browser tools (FEAT-025).
 
 ## Budgets
 
-Budgets are configuration, not prompt promises (`runtime/budget.ts`,
-`DEFAULT_BUDGET_LIMITS`). The `BudgetTracker` enforces, per run:
+Budgets are enforced runtime configuration, not prompt promises. Shared
+user-configurable defaults are documented once in the canonical
+[Agentic options](model-configuration.md#agentic-options) table. Additional
+non-flag safety bounds are:
 
-| Budget              | Default                                            | Meaning                                                                                                                                                                                                                 |
-| ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wallClockMs`       | unlimited                                          | Total wall-clock time for the run. Unbounded by default (local models are slow); cap it explicitly with `--budget-ms` or `YANTRA_AGENT_<COMMAND>_BUDGET_MS`.                                                            |
-| `totalToolCalls`    | 60                                                 | Tool calls across all tools.                                                                                                                                                                                            |
-| `perToolCalls`      | 25                                                 | Calls to any single tool (overridable per tool).                                                                                                                                                                        |
-| `perToolTimeoutMs`  | 45 s (90 s for agentic `do`/`ask`/`research` runs) | Execution timeout for one tool call. The agentic orchestrator overrides the base default (`DEFAULT_AGENT_BUDGETS` in `runtime/orchestrator.ts`) with headroom above the browser tools' own ~60s page-settle caps below. |
-| `maxBytesPerResult` | 24 KB                                              | Agent-visible bytes in one tool result.                                                                                                                                                                                 |
-| `maxBytesPerRun`    | 512 KB                                             | Cumulative agent-visible bytes for the run.                                                                                                                                                                             |
-| `maxNavigations`    | 30                                                 | Browser navigations (FEAT-025).                                                                                                                                                                                         |
-| `maxHosts`          | 20                                                 | Distinct outbound hosts.                                                                                                                                                                                                |
+| Bound                          | Default     | Behavior                                                                |
+| ------------------------------ | ----------- | ----------------------------------------------------------------------- |
+| Soft wall-clock wind-down      | 80% (`12m`) | Stops new exploration and tells the model to publish existing evidence. |
+| Agent-visible bytes per result | 24 KB       | Bounds one sanitized tool result.                                       |
+| Agent-visible bytes per run    | 512 KB      | Refuses further non-terminal result volume.                             |
+| Browser navigations            | 30          | Refuses a navigation after the cap.                                     |
+| Distinct outbound hosts        | 20          | Refuses a new host after the cap.                                       |
 
-Exhaustion returns a typed `BUDGET_EXHAUSTED` decision carrying the specific
-limit that tripped.
+The provider-token ceiling and hard wall-clock deadline are run-fatal. The
+byte, navigation, and host bounds fail the affected call with a typed
+`BUDGET_EXHAUSTED` result while leaving the session alive to publish. Tool-call
+counts remain in budget snapshots and audit artifacts, but are not caps; useful
+work does not stop merely because a command-specific call quota was reached.
 
-**A budget bounds tool use, not the run.** Two rules follow from that, and both
-exist because the alternative throws away completed work:
+`result_publish` is exempt from the soft wind-down and cumulative result-byte
+cap so completed work can become an artifact. The hard wall-clock deadline still
+binds it.
 
-- **`result_publish` is exempt from the run-wide cumulative caps**
-  (`totalToolCalls`, `maxBytesPerRun`). It is the run's only exit, so charging it
-  against the pool the exploration tools drain lets a fully-researched run be
-  denied its own publication. Its `perToolCalls` cap still bounds the
-  correction-retry loop, and the wall clock still applies.
-- **Only `wall-clock` exhaustion aborts the run.** Every count-based cap
-  (`total-calls`, `per-tool-calls`, `cumulative-bytes`, `navigations`, `hosts`)
-  fails that call and leaves the session alive, so the agent can publish what it
-  already gathered. The denial message says exactly that, and the repeated-failure
-  circuit breaker still stops an agent that ignores it.
+The three default time bounds are deliberately related: `--tool-timeout 3m`
+with `--tool-retries 3` permits the initial attempt plus three retries, reaching
+12 minutes exactly when the 15-minute run enters its 80% wind-down. An
+always-timing-out tool therefore receives retryable failures, then the runtime
+steers the model to publish before the hard deadline. Each timeout remains in
+`tool-calls.jsonl`; evidence collected before it stays in the publication
+ledger.
 
 ## Outbound URL policy (`web_fetch`, `browser_navigate`)
 

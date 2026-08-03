@@ -6,11 +6,17 @@ import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import {
   registerResearchCommand,
   type ResearchInvocation,
   type ResearchRuntime,
 } from '../../src/commands/research.js';
+
+const resolveAvailable: ResearchRuntime['resolveAgent'] = (command, options, env, prefs) =>
+  resolveAgentInvocation(command, options, env, prefs, {
+    probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+  });
 
 function captureStream() {
   let data = '';
@@ -56,6 +62,7 @@ function harness(overrides: Partial<ResearchRuntime> = {}) {
         error: { code: 'AGENT_AUTH_UNAVAILABLE', message: 'fixture' },
       });
     },
+    resolveAgent: resolveAvailable,
     ...overrides,
   });
 
@@ -89,30 +96,63 @@ describe('@no-llm cli/research command', () => {
     ).rejects.toMatchObject({ code: 'commander.invalidArgument', exitCode: 1 });
   });
 
-  it('threads --max-sources and --budget-ms into the budget', async () => {
+  it('threads --max-sources and --pipeline-timeout into the deterministic budget', async () => {
     const h = harness();
     await h.program.parseAsync(
-      ['research', 'topic', '--max-sources', '10', '--budget-ms', '5000', '--no-llm'],
+      [
+        'research',
+        'topic',
+        '--max-sources',
+        '10',
+        '--max-llm-calls',
+        '8',
+        '--pipeline-timeout',
+        '5s',
+        '--no-llm',
+      ],
       { from: 'user' },
     );
     expect(h.options()?.budget.maxSources).toBe(10);
     expect(h.options()?.budget.maxWallClockMs).toBe(5_000);
+    expect(h.options()?.budget.maxLlmCalls).toBe(8);
   });
 
-  it('leaves the agentic wall clock unlimited when --budget-ms is not passed', async () => {
+  it.each(['--budget', '--budget-ms'])('rejects the retired %s spelling', async (flag) => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['research', 'topic', flag, '5', '--no-llm'], { from: 'user' }),
+    ).rejects.toMatchObject({ code: 'commander.unknownOption' });
+  });
+
+  it('uses the finite default agentic wall clock when no override is passed', async () => {
     const h = harness();
     await expect(
       h.program.parseAsync(['research', 'topic'], { from: 'user' }),
     ).rejects.toMatchObject({ exitCode: 2 });
-    expect(h.agentRequest()?.budgets?.wallClockMs).toBeUndefined();
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(900_000);
   });
 
-  it('bounds the agentic wall clock only when --budget-ms is explicit', async () => {
+  it('bounds the agentic wall clock with --max-duration', async () => {
     const h = harness();
     await expect(
-      h.program.parseAsync(['research', 'topic', '--budget-ms', '5000'], { from: 'user' }),
+      h.program.parseAsync(['research', 'topic', '--max-duration', '5m'], { from: 'user' }),
     ).rejects.toMatchObject({ exitCode: 2 });
-    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(5_000);
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(300_000);
+  });
+
+  it('warns and returns a deterministic Brief when no credential is available', async () => {
+    const h = harness({
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: false, authSource: 'unavailable' }),
+        }),
+    });
+
+    await h.program.parseAsync(['research', 'topic'], { from: 'user' });
+
+    expect(h.options()?.noLlm).toBe(true);
+    expect(h.stdout.value()).toContain('Cheapest Sony WH-1000XM5 today');
+    expect(h.stderr.value()).toMatch(/^warning: model anthropic\/claude-haiku-4-5/u);
   });
 
   it('treats LLM_PROVIDER=none as noLlm=true', async () => {

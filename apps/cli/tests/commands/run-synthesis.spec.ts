@@ -14,30 +14,29 @@
  * covered by `packages/core/tests/workflow/replay/synthesize.spec.ts`.
  */
 
-import { CommanderError } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { makeRunCommand, resolveRunSynthesis } from '../../src/commands/run.js';
 
 describe('@no-llm resolveRunSynthesis', () => {
-  it('leaves the decision to the workflow when no flag is passed', () => {
-    const wiring = resolveRunSynthesis({}, {});
+  it('leaves the decision to the workflow when no flag is passed', async () => {
+    const wiring = await resolveRunSynthesis({}, { ANTHROPIC_API_KEY: 'fixture' });
 
     expect(wiring.noLlm).toBe(false);
     expect(wiring.selection).not.toBeNull();
   });
 
-  it('vetoes the model when --no-llm is passed', () => {
+  it('vetoes the model when --no-llm is passed', async () => {
     // Commander stores `--no-llm` as `llm: false` on the same key.
-    const wiring = resolveRunSynthesis({ llm: false }, {});
+    const wiring = await resolveRunSynthesis({ llm: false }, {});
 
     expect(wiring.noLlm).toBe(true);
     // A null selection is what guarantees no provider adapter is constructed.
     expect(wiring.selection).toBeNull();
   });
 
-  it('vetoes the model when --no-llm is combined with model flags', () => {
-    const wiring = resolveRunSynthesis(
+  it('vetoes the model when --no-llm is combined with model flags', async () => {
+    const wiring = await resolveRunSynthesis(
       { llm: false, model: 'claude-sonnet-5', provider: 'anthropic' },
       {},
     );
@@ -46,24 +45,24 @@ describe('@no-llm resolveRunSynthesis', () => {
     expect(wiring.selection).toBeNull();
   });
 
-  it('honors LLM_PROVIDER=none as a veto, exactly as ask and research do', () => {
-    const wiring = resolveRunSynthesis({}, { LLM_PROVIDER: 'none' });
+  it('honors LLM_PROVIDER=none as a veto, exactly as ask and research do', async () => {
+    const wiring = await resolveRunSynthesis({}, { LLM_PROVIDER: 'none' });
 
     expect(wiring.noLlm).toBe(true);
     expect(wiring.selection).toBeNull();
   });
 
-  it('resolves the pinned default model with no model flags', () => {
-    const wiring = resolveRunSynthesis({}, {});
+  it('resolves the pinned default model with no model flags', async () => {
+    const wiring = await resolveRunSynthesis({}, { ANTHROPIC_API_KEY: 'fixture' });
 
     expect(wiring.selection?.model).toMatchObject({ provider: 'anthropic' });
     expect(wiring.selection?.auth).toEqual({ mode: 'managed' });
   });
 
-  it('honors explicit provider and model overrides', () => {
-    const wiring = resolveRunSynthesis(
+  it('honors explicit provider and model overrides', async () => {
+    const wiring = await resolveRunSynthesis(
       { provider: 'ollama', model: 'llama3.1', thinking: 'low' },
-      {},
+      { OLLAMA_API_KEY: 'fixture' },
     );
 
     expect(wiring.selection?.model).toEqual({
@@ -73,48 +72,50 @@ describe('@no-llm resolveRunSynthesis', () => {
     });
   });
 
-  it('reads the model from the environment', () => {
-    const wiring = resolveRunSynthesis(
+  it('reads the model from the environment', async () => {
+    const wiring = await resolveRunSynthesis(
       {},
-      { YANTRA_AGENT_PROVIDER: 'ollama', YANTRA_AGENT_MODEL: 'qwen3' },
+      {
+        YANTRA_AGENT_PROVIDER: 'ollama',
+        YANTRA_AGENT_MODEL: 'qwen3',
+        OLLAMA_API_KEY: 'fixture',
+      },
     );
 
     expect(wiring.selection?.model).toMatchObject({ provider: 'ollama', id: 'qwen3' });
   });
 
-  it('resolves a runtime-key auth reference', () => {
-    const wiring = resolveRunSynthesis({ authSecret: 'model.key' }, {});
+  it('resolves a runtime-key auth reference', async () => {
+    const wiring = await resolveRunSynthesis({ authSecret: 'model.key' }, {}, new Map(), {
+      probeCredential: () => Promise.resolve({ available: true, authSource: 'runtime-key' }),
+    });
 
     expect(wiring.selection?.auth).toEqual({ mode: 'runtime-key', secretRef: 'model.key' });
   });
 
-  it('raises a validation failure (exit 1) for a blank provider', () => {
-    expect(() => resolveRunSynthesis({ provider: '  ' }, {})).toThrow(CommanderError);
-
-    try {
-      resolveRunSynthesis({ provider: '  ' }, {});
-      expect.unreachable('expected a validation failure');
-    } catch (error) {
-      expect((error as CommanderError).exitCode).toBe(1);
-      expect((error as CommanderError).code).toBe('yantra.run.invalid-model');
-    }
+  it('raises a validation failure (exit 1) for a blank provider', async () => {
+    await expect(resolveRunSynthesis({ provider: '  ' }, {})).rejects.toMatchObject({
+      exitCode: 1,
+      code: 'yantra.run.invalid-model',
+    });
   });
 
-  it('raises a validation failure for a blank --auth-secret', () => {
-    try {
-      resolveRunSynthesis({ authSecret: '   ' }, {});
-      expect.unreachable('expected a validation failure');
-    } catch (error) {
-      expect((error as CommanderError).exitCode).toBe(1);
-      expect((error as CommanderError).code).toBe('yantra.run.invalid-auth-secret');
-    }
+  it('raises a validation failure for a blank --auth-secret', async () => {
+    await expect(resolveRunSynthesis({ authSecret: '   ' }, {})).rejects.toMatchObject({
+      exitCode: 1,
+      code: 'yantra.run.invalid-auth-secret',
+    });
   });
 
-  it('does not validate model flags at all once the model is vetoed', () => {
+  it('does not validate model flags at all once the model is vetoed', async () => {
     // A run the user already opted out of must not be blocked by a provider it
     // will never reach.
-    expect(() => resolveRunSynthesis({ llm: false, provider: '  ' }, {})).not.toThrow();
-    expect(() => resolveRunSynthesis({ provider: '  ' }, { LLM_PROVIDER: 'none' })).not.toThrow();
+    await expect(resolveRunSynthesis({ llm: false, provider: '  ' }, {})).resolves.toMatchObject({
+      noLlm: true,
+    });
+    await expect(
+      resolveRunSynthesis({ provider: '  ' }, { LLM_PROVIDER: 'none' }),
+    ).resolves.toMatchObject({ noLlm: true });
   });
 });
 

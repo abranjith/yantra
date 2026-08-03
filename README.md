@@ -105,7 +105,9 @@ Every run also writes portable `brief.md` and a self-contained, inert
 - **Cache**: 24h cache in `~/.cache/yantra/ask` (disable with `--no-cache`).
 
 Other flags: `--search-provider <auto|google|duckduckgo|brave|tavily>`,
-`--limit`, `--fetch-timeout`, `--budget-ms`, `--budget`, `--open`, `--no-color`.
+`--max-sources`, `--limit`, `--fetch-timeout`, `--pipeline-timeout`, `--open`,
+`--no-color`. Agent model and enforcement options are listed in the canonical
+[Agentic options](docs/model-configuration.md#agentic-options) reference.
 
 ### Search providers
 
@@ -193,8 +195,8 @@ honest partial Brief with a `budget_exhausted` notice:
   source budget.
 - **Sources**: `--max-sources <n>` (default `24`); the pool dedups near-duplicate
   articles and caps sources per host so one domain can't dominate.
-- **Wall-clock**: `--budget-ms <ms>` (default `180000`).
-- **LLM calls**: `--budget <n>` (default `12`).
+- **Wall-clock**: `--pipeline-timeout <duration>` (default `3m`).
+- **LLM calls**: `--max-llm-calls <n>` (default `12`).
 - **Agent-optional**: `--no-llm` (or `LLM_PROVIDER=none`) runs end to end —
   follow-up queries fall back to deterministic expansion and synthesis to the
   deterministic synthesizer.
@@ -202,8 +204,8 @@ honest partial Brief with a `budget_exhausted` notice:
 Output flags mirror `ask`: `--detail {overview|standard|full}`,
 `--format {terminal|md|html|json}` (`--json` shorthand), `--length`, `--open`,
 `--search-provider`, `--fetch-timeout`, `--per-query-limit`, `--no-color`.
-Model-selection flags mirror `do` — see
-[Selecting the model](#selecting-the-model).
+Agent options mirror every model-capable command — see
+[Agentic options](docs/model-configuration.md#agentic-options).
 
 Alongside the Brief artifacts, each hop writes a `research-state.json` snapshot
 (queries, kept/fetched counts, coverage, remaining budget) to the run dir for
@@ -230,13 +232,12 @@ default to denial; waits are bounded, and `--json`/non-TTY runs fail closed
 without prompting. CAPTCHA, bot walls, robots restrictions, and other controls
 produce an honest handoff—Yantra never evades them.
 
-Hard budgets cover total/per-tool calls, per-tool timeout, provider tokens/cost
-(approximate at turn boundaries), navigation/host count, and result bytes.
-Wall-clock time is **unlimited by default** — local models are slow, so
-time-bounding a run is opt-in via `--budget-ms` (or
-`YANTRA_AGENT_<COMMAND>_BUDGET_MS`). Relevant flags include `--budget-ms`, `--max-tool-calls`,
-`--max-calls-per-tool`, `--tool-timeout-ms`, `--max-provider-tokens`,
-`--max-cost-usd`, and `--confirmation-timeout-ms`. Exit codes are `0` for a
+Hard budgets cover wall-clock time, per-tool timeout, provider tokens,
+navigation/host count, and result bytes. Tool-call counts remain audit data, not
+caps. At 80% of the wall clock, exploration winds down while publication remains
+available, favoring an honest partial Brief over losing gathered evidence. See
+the canonical [Agentic options](docs/model-configuration.md#agentic-options)
+reference for every flag, configuration layer, and default. Exit codes are `0` for a
 published Brief, `2` for failure or budget exhaustion, `4` for human handoff,
 and `130` for an interrupt. `--save-as` is reserved for workflow promotion;
 deterministic saved workflows continue to use `yantra run` without an LLM loop.
@@ -287,29 +288,19 @@ workflows invoked by an agent are always zero-LLM regardless of what the workflo
 declares. See
 [docs/workflow-extraction.md](docs/workflow-extraction.md#the-synthesis-block).
 
-## Selecting the model
+## Agentic options
 
-`ask`, `research`, and `do` all open one provider session, so they share one
-model-selection surface — whatever you can point `do` at, you can point `ask`
-and `research` at too. `yantra run` accepts the same flags, and uses them only
-when the workflow it replays declared `synthesis.use_llm`:
-
-| Flag                  | Purpose                                              | Environment fallback    |
-| --------------------- | ---------------------------------------------------- | ----------------------- |
-| `--provider <name>`   | Provider key, e.g. `anthropic` or `ollama`           | `YANTRA_AGENT_PROVIDER` |
-| `--model <id>`        | Provider-scoped model id                             | `YANTRA_AGENT_MODEL`    |
-| `--thinking <level>`  | Reasoning level (adapters clamp to model capability) | —                       |
-| `--auth-secret <ref>` | Keychain reference resolved to a runtime-only key    | —                       |
+`ask`, `research`, `do`, `run`, and `resume` share provider, model, credential,
+budget, retry, confirmation, and deterministic-selection options. See the
+canonical [Agentic options](docs/model-configuration.md#agentic-options)
+reference for their meanings, preference keys, environment variables,
+precedence, duration syntax, and defaults.
 
 Report-template selection uses the same spelling on every agentic command:
 
 | Flag               | Purpose                                             | Supported commands      |
 | ------------------ | --------------------------------------------------- | ----------------------- |
 | `--template <ref>` | Select a saved name, tag, or Markdown template path | `ask`, `research`, `do` |
-
-Precedence is **explicit flag > environment > pinned default**
-(`anthropic` / `claude-haiku-4-5`). A blank provider, model, or secret
-reference is a validation failure (exit 1), never a silent fallback.
 
 ```bash
 yantra ask "what changed in the EU AI Act" --provider ollama --model llama3.1:8b

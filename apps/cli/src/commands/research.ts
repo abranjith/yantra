@@ -25,6 +25,7 @@ import {
   loadEthicsConfig,
   loadSearchConfig,
   resolveSearchProvider,
+  type EffectivePreferences,
   type Logger,
   type ResearchOptions,
   type ResearchRunResult,
@@ -35,14 +36,16 @@ import { validateBrief, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import {
-  addAgentModelOptions,
-  selectAgentSession,
-  type AgentModelOptions,
-  type AgentSelection,
-} from '../agent-model.js';
+  addAgentOptions,
+  parseDuration,
+  resolveAgentInvocation,
+  type AgentInvocation,
+  type AgentOptions,
+} from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
+import { loadEffectivePreferences } from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
@@ -60,7 +63,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface ResearchCommandOptions extends AgentModelOptions {
+interface ResearchCommandOptions extends AgentOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly color?: boolean;
@@ -71,9 +74,9 @@ interface ResearchCommandOptions extends AgentModelOptions {
   readonly format?: string;
   readonly length?: string;
   readonly searchProvider?: string;
-  readonly budget?: string;
+  readonly maxLlmCalls?: string;
   readonly fetchTimeout?: string;
-  readonly budgetMs?: string;
+  readonly pipelineTimeout?: string;
   readonly perQueryLimit?: string;
   readonly template?: string;
 }
@@ -89,7 +92,9 @@ export interface ResearchRuntime {
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly createLoop: (invocation: ResearchInvocation) => Promise<ResearchLoop>;
+  readonly resolveDefaults: () => Promise<EffectivePreferences>;
   readonly runTask: typeof runAgenticTask;
+  readonly resolveAgent: typeof resolveAgentInvocation;
   readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
   readonly recordHistory: (runId: string) => Promise<void>;
@@ -113,7 +118,7 @@ export function registerResearchCommand(
   // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
   // `--auth-secret`), identical to `ask` and `do`. These bind the LLM provider;
   // `--search-provider` below is the unrelated web-search backend.
-  addAgentModelOptions(researchCommand)
+  addAgentOptions(researchCommand)
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option('--depth <hops>', 'number of research hops (1-3)')
@@ -138,7 +143,6 @@ export function registerResearchCommand(
     )
     .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
     .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addOption(new Option('--no-llm', 'force the deterministic (no-LLM) path'))
     .addOption(new Option('--no-color', 'disable ANSI color output'))
     .addOption(
       new Option(
@@ -146,19 +150,32 @@ export function registerResearchCommand(
         'search provider (default: auto walks tavily -> brave -> duckduckgo)',
       ).choices(['auto', 'google', 'duckduckgo', 'brave', 'tavily']),
     )
-    .addOption(new Option('--budget <calls>', 'maximum LLM calls across the run'))
+    .addOption(new Option('--max-llm-calls <n>', 'maximum LLM calls across the deterministic run'))
     .addOption(
       new Option('--per-query-limit <n>', 'search results to consider per query').default('6'),
     )
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
     .addOption(
       new Option(
-        '--budget-ms <ms>',
-        'deterministic loop wall-clock budget in ms; for agentic runs, an opt-in wall-clock limit (unlimited when omitted)',
-      ).default('180000'),
+        '--pipeline-timeout <duration>',
+        'deterministic loop wall-clock timeout (for example 3m)',
+      ).default('3m'),
     )
     .action(async (topicArg: string, options: ResearchCommandOptions, command: Command) => {
-      const invocation = buildInvocation(topicArg, options, resolvedRuntime.env);
+      const effective = await resolvedRuntime.resolveDefaults();
+      const agent = await resolvedRuntime.resolveAgent(
+        'research',
+        options,
+        resolvedRuntime.env,
+        effective,
+      );
+      if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
+        resolvedRuntime.stderr.write(
+          `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
+            'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
+        );
+      }
+      const invocation = buildInvocation(topicArg, options, agent.mode === 'no-llm');
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
       if (options.template !== undefined && invocation.options.noLlm) {
@@ -188,29 +205,17 @@ export function registerResearchCommand(
       // failure (exit 1) rather than being reclassified as an execution failure
       // by the catch below. Skipped entirely in deterministic mode, which never
       // constructs a provider session.
-      const agentSelection: AgentSelection | null = invocation.options.noLlm
-        ? null
-        : selectAgentSession('research', options, resolvedRuntime.env);
-
       resolvedRuntime.stderr.write(
         `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
           `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
           `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
-          (agentSelection === null
-            ? ''
-            : ` model=${agentSelection.model.provider}/${agentSelection.model.id}`) +
+          (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
           '\n',
       );
 
       try {
         // Deterministic selection is resolved before any agent/provider setup.
-        if (agentSelection !== null) {
-          // Agentic wall clock is unlimited unless --budget-ms was passed
-          // explicitly; the deterministic loop below keeps its bounded default.
-          const explicitWallClockMs =
-            command.getOptionValueSource('budgetMs') === 'cli'
-              ? invocation.options.budget.maxWallClockMs
-              : null;
+        if (agent.mode === 'llm') {
           await runAgenticResearch(
             topicArg,
             invocation,
@@ -219,10 +224,7 @@ export function registerResearchCommand(
             options,
             resolvedRuntime,
             template,
-            {
-              ...agentSelection,
-              wallClockMs: explicitWallClockMs,
-            },
+            agent,
           );
           return;
         }
@@ -339,7 +341,9 @@ function runtimeWithDefaults(runtime?: Partial<ResearchRuntime>): ResearchRuntim
     stdout: runtime?.stdout ?? process.stdout,
     stderr: runtime?.stderr ?? process.stderr,
     createLoop: runtime?.createLoop ?? createDefaultResearchLoop,
+    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
+    resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
     resolveTemplate:
       runtime?.resolveTemplate ??
@@ -356,7 +360,7 @@ async function runAgenticResearch(
   options: ResearchCommandOptions,
   runtime: ResearchRuntime,
   template: ActiveReportTemplate | undefined,
-  agent: AgentSelection & { readonly wallClockMs: number | null },
+  agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -383,10 +387,7 @@ async function runAgenticResearch(
     model: agent.model,
     auth: agent.auth,
     profile,
-    budgets: {
-      ...(agent.wallClockMs === null ? {} : { wallClockMs: agent.wallClockMs }),
-      totalToolCalls: invocation.options.budget.maxLlmCalls,
-    },
+    budgets: agent.budgets,
     ...(template === undefined ? {} : { template }),
     connector,
   });
@@ -434,13 +435,17 @@ function agentFailureMessage(
 function buildInvocation(
   topic: string,
   options: ResearchCommandOptions,
-  env: NodeJS.ProcessEnv,
+  noLlm: boolean,
 ): ResearchInvocation {
   const maxHops = clampInt(options.depth, 2, 1, 3);
   const maxSources = clampInt(options.maxSources, 24, 1, 100);
-  const maxWallClockMs = clampInt(options.budgetMs, 180_000, 1_000, 600_000);
-  const maxLlmCalls = clampInt(options.budget, 12, 1, 100);
-  const noLlm = options.llm === false || env.LLM_PROVIDER === 'none';
+  const maxWallClockMs = noLlm
+    ? Math.min(
+        600_000,
+        Math.max(1_000, parseDuration(options.pipelineTimeout ?? '3m', '--pipeline-timeout')),
+      )
+    : 180_000;
+  const maxLlmCalls = clampInt(options.maxLlmCalls, 12, 1, 100);
 
   return {
     searchProvider: parseProvider(options.searchProvider),

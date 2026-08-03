@@ -40,11 +40,12 @@ import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@y
 import { CommanderError, Option, type Command } from 'commander';
 
 import {
-  addAgentModelOptions,
-  selectAgentSession,
-  type AgentModelOptions,
-  type AgentSelection,
-} from '../agent-model.js';
+  addAgentOptions,
+  parseDuration,
+  resolveAgentInvocation,
+  type AgentInvocation,
+  type AgentOptions,
+} from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -66,20 +67,20 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface AskOptions extends AgentModelOptions {
+interface AskOptions extends AgentOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly cache?: boolean;
   readonly color?: boolean;
   readonly open?: boolean;
-  readonly budget?: string;
+  readonly maxSources?: string;
   readonly searchProvider?: string;
   readonly limit?: string;
   readonly detail?: string;
   readonly format?: string;
   readonly length?: string;
   readonly fetchTimeout?: string;
-  readonly budgetMs?: string;
+  readonly pipelineTimeout?: string;
   readonly template?: string;
 }
 
@@ -94,6 +95,8 @@ export interface AskRuntime {
   readonly recordHistory: (runId: string) => Promise<void>;
   /** Shared agentic runtime; only selected after deterministic mode is ruled out. */
   readonly runTask: typeof runAgenticTask;
+  /** Shared option resolver; injectable so command tests never inspect host credentials. */
+  readonly resolveAgent: typeof resolveAgentInvocation;
   readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
 }
@@ -112,7 +115,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
   // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
   // `--auth-secret`), identical to `research` and `do`. These bind the LLM
   // provider; `--search-provider` below is the unrelated web-search backend.
-  addAgentModelOptions(askCommand)
+  addAgentOptions(askCommand)
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option(
@@ -133,10 +136,9 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     )
     .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
     .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addOption(new Option('--no-llm', 'force the deterministic (no-LLM) synthesizer'))
     .addOption(new Option('--no-cache', 'disable cache reads/writes'))
     .addOption(new Option('--no-color', 'disable ANSI color output'))
-    .addOption(new Option('--budget <calls>', 'maximum sources to fetch'))
+    .addOption(new Option('--max-sources <n>', 'maximum sources to fetch'))
     .addOption(
       new Option(
         '--search-provider <provider>',
@@ -148,15 +150,27 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
     .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('30000'))
     .addOption(
       new Option(
-        '--budget-ms <ms>',
-        'deterministic pipeline timeout in ms; for agentic runs, an opt-in wall-clock limit (unlimited when omitted)',
-      ).default('100000'),
+        '--pipeline-timeout <duration>',
+        'deterministic pipeline timeout (for example 100s)',
+      ).default('100s'),
     )
     .action(async (queryArg: string, options: AskOptions, command: Command) => {
       // Resolve unset flags from the effective preferences (explicit flag wins).
       const effective = await resolvedRuntime.resolveDefaults();
       const resolved = resolveAskDefaults(options, effective);
-      const baseQuery = buildAskQuery(queryArg, options, resolvedRuntime.env, resolved);
+      const agent = await resolvedRuntime.resolveAgent(
+        'ask',
+        options,
+        resolvedRuntime.env,
+        effective,
+      );
+      if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
+        resolvedRuntime.stderr.write(
+          `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
+            'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
+        );
+      }
+      const baseQuery = buildAskQuery(queryArg, options, resolved, agent.mode === 'no-llm');
       // Build the privacy-gated personalization context (LLM path only). The
       // builder takes preferences only — raw history has no path in.
       const personalization = baseQuery.noLlm ? null : personalizationFrom(effective);
@@ -190,34 +204,27 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       // failure (exit 1) rather than being reclassified as an execution failure
       // by the catch below. Skipped entirely in deterministic mode, which never
       // constructs a provider session.
-      const agentSelection: AgentSelection | null = query.noLlm
-        ? null
-        : selectAgentSession('ask', options, resolvedRuntime.env);
-
       resolvedRuntime.stderr.write(
         `ask: search-provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
           `no-llm=${query.noLlm} detail=${detail} format=${format}` +
-          (agentSelection === null
-            ? ''
-            : ` model=${agentSelection.model.provider}/${agentSelection.model.id}`) +
+          (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
           '\n',
       );
 
       try {
         // Selection happens before the agent runtime/provider is constructed.
         // The deterministic pipeline below is deliberately untouched.
-        if (agentSelection !== null) {
-          // The agentic wall clock is unlimited by default; only an explicit
-          // --budget-ms bounds it (and it is not clamped to the deterministic
-          // pipeline's 300s ceiling — local models legitimately need longer).
-          const explicitWallClockMs =
-            command.getOptionValueSource('budgetMs') === 'cli'
-              ? parseNullablePositiveInt(options.budgetMs)
-              : null;
-          await runAgenticAsk(queryArg, query, format, detail, options, resolvedRuntime, template, {
-            ...agentSelection,
-            wallClockMs: explicitWallClockMs,
-          });
+        if (agent.mode === 'llm') {
+          await runAgenticAsk(
+            queryArg,
+            query,
+            format,
+            detail,
+            options,
+            resolvedRuntime,
+            template,
+            agent,
+          );
           return;
         }
         const pipeline = await resolvedRuntime.createPipeline(query);
@@ -377,6 +384,7 @@ function runtimeWithDefaults(runtime?: Partial<AskRuntime>): AskRuntime {
     resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
     recordHistory: runtime?.recordHistory ?? ((runId: string) => recordTaskHistory(runId)),
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
+    resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
     isTty: runtime?.isTty ?? process.stdin.isTTY === true,
     resolveTemplate:
       runtime?.resolveTemplate ??
@@ -392,7 +400,7 @@ async function runAgenticAsk(
   options: AskOptions,
   runtime: AskRuntime,
   template: ActiveReportTemplate | undefined,
-  agent: AgentSelection & { readonly wallClockMs: number | null },
+  agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
   const connector = new CLIConnectorIO(
@@ -409,10 +417,7 @@ async function runAgenticAsk(
     model: agent.model,
     auth: agent.auth,
     profile,
-    budgets: {
-      ...(agent.wallClockMs === null ? {} : { wallClockMs: agent.wallClockMs }),
-      ...(query.budgetCalls === null ? {} : { totalToolCalls: query.budgetCalls }),
-    },
+    budgets: agent.budgets,
     ...(query.personalization ? { profileContext: query.personalization } : {}),
     ...(template === undefined ? {} : { template }),
     connector,
@@ -526,12 +531,11 @@ function asLength(raw: string | undefined): SynthesisLength | undefined {
 function buildAskQuery(
   raw: string,
   options: AskOptions,
-  env: NodeJS.ProcessEnv,
   resolved: ResolvedAskDefaults,
+  noLlm: boolean,
 ): AskQuery {
   const limit = clampInt(options.limit, 3, 1, 10);
-  const budgetCalls = parseNullablePositiveInt(options.budget);
-  const noLlm = options.llm === false || env.LLM_PROVIDER === 'none';
+  const budgetCalls = parseNullablePositiveInt(options.maxSources);
 
   return {
     raw,
@@ -542,7 +546,12 @@ function buildAskQuery(
     budgetCalls,
     searchProvider: resolved.provider,
     perFetchTimeoutMs: clampInt(options.fetchTimeout, 8_000, 1_000, 120_000),
-    pipelineBudgetMs: clampInt(options.budgetMs, 30_000, 1_000, 300_000),
+    pipelineBudgetMs: noLlm
+      ? Math.min(
+          300_000,
+          Math.max(1_000, parseDuration(options.pipelineTimeout ?? '100s', '--pipeline-timeout')),
+        )
+      : 100_000,
     length: resolved.length,
   };
 }

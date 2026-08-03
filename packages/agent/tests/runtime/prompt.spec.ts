@@ -15,11 +15,9 @@ import {
 
 const budgets: AgentPromptBudgets = {
   wallClockMs: 60_000,
-  totalToolCalls: 20,
-  perToolCalls: 8,
   perToolTimeoutMs: 5_000,
+  toolRetries: 3,
   maxProviderTokens: 10_000,
-  maxProviderCostUsd: 1,
   maxNavigations: 5,
   maxHosts: 3,
   maxBytesPerResult: 2048,
@@ -130,14 +128,14 @@ describe('@no-llm agent-v1 prompt governance', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toMatch(/json schema|parameters|tool call id/i);
   });
 
-  it('renders an unbounded wall clock as "unlimited", never as Infinity', () => {
-    const prompt = buildAgentUserPrompt(
-      { goal: 'g', budgets: { ...budgets, wallClockMs: Number.POSITIVE_INFINITY } },
-      markerSanitizer,
-    );
+  it('renders duration, tokens, tool timeout, and retries without call or cost caps', () => {
+    const prompt = buildAgentUserPrompt({ goal: 'g', budgets }, markerSanitizer);
 
-    expect(prompt).toContain('- wall clock: unlimited');
-    expect(prompt).not.toContain('Infinity');
+    expect(prompt).toContain('- duration: 60000 ms');
+    expect(prompt).toContain('- provider token ceiling: 10000 tokens');
+    expect(prompt).toContain('- tool timeout: 5000 ms');
+    expect(prompt).toContain('- tool retries: 3');
+    expect(prompt).not.toMatch(/total calls|calls per capability|cost ceiling/i);
   });
 
   it('sanitizes the goal, bounds profile context by UTF-8 bytes, and normalizes hosts', () => {

@@ -13,19 +13,16 @@ import {
   resolveCommandTaskProfile,
   type runAgenticTask,
   type ActiveReportTemplate,
-  type AgentBudgetConfig,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
+import type { EffectivePreferences } from '@yantra/core';
 import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
-import {
-  addAgentModelOptions,
-  selectAgentSession,
-  type AgentModelOptions,
-} from '../agent-model.js';
+import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
+import { loadEffectivePreferences } from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
@@ -36,18 +33,11 @@ import {
   resolveTemplateRef,
 } from '../template-ref.js';
 
-interface DoOptions extends AgentModelOptions {
+interface DoOptions extends AgentOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly template?: string;
   readonly allowHost?: string[];
-  readonly budgetMs?: string;
-  readonly maxToolCalls?: string;
-  readonly maxCallsPerTool?: string;
-  readonly toolTimeoutMs?: string;
-  readonly maxProviderTokens?: string;
-  readonly maxCostUsd?: string;
-  readonly confirmationTimeoutMs?: string;
   /** Promote a successful run's browser trace into a saved workflow (FEAT-027). */
   readonly saveAs?: string;
 }
@@ -61,6 +51,8 @@ export interface DoRuntime {
   readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
   readonly recordHistory: (runId: string) => Promise<void>;
+  readonly resolveDefaults: () => Promise<EffectivePreferences>;
+  readonly resolveAgent: typeof resolveAgentInvocation;
 }
 
 /** Register `do`/`discover` without introducing any agent loop in the CLI. */
@@ -71,19 +63,12 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
     .alias('discover')
     .description('Run a multi-turn web agent that uses Yantra tools and publishes a Brief.')
     .argument('<goal>', 'browser or web goal to accomplish');
-  addAgentModelOptions(command)
+  addAgentOptions(command)
     .addOption(
       new Option('--allow-host <host>', 'restrict outbound work to a host (repeatable)')
         .argParser(collect)
         .default([]),
     )
-    .addOption(new Option('--budget-ms <ms>', 'whole-run wall-clock budget'))
-    .addOption(new Option('--max-tool-calls <n>', 'maximum total tool calls'))
-    .addOption(new Option('--max-calls-per-tool <n>', 'maximum calls to one tool'))
-    .addOption(new Option('--tool-timeout-ms <ms>', 'timeout for one tool call'))
-    .addOption(new Option('--max-provider-tokens <n>', 'approximate provider token ceiling'))
-    .addOption(new Option('--max-cost-usd <amount>', 'approximate provider cost ceiling'))
-    .addOption(new Option('--confirmation-timeout-ms <ms>', 'maximum live consent wait'))
     .addOption(
       new Option(
         '--save-as <name>',
@@ -92,7 +77,6 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
     )
     .addOption(new Option('--json', 'emit progress and outcome as NDJSON').default(false))
     .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addOption(new Option('--no-llm', 'disable LLM mode'))
     .action((goal: string, options: DoOptions) => executeDo(goal, options, resolved));
 }
 
@@ -100,10 +84,23 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
 export const exitCodeForDoOutcome = exitCodeForAgenticOutcome;
 
 async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
-  const noLlm = options.llm === false || runtime.env.LLM_PROVIDER === 'none';
-  if (options.template !== undefined && noLlm) {
-    runtime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
-    throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+  const effective = await runtime.resolveDefaults();
+  const agent = await runtime.resolveAgent('do', options, runtime.env, effective);
+  if (agent.mode === 'no-llm') {
+    if (agent.reason === 'unavailable') {
+      const message =
+        `No credentials available for provider "${agent.model.provider}". ` +
+        'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.';
+      runtime.stderr.write(`AGENT_AUTH_UNAVAILABLE: ${message}\n`);
+      throw new CommanderError(3, 'AGENT_AUTH_UNAVAILABLE', message);
+    }
+    const message =
+      options.template === undefined
+        ? '`do` runs a web agent and requires a model; use `ask --no-llm` or ' +
+          '`research --no-llm` for deterministic web research.'
+        : TEMPLATE_LLM_GUARD;
+    runtime.stderr.write(`${message}\n`);
+    throw new CommanderError(1, 'yantra.do.llm-required', message);
   }
   const template =
     options.template === undefined
@@ -136,13 +133,12 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     // runtime's implicit default. This also honors the documented
     // `YANTRA_AGENT_DO_*` budget env overrides, matching the `ask` path.
     const profile = resolveCommandTaskProfile('do', runtime.env);
-    const agent = selectAgentSession('do', options, runtime.env);
     const outcome = await runtime.runTask({
       goal,
       profile,
       model: agent.model,
       auth: agent.auth,
-      budgets: parseBudgets(options),
+      budgets: agent.budgets,
       allowedHosts: normalizeHosts(options.allowHost ?? []),
       // A user is present only on an interactive TTY run (not --json / piped):
       // the agent prompt then says a user can approve protected actions but
@@ -193,46 +189,6 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
   }
 }
 
-function parseBudgets(options: DoOptions): Partial<AgentBudgetConfig> {
-  const wallClockMs = positiveInteger(options.budgetMs, '--budget-ms');
-  const totalToolCalls = positiveInteger(options.maxToolCalls, '--max-tool-calls');
-  const perToolCalls = positiveInteger(options.maxCallsPerTool, '--max-calls-per-tool');
-  const perToolTimeoutMs = positiveInteger(options.toolTimeoutMs, '--tool-timeout-ms');
-  const maxProviderTokens = positiveInteger(options.maxProviderTokens, '--max-provider-tokens');
-  const maxProviderCostUsd = positiveNumber(options.maxCostUsd, '--max-cost-usd');
-  const confirmationWaitMs = positiveInteger(
-    options.confirmationTimeoutMs,
-    '--confirmation-timeout-ms',
-  );
-  return {
-    ...(wallClockMs !== undefined ? { wallClockMs } : {}),
-    ...(totalToolCalls !== undefined ? { totalToolCalls } : {}),
-    ...(perToolCalls !== undefined ? { perToolCalls } : {}),
-    ...(perToolTimeoutMs !== undefined ? { perToolTimeoutMs } : {}),
-    ...(maxProviderTokens !== undefined ? { maxProviderTokens } : {}),
-    ...(maxProviderCostUsd !== undefined ? { maxProviderCostUsd } : {}),
-    ...(confirmationWaitMs !== undefined ? { confirmationWaitMs } : {}),
-  };
-}
-
-function positiveInteger(raw: string | undefined, flag: string): number | undefined {
-  if (raw === undefined) return undefined;
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new CommanderError(1, 'yantra.do.invalid-budget', `${flag} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function positiveNumber(raw: string | undefined, flag: string): number | undefined {
-  if (raw === undefined) return undefined;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new CommanderError(1, 'yantra.do.invalid-budget', `${flag} must be positive.`);
-  }
-  return parsed;
-}
-
 function normalizeHosts(hosts: readonly string[]): string[] {
   const normalized = hosts.map(clean).map((host) => host.toLowerCase());
   for (const host of normalized) {
@@ -266,6 +222,8 @@ function runtimeWithDefaults(runtime?: Partial<DoRuntime>): DoRuntime {
       runtime?.resolveTemplate ??
       ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
     recordHistory: runtime?.recordHistory ?? ((runId) => recordTaskHistory(runId)),
+    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
+    resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
   };
 }
 

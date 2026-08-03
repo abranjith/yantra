@@ -1,7 +1,5 @@
 import type { TemplateManifest } from '@yantra/protocol';
 
-import type { AgentBudgetConfig } from './orchestrator.js';
-
 /** Commands that can start an agentic Yantra session. */
 export type AgenticCommand = 'ask' | 'research' | 'do';
 
@@ -29,7 +27,6 @@ export interface CommandTaskProfile {
   readonly command: AgenticCommand;
   readonly toolNames: readonly YantraToolName[];
   readonly workflowToolMode: WorkflowToolMode;
-  readonly budgets: Partial<AgentBudgetConfig>;
   /** Appended only to the per-run user prompt, never the system prompt. */
   readonly promptAddendum: string;
   readonly briefKind: BriefKind;
@@ -51,7 +48,6 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'ask',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'list',
-    budgets: { totalToolCalls: 12, perToolCalls: 6 },
     promptAddendum:
       'Answer the question directly from the fetched evidence, then finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish an answer ' +
@@ -65,7 +61,6 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'research',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'run',
-    budgets: { totalToolCalls: 30, perToolCalls: 12 },
     promptAddendum:
       'Research broadly before publishing: use independent sources and cover material gaps, ' +
       'then finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
@@ -79,7 +74,6 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'do',
     toolNames: ALL_TOOLS,
     workflowToolMode: 'run',
-    budgets: {},
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task Brief.',
@@ -117,9 +111,8 @@ export function promptAddendumFor(
 }
 
 /**
- * Returns a configured profile. Environment keys are the CLI configuration
- * surface until persistent agent-budget config is introduced:
- * `YANTRA_AGENT_<COMMAND>_{BUDGET_MS,MAX_TOOL_CALLS,MAX_CALLS_PER_TOOL}`.
+ * Returns a configured profile. Budgets are resolved once by the shared CLI
+ * agent-option surface; profiles retain only capabilities and prompt behavior.
  * Research browsing is explicitly opt-in via `YANTRA_AGENT_RESEARCH_BROWSE=1`.
  */
 export function resolveCommandTaskProfile(
@@ -127,28 +120,12 @@ export function resolveCommandTaskProfile(
   env: NodeJS.ProcessEnv = process.env,
 ): CommandTaskProfile {
   const base = COMMAND_TASK_PROFILES[command];
-  const prefix = `YANTRA_AGENT_${command.toUpperCase()}_`;
-  const budgets: Partial<AgentBudgetConfig> = {
-    ...base.budgets,
-    ...positive(env[`${prefix}BUDGET_MS`], 'wallClockMs'),
-    ...positive(env[`${prefix}MAX_TOOL_CALLS`], 'totalToolCalls'),
-    ...positive(env[`${prefix}MAX_CALLS_PER_TOOL`], 'perToolCalls'),
-  };
   const browseEnabled =
     command === 'research' &&
     (env.YANTRA_AGENT_RESEARCH_BROWSE === '1' || env.YANTRA_AGENT_RESEARCH_BROWSE === 'true');
 
   return {
     ...base,
-    budgets,
     toolNames: browseEnabled ? [...base.toolNames, ...BROWSE_TOOLS] : [...base.toolNames],
   };
-}
-
-function positive(
-  raw: string | undefined,
-  key: keyof AgentBudgetConfig,
-): Partial<AgentBudgetConfig> {
-  const value = Number(raw);
-  return Number.isSafeInteger(value) && value > 0 ? { [key]: value } : {};
 }

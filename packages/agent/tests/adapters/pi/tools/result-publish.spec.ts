@@ -47,24 +47,14 @@ describe('@no-llm result_publish tool', () => {
     await expect(access(join(runDir, 'brief.json'))).resolves.toBeUndefined();
   });
 
-  it('publishes after the run spent its whole total tool-call budget', async () => {
-    // Regression (run 20260801T222532Z-research-b99efc18): 12 successful
-    // web_search/web_fetch calls consumed the run's 12-call total budget, and
-    // the 13th call — result_publish, the ONLY way to complete a run — was
-    // denied with "Total tool-call budget of 12 calls is exhausted". A run that
-    // had gathered everything it needed was finalized as budget_exhausted and
-    // every fetched source was discarded.
+  it('publishes after the run spent its cumulative byte budget', async () => {
     const services = buildServices({
       runDir,
       publish: createBriefPublisher(runDir),
-      limits: { totalToolCalls: 2, perToolCalls: 4 },
+      limits: { maxBytesPerRun: 1 },
     });
-    const fetchTool = wrapTool(webFetchSpec(services), services);
-    // Spend the entire total-call budget on evidence gathering.
-    await fetchTool.execute({ url: 'https://example.com/a' }, undefined);
-    await fetchTool.execute({ url: 'https://example.com/b' }, undefined);
-    const starved = await fetchTool.execute({ url: 'https://example.com/c' }, undefined);
-    expect(starved.error_code).toBe('BUDGET_EXHAUSTED');
+    expect(services.budgets.accountResultBytes(2).isOk).toBe(false);
+    expect(services.budgets.reserveCall('web_fetch').isOk).toBe(false);
 
     const publish = wrapTool(resultPublishSpec(services), services);
     const result = await publish.execute({ brief: validBrief() }, undefined);
@@ -74,22 +64,18 @@ describe('@no-llm result_publish tool', () => {
     await expect(access(join(runDir, 'brief.json'))).resolves.toBeUndefined();
   });
 
-  it('still bounds the publish correction loop with its per-tool budget', async () => {
-    // The total-call exemption must not make retries unbounded.
+  it('does not impose the removed per-tool call cap on publish corrections', async () => {
     const services = buildServices({
       runDir,
       publish: createBriefPublisher(runDir),
-      limits: { totalToolCalls: 1, perToolCalls: 2 },
     });
     const tool = wrapTool(resultPublishSpec(services), services);
     const invalid = { brief: { title: 'Bad', overview: 'x', sources: ['not a url'] } };
 
-    expect((await tool.execute(invalid, undefined)).error_code).toBe('BRIEF_INVALID');
-    expect((await tool.execute(invalid, undefined)).error_code).toBe('BRIEF_INVALID');
-    const denied = await tool.execute(invalid, undefined);
-
-    expect(denied.error_code).toBe('BUDGET_EXHAUSTED');
-    expect(denied.details).toMatchObject({ budget_limit: 'per-tool-calls' });
+    for (let index = 0; index < 10; index += 1) {
+      expect((await tool.execute(invalid, undefined)).error_code).toBe('BRIEF_INVALID');
+    }
+    expect((await tool.execute({ brief: validBrief() }, undefined)).status).toBe('ok');
   });
 
   it('rejects a second publish with ALREADY_PUBLISHED', async () => {

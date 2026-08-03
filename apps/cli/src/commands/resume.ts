@@ -11,7 +11,11 @@
  */
 
 import { PiAgentProvider } from '@yantra/agent';
-import { InteractiveConfirmationGateway, type Logger } from '@yantra/core';
+import {
+  InteractiveConfirmationGateway,
+  type EffectivePreferences,
+  type Logger,
+} from '@yantra/core';
 import type { RunManifest } from '@yantra/core/workflow/replay';
 import {
   LocalRunStore,
@@ -21,7 +25,8 @@ import {
 } from '@yantra/core/workflow/replay';
 import { Command } from 'commander';
 
-import { selectAgentSession } from '../agent-model.js';
+import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import { loadEffectivePreferences } from '../preferences.js';
 import {
   buildOrchestratorRuntime,
   makeStderrLogger,
@@ -29,7 +34,7 @@ import {
 } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
-interface ResumeOptions {
+interface ResumeOptions extends AgentOptions {
   readonly json?: boolean;
   readonly debug?: boolean;
   readonly force?: boolean;
@@ -38,7 +43,7 @@ interface ResumeOptions {
 export function makeResumeCommand(): Command {
   const cmd = new Command('resume');
 
-  cmd
+  addAgentOptions(cmd)
     .description('Resume a previously failed or paused workflow run')
     .argument('<run-id>', 'Run ID to resume (from the run directory name)')
     .option('--json', 'Emit JSON summary to stdout', false)
@@ -64,7 +69,13 @@ export function makeResumeCommand(): Command {
         // a run store, so this costs nothing extra.
         const point = await loadResumePoint(new LocalRunStore(), runId);
 
-        const inherited = synthesisForResume(point.manifest, logger);
+        const inherited = await synthesisForResume(
+          point.manifest,
+          logger,
+          options,
+          process.env,
+          await loadEffectivePreferences(),
+        );
         const runtime = await buildOrchestratorRuntime({
           logger,
           confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
@@ -138,10 +149,13 @@ export function makeResumeCommand(): Command {
  * @param logger - Structured logger for the synthesizer.
  * @returns The wiring, or undefined to leave the stage disabled.
  */
-export function synthesisForResume(
+export async function synthesisForResume(
   manifest: RunManifest,
   logger: Logger,
-): OrchestratorSynthesisOptions | undefined {
+  options: AgentOptions = {},
+  env: NodeJS.ProcessEnv = process.env,
+  prefs: EffectivePreferences = new Map(),
+): Promise<OrchestratorSynthesisOptions | undefined> {
   const record = manifest.synthesis;
   if (record === undefined) return undefined;
   if (record.strategy === 'deterministic' && !record.fallbackUsed) {
@@ -150,14 +164,15 @@ export function synthesisForResume(
 
   // The manifest records the strategy, not the model, so the model resolves the
   // documented way (flag absent here → environment → pinned default).
-  const selection = selectAgentSession('resume', {}, process.env);
+  const invocation = await resolveAgentInvocation('resume', options, env, prefs);
+  if (invocation.mode === 'no-llm') return { llm: null, noLlm: true };
   return {
     noLlm: false,
     llm: ({ runId, runDir }) =>
       createSynthesisLlm({
         provider: new PiAgentProvider(),
-        model: selection.model,
-        auth: selection.auth,
+        model: invocation.model,
+        auth: invocation.auth,
         runId,
         runDir,
         cwd: process.cwd(),

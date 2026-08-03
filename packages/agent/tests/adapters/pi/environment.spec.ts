@@ -11,11 +11,14 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 
+import { AuthStorage } from '@earendil-works/pi-coding-agent';
+import type { KeychainProvider } from '@yantra/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   checkCustomModelContextWindow,
   createPiEnvironment,
+  probePiCredential,
   type PiEnvironmentOptions,
 } from '../../../src/adapters/pi/environment.js';
 import { AgentAuthUnavailableError } from '../../../src/errors.js';
@@ -234,6 +237,79 @@ describe('@no-llm createPiEnvironment — auth', () => {
 
     const env = await createPiEnvironment(options);
     expect(env.authSource).toBe('unavailable');
+  });
+});
+
+describe('@no-llm probePiCredential', () => {
+  function keychain(list: KeychainProvider['list']): KeychainProvider {
+    return {
+      get: () => Promise.resolve(null),
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(false),
+      list,
+      isAvailable: () => Promise.resolve(true),
+    };
+  }
+
+  it('finds a provider environment credential without opening a session', async () => {
+    await expect(
+      probePiCredential({
+        provider: 'anthropic',
+        auth: { mode: 'managed' },
+        env: { ANTHROPIC_API_KEY: 'fixture' },
+        dataDir: await makeTempDir('yantra-probe-env-'),
+      }),
+    ).resolves.toEqual({ available: true, authSource: 'environment' });
+  });
+
+  it('finds a managed auth.json credential by status only', async () => {
+    const dataDir = await makeTempDir('yantra-probe-managed-');
+    const authPath = join(dataDir, 'pi', 'auth.json');
+    AuthStorage.create(authPath).set('testprov', { type: 'api_key', key: 'fixture' });
+
+    await expect(
+      probePiCredential({
+        provider: 'testprov',
+        auth: { mode: 'managed' },
+        env: {},
+        dataDir,
+      }),
+    ).resolves.toEqual({ available: true, authSource: 'managed' });
+  });
+
+  it('finds a runtime-key reference by account name without reading its value', async () => {
+    let getCalled = false;
+    const store: KeychainProvider = {
+      get: () => {
+        getCalled = true;
+        return Promise.resolve('must-not-be-read');
+      },
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(false),
+      list: () => Promise.resolve([{ account: 'model.api_key' }]),
+      isAvailable: () => Promise.resolve(true),
+    };
+
+    await expect(
+      probePiCredential({
+        provider: 'anthropic',
+        auth: { mode: 'runtime-key', secretRef: 'model.api_key' },
+        env: {},
+        keychain: store,
+      }),
+    ).resolves.toEqual({ available: true, authSource: 'runtime-key' });
+    expect(getCalled).toBe(false);
+  });
+
+  it('turns an unreadable keychain into unavailable instead of throwing', async () => {
+    await expect(
+      probePiCredential({
+        provider: 'anthropic',
+        auth: { mode: 'runtime-key', secretRef: 'model.api_key' },
+        env: {},
+        keychain: keychain(() => Promise.reject(new Error('locked'))),
+      }),
+    ).resolves.toEqual({ available: false, authSource: 'unavailable' });
   });
 });
 

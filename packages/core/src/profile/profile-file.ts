@@ -25,6 +25,10 @@ const searchProviderSchema = z.enum(['auto', 'google', 'duckduckgo', 'brave', 't
 const detailSchema = z.enum(['overview', 'standard', 'full']);
 const lengthSchema = z.enum(['short', 'medium', 'long']);
 const unitsSchema = z.enum(['metric', 'imperial']);
+const nullableAgentStringSchema = z.string().trim().min(1).nullable();
+const agentDurationSchema = z
+  .string()
+  .regex(/^[1-9]\d*(?:ms|s|m|h)?$/, 'expected a positive duration such as 15m, 900s, or 900000');
 
 /**
  * The profile.yaml schema. Every block and leaf has a default so a partial (or
@@ -52,6 +56,18 @@ export const profileSchema = z
         favorite_retailers: z.array(z.string()).default([]),
       })
       .default({}),
+    agent: z
+      .object({
+        provider: nullableAgentStringSchema.default(null),
+        model: nullableAgentStringSchema.default(null),
+        thinking: nullableAgentStringSchema.default(null),
+        max_duration: agentDurationSchema.default('15m'),
+        max_tokens: z.number().int().positive().default(2_000_000),
+        tool_timeout: agentDurationSchema.default('3m'),
+        tool_retries: z.number().int().nonnegative().default(3),
+        confirm_timeout: agentDurationSchema.default('3m'),
+      })
+      .default({}),
   })
   .strict();
 
@@ -73,6 +89,14 @@ export const KNOWN_PREFERENCE_KEYS = [
   'personalization.enabled',
   'personalization.interests',
   'personalization.favorite_retailers',
+  'agent.provider',
+  'agent.model',
+  'agent.thinking',
+  'agent.max_duration',
+  'agent.max_tokens',
+  'agent.tool_timeout',
+  'agent.tool_retries',
+  'agent.confirm_timeout',
 ] as const;
 
 export type PreferenceKey = (typeof KNOWN_PREFERENCE_KEYS)[number];
@@ -144,6 +168,14 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['personalization.enabled', profile.personalization.enabled],
     ['personalization.interests', profile.personalization.interests],
     ['personalization.favorite_retailers', profile.personalization.favorite_retailers],
+    ['agent.provider', profile.agent.provider],
+    ['agent.model', profile.agent.model],
+    ['agent.thinking', profile.agent.thinking],
+    ['agent.max_duration', profile.agent.max_duration],
+    ['agent.max_tokens', profile.agent.max_tokens],
+    ['agent.tool_timeout', profile.agent.tool_timeout],
+    ['agent.tool_retries', profile.agent.tool_retries],
+    ['agent.confirm_timeout', profile.agent.confirm_timeout],
   ]);
 }
 
@@ -157,6 +189,14 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'personalization.enabled': z.boolean(),
   'personalization.interests': z.array(z.string()),
   'personalization.favorite_retailers': z.array(z.string()),
+  'agent.provider': nullableAgentStringSchema,
+  'agent.model': nullableAgentStringSchema,
+  'agent.thinking': nullableAgentStringSchema,
+  'agent.max_duration': agentDurationSchema,
+  'agent.max_tokens': z.number().int().positive(),
+  'agent.tool_timeout': agentDurationSchema,
+  'agent.tool_retries': z.number().int().nonnegative(),
+  'agent.confirm_timeout': agentDurationSchema,
 };
 
 /**
@@ -200,6 +240,16 @@ function coerceRawValue(key: PreferenceKey, rawValue: string): unknown {
   }
   if (key === 'locale.region' && rawValue.toLowerCase() === 'null') {
     return null;
+  }
+  if (
+    (key === 'agent.provider' || key === 'agent.model' || key === 'agent.thinking') &&
+    rawValue.toLowerCase() === 'null'
+  ) {
+    return null;
+  }
+  if (key === 'agent.max_tokens' || key === 'agent.tool_retries') {
+    const value = Number(rawValue);
+    return Number.isSafeInteger(value) ? value : rawValue;
   }
   return rawValue;
 }

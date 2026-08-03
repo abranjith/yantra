@@ -5,6 +5,7 @@ import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { registerDoCommand } from '../../src/commands/do.js';
 
 function capture(): { stream: Writable; value: () => string } {
@@ -52,7 +53,11 @@ function outcome(kind: AgenticTaskOutcome['kind']): AgenticTaskOutcome {
 async function invoke(
   argv: readonly string[],
   terminal: AgenticTaskOutcome,
-  options: { readonly isTty?: boolean; readonly render?: boolean } = {},
+  options: {
+    readonly isTty?: boolean;
+    readonly render?: boolean;
+    readonly env?: NodeJS.ProcessEnv;
+  } = {},
 ): Promise<{
   readonly exitCode: number;
   readonly request: AgenticTaskRequest;
@@ -70,10 +75,14 @@ async function invoke(
   const program = new Command().exitOverride();
   registerDoCommand(program, {
     runTask,
-    env: {},
+    env: options.env ?? {},
     stdout: stdout.stream,
     stderr: stderr.stream,
     isTty: options.isTty ?? false,
+    resolveAgent: (command, agentOptions, env, prefs) =>
+      resolveAgentInvocation(command, agentOptions, env, prefs, {
+        probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+      }),
   });
   let exitCode = 0;
   try {
@@ -85,6 +94,25 @@ async function invoke(
 }
 
 describe('@no-llm yantra do cutover', () => {
+  it('rejects --no-llm with guidance and opens no agent session', async () => {
+    const result = await invoke(['do', 'goal', '--no-llm'], outcome('published'));
+
+    expect(result.exitCode).toBe(1);
+    expect(result.request).toBeUndefined();
+    expect(result.stderr).toContain(
+      '`do` runs a web agent and requires a model; use `ask --no-llm` or `research --no-llm` for deterministic web research.',
+    );
+  });
+
+  it('treats LLM_PROVIDER=none exactly like --no-llm', async () => {
+    const result = await invoke(['do', 'goal'], outcome('published'), {
+      env: { LLM_PROVIDER: 'none' },
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.request).toBeUndefined();
+  });
+
   it('parses model, auth, host, and budget flags into one AgenticTaskRequest', async () => {
     const result = await invoke(
       [
@@ -100,12 +128,16 @@ describe('@no-llm yantra do cutover', () => {
         'model.api_key',
         '--allow-host',
         'EXAMPLE.com',
-        '--max-tool-calls',
-        '12',
-        '--max-cost-usd',
-        '1.5',
-        '--confirmation-timeout-ms',
-        '5000',
+        '--max-duration',
+        '20m',
+        '--max-tokens',
+        '12000',
+        '--tool-timeout',
+        '2m',
+        '--tool-retries',
+        '4',
+        '--confirm-timeout',
+        '5s',
         '--save-as',
         'future-workflow',
       ],
@@ -118,7 +150,13 @@ describe('@no-llm yantra do cutover', () => {
       model: { provider: 'fixture', id: 'fixture-model', thinking: 'medium' },
       auth: { mode: 'runtime-key', secretRef: 'model.api_key' },
       allowedHosts: ['example.com'],
-      budgets: { totalToolCalls: 12, maxProviderCostUsd: 1.5, confirmationWaitMs: 5000 },
+      budgets: {
+        wallClockMs: 1_200_000,
+        maxProviderTokens: 12_000,
+        perToolTimeoutMs: 120_000,
+        toolRetries: 4,
+        confirmationWaitMs: 5_000,
+      },
     });
   });
 
@@ -142,7 +180,7 @@ describe('@no-llm yantra do cutover', () => {
     expect(result.request.profile?.briefKind).toBe('task');
   });
 
-  it('honors the YANTRA_AGENT_DO_* budget env overrides via the resolved profile', async () => {
+  it('honors the shared YANTRA_AGENT_* budget environment overrides', async () => {
     const stdout = capture();
     const stderr = capture();
     let captured: AgenticTaskRequest | undefined;
@@ -153,21 +191,51 @@ describe('@no-llm yantra do cutover', () => {
     const program = new Command().exitOverride();
     registerDoCommand(program, {
       runTask,
-      env: { YANTRA_AGENT_DO_MAX_TOOL_CALLS: '7' },
+      env: { YANTRA_AGENT_MAX_DURATION: '7m' },
       stdout: stdout.stream,
       stderr: stderr.stream,
       isTty: false,
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+        }),
     });
     await program.parseAsync(['do', 'goal'], { from: 'user' });
 
-    expect(captured?.profile?.budgets.totalToolCalls).toBe(7);
+    expect(captured?.budgets?.wallClockMs).toBe(420_000);
+    expect(captured?.profile).not.toHaveProperty('budgets');
   });
 
-  it('surfaces AGENT_AUTH_UNAVAILABLE actionably without a null fallback', async () => {
+  it('renders a typed runtime failure without a null fallback', async () => {
     const result = await invoke(['do', 'goal'], outcome('failed'), { render: true });
 
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain('AGENT_AUTH_UNAVAILABLE: Configure auth.');
+  });
+
+  it('exits 3 with AGENT_AUTH_UNAVAILABLE when the offline probe finds no credential', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    const runTask = vi.fn(() => Promise.resolve(outcome('published')));
+    const program = new Command().exitOverride();
+    registerDoCommand(program, {
+      runTask,
+      env: {},
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      isTty: false,
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: false, authSource: 'unavailable' }),
+        }),
+    });
+
+    await expect(program.parseAsync(['do', 'goal'], { from: 'user' })).rejects.toMatchObject({
+      code: 'AGENT_AUTH_UNAVAILABLE',
+      exitCode: 3,
+    });
+    expect(stderr.value()).toContain('AGENT_AUTH_UNAVAILABLE');
+    expect(runTask).not.toHaveBeenCalled();
   });
 
   it('uses a non-interactive connector and parseable NDJSON in --json mode', async () => {
@@ -194,12 +262,24 @@ describe('@no-llm yantra do cutover', () => {
   });
 
   it('rejects malformed budget and host flags as validation errors', async () => {
-    expect((await invoke(['do', 'goal', '--budget-ms', '0'], outcome('published'))).exitCode).toBe(
-      1,
-    );
+    expect(
+      (await invoke(['do', 'goal', '--max-duration', '0'], outcome('published'))).exitCode,
+    ).toBe(1);
     expect(
       (await invoke(['do', 'goal', '--allow-host', 'bad host'], outcome('published'))).exitCode,
     ).toBe(1);
+  });
+
+  it.each([
+    '--budget-ms',
+    '--max-tool-calls',
+    '--max-calls-per-tool',
+    '--tool-timeout-ms',
+    '--max-provider-tokens',
+    '--max-cost-usd',
+    '--confirmation-timeout-ms',
+  ])('rejects the retired %s spelling', async (flag) => {
+    expect((await invoke(['do', 'goal', flag, '5'], outcome('published'))).exitCode).toBe(1);
   });
 
   it('keeps the CLI free of manual discovery-loop imports and duplicate history', async () => {

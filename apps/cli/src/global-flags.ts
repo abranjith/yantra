@@ -14,6 +14,22 @@ export interface GlobalFlags {
   readonly noColor: boolean;
 }
 
+/** Why the shared agent resolver selected the deterministic path. */
+export type NoLlmReason = 'flag' | 'env';
+
+/**
+ * Resolves the single process-wide no-LLM derivation used by every command.
+ * Commander stores `--no-llm` as `llm: false`; `LLM_PROVIDER=none` is the
+ * environment-level equivalent.
+ */
+export function noLlmReason(
+  options: { readonly llm?: boolean },
+  env: NodeJS.ProcessEnv,
+): NoLlmReason | null {
+  if (options.llm === false) return 'flag';
+  return env.LLM_PROVIDER === 'none' ? 'env' : null;
+}
+
 /**
  * Builds a {@link GlobalFlags} bag from `process.argv`-style argv plus the
  * runtime environment. Mutually-exclusive flags are *not* enforced here —
@@ -37,7 +53,7 @@ export function readGlobalFlags(args: {
   return {
     json: argSet.has('--json'),
     debug: argSet.has('--debug'),
-    noLlm: argSet.has('--no-llm') || args.env.LLM_PROVIDER === 'none',
+    noLlm: noLlmReason(argSet.has('--no-llm') ? { llm: false } : {}, args.env) !== null,
     noColor: argSet.has('--no-color') || noColorEnv || !args.isTty,
     configPath,
   };

@@ -9,6 +9,7 @@ privacy guarantee is enforced.
 
 | Data                                                                                                | Location                                               | Nature                                                                     |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Agent operational defaults** (model, budgets, retries, confirmation timeout)                      | `~/.config/yantra/profile.yaml` (`agent.*`)            | Configuration only; never personalization context.                         |
 | **Personal defaults** (search provider, detail/length, locale/units, favorite retailers, interests) | `~/.config/yantra/profile.yaml`                        | Human-editable YAML. This file is **yours** — open it, edit it, delete it. |
 | **Task history** (intent, brief id, status, timing, cost, provider)                                 | `~/.local/share/yantra/index.db` (`history` table)     | A local SQLite index.                                                      |
 | **Machine preference signals**                                                                      | `~/.local/share/yantra/index.db` (`preferences` table) | Learned/managed values; each carries an `approved` flag.                   |
@@ -61,6 +62,10 @@ Prefers metric units. Favors retailers: Amazon, Best Buy.
 This is intentionally the _only_ personalization surface an LLM sees. The
 guarantee is enforced by **three independent mechanisms**, so a single mistake
 cannot leak your history:
+
+Operational `agent.*` preferences are explicitly excluded even though they are
+approved profile values. They configure session construction and enforcement;
+they are never summarized into the user-personalization paragraph.
 
 1. **Input-type restriction (structural).** `buildPersonalizationContext` accepts
    an `EffectivePreferences` map and nothing else. There is no overload, field,

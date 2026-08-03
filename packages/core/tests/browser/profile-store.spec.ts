@@ -223,6 +223,8 @@ describe('@no-llm LocalProfileStore', () => {
       expect(mockRm).toHaveBeenCalledWith('/tmp/yantra-test-uuid', {
         recursive: true,
         force: true,
+        maxRetries: 5,
+        retryDelay: 100,
       });
     });
 

@@ -30,27 +30,29 @@
 import { readFile } from 'node:fs/promises';
 
 import { PiAgentProvider } from '@yantra/agent';
-import { InteractiveConfirmationGateway } from '@yantra/core';
+import { InteractiveConfirmationGateway, type EffectivePreferences } from '@yantra/core';
 import type { BriefRunArtifacts, RunRequest } from '@yantra/core/workflow/replay';
 import { exitCodeFor } from '@yantra/core/workflow/replay';
 import type { Brief } from '@yantra/protocol';
 import { validateBrief } from '@yantra/protocol';
-import { Command, Option } from 'commander';
+import { Command } from 'commander';
 
 import {
-  addAgentModelOptions,
-  selectAgentSession,
-  type AgentModelOptions,
-  type AgentSelection,
-} from '../agent-model.js';
+  addAgentOptions,
+  resolveAgentInvocation,
+  type AgentInvocationDependencies,
+  type AgentInvocation,
+  type AgentOptions,
+} from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
+import { loadEffectivePreferences } from '../preferences.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
-interface RunOptions extends AgentModelOptions {
+interface RunOptions extends AgentOptions {
   readonly params?: string[];
   readonly paramsFile?: string;
   readonly json?: boolean;
@@ -91,15 +93,9 @@ export function makeRunCommand(): Command {
     .option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs')
     .option('--json', 'Emit JSON summary to stdout instead of a terminal card', false)
     .option('--debug', 'Emit verbose debug logging to stderr', false)
-    .option('--template <ref>', 'report templates are supported on ask, research, and do')
-    .addOption(
-      new Option(
-        '--no-llm',
-        "force the deterministic (no-model) Brief even if the workflow's synthesis block asks for a model",
-      ),
-    );
+    .option('--template <ref>', 'report templates are supported on ask, research, and do');
 
-  addAgentModelOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
+  addAgentOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
     if (options.template !== undefined) {
       process.stderr.write(
         'templates are not yet supported on run; see docs/report-templates.md\n',
@@ -123,12 +119,18 @@ export function makeRunCommand(): Command {
     // error after a run directory already exists — the `ask` precedent.
     let wiring: RunSynthesisWiring = { noLlm: true, selection: null };
     try {
-      wiring = resolveRunSynthesis(options, process.env);
+      wiring = await resolveRunSynthesis(options, process.env, await loadEffectivePreferences());
     } catch (err) {
       process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
       process.exit(1);
     }
     const { selection } = wiring;
+    if (wiring.reason === 'unavailable' && wiring.unavailableModel !== undefined) {
+      process.stderr.write(
+        `warning: model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
+          'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis\n',
+      );
+    }
 
     try {
       // Interactive TTY runs can prompt for consent in-process; `--json` and
@@ -256,7 +258,10 @@ export interface RunSynthesisWiring {
    * model. These are *coordinates only* — the adapter is constructed lazily, and
    * only for a workflow that declared `synthesis.use_llm`.
    */
-  readonly selection: AgentSelection | null;
+  readonly selection: Extract<AgentInvocation, { readonly mode: 'llm' }> | null;
+  /** Why deterministic synthesis was selected, when applicable. */
+  readonly reason?: Extract<AgentInvocation, { readonly mode: 'no-llm' }>['reason'];
+  readonly unavailableModel?: Extract<AgentInvocation, { readonly reason: 'unavailable' }>['model'];
 }
 
 /**
@@ -274,14 +279,22 @@ export interface RunSynthesisWiring {
  * @throws CommanderError (exit code 1) on an invalid provider/model/auth
  *   reference, unless the model was vetoed (nothing to validate then).
  */
-export function resolveRunSynthesis(
+export async function resolveRunSynthesis(
   options: RunOptions,
   env: NodeJS.ProcessEnv,
-): RunSynthesisWiring {
-  if (options.llm === false || env.LLM_PROVIDER === 'none') {
-    return { noLlm: true, selection: null };
-  }
-  return { noLlm: false, selection: selectAgentSession('run', options, env) };
+  prefs: EffectivePreferences = new Map(),
+  dependencies: AgentInvocationDependencies = {},
+): Promise<RunSynthesisWiring> {
+  const invocation = await resolveAgentInvocation('run', options, env, prefs, dependencies);
+  if (invocation.mode === 'llm') return { noLlm: false, selection: invocation };
+  return invocation.reason === 'unavailable'
+    ? {
+        noLlm: true,
+        selection: null,
+        reason: invocation.reason,
+        unavailableModel: invocation.model,
+      }
+    : { noLlm: true, selection: null, reason: invocation.reason };
 }
 
 /**

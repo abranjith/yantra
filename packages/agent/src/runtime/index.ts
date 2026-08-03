@@ -27,6 +27,7 @@ export {
 export type { AgentProgressEvent, AgentTaskConnector } from './connector.js';
 export {
   DEFAULT_AGENT_BUDGETS,
+  isRunFatalBudget,
   runAgenticTask,
   type AgentBudgetConfig,
   type ActiveReportTemplate,
@@ -45,6 +46,17 @@ export {
   type WorkflowToolMode,
   type YantraToolName,
 } from './profiles.js';
+export {
+  DEFAULT_AGENT_MODEL,
+  DEFAULT_AGENT_PROVIDER,
+  probeAgentCredential,
+  runAgentDiagnostics,
+  type AgentCredentialProbeInput,
+  type AgentDiagnosticDependencies,
+  type AgentDiagnosticOptions,
+  type AgentDoctorCheck,
+  type AgentOptionSource,
+} from './diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // FEAT-024 tool runtime — budgets, outbound URL policy, mandatory middleware,

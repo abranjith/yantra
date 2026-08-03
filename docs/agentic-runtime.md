@@ -20,27 +20,23 @@ Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both tha
 | `research` | `web_search`, `web_fetch`, `script_run`, `workflow_run`, `result_publish`             | Requires broad multi-source evidence before publication. Set `YANTRA_AGENT_RESEARCH_BROWSE=1` to add read-only browser navigation, observation, and extraction; browser mutations remain unavailable. |
 | `do`       | Full registered catalog                                                               | Includes browser actions and deterministic workflow execution, still guarded by policy and confirmation.                                                                                              |
 
-Model selection is uniform across the three: `--provider`, `--model`,
-`--thinking`, and `--auth-secret` are registered from one shared CLI module
-(`apps/cli/src/agent-model.ts`), so the override surface cannot drift per
-command. Resolution is explicit flag > `YANTRA_AGENT_PROVIDER` /
-`YANTRA_AGENT_MODEL` > pinned default, and an empty value is a validation
-failure (exit 1) rather than a silent substitution. See
-[model-configuration.md](model-configuration.md).
+Model, credential, budget, retry, confirmation, and deterministic selection are
+uniform across `ask`, `research`, `do`, `run`, and `resume`. They are registered
+and resolved from `apps/cli/src/agent-options.ts`, so commands cannot drift.
+See the canonical [Agentic options](model-configuration.md#agentic-options)
+table for flags, profile keys, environment variables, precedence, duration
+syntax, and defaults.
 
-Command-budget defaults are configuration keys: `YANTRA_AGENT_ASK_*`, `YANTRA_AGENT_RESEARCH_*`, and `YANTRA_AGENT_DO_*` accept `BUDGET_MS`, `MAX_TOOL_CALLS`, and `MAX_CALLS_PER_TOOL` suffixes. The defaults intentionally increase from ask to research to do.
-
-| Command    | Total tool calls    | Calls per tool      |
-| ---------- | ------------------- | ------------------- |
-| `ask`      | 12                  | 6                   |
-| `research` | 30                  | 12                  |
-| `do`       | 60 (global default) | 25 (global default) |
-
-These caps were lowered from earlier releases because the combined `web_search` tool now returns fetched page content in a single call — one `web_search` replaces the old search-then-fetch-fetch-fetch chain, so a task reaches the same evidence in fewer tool calls. The per-tool execution timeout default is 60s (raised from 45s): `web_search` runs its top-N fetches in parallel, so its wall time is ≈ one search plus one fetch round, and the extra headroom keeps a slow SERP plus that fetch round inside a single per-tool timeout. Env overrides still win over every default.
+Tool-call counts are audit data, not completion policy. Hard safety bounds remain
+on provider tokens, result bytes, navigation count, host count, per-tool time,
+confirmation waits, and the whole-run wall clock. At 80% of the wall clock,
+exploration winds down: further non-terminal calls are refused while publication
+remains available. This favors an honest partial Brief over losing gathered
+evidence at the deadline.
 
 ## Confirmation UX
 
-Protected actions show the tool action, sanitized summary, host, expected cost (when known), and consequence before anything executes. The default answer is denial. An interactive wait is bounded by `agent.confirmation_wait_ms` and by the run's remaining wall-clock budget; the wall clock continues while the prompt is open.
+Protected actions show the tool action, sanitized summary, host, expected cost (when known), and consequence before anything executes. The default answer is denial. An interactive wait is bounded by `--confirm-timeout` (or its environment/profile equivalent) and by the run's remaining wall-clock budget; the wall clock continues while the prompt is open.
 
 Timeouts are recorded as `CONFIRMATION_TIMEOUT` and fail closed, so the agent may choose a safe alternative or hand off. `--json`, non-TTY, scheduled, and daemon surfaces never prompt and deny immediately. Ctrl+C or budget exhaustion cancels a pending prompt and enters the same full teardown path as any other run abort.
 

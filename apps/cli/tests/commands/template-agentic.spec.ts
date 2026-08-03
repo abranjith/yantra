@@ -5,6 +5,7 @@ import { parseTemplate } from '@yantra/core';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { registerAskCommand } from '../../src/commands/ask.js';
 import { registerDoCommand } from '../../src/commands/do.js';
 import { registerResearchCommand } from '../../src/commands/research.js';
@@ -48,6 +49,15 @@ async function parseGuard(command: 'ask' | 'research' | 'do') {
     stderr: stderr.stream,
     isTty: false,
     runTask: vi.fn(() => Promise.resolve(failed)),
+    resolveAgent: (
+      command: string,
+      options: Parameters<typeof resolveAgentInvocation>[1],
+      env: NodeJS.ProcessEnv,
+      prefs: Parameters<typeof resolveAgentInvocation>[3],
+    ) =>
+      resolveAgentInvocation(command, options, env, prefs, {
+        probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+      }),
   };
   if (command === 'ask') {
     registerAskCommand(program, {
@@ -88,6 +98,15 @@ describe('@no-llm agentic template command wiring', () => {
         isTty: false,
         resolveTemplate: () => Promise.resolve(resolvedTemplate()),
         runTask,
+        resolveAgent: (
+          resolvedCommand: string,
+          options: Parameters<typeof resolveAgentInvocation>[1],
+          env: NodeJS.ProcessEnv,
+          prefs: Parameters<typeof resolveAgentInvocation>[3],
+        ) =>
+          resolveAgentInvocation(resolvedCommand, options, env, prefs, {
+            probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+          }),
       };
       if (command === 'ask') {
         registerAskCommand(program, {

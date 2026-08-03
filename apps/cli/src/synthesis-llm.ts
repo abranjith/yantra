@@ -16,7 +16,7 @@
  * - **One auth path.** `--auth-secret` / managed credentials resolve exactly as
  *   they do for `ask`/`research`/`do`; no second credential story to audit.
  * - **One model-selection surface.** `--provider` / `--model` / `--thinking`
- *   come from `agent-model.ts` verbatim, so `run` cannot drift from `ask`.
+ *   come from `agent-options.ts` verbatim, so `run` cannot drift from `ask`.
  * - **No new dependency.** No provider SDK is added, and the SDK stays behind
  *   the existing `packages/agent/src/adapters/pi/` seam.
  * - **Existing observability.** The session log lands under the run directory

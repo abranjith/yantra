@@ -20,6 +20,8 @@ import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
 import {
+  DEFAULT_AGENT_BUDGETS,
+  isRunFatalBudget,
   runAgenticTask,
   type AgenticRunEnvironment,
   type AgenticTaskRequest,
@@ -64,6 +66,7 @@ async function fixture(options: {
   readonly signal?: AbortSignal;
   readonly budgets?: AgenticTaskRequest['budgets'];
   readonly now?: () => Date;
+  readonly budgetNow?: () => number;
   readonly template?: AgenticTaskRequest['template'];
 }): Promise<{
   readonly outcome: AgenticTaskOutcome;
@@ -91,6 +94,7 @@ async function fixture(options: {
       createEnvironment: () => Promise.resolve(environment),
       createProvider: () => options.provider,
       ...(options.now ? { now: options.now } : {}),
+      ...(options.budgetNow ? { budgetNow: options.budgetNow } : {}),
     },
   );
   return { outcome, connector, teardown };
@@ -383,7 +387,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       },
     );
 
-    expect(outcome.kind).toBe('published');
+    expect(outcome).toMatchObject({ kind: 'published' });
     const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
       title: string;
       overview: string;
@@ -558,19 +562,20 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(events).toContain('"failure_class":"validation_error"');
   });
 
-  it('accepts an unbounded wall clock without aborting the run (unlimited default)', async () => {
+  it('uses the finite shared duration, token, timeout, and retry defaults', async () => {
     const provider = new FakeAgentProvider({ runResult: completed });
 
-    const result = await fixture({
-      provider,
-      budgets: { wallClockMs: Number.POSITIVE_INFINITY },
-    });
+    const result = await fixture({ provider });
 
-    // Pre-fix, Infinity was rejected by budget normalization (and a naive
-    // setTimeout(Infinity) would fire after 1ms and abort as 'wall-clock').
     expect(result.outcome).toMatchObject({
       kind: 'failed',
       error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(DEFAULT_AGENT_BUDGETS).toMatchObject({
+      wallClockMs: 900_000,
+      maxProviderTokens: 2_000_000,
+      perToolTimeoutMs: 180_000,
+      toolRetries: 3,
     });
     expect(provider.sessions[0]?.abortCount).toBe(0);
   });
@@ -681,27 +686,12 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       }),
     ],
     [
-      'per-tool timeout',
-      event('tool_finished', {
-        callId: 'timeout',
-        tool: 'web_fetch',
-        output: { status: 'error', error_code: 'TOOL_TIMEOUT' },
-        isError: true,
-      }),
-    ],
-    [
       'provider token cap',
       event('turn_finished', { usage: { turns: 1, inputTokens: 6, outputTokens: 6 } }),
     ],
-    ['provider cost cap', event('turn_finished', { usage: { turns: 1, costUsd: 2 } })],
   ])('aborts and finalizes budget_exhausted for %s', async (label, budgetEvent) => {
     const provider = new FakeAgentProvider({ eventsOnRun: [budgetEvent] });
-    const budgets =
-      label === 'provider token cap'
-        ? { maxProviderTokens: 10 }
-        : label === 'provider cost cap'
-          ? { maxProviderCostUsd: 1 }
-          : undefined;
+    const budgets = label === 'provider token cap' ? { maxProviderTokens: 10 } : undefined;
 
     const result = await fixture({ provider, ...(budgets ? { budgets } : {}) });
 
@@ -710,7 +700,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.closeCount).toBe(1);
   });
 
-  it.each(['total-calls', 'per-tool-calls', 'cumulative-bytes', 'navigations', 'hosts'])(
+  it.each(['wall-clock-soft', 'cumulative-bytes', 'navigations', 'hosts'])(
     'keeps the run alive so it can still publish when the %s budget is spent',
     async (limit) => {
       // Regression (run 20260801T222532Z-research-b99efc18): a spent tool budget
@@ -742,23 +732,28 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     },
   );
 
-  it('publishes after exhausting the total tool-call budget on evidence gathering', async () => {
-    // The full reported failure, end to end: every total tool call is spent on
-    // successful web_fetch calls, and the terminal publication still lands.
-    const budgetDenial = (callId: string): AgentEvent =>
-      event('tool_finished', {
-        callId,
-        tool: 'web_fetch',
-        output: {
-          status: 'error',
-          error_code: 'BUDGET_EXHAUSTED',
-          details: { budget_limit: 'total-calls' },
-        },
-        isError: true,
-      });
+  it('classifies the soft wall clock as non-fatal and the hard wall clock as fatal', () => {
+    expect(isRunFatalBudget('wall-clock-soft')).toBe(false);
+    expect(isRunFatalBudget('wall-clock')).toBe(true);
+  });
+
+  it('keeps pre-timeout evidence and publishes after one retryable tool timeout', async () => {
+    let services: RunServices | undefined;
     const provider = new FakeAgentProvider({
       eventsByRun: [
-        [budgetDenial('c1')],
+        [
+          event('assistant_text', { text: 'A supported draft from the first source.' }),
+          event('tool_finished', {
+            callId: 'timeout',
+            tool: 'web_fetch',
+            output: {
+              status: 'error',
+              error_code: 'TOOL_TIMEOUT',
+              retryable: true,
+            },
+            isError: true,
+          }),
+        ],
         [
           event('tool_finished', {
             callId: 'publish',
@@ -770,13 +765,28 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       ],
       resultsByRun: [completed, completed],
       onRun: async (_prompt, runIndex, session) => {
-        if (runIndex !== 1) return;
+        if (runIndex === 0) {
+          services?.evidence.add(evidenceEntry('https://news.example.com/before', 'First source'));
+          return;
+        }
         const runDir = join(session.logPath, '..', '..');
         await mkdir(runDir, { recursive: true });
         const brief = createBrief({
           task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-          title: 'Published despite a spent budget',
-          overview: 'The evidence gathered before the budget ran out was published.',
+          title: 'Published after a timeout',
+          overview: 'The evidence gathered before the timeout was preserved. [1]',
+          sources: [
+            {
+              n: 1,
+              url: 'https://news.example.com/before',
+              final_url: null,
+              host: 'news.example.com',
+              title: 'First source',
+              excerpt: 'An excerpt from the final report.',
+              fetched_at: '2026-07-19T22:05:00.000Z',
+              published_at: null,
+            },
+          ],
         });
         await Promise.all([
           writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8'),
@@ -786,9 +796,34 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       },
     });
 
-    const result = await fixture({ provider });
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+    const outcome = await runAgenticTask(
+      {
+        goal: 'latest news',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: () => Promise.resolve(environment),
+        createProvider: (runServices) => {
+          services = runServices;
+          return provider;
+        },
+      },
+    );
 
-    expect(result.outcome.kind).toBe('published');
+    expect(outcome).toMatchObject({ kind: 'published' });
+    expect(provider.sessions[0]?.abortCount).toBe(0);
+    const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
+      sources: { url: string }[];
+    };
+    expect(brief.sources).toMatchObject([{ url: 'https://news.example.com/before' }]);
   });
 
   it('stops with a diagnostic failure after repeated identical tool failures (circuit breaker)', async () => {
@@ -802,11 +837,9 @@ describe('@no-llm runAgenticTask lifecycle', () => {
         output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
         isError: true,
       });
-    const provider = new FakeAgentProvider({
-      eventsByRun: [[failure('c1'), failure('c2'), failure('c3'), failure('c4')]],
-    });
+    const provider = new FakeAgentProvider({ eventsByRun: [[failure('c1'), failure('c2')]] });
 
-    const result = await fixture({ provider });
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
 
     expect(result.outcome).toMatchObject({
       kind: 'failed',
@@ -819,6 +852,118 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     // The breaker interrupts the session and never reaches a completion nudge.
     expect(provider.sessions[0]?.abortCount).toBe(1);
     expect(provider.sessions[0]?.runPrompts).toHaveLength(1);
+  });
+
+  it('does not trip the repeated-failure breaker before the configured retry count', async () => {
+    const failure = (callId: string): AgentEvent =>
+      event('tool_finished', {
+        callId,
+        tool: 'browser_click',
+        output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
+        isError: true,
+      });
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[failure('c1'), failure('c2'), failure('c3'), failure('c4')], []],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 5 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(provider.sessions[0]?.abortCount).toBe(0);
+    expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+  });
+
+  it('bounds repeated tool timeouts with the generic retry breaker', async () => {
+    const timeout = (callId: string): AgentEvent =>
+      event('tool_finished', {
+        callId,
+        tool: 'web_fetch',
+        output: { status: 'error', error_code: 'TOOL_TIMEOUT', retryable: true },
+        isError: true,
+      });
+    const provider = new FakeAgentProvider({ eventsByRun: [[timeout('a'), timeout('b')]] });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_TOOL_FAILED' },
+    });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toMatch(/repeatedly failed.*web_fetch.*TOOL_TIMEOUT/is);
+    expect(message).not.toContain('per-tool-timeout');
+  });
+
+  it('lets the 3m × 4 timeout path reach the 12m wind-down and publish', async () => {
+    let budgetTime = 0;
+    const timeout = (callId: string): AgentEvent =>
+      event('tool_finished', {
+        callId,
+        tool: 'web_fetch',
+        output: { status: 'error', error_code: 'TOOL_TIMEOUT', retryable: true },
+        isError: true,
+      });
+    const provider = new FakeAgentProvider({
+      onRun: async (_prompt, runIndex, session) => {
+        if (runIndex === 0) {
+          for (let attempt = 0; attempt < 4; attempt += 1) {
+            budgetTime += 3 * 60 * 1_000;
+            session.emit(timeout(`timeout-${attempt}`));
+          }
+          session.emit(
+            event('tool_finished', {
+              callId: 'soft-stop',
+              tool: 'web_fetch',
+              output: {
+                status: 'error',
+                error_code: 'BUDGET_EXHAUSTED',
+                details: { budget_limit: 'wall-clock-soft' },
+              },
+              isError: true,
+            }),
+          );
+          return;
+        }
+        const runDir = join(session.logPath, '..', '..');
+        const brief = createBrief({
+          task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          title: 'Partial result',
+          overview: 'Published at the soft deadline.',
+        });
+        await Promise.all([
+          writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8'),
+          writeFile(join(runDir, 'brief.md'), '# Partial result\n', 'utf8'),
+          writeFile(join(runDir, 'brief.html'), '<h1>Partial result</h1>', 'utf8'),
+        ]);
+        session.emit(
+          event('tool_finished', {
+            callId: 'publish',
+            tool: 'result_publish',
+            output: { status: 'ok', details: { brief_id: brief.brief_id } },
+            isError: false,
+          }),
+        );
+      },
+      resultsByRun: [completed, completed],
+    });
+
+    const result = await fixture({
+      provider,
+      budgetNow: () => budgetTime,
+      budgets: {
+        wallClockMs: 15 * 60 * 1_000,
+        perToolTimeoutMs: 3 * 60 * 1_000,
+        toolRetries: 3,
+      },
+    });
+
+    expect(budgetTime).toBe(12 * 60 * 1_000);
+    expect(result.outcome.kind).toBe('published');
+    expect(provider.sessions[0]?.abortCount).toBe(0);
   });
 
   it('does not trip the breaker when a success interrupts the failure streak', async () => {
@@ -837,16 +982,13 @@ describe('@no-llm runAgenticTask lifecycle', () => {
         isError: false,
       });
     const provider = new FakeAgentProvider({
-      // Three failures, a success (resets the streak), then three more: the
-      // streak never reaches four in a row, so the run takes the normal path.
-      eventsByRun: [
-        [fail('a'), fail('b'), fail('c'), ok('d'), fail('e'), fail('f'), fail('g')],
-        [],
-      ],
+      // Two failures, a success (resets the streak), then two more: with two
+      // retries allowed, neither streak reaches the third failing attempt.
+      eventsByRun: [[fail('a'), fail('b'), ok('d'), fail('e'), fail('f')], []],
       runResult: completed,
     });
 
-    const result = await fixture({ provider });
+    const result = await fixture({ provider, budgets: { toolRetries: 2 } });
 
     expect(result.outcome).toMatchObject({
       kind: 'failed',

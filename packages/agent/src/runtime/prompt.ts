@@ -32,13 +32,10 @@ Do not stall waiting for input: if the goal is broad or ambiguous, choose the mo
 
 /** Budget fields rendered into the per-run user prompt. */
 export interface AgentPromptBudgets {
-  /** `Number.POSITIVE_INFINITY` renders as "unlimited". */
   readonly wallClockMs: number;
-  readonly totalToolCalls: number;
-  readonly perToolCalls: number;
   readonly perToolTimeoutMs: number;
-  readonly maxProviderTokens?: number;
-  readonly maxProviderCostUsd?: number;
+  readonly toolRetries: number;
+  readonly maxProviderTokens: number;
   readonly maxNavigations: number;
   readonly maxHosts: number;
   readonly maxBytesPerResult: number;
@@ -132,12 +129,10 @@ export function buildAgentUserPrompt(
     '',
     ...(input.ambient ? [...ambientLines(input.ambient), ''] : []),
     'Run constraints:',
-    `- wall clock: ${Number.isFinite(input.budgets.wallClockMs) ? `${input.budgets.wallClockMs} ms` : 'unlimited'}`,
-    `- total calls: ${input.budgets.totalToolCalls}`,
-    `- calls per capability: ${input.budgets.perToolCalls}`,
-    `- call timeout: ${input.budgets.perToolTimeoutMs} ms`,
-    `- provider token ceiling: ${formatApprox(input.budgets.maxProviderTokens, 'tokens')}`,
-    `- provider cost ceiling: ${formatApprox(input.budgets.maxProviderCostUsd, 'USD')}`,
+    `- duration: ${input.budgets.wallClockMs} ms`,
+    `- tool timeout: ${input.budgets.perToolTimeoutMs} ms`,
+    `- tool retries: ${input.budgets.toolRetries}`,
+    `- provider token ceiling: ${input.budgets.maxProviderTokens} tokens`,
     `- navigations: ${input.budgets.maxNavigations}`,
     `- distinct hosts: ${input.budgets.maxHosts}`,
     `- bytes per result: ${input.budgets.maxBytesPerResult}`,
@@ -248,10 +243,6 @@ function normalizeHosts(hosts: readonly string[]): string[] {
         .filter((host) => host.length > 0 && /^[a-z0-9.-]+(?::\d+)?$/.test(host)),
     ),
   ].sort();
-}
-
-function formatApprox(value: number | undefined, unit: string): string {
-  return value === undefined ? 'provider-reported only' : `approximately ${value} ${unit}`;
 }
 
 function truncateUtf8(text: string, maxBytes: number): string {

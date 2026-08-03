@@ -6,7 +6,13 @@ import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { registerAskCommand, type AskRuntime } from '../../src/commands/ask.js';
+
+const resolveAvailable: AskRuntime['resolveAgent'] = (command, options, env, prefs) =>
+  resolveAgentInvocation(command, options, env, prefs, {
+    probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+  });
 
 function captureStream() {
   let data = '';
@@ -50,6 +56,7 @@ function harness(overrides: Partial<AskRuntime> = {}) {
         error: { code: 'AGENT_AUTH_UNAVAILABLE', message: 'fixture' },
       });
     },
+    resolveAgent: resolveAvailable,
     ...overrides,
   });
 
@@ -80,22 +87,58 @@ describe('@no-llm cli/ask command', () => {
     expect(h.agentRequest()?.profile?.command).toBe('ask');
   });
 
-  it('leaves the agentic wall clock unlimited when --budget-ms is not passed', async () => {
+  it('uses the finite default agentic wall clock when no override is passed', async () => {
     const h = harness();
     await expect(
       h.program.parseAsync(['ask', 'today ai news'], { from: 'user' }),
     ).rejects.toMatchObject({ exitCode: 2 });
-    expect(h.agentRequest()?.budgets?.wallClockMs).toBeUndefined();
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(900_000);
   });
 
-  it('passes an explicit --budget-ms through unclamped as the agentic wall clock', async () => {
+  it('passes an explicit --max-duration through as the agentic wall clock', async () => {
     const h = harness();
     // 900000 exceeds the deterministic pipeline's 300000 ceiling; the agentic
     // path must not clamp it (local models legitimately need longer runs).
     await expect(
-      h.program.parseAsync(['ask', 'today ai news', '--budget-ms', '900000'], { from: 'user' }),
+      h.program.parseAsync(
+        ['ask', 'today ai news', '--max-duration', '20m', '--pipeline-timeout', '5s'],
+        { from: 'user' },
+      ),
     ).rejects.toMatchObject({ exitCode: 2 });
-    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(900_000);
+    expect(h.agentRequest()?.budgets?.wallClockMs).toBe(1_200_000);
+  });
+
+  it('keeps --max-sources and --pipeline-timeout on the deterministic path', async () => {
+    const h = harness();
+    await h.program.parseAsync(
+      ['ask', 'q', '--max-sources', '9', '--pipeline-timeout', '5s', '--no-llm'],
+      { from: 'user' },
+    );
+
+    expect(h.query()?.budgetCalls).toBe(9);
+    expect(h.query()?.pipelineBudgetMs).toBe(5_000);
+  });
+
+  it.each(['--budget', '--budget-ms'])('rejects the retired %s spelling', async (flag) => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['ask', 'q', flag, '5', '--no-llm'], { from: 'user' }),
+    ).rejects.toMatchObject({ code: 'commander.unknownOption' });
+  });
+
+  it('warns and returns a deterministic Brief when no credential is available', async () => {
+    const h = harness({
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: false, authSource: 'unavailable' }),
+        }),
+    });
+
+    await h.program.parseAsync(['ask', 'today ai news'], { from: 'user' });
+
+    expect(h.query()?.noLlm).toBe(true);
+    expect(h.stdout.value()).toContain('Cheapest Sony WH-1000XM5 today');
+    expect(h.stderr.value()).toMatch(/^warning: model anthropic\/claude-haiku-4-5/u);
   });
 
   it('passes --length through to the synthesis budget', async () => {

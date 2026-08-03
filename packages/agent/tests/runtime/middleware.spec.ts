@@ -112,50 +112,50 @@ describe('@no-llm middleware stage short-circuiting', () => {
   it('returns BUDGET_EXHAUSTED without invoking policy or the domain op', async () => {
     const run = vi.fn(async () => OK);
     const policy = vi.fn(() => null);
-    const services = makeServices({ limits: { perToolCalls: 1 } });
+    const services = makeServices({ limits: { maxBytesPerRun: 1 } });
     const tool = wrapTool(spec(run, { policy }), services);
 
-    expect((await tool.execute({ q: 'a' }, undefined)).status).toBe('ok');
-    const denied = await tool.execute({ q: 'b' }, undefined);
+    services.budgets.accountResultBytes(2);
+    const denied = await tool.execute({ q: 'a' }, undefined);
 
     expect(denied.status).toBe('error');
     expect(denied.error_code).toBe('BUDGET_EXHAUSTED');
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(policy).toHaveBeenCalledTimes(1);
+    expect(run).not.toHaveBeenCalled();
+    expect(policy).not.toHaveBeenCalled();
   });
 
   it('reports which budget limit tripped so the orchestrator can classify it', async () => {
-    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const services = makeServices({ limits: { maxBytesPerRun: 1 } });
     const tool = wrapTool(
       spec(async () => OK),
       services,
     );
 
-    await tool.execute({ q: 'a' }, undefined);
+    services.budgets.accountResultBytes(2);
     const denied = await tool.execute({ q: 'b' }, undefined);
 
     expect(denied.error_code).toBe('BUDGET_EXHAUSTED');
-    expect(denied.details).toMatchObject({ budget_limit: 'total-calls' });
+    expect(denied.details).toMatchObject({ budget_limit: 'cumulative-bytes' });
   });
 
   it('tells a starved non-terminal tool to publish what it already gathered', async () => {
-    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const services = makeServices({ limits: { maxBytesPerRun: 1 } });
     const tool = wrapTool(
       spec(async () => OK),
       services,
     );
 
-    await tool.execute({ q: 'a' }, undefined);
+    services.budgets.accountResultBytes(2);
     const denied = await tool.execute({ q: 'b' }, undefined);
 
     expect(denied.modelText).toContain('Publish your result now');
   });
 
-  it('runs a terminal tool after the total-call budget is spent', async () => {
+  it('runs a terminal tool after the cumulative byte budget is spent', async () => {
     // Regression: `result_publish` is the only way to complete a run. Charging
     // it against the exploration pool let a fully-researched run be denied its
     // own publication and finalize as budget_exhausted.
-    const services = makeServices({ limits: { totalToolCalls: 1 } });
+    const services = makeServices({ limits: { maxBytesPerRun: 1 } });
     const explore = wrapTool(
       spec(async () => OK),
       services,
@@ -166,7 +166,7 @@ describe('@no-llm middleware stage short-circuiting', () => {
       services,
     );
 
-    expect((await explore.execute({ q: 'a' }, undefined)).status).toBe('ok');
+    services.budgets.accountResultBytes(2);
     expect((await explore.execute({ q: 'b' }, undefined)).error_code).toBe('BUDGET_EXHAUSTED');
     const published = await publish.execute({ q: 'c' }, undefined);
 

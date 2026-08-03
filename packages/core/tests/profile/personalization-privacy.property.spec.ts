@@ -107,6 +107,39 @@ function makeDoc(text: string): SynthesisDoc {
 }
 
 describe('@no-llm personalization never leaks history into LLM payloads', () => {
+  it('never includes operational agent preferences even when approved', () => {
+    const prefs = new Map(approvedPrefs('metric', ['Target']));
+    const agentValues: Readonly<Record<string, unknown>> = {
+      'agent.provider': 'private-provider-canary',
+      'agent.model': 'private-model-canary',
+      'agent.thinking': 'private-thinking-canary',
+      'agent.max_duration': '20m',
+      'agent.max_tokens': 1234567,
+      'agent.tool_timeout': '4m',
+      'agent.tool_retries': 9,
+      'agent.confirm_timeout': '5m',
+    };
+    for (const [key, value] of Object.entries(agentValues)) {
+      prefs.set(key, {
+        key,
+        value,
+        source: 'user',
+        approved: true,
+        provenance: 'profile.yaml',
+      });
+    }
+
+    const result = buildPersonalizationContext(prefs);
+    expect(result.isOk).toBe(true);
+    if (!result.isOk || result.value === null) throw new Error('expected personalization context');
+    const context = String(result.value);
+    expect(context).toContain('Prefers metric units.');
+    expect(context).toContain('Favors retailers: Target.');
+    for (const value of Object.values(agentValues)) {
+      expect(context).not.toContain(String(value));
+    }
+  });
+
   it('captures no history intent text in any LLM payload (500 runs)', async () => {
     await fc.assert(
       fc.asyncProperty(

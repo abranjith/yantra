@@ -204,7 +204,12 @@ export class LocalProfileStore implements ProfileStore {
    */
   async cleanupEphemeral(absolutePath: string): Promise<void> {
     try {
-      await rm(absolutePath, { recursive: true, force: true });
+      // On Windows, Chrome can still hold a handle on files under the profile
+      // dir for a short window after browser.close()/process exit resolves;
+      // an immediate rm() then fails with EBUSY/EPERM. Node's built-in retry
+      // (linear backoff, only on EBUSY/EMFILE/ENFILE/ENOTEMPTY/EPERM) rides
+      // that out instead of leaking the directory on the first attempt.
+      await rm(absolutePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
       if (code === 'EBUSY' || code === 'EPERM') {

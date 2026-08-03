@@ -4,7 +4,6 @@ import { parseTemplate } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
 import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
-import { DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
 import {
   COMMAND_TASK_PROFILES,
@@ -33,28 +32,14 @@ describe('@no-llm command task profiles', () => {
     expect(new Set([ask, research, task]).size).toBe(3);
   });
 
-  it('does not time-bound any command by default; wall clock is an explicit override', () => {
-    // Unlimited-by-default: local models are slow, so a fixed deadline aborts
-    // legitimate runs. Bounding is opt-in via env/CLI (see budget.ts).
-    expect(COMMAND_TASK_PROFILES.ask.budgets.wallClockMs).toBeUndefined();
-    expect(COMMAND_TASK_PROFILES.research.budgets.wallClockMs).toBeUndefined();
-    expect(COMMAND_TASK_PROFILES.do.budgets.wallClockMs).toBeUndefined();
-  });
-
-  it('reads per-command budget configuration with sane profile fallbacks', () => {
+  it('exposes no per-command budgets and ignores legacy budget environment variables', () => {
     const configured = resolveCommandTaskProfile('ask', {
-      YANTRA_AGENT_ASK_BUDGET_MS: '90000',
       YANTRA_AGENT_ASK_MAX_TOOL_CALLS: '9',
-      YANTRA_AGENT_ASK_MAX_CALLS_PER_TOOL: '4',
     });
-    const fallback = resolveCommandTaskProfile('ask', { YANTRA_AGENT_ASK_BUDGET_MS: '-2' });
 
-    expect(configured.budgets).toMatchObject({
-      wallClockMs: 90_000,
-      totalToolCalls: 9,
-      perToolCalls: 4,
-    });
-    expect(fallback.budgets).toMatchObject(COMMAND_TASK_PROFILES.ask.budgets);
+    for (const profile of [...Object.values(COMMAND_TASK_PROFILES), configured]) {
+      expect(profile).not.toHaveProperty('budgets');
+    }
   });
 
   it('keeps do equivalent to the full FEAT-026 catalog and enables research browsing only explicitly', () => {
@@ -103,41 +88,6 @@ describe('@no-llm command task profiles', () => {
       expect(addendum).toMatch(/content|fetched|evidence/i);
       expect(addendum).toMatch(/web_fetch/);
     }
-  });
-
-  it('retunes caps for the combined tool while preserving ask < research < do', () => {
-    // One combined web_search replaces ~1 search + 2–3 fetches, so the per-command
-    // call budgets drop (FEAT-WI-001 TASK-005); `do` keeps the global defaults.
-    expect(COMMAND_TASK_PROFILES.ask.budgets).toMatchObject({
-      totalToolCalls: 12,
-      perToolCalls: 6,
-    });
-    expect(COMMAND_TASK_PROFILES.research.budgets).toMatchObject({
-      totalToolCalls: 30,
-      perToolCalls: 12,
-    });
-    expect(COMMAND_TASK_PROFILES.do.budgets.totalToolCalls).toBeUndefined();
-    expect(COMMAND_TASK_PROFILES.do.budgets.perToolCalls).toBeUndefined();
-
-    // Ordering invariant: ask < research < do (do falls back to global defaults).
-    const doTotal = DEFAULT_BUDGET_LIMITS.totalToolCalls;
-    const doPerTool = DEFAULT_BUDGET_LIMITS.perToolCalls;
-    expect(COMMAND_TASK_PROFILES.ask.budgets.totalToolCalls!).toBeLessThan(
-      COMMAND_TASK_PROFILES.research.budgets.totalToolCalls!,
-    );
-    expect(COMMAND_TASK_PROFILES.research.budgets.totalToolCalls!).toBeLessThan(doTotal);
-    expect(COMMAND_TASK_PROFILES.ask.budgets.perToolCalls!).toBeLessThan(
-      COMMAND_TASK_PROFILES.research.budgets.perToolCalls!,
-    );
-    expect(COMMAND_TASK_PROFILES.research.budgets.perToolCalls!).toBeLessThan(doPerTool);
-  });
-
-  it('still lets env overrides win over the retuned defaults', () => {
-    const configured = resolveCommandTaskProfile('research', {
-      YANTRA_AGENT_RESEARCH_MAX_TOOL_CALLS: '40',
-      YANTRA_AGENT_RESEARCH_MAX_CALLS_PER_TOOL: '18',
-    });
-    expect(configured.budgets).toMatchObject({ totalToolCalls: 40, perToolCalls: 18 });
   });
 
   it('keeps the superseded research prompt stack removed', () => {

@@ -71,7 +71,7 @@ describe('@no-llm the interactive run path is workflow-declared only', () => {
   });
 
   it('offers --no-llm as a veto and no --llm opt-in', () => {
-    expect(source).toContain("'--no-llm'");
+    expect(source).toContain('addAgentOptions');
     expect(source).not.toMatch(/new Option\(\s*'--llm'/);
   });
 });

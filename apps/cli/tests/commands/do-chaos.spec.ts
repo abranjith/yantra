@@ -4,6 +4,7 @@ import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { registerDoCommand } from '../../src/commands/do.js';
 
 const sink = new Writable({ write: (_chunk, _encoding, callback) => callback() });
@@ -43,6 +44,10 @@ describe('@no-llm yantra do orchestrator chaos mapping', () => {
       stdout: sink,
       stderr: sink,
       isTty: false,
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
+        }),
     });
 
     let exitCode = 0;

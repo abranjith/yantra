@@ -38,14 +38,14 @@ function manifest(overrides: Partial<RunManifest> = {}): RunManifest {
 }
 
 describe('@no-llm synthesisForResume', () => {
-  it('disables the stage when the original run never synthesized', () => {
+  it('disables the stage when the original run never synthesized', async () => {
     // Absent `manifest.synthesis` means the first attempt never reached the
     // stage — nothing to inherit.
-    expect(synthesisForResume(manifest(), logger)).toBeUndefined();
+    await expect(synthesisForResume(manifest(), logger)).resolves.toBeUndefined();
   });
 
-  it('stays deterministic when the original run was deterministic', () => {
-    const wiring = synthesisForResume(
+  it('stays deterministic when the original run was deterministic', async () => {
+    const wiring = await synthesisForResume(
       manifest({
         synthesis: { strategy: 'deterministic', fallbackUsed: false, briefPath: '/b.json' },
       }),
@@ -55,27 +55,29 @@ describe('@no-llm synthesisForResume', () => {
     expect(wiring).toEqual({ llm: null, noLlm: true });
   });
 
-  it('re-offers the model when the original run wanted one and had to fall back', () => {
+  it('re-offers the model when the original run wanted one and had to fall back', async () => {
     // `fallbackUsed` records intent, not outcome: the workflow declared
     // `synthesis.use_llm` and the model was unreachable that time. Pinning the
     // resume to deterministic would let one transient provider failure quietly
     // rewrite what the workflow produces from then on.
-    const wiring = synthesisForResume(
+    const wiring = await synthesisForResume(
       manifest({
         synthesis: { strategy: 'deterministic', fallbackUsed: true, briefPath: '/b.json' },
       }),
       logger,
+      {},
+      { ANTHROPIC_API_KEY: 'fixture' },
     );
 
     expect(wiring?.noLlm).toBe(false);
     expect(typeof wiring?.llm).toBe('function');
   });
 
-  it('stays deterministic when the run was deterministic by decision, not by failure', () => {
+  it('stays deterministic when the run was deterministic by decision, not by failure', async () => {
     // No fallback recorded means nothing was taken away: the workflow never
     // declared `use_llm`, or `--no-llm` vetoed it. Either way the resume must
     // not acquire a provider session the first attempt deliberately lacked.
-    const wiring = synthesisForResume(
+    const wiring = await synthesisForResume(
       manifest({
         synthesis: { strategy: 'deterministic', fallbackUsed: false, briefPath: null },
       }),
@@ -85,22 +87,26 @@ describe('@no-llm synthesisForResume', () => {
     expect(wiring).toEqual({ llm: null, noLlm: true });
   });
 
-  it('re-selects the LLM strategy when the original run used one', () => {
-    const wiring = synthesisForResume(
+  it('re-selects the LLM strategy when the original run used one', async () => {
+    const wiring = await synthesisForResume(
       manifest({ synthesis: { strategy: 'llm', fallbackUsed: false, briefPath: '/b.json' } }),
       logger,
+      {},
+      { ANTHROPIC_API_KEY: 'fixture' },
     );
 
     expect(wiring?.noLlm).toBe(false);
     expect(typeof wiring?.llm).toBe('function');
   });
 
-  it('builds the inherited LLM port lazily, per run', () => {
+  it('builds the inherited LLM port lazily, per run', async () => {
     // The factory shape matters: the session log belongs in the resumed run's
     // directory, which is not known when the wiring is assembled.
-    const wiring = synthesisForResume(
+    const wiring = await synthesisForResume(
       manifest({ synthesis: { strategy: 'llm', fallbackUsed: false, briefPath: '/b.json' } }),
       logger,
+      {},
+      { ANTHROPIC_API_KEY: 'fixture' },
     );
 
     const port = wiring?.llm?.({ runId: 'run-001', runDir: '/runs/run-001' });
@@ -108,13 +114,29 @@ describe('@no-llm synthesisForResume', () => {
     expect(port?.providerId).toContain(':');
   });
 
-  it('records a null briefPath without changing the inherited strategy', () => {
+  it('records a null briefPath without changing the inherited strategy', async () => {
     // An artifact-write failure on the first attempt still records the strategy.
-    const wiring = synthesisForResume(
+    const wiring = await synthesisForResume(
       manifest({ synthesis: { strategy: 'llm', fallbackUsed: false, briefPath: null } }),
       logger,
+      {},
+      { ANTHROPIC_API_KEY: 'fixture' },
     );
 
     expect(wiring?.noLlm).toBe(false);
+  });
+
+  it('honors the shared provider and model flags on resume', async () => {
+    const wiring = await synthesisForResume(
+      manifest({ synthesis: { strategy: 'llm', fallbackUsed: false, briefPath: '/b.json' } }),
+      logger,
+      { provider: 'ollama', model: 'llama3.1:8b' },
+      { OLLAMA_API_KEY: 'fixture' },
+    );
+
+    expect(wiring?.noLlm).toBe(false);
+    expect(wiring?.llm?.({ runId: 'run-001', runDir: '/runs/run-001' }).providerId).toContain(
+      'ollama',
+    );
   });
 });

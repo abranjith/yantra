@@ -30,9 +30,9 @@ export interface ResearchBudget {
   readonly maxHops: number;
   /** Maximum sources kept across all hops. From `--max-sources`. */
   readonly maxSources: number;
-  /** Wall-clock budget in milliseconds. From `--budget-ms`. */
+  /** Wall-clock budget in milliseconds. From `--pipeline-timeout`. */
   readonly maxWallClockMs: number;
-  /** Maximum LLM calls (gap analysis + query-gen + synthesis). From `--budget`. */
+  /** Maximum LLM calls (gap analysis + query-gen + synthesis). From `--max-llm-calls`. */
   readonly maxLlmCalls: number;
 }
 

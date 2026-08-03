@@ -69,7 +69,7 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
-import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits } from './budget.js';
+import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
 import type { ToolStatus } from './middleware.js';
@@ -92,15 +92,6 @@ import type { UrlPolicyConfig } from './url-policy.js';
 
 /** Maximum consulted sources recapped inline in the completion nudge. */
 const NUDGE_EVIDENCE_CAP = 10;
-
-/**
- * Consecutive identical tool failures (same tool + same error code, with no
- * successful call in between) that trip the stuck-loop circuit breaker. A weak
- * model that keeps retrying an impossible action would otherwise burn the whole
- * per-tool budget; tripping here stops it early with a diagnostic failure. Sized
- * to still allow a couple of good-faith retries of a transient error.
- */
-const REPEATED_TOOL_FAILURE_LIMIT = 4;
 
 /**
  * Build the completion nudge sent once when a session run stops without a
@@ -208,12 +199,12 @@ function buildTemplateCompletionNudge(
 
 /** Full enforced budget configuration for one agentic run. */
 export interface AgentBudgetConfig extends BudgetLimits, AgentPromptBudgets {
-  readonly maxProviderTokens?: number;
-  readonly maxProviderCostUsd?: number;
+  readonly maxProviderTokens: number;
+  readonly toolRetries: number;
   readonly confirmationWaitMs: number;
 }
 
-/** Production defaults; provider token/cost ceilings are opt-in and approximate. */
+/** Production defaults for the one shared agentic budget surface. */
 export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
   ...DEFAULT_BUDGET_LIMITS,
   // The combined `web_search` tool does a provider search then fetches the top-N
@@ -227,7 +218,9 @@ export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
   // this ceiling is set with headroom above that, not equal to it — otherwise
   // the outer TOOL_TIMEOUT would race the controller's own bounded wait and
   // usually win, discarding its more specific result.
-  perToolTimeoutMs: 120 * 1000,
+  perToolTimeoutMs: 3 * 60 * 1000,
+  maxProviderTokens: 2_000_000,
+  toolRetries: 3,
   confirmationWaitMs: 3 * 60 * 1000,
 };
 
@@ -307,6 +300,8 @@ export interface AgenticTaskDependencies {
   ) => AgentProvider;
   readonly reportBuilder?: ReportBuilder;
   readonly now?: () => Date;
+  /** Monotonic budget clock override for deterministic boundary tests. */
+  readonly budgetNow?: NowMs;
   readonly cwd?: string;
   /** Test/embedding override (for example, HTTP on a loopback fixture site). */
   readonly urlPolicyConfig?: UrlPolicyConfig;
@@ -334,7 +329,7 @@ export async function runAgenticTask(
   const runStore = dependencies.runStore ?? new LocalRunStore();
   const sanitizer = dependencies.sanitizer ?? new DefaultSanitizer();
   const profile = request.profile ?? COMMAND_TASK_PROFILES.do;
-  const budgetsConfig = normalizeBudgets({ ...profile.budgets, ...request.budgets });
+  const budgetsConfig = normalizeBudgets(request.budgets);
   const taskId = generateUlid();
   const created = await runStore.createAgentRun({
     taskId,
@@ -371,7 +366,7 @@ export async function runAgenticTask(
       rankSink: dependencies.rankSink ?? null,
     });
     const runAbort = new AbortController();
-    const budgetTracker = new BudgetTracker(budgetsConfig);
+    const budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
     const actionPhase = new ActionPhase();
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
@@ -484,6 +479,7 @@ export async function runAgenticTask(
       connector: request.connector,
       runAbort,
       budgets: budgetsConfig,
+      budgetTracker,
       runId: created.runId,
       runDir: created.runDir,
     });
@@ -597,12 +593,12 @@ function createExecutionState(input: {
   readonly connector: AgentTaskConnector;
   readonly runAbort: AbortController;
   readonly budgets: AgentBudgetConfig;
+  readonly budgetTracker: BudgetTracker;
   readonly runId: string;
   readonly runDir: string;
 }): ExecutionState {
   const starts = new Map<string, number>();
   let providerTokens = 0;
-  let providerCost = 0;
   let published = false;
   let budgetReason: string | undefined;
   let userAborted = false;
@@ -649,7 +645,13 @@ function createExecutionState(input: {
       failureStreakKey = key;
       failureStreakCount = 1;
     }
-    if (failureStreakCount >= REPEATED_TOOL_FAILURE_LIMIT && repeatedFailure === undefined) {
+    if (failureStreakCount >= input.budgets.toolRetries + 1 && repeatedFailure === undefined) {
+      // At the default 3m × (3 retries + first attempt), repeated timeouts land
+      // exactly on the 80% wind-down. Let the non-fatal soft deadline win so
+      // the next exploration call is refused and the session can publish.
+      if (metadata.errorCode === 'TOOL_TIMEOUT' && input.budgetTracker.isSoftWallClockExhausted()) {
+        return;
+      }
       repeatedFailure = { tool, errorCode: metadata.errorCode ?? 'TOOL_FAILED' };
       interrupt('repeated-tool-failure');
     }
@@ -689,11 +691,7 @@ function createExecutionState(input: {
           at: event.at,
         });
         if (event.tool === 'result_publish' && metadata.status === 'ok') published = true;
-        if (metadata.errorCode === 'TOOL_TIMEOUT') interrupt('per-tool-timeout');
-        else if (
-          metadata.errorCode === 'BUDGET_EXHAUSTED' &&
-          isRunFatalBudget(metadata.budgetLimit)
-        )
+        if (metadata.errorCode === 'BUDGET_EXHAUSTED' && isRunFatalBudget(metadata.budgetLimit))
           interrupt('tool-budget');
         if (metadata.handoff) {
           handoff = {
@@ -707,18 +705,8 @@ function createExecutionState(input: {
       }
       case 'turn_finished':
         providerTokens += (event.usage.inputTokens ?? 0) + (event.usage.outputTokens ?? 0);
-        providerCost += event.usage.costUsd ?? 0;
-        if (
-          input.budgets.maxProviderTokens !== undefined &&
-          providerTokens >= input.budgets.maxProviderTokens
-        ) {
+        if (providerTokens >= input.budgets.maxProviderTokens) {
           interrupt('provider-tokens');
-        }
-        if (
-          input.budgets.maxProviderCostUsd !== undefined &&
-          providerCost >= input.budgets.maxProviderCostUsd
-        ) {
-          interrupt('provider-cost');
         }
         return;
       case 'failed':
@@ -1278,13 +1266,13 @@ async function createDefaultEnvironment(context: {
 function normalizeBudgets(overrides: Partial<AgentBudgetConfig> | undefined): AgentBudgetConfig {
   const merged = { ...DEFAULT_AGENT_BUDGETS, ...overrides };
   for (const [key, value] of Object.entries(merged)) {
-    if (key === 'perToolCallOverrides') continue;
-    // The wall clock is the one budget that may be unbounded: runs are
-    // unlimited by default and time-bounding is an explicit override.
-    if (key === 'wallClockMs' && value === Number.POSITIVE_INFINITY) continue;
+    if (key === 'toolRetries' && value === 0) continue;
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) {
       throw new Error(`Agent budget "${key}" must be a positive finite number.`);
     }
+  }
+  if (merged.softWallClockFraction > 1) {
+    throw new Error('Agent budget "softWallClockFraction" must be at most 1.');
   }
   return merged;
 }
@@ -1302,9 +1290,9 @@ function summarizeInput(input: unknown): string {
  * any cap is hit destroys a run that may already hold everything it needs and
  * only lacks the final publication — the observed failure where twelve
  * successful fetches were discarded because the thirteenth call had no budget.
- * Every count-based cap therefore stops that tool and leaves the run alive to
- * publish (`result_publish` is exempt from the cumulative caps, so it always
- * can). The wall clock is the exception: an out-of-time run is genuinely over.
+ * Cumulative safety caps therefore stop that tool and leave the run alive to
+ * publish. The wall clock is two-phase: its soft limit stops exploration while
+ * exempting `result_publish`; only the hard 100% deadline ends the run.
  */
 const RUN_FATAL_BUDGET_LIMITS: ReadonlySet<string> = new Set(['wall-clock']);
 
@@ -1314,7 +1302,7 @@ const RUN_FATAL_BUDGET_LIMITS: ReadonlySet<string> = new Set(['wall-clock']);
  * @param limit The specific budget limit reported by the middleware, when known.
  * @returns True for run-fatal limits, and for an unreported limit (fail safe).
  */
-function isRunFatalBudget(limit: string | undefined): boolean {
+export function isRunFatalBudget(limit: string | undefined): boolean {
   return limit === undefined || RUN_FATAL_BUDGET_LIMITS.has(limit);
 }
 

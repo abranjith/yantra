@@ -141,11 +141,9 @@ describe('@no-llm templated result_publish', () => {
     expect((await tool.execute(validReport(), undefined)).status).toBe('ok');
   });
 
-  it('publishes the document after the total tool-call budget is spent', async () => {
-    // The reported failure was on the templated path: without the terminal-call
-    // exemption, `result_publish` is denied and no document.* is ever written.
-    const { services, tool } = setup(true, { totalToolCalls: 1, perToolCalls: 4 });
-    expect(services.budgets.reserveCall('web_fetch').isOk).toBe(true);
+  it('publishes the document after the cumulative byte budget is spent', async () => {
+    const { services, tool } = setup(true, { maxBytesPerRun: 1 });
+    expect(services.budgets.accountResultBytes(2).isOk).toBe(false);
     expect(services.budgets.reserveCall('web_fetch').isOk).toBe(false);
 
     const result = await tool.execute(validReport(), undefined);

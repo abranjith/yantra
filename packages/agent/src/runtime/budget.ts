@@ -2,23 +2,21 @@
  * BudgetTracker — the run-scoped resource accountant for agentic tool use
  * (FEAT-024 TASK-001, plan_agentic.md §9).
  *
- * Every budget the plan lists for the pre-browser phase is enforced here:
- * wall-clock time, total tool calls, per-tool calls, per-tool execution
- * timeout, agent-visible bytes per result, cumulative agent-visible bytes per
- * run, and browser navigations/hosts (consumed later by FEAT-025). Exhaustion
- * never throws — it returns a typed {@link BudgetDecision} that the middleware
- * surfaces as a stable `BUDGET_EXHAUSTED` tool result.
+ * The tracker enforces the measurable safety envelope around agentic tool use:
+ * a two-phase wall clock, per-tool execution timeout, agent-visible bytes per
+ * result and run, and browser navigations/hosts. Economic bounds live at the
+ * provider-token layer; tool-call counts remain audit data rather than caps.
+ * Exhaustion never throws — it returns a typed {@link BudgetDecision} that the
+ * middleware surfaces as a stable `BUDGET_EXHAUSTED` tool result.
  *
  * **Terminal calls are exempt from the run-wide cumulative caps.** A budget
  * exists to bound *exploration*; the terminal publication tool is the run's
  * exit, not exploration. Charging it against the same pool the exploration
  * tools drain means a run that gathered everything it needed can be denied the
- * one call that turns that work into an artifact — observed in the field as
- * `result_publish` failing with "Total tool-call budget of 12 calls is
- * exhausted" after twelve successful searches and fetches, losing the whole
- * run. Terminal calls therefore skip the total-call and cumulative-byte caps
- * (both trivially small for a publication) while remaining bound by the
- * per-tool cap, which is what actually bounds a correction-retry loop.
+ * one call that turns that work into an artifact. Terminal calls therefore
+ * skip the soft wall-clock wind-down and
+ * cumulative-byte cap so a run can publish the evidence it already gathered.
+ * The hard wall clock still binds every call.
  *
  * The tracker is intentionally a plain in-memory accountant with an injectable
  * clock so tests can assert exact boundary behaviour without real time passing.
@@ -33,8 +31,7 @@ export type NowMs = () => number;
 /** Which limit an exhausted budget hit. Stable strings — audited and rendered. */
 export type BudgetLimit =
   | 'wall-clock'
-  | 'total-calls'
-  | 'per-tool-calls'
+  | 'wall-clock-soft'
   | 'cumulative-bytes'
   | 'navigations'
   | 'hosts';
@@ -52,21 +49,16 @@ export interface BudgetDecision {
   readonly message: string;
 }
 
-/** Configurable budget limits. All are hard caps; see plan §9 for defaults. */
+/** Configurable safety limits; the soft fraction starts publication wind-down. */
 export interface BudgetLimits {
   /**
    * Maximum wall-clock time for the whole run, in milliseconds.
-   * `Number.POSITIVE_INFINITY` disables the wall-clock cap (the default): local
-   * models are slow enough that a fixed default deadline aborts legitimate
-   * runs, so time-bounding a run is an explicit user/config decision.
+   * A custom `Number.POSITIVE_INFINITY` disables the cap; production agentic
+   * runs use a finite default resolved by the shared option surface.
    */
   readonly wallClockMs: number;
-  /** Maximum number of tool calls across all tools. */
-  readonly totalToolCalls: number;
-  /** Default maximum calls for a single tool (overridable per tool). */
-  readonly perToolCalls: number;
-  /** Per-tool overrides for {@link perToolCalls}, keyed by tool name. */
-  readonly perToolCallOverrides?: Readonly<Record<string, number>>;
+  /** Fraction of the wall clock after which exploration winds down. */
+  readonly softWallClockFraction: number;
   /** Maximum execution time for a single tool call, in milliseconds. */
   readonly perToolTimeoutMs: number;
   /** Maximum agent-visible bytes in a single tool result. */
@@ -85,9 +77,8 @@ export interface BudgetLimits {
  * bounding runaway loops and injection-driven exfiltration.
  */
 export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
-  wallClockMs: Number.POSITIVE_INFINITY,
-  totalToolCalls: 60,
-  perToolCalls: 25,
+  wallClockMs: 15 * 60 * 1000,
+  softWallClockFraction: 0.8,
   perToolTimeoutMs: 45 * 1000,
   maxBytesPerResult: 24 * 1024,
   maxBytesPerRun: 512 * 1024,
@@ -99,9 +90,9 @@ export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
 export interface BudgetCallOptions {
   /**
    * True for the run's terminal publication call. Exempts it from the run-wide
-   * cumulative caps (total calls, cumulative bytes) so a run can always convert
+   * cumulative caps (soft wall clock, cumulative bytes) so a run can always convert
    * the work it already did into a published artifact. Consumption is still
-   * recorded, and the per-tool cap still applies.
+   * recorded, and per-result output bounding still applies.
    */
   readonly terminal?: boolean;
 }
@@ -169,9 +160,16 @@ export class BudgetTracker {
     return this.now() - this.startedAt >= this.limits.wallClockMs;
   }
 
+  /** True once the exploration wind-down boundary is reached. */
+  public isSoftWallClockExhausted(): boolean {
+    return (
+      this.now() - this.startedAt >= this.limits.wallClockMs * this.limits.softWallClockFraction
+    );
+  }
+
   /**
-   * Reserve one tool call: checks wall-clock, cumulative bytes, total-call, and
-   * per-tool-call limits, then increments the counters on success. Atomic —
+   * Reserve one tool call: checks the hard/soft wall clocks and cumulative
+   * bytes, then increments the audit counters on success. Atomic —
    * either the call is fully reserved or nothing is consumed.
    *
    * @param tool The tool name being invoked.
@@ -191,6 +189,14 @@ export class BudgetTracker {
       );
     }
     const terminal = options.terminal === true;
+    if (!terminal && this.isSoftWallClockExhausted()) {
+      return err(
+        this.decide(
+          'wall-clock-soft',
+          'The run is out of exploration time. Publish now using the evidence already gathered.',
+        ),
+      );
+    }
     if (!terminal && this.cumulativeBytes >= this.limits.maxBytesPerRun) {
       return err(
         this.decide(
@@ -199,24 +205,7 @@ export class BudgetTracker {
         ),
       );
     }
-    if (!terminal && this.totalCalls >= this.limits.totalToolCalls) {
-      return err(
-        this.decide(
-          'total-calls',
-          `Total tool-call budget of ${this.limits.totalToolCalls} calls is exhausted.`,
-        ),
-      );
-    }
-    const perToolLimit = this.limits.perToolCallOverrides?.[tool] ?? this.limits.perToolCalls;
     const used = this.perToolCounts.get(tool) ?? 0;
-    if (used >= perToolLimit) {
-      return err(
-        this.decide(
-          'per-tool-calls',
-          `Per-tool call budget of ${perToolLimit} for "${tool}" is exhausted.`,
-        ),
-      );
-    }
 
     this.totalCalls += 1;
     this.perToolCounts.set(tool, used + 1);

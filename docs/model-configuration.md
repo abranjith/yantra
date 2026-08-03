@@ -5,25 +5,38 @@ Yantra's agentic commands run on a provider session backed by the
 the agent runtime's credentials and model definitions, and how credential
 resolution is audited.
 
-## Selecting provider and model
+## Agentic options
 
-`yantra ask`, `yantra research`, and `yantra do` each open exactly one provider
-session, so all three accept the same selection flags. `yantra run` accepts the
-identical surface for writing a replayed workflow's Brief (see
-[Model selection in replay](#model-selection-in-replay) below):
+`ask`, `research`, `do`, `run`, and `resume` register one shared agentic option
+surface. This table is the canonical reference for its defaults:
 
-| Flag                  | Meaning                                                          | Environment fallback    |
-| --------------------- | ---------------------------------------------------------------- | ----------------------- |
-| `--provider <name>`   | Provider key, e.g. `anthropic` or `ollama`.                      | `YANTRA_AGENT_PROVIDER` |
-| `--model <id>`        | Provider-scoped model identifier.                                | `YANTRA_AGENT_MODEL`    |
-| `--thinking <level>`  | Reasoning level; adapters clamp it to the model's capability.    | —                       |
-| `--auth-secret <ref>` | Secret reference selecting `runtime-key` auth (see table below). | —                       |
+| Flag                           | Meaning                                                   | `profile.yaml` key      | Environment                    | Default            |
+| ------------------------------ | --------------------------------------------------------- | ----------------------- | ------------------------------ | ------------------ |
+| `--provider <name>`            | Provider key, such as `anthropic` or `ollama`.            | `agent.provider`        | `YANTRA_AGENT_PROVIDER`        | `anthropic`        |
+| `--model <id>`                 | Provider-scoped model identifier.                         | `agent.model`           | `YANTRA_AGENT_MODEL`           | `claude-haiku-4-5` |
+| `--thinking <level>`           | Reasoning level; adapters clamp it to model capability.   | `agent.thinking`        | `YANTRA_AGENT_THINKING`        | unset              |
+| `--auth-secret <ref>`          | OS-keychain reference selecting runtime-only auth.        | —                       | `YANTRA_AGENT_AUTH_SECRET`     | managed auth       |
+| `--max-duration <duration>`    | Hard wall clock for the whole agent run.                  | `agent.max_duration`    | `YANTRA_AGENT_MAX_DURATION`    | `15m`              |
+| `--max-tokens <n>`             | Cumulative provider-token ceiling.                        | `agent.max_tokens`      | `YANTRA_AGENT_MAX_TOKENS`      | `2000000`          |
+| `--tool-timeout <duration>`    | Timeout for one tool call.                                | `agent.tool_timeout`    | `YANTRA_AGENT_TOOL_TIMEOUT`    | `3m`               |
+| `--tool-retries <n>`           | Retries allowed after an identical tool/error pair fails. | `agent.tool_retries`    | `YANTRA_AGENT_TOOL_RETRIES`    | `3`                |
+| `--confirm-timeout <duration>` | Maximum live consent wait.                                | `agent.confirm_timeout` | `YANTRA_AGENT_CONFIRM_TIMEOUT` | `3m`               |
+| `--no-llm`                     | Force the deterministic path where the command has one.   | —                       | `LLM_PROVIDER=none`            | model enabled      |
 
-Resolution order is **explicit flag > environment > pinned default**
-(`anthropic` / `claude-haiku-4-5`). A blank provider, model, or secret
-reference is a typed validation failure (exit 1) — the CLI never quietly
-substitutes a different model or downgrades the credential mode. Deterministic
-`--no-llm` runs ignore these flags because they never build a session.
+Resolution is **explicit flag > environment > profile preference > pinned
+default**. Layers that do not apply are marked “—” above. An explicit
+`--no-llm` or `LLM_PROVIDER=none` is resolved first, so unused model and budget
+values are not validated. Otherwise blank provider, model, or auth references
+and invalid budgets are typed validation failures (exit 1).
+
+Durations are positive integers with an optional `ms`, `s`, `m`, or `h` suffix;
+a bare integer means milliseconds. Examples: `900000`, `900s`, and `15m`.
+Fractions, negative values, zero, and unknown units are rejected.
+
+The 15-minute run has an 80% exploration wind-down point at 12 minutes. After
+that soft boundary, non-terminal tool calls are refused with guidance to publish
+the evidence already gathered; `result_publish` remains available until the hard
+deadline. A Brief produced during wind-down may therefore be labeled partial.
 
 ## Model selection in replay
 
@@ -37,11 +50,16 @@ select _which_ model that workflow gets; they never opt a workflow in:
 yantra run quarterly-report                             # whatever the workflow declares
 yantra run quarterly-report --provider ollama --model llama3.1:8b
 yantra run quarterly-report --no-llm                    # force deterministic
+yantra resume <run-id> --model claude-sonnet-5
 ```
 
 A workflow whose `synthesis.use_llm` is false — the default, and the state of
 every workflow saved before the field existed — opens no provider session no
 matter which model flags are present.
+
+`resume` accepts the same selection surface when it inherits an LLM synthesis
+strategy. Agent budget flags govern live agent work; they do not alter a
+deterministic replay.
 
 The model affects **only** how the run's Brief is worded, and only for a workflow
 that declares a `synthesis:` block. It never influences which steps run: step
@@ -95,11 +113,12 @@ Model credentials resolve through one of these paths (recorded per run as
 | `environment`   | A provider environment variable (e.g. `ANTHROPIC_API_KEY`). Supported as-is; note the audit trail records that the key came from the environment.                       |
 | `models-config` | Request auth configured in `models.json` (custom providers).                                                                                                            |
 
-Absence of any usable credential is a **typed startup failure**
-(`AGENT_AUTH_UNAVAILABLE`) with a fix hint — agentic commands never silently
-fall back to a non-LLM implementation. To intentionally use no credentials,
-select the deterministic `ask` or `research` pipeline with `--no-llm` or
-`LLM_PROVIDER=none`; that selection occurs before any agent session is built.
+Credential availability is probed offline before a session opens. When none of
+the sources above resolves, commands with a useful deterministic path (`ask`,
+`research`, and replay synthesis in `run`) print one warning naming the selected
+provider/model and continue deterministically. `do` and `doctor --agent-smoke`
+have no meaningful deterministic result, so they fail with the typed
+`AGENT_AUTH_UNAVAILABLE` startup error (exit 3) and an actionable fix hint.
 
 ## Opting in to a personal pi credential store
 

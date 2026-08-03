@@ -1,6 +1,7 @@
 import type { EffectivePreference, EffectivePreferences } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
+import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { resolveAskDefaults } from '../../src/commands/ask.js';
 
 function prefs(entries: Record<string, unknown>): EffectivePreferences {
@@ -44,5 +45,23 @@ describe('@no-llm resolveAskDefaults (flag > prefs > hardcoded)', () => {
   it('maps a preferred search_provider of "auto" to null', () => {
     const resolved = resolveAskDefaults({}, prefs({ 'defaults.search_provider': 'auto' }));
     expect(resolved.provider).toBeNull();
+  });
+
+  it('resolves agent preferences alongside ask display defaults', async () => {
+    const effective = prefs({
+      'defaults.detail': 'full',
+      'agent.model': 'profile-model',
+      'agent.max_duration': '20m',
+    });
+    const agent = await resolveAgentInvocation('ask', {}, {}, effective, {
+      probeCredential: () => Promise.resolve({ available: true, authSource: 'managed' }),
+    });
+
+    expect(resolveAskDefaults({}, effective).detail).toBe('full');
+    expect(agent).toMatchObject({
+      mode: 'llm',
+      model: { id: 'profile-model' },
+      budgets: { wallClockMs: 1_200_000 },
+    });
   });
 });
