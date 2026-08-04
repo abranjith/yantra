@@ -22,7 +22,7 @@ import { CommanderError, Option, type Command } from 'commander';
 import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
-import { loadEffectivePreferences } from '../preferences.js';
+import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
@@ -144,6 +144,10 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
       // the agent prompt then says a user can approve protected actions but
       // cannot answer open-ended questions, instead of claiming "no user".
       interactive: runtime.isTty && !json,
+      // Sensitive ambient facts the user granted. Passed on every agentic
+      // command, not just `ask` — `do` sending none is what let a run infer a
+      // city from its timezone.
+      ambient: resolveAmbientContext(effective),
       ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
       ...(template === undefined ? {} : { template }),
       connector,

@@ -87,9 +87,27 @@ record for the provider session:
 | `auth_source`       | `managed`, `runtime-key`, or `environment`; never a credential. |
 | `session_id`        | Provider session identity.                                      |
 | `session_file`      | Relative pointer to the raw JSONL under `agent/`.               |
-| `prompt_version`    | Authoritative prompt version (currently `agent-v2`).            |
+| `prompt_version`    | Authoritative prompt version (currently `agent-v6`).            |
 | `prompt_hash`       | SHA-256 of the exact system prompt text.                        |
 | `tool_catalog_hash` | SHA-256 of canonical tool names, schemas, and descriptions.     |
+
+Every version ever shipped stays valid in the schema, so manifests written by
+older releases keep validating.
+
+### `agent-v6` — grant-aware ambient context
+
+`agent-v6` makes the per-run ambient block state **every** ambient fact on every
+run: as a value when available, otherwise as the literal marker
+`- user location: not available`, closed by a rule forbidding the model from
+guessing or deriving what it was not given. The system prompt's **Trust
+boundary** section gained the matching pair of prohibitions — never infer the
+user's location from ambient signals such as timezone or locale, and never
+assemble a URL rather than following one a tool produced.
+
+Because the system prompt text changed, **`prompt_hash` changes for all agentic
+runs** from this release forward. That is expected: the hash exists to make a
+prompt change detectable. Comparing runs across the boundary means comparing
+`prompt_version` first.
 
 ## Stable tool-call projection
 

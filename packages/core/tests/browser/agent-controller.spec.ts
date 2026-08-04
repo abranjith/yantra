@@ -105,6 +105,23 @@ describe('@no-llm AgentBrowserController', () => {
         response.end('<title>Next</title><button>Arrived</button>');
         return;
       }
+      if (path === '/many') {
+        // 50 interactables, more than the 30 model-visible cap, plus an open
+        // autocomplete listbox whose options only a scan that selects
+        // [role="option"] can see.
+        const buttons = Array.from(
+          { length: 50 },
+          (_, i) => `<button>Action ${String(i).padStart(2, '0')}</button>`,
+        ).join('');
+        const options = ['Chicago, IL', 'Chicago Midway', 'Chicopee, MA']
+          .map((name) => `<li role="option">${name}</li>`)
+          .join('');
+        response.end(`<!doctype html><title>Many</title>
+          <input aria-label="Destination" role="combobox">
+          <ul role="listbox">${options}</ul>
+          ${buttons}`);
+        return;
+      }
       if (path === '/delayed') {
         // The reported real-world failure shape: the site starts its
         // navigation on a timer well after the click handler returns.
@@ -274,6 +291,54 @@ describe('@no-llm AgentBrowserController', () => {
     expect(windowResult.popup_intercepted).toBe(`${baseUrl}/popup-target`);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+    await controller.teardown();
+  }, 45_000);
+
+  it('caps the model-visible observation at 30 but resolves more under an explicit cap', async () => {
+    // `browser_form_fill` needs to address elements outside the model-visible
+    // cap; `browser_observe` must not be widened by that. The cap argument is
+    // for internal resolution only.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'cap-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/many`);
+
+    const modelVisible = await controller.observe();
+    const internal = await controller.observe({ cap: 400 });
+
+    expect(modelVisible.interactables).toHaveLength(30);
+    expect(internal.interactables.length).toBeGreaterThan(30);
+    // The cap is clamped, so an absurd request cannot explode the handle set.
+    const clamped = await controller.observe({ cap: 10_000 });
+    expect(clamped.interactables.length).toBeLessThanOrEqual(400);
+    await controller.teardown();
+  }, 45_000);
+
+  it('exposes open autocomplete options to an uncapped observation', async () => {
+    // Regression: `[role="option"]` was absent from the scan selector, so the
+    // real suggestions of a destination combobox were structurally invisible
+    // and the agent clicked a marketing tile instead.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'option-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/many`);
+
+    const observation = await controller.observe({ cap: 400 });
+    const options = observation.interactables.filter((entry) => entry.role === 'option');
+
+    expect(options.map((entry) => entry.name)).toEqual([
+      'Chicago, IL',
+      'Chicago Midway',
+      'Chicopee, MA',
+    ]);
+    // Refs still resolve to live elements, so the option can actually be clicked.
+    expect(() => controller.resolveRef(options[0]!.ref)).not.toThrow();
     await controller.teardown();
   }, 45_000);
 

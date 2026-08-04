@@ -33,6 +33,7 @@ import type { BudgetTracker } from './budget.js';
 import type { WorkflowToolMode } from './profiles.js';
 import type { AgentTrace } from './trace.js';
 import type { UrlPolicy } from './url-policy.js';
+import type { UrlProvenance } from './url-provenance.js';
 
 /** Confirmation dependencies (gateway + optional persistence). */
 export interface ConfirmationServices {
@@ -380,6 +381,13 @@ export interface RunServices {
   readonly modelValues?: ModelSuppliedValues;
   /** Outbound URL controls (§8.13). */
   readonly urlPolicy: UrlPolicy;
+  /**
+   * Run-scoped record of every URL a tool result produced. `browser_navigate`
+   * refuses targets absent from it, so the agent cannot navigate to a URL it
+   * assembled itself. Required, not optional: a construction site that forgot
+   * to supply it would silently disable the control.
+   */
+  readonly urlProvenance: UrlProvenance;
   /** Confirmation gateway + persistence, or null when no connector is wired. */
   readonly confirmation: ConfirmationServices | null;
   /** Run-scoped action-phase latch (closed by `result_publish`). */

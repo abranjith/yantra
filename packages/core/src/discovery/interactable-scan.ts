@@ -27,11 +27,18 @@ export function scanInteractablesInPage(): RawInteractable[] {
     radio: 'input',
     combobox: 'select',
     listbox: 'select',
+    // Autocomplete suggestions. Without this the real options of a destination
+    // or date combobox were structurally invisible to every observation, so an
+    // agent that filled such a field had nothing correct left to click — the
+    // logged run clicked a marketing tile instead. Options exist only while a
+    // dropdown is open, so scanning them adds no steady-state noise.
+    option: 'select',
   };
   const candidates = Array.from(
     document.querySelectorAll<HTMLElement>(
       'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
-        '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"]',
+        '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
+        '[role="option"]',
     ),
   );
   const results: RawInteractable[] = [];
@@ -96,7 +103,9 @@ export function scanInteractablesInPage(): RawInteractable[] {
     }
     const parentLabel = element.closest('label')?.textContent;
     if (parentLabel?.trim()) return truncate(normalize(parentLabel));
-    if (element.matches('button,a')) {
+    // Options carry their label as text content, like buttons and links do, and
+    // an unnamed option is unusable — name matching is the only way to pick one.
+    if (element.matches('button,a,[role="option"],[role="menuitem"],[role="tab"]')) {
       const text = element.textContent?.trim();
       if (text) return truncate(normalize(text));
     }

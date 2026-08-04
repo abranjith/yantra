@@ -20,10 +20,20 @@ export function browserController(services: RunServices): AgentBrowserController
   );
 }
 
-export function isDomainFailure(
-  value: AgentBrowserController | DomainFailure,
-): value is DomainFailure {
-  return 'ok' in value && value.ok === false;
+/**
+ * Narrows any `T | DomainFailure` union to the failure arm.
+ *
+ * Generic because tools now return domain values other than a controller from
+ * the same union (a resolved form field, a per-field outcome); the check itself
+ * is unchanged — only a `DomainFailure` carries `ok: false`.
+ */
+export function isDomainFailure<T>(value: T | DomainFailure): value is DomainFailure {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'ok' in value &&
+    (value as { readonly ok: unknown }).ok === false
+  );
 }
 
 export function browserFailure(error: unknown): DomainFailure {

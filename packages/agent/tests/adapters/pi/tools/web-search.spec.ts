@@ -156,6 +156,13 @@ describe('@no-llm web_search combined tool', () => {
     ]);
     expect(services.evidence.entries()[0]?.tool).toBe('web_search');
     expect(services.evidence.entries()[0]?.excerpt).toBe(payload.sites[0]?.excerpt);
+    // Every URL shown to the model — fetched sites AND the unfetched
+    // "more results" tail — becomes navigable provenance, since the model is
+    // being invited to follow them.
+    for (const url of ['https://e0.com/', 'https://e2.com/', 'https://e3.com/']) {
+      expect(services.urlProvenance.has(url)).toBe(true);
+    }
+    expect(services.urlProvenance.has('https://never-returned.com/')).toBe(false);
   });
 
   it('is rejected with EVIDENCE_FROZEN once the evidence phase is frozen', async () => {

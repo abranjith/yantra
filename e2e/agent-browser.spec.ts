@@ -9,6 +9,7 @@ import {
   EvidenceLedger,
   EvidencePhase,
   UrlPolicy,
+  UrlProvenance,
   buildYantraWrappedTools,
   type RunServices,
   type WrappedTool,
@@ -57,6 +58,10 @@ describe('@no-llm real Chrome browser tools', () => {
       },
     });
     const sanitizer = new DefaultSanitizer();
+    // Mirrors a real `--allow-host` run: the user named these hosts, so any
+    // page on them is reachable while an assembled URL elsewhere is not.
+    const provenance = new UrlProvenance();
+    provenance.seed({ allowedHosts: ['127.0.0.1', 'localhost'] });
     const services: RunServices = {
       template: null,
       runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -64,6 +69,7 @@ describe('@no-llm real Chrome browser tools', () => {
       budgets,
       sanitizer,
       urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
+      urlProvenance: provenance,
       confirmation: { gateway: grantingGateway(), store: null },
       actionPhase: new ActionPhase(),
       evidence: new EvidenceLedger(sanitizer),
@@ -162,8 +168,9 @@ describe('@no-llm real Chrome browser tools', () => {
   });
 
   it('refuses a wrong-host secret before resolution and leaves no canary artifact', async () => {
-    const localhostUrl = fixture.baseUrl.replace('127.0.0.1', 'localhost');
-    await call('browser_navigate', { url: `${localhostUrl}/form.html` });
+    await call('browser_navigate', {
+      url: `${fixture.baseUrl.replace('127.0.0.1', 'localhost')}/form.html`,
+    });
     const observed = await observe();
     const mismatch = await call('browser_fill', {
       ref: refByName(observed, 'Password'),

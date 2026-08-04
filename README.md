@@ -15,6 +15,27 @@ pnpm install
 pnpm test
 ```
 
+### First run
+
+`yantra init` writes `~/.config/yantra/config.yaml` and seeds your
+`profile.yaml`. On an interactive terminal it asks one short question — whether
+the agent may be told your location, and if so, your city or area — and records
+the answer as a grant you can change at any time.
+
+```bash
+yantra init                      # asks; writes both files
+yantra init --yes                # accept defaults without prompting
+yantra init --json               # machine-readable; never prompts
+yantra init --reset              # back up and rewrite, asking again
+```
+
+**Scripted and CI use is unaffected.** The question fires only on an interactive
+TTY, without `--json` or `--yes`, and only when the profile is actually being
+written (absent, or `--reset`) — a non-TTY implies `--yes`. Every other path
+writes the defaults silently, and the defaults are behavior-preserving: the
+grant starts `true` with no city set, which reads to the agent as
+"not available".
+
 ## Commands
 
 | Command            | Description                        |
@@ -232,6 +253,17 @@ default to denial; waits are bounded, and `--json`/non-TTY runs fail closed
 without prompting. CAPTCHA, bot walls, robots restrictions, and other controls
 produce an honest handoff—Yantra never evades them.
 
+**Two rules keep a `do` run grounded in what it actually saw.** Navigation is
+restricted to URLs a tool result actually produced, plus the hosts and URLs you
+supplied yourself (`--allow-host`, or a link in the goal) — so the agent cannot
+assemble a "deep link" and publish from whatever page it happens to serve
+(`URL_NOT_FROM_EVIDENCE`). And `browser_form_fill` lets
+it drive a real multi-field search form — autocomplete destinations and calendar
+date pickers included — in one call, so hand-building a URL is not the only way
+through. It is available to `do` only, never submits, and never handles
+credentials; use `browser_fill` for those. See
+[docs/agent-tools.md](docs/agent-tools.md).
+
 Hard budgets cover wall-clock time, per-tool timeout, provider tokens,
 navigation/host count, and result bytes. Tool-call counts remain audit data, not
 caps. At 80% of the wall clock, exploration winds down while publication remains
@@ -241,6 +273,18 @@ reference for every flag, configuration layer, and default. Exit codes are `0` f
 published Brief, `2` for failure or budget exhaustion, `4` for human handoff,
 and `130` for an interrupt. `--save-as` is reserved for workflow promotion;
 deterministic saved workflows continue to use `yantra run` without an LLM loop.
+
+**A goal that needs your location, when Yantra does not have one, exits `4`
+immediately** — before any tokens are spent or a browser launches:
+
+```console
+$ yantra do "cheap hotels near me"
+This goal needs your location, but none is available and Yantra will not infer one.
+Set one with `yantra prefs set locale.city "<city, state>"`, or name the location in the query.
+```
+
+If you turned location sharing off, the remedy names that instead. Yantra will
+not substitute a city guessed from your timezone.
 
 ## Saved workflows (`yantra run`)
 
@@ -331,9 +375,9 @@ yantra usage --type ask --since 7d   # filter by task type and age (7d, 24h, or 
 ```
 
 Durable personal defaults live in a **human-editable** `~/.config/yantra/profile.yaml`
-(search provider, detail/length, locale/units, favorite retailers, interests) and
-are applied as flag defaults across `ask`/`research` (an explicit flag always
-wins).
+(search provider, detail/length, locale/city/region/units, favorite retailers,
+interests) and are applied as flag defaults across `ask`/`research` (an explicit
+flag always wins).
 
 ```bash
 yantra profile                       # your effective preferences + where each came from
@@ -341,6 +385,22 @@ yantra prefs set defaults.detail full
 yantra prefs get defaults.detail
 yantra prefs --forget defaults.detail   # real deletion (privacy control)
 ```
+
+**Your location is yours to grant.** The `context` block records which sensitive
+facts the agent may be told about you. Today it holds one grant — `location` —
+which gates the value composed from `locale.city` and `locale.region`:
+
+```bash
+yantra prefs set locale.city "Naperville, IL"   # the value
+yantra prefs set context.location false         # withhold it from the agent
+```
+
+When the location is unavailable — denied, or simply never set — the agent is
+told so explicitly and is **forbidden from deriving one**. A goal like
+`"hotels near me"` then stops with a handoff naming the remedy, rather than
+guessing a city from your timezone. The current date, timezone, and locale tag
+are host-environment facts, not personal data; they are always supplied and are
+not grants.
 
 **Privacy:** only a short, **sanitized, user-approved** preference summary is ever
 injected into a prompt (e.g. "Prefers metric units. Favors retailers: X, Y.").

@@ -11,6 +11,7 @@ import {
 import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../src/runtime/middleware.js';
 import { ActionPhase, type RunServices } from '../../src/runtime/run-services.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
+import { UrlProvenance } from '../../src/runtime/url-provenance.js';
 
 const CANARY = 'sk-CANARYtokenABCDEFGHIJKLMNOP';
 
@@ -34,6 +35,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     ...(overrides.userInput ? { userInput: overrides.userInput } : {}),
     ...(overrides.modelValues ? { modelValues: overrides.modelValues } : {}),
     urlPolicy: new UrlPolicy(budgets),
+    urlProvenance: new UrlProvenance(),
     confirmation: overrides.gateway ? { gateway: overrides.gateway, store: null } : null,
     actionPhase: overrides.actionPhase ?? new ActionPhase(),
     trace: null,

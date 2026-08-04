@@ -160,22 +160,71 @@ unboundedly (`runtime/url-policy.ts`). Every candidate URL is:
 
 Every decision — allow or reject — is audited in full.
 
+## URL provenance (`browser_navigate`)
+
+The URL policy asks _"is this URL safe to visit?"_. Provenance asks a different
+question: _"where did this URL come from?"_
+
+A model that cannot reach a page through the interface will try to reach it by
+construction. In run `20260803T033803Z-do-f1d9f01b` the agent gave up on a search
+form and hand-built a Kayak deep link containing a **fabricated city id**. The
+site did not error — it served _"Shook, Missouri"_, eight cabins at a lake, under
+`status: ok`. Nothing flagged it, and the run published hotel prices for a place
+the user had never heard of. A guessed URL that 404s is a nuisance; a guessed URL
+that resolves to plausible-looking wrong data is a correctness hole that no
+downstream verification closes, because every later observation faithfully
+reports the wrong page.
+
+So each run keeps an append-only record (`runtime/url-provenance.ts`) of every
+URL some tool result actually produced, and `browser_navigate` refuses anything
+absent from it with **`URL_NOT_FROM_EVIDENCE`** (retryable):
+
+> This URL did not come from a search result or a page you visited. Yantra does
+> not navigate to URLs the agent assembled. Use `web_search` to find the page, or
+> click through to it from a page you have observed.
+
+The check runs **before** the URL policy, because `check()` reserves navigation
+and host budget and a refused guess must not consume it.
+
+**Seeded from trusted input** — every URL written in the user's own goal, and
+every `--allow-host` entry. A user-named host is granted in full (any path,
+scheme, and port): naming it is an explicit human statement of where the run
+should work, and is itself the attestation that the host is correct. The failure
+this guards against was a fabricated path on a host the user never named, reached
+organically mid-run — that case is unaffected.
+
+**Extended by tool results** — `web_search` hits including the `more_results`
+tail, successfully fetched `web_fetch` pages, the post-redirect URL of every
+completed navigation, and intercepted popup targets.
+
+Matching for these earned URLs is deliberately a little generous, since a false
+refusal costs a turn while a false accept costs correctness: host and scheme are
+case-insensitive, the fragment is ignored, one trailing slash on a non-root path
+is insignificant, and the bare origin of any visited page always matches
+(clicking a site's logo is always available). What it will **not** forgive is a
+differing path or query string — precisely where a fabricated id hides.
+
+`web_fetch` is deliberately **not** provenance-gated: following a URL quoted in
+page text is a legitimate `ask`/`research` flow, and page text is not provenance.
+Gating it needs its own design.
+
 ## The initial tools
 
 `ask`, `research`, and `do` share the same wrappers and audit projection, but do not receive the same capabilities. `ask` is web-only and may only list saved workflows; `research` is web-only unless `YANTRA_AGENT_RESEARCH_BROWSE=1` explicitly enables read-only browsing; only `do` receives browser mutation tools. This is capability removal at registration time, not a prompt-only restriction.
 
-| Tool               | What it does                                                                                                                                 | Key constraints                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web_search`       | Search the public web and return the top hits **with their extracted page content** and references, plus a snippet-only `more_results` tail. | Combined search-that-fetches: fetches the top `search.fetch_top` hits (1–5, default 3) through the same per-source path as the deterministic pipeline. Every fetched URL passes the URL policy and ethics gate individually; per-site failures are data (`failures[]`), never a whole-tool error. Snippets **and** fetched content are untrusted, sanitized before the model sees them; oversized site text becomes a capture reference.                      |
-| `web_fetch`        | Fetch + extract readable article text from **one specific public URL** you already have.                                                     | Secondary to `web_search` (which already returns page content for a query): use it only for a direct link or a link discovered inside previously fetched content. URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                                                                              |
-| `browser_navigate` | Lazily open the single run page at a policy-checked URL.                                                                                     | URL/host budgets and ethics checks run before navigation.                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `browser_observe`  | Return bounded readable text and ranked opaque refs.                                                                                         | Side-effect free; creates a new ref generation and invalidates the prior one.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `browser_click`    | Click an actionable opaque ref.                                                                                                              | Dispatched as a user-shaped held press. The result is held until the page stops moving: late-starting navigations, redirect chains, and fetch/XHR updates settle (bounded) before the next tool call can race them. Hidden, disabled, and stale targets return structured errors; a covered target is clicked through to whatever covers it, exactly as a real user's click would be — re-observe to see the outcome. Protected actions require confirmation. |
-| `browser_fill`     | Fill an observed field with a literal, a `{{user:...}}` placeholder, or a website secret reference.                                          | Native `<select>` elements are filled by option label or value (`OPTION_NOT_FOUND` otherwise); text fields are overtyped with real key events. `{{user:...}}` placeholders resolve to the real user-provided value at the execution boundary; credential-shaped literals (raw or resolved) are rejected; secret refs require confirmation and trusted host metadata.                                                                                          |
-| `browser_extract`  | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                                            |
-| `script_run`       | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                                             |
-| `workflow_run`     | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                                            |
-| `result_publish`   | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                                                                   |
+| Tool                | What it does                                                                                                                                 | Key constraints                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`        | Search the public web and return the top hits **with their extracted page content** and references, plus a snippet-only `more_results` tail. | Combined search-that-fetches: fetches the top `search.fetch_top` hits (1–5, default 3) through the same per-source path as the deterministic pipeline. Every fetched URL passes the URL policy and ethics gate individually; per-site failures are data (`failures[]`), never a whole-tool error. Snippets **and** fetched content are untrusted, sanitized before the model sees them; oversized site text becomes a capture reference.                      |
+| `web_fetch`         | Fetch + extract readable article text from **one specific public URL** you already have.                                                     | Secondary to `web_search` (which already returns page content for a query): use it only for a direct link or a link discovered inside previously fetched content. URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                                                                              |
+| `browser_navigate`  | Lazily open the single run page at a policy-checked URL.                                                                                     | The URL must have come from a tool result, the goal, or `--allow-host` — an assembled URL is refused with `URL_NOT_FROM_EVIDENCE` before any budget is spent. URL/host budgets and ethics checks then run before navigation.                                                                                                                                                                                                                                  |
+| `browser_observe`   | Return bounded readable text and ranked opaque refs.                                                                                         | Side-effect free; creates a new ref generation and invalidates the prior one.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `browser_click`     | Click an actionable opaque ref.                                                                                                              | Dispatched as a user-shaped held press. The result is held until the page stops moving: late-starting navigations, redirect chains, and fetch/XHR updates settle (bounded) before the next tool call can race them. Hidden, disabled, and stale targets return structured errors; a covered target is clicked through to whatever covers it, exactly as a real user's click would be — re-observe to see the outcome. Protected actions require confirmation. |
+| `browser_fill`      | Fill an observed field with a literal, a `{{user:...}}` placeholder, or a website secret reference.                                          | Native `<select>` elements are filled by option label or value (`OPTION_NOT_FOUND` otherwise); text fields are overtyped with real key events. `{{user:...}}` placeholders resolve to the real user-provided value at the execution boundary; credential-shaped literals (raw or resolved) are rejected; secret refs require confirmation and trusted host metadata.                                                                                          |
+| `browser_form_fill` | Fill several fields of one form in a single call, addressing them by visible name and re-observing between steps. **`do` only.**             | Never submits and never handles credentials (no `secret_ref` form; credential-shaped values are refused). Resolves each field against a fresh uncapped observation, so autocomplete options and calendar days revealed by the previous step are addressable. Stops at the first failing field and reports what was applied. Returns the post-fill observation so the submit button can be clicked with `browser_click`.                                       |
+| `browser_extract`   | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                                            |
+| `script_run`        | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                                             |
+| `workflow_run`      | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                                            |
+| `result_publish`    | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                                                                   |
 
 Web tool outcomes also feed Yantra's local domain-ranking signal: search hits
 add a positive observation, while blocked, failed, or unreadable pages add a
@@ -186,6 +235,64 @@ Prefer `workflow_run` over ad-hoc browsing whenever a saved workflow matches the
 goal: it replays reliably and cheaply with no model involvement. The agent never
 sees a workflow's secrets or internal locators, and must never pass secret values
 as workflow params.
+
+### `browser_form_fill` — multi-field forms
+
+`browser_fill` sets one field addressed by an opaque ref from the model's last
+observation. A real search form defeats that in two compounding ways:
+
+- The elements that matter often appear **because of** the previous step.
+  Autocomplete suggestions and calendar days do not exist when the model last
+  observed, so it has no ref for them.
+- The model-visible observation is capped at 30 elements ranked by viewport
+  position, so header links and marketing tiles routinely outrank the form's own
+  controls.
+
+In run `20260803T033803Z-do-f1d9f01b` the agent filled a destination box and then
+clicked what it believed was the suggestion. It was a marketing tile — _"View
+more deals for Chicago Hotels"_. The real options were `[role="option"]` elements
+the scanner did not even select. The check-in/check-out fields were
+`role: button` opening a calendar widget, not fillable inputs, so the agent never
+solved them, gave up, and assembled a URL instead.
+
+`browser_form_fill` takes an ordered `fields` array (1–10) of
+`{ field, value, pick_suggestion? }` and, for each in turn:
+
+1. re-observes the live page **uncapped** (internal resolution only — the
+   model-visible surface is unchanged) and resolves `field`, which may be a
+   visible name (exact, then prefix, then substring) or an `eNN` ref;
+2. dispatches on the resolved element's role — text/search/combobox fields are
+   typed into (a native `<select>` still routes through the controller's option
+   matching, so `OPTION_NOT_FOUND` surfaces unchanged); a **button** is treated
+   as a widget: click to open, re-observe, then click the matching choice;
+3. when `pick_suggestion` is true, polls for a real `role="option"` element for
+   up to 3 s and clicks the closest match — only page-declared options are
+   eligible, so a same-named marketing tile can never win.
+
+An ISO date value (`"2026-08-05"`) is matched against a calendar day rendered as
+`"August 5, 2026"`, falling back to a loose match requiring both the month name
+and the day number.
+
+**It stops at the first failing field** and returns the fields applied so far
+alongside the typed error — it never continues past a failure and never
+substitutes a guess. Ambiguity is an error too: `"Check-"` matching both
+"Check-in" and "Check-out" returns `FORM_FIELD_AMBIGUOUS` rather than silently
+filling the wrong date and looking like success.
+
+| Error                         | Meaning                                                            |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `FORM_FIELD_NOT_FOUND`        | No field matches; lists up to 8 available names.                   |
+| `FORM_FIELD_AMBIGUOUS`        | Several fields match at the winning tier; lists them.              |
+| `FORM_FIELD_UNSUPPORTED_ROLE` | Checkbox/radio or a non-fillable element — use `browser_click`.    |
+| `FORM_WIDGET_NO_MATCH`        | The widget opened but nothing in it matches the value.             |
+| `SUGGESTION_NOT_OFFERED`      | No autocomplete option appeared within the wait window.            |
+| `SECRET_SHAPED_LITERAL`       | A credential-shaped value; use `browser_fill` with a `secret_ref`. |
+
+**Boundaries.** It never submits — the returned observation includes the submit
+button and the model clicks it with `browser_click`, which keeps the
+protected-action confirmation path exactly where it already was. It never
+resolves credentials: there is no `secret_ref` form, so `browser_fill` remains
+the sole credentialed fill path. Use `browser_fill` for a single field.
 
 ## Browser session and observation model
 

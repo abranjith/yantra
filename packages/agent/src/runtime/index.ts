@@ -13,6 +13,13 @@ export {
   type AgentPromptBudgets,
   type AgentUserPromptInput,
 } from './prompt.js';
+export { UrlProvenance } from './url-provenance.js';
+export {
+  locationHandoffFor,
+  requiresUserLocation,
+  type AmbientContextView,
+  type LocationHandoff,
+} from './location-gate.js';
 export {
   ConfirmationBridge,
   ConfirmationWaitAbortedError,

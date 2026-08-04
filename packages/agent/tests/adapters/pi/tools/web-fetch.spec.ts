@@ -50,6 +50,28 @@ describe('@no-llm web_fetch tool', () => {
     expect(services.evidence.entries()).toMatchObject([
       { url: 'https://example.com/a', tool: 'web_fetch', title: 'Fixture Title' },
     ]);
+    // A successfully fetched page is attested, so navigating to it is allowed.
+    expect(services.urlProvenance.has('https://example.com/a')).toBe(true);
+  });
+
+  it('records nothing in provenance when the fetch does not produce a page', async () => {
+    // A URL that could not be fetched and read attests nothing — otherwise a
+    // failed guess would still earn the right to navigate to it.
+    const services = buildServices({
+      runDir,
+      fetch: {
+        fetcher: fetcherReturning(fetchedDoc()),
+        extractor: extractorReturning(''),
+      },
+    });
+
+    const result = await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://example.com/a' },
+      undefined,
+    );
+
+    expect(result.error_code).toBe('EXTRACTION_EMPTY');
+    expect(services.urlProvenance.has('https://example.com/a')).toBe(false);
   });
 
   it('is rejected with EVIDENCE_FROZEN once the evidence phase is frozen', async () => {

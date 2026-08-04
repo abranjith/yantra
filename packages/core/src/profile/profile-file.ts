@@ -6,6 +6,15 @@
  * — a malformed profile is an exit-1 validation error with field context, never
  * a silent reset. The machine-managed `learned` signals live in the SQLite
  * `preferences` table; {@link SqlitePreferenceStore} merges the two layers.
+ *
+ * The `context` block is the user's control surface over which *sensitive*
+ * ambient facts the engine may state to a model. Today it holds one grant,
+ * `location`, gating the value composed from `locale.city` / `locale.region`.
+ * Every grant defaults to `true`, which is behavior-preserving: with no city
+ * configured the ambient block still renders `not available`, so an untouched
+ * install behaves exactly as it did before the block existed. Date, timezone,
+ * and locale are host-environment facts, not personal data, and are
+ * deliberately not grants.
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -45,8 +54,18 @@ export const profileSchema = z
       .default({}),
     locale: z
       .object({
+        city: z.string().trim().min(1).nullable().default(null),
         region: z.string().nullable().default(null),
         units: unitsSchema.default('metric'),
+      })
+      .default({}),
+    // The user's grants over sensitive ambient facts. Declared as a block, not a
+    // lone flag, so a future sensitive fact is a one-line addition. The current
+    // date, timezone, and locale tag are host-environment facts, not personal
+    // data, so they are deliberately not grants and always reach the model.
+    context: z
+      .object({
+        location: z.boolean().default(true),
       })
       .default({}),
     personalization: z
@@ -84,8 +103,10 @@ export const KNOWN_PREFERENCE_KEYS = [
   'defaults.search_provider',
   'defaults.detail',
   'defaults.length',
+  'locale.city',
   'locale.region',
   'locale.units',
+  'context.location',
   'personalization.enabled',
   'personalization.interests',
   'personalization.favorite_retailers',
@@ -163,8 +184,10 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['defaults.search_provider', profile.defaults.search_provider],
     ['defaults.detail', profile.defaults.detail],
     ['defaults.length', profile.defaults.length],
+    ['locale.city', profile.locale.city],
     ['locale.region', profile.locale.region],
     ['locale.units', profile.locale.units],
+    ['context.location', profile.context.location],
     ['personalization.enabled', profile.personalization.enabled],
     ['personalization.interests', profile.personalization.interests],
     ['personalization.favorite_retailers', profile.personalization.favorite_retailers],
@@ -184,8 +207,10 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'defaults.search_provider': searchProviderSchema,
   'defaults.detail': detailSchema,
   'defaults.length': lengthSchema,
+  'locale.city': z.string().trim().min(1).nullable(),
   'locale.region': z.string().nullable(),
   'locale.units': unitsSchema,
+  'context.location': z.boolean(),
   'personalization.enabled': z.boolean(),
   'personalization.interests': z.array(z.string()),
   'personalization.favorite_retailers': z.array(z.string()),
@@ -227,7 +252,7 @@ function isKnownKey(key: string): key is PreferenceKey {
 
 /** Coerces the CLI string into the shape the key's schema expects. */
 function coerceRawValue(key: PreferenceKey, rawValue: string): unknown {
-  if (key === 'personalization.enabled') {
+  if (key === 'personalization.enabled' || key === 'context.location') {
     if (rawValue === 'true') return true;
     if (rawValue === 'false') return false;
     return rawValue; // let the schema reject anything else
@@ -238,7 +263,7 @@ function coerceRawValue(key: PreferenceKey, rawValue: string): unknown {
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
   }
-  if (key === 'locale.region' && rawValue.toLowerCase() === 'null') {
+  if ((key === 'locale.region' || key === 'locale.city') && rawValue.toLowerCase() === 'null') {
     return null;
   }
   if (

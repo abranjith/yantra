@@ -14,6 +14,7 @@ export type YantraToolName =
   | 'browser_observe'
   | 'browser_click'
   | 'browser_fill'
+  | 'browser_form_fill'
   | 'browser_extract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
@@ -34,12 +35,16 @@ export interface CommandTaskProfile {
 
 const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'] as const;
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
+// `browser_form_fill` is a mutation tool, so it belongs here beside
+// `browser_click`/`browser_fill` and deliberately NOT in BROWSE_TOOLS — that set
+// is `research`'s opt-in *read-only* browse mode.
 const ALL_TOOLS = [
   ...READ_TOOLS,
   'workflow_run',
   ...BROWSE_TOOLS,
   'browser_click',
   'browser_fill',
+  'browser_form_fill',
 ] as const;
 
 /** Stable default profiles. Configured copies are obtained with `resolveCommandTaskProfile`. */

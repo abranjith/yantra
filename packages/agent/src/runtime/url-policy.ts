@@ -43,7 +43,9 @@ export type UrlPolicyErrorCode =
   | 'URL_INSECURE'
   | 'URL_CREDENTIAL_SHAPE'
   | 'URL_HOST_NOT_ALLOWED'
-  | 'BUDGET_EXHAUSTED';
+  | 'BUDGET_EXHAUSTED'
+  /** The URL was not produced by any tool result this run — see `UrlProvenance`. */
+  | 'URL_NOT_FROM_EVIDENCE';
 
 /** A typed, render-safe URL rejection. Never contains the offending secret. */
 export interface UrlPolicyRejection {

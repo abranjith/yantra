@@ -77,6 +77,40 @@ describe('@no-llm sanitizer strippers', () => {
     expect(result.text).not.toContain('?q=1');
   });
 
+  it('stripQueryStrings still strips a query on a schemeless URL fragment', () => {
+    const result = stripQueryStrings('see example.com/p?token=abc123 for details');
+
+    expect(result.text).not.toContain('token=abc123');
+    expect(result.text).toContain('example.com/p');
+  });
+
+  it('stripQueryStrings stops at a quote instead of eating JSON structure', () => {
+    // Regression: the fallback ran from any `?` to the next whitespace, so a
+    // tool result containing a field named "Where to?" came back as
+    // {"name":"Where to more deals ..."} — two entries fused into one with the
+    // intervening keys destroyed. Percent-encoding means a real query string
+    // never contains a raw quote, so stopping there cannot shorten one.
+    const input = JSON.stringify([
+      { ref: 'e14', name: 'Where to?' },
+      { ref: 'e38', name: 'View more deals' },
+    ]);
+
+    const result = stripQueryStrings(input);
+
+    expect(() => JSON.parse(result.text) as unknown).not.toThrow();
+    // The structure survives intact, and a trailing `?` in prose — which was
+    // never a query string — is left alone rather than silently deleted.
+    expect(JSON.parse(result.text)).toEqual([
+      { ref: 'e14', name: 'Where to?' },
+      { ref: 'e38', name: 'View more deals' },
+    ]);
+  });
+
+  it('stripQueryStrings does not run past an angle bracket or backslash', () => {
+    expect(stripQueryStrings('<p>Ready?</p><p>Go</p>').text).toBe('<p>Ready?</p><p>Go</p>');
+    expect(stripQueryStrings('what?\\nnext').text).toBe('what?\\nnext');
+  });
+
   it('property: redactEmails strips generated email addresses', () => {
     fc.assert(
       fc.property(

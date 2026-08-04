@@ -155,6 +155,19 @@ export function stripFormValues(html: string): TransformResult {
 
 /**
  * Remove all query strings from URLs in arbitrary text.
+ *
+ * The first pass rewrites well-formed URLs. The second is a deliberately blunt
+ * fallback for URL-ish fragments the parser does not recognize (a bare
+ * `example.com/p?token=abc`), and it runs over arbitrary text — so its stop set
+ * matters. It must stop at characters that cannot appear unencoded inside a real
+ * query string: quotes, angle brackets, and backslashes.
+ *
+ * Without that, the fallback ran from any `?` to the next whitespace and
+ * happily ate straight through JSON structure. A tool result containing a field
+ * named `"Where to?"` came out as
+ * `{"name":"Where to more deals for Chicago Hotels"}` — two entries silently
+ * fused into one, with the intervening keys destroyed. Percent-encoding means
+ * excluding these characters never shortens a genuine query string.
  */
 export function stripQueryStrings(text: string): TransformResult {
   let hits = 0;
@@ -168,7 +181,7 @@ export function stripQueryStrings(text: string): TransformResult {
     return url.toString();
   });
 
-  const fallback = rewritten.text.replace(/\?([^#\s]+)/g, (_full) => {
+  const fallback = rewritten.text.replace(/\?([^#\s"'<>\\]+)/g, (_full) => {
     hits += 1;
     return '';
   });

@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { UserInputVault, type PayloadSanitizer } from '@yantra/core';
+import {
+  UserInputVault,
+  brandSanitized,
+  type AmbientGrants,
+  type PayloadSanitizer,
+} from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -41,6 +46,16 @@ function goalSectionOf(prompt: string): string {
   return end === -1 ? prompt : prompt.slice(0, end);
 }
 
+/** The default grants: everything permitted, nothing configured. */
+const GRANTED: AmbientGrants = { location: true };
+
+/** The rendered ambient block, i.e. everything between it and run constraints. */
+function ambientSectionOf(prompt: string): string {
+  const start = prompt.indexOf('Ambient context');
+  const end = prompt.indexOf('Run constraints:');
+  return start === -1 ? '' : prompt.slice(start, end === -1 ? undefined : end);
+}
+
 describe('@no-llm agent-v1 prompt governance', () => {
   it('contains exactly the five governed sections and explicit untrusted-content rules', () => {
     const headings = [...AGENT_SYSTEM_PROMPT.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
@@ -54,7 +69,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     ]);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
-    expect(PROMPT_VERSION).toBe('agent-v5');
+    expect(PROMPT_VERSION).toBe('agent-v6');
   });
 
   it('keeps the completion section flow-neutral but anti-stall (agent-v4)', () => {
@@ -164,6 +179,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
       now: new Date('2026-07-19T12:00:00Z'),
       timeZone: 'America/Chicago',
       locale: 'en-US',
+      grants: GRANTED,
     };
 
     const prompt = buildAgentUserPrompt({ goal: 'g', budgets, ambient }, markerSanitizer);
@@ -185,11 +201,19 @@ describe('@no-llm agent-v1 prompt governance', () => {
     const now = new Date('2026-07-19T03:00:00Z');
 
     const losAngeles = buildAgentUserPrompt(
-      { goal: 'g', budgets, ambient: { now, timeZone: 'America/Los_Angeles', locale: 'en-US' } },
+      {
+        goal: 'g',
+        budgets,
+        ambient: { now, timeZone: 'America/Los_Angeles', locale: 'en-US', grants: GRANTED },
+      },
       markerSanitizer,
     );
     const tokyo = buildAgentUserPrompt(
-      { goal: 'g', budgets, ambient: { now, timeZone: 'Asia/Tokyo', locale: 'ja-JP' } },
+      {
+        goal: 'g',
+        budgets,
+        ambient: { now, timeZone: 'Asia/Tokyo', locale: 'ja-JP', grants: GRANTED },
+      },
       markerSanitizer,
     );
 
@@ -209,6 +233,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
           now: new Date('2026-01-19T12:00:00Z'),
           timeZone: 'America/Chicago',
           locale: 'en-US',
+          grants: GRANTED,
         },
       },
       markerSanitizer,
@@ -222,7 +247,12 @@ describe('@no-llm agent-v1 prompt governance', () => {
       {
         goal: 'g',
         budgets,
-        ambient: { now: new Date('2026-07-19T12:00:00Z'), timeZone: 'UTC', locale: 'en-US' },
+        ambient: {
+          now: new Date('2026-07-19T12:00:00Z'),
+          timeZone: 'UTC',
+          locale: 'en-US',
+          grants: GRANTED,
+        },
       },
       markerSanitizer,
     );
@@ -234,7 +264,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     const resolved = new Intl.DateTimeFormat().resolvedOptions();
 
     const prompt = buildAgentUserPrompt(
-      { goal: 'g', budgets, ambient: { now: new Date('2026-07-19T12:00:00Z') } },
+      { goal: 'g', budgets, ambient: { now: new Date('2026-07-19T12:00:00Z'), grants: GRANTED } },
       markerSanitizer,
     );
 
@@ -246,6 +276,157 @@ describe('@no-llm agent-v1 prompt governance', () => {
     const prompt = buildAgentUserPrompt({ goal: 'g', budgets }, markerSanitizer);
 
     expect(prompt).not.toContain('Ambient context');
+  });
+
+  it('renders the host-environment lines identically regardless of the grants (agent-v6)', () => {
+    // Regression lock: date, timezone, and locale are host-environment facts,
+    // not personal data. A grant must not be able to change or suppress them —
+    // making the date deniable would reopen the exact failure the block exists
+    // to prevent (small models guessing the date from their training prior).
+    const now = new Date('2026-07-19T12:00:00Z');
+    const base = { goal: 'g', budgets } as const;
+    const hostLines = [
+      '- current date: Sunday, 2026-07-19',
+      '- timezone: America/Chicago (UTC-05:00)',
+      '- locale: en-US',
+    ];
+
+    const granted = buildAgentUserPrompt(
+      {
+        ...base,
+        ambient: {
+          now,
+          timeZone: 'America/Chicago',
+          locale: 'en-US',
+          grants: { location: true },
+          userLocation: brandSanitized('Naperville, IL, US'),
+        },
+      },
+      markerSanitizer,
+    );
+    const denied = buildAgentUserPrompt(
+      {
+        ...base,
+        ambient: {
+          now,
+          timeZone: 'America/Chicago',
+          locale: 'en-US',
+          grants: { location: false },
+          userLocation: null,
+        },
+      },
+      markerSanitizer,
+    );
+
+    for (const line of hostLines) {
+      expect(granted).toContain(line);
+      expect(denied).toContain(line);
+    }
+  });
+
+  it('renders the location when a granted value is present', () => {
+    const prompt = buildAgentUserPrompt(
+      {
+        goal: 'cheap hotels near me',
+        budgets,
+        ambient: {
+          now: new Date('2026-07-19T12:00:00Z'),
+          grants: { location: true },
+          userLocation: brandSanitized('Naperville, IL, US'),
+        },
+      },
+      markerSanitizer,
+    );
+
+    expect(prompt).toContain('- user location: Naperville, IL, US');
+    expect(prompt).not.toContain('- user location: not available');
+  });
+
+  it('renders "not available" and leaks no stored value when the grant is denied', () => {
+    // The denied case must be indistinguishable from the unset one: a model
+    // that could tell a withheld value exists learns nothing actionable, and
+    // the user's withheld city must not appear anywhere in the prompt.
+    const prompt = buildAgentUserPrompt(
+      {
+        goal: 'cheap hotels near me',
+        budgets,
+        ambient: {
+          now: new Date('2026-07-19T12:00:00Z'),
+          grants: { location: false },
+          userLocation: null,
+        },
+      },
+      markerSanitizer,
+    );
+
+    expect(prompt).toContain('- user location: not available');
+    expect(prompt).not.toContain('Naperville');
+  });
+
+  it('renders "not available" when the grant is held but no value is configured', () => {
+    const prompt = buildAgentUserPrompt(
+      {
+        goal: 'g',
+        budgets,
+        ambient: {
+          now: new Date('2026-07-19T12:00:00Z'),
+          grants: { location: true },
+          userLocation: null,
+        },
+      },
+      markerSanitizer,
+    );
+
+    expect(prompt).toContain('- user location: not available');
+  });
+
+  it('renders denied and unset location identically (no withholding signal)', () => {
+    const now = new Date('2026-07-19T12:00:00Z');
+    const denied = buildAgentUserPrompt(
+      { goal: 'g', budgets, ambient: { now, grants: { location: false }, userLocation: null } },
+      markerSanitizer,
+    );
+    const unset = buildAgentUserPrompt(
+      { goal: 'g', budgets, ambient: { now, grants: { location: true }, userLocation: null } },
+      markerSanitizer,
+    );
+
+    expect(ambientSectionOf(denied)).toBe(ambientSectionOf(unset));
+  });
+
+  it('always closes the ambient block with the never-derive rule', () => {
+    const now = new Date('2026-07-19T12:00:00Z');
+    for (const userLocation of [null, brandSanitized('Naperville, IL')]) {
+      const prompt = buildAgentUserPrompt(
+        { goal: 'g', budgets, ambient: { now, grants: GRANTED, userLocation } },
+        markerSanitizer,
+      );
+
+      expect(prompt).toContain('Facts marked "not available" were not shared.');
+      expect(prompt).toContain('Never guess or derive them');
+      expect(prompt).toContain('stop and report it as a blocker');
+    }
+  });
+
+  it('forbids inferring personal facts and assembling URLs in the trust boundary (agent-v6)', () => {
+    // Both halves of the logged failure: a location inferred from the timezone,
+    // and a hand-built Kayak deep link that silently returned a different city.
+    const trustBoundary = AGENT_SYSTEM_PROMPT.split('## Trust boundary')[1] ?? '';
+
+    expect(trustBoundary).toMatch(/never infer the user's location/i);
+    expect(trustBoundary).toMatch(/timezone or locale/i);
+    expect(trustBoundary).toMatch(/never assemble a URL yourself/i);
+    expect(trustBoundary).toMatch(/only to URLs a tool result gave you/i);
+  });
+
+  it('carries the never-invent-a-missing-fact clause on both interaction branches', () => {
+    const clause =
+      'Never invent a missing fact the goal depends on; report it as a blocker instead.';
+
+    expect(buildAgentUserPrompt({ goal: 'g', budgets }, markerSanitizer)).toContain(clause);
+    expect(buildAgentUserPrompt({ goal: 'g', budgets, attended: true }, markerSanitizer)).toContain(
+      clause,
+    );
   });
 
   it('redacts goal values into resolvable placeholders when a vault is supplied', async () => {

@@ -21,6 +21,7 @@ import type { RunServices } from '../../../runtime/run-services.js';
 import { browserClickSpec } from './browser-click.js';
 import { browserExtractSpec } from './browser-extract.js';
 import { browserFillSpec } from './browser-fill.js';
+import { browserFormFillSpec } from './browser-form-fill.js';
 import { browserNavigateSpec } from './browser-navigate.js';
 import { browserObserveSpec } from './browser-observe.js';
 import { resultPublishSpec } from './result-publish.js';
@@ -45,6 +46,7 @@ export { validateSlots, type TemplateSlotIssue } from './template-validate.js';
 export { browserClickSpec } from './browser-click.js';
 export { browserExtractSpec } from './browser-extract.js';
 export { browserFillSpec } from './browser-fill.js';
+export { browserFormFillSpec } from './browser-form-fill.js';
 export { browserNavigateSpec } from './browser-navigate.js';
 export { browserObserveSpec } from './browser-observe.js';
 export { workflowRunSpec } from './workflow-run.js';
@@ -71,6 +73,7 @@ export function buildYantraWrappedTools(
     wrapTool(browserObserveSpec(toolServices), toolServices),
     wrapTool(browserClickSpec(toolServices), toolServices),
     wrapTool(browserFillSpec(toolServices), toolServices),
+    wrapTool(browserFormFillSpec(toolServices), toolServices),
     wrapTool(browserExtractSpec(toolServices), toolServices),
     wrapTool(webSearchSpec(toolServices), toolServices),
     wrapTool(webFetchSpec(toolServices), toolServices),

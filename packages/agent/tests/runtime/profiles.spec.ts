@@ -53,6 +53,34 @@ describe('@no-llm command task profiles', () => {
     expect(research.toolNames).toContain('browser_navigate');
     expect(research.toolNames).not.toContain('browser_click');
     expect(research.toolNames).not.toContain('browser_fill');
+    // browser_form_fill mutates the page, so opt-in research browsing (a
+    // read-only mode) must not gain it either.
+    expect(research.toolNames).not.toContain('browser_form_fill');
+  });
+
+  it('gives browser_form_fill to do only', () => {
+    expect(COMMAND_TASK_PROFILES.do.toolNames).toContain('browser_form_fill');
+    expect(COMMAND_TASK_PROFILES.ask.toolNames).not.toContain('browser_form_fill');
+    expect(COMMAND_TASK_PROFILES.research.toolNames).not.toContain('browser_form_fill');
+
+    const doCatalog = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map(
+      (tool) => tool.name,
+    );
+    const askCatalog = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.ask).map(
+      (tool) => tool.name,
+    );
+    expect(doCatalog).toContain('browser_form_fill');
+    expect(askCatalog).not.toContain('browser_form_fill');
+  });
+
+  it('records the tool_catalog_hash after adding browser_form_fill', () => {
+    // The catalog is name-sorted and hashed per run, so adding a tool changes
+    // this value by design. Recorded so an unintended catalog change is visible.
+    const hash = hashToolCatalog(yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do));
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hash).toBe(
+      hashToolCatalog(yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do)),
+    );
   });
 
   it('keeps command addenda free of tool schemas and completion remains in the one system prompt', () => {

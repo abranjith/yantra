@@ -36,6 +36,7 @@ import {
 } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { UrlPolicy } from '../../../../src/runtime/url-policy.js';
+import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 export interface BuildServicesOptions {
   readonly runDir?: string;
@@ -48,6 +49,12 @@ export interface BuildServicesOptions {
   readonly trace?: AgentTrace;
   readonly userInput?: UserInputVault;
   readonly template?: TemplateManifest | null;
+  /**
+   * Run-scoped URL provenance. Defaults to an empty one, so a test that expects
+   * `browser_navigate` to succeed must record the target first — exactly as a
+   * real run earns it from a tool result.
+   */
+  readonly urlProvenance?: UrlProvenance;
 }
 
 /** Build a RunServices with sensible fakes and overridable domain deps. */
@@ -90,6 +97,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     sanitizer,
     ...(options.userInput ? { userInput: options.userInput } : {}),
     urlPolicy: new UrlPolicy(budgets),
+    urlProvenance: options.urlProvenance ?? new UrlProvenance(),
     confirmation: null,
     actionPhase: new ActionPhase(),
     evidence: new EvidenceLedger(sanitizer),
@@ -244,6 +252,8 @@ function minimalValidFor(spec: ToolWrapperSpec<TObject>): Record<string, unknown
       return { ref: 'e1' };
     case 'browser_fill':
       return { ref: 'e1', value: { kind: 'literal', value: 'hello' } };
+    case 'browser_form_fill':
+      return { fields: [{ field: 'Search', value: 'hello' }] };
     case 'browser_extract':
       return { kind: 'content' };
     case 'workflow_run':

@@ -30,9 +30,11 @@ import {
   FileWorkflowStore,
   workflowsRoot,
   type AgentBrowserController as AgentBrowserControllerType,
+  type AmbientGrants,
   type PayloadSanitizer,
   type RankSignalSink,
   type ReportBuilder,
+  type Sanitized,
   type WorkflowStore,
 } from '@yantra/core';
 import {
@@ -72,6 +74,7 @@ import type {
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
+import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
 import { COMMAND_TASK_PROFILES, promptAddendumFor, type CommandTaskProfile } from './profiles.js';
@@ -89,6 +92,7 @@ import {
 import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
+import { UrlProvenance } from './url-provenance.js';
 
 /** Maximum consulted sources recapped inline in the completion nudge. */
 const NUDGE_EVIDENCE_CAP = 10;
@@ -235,6 +239,16 @@ export interface AgenticTaskRequest {
   readonly allowedHosts?: readonly string[];
   readonly profileContext?: string;
   /**
+   * Sensitive ambient facts the user has granted, resolved from their effective
+   * preferences by `resolveAmbientGrants`/`resolveUserLocation`. Omitting the
+   * block reads as granted-but-unset: the prompt states `not available` and the
+   * location gate treats the goal as unanswerable rather than guessing.
+   */
+  readonly ambient?: {
+    readonly grants: AmbientGrants;
+    readonly userLocation: Sanitized<string> | null;
+  };
+  /**
    * True when a user is present for this run (interactive TTY): the per-run
    * prompt then states a user can approve protected actions but not answer
    * open-ended questions. Defaults to false (unattended), matching non-TTY,
@@ -346,6 +360,33 @@ export async function runAgenticTask(
         }),
   });
 
+  // Deterministic pre-flight: a goal that needs the user's location, with no
+  // location available, cannot be answered honestly. Refuse it here — the run
+  // directory exists so the failure is auditable, but no provider session is
+  // opened, no browser launches, and no tokens are spent. Running it anyway is
+  // what produced a confident answer about a city inferred from a timezone.
+  const locationHandoff = locationHandoffFor(request.goal, request.ambient);
+  if (locationHandoff !== null) {
+    const outcome: AgenticTaskOutcome = {
+      kind: 'handoff',
+      runId: created.runId,
+      runDir: created.runDir,
+      ...locationHandoff,
+    };
+    const gateEvents = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
+    gateEvents.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
+    await finalizeRun({
+      outcome,
+      taskId,
+      events: gateEvents,
+      runStore,
+      reportBuilder: dependencies.reportBuilder ?? new MarkdownReportBuilder(),
+      now,
+    });
+    request.connector.renderAgentOutcome(outcome);
+    return outcome;
+  }
+
   let environment: AgenticRunEnvironment | undefined;
   let session: AgentSession | undefined;
   let recorder: RunRecorder | undefined;
@@ -386,6 +427,14 @@ export async function runAgenticTask(
     // handles round-trip, leaving `[redacted-*]` for untrusted page data only.
     const modelValues = new ModelSuppliedValues();
     const evidence = new EvidenceLedger(sanitizer);
+    // Seeded from the run's trusted inputs only: hosts the user allowlisted and
+    // URLs the user typed into the goal. Everything else must be earned by a
+    // tool result, so a URL the model assembles has no way in.
+    const urlProvenance = new UrlProvenance();
+    urlProvenance.seed({
+      ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
+      goal: request.goal,
+    });
     const domain: ToolDomainDeps =
       request.template === undefined
         ? environment.domain
@@ -418,6 +467,7 @@ export async function runAgenticTask(
             ? { allowedHosts: dependencies.urlPolicyConfig.allowedHosts }
             : {}),
       }),
+      urlProvenance,
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
       evidence,
@@ -444,7 +494,14 @@ export async function runAgenticTask(
         budgets: budgetsConfig,
         // Ambient facts use the injectable clock so hermetic tests can pin the
         // rendered date; timezone/locale default to the host inside the builder.
-        ambient: { now: now() },
+        // Grants default to granted-but-unset when a caller supplies no ambient
+        // block, which renders as `not available` — the behavior-preserving
+        // reading, and never a guessed value.
+        ambient: {
+          now: now(),
+          grants: request.ambient?.grants ?? { location: true },
+          userLocation: request.ambient?.userLocation ?? null,
+        },
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(request.profileContext ? { profileContext: request.profileContext } : {}),
         attended: request.interactive === true,

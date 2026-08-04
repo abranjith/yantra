@@ -20,7 +20,8 @@ describe('@no-llm profile-file schema', () => {
       detail: 'standard',
       length: 'medium',
     });
-    expect(profile.locale).toEqual({ region: null, units: 'metric' });
+    expect(profile.locale).toEqual({ city: null, region: null, units: 'metric' });
+    expect(profile.context).toEqual({ location: true });
     expect(profile.personalization).toEqual({
       enabled: true,
       interests: [],
@@ -42,6 +43,8 @@ describe('@no-llm profile-file schema', () => {
     const flat = flattenProfile(defaultProfile());
     expect(flat.get('defaults.detail')).toBe('standard');
     expect(flat.get('locale.units')).toBe('metric');
+    expect(flat.get('locale.city')).toBeNull();
+    expect(flat.get('context.location')).toBe(true);
     expect(flat.get('personalization.enabled')).toBe(true);
     expect(flat.get('personalization.favorite_retailers')).toEqual([]);
     expect(Object.fromEntries(flat)).toMatchObject({
@@ -128,6 +131,89 @@ describe('@no-llm profile-file load/save', () => {
     expect(result.isOk).toBe(false);
   });
 
+  it('accepts the context block and locale.city', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'locale:\n  city: Naperville, IL\ncontext:\n  location: false\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value.locale.city).toBe('Naperville, IL');
+      expect(result.value.context.location).toBe(false);
+    }
+  });
+
+  it('rejects an empty locale.city', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'locale:\n  city: ""\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) expect(result.error).toContain('locale.city');
+  });
+
+  it('still rejects a genuinely unknown top-level key alongside the new blocks', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'context:\n  location: true\nsurprise: true\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(false);
+  });
+
+  it('rejects a non-boolean context.location', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'context:\n  location: sometimes\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) expect(result.error).toContain('context.location');
+  });
+
+  it('loads a profile written before the context block with the grant defaulted', async () => {
+    // Byte-for-byte a pre-change profile.yaml: no `context` block, no locale.city.
+    const path = join(dir, 'profile.yaml');
+    await writeFile(
+      path,
+      [
+        '# yantra profile — your personal defaults (edit freely)',
+        'defaults:',
+        '  search_provider: auto',
+        '  detail: standard',
+        '  length: medium',
+        'locale:',
+        '  region: null',
+        '  units: metric',
+        'personalization:',
+        '  enabled: true',
+        '  interests: []',
+        '  favorite_retailers: []',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) {
+      expect(result.value.context).toEqual({ location: true });
+      expect(result.value.locale.city).toBeNull();
+    }
+  });
+
+  it('round-trips the context grant and city through save/load', async () => {
+    const path = join(dir, 'profile.yaml');
+    const profile = defaultProfile();
+    await saveProfile(
+      {
+        ...profile,
+        locale: { ...profile.locale, city: 'Naperville, IL' },
+        context: { location: false },
+      },
+      path,
+    );
+    const reloaded = await loadProfile(path);
+    expect(reloaded.isOk).toBe(true);
+    if (reloaded.isOk) {
+      expect(reloaded.value.locale.city).toBe('Naperville, IL');
+      expect(reloaded.value.context.location).toBe(false);
+    }
+  });
+
   it('writes an owner-editable file with a comment header', async () => {
     const path = join(dir, 'profile.yaml');
     await saveProfile(defaultProfile(), path);
@@ -169,6 +255,26 @@ describe('@no-llm validatePreference', () => {
     const result = validatePreference('locale.region', 'null');
     expect(result.isOk).toBe(true);
     if (result.isOk) expect(result.value).toBeNull();
+  });
+
+  it('accepts and coerces the context.location grant', () => {
+    const off = validatePreference('context.location', 'false');
+    expect(off.isOk).toBe(true);
+    if (off.isOk) expect(off.value).toBe(false);
+    const on = validatePreference('context.location', 'true');
+    expect(on.isOk).toBe(true);
+    if (on.isOk) expect(on.value).toBe(true);
+    expect(validatePreference('context.location', 'maybe').isOk).toBe(false);
+  });
+
+  it('accepts locale.city, trimming it, and rejects a blank value', () => {
+    const set = validatePreference('locale.city', '  Naperville, IL  ');
+    expect(set.isOk).toBe(true);
+    if (set.isOk) expect(set.value).toBe('Naperville, IL');
+    expect(validatePreference('locale.city', '   ').isOk).toBe(false);
+    const cleared = validatePreference('locale.city', 'null');
+    expect(cleared.isOk).toBe(true);
+    if (cleared.isOk) expect(cleared.value).toBeNull();
   });
 
   it('validates agent duration and integer preferences at write time', () => {

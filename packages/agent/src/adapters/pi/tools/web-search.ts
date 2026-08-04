@@ -231,6 +231,8 @@ async function mapOutcome(
         published_at: doc.publishedAt,
         excerpt: doc.excerpt ?? doc.text.slice(0, 1000),
       };
+      // A search hit is an attested URL: the model may navigate to it later.
+      services.urlProvenance.record(doc.url);
       // Every fetched site becomes ledger evidence: result_publish attaches
       // these as the Brief's sources, so the model never re-types URLs.
       services.evidence.add({
@@ -264,6 +266,9 @@ async function mapOutcome(
     title: hit.title,
     snippet: hit.snippet,
   }));
+  // The unfetched tail is shown to the model as "more results", so those URLs
+  // are equally attested — the model is invited to follow them.
+  for (const hit of moreResults) services.urlProvenance.record(hit.url);
 
   return {
     ok: true,

@@ -261,6 +261,53 @@ describe('@no-llm scanInteractablesInPage', () => {
     expect(scanInteractablesInPage()).toEqual([]);
   });
 
+  it('scans an autocomplete option and names it from its text content', () => {
+    // Regression: `[role="option"]` was absent from the candidate selector, so
+    // a destination combobox's real suggestions were structurally invisible to
+    // every observation. The agent clicked a marketing tile instead.
+    const option = document.createElement('li');
+    option.setAttribute('role', 'option');
+    option.textContent = 'Chicago, IL, United States';
+    document.body.appendChild(option);
+    stubVisible(option);
+
+    expect(scanInteractablesInPage()).toEqual([
+      expect.objectContaining({
+        role: 'option',
+        kind: 'select',
+        name: 'Chicago, IL, United States',
+      }),
+    ]);
+  });
+
+  it('prefers an option aria-label over its text content', () => {
+    const option = document.createElement('li');
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-label', 'Chicago O’Hare');
+    option.textContent = 'ORD';
+    document.body.appendChild(option);
+    stubVisible(option);
+
+    expect(scanInteractablesInPage()[0]?.name).toBe('Chicago O’Hare');
+  });
+
+  it('keeps ranking options by viewport top alongside other interactables', () => {
+    const button = document.createElement('button');
+    button.textContent = 'Search';
+    document.body.appendChild(button);
+    stubVisible(button, 200);
+
+    const option = document.createElement('li');
+    option.setAttribute('role', 'option');
+    option.textContent = 'Chicago, IL';
+    document.body.appendChild(option);
+    stubVisible(option, 50);
+
+    const results = scanInteractablesInPage();
+    expect(results.map((r) => r.top)).toEqual([200, 50]);
+    expect(results.map((r) => r.role)).toEqual(['button', 'option']);
+  });
+
   it('never includes a password field value anywhere in the descriptor (login-page case)', () => {
     const input = document.createElement('input');
     input.type = 'password';

@@ -118,11 +118,14 @@ const DEFAULT_JSON_PATH_ENTRIES = ['apps/cli/src/render/json.ts'] as const;
  * LLM-payload-assembly entrypoints whose import closures must never reach the
  * `index-db` history/preference/domain-rank stores (privacy guarantee). These are
  * every place a prompt is built from content: the LLM synthesizer, the research
- * query generator, and the agent-side prompt templates.
+ * query generator, the agent-side prompt templates, and the ambient-context
+ * resolvers (the second preference→prompt chokepoint, which supplies the user's
+ * granted location to the agentic ambient block).
  */
 const DEFAULT_LLM_PAYLOAD_ENTRIES = [
   'packages/core/src/synthesis/llm.ts',
   'packages/core/src/research/query-gen.ts',
+  'packages/core/src/profile/ambient-context.ts',
   'packages/agent/src/synthesis/prompt.ts',
 ] as const;
 

@@ -45,7 +45,11 @@ import {
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
-import { loadEffectivePreferences } from '../preferences.js';
+import {
+  loadEffectivePreferences,
+  resolveAmbientContext,
+  type ResolvedAmbientContext,
+} from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
@@ -225,6 +229,7 @@ export function registerResearchCommand(
             resolvedRuntime,
             template,
             agent,
+            resolveAmbientContext(effective),
           );
           return;
         }
@@ -361,6 +366,7 @@ async function runAgenticResearch(
   runtime: ResearchRuntime,
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
+  ambient: ResolvedAmbientContext,
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -389,6 +395,7 @@ async function runAgenticResearch(
     profile,
     budgets: agent.budgets,
     ...(template === undefined ? {} : { template }),
+    ambient,
     connector,
   });
   if (outcome.kind !== 'published') {

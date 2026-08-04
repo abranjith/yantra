@@ -20,6 +20,7 @@ describe('@no-llm createYantraTools factory', () => {
       'browser_click',
       'browser_extract',
       'browser_fill',
+      'browser_form_fill',
       'browser_navigate',
       'browser_observe',
       'result_publish',
@@ -28,6 +29,12 @@ describe('@no-llm createYantraTools factory', () => {
       'web_search',
       'workflow_run',
     ]);
+  });
+
+  it('keeps the catalog name-sorted and duplicate-free', () => {
+    const names = createYantraTools(buildServices()).map((tool) => tool.name);
+    expect(names).toEqual([...names].sort());
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('never exposes any Pi built-in tool (bash/read/write/edit/grep/find/ls)', () => {

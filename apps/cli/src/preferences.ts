@@ -14,10 +14,14 @@ import {
   flattenProfile,
   loadProfile,
   openIndexDb,
+  resolveAmbientGrants,
+  resolveUserLocation,
+  type AmbientGrants,
   type EffectivePreference,
   type EffectivePreferences,
   type Logger,
   type PreferenceStore,
+  type Sanitized,
 } from '@yantra/core';
 
 /** An open preference store plus a close handle. */
@@ -75,6 +79,25 @@ export async function loadEffectivePreferences(logger?: Logger): Promise<Effecti
   } finally {
     handle.close();
   }
+}
+
+/** The sensitive ambient facts one agentic run may state to the model. */
+export interface ResolvedAmbientContext {
+  readonly grants: AmbientGrants;
+  readonly userLocation: Sanitized<string> | null;
+}
+
+/**
+ * Resolves the ambient block every agentic command passes to `runAgenticTask`.
+ *
+ * One helper, three call sites (`do`, `research`, `ask`), so the three commands
+ * cannot drift — the original defect was precisely that `ask` supplied user
+ * context and the other two silently did not.
+ *
+ * @param prefs - The merged effective preferences.
+ */
+export function resolveAmbientContext(prefs: EffectivePreferences): ResolvedAmbientContext {
+  return { grants: resolveAmbientGrants(prefs), userLocation: resolveUserLocation(prefs) };
 }
 
 /** Builds an effective view from the yaml layer alone (no index available). */

@@ -49,7 +49,11 @@ import {
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
-import { loadEffectivePreferences } from '../preferences.js';
+import {
+  loadEffectivePreferences,
+  resolveAmbientContext,
+  type ResolvedAmbientContext,
+} from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
@@ -224,6 +228,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
             resolvedRuntime,
             template,
             agent,
+            resolveAmbientContext(effective),
           );
           return;
         }
@@ -401,6 +406,7 @@ async function runAgenticAsk(
   runtime: AskRuntime,
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
+  ambient: ResolvedAmbientContext,
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
   const connector = new CLIConnectorIO(
@@ -420,6 +426,7 @@ async function runAgenticAsk(
     budgets: agent.budgets,
     ...(query.personalization ? { profileContext: query.personalization } : {}),
     ...(template === undefined ? {} : { template }),
+    ambient,
     connector,
   });
   await renderAgenticOutcome(outcome, runtime, format, detail, options);

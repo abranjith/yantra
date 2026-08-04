@@ -22,6 +22,7 @@ import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-ob
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps, RunServices } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
+import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 import { assertToolContract, buildServices } from './test-support.js';
 
@@ -62,6 +63,140 @@ describe('@no-llm browser tools', () => {
     );
     expect(result.status).toBe('ok');
     expect(result.modelText).toContain('popup_intercepted');
+  });
+
+  describe('URL provenance', () => {
+    /** The fabricated Kayak deep link from run 20260803T033803Z-do-f1d9f01b. */
+    const FABRICATED =
+      'https://www.kayak.com/hotels/Chicago,IL-c17823/2026-08-05/2026-08-07/1adults;map?sort=price_a';
+
+    it('refuses the exact assembled URL from the logged run', async () => {
+      // Provenance holds the hotels index the run legitimately reached; the
+      // deep link with the made-up city id `c17823` was never produced by any
+      // tool, and it silently served a different city.
+      const controller = fakeController();
+      const services = browserServices(controller, {}, seeded('https://www.kayak.com/hotels/'));
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: FABRICATED },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+      expect(controller.navigate).not.toHaveBeenCalled();
+    });
+
+    it('allows the recorded page without its trailing slash', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://www.kayak.com/hotels', title: 'H' });
+      const services = browserServices(controller, {}, seeded('https://www.kayak.com/hotels/'));
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://www.kayak.com/hotels' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+    });
+
+    it('allows backing out to the origin of a visited page', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://www.kayak.com/', title: 'Kayak' });
+      const services = browserServices(controller, {}, seeded('https://www.kayak.com/hotels/'));
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://www.kayak.com/' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+    });
+
+    it('does not spend navigation or host budget on a refusal', async () => {
+      // The check runs before `urlPolicy.check`, which reserves budget: a
+      // refused guess must not cost a legitimate navigation its slot.
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://example.com/a', title: 'A' });
+      const services = buildServices({
+        runDir,
+        limits: { maxNavigations: 1 },
+        urlProvenance: seeded('https://example.com/a'),
+        domain: {
+          browser: {
+            controller: controller as unknown as AgentBrowserController,
+            ethics: { check: () => Promise.resolve() },
+            secretResolver: null,
+            secretHosts: () => Promise.resolve([]),
+            captureThresholdBytes: 1024,
+          },
+        },
+      });
+      const navigate = wrapTool(browserNavigateSpec(services), services);
+
+      const refused = await navigate.execute({ url: 'https://example.com/guessed' }, undefined);
+      const allowed = await navigate.execute({ url: 'https://example.com/a' }, undefined);
+
+      expect(refused.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+      expect(allowed.status).toBe('ok');
+    });
+
+    it('allows a URL the user wrote in the goal on the first call', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://track.example.com/x', title: 'T' });
+      const provenance = new UrlProvenance();
+      provenance.seed({ goal: 'check https://track.example.com/x for me' });
+      const services = browserServices(controller, {}, provenance);
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://track.example.com/x' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+    });
+
+    it('records the redirect target so re-navigating to it later succeeds', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({
+        url: 'https://example.com/redirected',
+        title: 'Landed',
+      });
+      const services = browserServices(controller, {}, seeded('https://example.com/start'));
+      const navigate = wrapTool(browserNavigateSpec(services), services);
+
+      await navigate.execute({ url: 'https://example.com/start' }, undefined);
+      const again = await navigate.execute({ url: 'https://example.com/redirected' }, undefined);
+
+      expect(again.status).toBe('ok');
+    });
+
+    it('records an intercepted popup target', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({
+        url: 'https://example.com/start',
+        title: 'Start',
+        popup_intercepted: 'https://example.com/popup',
+      });
+      const services = browserServices(controller, {}, seeded('https://example.com/start'));
+      const navigate = wrapTool(browserNavigateSpec(services), services);
+
+      await navigate.execute({ url: 'https://example.com/start' }, undefined);
+      const popup = await navigate.execute({ url: 'https://example.com/popup' }, undefined);
+
+      expect(popup.status).toBe('ok');
+    });
+
+    it('names an actionable remedy in the refusal message', async () => {
+      const services = browserServices(fakeController(), {}, new UrlProvenance());
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://example.com/guessed' },
+        undefined,
+      );
+
+      expect(result.modelText).toContain('web_search');
+      expect(result.modelText).toContain('click');
+    });
   });
 
   it('returns a typed refusal when robots blocks navigation', async () => {
@@ -432,6 +567,7 @@ describe('@no-llm browser tools', () => {
     const services = buildServices({
       runDir,
       trace,
+      urlProvenance: seeded('https://shop.example/login'),
       domain: {
         browser: {
           controller: controller as unknown as AgentBrowserController,
@@ -627,9 +763,11 @@ describe('@no-llm browser tools', () => {
   function browserServices(
     controller: ReturnType<typeof fakeController>,
     overrides: Partial<BrowserToolDeps> = {},
+    urlProvenance: UrlProvenance = seeded('https://example.com/'),
   ): RunServices {
     return buildServices({
       runDir,
+      urlProvenance,
       domain: {
         browser: {
           controller: controller as unknown as AgentBrowserController,
@@ -643,6 +781,13 @@ describe('@no-llm browser tools', () => {
     });
   }
 });
+
+/** A provenance record pre-loaded with URLs a tool result would have produced. */
+function seeded(...urls: readonly string[]): UrlProvenance {
+  const provenance = new UrlProvenance();
+  for (const url of urls) provenance.record(url);
+  return provenance;
+}
 
 function fakeController() {
   return {

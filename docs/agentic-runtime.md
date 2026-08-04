@@ -8,7 +8,28 @@ The CLI never owns the reasoning loop. It parses the goal and flags, selects mod
 
 The production system prompt lives in `packages/agent/src/runtime/prompt.ts`. It has exactly five governed sections: role, operating loop, trust boundary, safety, and completion/failure. Tool names, schemas, and provider mechanics are intentionally absent because the registered tool catalog is authoritative.
 
-Every semantic prompt edit must also bump `PROMPT_VERSION`. Runs record both that version and a SHA-256 hash of the exact prompt text, so audits can distinguish prompt revisions. The per-run user prompt contains only the sanitized goal, an engine-derived ambient context block (current date, timezone, locale — from the run clock and host environment, framed as authoritative because small local models otherwise guess the date from their training prior), enforced constraints, allowed hosts/scope, and bounded approved profile context; page content and tool results remain untrusted data. User-specific facts such as location are never inferred automatically — they belong in the approved profile context.
+Every semantic prompt edit must also bump `PROMPT_VERSION` (currently `agent-v6`). Runs record both that version and a SHA-256 hash of the exact prompt text, so audits can distinguish prompt revisions. The per-run user prompt contains only the sanitized goal, an ambient context block, enforced constraints, allowed hosts/scope, and bounded approved profile context; page content and tool results remain untrusted data.
+
+The ambient block states **every** ambient fact on every run. Current date, timezone, and locale come from the run clock and host environment and always render — framed as authoritative because small local models otherwise guess the date from their training prior. The user's location is personal data, so it renders only when the `context.location` grant permits it _and_ a value is configured; otherwise the block states `- user location: not available`. Naming the absence is the point: an omitted line reads as an oversight the model may fill in, while a stated absence plus the block's closing rule — never guess or derive a fact marked `not available` — reads as a boundary. The trust boundary reinforces it: the model may not infer the user's location from ambient signals such as the timezone.
+
+The location value reaches the prompt only through `resolveUserLocation`, which reads approved preferences, sanitizes, caps at 120 characters, and returns a `Sanitized<string>` — the only type the ambient block's location slot accepts. See [personalization-and-privacy.md](personalization-and-privacy.md).
+
+## Location pre-flight gate
+
+Some goals cannot be answered without knowing where the user is. Before the provider session opens — no tokens spent, no browser launched — `runAgenticTask()` checks whether the goal is _self-referentially_ location-dependent (`near me`, `nearby`, `in my area`, `where I live`, and similar) while no location is available. When both hold, the run ends immediately as a **`handoff` (exit 4)**:
+
+> **Blocker:** This goal needs your location, but none is available and Yantra will not infer one.
+
+The remedy branches on what is actually wrong:
+
+| Situation                               | `safestNextAction`                                                                                                          |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Grant held, no value configured         | ``Set one with `yantra prefs set locale.city "<city, state>"`, or name the location in the query.``                         |
+| Grant denied (`context.location false`) | ``Location sharing is off. Re-enable it with `yantra prefs set context.location true`, or name the location in the query.`` |
+
+(The prompt deliberately does _not_ distinguish these two — see [personalization-and-privacy.md](personalization-and-privacy.md). The user-facing remedy does, because the user knows what they chose.)
+
+The gate is intentionally conservative and matches only self-referential phrasings, so bare `nearest`/`closest` do not trigger it — "the nearest station to Times Square" carries its own anchor. This is a **two-layer design, not a gap**: anything the phrase list misses is still covered by the `not available` marker and the never-derive prompt rule, so such a goal ends in a model-reported blocker rather than a guessed city. The run directory, failure event, and `report.md` are written exactly as for any other handoff.
 
 ## Command profiles and deterministic mode
 

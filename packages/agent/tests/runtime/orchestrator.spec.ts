@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  brandSanitized,
   DefaultSanitizer,
   parseTemplate,
   ScriptRegistry,
@@ -26,7 +27,7 @@ import {
   type AgenticRunEnvironment,
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
-import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
+import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
@@ -660,6 +661,119 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     expect(result.outcome).toMatchObject({ kind: 'handoff', blocker: 'error: ETHICS_BLOCKED' });
     expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+  });
+
+  describe('location pre-flight gate', () => {
+    /** Runs a goal through the gate with a controllable ambient block. */
+    async function gated(
+      goal: string,
+      ambient: AgenticTaskRequest['ambient'],
+    ): Promise<{
+      readonly outcome: AgenticTaskOutcome;
+      readonly provider: FakeAgentProvider;
+      readonly teardown: ReturnType<typeof vi.fn>;
+      readonly createEnvironment: ReturnType<typeof vi.fn>;
+      readonly runDir: string;
+    }> {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-location-gate-'));
+      tempDirs.push(root);
+      const provider = new FakeAgentProvider({ eventsOnRun: [] });
+      const teardown = vi.fn(() => Promise.resolve());
+      const environment = buildEnvironment(teardown);
+      const createEnvironment = vi.fn(() => Promise.resolve(environment));
+      const outcome = await runAgenticTask(
+        {
+          goal,
+          model: { provider: 'fixture', id: 'fixture-model' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ...(ambient ? { ambient } : {}),
+        },
+        {
+          runStore: new LocalRunStore(root),
+          sanitizer: new DefaultSanitizer(),
+          createEnvironment,
+          createProvider: () => provider,
+        },
+      );
+      return { outcome, provider, teardown, createEnvironment, runDir: outcome.runDir };
+    }
+
+    it('returns a handoff and spends nothing when the goal needs an absent location', async () => {
+      const result = await gated('cheap hotels near me August 5 2026 2 nights', {
+        grants: { location: true },
+        userLocation: null,
+      });
+
+      expect(result.outcome.kind).toBe('handoff');
+      // Zero cost: no provider session, no environment, no browser teardown.
+      expect(result.provider.sessions).toHaveLength(0);
+      expect(result.createEnvironment).not.toHaveBeenCalled();
+      expect(result.teardown).not.toHaveBeenCalled();
+    });
+
+    it('writes the run directory and emits the failure event', async () => {
+      const result = await gated('hotels near me', {
+        grants: { location: true },
+        userLocation: null,
+      });
+
+      await expect(access(result.runDir)).resolves.toBeUndefined();
+      const events = await readFile(join(result.runDir, 'events.jsonl'), 'utf8');
+      expect(events).toContain('"kind":"task_started"');
+      expect(events).toContain('"kind":"task_failed"');
+      const report = await readFile(join(result.runDir, 'report.md'), 'utf8');
+      expect(report.length).toBeGreaterThan(0);
+    });
+
+    it('maps to exit code 4 (user handoff)', async () => {
+      const result = await gated('hotels near me', {
+        grants: { location: true },
+        userLocation: null,
+      });
+
+      expect(exitCodeForAgenticOutcome(result.outcome)).toBe(4);
+    });
+
+    it('selects the remedy from the grant', async () => {
+      const unset = await gated('hotels near me', {
+        grants: { location: true },
+        userLocation: null,
+      });
+      const denied = await gated('hotels near me', {
+        grants: { location: false },
+        userLocation: null,
+      });
+
+      expect(unset.outcome).toMatchObject({
+        kind: 'handoff',
+        safestNextAction: expect.stringContaining('yantra prefs set locale.city') as unknown,
+      });
+      expect(denied.outcome).toMatchObject({
+        kind: 'handoff',
+        safestNextAction: expect.stringContaining('context.location true') as unknown,
+      });
+    });
+
+    it('does not fire when the location is available', async () => {
+      const result = await gated('hotels near me', {
+        grants: { location: true },
+        userLocation: brandSanitized('Naperville, IL, US'),
+      });
+
+      expect(result.outcome.kind).not.toBe('handoff');
+      expect(result.provider.sessions).toHaveLength(1);
+    });
+
+    it('does not fire for a goal that needs no location', async () => {
+      const result = await gated('compare the top three 4K monitors', {
+        grants: { location: true },
+        userLocation: null,
+      });
+
+      expect(result.outcome.kind).not.toBe('handoff');
+      expect(result.provider.sessions).toHaveLength(1);
+    });
   });
 
   it.each([

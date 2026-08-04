@@ -22,12 +22,25 @@ import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 // NOT re-exported here — two `export *` barrels exposing the same name make it
 // ambiguous, and ESM then silently omits it from the package entry point.
 
+/**
+ * Handle-resolution selector. **Must stay byte-identical in membership and
+ * order to the one in `discovery/interactable-scan.ts`**: the scanner reports a
+ * `selectorIndex` into its own candidate list, and `observe()` indexes this
+ * `page.$$()` result with it. A selector that drifts from the scanner's does not
+ * fail loudly — it silently binds every ref to the wrong element.
+ */
 const INTERACTABLE_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
-  '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"]';
+  '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
+  '[role="option"]';
 
 const DEFAULT_DIGEST_BYTES = 16 * 1024;
 const DEFAULT_INTERACTABLE_CAP = 30;
+/**
+ * Ceiling on interactables resolved for an internal (uncapped) observation.
+ * Bounds the handle set on pathological pages; never model-visible.
+ */
+const MAX_RESOLUTION_INTERACTABLES = 400;
 const POPUP_CAPTURE_WAIT_MS = 5_000;
 const POPUP_URL_WAIT_MS = 3_000;
 /** Hard cap on `page.goto()` itself, overriding Puppeteer's 30s default: real
@@ -208,16 +221,30 @@ export class AgentBrowserController {
    * Observe sanitized page text and mint/refresh opaque interactable refs.
    * Elements already seen on this document keep their ref id; only their
    * handle is refreshed.
+   *
+   * @param options.cap - Maximum interactables to resolve, defaulting to the
+   *   controller's model-visible cap and clamped to
+   *   {@link MAX_RESOLUTION_INTERACTABLES} so a huge page cannot explode the
+   *   handle set. **This is for internal resolution only** — a tool that needs
+   *   to address an element the model never saw (`browser_form_fill` matching a
+   *   field name, or an autocomplete option) raises it for its own lookup. It
+   *   must never be used to widen what is returned to the model: `browser_observe`
+   *   calls `observe()` with no argument precisely so the model-visible surface
+   *   stays bounded.
    */
-  public async observe(): Promise<AgentBrowserObservation> {
+  public async observe(options: { readonly cap?: number } = {}): Promise<AgentBrowserObservation> {
     this.assertLaunched();
     await this.awaitReadable();
+    const cap = Math.max(
+      1,
+      Math.min(Math.floor(options.cap ?? this.maxInteractables), MAX_RESOLUTION_INTERACTABLES),
+    );
     const snapshot = await buildAgentPageSnapshot(
       this.pageFacade!,
       { extractor: this.extractor },
       {
         maxDigestBytes: this.maxDigestBytes,
-        maxInteractables: this.maxInteractables,
+        maxInteractables: cap,
       },
     );
     const handles = await this.page!.$$(INTERACTABLE_SELECTOR);

@@ -1,6 +1,12 @@
 /**
- * The personalization chokepoint — the ONLY code path that turns a user's
- * preferences into text bound for an LLM prompt.
+ * The personalization chokepoint — one of exactly two code paths that turn a
+ * user's preferences into text bound for an LLM prompt. The other is
+ * `ambient-context.ts`, which resolves the user's granted location for the
+ * ambient block. The two exist because they feed different prompt sections and
+ * obey different gating (personalization is a master switch; location is a
+ * per-fact user grant), but they share one rule set: the three privacy
+ * properties below hold *structurally* in both, and any future preference→prompt
+ * path must be added here or there rather than opened as a third.
  *
  * Three privacy properties are guaranteed *structurally* here (plan §6):
  *

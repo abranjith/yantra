@@ -7,13 +7,14 @@ privacy guarantee is enforced.
 
 ## What is stored, and where
 
-| Data                                                                                                | Location                                               | Nature                                                                     |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
-| **Agent operational defaults** (model, budgets, retries, confirmation timeout)                      | `~/.config/yantra/profile.yaml` (`agent.*`)            | Configuration only; never personalization context.                         |
-| **Personal defaults** (search provider, detail/length, locale/units, favorite retailers, interests) | `~/.config/yantra/profile.yaml`                        | Human-editable YAML. This file is **yours** — open it, edit it, delete it. |
-| **Task history** (intent, brief id, status, timing, cost, provider)                                 | `~/.local/share/yantra/index.db` (`history` table)     | A local SQLite index.                                                      |
-| **Machine preference signals**                                                                      | `~/.local/share/yantra/index.db` (`preferences` table) | Learned/managed values; each carries an `approved` flag.                   |
-| **Rate-limit buckets**                                                                              | `~/.local/share/yantra/index.db` (`rate_limits` table) | Per-host token buckets that survive restarts.                              |
+| Data                                                                                                            | Location                                               | Nature                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Agent operational defaults** (model, budgets, retries, confirmation timeout)                                  | `~/.config/yantra/profile.yaml` (`agent.*`)            | Configuration only; never personalization context.                         |
+| **Personal defaults** (search provider, detail/length, locale/city/region/units, favorite retailers, interests) | `~/.config/yantra/profile.yaml`                        | Human-editable YAML. This file is **yours** — open it, edit it, delete it. |
+| **Sensitive-context grants** (`context.location`)                                                               | `~/.config/yantra/profile.yaml` (`context.*`)          | Which sensitive facts the agent may be told. Asked at `yantra init`.       |
+| **Task history** (intent, brief id, status, timing, cost, provider)                                             | `~/.local/share/yantra/index.db` (`history` table)     | A local SQLite index.                                                      |
+| **Machine preference signals**                                                                                  | `~/.local/share/yantra/index.db` (`preferences` table) | Learned/managed values; each carries an `approved` flag.                   |
+| **Rate-limit buckets**                                                                                          | `~/.local/share/yantra/index.db` (`rate_limits` table) | Per-host token buckets that survive restarts.                              |
 
 Nothing leaves your machine. The index is a **rebuildable cache** — the
 canonical run-dir files under `~/.local/share/yantra/runs/` remain the source of
@@ -91,3 +92,79 @@ they are never summarized into the user-personalization paragraph.
 Turn personalization off entirely by setting `personalization.enabled: false` in
 `profile.yaml` (or `yantra prefs set personalization.enabled false`): no context
 is built, ever.
+
+## Ambient context: what the agent is told about the run
+
+Agentic runs (`do`, `research`, `ask`) also receive a small **ambient block** —
+facts about the run itself, stated authoritatively so small models do not guess
+them from their training prior:
+
+```
+Ambient context (authoritative; prefer these values over your training data):
+- current date: Wednesday, 2026-08-05
+- timezone: America/Chicago (UTC-05:00)
+- locale: en-US
+- user location: Naperville, IL, US
+Facts marked "not available" were not shared. Never guess or derive them; if the
+goal depends on one, stop and report it as a blocker.
+```
+
+The first three are **host-environment facts** — your clock and your OS locale
+settings, not personal data. They are always supplied and are deliberately _not_
+grants: making the date deniable would reopen the exact failure the block exists
+to prevent.
+
+**Your location is different.** It is genuinely personal, so it is gated by an
+explicit grant:
+
+| Key                | Default | Effect                                                                 |
+| ------------------ | ------- | ---------------------------------------------------------------------- |
+| `context.location` | `true`  | Permits stating the value composed from `locale.city`/`locale.region`. |
+| `locale.city`      | `null`  | Free text at city grain, e.g. `"Naperville, IL"`.                      |
+| `locale.region`    | `null`  | Country/region grain, e.g. `"US"`.                                     |
+
+```bash
+yantra prefs set locale.city "Naperville, IL"
+yantra prefs set context.location false   # withhold it
+yantra prefs set context.location true    # grant it again
+```
+
+### Where the grant is first collected
+
+`yantra init` asks for it, so the first answer is an explicit choice rather than
+a default you never saw:
+
+> Share your location with the agent? Without it, Yantra will ask you to name a
+> location in queries like 'hotels near me' rather than guessing one.
+
+Answering yes chains one more question — _"City or area (e.g. Naperville, IL) —
+leave blank to set later"_. Declining skips it entirely. Date, timezone, and
+locale are not asked about; they are always supplied.
+
+The questionnaire fires only when **all** of these hold: stdin is an interactive
+TTY, neither `--json` nor `--yes` was passed, and the profile is actually being
+written (absent, or `--reset`). **CI and scripted use are therefore unaffected —
+a non-TTY implies `--yes`** — and a re-run over an existing profile never asks a
+question whose answer would be discarded. Cancelling (Ctrl-C) falls back to the
+defaults rather than failing the command.
+
+The grant defaults to `true` because it is behavior-preserving: with no city
+configured the block still renders `- user location: not available`, so an
+untouched install is unchanged.
+
+Three properties are worth stating plainly:
+
+- **Denied and unconfigured are indistinguishable to the model.** Both render
+  `not available`. The model's correct behavior is identical either way, and
+  distinguishing them would leak that you hold a value you are withholding. The
+  _user-facing_ remedy does distinguish them — a location handoff tells you to
+  set `locale.city` or to re-enable `context.location`, whichever applies.
+- **The value goes through the same chokepoint as personalization.**
+  `resolveUserLocation` reads only approved rows, sanitizes through the single
+  `sanitize()` entry point, caps at 120 characters, and returns a
+  `Sanitized<string>` — the only type the ambient block's location slot accepts,
+  so an unvetted value is a compile error.
+- **The agent may not derive what it was not given.** The system prompt forbids
+  inferring your location from ambient signals such as the timezone. A goal that
+  needs a location it does not have fails fast with a handoff (exit 4) instead
+  of proceeding on a guess.

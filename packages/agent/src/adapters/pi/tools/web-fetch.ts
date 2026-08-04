@@ -145,6 +145,12 @@ async function runWebFetch(
     };
   }
 
+  // A successfully fetched page is an attested URL, so the model may navigate
+  // to it later. Recorded only on success — a URL that could not be fetched and
+  // read attests nothing, which keeps a failed guess from earning navigation.
+  services.urlProvenance.record(article.url);
+  services.urlProvenance.record(doc.finalUrl);
+
   // The fetched page becomes ledger evidence: result_publish attaches these
   // as the Brief's sources, so the model never re-types URLs.
   services.evidence.add({

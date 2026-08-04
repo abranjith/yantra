@@ -35,6 +35,20 @@ export function browserNavigateSpec(
 }
 
 async function runNavigate(params: Params, services: RunServices): Promise<DomainResult> {
+  // Provenance is checked BEFORE the URL policy: `check` reserves navigation
+  // and host budget, and a refused guess must not consume the budget a
+  // legitimate navigation still needs.
+  if (!services.urlProvenance.has(params.url)) {
+    return {
+      ok: false,
+      errorCode: 'URL_NOT_FROM_EVIDENCE',
+      retryable: true,
+      message:
+        'This URL did not come from a search result or a page you visited. Yantra does not ' +
+        'navigate to URLs the agent assembled. Use web_search to find the page, or click ' +
+        'through to it from a page you have observed.',
+    };
+  }
   const allowed = services.urlPolicy.check(params.url);
   if (!allowed.isOk)
     return {
@@ -73,6 +87,13 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     throw error;
   }
   const result = await controller.navigate(allowed.value.url);
+  // Record where we actually landed, so returning to a visited page always
+  // works even when the site redirected us somewhere we never asked for. An
+  // intercepted popup's target is equally attested: the page itself offered it.
+  services.urlProvenance.record(result.url);
+  if (result.popup_intercepted !== undefined) {
+    services.urlProvenance.record(result.popup_intercepted);
+  }
   services.trace?.append({
     kind: 'navigate',
     host: allowed.value.host,

@@ -23,6 +23,12 @@ export {
   type PreferenceSourceKind,
 } from './effective-preferences.js';
 export {
+  MAX_LOCATION_CHARS,
+  resolveAmbientGrants,
+  resolveUserLocation,
+  type AmbientGrants,
+} from './ambient-context.js';
+export {
   MAX_CONTEXT_CHARS,
   PersonalizationError,
   buildPersonalizationContext,
