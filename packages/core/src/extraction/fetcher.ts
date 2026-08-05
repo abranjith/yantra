@@ -113,6 +113,14 @@ export interface BrowserFallbackFetcherOptions {
 
 /**
  * Browser fallback fetcher used for JS-heavy pages.
+ *
+ * A rendered page is only evidence when the server actually served one. Chrome
+ * renders its own "This page isn't working / HTTP ERROR 4xx" interstitial for an
+ * error response, and that interstitial extracts as perfectly readable prose —
+ * so reporting every navigation as `200` published error-page text ("If the
+ * problem continues, contact the site owner.") as a source excerpt. The status
+ * rule here is deliberately identical to {@link HttpFetcher}'s: one fetch
+ * contract, two transports.
  */
 export class BrowserFallbackFetcher implements ContentFetcher {
   private readonly browserProvider: BrowserProvider;
@@ -133,7 +141,15 @@ export class BrowserFallbackFetcher implements ContentFetcher {
 
     try {
       const page = await session.newPage();
-      await page.goto(url, { waitUntil: 'networkidle2' });
+      const response = await page.goto(url, { waitUntil: 'networkidle2' });
+      const statusCode = navigationStatus(response);
+      if (statusCode !== null && statusCode >= 400) {
+        throw new FetchError(`HTTP ${statusCode} while rendering content.`, {
+          url,
+          kind: 'http-status',
+          statusCode,
+        });
+      }
       const html = await page.evaluate(() => document.documentElement?.outerHTML ?? '');
 
       return {
@@ -142,7 +158,9 @@ export class BrowserFallbackFetcher implements ContentFetcher {
         fetchedAt: new Date().toISOString(),
         contentType: 'text/html',
         html,
-        statusCode: 200,
+        // A page facade that reports no response (data: URLs, same-document
+        // navigation, test fakes) is reported as it always was.
+        statusCode: statusCode ?? 200,
         fetchMode: 'browser',
         elapsedMs: Date.now() - startedAt,
       };
@@ -150,6 +168,23 @@ export class BrowserFallbackFetcher implements ContentFetcher {
       await session.close();
     }
   }
+}
+
+/**
+ * HTTP status of a navigation, or null when the page facade does not expose one.
+ * `Page.goto` is typed as returning `unknown` so fakes can stay minimal; the
+ * production Puppeteer page returns an `HTTPResponse` carrying `status()`.
+ */
+function navigationStatus(response: unknown): number | null {
+  if (typeof response !== 'object' || response === null) {
+    return null;
+  }
+  const status = (response as { status?: unknown }).status;
+  if (typeof status !== 'function') {
+    return null;
+  }
+  const code = (status as () => unknown).call(response);
+  return typeof code === 'number' && Number.isFinite(code) ? code : null;
 }
 
 export interface HybridContentFetcherOptions {

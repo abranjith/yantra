@@ -10,6 +10,7 @@ export {
   ChildFinding,
   KeyFinding,
   Section,
+  editorialMarkIsInformative,
 } from './schemas/brief.js';
 export {
   BriefValidationError,

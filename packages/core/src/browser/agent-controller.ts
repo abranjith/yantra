@@ -497,6 +497,11 @@ export class AgentBrowserController {
     });
   }
 
+  /** Live page URL, or `''` before the first navigation. */
+  public url(): string {
+    return this.page?.url() ?? '';
+  }
+
   /** Live page hostname for policy/secret binding. */
   public host(): string {
     try {

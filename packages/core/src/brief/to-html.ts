@@ -43,7 +43,14 @@
  * deterministic, exactly like {@link briefToMarkdown}.
  */
 
-import type { Brief, BriefNotice, BriefSource, KeyFinding, Section } from '@yantra/protocol';
+import {
+  editorialMarkIsInformative,
+  type Brief,
+  type BriefNotice,
+  type BriefSource,
+  type KeyFinding,
+  type Section,
+} from '@yantra/protocol';
 
 import {
   escapeForMarkdown,
@@ -168,9 +175,13 @@ function subtleizeCitations(html: string, declared: ReadonlySet<number>): string
 
 /** The key findings as a list, each carrying its citations as subtle superscripts. */
 function keyFindingsHtml(findings: readonly KeyFinding[], declared: ReadonlySet<number>): string {
+  // The editorial chip is shown only when it separates commentary from cited
+  // findings; an all-editorial Brief would otherwise chip every bullet.
+  const markEditorial = editorialMarkIsInformative(findings);
   const items = findings
     .map((finding) => {
-      const editorial = finding.editorial ? ' <em class="editorial">editorial</em>' : '';
+      const editorial =
+        markEditorial && finding.editorial ? ' <em class="editorial">editorial</em>' : '';
       // The deterministic path carries citations only in the structured array;
       // the LLM path may inline [n] in the text — transform those in place.
       const body = /\[\d+\]/u.test(finding.text)

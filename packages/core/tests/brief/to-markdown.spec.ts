@@ -37,6 +37,37 @@ describe('@no-llm briefToMarkdown', () => {
     expect(md).not.toContain('free shipping [1] *(editorial)*');
   });
 
+  it('drops the editorial marker when every finding is editorial', () => {
+    // Every agentic Brief lands here: the runtime attaches ledger sources and
+    // publishes the model's findings as uncited commentary, so a marker on
+    // every bullet distinguishes nothing.
+    const md = briefToMarkdown(
+      makeBrief({
+        key_findings: [
+          { text: 'Cheapest overall: $116 total.', citations: [], editorial: true, facet: null },
+          { text: 'Free cancellation on most.', citations: [], editorial: true, facet: null },
+        ],
+      }),
+    );
+
+    expect(md).toContain('- Cheapest overall: $116 total.\n');
+    expect(md).not.toContain('*(editorial)*');
+  });
+
+  it('keeps the editorial marker when one cited finding makes it meaningful', () => {
+    const md = briefToMarkdown(
+      makeBrief({
+        key_findings: [
+          { text: 'Priced at $328.', citations: [1], editorial: false, facet: null },
+          { text: 'Buying now is reasonable.', citations: [], editorial: true, facet: null },
+        ],
+      }),
+    );
+
+    expect(md).toContain('- Buying now is reasonable. *(editorial)*');
+    expect(md).not.toContain('- Priced at $328. [1] *(editorial)*');
+  });
+
   it('renders the comparison facet as a GitHub Markdown table with ✓/✗ booleans', () => {
     const md = briefToMarkdown(canonicalBrief);
 

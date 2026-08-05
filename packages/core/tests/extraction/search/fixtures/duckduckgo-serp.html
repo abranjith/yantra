@@ -2,6 +2,15 @@
 <html>
   <body>
     <div class="serp__results">
+      <!-- Sponsored rows are served above the organic ones and reuse result__a. -->
+      <div class="result result--ad">
+        <a
+          class="result__a"
+          href="//duckduckgo.com/y.js?ad_domain=advertiser.example&amp;ad_provider=bingv7aa&amp;click_metadata=Zm9vYmFy"
+          >Sponsored Result</a
+        >
+        <a class="result__snippet">Sponsored snippet text</a>
+      </div>
       <div class="result">
         <a class="result__a" href="https://example.com/one">First Result</a>
         <a class="result__snippet">First snippet text</a>
@@ -11,7 +20,9 @@
         <a class="result__snippet">Second snippet text</a>
       </div>
       <div class="result">
-        <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fthree">Third Result</a>
+        <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fthree"
+          >Third Result</a
+        >
         <a class="result__snippet">Third snippet text</a>
       </div>
     </div>

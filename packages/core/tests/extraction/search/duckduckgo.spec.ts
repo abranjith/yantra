@@ -49,6 +49,58 @@ describe('@no-llm extraction/search/duckduckgo', () => {
     expect(rows[2]?.url).toBe('https://example.com/three');
   });
 
+  it('drops sponsored rows so an ad tracker never outranks an organic hit', async () => {
+    // Regression: run 20260804T043011Z-do-b85f02f1 published two
+    // `duckduckgo.com/y.js?ad_domain=…` ad-click trackers as its Brief sources.
+    // They sit above the organic rows, so unfiltered they take rank 0.
+    const provider = providerFor(fixture('duckduckgo-serp.html'));
+
+    const rows = await provider.search('cheap hotels', {
+      limit: 5,
+      signal: new AbortController().signal,
+    });
+
+    expect(rows.map((r) => r.url)).toEqual([
+      'https://example.com/one',
+      'https://example.com/two',
+      'https://example.com/three',
+    ]);
+    expect(rows.some((r) => r.url.includes('/y.js'))).toBe(false);
+    expect(rows.some((r) => r.title === 'Sponsored Result')).toBe(false);
+  });
+
+  it('drops an ad href even when the row carries no ad class', async () => {
+    const provider = providerFor(
+      '<html><body><div class="serp__results">' +
+        '<div class="result"><a class="result__a" href="//duckduckgo.com/y.js?ad_domain=x">Ad</a></div>' +
+        '<div class="result"><a class="result__a" href="https://example.com/real">Real</a></div>' +
+        '</div></body></html>',
+    );
+
+    const rows = await provider.search('ai news', {
+      limit: 3,
+      signal: new AbortController().signal,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.url).toBe('https://example.com/real');
+  });
+
+  it('reports empty-results for an all-sponsored page rather than returning ads', async () => {
+    const provider = providerFor(
+      '<html><body><div class="serp__results">' +
+        '<div class="result result--ad"><a class="result__a" href="//duckduckgo.com/y.js?ad_domain=x">Ad</a></div>' +
+        '</div></body></html>',
+    );
+
+    const error = await provider
+      .search('ai news', { limit: 3, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ScrapeSearchError);
+    expect((error as ScrapeSearchError).context.code).toBe('empty-results');
+  });
+
   it('respects the limit by truncating extra rows', async () => {
     const provider = providerFor(fixture('duckduckgo-serp.html'));
 

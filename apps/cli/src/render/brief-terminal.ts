@@ -24,7 +24,14 @@
  * contains no ANSI escape bytes at all.
  */
 
-import type { Brief, BriefNotice, BriefSource, KeyFinding, Section } from '@yantra/protocol';
+import {
+  editorialMarkIsInformative,
+  type Brief,
+  type BriefNotice,
+  type BriefSource,
+  type KeyFinding,
+  type Section,
+} from '@yantra/protocol';
 import boxen, { type Options as BoxenOptions } from 'boxen';
 import { Chalk, type ChalkInstance } from 'chalk';
 import Table from 'cli-table3';
@@ -116,11 +123,19 @@ function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: nu
   return `${title}\n${boxen(content, boxOptions)}`;
 }
 
-/** Scannable key-finding bullets; editorial notes use a distinct glyph. */
+/**
+ * Scannable key-finding bullets; editorial notes use a distinct glyph.
+ *
+ * The distinction is drawn only when the Brief actually mixes cited findings
+ * with commentary — an all-editorial Brief (every agentic run) would otherwise
+ * render an identical marker on every bullet, which is decoration, not signal.
+ */
 function keyFindingsBlock(findings: readonly KeyFinding[], c: ChalkInstance): string {
+  const markEditorial = editorialMarkIsInformative(findings);
   const lines = findings.flatMap((finding) => {
-    const glyph = finding.editorial ? c.yellow('◦') : c.green('•');
-    const marker = finding.editorial ? c.dim(' (editorial)') : '';
+    const editorial = markEditorial && finding.editorial;
+    const glyph = editorial ? c.yellow('◦') : c.green('•');
+    const marker = editorial ? c.dim(' (editorial)') : '';
     const body = findingText(finding.text, finding.citations, c);
     return [
       `${glyph} ${body}${marker}`,

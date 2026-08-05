@@ -21,8 +21,11 @@ import {
 } from '../../src/extraction/fetcher.js';
 
 class FakePage implements Page {
+  public constructor(private readonly status: number | null = null) {}
   public async goto(): Promise<unknown> {
-    return null;
+    // Puppeteer resolves `goto` with an HTTPResponse; a facade that cannot
+    // report one (test fakes, same-document navigation) resolves with null.
+    return this.status === null ? null : { status: () => this.status };
   }
   public async evaluate<T>(): Promise<T> {
     return '<html><main><article><p>rendered</p></article></main></html>' as T;
@@ -39,6 +42,10 @@ class FakePage implements Page {
 }
 
 class FakeSession implements BrowserSession {
+  public constructor(
+    private readonly status: number | null = null,
+    private readonly onClose?: () => void,
+  ) {}
   public readonly id = 's1';
   public readonly chrome: ChromeInstall = {
     path: '/fake/chrome',
@@ -50,10 +57,10 @@ class FakeSession implements BrowserSession {
   public readonly profilePath = '/tmp/fake-profile';
 
   public async newPage(): Promise<Page> {
-    return new FakePage();
+    return new FakePage(this.status);
   }
   public async close(): Promise<void> {
-    return;
+    this.onClose?.();
   }
   public on(): void {
     return;
@@ -64,6 +71,14 @@ const fakeBrowserProvider: BrowserProvider = {
   launch: async () => new FakeSession(),
   detectChrome: async () => null,
 };
+
+/** A provider whose page reports `status` for every navigation. */
+function providerWithStatus(status: number, onClose?: () => void): BrowserProvider {
+  return {
+    launch: async () => new FakeSession(status, onClose),
+    detectChrome: async () => null,
+  };
+}
 
 describe('@no-llm extraction/fetcher', () => {
   let mockAgent: MockAgent;
@@ -169,5 +184,88 @@ describe('@no-llm extraction/fetcher', () => {
 
     expect(doc.fetchMode).toBe('browser');
     expect(doc.finalUrl).toBe('https://example.com/final');
+  });
+
+  it('rejects a browser navigation that landed on an HTTP error page', async () => {
+    // Regression: Chrome renders "This page isn't working / HTTP ERROR 400" for
+    // an error response, that interstitial extracts as readable prose, and the
+    // hardcoded 200 published it as a Brief source excerpt.
+    const fetcher = new BrowserFallbackFetcher({ browserProvider: providerWithStatus(400) });
+
+    await expect(
+      fetcher.fetch('https://example.com/ad-redirect', {
+        timeoutMs: 8_000,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof FetchError &&
+        error.context.kind === 'http-status' &&
+        error.context.statusCode === 400,
+    );
+  });
+
+  it('closes the browser session when a navigation status is rejected', async () => {
+    let closed = false;
+    const fetcher = new BrowserFallbackFetcher({
+      browserProvider: providerWithStatus(503, () => {
+        closed = true;
+      }),
+    });
+
+    await fetcher
+      .fetch('https://example.com/down', {
+        timeoutMs: 8_000,
+        signal: new AbortController().signal,
+      })
+      .catch(() => undefined);
+
+    expect(closed).toBe(true);
+  });
+
+  it('reports the real status for a successful browser navigation', async () => {
+    const fetcher = new BrowserFallbackFetcher({ browserProvider: providerWithStatus(204) });
+
+    const doc = await fetcher.fetch('https://example.com/ok', {
+      timeoutMs: 8_000,
+      signal: new AbortController().signal,
+    });
+
+    expect(doc.statusCode).toBe(204);
+    expect(doc.fetchMode).toBe('browser');
+  });
+
+  it('keeps the 200 default when the page facade reports no response', async () => {
+    const fetcher = new BrowserFallbackFetcher({ browserProvider: fakeBrowserProvider });
+
+    const doc = await fetcher.fetch('https://example.com/spa', {
+      timeoutMs: 8_000,
+      signal: new AbortController().signal,
+    });
+
+    expect(doc.statusCode).toBe(200);
+  });
+
+  it('fails the hybrid fetch when both transports hit an error status', async () => {
+    // The ad-redirect case end to end: HTTP 400, browser fallback 400, so the
+    // caller records a per-source failure instead of an error-page "document".
+    mockAgent
+      .get('https://duckduckgo.example')
+      .intercept({ path: '/y.js', method: 'GET' })
+      .reply(400, '');
+
+    const hybrid = new HybridContentFetcher({
+      httpFetcher: new HttpFetcher(),
+      browserFetcher: new BrowserFallbackFetcher({ browserProvider: providerWithStatus(400) }),
+    });
+
+    await expect(
+      hybrid.fetch('https://duckduckgo.example/y.js', {
+        timeoutMs: 8_000,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toSatisfy(
+      (error: unknown) => error instanceof FetchError && error.context.kind === 'http-status',
+    );
   });
 });

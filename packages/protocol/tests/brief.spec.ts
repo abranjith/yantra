@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Brief, BriefFacets, KeyFinding } from '../src/index.js';
+import { Brief, BriefFacets, KeyFinding, editorialMarkIsInformative } from '../src/index.js';
 
 import { makeBrief, makeSource } from './brief-factories.js';
 
@@ -422,5 +422,29 @@ describe('@no-llm brief schema — evidence-first additions (FEAT-FP-001)', () =
       },
     });
     expect(Brief.safeParse(brief).success).toBe(false);
+  });
+});
+
+describe('@no-llm editorialMarkIsInformative', () => {
+  const finding = (editorial: boolean): KeyFinding => ({
+    text: editorial ? 'commentary' : 'cited claim',
+    citations: editorial ? [] : [1],
+    editorial,
+    facet: null,
+    children: [],
+  });
+
+  it('is true when a cited finding stands beside commentary', () => {
+    expect(editorialMarkIsInformative([finding(false), finding(true)])).toBe(true);
+  });
+
+  it('is false when every finding is editorial', () => {
+    // The shape every agentic run publishes: ledger-attached sources, findings
+    // carried as uncited commentary. Marking each one distinguishes nothing.
+    expect(editorialMarkIsInformative([finding(true), finding(true)])).toBe(false);
+  });
+
+  it('is false for an empty finding list', () => {
+    expect(editorialMarkIsInformative([])).toBe(false);
   });
 });

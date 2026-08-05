@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { AgentBrowserController } from '@yantra/core';
 import { generateUlid } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
@@ -122,6 +123,7 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
     extractionKind: kind,
     requires_confirmation: false,
   });
+  recordEvidence(kind, extracted, controller, services);
   const serialized = JSON.stringify(extracted);
   if (Buffer.byteLength(serialized, 'utf8') <= deps.captureThresholdBytes)
     return { ok: true, model: extracted };
@@ -137,6 +139,45 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
     model: { capture_ref: captureRef, preview: previewExtraction(kind, extracted) },
     details: { capture_ref: captureRef },
   };
+}
+
+/** Bytes of extracted page text offered as the ledger excerpt (it bounds it further). */
+const EVIDENCE_EXCERPT_CHARS = 1_000;
+
+/**
+ * Record a read page as ledger evidence, so `result_publish` attaches it as a
+ * Brief source.
+ *
+ * A browser-driven run reads its answer off pages it clicked through to; before
+ * this, only `web_search`/`web_fetch` fed the ledger, so such a run published
+ * the search hop (or nothing) as its sources while every fact came from the
+ * extracted page. Only `content` extractions qualify: a `table` extraction
+ * carries no page title or prose to excerpt, and the page it came from is
+ * recorded when the agent reads its content.
+ *
+ * Best-effort by design — an unusable URL (no navigation yet, a `data:`/blank
+ * page) is skipped rather than turned into a junk source, and never fails the
+ * extraction the agent asked for.
+ */
+function recordEvidence(
+  kind: ExtractionKind,
+  extracted: unknown,
+  controller: AgentBrowserController,
+  services: RunServices,
+): void {
+  if (kind !== 'content') return;
+  const url = controller.url();
+  if (!/^https?:\/\//iu.test(url)) return;
+  const { title, text } = extracted as { title: string; text: string };
+  services.evidence.add({
+    url,
+    finalUrl: null,
+    title: title.length > 0 ? title : null,
+    excerpt: text.slice(0, EVIDENCE_EXCERPT_CHARS),
+    fetchedAt: services.nowIso(),
+    publishedAt: null,
+    tool: 'browser_extract',
+  });
 }
 
 function validExtraction(kind: ExtractionKind, value: unknown): boolean {

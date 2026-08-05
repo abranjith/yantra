@@ -103,6 +103,35 @@ describe('@no-llm renderBriefTerminal', () => {
     expect(full).toContain('https://www.amazon.com/sony-wh-1000xm5');
   });
 
+  it('drops the editorial marker and glyph when every finding is editorial', () => {
+    // Agentic Briefs publish every finding as uncited commentary; marking each
+    // one puts an identical badge on the whole list.
+    const brief = makeBrief({
+      key_findings: [
+        { text: 'Cheapest overall: $116 total.', citations: [], editorial: true, facet: null },
+        { text: 'Free cancellation on most.', citations: [], editorial: true, facet: null },
+      ],
+    });
+    const out = stripAnsi(renderBriefTerminal(brief, { detail: 'standard', noColor: true }));
+
+    expect(out).toContain('• Cheapest overall: $116 total.');
+    expect(out).not.toContain('(editorial)');
+    expect(out).not.toContain('◦');
+  });
+
+  it('keeps the editorial marker when a cited finding makes it meaningful', () => {
+    const brief = makeBrief({
+      key_findings: [
+        { text: 'Priced at $328.', citations: [1], editorial: false, facet: null },
+        { text: 'Buying now is reasonable.', citations: [], editorial: true, facet: null },
+      ],
+    });
+    const out = stripAnsi(renderBriefTerminal(brief, { detail: 'standard', noColor: true }));
+
+    expect(out).toContain('◦ Buying now is reasonable. (editorial)');
+    expect(out).toContain('• Priced at $328.');
+  });
+
   it('degrades gracefully when findings, sections, and facets are empty', () => {
     const brief = makeBrief({ key_findings: [], sections: [], facets: null, notices: [] });
     const out = stripAnsi(renderBriefTerminal(brief, { detail: 'full', noColor: true }));

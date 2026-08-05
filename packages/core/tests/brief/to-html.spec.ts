@@ -253,10 +253,30 @@ describe('@no-llm briefToHtml', () => {
   it('marks an editorial finding with a chip instead of inline parentheses', () => {
     const html = briefToHtml(
       makeBrief({
-        key_findings: [{ text: 'A judgement call.', citations: [], editorial: true, facet: null }],
+        key_findings: [
+          { text: 'Priced at $328.', citations: [1], editorial: false, facet: null },
+          { text: 'A judgement call.', citations: [], editorial: true, facet: null },
+        ],
       }),
     );
-    expect(html).toContain('<em class="editorial">editorial</em>');
+    expect(html).toContain('A judgement call. <em class="editorial">editorial</em>');
+    // Only the uncited finding is chipped.
+    expect(html.match(/<em class="editorial">/gu)).toHaveLength(1);
+  });
+
+  it('drops the editorial chip when every finding is editorial', () => {
+    // The agentic publication path marks every finding editorial, so chipping
+    // each one labels the whole list identically instead of distinguishing it.
+    const html = briefToHtml(
+      makeBrief({
+        key_findings: [
+          { text: 'Cheapest overall: $116 total.', citations: [], editorial: true, facet: null },
+          { text: 'A judgement call.', citations: [], editorial: true, facet: null },
+        ],
+      }),
+    );
+    expect(html).toContain('<li>Cheapest overall: $116 total.</li>');
+    expect(html).not.toContain('class="editorial"');
   });
 
   it('renders source timestamps as readable dates that keep the exact instant', () => {

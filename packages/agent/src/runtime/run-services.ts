@@ -258,16 +258,21 @@ export interface EvidenceEntry {
   /** Publication timestamp as extracted (best-effort), or null when unknown. */
   readonly publishedAt: string | null;
   /** The tool that consulted the source. */
-  readonly tool: 'web_search' | 'web_fetch';
+  readonly tool: 'web_search' | 'web_fetch' | 'browser_extract';
 }
 
 /**
  * Run-scoped record of every web source the agent consulted. The web tools
- * append each successfully fetched site; `result_publish` and the runtime
- * fallback publisher attach these entries as the Brief's sources, so the model
- * never has to round-trip URLs through its own context (the observed failure
- * mode behind placeholder sources, "publication impossible" blockers, and
- * post-nudge re-searching).
+ * append each successfully fetched site and `browser_extract` appends each page
+ * it read; `result_publish` and the runtime fallback publisher attach these
+ * entries as the Brief's sources, so the model never has to round-trip URLs
+ * through its own context (the observed failure mode behind placeholder
+ * sources, "publication impossible" blockers, and post-nudge re-searching).
+ *
+ * Browser pages belong here for the same reason search hits do: a `do` run that
+ * clicks its way to a price and extracts it drew its answer from that page, and
+ * a Brief that instead cites only the search hop is not describing where its
+ * facts came from.
  *
  * Title/excerpt text is page-derived (untrusted), so `add` runs it through the
  * run's sanitizer and bounds it — the ledger is its own chokepoint because its

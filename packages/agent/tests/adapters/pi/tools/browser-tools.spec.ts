@@ -543,6 +543,71 @@ describe('@no-llm browser tools', () => {
     if (step?.kind === 'extract') expect(step.extractionKind).toBe('content');
   });
 
+  it('records the extracted page as ledger evidence so it becomes a Brief source', async () => {
+    // Regression: run 20260804T043011Z-do-b85f02f1 read its hotel prices off
+    // booking.com and expedia.com through the browser, but only web_search fed
+    // the ledger — so the published Brief cited the search hop, not the pages
+    // the answer came from.
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'Frisco Hotels', text: 'Motel 6 — $116 total.' });
+    controller.url.mockReturnValue('https://www.expedia.com/Frisco-Hotels');
+    const services = browserServices(controller);
+
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'content' },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(services.evidence.entries()).toEqual([
+      {
+        url: 'https://www.expedia.com/Frisco-Hotels',
+        finalUrl: null,
+        title: 'Frisco Hotels',
+        excerpt: 'Motel 6 — $116 total.',
+        fetchedAt: expect.any(String),
+        publishedAt: null,
+        tool: 'browser_extract',
+      },
+    ]);
+  });
+
+  it('records one entry per page when the same page is extracted twice', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'Frisco Hotels', text: 'Prices.' });
+    const services = browserServices(controller);
+    const tool = wrapTool(browserExtractSpec(services), services);
+
+    await tool.execute({ kind: 'content' }, undefined);
+    await tool.execute({ kind: 'content' }, undefined);
+
+    expect(services.evidence.entries()).toHaveLength(1);
+  });
+
+  it('does not record a table extraction as evidence', async () => {
+    // A table carries no page title or prose to excerpt; the page enters the
+    // ledger when its content is read.
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ headers: ['Hotel'], rows: [['Motel 6']] });
+    const services = browserServices(controller);
+
+    await wrapTool(browserExtractSpec(services), services).execute({ kind: 'table' }, undefined);
+
+    expect(services.evidence.isEmpty()).toBe(true);
+  });
+
+  it('skips evidence for a page with no fetchable URL', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: '', text: 'body' });
+    controller.url.mockReturnValue('about:blank');
+    const services = browserServices(controller);
+
+    const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
+
+    expect(result.status).toBe('ok');
+    expect(services.evidence.isEmpty()).toBe(true);
+  });
+
   it('rejects a content extraction whose shape does not validate', async () => {
     const controller = fakeController();
     controller.extract.mockResolvedValue({ title: 'T' });
@@ -796,6 +861,7 @@ function fakeController() {
     click: vi.fn(),
     fill: vi.fn(),
     extract: vi.fn(),
+    url: vi.fn().mockReturnValue('https://example.com/page'),
     host: vi.fn().mockReturnValue('example.com'),
     describeRef: vi.fn().mockReturnValue({ ref: 'e1', role: 'button', name: 'Continue' }),
     // The real controller derives the persisted locator from the live element

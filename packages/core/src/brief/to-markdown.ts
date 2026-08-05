@@ -16,7 +16,13 @@
  * refinement, and this function introduces no escapes of its own.
  */
 
-import type { Brief, BriefSource, KeyFinding, Section } from '@yantra/protocol';
+import {
+  editorialMarkIsInformative,
+  type Brief,
+  type BriefSource,
+  type KeyFinding,
+  type Section,
+} from '@yantra/protocol';
 
 /**
  * Renders a {@link Brief} as a portable, full-detail Markdown document.
@@ -48,7 +54,14 @@ export function briefToMarkdown(brief: Brief): string {
   }
 
   if (brief.key_findings.length > 0) {
-    blocks.push(['## Key Findings', '', ...brief.key_findings.map(keyFindingLine)].join('\n'));
+    const markEditorial = editorialMarkIsInformative(brief.key_findings);
+    blocks.push(
+      [
+        '## Key Findings',
+        '',
+        ...brief.key_findings.map((finding) => keyFindingLine(finding, markEditorial)),
+      ].join('\n'),
+    );
   }
 
   for (const section of brief.sections) {
@@ -105,15 +118,20 @@ function capInlineMarkers(text: string): string {
   );
 }
 
-/** Renders one key finding bullet, tagging uncited editorial commentary. */
-function keyFindingLine(finding: KeyFinding): string {
+/**
+ * Renders one key finding bullet, tagging uncited editorial commentary.
+ *
+ * @param markEditorial - Whether the editorial tag distinguishes anything in
+ *   this Brief (see `editorialMarkIsInformative`); false suppresses it.
+ */
+function keyFindingLine(finding: KeyFinding, markEditorial: boolean): string {
   const text = inline(finding.text);
   // Structured citations are authoritative on the deterministic path; an LLM
   // finding may inline its own [n], which we cap in place instead.
   const body = /\[\d+\]/u.test(text)
     ? capInlineMarkers(text)
     : appendMarkers(text, finding.citations);
-  const parent = finding.editorial ? `- ${body} *(editorial)*` : `- ${body}`;
+  const parent = markEditorial && finding.editorial ? `- ${body} *(editorial)*` : `- ${body}`;
   const children = (finding.children ?? []).map(
     (child) => `  - ${inline(child.text)} ${capMarkers(child.citations)}`,
   );

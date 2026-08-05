@@ -101,6 +101,15 @@ interface DuckDuckGoParseResult {
 /**
  * Parses DuckDuckGo HTML-endpoint markup into organic result rows and detects
  * the anti-bot challenge interstitial. Exported for the provider contract suite.
+ *
+ * Sponsored rows are dropped. DuckDuckGo renders them with the very same
+ * `result__a` anchor as organic hits — only the row class and the `y.js` ad
+ * href distinguish them — and they sit *above* the organic results, so an
+ * unfiltered parse hands the top rank to an ad-click tracker. Those hrefs are
+ * not pages: they carry kilobytes of click metadata (long enough to trip the
+ * 2048-character URL policy), they 400 when fetched outside a real click, and
+ * the resulting browser error page was being extracted and published as a
+ * Brief source.
  */
 export function parseDuckDuckGoHtml(html: string): DuckDuckGoParseResult {
   const $ = load(html);
@@ -110,15 +119,38 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoParseResult {
   $('a.result__a').each((_index, element) => {
     const anchor = $(element);
     const result = anchor.closest('.result');
+    const href = anchor.attr('href') ?? '';
+    if (result.is(AD_ROW_SELECTOR) || isAdHref(href)) {
+      return;
+    }
     const snippetText = result.find('.result__snippet').first().text().trim();
     rows.push({
-      href: anchor.attr('href') ?? '',
+      href,
       title: anchor.text().trim(),
       snippet: snippetText.length > 0 ? snippetText : null,
     });
   });
 
   return { rows, blocked };
+}
+
+/** Row classes DuckDuckGo puts on sponsored results. */
+const AD_ROW_SELECTOR = '.result--ad, .result--ad--small, .result--sponsored';
+
+/** Base for resolving DuckDuckGo's protocol-relative (`//host/path`) hrefs. */
+const HREF_BASE = 'https://html.duckduckgo.com/html/';
+
+/** True for a DuckDuckGo ad-click tracker href (`//duckduckgo.com/y.js?...`). */
+function isAdHref(href: string): boolean {
+  try {
+    const absolute = new URL(href, HREF_BASE);
+    return (
+      (absolute.hostname === 'duckduckgo.com' || absolute.hostname.endsWith('.duckduckgo.com')) &&
+      absolute.pathname === '/y.js'
+    );
+  } catch {
+    return false;
+  }
 }
 
 function canonicalizeDdgHref(href: string, endpoint: string): string {

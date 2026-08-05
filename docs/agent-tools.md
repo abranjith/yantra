@@ -221,10 +221,10 @@ Gating it needs its own design.
 | `browser_click`     | Click an actionable opaque ref.                                                                                                              | Dispatched as a user-shaped held press. The result is held until the page stops moving: late-starting navigations, redirect chains, and fetch/XHR updates settle (bounded) before the next tool call can race them. Hidden, disabled, and stale targets return structured errors; a covered target is clicked through to whatever covers it, exactly as a real user's click would be — re-observe to see the outcome. Protected actions require confirmation. |
 | `browser_fill`      | Fill an observed field with a literal, a `{{user:...}}` placeholder, or a website secret reference.                                          | Native `<select>` elements are filled by option label or value (`OPTION_NOT_FOUND` otherwise); text fields are overtyped with real key events. `{{user:...}}` placeholders resolve to the real user-provided value at the execution boundary; credential-shaped literals (raw or resolved) are rejected; secret refs require confirmation and trusted host metadata.                                                                                          |
 | `browser_form_fill` | Fill several fields of one form in a single call, addressing them by visible name and re-observing between steps. **`do` only.**             | Never submits and never handles credentials (no `secret_ref` form; credential-shaped values are refused). Resolves each field against a fresh uncapped observation, so autocomplete options and calendar days revealed by the previous step are addressable. Stops at the first failing field and reports what was applied. Returns the post-fill observation so the submit button can be clicked with `browser_click`.                                       |
-| `browser_extract`   | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview.                                                                                                                                                                                                                                                            |
+| `browser_extract`   | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview. A `content` extraction also records the page in the evidence ledger, so a browser-driven run cites the pages its answer came from.                                                                                                                         |
 | `script_run`        | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                                             |
 | `workflow_run`      | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                                            |
-| `result_publish`    | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                                                                   |
+| `result_publish`    | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned plus every page `browser_extract` read), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                                            |
 
 Web tool outcomes also feed Yantra's local domain-ranking signal: search hits
 add a positive observation, while blocked, failed, or unreadable pages add a
@@ -419,18 +419,26 @@ publisher runs, so even small local models get a structured retry path.
 `key_findings` and `sources` are optional at the schema level.
 
 **Sources are ledger-authoritative.** Every site `web_search` and `web_fetch`
-return is recorded in the run's evidence ledger (URL, title, excerpt, fetch and
-publication timestamps, sanitized and bounded). When the ledger has entries,
+return, and every page a `browser_extract` content extraction read, is recorded
+in the run's evidence ledger (URL, title, excerpt, fetch and publication
+timestamps, sanitized and bounded; first sighting of a URL wins). Browser pages
+belong there for the same reason search hits do — a `do` run that clicks through
+to a price and extracts it drew its answer from that page, and a Brief that
+instead cites only the search hop is not describing where its facts came from.
+When the ledger has entries,
 `result_publish` attaches those entries — with excerpts — as the Brief's
 sources in consulted order and **ignores** model-supplied `sources`; findings
 are published as editorial commentary (ad-hoc per-call citation numbers are
-stripped rather than mis-attributed against run-wide numbering). Small local
-models cannot reliably round-trip URLs from earlier tool results into a typed
-payload — observed failures include placeholder `"N/A"` sources and a
-completion-nudged re-search that changed the answer — so the model is never
-asked to courier data the runtime already owns. Model-supplied sources are
-honored only when the ledger is empty (for example browser-only `do` runs),
-where citation integrity is validated as before. Internal callers may still
+stripped rather than mis-attributed against run-wide numbering). Because that
+makes _every_ finding editorial, the renderers show the editorial mark only when
+a Brief also carries a cited finding — the flag stays in `brief.json`, but a
+badge on every bullet is decoration, not information. Small local models cannot
+reliably round-trip URLs from earlier tool results into a typed payload —
+observed failures include placeholder `"N/A"` sources and a completion-nudged
+re-search that changed the answer — so the model is never asked to courier data
+the runtime already owns. Model-supplied sources are honored only when the
+ledger is empty (a run that published without reading a page), where citation
+integrity is validated as before. Internal callers may still
 pass a complete protocol Brief (detected by `brief_id`/`schema_version`); it
 passes through untouched and is validated as-is.
 

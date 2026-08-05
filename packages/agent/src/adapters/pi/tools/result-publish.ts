@@ -16,14 +16,14 @@
  * a structured, correctable error listing the offending references.
  *
  * Sources are **ledger-authoritative**: when the run's evidence ledger has
- * entries (every site `web_search`/`web_fetch` returned), those entries become
- * the Brief's sources — with excerpts — and any model-supplied `sources` are
- * ignored. Small local models cannot reliably round-trip URLs from earlier tool
- * results into a typed payload (observed: placeholder `"N/A"` sources, and a
- * completion-nudged re-search that changed the answer); the runtime already
- * owns that data, so the model is never asked to courier it. Model-supplied
- * sources are honored only when the ledger is empty (for example browser-only
- * `do` runs).
+ * entries (every site `web_search`/`web_fetch` returned, plus every page
+ * `browser_extract` read), those entries become the Brief's sources — with
+ * excerpts — and any model-supplied `sources` are ignored. Small local models
+ * cannot reliably round-trip URLs from earlier tool results into a typed
+ * payload (observed: placeholder `"N/A"` sources, and a completion-nudged
+ * re-search that changed the answer); the runtime already owns that data, so
+ * the model is never asked to courier it. Model-supplied sources are honored
+ * only when the ledger is empty (a run that published without reading a page).
  */
 
 import { renderTemplate, writeBriefArtifacts, writeReportArtifacts } from '@yantra/core';
