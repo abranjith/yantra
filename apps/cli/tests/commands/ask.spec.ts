@@ -1,7 +1,12 @@
 import { Writable } from 'node:stream';
 
 import type { AgenticTaskRequest } from '@yantra/agent';
-import type { AskPipeline, AskQuery, AskRunResult } from '@yantra/core';
+import {
+  UserInputMarkerError,
+  type AskPipeline,
+  type AskQuery,
+  type AskRunResult,
+} from '@yantra/core';
 import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
@@ -220,5 +225,16 @@ describe('@no-llm cli/ask command', () => {
       exitCode: 2,
     });
     expect(stderr.value()).toContain('ask failed: boom');
+  });
+
+  it('keeps marker syntax failures as validation errors', async () => {
+    const h = harness({
+      runTask: () => Promise.reject(new UserInputMarkerError(4, 'unterminated')),
+    });
+
+    await expect(
+      h.program.parseAsync(['ask', 'use @{broken'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    expect(h.stderr.value()).toContain('column 5');
   });
 });

@@ -2,12 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  UserInputVault,
-  brandSanitized,
-  type AmbientGrants,
-  type PayloadSanitizer,
-} from '@yantra/core';
+import { UserInputVault, brandSanitized, redactRunInput, type AmbientGrants } from '@yantra/core';
+import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -30,15 +26,7 @@ const budgets: AgentPromptBudgets = {
   confirmationWaitMs: 30_000,
 };
 
-const markerSanitizer: PayloadSanitizer = {
-  sanitize: (payload) => ({
-    text: String(payload).replaceAll('UNSANITIZED_CANARY', '[sanitized]'),
-    tags: [],
-    originalByteLength: Buffer.byteLength(String(payload)),
-    outputByteLength: Buffer.byteLength(String(payload)),
-    truncated: false,
-  }),
-};
+const markerSanitizer = new UserInputVault();
 
 /** The rendered goal, i.e. everything before the run-constraints block. */
 function goalSectionOf(prompt: string): string {
@@ -153,10 +141,10 @@ describe('@no-llm agent-v1 prompt governance', () => {
     expect(prompt).not.toMatch(/total calls|calls per capability|cost ceiling/i);
   });
 
-  it('sanitizes the goal, bounds profile context by UTF-8 bytes, and normalizes hosts', () => {
+  it('renders an already-redacted goal, bounds profile context, and normalizes hosts', () => {
     const prompt = buildAgentUserPrompt(
       {
-        goal: 'Find UNSANITIZED_CANARY records',
+        goal: 'Find [sanitized] records',
         budgets,
         allowedHosts: ['EXAMPLE.com', 'example.com', 'bad host'],
         profileContext: 'ééééé',
@@ -166,7 +154,6 @@ describe('@no-llm agent-v1 prompt governance', () => {
     );
 
     expect(prompt).toContain('Find [sanitized] records');
-    expect(prompt).not.toContain('UNSANITIZED_CANARY');
     expect(prompt).toContain('Allowed hosts: example.com');
     expect(prompt).toContain('Approved profile context:\néé');
   });
@@ -429,18 +416,16 @@ describe('@no-llm agent-v1 prompt governance', () => {
     );
   });
 
-  it('redacts goal values into resolvable placeholders when a vault is supplied', async () => {
+  it('does not double-redact an already-placeholdered goal', async () => {
     // Regression: the 'public' sanitizer profile replaced goal PII with the
     // irreversible '[redacted-email]' marker, so the model could never use the
     // value in a tool call (fills typed the marker into real forms). The vault
     // path must produce a resolvable placeholder plus the usage instruction.
     const vault = new UserInputVault();
+    const redactedGoal = vault.redact('sign up for the newsletter using john.doe@example.com');
+    const sizeBeforePrompt = vault.size;
 
-    const prompt = buildAgentUserPrompt(
-      { goal: 'sign up for the newsletter using john.doe@example.com', budgets },
-      markerSanitizer,
-      vault,
-    );
+    const prompt = buildAgentUserPrompt({ goal: redactedGoal, budgets }, vault);
 
     expect(prompt).toContain('{{user:email:1}}');
     expect(prompt).not.toContain('john.doe@example.com');
@@ -450,12 +435,12 @@ describe('@no-llm agent-v1 prompt governance', () => {
     expect(goalSectionOf(prompt)).not.toContain('[redacted-email]');
     expect(prompt).toContain('Hidden values:');
     expect(vault.resolve('{{user:email:1}}')).toBe('john.doe@example.com');
+    expect(vault.size).toBe(sizeBeforePrompt);
   });
 
   it('omits the user-placeholder guidance when the goal has no sensitive values', () => {
     const prompt = buildAgentUserPrompt(
       { goal: 'compare the top three 4K monitors', budgets },
-      markerSanitizer,
       new UserInputVault(),
     );
 
@@ -469,7 +454,6 @@ describe('@no-llm agent-v1 prompt governance', () => {
     // explanation treats it as a runtime bug and burns its budget on it.
     const prompt = buildAgentUserPrompt(
       { goal: 'compare the top three 4K monitors', budgets },
-      markerSanitizer,
       new UserInputVault(),
     );
 
@@ -480,11 +464,8 @@ describe('@no-llm agent-v1 prompt governance', () => {
 
   it('keeps the hidden-value guidance compact enough to be worth its tokens', () => {
     const vault = new UserInputVault();
-    const prompt = buildAgentUserPrompt(
-      { goal: 'email john.doe@example.com my number +1 (555) 123-4567', budgets },
-      markerSanitizer,
-      vault,
-    );
+    const redactedGoal = vault.redact('email john.doe@example.com my number +1 (555) 123-4567');
+    const prompt = buildAgentUserPrompt({ goal: redactedGoal, budgets }, vault);
     const block = prompt.slice(prompt.indexOf('Hidden values:'));
 
     expect(block.length).toBeLessThan(1_200);
@@ -496,7 +477,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     // stripped tag. The vault path must leave plain text byte-identical.
     const goal = 'find laptops under $1500 & compare <best value> models';
 
-    const prompt = buildAgentUserPrompt({ goal, budgets }, markerSanitizer, new UserInputVault());
+    const prompt = buildAgentUserPrompt({ goal, budgets }, new UserInputVault());
 
     expect(prompt).toContain(goal);
     expect(prompt).not.toContain('&amp;');
@@ -504,16 +485,28 @@ describe('@no-llm agent-v1 prompt governance', () => {
 
   it('redacts profile context through the same vault', () => {
     const vault = new UserInputVault();
+    const redactedProfile = vault.redact('Backup contact: jane@example.org');
 
     const prompt = buildAgentUserPrompt(
-      { goal: 'renew my plan', budgets, profileContext: 'Backup contact: jane@example.org' },
-      markerSanitizer,
+      { goal: 'renew my plan', budgets, profileContext: redactedProfile },
       vault,
     );
 
     expect(prompt).toContain('Approved profile context:');
     expect(prompt).not.toContain('jane@example.org');
     expect(prompt).toContain('{{user:email:1}}');
+  });
+
+  it('property: no raw marked value appears in a built prompt', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[A-Z0-9]{4,24}$/), (suffix) => {
+        const value = `PROMPT-${suffix}`;
+        const redacted = redactRunInput({ goal: `use @password{${value}}` });
+        const prompt = buildAgentUserPrompt({ goal: redacted.goal, budgets }, redacted.vault);
+        expect(prompt).not.toContain(value);
+      }),
+      { numRuns: 200 },
+    );
   });
 
   it('declares the authoritative runtime prompt version only once', async () => {

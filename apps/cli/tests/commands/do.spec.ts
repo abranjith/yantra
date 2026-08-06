@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Writable } from 'node:stream';
 
 import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
+import { UserInputMarkerError } from '@yantra/core';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -57,6 +58,8 @@ async function invoke(
     readonly isTty?: boolean;
     readonly render?: boolean;
     readonly env?: NodeJS.ProcessEnv;
+    readonly runError?: unknown;
+    readonly warning?: string;
   } = {},
 ): Promise<{
   readonly exitCode: number;
@@ -69,6 +72,8 @@ async function invoke(
   let captured: AgenticTaskRequest | undefined;
   const runTask = vi.fn((request: AgenticTaskRequest) => {
     captured = request;
+    if (options.warning) request.connector.emitAgentWarning?.(options.warning);
+    if (options.runError !== undefined) return Promise.reject(options.runError);
     if (options.render) request.connector.renderAgentOutcome(terminal);
     return Promise.resolve(terminal);
   });
@@ -268,6 +273,27 @@ describe('@no-llm yantra do cutover', () => {
     expect(
       (await invoke(['do', 'goal', '--allow-host', 'bad host'], outcome('published'))).exitCode,
     ).toBe(1);
+  });
+
+  it('maps marker syntax failures to exit 1 without echoing a marked value', async () => {
+    const result = await invoke(['do', 'login with @password{p1'], outcome('published'), {
+      runError: new UserInputMarkerError(11, 'unterminated'),
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('column 12');
+    expect(result.stderr).not.toContain('p1');
+  });
+
+  it('prints user-input warnings on stderr but suppresses them under --json', async () => {
+    const warning = 'use `@{...}` to guarantee masking';
+    const human = await invoke(['do', 'password p1'], outcome('published'), { warning });
+    const json = await invoke(['do', 'password p1', '--json'], outcome('published'), { warning });
+
+    expect(human.exitCode).toBe(0);
+    expect(human.stderr).toContain(`warning: ${warning}`);
+    expect(json.exitCode).toBe(0);
+    expect(json.stderr).not.toContain(warning);
   });
 
   it.each([

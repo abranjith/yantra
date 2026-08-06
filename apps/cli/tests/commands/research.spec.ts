@@ -1,7 +1,12 @@
 import { Writable } from 'node:stream';
 
 import type { AgenticTaskRequest } from '@yantra/agent';
-import type { ResearchLoop, ResearchOptions, ResearchRunResult } from '@yantra/core';
+import {
+  UserInputMarkerError,
+  type ResearchLoop,
+  type ResearchOptions,
+  type ResearchRunResult,
+} from '@yantra/core';
 import { canonicalBrief } from '@yantra/test-helpers';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
@@ -220,5 +225,16 @@ describe('@no-llm cli/research command', () => {
       exitCode: 2,
     });
     expect(stderr.value()).toContain('research failed: boom');
+  });
+
+  it('keeps marker syntax failures as validation errors', async () => {
+    const h = harness({
+      runTask: () => Promise.reject(new UserInputMarkerError(6, 'unknown_tag')),
+    });
+
+    await expect(
+      h.program.parseAsync(['research', 'use @passwrd{x}'], { from: 'user' }),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    expect(h.stderr.value()).toContain('column 7');
   });
 });

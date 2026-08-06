@@ -92,6 +92,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(outcome).toMatchObject({ promotion: { saved: true, workflowName: 'package-eta' } });
@@ -117,6 +118,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(store.saved[0]?.synthesis?.use_llm).toBe(true);
@@ -132,6 +134,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     const saved = store.saved[0];
@@ -150,6 +153,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: { kind: 'failed', runId: 'r', runDir: '/r', error: { code: 'X', message: 'no' } },
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(store.saved).toEqual([]);
@@ -164,6 +168,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(store.saved).toEqual([]);
@@ -176,6 +181,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(undefined),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(outcome?.kind).toBe('published');
@@ -191,6 +197,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: 'When will my package arrive?',
     });
 
     expect(outcome?.kind).toBe('published');
@@ -205,6 +212,7 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       environment: environment(store),
       trace: populatedTrace(),
       outcome: published,
+      persistenceGoal: '   padded goal   ',
     });
 
     expect(store.saved[0]?.synthesis?.goal).toBe('padded goal');

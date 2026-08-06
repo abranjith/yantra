@@ -1,6 +1,7 @@
+import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { sanitize } from '../../src/sanitizer/index.js';
+import { redactRunInput, sanitize } from '../../src/sanitizer/index.js';
 import { ModelSuppliedValues } from '../../src/sanitizer/model-values.js';
 import { UserInputVault, containsUserInputPlaceholder } from '../../src/sanitizer/user-input.js';
 
@@ -51,6 +52,50 @@ describe('@no-llm model-supplied value preservation', () => {
 });
 
 describe('@no-llm user-input vault redaction', () => {
+  it('redacts goal and profile together and returns safe advisory warnings', () => {
+    const result = redactRunInput({
+      goal: 'login with password p1',
+      profileContext: 'backup jane@example.org',
+    });
+
+    expect(result.goal).toBe('login with password {{user:password:1}}');
+    expect(result.profileContext).toBe('backup {{user:email:1}}');
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('@{...}');
+    expect(result.warnings.join(' ')).not.toContain('p1');
+  });
+
+  it('gives explicit markers structural precedence over every heuristic', () => {
+    const vault = new UserInputVault();
+    const redacted = vault.redact(
+      'enter website xyz with @username{u1} and @password{p1}; email @password{a@b.com}',
+    );
+
+    expect(redacted).toBe(
+      'enter website xyz with {{user:username:1}} and {{user:password:1}}; email {{user:password:2}}',
+    );
+    expect(redacted).toContain('xyz');
+    expect(redacted).not.toContain('{{user:email:');
+  });
+
+  it('tokenizes marked values that fail every shape gate and protects inner shapes', () => {
+    const vault = new UserInputVault();
+    const redacted = vault.redact('use @{7}, @{ok}, and @{contact a@b.com now}');
+
+    expect(redacted).toBe('use {{user:secret:1}}, {{user:secret:2}}, and {{user:secret:3}}');
+    expect(redacted).not.toContain('{{user:email:');
+    expect(vault.resolve(redacted)).toBe('use 7, ok, and contact a@b.com now');
+  });
+
+  it('deduplicates repeated marked values without reprocessing marker output', () => {
+    const vault = new UserInputVault();
+
+    expect(vault.redact('@password{p1} then @password{p1}')).toBe(
+      '{{user:password:1}} then {{user:password:1}}',
+    );
+    expect(vault.redact('@{literal {{user: prefix text}}}')).toContain('{{user:secret:');
+  });
+
   it('replaces an email with an indexed placeholder and resolves it back exactly', () => {
     const vault = new UserInputVault();
 
@@ -158,6 +203,92 @@ describe('@no-llm user-input vault redaction', () => {
     const echoed = vault.mask('Thanks! We sent a confirmation to a@x.com.');
 
     expect(echoed).toBe('Thanks! We sent a confirmation to {{user:email:1}}.');
+  });
+
+  it('masks short values only at standalone positions', () => {
+    const vault = new UserInputVault();
+    const placeholder = vault.redact('@username{u1}');
+
+    expect(vault.mask('logged in as u1; Ju1ce and u12 stay')).toBe(
+      `logged in as ${placeholder}; Ju1ce and u12 stay`,
+    );
+  });
+
+  it('protects placeholder spans and is idempotent', () => {
+    const vault = new UserInputVault();
+    const placeholder = vault.redact('@{user}');
+
+    expect(placeholder).toBe('{{user:secret:1}}');
+    expect(vault.mask(placeholder)).toBe(placeholder);
+    expect(vault.mask(vault.mask(`hello user ${placeholder}`))).toBe(
+      `hello ${placeholder} ${placeholder}`,
+    );
+  });
+
+  it('keeps long substring masking and handles overlaps longest-first', () => {
+    const cardVault = new UserInputVault();
+    const cardPlaceholder = cardVault.redact('card 4111111111111111').split(' ')[1]!;
+    expect(cardVault.mask('id=4111111111111111&x=1')).toBe(`id=${cardPlaceholder}&x=1`);
+
+    const overlap = new UserInputVault();
+    const short = overlap.redact('@{abc}');
+    const long = overlap.redact('@{abcdef}');
+    expect(overlap.mask('abcdef abc')).toBe(`${long} ${short}`);
+  });
+
+  it('neutralizes known placeholders for durable persistence', () => {
+    const vault = new UserInputVault();
+    const redacted = vault.redact('login with @password{p1}');
+
+    expect(vault.neutralize(redacted)).toBe('login with [user-provided password]');
+    expect(vault.neutralize('{{user:password:99}}')).toBe('{{user:password:99}}');
+  });
+
+  it('warns once when a marked value is too short for substring echo masking', () => {
+    const vault = new UserInputVault();
+    vault.redact('@{u1} and @password{long-enough}');
+
+    expect(vault.warnOnShortValues()).toHaveLength(1);
+  });
+
+  it('applies keyword detection before shape detection', () => {
+    const vault = new UserInputVault();
+
+    expect(vault.redact('ssn 123-45-6789 and password 4111111111111111')).toBe(
+      'ssn {{user:national_id:1}} and password {{user:password:1}}',
+    );
+  });
+
+  it('redacts valid VINs but leaves invalid and embedded lookalikes visible', () => {
+    const vault = new UserInputVault();
+
+    expect(vault.redact('vehicle 1HGCM82633A004352')).toBe('vehicle {{user:vin:1}}');
+    expect(vault.redact('vehicle 1HGCM82633A004353')).toBe('vehicle 1HGCM82633A004353');
+    expect(vault.redact('id-1HGCM82633A004352-suffix')).toBe('id-1HGCM82633A004352-suffix');
+  });
+
+  it('property: marked values never enter redacted text and resolve to marker-stripped input', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[A-Z0-9]{4,24}$/), (suffix) => {
+        const value = `MARKED-${suffix}`;
+        const vault = new UserInputVault();
+        const redacted = vault.redact(`before @password{${value}} after`);
+        expect(redacted).not.toContain(value);
+        expect(vault.resolve(redacted)).toBe(`before ${value} after`);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it('property: masking removes every standalone stored value', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[A-Z0-9]{8,24}$/), (value) => {
+        const vault = new UserInputVault();
+        vault.redact(`@{${value}}`);
+        expect(vault.mask(`prefix-${value}-suffix`)).not.toContain(value);
+      }),
+      { numRuns: 200 },
+    );
   });
 
   it('resolve and mask are identity operations on an empty vault', () => {

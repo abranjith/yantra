@@ -22,6 +22,7 @@ import {
   redactPhones,
   redactSsn,
   redactTaxId,
+  redactVin,
   isStandalonePosition,
   stripAuthQueryParams,
   stripFormValues,
@@ -29,6 +30,9 @@ import {
   type TransformResult,
 } from './strippers.js';
 import { truncateUtf8 } from './truncate.js';
+import { containsHighRiskCredentialKeyword } from './user-input-keywords.js';
+import { parseUserInputMarkers } from './user-input-markers.js';
+import { UserInputVault } from './user-input.js';
 
 export type { SanitizationProfile } from './profiles.js';
 export { brandSanitized, type Sanitized } from './brand.js';
@@ -38,6 +42,57 @@ export {
   containsUserInputPlaceholder,
   type UserInputValueTag,
 } from './user-input.js';
+export {
+  MARKER_TAGS,
+  UserInputMarkerError,
+  containsUserInputPlaceholder as containsReservedUserInputPlaceholder,
+  parseUserInputMarkers,
+  type AssignUserInputValue,
+  type InputSegment,
+  type UserInputMarkerErrorReason,
+} from './user-input-markers.js';
+export { containsHighRiskCredentialKeyword, detectKeywordValues } from './user-input-keywords.js';
+
+/** Result of the one ingress redaction pass for an agentic run. */
+export interface RedactedRunInput {
+  readonly goal: string;
+  readonly profileContext?: string;
+  readonly vault: UserInputVault;
+  readonly warnings: readonly string[];
+}
+
+/**
+ * Redact all user-authored agent input exactly once before run creation.
+ *
+ * The returned vault must travel with the run so tool middleware can resolve
+ * placeholders and re-mask echoes. Warnings are advisory and contain no raw
+ * marked values.
+ */
+export function redactRunInput(input: {
+  readonly goal: string;
+  readonly profileContext?: string;
+}): RedactedRunInput {
+  const parsedGoal = parseUserInputMarkers(input.goal);
+  const goalHasMarker = parsedGoal.some((segment) => segment.kind === 'value');
+  const vault = new UserInputVault();
+  const goal = vault.redact(input.goal);
+  const profileContext =
+    input.profileContext === undefined ? undefined : vault.redact(input.profileContext);
+  const warnings = [
+    ...(!goalHasMarker && containsHighRiskCredentialKeyword(input.goal)
+      ? [
+          'Sensitive credential wording was detected without an explicit marker; use `@{...}` (or a tagged form such as `@password{...}`) to guarantee the value stays out of the model.',
+        ]
+      : []),
+    ...vault.warnOnShortValues(),
+  ];
+  return {
+    goal,
+    ...(profileContext === undefined ? {} : { profileContext }),
+    vault,
+    warnings,
+  };
+}
 
 export type TransformationTag =
   | 'form-value-strip'
@@ -58,6 +113,7 @@ export type TransformationTag =
   | 'host-override-tax-id'
   | 'host-override-passport-number'
   | 'host-override-drivers-license'
+  | 'host-override-vin'
   | 'truncate';
 
 /** Per-host extra redactors, keyed by their config tag (single dispatch table). */
@@ -80,6 +136,7 @@ const EXTRA_REDACTORS: Readonly<
   tax_id: { run: redactTaxId, tag: 'host-override-tax-id' },
   passport_number: { run: redactPassportNumber, tag: 'host-override-passport-number' },
   drivers_license: { run: redactDriversLicense, tag: 'host-override-drivers-license' },
+  vin: { run: redactVin, tag: 'host-override-vin' },
 });
 
 export interface SanitizedPayload {

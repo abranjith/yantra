@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,8 @@ import {
   DefaultSanitizer,
   parseTemplate,
   ScriptRegistry,
+  UserInputMarkerError,
+  type WorkflowStore,
   type AgentBrowserController,
   type ContentFetcher,
   type EthicsGate,
@@ -14,7 +16,7 @@ import {
   type SearchProvider,
 } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
-import { createBrief, type ConfirmationRequest } from '@yantra/protocol';
+import { createBrief, type ConfirmationRequest, type WorkflowFile } from '@yantra/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
@@ -45,6 +47,11 @@ class RecordingConnector implements AgentTaskConnector {
   public readonly interactive = true;
   public readonly events: AgentProgressEvent[] = [];
   public readonly outcomes: AgenticTaskOutcome[] = [];
+  public readonly warnings: string[] = [];
+
+  public emitAgentWarning(warning: string): void {
+    this.warnings.push(warning);
+  }
 
   public requestConfirmation(
     _request: ConfirmationRequest,
@@ -140,6 +147,33 @@ function buildEnvironment(teardown: ReturnType<typeof vi.fn>): AgenticRunEnviron
   };
 }
 
+function recordingWorkflowStore(): WorkflowStore & { readonly saved: WorkflowFile[] } {
+  const saved: WorkflowFile[] = [];
+  return {
+    saved,
+    load: vi.fn(),
+    list: vi.fn(() => Promise.resolve([])),
+    listCatalog: vi.fn(() => Promise.resolve([])),
+    delete: vi.fn(),
+    exists: vi.fn(() => Promise.resolve(false)),
+    save: vi.fn((workflow: WorkflowFile) => {
+      saved.push(workflow);
+      return Promise.resolve();
+    }),
+  } as unknown as WorkflowStore & { readonly saved: WorkflowFile[] };
+}
+
+async function textUnder(root: string): Promise<string> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const chunks: string[] = [];
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) chunks.push(await textUnder(path));
+    else chunks.push(await readFile(path, 'utf8'));
+  }
+  return chunks.join('\n');
+}
+
 const completed: AgentRunResult = {
   outcome: 'completed',
   stopReason: 'stop',
@@ -164,6 +198,62 @@ function evidenceEntry(url: string, title: string): EvidenceEntry {
 }
 
 describe('@no-llm runAgenticTask lifecycle', () => {
+  it('rejects malformed markers before creating any run state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-marker-ingress-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+
+    await expect(
+      runAgenticTask(
+        {
+          goal: 'login with @{unterminated',
+          model: { provider: 'fixture', id: 'fixture-model' },
+          auth: { mode: 'managed' },
+          connector,
+        },
+        { runStore: new LocalRunStore(root) },
+      ),
+    ).rejects.toBeInstanceOf(UserInputMarkerError);
+    expect(await readdir(root)).toEqual([]);
+    expect(connector.outcomes).toEqual([]);
+  });
+
+  it('redacts marked goals once, warns safely, and resolves URL provenance in memory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-marker-runtime-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const provider = new FakeAgentProvider({ runResult: completed });
+    let services: RunServices | undefined;
+    const goal = 'open https://example.com/login?token=@{u1} with @password{p1}';
+
+    await runAgenticTask(
+      {
+        goal,
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: () => Promise.resolve(buildEnvironment(vi.fn(() => Promise.resolve()))),
+        createProvider: (runServices) => {
+          services = runServices;
+          return provider;
+        },
+      },
+    );
+
+    const prompt = provider.sessions[0]?.runPrompts[0] ?? '';
+    expect(prompt).not.toContain('u1');
+    expect(prompt).not.toContain('p1');
+    expect(prompt).toContain('{{user:secret:1}}');
+    expect(prompt).toContain('{{user:password:1}}');
+    expect(connector.warnings.join(' ')).toContain('under 3 characters');
+    expect(connector.warnings.join(' ')).not.toContain('u1');
+    expect(services?.urlProvenance.has('https://example.com/login?token=u1')).toBe(true);
+  });
+
   it('does not assemble an unpublished draft in template mode', async () => {
     const parsed = parseTemplate(
       '# {{ title | text }}\n\n## Summary\n{{ summary }}\n\n{{ sources }}',
@@ -238,6 +328,79 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     ]);
     expect(toolAudit.trim().split('\n')).toHaveLength(2);
     expect(result.connector.outcomes).toEqual([result.outcome]);
+  });
+
+  it('keeps a marked value out of every run artifact and promoted workflow', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-marker-no-leak-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const store = recordingWorkflowStore();
+    const provider = new FakeAgentProvider({
+      eventsOnRun: [
+        event('tool_finished', {
+          callId: 'publish',
+          tool: 'result_publish',
+          output: { status: 'ok', details: { brief_id: 'fixture' } },
+          isError: false,
+        }),
+      ],
+      onRun: async (_prompt, runIndex, session) => {
+        if (runIndex !== 0) return;
+        const runDir = join(session.logPath, '..', '..');
+        const brief = createBrief({
+          task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          title: 'Masked login result',
+          overview: 'The task completed without persisting user values.',
+        });
+        await Promise.all([
+          writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8'),
+          writeFile(join(runDir, 'brief.md'), '# Masked login result\n', 'utf8'),
+          writeFile(join(runDir, 'brief.html'), '<h1>Masked login result</h1>', 'utf8'),
+        ]);
+      },
+    });
+    const environment = {
+      ...buildEnvironment(vi.fn(() => Promise.resolve())),
+      workflowStore: store,
+    };
+
+    const outcome = await runAgenticTask(
+      {
+        goal: 'sign in with @password{p1}',
+        saveAs: 'masked-login',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: () => Promise.resolve(environment),
+        createProvider: (services) => {
+          services.trace.append({
+            kind: 'navigate',
+            host: 'example.com',
+            url: 'https://example.com/login',
+            requires_confirmation: false,
+          });
+          services.trace.append({
+            kind: 'extract',
+            host: 'example.com',
+            extractionKind: 'content',
+            requires_confirmation: false,
+          });
+          return provider;
+        },
+      },
+    );
+
+    expect(outcome).toMatchObject({ kind: 'published', promotion: { saved: true } });
+    expect(await textUnder(outcome.runDir)).not.toContain('p1');
+    expect(JSON.stringify(store.saved)).not.toContain('p1');
+    expect(store.saved[0]?.description).toContain(
+      'Promoted from: sign in with [user-provided password]',
+    );
+    expect(store.saved[0]?.synthesis?.goal).toBe('sign in with [user-provided password]');
   });
 
   it('injects ambient date context from the run clock into the first user prompt', async () => {

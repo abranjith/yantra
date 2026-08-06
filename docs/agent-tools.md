@@ -53,11 +53,11 @@ Three layers decide what the model sees, and they are separated by **who owns
 the value**, not by what shape it has. Every model-visible tool result passes
 through all three, in this order, inside `sanitizeAndBound`:
 
-| Provenance                            | Mechanism             | Token the model sees | Reversible |
-| ------------------------------------- | --------------------- | -------------------- | ---------- |
-| The **user's** values (goal, profile) | `UserInputVault`      | `{{user:email:1}}`   | yes        |
-| The **model's** own tool-call inputs  | `ModelSuppliedValues` | the value, unchanged | n/a        |
-| **Third-party** page/document content | profile strippers     | `[redacted-email]`   | no         |
+| Provenance                                            | Mechanism             | Token the model sees | Reversible |
+| ----------------------------------------------------- | --------------------- | -------------------- | ---------- |
+| The **user's** marked/detected values (goal, profile) | `UserInputVault`      | `{{user:email:1}}`   | yes        |
+| The **model's** own tool-call inputs                  | `ModelSuppliedValues` | the value, unchanged | n/a        |
+| **Third-party** page/document content                 | profile strippers     | `[redacted-email]`   | no         |
 
 The middle layer is what keeps the other two honest. A value the model typed
 into a tool call is already in its context window, so redacting it out of the
@@ -85,17 +85,18 @@ it).
   per-run prompt states this round trip explicitly, because a placeholder
   echoed in an observed URL or field is easily misread as proof that the
   runtime failed to substitute — it is proof of the opposite.
-- **Only genuinely sensitive values are tokenized.** Redaction that swallows an
-  identifier the task is _about_ (a tracking, order, or invoice number) breaks
-  the task, so the vault is stricter than the page-content sanitizer: a bare
-  10–15 digit run is treated as a phone number only when the surrounding
-  wording says so, and a digit run glued into a larger id (`1Z999AA10123456784`,
-  `ORD-2024-889912`) is never tokenized in part.
+- **Explicit markers are the guarantee.** `@{value}` and tagged forms such as
+  `@password{value}` become protected segments before any heuristic runs;
+  keyword look-around and shape detection can never inspect them. Heuristics
+  remain best-effort and conservative so a tracking or order number is not
+  swallowed by a shape guess. See
+  [User-input masking](user-input-masking.md) for grammar and boundaries.
 - **Guards still apply.** A credential-shaped user value resolved from a
   placeholder is rejected by `browser_fill` exactly like a raw credential
   literal (`SECRET_SHAPED_LITERAL`); URL policy scans the resolved URL.
 - **Artifacts stay redacted.** The trace (`trace.json`) and tool-call audit
-  records keep the placeholder form, never the raw value.
+  records keep the placeholder form, never the raw value; promoted workflows
+  replace known placeholders with `[user-provided <tag>]`.
 - **The model is told all of this.** The per-run prompt carries a short
   `Hidden values:` block naming both vocabularies and the self-supplied
   exemption. It is not optional politeness: a model that meets either token

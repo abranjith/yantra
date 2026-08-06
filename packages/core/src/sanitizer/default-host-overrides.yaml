@@ -148,13 +148,13 @@ hosts:
   # Auto insurance.
   '*.geico.com':
     inherits: authenticated
-    extra_redactors: [member_id, drivers_license]
+    extra_redactors: [member_id, drivers_license, vin]
   '*.progressive.com':
     inherits: authenticated
-    extra_redactors: [member_id, drivers_license]
+    extra_redactors: [member_id, drivers_license, vin]
   '*.statefarm.com':
     inherits: authenticated
-    extra_redactors: [member_id, drivers_license]
+    extra_redactors: [member_id, drivers_license, vin]
   '*.allstate.com':
     inherits: authenticated
-    extra_redactors: [member_id, drivers_license]
+    extra_redactors: [member_id, drivers_license, vin]

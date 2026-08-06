@@ -48,6 +48,7 @@ const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
 const CARD_CANDIDATE_RE = /\b(?:\d[ -]?){13,19}\b/g;
 const PHONE_CANDIDATE_RE = /\+?\d[\d()\s.-]{8,}\d/g;
+const VIN_CANDIDATE_RE = /\b[A-HJ-NPR-Z0-9]{17}\b/g;
 const CURRENCY_USD_RE = /\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?/g;
 const DATE_OF_BIRTH_RE =
   /\b(?:19|20)\d{2}[/-](?:0[1-9]|1[0-2])[/-](?:0[1-9]|[12]\d|3[01])\b|\b(?:0[1-9]|1[0-2])[/-](?:0[1-9]|[12]\d|3[01])[/-](?:19|20)\d{2}\b/g;
@@ -88,6 +89,7 @@ export const SENSITIVE_VALUE_PATTERNS = Object.freeze({
   ssn: SSN_RE,
   cardCandidate: CARD_CANDIDATE_RE,
   phoneCandidate: PHONE_CANDIDATE_RE,
+  vinCandidate: VIN_CANDIDATE_RE,
   apiKey: API_KEY_PATTERNS,
   authQueryParam: AUTH_QUERY_PARAM_RE,
 });
@@ -279,6 +281,22 @@ export function redactPhones(text: string): TransformResult {
   return { text: redacted, hits };
 }
 
+/** Redact checksum-valid ISO 3779 VINs while preserving lookalike identifiers. */
+export function redactVin(text: string): TransformResult {
+  let hits = 0;
+  const redacted = text.replace(
+    VIN_CANDIDATE_RE,
+    (candidate: string, offset: number, whole: string) => {
+      if (!isStandalonePosition(whole, offset, candidate.length) || !isVinValid(candidate)) {
+        return candidate;
+      }
+      hits += 1;
+      return '[redacted-vin]';
+    },
+  );
+  return { text: redacted, hits };
+}
+
 export function redactApiKeyShapes(text: string): TransformResult {
   let current = text;
   let hits = 0;
@@ -358,6 +376,56 @@ export function isLuhnValid(digits: string): boolean {
   }
 
   return sum % 10 === 0;
+}
+
+/**
+ * Validate a vehicle identification number using the ISO 3779
+ * transliteration, weights, and position-9 check digit (`X` represents ten).
+ *
+ * The check digit is what makes shape detection acceptably precise here;
+ * national identifiers without a reliable shared checksum are intentionally
+ * handled only by explicit markers or contextual keywords.
+ */
+export function isVinValid(vin: string): boolean {
+  const normalized = vin.toUpperCase();
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(normalized)) return false;
+
+  const transliteration: Readonly<Record<string, number>> = {
+    A: 1,
+    B: 2,
+    C: 3,
+    D: 4,
+    E: 5,
+    F: 6,
+    G: 7,
+    H: 8,
+    J: 1,
+    K: 2,
+    L: 3,
+    M: 4,
+    N: 5,
+    P: 7,
+    R: 9,
+    S: 2,
+    T: 3,
+    U: 4,
+    V: 5,
+    W: 6,
+    X: 7,
+    Y: 8,
+    Z: 9,
+  };
+  const weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2] as const;
+  let total = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index]!;
+    const value = /\d/.test(character) ? Number(character) : transliteration[character];
+    if (value === undefined) return false;
+    total += value * weights[index]!;
+  }
+  const remainder = total % 11;
+  const expected = remainder === 10 ? 'X' : String(remainder);
+  return normalized[8] === expected;
 }
 
 function replaceWithRegex(text: string, regex: RegExp, replacement: string): TransformResult {

@@ -25,7 +25,8 @@ export type ExtraRedactorTag =
   | 'medical_record_number'
   | 'tax_id'
   | 'passport_number'
-  | 'drivers_license';
+  | 'drivers_license'
+  | 'vin';
 
 export interface HostOverride {
   readonly hostPattern: string;
@@ -55,6 +56,7 @@ const extraRedactorSchema = z.enum([
   'tax_id',
   'passport_number',
   'drivers_license',
+  'vin',
 ]);
 const hostOverrideConfigSchema = z.object({
   version: z.literal(1),
@@ -97,7 +99,11 @@ const PAYROLL_REDACTORS: readonly ExtraRedactorTag[] = [
   'date_of_birth',
 ];
 const TAX_PREP_REDACTORS: readonly ExtraRedactorTag[] = ['tax_id', 'currency_usd'];
-const AUTO_INSURANCE_REDACTORS: readonly ExtraRedactorTag[] = ['member_id', 'drivers_license'];
+const AUTO_INSURANCE_REDACTORS: readonly ExtraRedactorTag[] = [
+  'member_id',
+  'drivers_license',
+  'vin',
+];
 
 /**
  * Packaged production defaults, mirrored byte-for-byte (as data) by

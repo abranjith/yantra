@@ -35,6 +35,7 @@ import {
   type Sanitized,
   type SearchProviderName,
   type SynthesisLength,
+  UserInputMarkerError,
 } from '@yantra/core';
 import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
@@ -250,6 +251,10 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof UserInputMarkerError) {
+          resolvedRuntime.stderr.write(`ask validation failed: ${message}\n`);
+          throw new CommanderError(1, 'yantra.ask.invalid-user-input-marker', message);
+        }
         resolvedRuntime.stderr.write(`ask failed: ${message}\n`);
         throw new CommanderError(2, 'yantra.ask.failed', message);
       }

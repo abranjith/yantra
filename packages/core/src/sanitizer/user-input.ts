@@ -1,35 +1,34 @@
 /**
- * UserInputVault — reversible redaction for the user's OWN input (FEAT fix:
- * redacted-values-break-tools).
+ * Reversible protection for the user's own run input.
  *
- * The payload sanitizer (`sanitize()`) irreversibly replaces sensitive shapes
- * with constant markers such as `[redacted-email]`. That is correct for
- * untrusted page content, but it is wrong for the user's own goal/profile
- * context: the agent must be able to USE those values (fill a form, open a
- * signed URL, search) without ever SEEING them. The vault solves this with
- * indexed, resolvable placeholders:
+ * Redaction is segment-based: explicit markers become protected value
+ * segments, and every later detector is allowed to inspect literal segments
+ * only. This makes precedence structural instead of relying on fragile chained
+ * string replacements.
  *
- * - `redact(text)` replaces each detected sensitive value with a placeholder
- *   like `{{user:email:1}}` and remembers the mapping. Identical values map to
- *   the same placeholder, so the model can disambiguate and reuse them.
- * - `resolve(text)` restores the original values — called ONLY at the tool
- *   execution boundary (the same posture as opaque secret references: values
- *   materialize at execution, never in model-visible text).
- * - `mask(text)` replaces any occurrence of a stored original value with its
- *   placeholder — applied to model-visible tool output so a page that echoes a
- *   filled value shows the model the same stable placeholder token.
+ * | Layer | Guarantee | Order |
+ * | --- | --- | --- |
+ * | `@{...}` / `@tag{...}` markers | absolute | first |
+ * | English keyword look-around | best-effort | second |
+ * | email/card/phone/API-key/VIN shapes | best-effort | last |
  *
- * Unlike the payload sanitizer, `redact` never HTML-parses the text (goals are
- * plain text; the cheerio round-trip mangles `&`/`<`) and never strips URL
- * query parameters — auth-shaped parameter values are tokenized instead, so a
- * user-pasted signed URL survives redaction and still navigates correctly
- * after resolution.
- *
- * The vault holds raw values in memory for one run only; it must never be
- * serialized into run artifacts or prompts.
+ * Only an explicit marker is a guarantee. Heuristics are defense-in-depth for
+ * unmarked values. Raw values remain in one run-scoped vault, resolve only at
+ * the tool boundary, and must never be serialized into prompts or artifacts.
  */
 
-import { isLuhnValid, isStandalonePosition, SENSITIVE_VALUE_PATTERNS } from './strippers.js';
+import {
+  isLuhnValid,
+  isStandalonePosition,
+  isVinValid,
+  SENSITIVE_VALUE_PATTERNS,
+} from './strippers.js';
+import { detectKeywordValues } from './user-input-keywords.js';
+import {
+  parseUserInputMarkers,
+  type AssignUserInputValue,
+  type InputSegment,
+} from './user-input-markers.js';
 
 /** Classification tags rendered into placeholder tokens. */
 export type UserInputValueTag =
@@ -38,16 +37,27 @@ export type UserInputValueTag =
   | 'ssn'
   | 'credit_card'
   | 'api_key'
-  | 'auth_param';
+  | 'auth_param'
+  | 'secret'
+  | 'username'
+  | 'password'
+  | 'pin'
+  | 'otp'
+  | 'national_id'
+  | 'vin'
+  | 'account'
+  | 'dob'
+  | 'address';
 
-/** Matches any vault placeholder token, e.g. `{{user:email:1}}`. */
-const PLACEHOLDER_RE = /\{\{user:[a-z_]+:\d+\}\}/g;
+export { containsUserInputPlaceholder } from './user-input-markers.js';
+
+const PLACEHOLDER_SOURCE = String.raw`\{\{user:([a-z_]+):(\d+)\}\}`;
+const PLACEHOLDER_RE = new RegExp(PLACEHOLDER_SOURCE, 'g');
 
 /**
  * Words that mark a nearby bare digit run as a phone number rather than an
- * identifier. Only a closed set of connective fillers may sit between the
- * keyword and the number ("my phone is 555...", "call me at 555..."), so an
- * unrelated noun phrase ("call the courier about 8744...") does not qualify.
+ * identifier. These gates are deliberately unchanged from the prior
+ * string-based implementation.
  */
 const PHONE_CONTEXT_RE =
   /(?:phone|mobile|cell|tel(?:ephone)?|call|text|sms|whatsapp|fax|contact|reach)(?:\W+(?:is|are|was|no|nr|num|number|at|on|me|us|my|our|the|to))*\W*$/i;
@@ -55,25 +65,33 @@ const PHONE_CONTEXT_RE =
 /** A number written like a phone: leading `+`, or internal grouping/separators. */
 const PHONE_SHAPED_RE = /^\+|[()\s.-]/;
 
-/** Auth-shaped query parameter assignments inside URL-ish text (string-level). */
+/** Auth-shaped query parameter assignments inside URL-ish literal text. */
 const AUTH_PARAM_ASSIGNMENT_RE = new RegExp(
   `([?&](?:${SENSITIVE_VALUE_PATTERNS.authQueryParam.source})=)([^&#\\s"'<>]+)`,
   'gi',
 );
 
-/** True when the string is (or contains) a vault placeholder token shape. */
-export function containsUserInputPlaceholder(text: string): boolean {
-  return new RegExp(PLACEHOLDER_RE.source).test(text);
+interface SegmentMatch {
+  readonly start: number;
+  readonly length: number;
+  readonly tag: UserInputValueTag;
+  readonly value: string;
+}
+
+interface MaskPart {
+  readonly text: string;
+  readonly protected: boolean;
 }
 
 /**
- * Run-scoped store of user-provided sensitive values behind resolvable
- * placeholders. One instance per agentic run; never shared across runs.
+ * Run-scoped store of user-provided values behind resolvable placeholders.
+ * One instance belongs to one agentic run and is never serialized.
  */
 export class UserInputVault {
   private readonly valueByPlaceholder = new Map<string, string>();
   private readonly placeholderByValue = new Map<string, string>();
   private readonly countersByTag = new Map<UserInputValueTag, number>();
+  private readonly markedValues = new Set<string>();
 
   /** Number of distinct values currently stored. */
   public get size(): number {
@@ -81,105 +99,159 @@ export class UserInputVault {
   }
 
   /**
-   * Replace sensitive values in the user's own text with indexed placeholders,
-   * storing the originals for boundary-time resolution.
+   * Replace user values with indexed placeholders while retaining originals
+   * for execution-boundary resolution.
    *
-   * @param text Plain user-authored text (goal, profile context).
-   * @returns The text with placeholders substituted; other content untouched.
+   * Explicit markers are parsed first. Keyword and shape detectors then split
+   * literal segments only, so they cannot see, consume, or re-tag a marked
+   * value.
    */
   public redact(text: string): string {
-    let out = text;
+    let segments = parseUserInputMarkers(text);
 
-    // Auth-shaped query param values first (URL-scoped), so a signed URL keeps
-    // its structure and the credential-ish value is still usable after resolve.
-    // The shared param-name pattern carries its own capture group, so the value
-    // is the THIRD capture (prefix, param name, value).
-    out = out.replace(
-      new RegExp(AUTH_PARAM_ASSIGNMENT_RE.source, 'gi'),
-      (_full, prefix: string, _param: string, value: string) =>
-        `${prefix}${this.placeholderFor('auth_param', value)}`,
-    );
+    // Reserve explicit marker identities first. If the same value appears in
+    // an earlier shape-detected span, the user's declared tag still wins.
+    for (const segment of segments) {
+      if (segment.kind !== 'value') continue;
+      this.markedValues.add(segment.value);
+      this.placeholderFor(segment.tag, segment.value);
+    }
 
-    out = this.replaceAllMatches(out, SENSITIVE_VALUE_PATTERNS.email, 'email');
-    out = this.replaceAllMatches(out, SENSITIVE_VALUE_PATTERNS.ssn, 'ssn');
+    const assign: AssignUserInputValue = (tag, value) => ({ kind: 'value', tag, value });
+    segments = detectKeywordValues(segments, assign);
 
-    // Credit cards keep the payload sanitizer's Luhn + length gate so ordinary
-    // long numbers (order ids, tracking numbers) stay visible to the model.
-    out = out.replace(
-      new RegExp(SENSITIVE_VALUE_PATTERNS.cardCandidate.source, 'g'),
-      (candidate) => {
+    segments = this.replaceSegments(segments, AUTH_PARAM_ASSIGNMENT_RE, (match) => {
+      const value = match[3];
+      if (value === undefined) return null;
+      return {
+        start: match.index + match[0].length - value.length,
+        length: value.length,
+        tag: 'auth_param',
+        value,
+      };
+    });
+    segments = this.replaceDirect(segments, SENSITIVE_VALUE_PATTERNS.email, 'email');
+    segments = this.replaceDirect(segments, SENSITIVE_VALUE_PATTERNS.ssn, 'ssn');
+
+    segments = this.replaceSegments(segments, SENSITIVE_VALUE_PATTERNS.cardCandidate, (match) => {
+      const candidate = match[0];
+      const digits = candidate.replace(/\D/g, '');
+      if (digits.length < 13 || digits.length > 19 || !isLuhnValid(digits)) return null;
+      return directMatch(match, 'credit_card');
+    });
+
+    // Preserve the existing context gate verbatim: an ungrouped 10-15 digit
+    // run is more often an order/tracking/account identifier than a phone.
+    segments = this.replaceSegments(
+      segments,
+      SENSITIVE_VALUE_PATTERNS.phoneCandidate,
+      (match, whole) => {
+        const candidate = match[0];
         const digits = candidate.replace(/\D/g, '');
-        if (digits.length < 13 || digits.length > 19 || !isLuhnValid(digits)) return candidate;
-        return this.placeholderFor('credit_card', candidate);
+        if (digits.length < 10 || digits.length > 15) return null;
+        if (!isStandalonePosition(whole, match.index, candidate.length)) return null;
+        if (
+          !PHONE_SHAPED_RE.test(candidate) &&
+          !PHONE_CONTEXT_RE.test(whole.slice(0, match.index))
+        ) {
+          return null;
+        }
+        return directMatch(match, 'phone');
       },
     );
 
-    // Phone numbers need more than a digit-length gate here. The shared
-    // candidate pattern is deliberately greedy for untrusted PAGE content
-    // (over-redaction is free there), but in the user's OWN goal a 10-15 digit
-    // run is far more often a tracking/order/account/invoice id — and
-    // tokenizing one breaks the task the user actually asked for (observed:
-    // a 12-digit FedEx tracking number became `{{user:phone:1}}`). So a bare
-    // digit run is only treated as a phone when the surrounding words say so;
-    // a `+`-prefixed or grouped number still tokenizes on shape alone.
-    out = out.replace(
-      new RegExp(SENSITIVE_VALUE_PATTERNS.phoneCandidate.source, 'g'),
-      (candidate: string, offset: number, whole: string) => {
-        const digits = candidate.replace(/\D/g, '');
-        if (digits.length < 10 || digits.length > 15) return candidate;
-        // Never tokenize the middle of a larger token: the candidate pattern
-        // carries no word boundaries, so a UPS id like `1Z999AA10123456784`
-        // would otherwise be mangled into `1Z999AA{{user:phone:1}}`.
-        if (!isStandalonePosition(whole, offset, candidate.length)) return candidate;
-        if (!PHONE_SHAPED_RE.test(candidate) && !PHONE_CONTEXT_RE.test(whole.slice(0, offset)))
-          return candidate;
-        return this.placeholderFor('phone', candidate);
+    segments = this.replaceSegments(
+      segments,
+      SENSITIVE_VALUE_PATTERNS.vinCandidate,
+      (match, whole) => {
+        if (!isStandalonePosition(whole, match.index, match[0].length) || !isVinValid(match[0])) {
+          return null;
+        }
+        return directMatch(match, 'vin');
       },
     );
 
     for (const pattern of SENSITIVE_VALUE_PATTERNS.apiKey) {
-      out = this.replaceAllMatches(out, pattern, 'api_key');
+      segments = this.replaceDirect(segments, pattern, 'api_key');
     }
 
-    return out;
+    return segments
+      .map((segment) =>
+        segment.kind === 'literal' ? segment.text : this.placeholderFor(segment.tag, segment.value),
+      )
+      .join('');
   }
 
   /**
-   * Restore stored values for every known placeholder in the text. Unknown
-   * (model-invented) placeholder shapes are left as-is — nothing to leak.
-   * Called only at the tool execution boundary.
+   * Restore known placeholders to their original values at the tool execution
+   * boundary. Unknown model-invented placeholders stay unchanged.
    */
   public resolve(text: string): string {
     if (this.valueByPlaceholder.size === 0) return text;
-    return text.replace(
-      new RegExp(PLACEHOLDER_RE.source, 'g'),
-      (token) => this.valueByPlaceholder.get(token) ?? token,
-    );
+    return text.replace(new RegExp(PLACEHOLDER_SOURCE, 'g'), (token) => {
+      return this.valueByPlaceholder.get(token) ?? token;
+    });
   }
 
   /**
-   * Replace occurrences of stored original values with their placeholders.
-   * Applied to model-visible output so echoed values come back as the same
-   * stable tokens the model already knows.
+   * Mask raw values echoed by tools back into their stable placeholders.
+   *
+   * This is defense-in-depth after execution, not the redaction guarantee.
+   * Values of eight or more characters are safe to mask as substrings; shorter
+   * values use token boundaries to avoid corrupting unrelated page text. Every
+   * existing or inserted placeholder is protected from subsequent passes.
    */
   public mask(text: string): string {
     if (this.placeholderByValue.size === 0) return text;
-    // Longest-first so an overlapping shorter value cannot clobber a longer one.
     const entries = [...this.placeholderByValue.entries()].sort(
       (left, right) => right[0].length - left[0].length,
     );
-    let out = text;
+    let parts = protectPlaceholders(text);
     for (const [value, placeholder] of entries) {
-      out = out.split(value).join(placeholder);
+      parts = parts.flatMap((part) =>
+        part.protected ? [part] : maskValueInPart(part.text, value, placeholder),
+      );
     }
-    return out;
+    return parts.map((part) => part.text).join('');
   }
 
-  private replaceAllMatches(text: string, pattern: RegExp, tag: UserInputValueTag): string {
-    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
-    return text.replace(new RegExp(pattern.source, flags), (match) =>
-      this.placeholderFor(tag, match),
+  /**
+   * Replace known placeholders with durable, non-resolvable descriptions for
+   * persistence paths such as promoted workflow YAML.
+   */
+  public neutralize(text: string): string {
+    return text.replace(new RegExp(PLACEHOLDER_SOURCE, 'g'), (token, tag: string) =>
+      this.valueByPlaceholder.has(token) ? `[user-provided ${tag}]` : token,
     );
+  }
+
+  /** Advisory warnings for marked values whose echoed forms are boundary-only. */
+  public warnOnShortValues(): readonly string[] {
+    const hasVeryShortMarker = [...this.markedValues].some((value) => [...value].length < 3);
+    return hasVeryShortMarker
+      ? [
+          'A marked value under 3 characters uses boundary-only echo masking and may be missed when a site embeds it inside a larger token.',
+        ]
+      : [];
+  }
+
+  private replaceDirect(
+    segments: readonly InputSegment[],
+    pattern: RegExp,
+    tag: UserInputValueTag,
+  ): readonly InputSegment[] {
+    return this.replaceSegments(segments, pattern, (match) => directMatch(match, tag));
+  }
+
+  private replaceSegments(
+    segments: readonly InputSegment[],
+    pattern: RegExp,
+    select: (match: RegExpExecArray, whole: string) => SegmentMatch | null,
+  ): readonly InputSegment[] {
+    return segments.flatMap((segment) => {
+      if (segment.kind === 'value') return [segment];
+      return replaceLiteralMatches(segment.text, pattern, select);
+    });
   }
 
   private placeholderFor(tag: UserInputValueTag, value: string): string {
@@ -192,4 +264,84 @@ export class UserInputVault {
     this.valueByPlaceholder.set(placeholder, value);
     return placeholder;
   }
+}
+
+function replaceLiteralMatches(
+  text: string,
+  pattern: RegExp,
+  select: (match: RegExpExecArray, whole: string) => SegmentMatch | null,
+): readonly InputSegment[] {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const scanner = new RegExp(pattern.source, flags);
+  const output: InputSegment[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = scanner.exec(text)) !== null) {
+    const selected = select(match, text);
+    if (selected === null || selected.start < cursor) continue;
+    pushLiteral(output, text.slice(cursor, selected.start));
+    output.push({ kind: 'value', tag: selected.tag, value: selected.value });
+    cursor = selected.start + selected.length;
+  }
+  pushLiteral(output, text.slice(cursor));
+  return output.length > 0 ? output : [{ kind: 'literal', text }];
+}
+
+function directMatch(match: RegExpExecArray, tag: UserInputValueTag): SegmentMatch {
+  return { start: match.index, length: match[0].length, tag, value: match[0] };
+}
+
+function pushLiteral(segments: InputSegment[], text: string): void {
+  if (text.length === 0) return;
+  const previous = segments.at(-1);
+  if (previous?.kind === 'literal') {
+    segments[segments.length - 1] = { kind: 'literal', text: previous.text + text };
+  } else {
+    segments.push({ kind: 'literal', text });
+  }
+}
+
+function protectPlaceholders(text: string): MaskPart[] {
+  const parts: MaskPart[] = [];
+  const scanner = new RegExp(PLACEHOLDER_RE.source, 'g');
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = scanner.exec(text)) !== null) {
+    if (match.index > cursor)
+      parts.push({ text: text.slice(cursor, match.index), protected: false });
+    parts.push({ text: match[0], protected: true });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length || parts.length === 0) {
+    parts.push({ text: text.slice(cursor), protected: false });
+  }
+  return parts;
+}
+
+function maskValueInPart(text: string, value: string, placeholder: string): MaskPart[] {
+  if (value.length === 0 || !text.includes(value)) return [{ text, protected: false }];
+  const parts: MaskPart[] = [];
+  let searchCursor = 0;
+  let outputCursor = 0;
+  for (;;) {
+    const found = text.indexOf(value, searchCursor);
+    if (found < 0) break;
+    const shouldMask = value.length >= 8 || isStandalonePosition(text, found, value.length);
+    if (!shouldMask) {
+      searchCursor = found + value.length;
+      continue;
+    }
+    if (found > outputCursor) {
+      parts.push({ text: text.slice(outputCursor, found), protected: false });
+    }
+    parts.push({ text: placeholder, protected: true });
+    outputCursor = found + value.length;
+    searchCursor = outputCursor;
+  }
+  if (parts.length === 0) return [{ text, protected: false }];
+  if (outputCursor < text.length) {
+    parts.push({ text: text.slice(outputCursor), protected: false });
+  }
+  return parts;
 }

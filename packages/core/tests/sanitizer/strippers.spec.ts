@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isLuhnValid,
+  isVinValid,
   redactApiKeyShapes,
   redactCreditCards,
   redactEmails,
   redactPhones,
   redactSsn,
+  redactVin,
   stripAuthQueryParams,
   stripFormValues,
   stripQueryStrings,
@@ -204,5 +206,18 @@ describe('@no-llm sanitizer strippers', () => {
       ),
       { numRuns: 200 },
     );
+  });
+
+  it('validates and redacts ISO 3779 VINs, including the X check-digit case', () => {
+    expect(isVinValid('1HGCM82633A004352')).toBe(true);
+    expect(isVinValid('1M8GDM9AXKP042788')).toBe(true);
+    expect(redactVin('VIN 1HGCM82633A004352')).toEqual({ text: 'VIN [redacted-vin]', hits: 1 });
+  });
+
+  it('leaves invalid, forbidden-letter, and embedded VIN lookalikes visible', () => {
+    expect(isVinValid('1HGCM82633A004353')).toBe(false);
+    expect(redactVin('VIN 1HGCM82633A004353').hits).toBe(0);
+    expect(redactVin('VIN 1HGCM82633A00I352').hits).toBe(0);
+    expect(redactVin('id-1HGCM82633A004352-suffix').hits).toBe(0);
   });
 });

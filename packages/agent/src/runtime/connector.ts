@@ -21,6 +21,8 @@ export type AgentProgressEvent =
 
 /** IO surface consumed by the agentic runtime (CLI today, other connectors later). */
 export interface AgentTaskConnector extends ConfirmationConnector {
+  /** Receive a safe advisory before run creation; JSON connectors may suppress it. */
+  emitAgentWarning?(warning: string): void;
   /** Receive one sanitized, bounded progress event. */
   emitAgentEvent(event: AgentProgressEvent): void;
   /** Receive the single finalized terminal outcome. */

@@ -19,7 +19,7 @@ import {
   ReadabilityExtractor,
   RobotsCacheImpl,
   ScriptRegistry,
-  UserInputVault,
+  redactRunInput,
   createAskEthicsAdapter,
   createConfirmationStore,
   createKeychainProvider,
@@ -339,6 +339,15 @@ export async function runAgenticTask(
   request: AgenticTaskRequest,
   dependencies: AgenticTaskDependencies = {},
 ): Promise<AgenticTaskOutcome> {
+  // Privacy ingress invariant: parse and redact every user-authored field once,
+  // before run state, browser state, or provider state can exist. Every new
+  // consumer of `request.goal` must use this redacted form instead.
+  const redacted = redactRunInput({
+    goal: request.goal,
+    ...(request.profileContext === undefined ? {} : { profileContext: request.profileContext }),
+  });
+  for (const warning of redacted.warnings) request.connector.emitAgentWarning?.(warning);
+  const userInput = redacted.vault;
   const now = dependencies.now ?? (() => new Date());
   const runStore = dependencies.runStore ?? new LocalRunStore();
   const sanitizer = dependencies.sanitizer ?? new DefaultSanitizer();
@@ -365,7 +374,7 @@ export async function runAgenticTask(
   // directory exists so the failure is auditable, but no provider session is
   // opened, no browser launches, and no tokens are spent. Running it anyway is
   // what produced a confident answer about a city inferred from a timezone.
-  const locationHandoff = locationHandoffFor(request.goal, request.ambient);
+  const locationHandoff = locationHandoffFor(redacted.goal, request.ambient);
   if (locationHandoff !== null) {
     const outcome: AgenticTaskOutcome = {
       kind: 'handoff',
@@ -417,10 +426,8 @@ export async function runAgenticTask(
       store: createConfirmationStore(created.runDir),
       nowIso: () => now().toISOString(),
     });
-    // One vault per run: the prompt builder tokenizes the user's own sensitive
-    // values into `{{user:...}}` placeholders (model-visible), and the tool
-    // middleware resolves them back to real values at the execution boundary.
-    const userInput = new UserInputVault();
+    // The ingress vault owns the redacted placeholders for this entire run;
+    // tool middleware resolves them only at the execution boundary.
     // The other half of the same contract: values the MODEL supplies in tool
     // calls are already in its context, so they are never re-redacted out of
     // its own results. Together the two make every value the run legitimately
@@ -433,7 +440,9 @@ export async function runAgenticTask(
     const urlProvenance = new UrlProvenance();
     urlProvenance.seed({
       ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
-      goal: request.goal,
+      // Provenance is a non-model-visible trust ledger. Resolve here so a URL
+      // whose query value was marked still grants the user-typed host.
+      goal: userInput.resolve(redacted.goal),
     });
     const domain: ToolDomainDeps =
       request.template === undefined
@@ -490,7 +499,7 @@ export async function runAgenticTask(
       });
     const userPrompt = buildAgentUserPrompt(
       {
-        goal: request.goal,
+        goal: redacted.goal,
         budgets: budgetsConfig,
         // Ambient facts use the injectable clock so hermetic tests can pin the
         // rendered date; timezone/locale default to the host inside the builder.
@@ -503,11 +512,10 @@ export async function runAgenticTask(
           userLocation: request.ambient?.userLocation ?? null,
         },
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
-        ...(request.profileContext ? { profileContext: request.profileContext } : {}),
+        ...(redacted.profileContext ? { profileContext: redacted.profileContext } : {}),
         attended: request.interactive === true,
         promptAddendum: promptAddendumFor(profile, services.template),
       },
-      sanitizer,
       userInput,
     );
 
@@ -596,6 +604,7 @@ export async function runAgenticTask(
           environment,
           trace,
           outcome: terminal,
+          persistenceGoal: userInput.neutralize(redacted.goal),
         });
       }
 
@@ -1094,8 +1103,10 @@ export async function maybePromoteTrace(input: {
   readonly environment: AgenticRunEnvironment | undefined;
   readonly trace: AgentTrace;
   readonly outcome: AgenticTaskOutcome | undefined;
+  /** Redacted goal with vault placeholders neutralized for durable storage. */
+  readonly persistenceGoal: string;
 }): Promise<AgenticTaskOutcome | undefined> {
-  const { request, environment, trace, outcome } = input;
+  const { request, environment, trace, outcome, persistenceGoal } = input;
   const workflowName = request.saveAs?.trim();
   if (workflowName === undefined || workflowName.length === 0) return outcome;
   if (outcome?.kind !== 'published') return outcome;
@@ -1116,12 +1127,12 @@ export async function maybePromoteTrace(input: {
     const result = await promoteAgentTrace(trace.steps(), {
       workflowName,
       store,
-      description: `Promoted from: ${request.goal}`,
+      description: `Promoted from: ${persistenceGoal}`,
       // Carry the goal into the workflow's `synthesis:` block so replaying it
       // reproduces the Brief this run published rather than the raw trailing
       // capture (FEAT-FP-001). Reaching here already implies a published Brief:
       // the guard above returns early for every other outcome kind.
-      synthesisGoal: request.goal,
+      synthesisGoal: persistenceGoal,
       // That Brief was written by this run's model, so the saved workflow says
       // so. `yantra run <name>` then reproduces the document with no extra
       // flag — the replay inherits the run's shape *and* its authorship.

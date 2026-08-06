@@ -1,4 +1,10 @@
-import type { AmbientGrants, PayloadSanitizer, Sanitized, UserInputVault } from '@yantra/core';
+import type { AmbientGrants, Sanitized, UserInputVault } from '@yantra/core';
+
+/**
+ * User-authored goal and profile text are redacted exactly once at
+ * `runAgenticTask` ingress, before a run directory exists. This module only
+ * bounds and renders already-redacted text.
+ */
 
 /**
  * The version recorded in agentic run manifests. `agent-v6` marks the grant-aware
@@ -104,40 +110,22 @@ const MAX_GOAL_BYTES = 20_480;
  * Builds the bounded per-run prompt from the redacted goal and approved
  * constraints. This is the only production user-prompt assembly path.
  *
- * When a {@link UserInputVault} is supplied (every production run), the goal
- * and profile context are redacted through it: sensitive values become
- * indexed, resolvable placeholders (`{{user:email:1}}`) that the middleware
- * substitutes with the real value at the tool execution boundary. This keeps
- * the model blind to the values while keeping them USABLE — the prior
- * irreversible `[redacted-email]` markers broke form fills, searches, and
- * signed-URL navigation. The vault path also never HTML-parses the goal, so
- * plain text with `&`/`<` is no longer mangled by the cheerio round trip.
- *
- * Without a vault (legacy/test callers), the payload sanitizer is applied as
- * before, so the goal is still never sent raw.
+ * The goal and profile context must already contain any indexed, resolvable
+ * placeholders (`{{user:email:1}}`). The vault is retained here solely to
+ * decide whether placeholder guidance is needed. This builder never calls
+ * `redact()`, so it cannot increment counters or reinterpret reserved tokens.
  *
  * @param input Goal, budget, host, and optional approved profile context.
- * @param sanitizer The single LLM-bound sanitizer chokepoint (vault-less path).
- * @param userInput Run-scoped vault backing placeholder resolution.
+ * @param userInput Run-scoped vault used only for the placeholder-guidance gate.
  * @returns Plain text containing no tool catalog or provider mechanics.
  */
 export function buildAgentUserPrompt(
   input: AgentUserPromptInput,
-  sanitizer: PayloadSanitizer,
-  userInput?: UserInputVault,
+  userInput: UserInputVault,
 ): string {
-  const goal = userInput
-    ? truncateUtf8(userInput.redact(input.goal), MAX_GOAL_BYTES).trim()
-    : sanitizer.sanitize(input.goal, 'public').text.trim();
+  const goal = truncateUtf8(input.goal, MAX_GOAL_BYTES).trim();
   const maxProfileBytes = Math.max(0, Math.floor(input.maxProfileContextBytes ?? 4096));
-  const profile = input.profileContext
-    ? truncateUtf8(
-        userInput
-          ? userInput.redact(input.profileContext)
-          : sanitizer.sanitize(input.profileContext, 'authenticated').text,
-        maxProfileBytes,
-      )
-    : '';
+  const profile = input.profileContext ? truncateUtf8(input.profileContext, maxProfileBytes) : '';
   const hosts = normalizeHosts(input.allowedHosts ?? []);
 
   const lines = [
@@ -181,7 +169,7 @@ export function buildAgentUserPrompt(
   // values exist; the `[redacted-...]` bullet always can, since any page may
   // contain third-party data.
   lines.push('', 'Hidden values: the runtime hides two kinds of data from you.');
-  if (userInput !== undefined && userInput.size > 0) {
+  if (userInput.size > 0) {
     lines.push(
       '- {{user:email:1}} and similar tokens stand for values the USER supplied. Pass one ' +
         'verbatim to any tool (a field, a URL, a search) and the runtime substitutes the real ' +

@@ -15,7 +15,7 @@ import {
   type ActiveReportTemplate,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
-import type { EffectivePreferences } from '@yantra/core';
+import { UserInputMarkerError, type EffectivePreferences } from '@yantra/core';
 import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
@@ -77,6 +77,11 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
     )
     .addOption(new Option('--json', 'emit progress and outcome as NDJSON').default(false))
     .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
+    .addHelpText(
+      'after',
+      '\nProtect user-supplied values from the model with `@{value}` or `@password{value}`. ' +
+        'Malformed markers are validation errors (exit 1).\n',
+    )
     .action((goal: string, options: DoOptions) => executeDo(goal, options, resolved));
 }
 
@@ -188,6 +193,12 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     if (exitCode !== 0) {
       throw new CommanderError(exitCode, `yantra.do.${outcome.kind}`, outcome.kind);
     }
+  } catch (error) {
+    if (error instanceof UserInputMarkerError) {
+      runtime.stderr.write(`${error.message}\n`);
+      throw new CommanderError(1, 'yantra.do.invalid-user-input-marker', error.message);
+    }
+    throw error;
   } finally {
     process.removeListener('SIGINT', onInterrupt);
   }

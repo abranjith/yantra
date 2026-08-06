@@ -181,6 +181,13 @@ export class CLIConnectorIO implements ConnectorIO {
     }
   }
 
+  /** Render a safe advisory on stderr, suppressing it for machine-readable output. */
+  public emitAgentWarning(warning: string): void {
+    const opts = this.requireAgentOptions();
+    if (opts.json) return;
+    opts.errStream.write(`warning: ${warning}\n`);
+  }
+
   /** Present a fail-closed terminal confirmation prompt. */
   public async requestConfirmation(
     request: ConfirmationRequest,

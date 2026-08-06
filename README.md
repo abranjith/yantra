@@ -243,9 +243,17 @@ progress, not completion.
 ```bash
 yantra do "compare the current return policies for these two stores"
 yantra do "submit the fixture form" --allow-host fixture.example
+yantra do "log into xyz.com as @username{u1} with @password{p1}"
 yantra do "research this topic" --provider anthropic --model claude-haiku-4-5
 yantra do "..." --json                         # progress + outcome as NDJSON
 ```
+
+Use `@{value}` or a tagged form such as `@password{value}` when a user-supplied
+value must remain usable by tools but must never reach the model. Explicit
+markers are the guarantee; keyword and shape detection are best-effort. A
+malformed marker exits `1` before any run directory is created. See
+[User-input masking](docs/user-input-masking.md) for the grammar, shell quoting,
+echo-masking caveats, and persistence rules.
 
 Live output streams assistant text and compact tool status lines without raw
 tool payloads. Protected actions pause immediately before the side effect and
@@ -484,6 +492,7 @@ The legacy internal `@yantra/agent` task-planning client has been removed. The s
 - Run directory layout & the provider session artifact: [docs/run-artifacts.md](docs/run-artifacts.md).
 - Diagnostics & agent startup error codes: [docs/diagnostics.md](docs/diagnostics.md).
 - Agent tool runtime, budgets & tool safety: [docs/agent-tools.md](docs/agent-tools.md).
+- Guaranteed user-input masking: [docs/user-input-masking.md](docs/user-input-masking.md).
 - The `extract` step, extraction schemas & the shared read pipeline: [docs/workflow-extraction.md](docs/workflow-extraction.md).
 - Agentic runtime release notes: [docs/agentic-release-notes.md](docs/agentic-release-notes.md).
 - Release-gate coverage and evidence: [docs/release-gate.md](docs/release-gate.md).

@@ -31,6 +31,7 @@ import {
   type ResearchRunResult,
   type SearchProviderName,
   type SynthesisLength,
+  UserInputMarkerError,
 } from '@yantra/core';
 import { validateBrief, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
@@ -243,6 +244,10 @@ export function registerResearchCommand(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof UserInputMarkerError) {
+          resolvedRuntime.stderr.write(`research validation failed: ${message}\n`);
+          throw new CommanderError(1, 'yantra.research.invalid-user-input-marker', message);
+        }
         resolvedRuntime.stderr.write(`research failed: ${message}\n`);
         throw new CommanderError(2, 'yantra.research.failed', message);
       }
