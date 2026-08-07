@@ -55,14 +55,17 @@ export interface AgentPageSnapshot {
 
 /**
  * Builds the browser tool's bounded observation while retaining internal
- * scanner indexes. Opaque refs are minted later by the controller and are the
- * only identifiers exposed to the model.
+ * scanner indexes. Dialog/widget elements rank before page elements; each
+ * partition is ordered by viewport `(top, left)` before the cap is applied.
+ * Opaque refs are minted later by the controller and are the only identifiers
+ * exposed to the model.
  */
 export async function buildAgentPageSnapshot(
   page: Page,
   deps: BuildObservationDeps,
   options: { readonly maxDigestBytes: number; readonly maxInteractables: number },
 ): Promise<AgentPageSnapshot> {
+  await ensureLocatorRuntime(page);
   const url = page.url();
   const pageData = await safeEvaluate(page, () => ({
     title: document.title,
@@ -75,7 +78,7 @@ export async function buildAgentPageSnapshot(
   const interactables = raw
     .filter((entry) => entry.visible)
     .slice()
-    .sort((left, right) => left.top - right.top)
+    .sort(compareInteractables)
     .slice(0, options.maxInteractables);
   return {
     url,
@@ -103,6 +106,7 @@ export async function buildObservation(
   cycleResult: CycleExecutionSummary,
   deps: BuildObservationDeps,
 ): Promise<Sanitized<DiscoveryObservation>> {
+  await ensureLocatorRuntime(page);
   const url = page.url();
   const host = safeHost(url);
 
@@ -184,6 +188,20 @@ async function safeEvaluate<T>(page: Page, fn: () => T): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/** Best-effort locator injection; observation must still work without it. */
+async function ensureLocatorRuntime(page: Page): Promise<void> {
+  try {
+    await page.locatorHost?.ensureInjected('main');
+  } catch {
+    // The in-page scanner owns an offline accessible-name fallback.
+  }
+}
+
+function compareInteractables(left: RawInteractable, right: RawInteractable): number {
+  if (left.scope !== right.scope) return left.scope === 'dialog' ? -1 : 1;
+  return left.top - right.top || left.left - right.left;
 }
 
 function safeHost(url: string): string | null {

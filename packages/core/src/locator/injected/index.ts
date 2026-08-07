@@ -164,6 +164,15 @@ function describeElement(element: Element): {
   };
 }
 
+/**
+ * Cheap accessible description for high-volume observation scans. Unlike
+ * `describeElement`, this performs no locator candidate construction/ranking.
+ * Observation callers use the name only and retain their own role mapping.
+ */
+function describeAccessible(element: Element): { role: string | null; name: string } {
+  return { role: getRole(element), name: getAccessibleName(element) };
+}
+
 /** Decodes a JSON text matcher (string or JsonRegex) back to string | RegExp. */
 function decodeTextMatcher(
   matcher: string | { __isRegExp: true; pattern: string; flags: string } | undefined,
@@ -220,6 +229,7 @@ const api = {
   clearSlot,
   getSlotElement,
   getBoundingRect,
+  describeAccessible,
   describeElement,
   // Internal helpers exported for test access
   isBoundingRectStable,

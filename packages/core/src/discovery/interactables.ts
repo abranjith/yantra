@@ -31,7 +31,10 @@ export function rankInteractables(
   return raw
     .filter((entry) => entry.visible)
     .slice()
-    .sort((a, b) => a.top - b.top)
+    .sort((a, b) => {
+      if (a.scope !== b.scope) return a.scope === 'dialog' ? -1 : 1;
+      return a.top - b.top || a.left - b.left;
+    })
     .slice(0, cap)
     .map((entry) => ({
       role: entry.role,

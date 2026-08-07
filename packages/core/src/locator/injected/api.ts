@@ -15,6 +15,15 @@ import type {
 
 export interface InjectedAPI {
   /**
+   * Returns only the role and accessible name for a live element. This exists
+   * separately from {@link describeElement} because observation scans call it
+   * hundreds of times and must not pay for locator candidate generation or
+   * ranking. Scanner callers deliberately consume the name only so their
+   * established coarse role mapping remains stable.
+   */
+  describeAccessible(element: Element): { role: string | null; name: string };
+
+  /**
    * Resolves a single candidate intent against the current document.
    * Returns count of matching elements. When count === 1, the found element
    * is stored in the internal slot and a slotKey is returned for retrieval.

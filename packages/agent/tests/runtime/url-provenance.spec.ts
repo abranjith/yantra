@@ -52,13 +52,45 @@ describe('@no-llm UrlProvenance matching', () => {
     expect(provenance.has('https://example.com/page#other')).toBe(true);
   });
 
-  it('treats the query string as significant', () => {
+  it('allows query-value variants and key subsets on an attested origin + path', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/search?a=1');
+    provenance.record('https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06&d2=2026-08-07');
 
-    expect(provenance.has('https://example.com/search?a=1')).toBe(true);
-    expect(provenance.has('https://example.com/search?a=2')).toBe(false);
-    expect(provenance.has('https://example.com/search')).toBe(false);
+    expect(
+      provenance.has('https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06&d2=2026-08-08'),
+    ).toBe(true);
+    expect(provenance.has('https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06')).toBe(
+      true,
+    );
+    expect(provenance.has('https://x.test/Hotel-Search')).toBe(true);
+    expect(provenance.has('https://x.test/Hotel-Search?destination=Frisco&cityId=c17823')).toBe(
+      false,
+    );
+    expect(provenance.has('https://x.test/hotels/Chicago,IL-c17823/2026-08-05')).toBe(false);
+    expect(provenance.has('https://y.test/Hotel-Search?destination=Frisco')).toBe(false);
+  });
+
+  it('does not grant a parameter name after recording a query-less URL', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://x.test/a');
+
+    expect(provenance.has('https://x.test/a?q=1')).toBe(false);
+  });
+
+  it('accumulates known parameter names across records', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://x.test/a?a=1');
+    provenance.record('https://x.test/a?b=2');
+
+    expect(provenance.has('https://x.test/a?a=9&b=9')).toBe(true);
+    expect(provenance.has('https://x.test/a?a=9&c=9')).toBe(false);
+  });
+
+  it('normalizes trailing slashes in origin + path query buckets', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://x.test/hotels/?x=1');
+
+    expect(provenance.has('https://x.test/hotels?x=2')).toBe(true);
   });
 
   it('matches the host case-insensitively but the path case-sensitively', () => {

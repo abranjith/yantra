@@ -8,6 +8,8 @@ import {
   browserController,
   browserFailure,
   isDomainFailure,
+  modelObservation,
+  observeAfterAction,
   PROTECTED_ACTION_RE,
   safeLocatorFor,
 } from './browser-common.js';
@@ -31,7 +33,7 @@ export function browserClickSpec(
     name: 'browser_click',
     label: 'Browser Click',
     description:
-      'Click one actionable element by its latest opaque observation ref. Use it after browser_observe. Do NOT supply CSS/XPath, reuse stale refs, or click protected submit/purchase actions without user confirmation.',
+      'Click one actionable element by its latest opaque observation ref. A fresh post-action observation is returned, so browser_observe is only needed for a read without acting. Do NOT supply CSS/XPath, reuse stale refs, or click protected submit/purchase actions without user confirmation.',
     parameters: BrowserClickParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -63,7 +65,14 @@ export function browserClickSpec(
           locator: ranked.length > 0 ? ranked : toCandidateChain(described?.role ?? '', name),
           requires_confirmation: PROTECTED_ACTION_RE.test(name),
         });
-        return { ok: true, model: result };
+        const observation = await observeAfterAction(controller);
+        return {
+          ok: true,
+          model: {
+            ...result,
+            ...(observation ? { observation: modelObservation(observation) } : {}),
+          },
+        };
       } catch (error) {
         return browserFailure(error);
       }

@@ -10,6 +10,14 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
     kind: 'button',
     disabled: false,
     top: 0,
+    left: 0,
+    group: null,
+    scope: 'page',
+    value: null,
+    valuePresent: false,
+    checked: null,
+    expanded: null,
+    selected: null,
     visible: true,
     ...overrides,
   };
@@ -28,6 +36,42 @@ describe('@no-llm rankInteractables', () => {
       raw({ name: 'second', top: 100 }),
     ]);
     expect(result.map((r) => r.name)).toEqual(['first', 'second', 'third']);
+  });
+
+  it('uses left position as a stable tie-break within a scope', () => {
+    const result = rankInteractables([
+      raw({ name: 'right', top: 10, left: 400 }),
+      raw({ name: 'left', top: 10, left: 10 }),
+    ]);
+    expect(result.map((entry) => entry.name)).toEqual(['left', 'right']);
+  });
+
+  it('keeps each side-by-side calendar panel contiguous in row-major coordinates', () => {
+    const august = Array.from({ length: 3 }, (_, row) =>
+      raw({ name: `Aug ${row + 1}`, top: row * 20, left: 10, scope: 'dialog' }),
+    );
+    const september = Array.from({ length: 3 }, (_, row) =>
+      raw({ name: `Sep ${row + 1}`, top: row * 20, left: 400, scope: 'dialog' }),
+    );
+
+    // `(top,left)` gives deterministic visual row order: left-panel cell then
+    // right-panel cell for each row, with no browser-dependent ties.
+    expect(rankInteractables([...september, ...august]).map((entry) => entry.name)).toEqual([
+      'Aug 1',
+      'Sep 1',
+      'Aug 2',
+      'Sep 2',
+      'Aug 3',
+      'Sep 3',
+    ]);
+  });
+
+  it('ranks visible dialog scope ahead of page chrome regardless of top', () => {
+    const result = rankInteractables([
+      raw({ name: 'Header', scope: 'page', top: 0 }),
+      raw({ name: 'Calendar day', scope: 'dialog', top: 500 }),
+    ]);
+    expect(result.map((entry) => entry.name)).toEqual(['Calendar day', 'Header']);
   });
 
   it('caps to MAX_INTERACTABLES by default', () => {

@@ -23,9 +23,10 @@
  *
  * Matching is deliberately a little generous — an origin root always matches,
  * and one trailing slash is insignificant — because the cost of a false refusal
- * is a wasted turn, while the cost of a false accept is the failure above. What
- * it will not do is treat a *different* query string or path as the same URL,
- * since that is exactly where a fabricated id hides.
+ * is a wasted turn, while the cost of a false accept is the failure above.
+ * Query values may vary once an origin + path and every parameter name have
+ * been attested; new paths and new parameter names remain refused, because
+ * those are the places a fabricated identifier can hide.
  */
 
 /**
@@ -39,6 +40,8 @@ export class UrlProvenance {
   private readonly urls = new Set<string>();
   /** Normalized origin roots (`https://host/`) of every recorded URL. */
   private readonly origins = new Set<string>();
+  /** Query parameter names attested for each normalized origin + path. */
+  private readonly queryKeysByOriginPath = new Map<string, Set<string>>();
   /** Hostnames the user explicitly allowlisted; see {@link allowHost}. */
   private readonly allowedHosts = new Set<string>();
 
@@ -54,6 +57,9 @@ export class UrlProvenance {
     if (parsed === null) return;
     this.urls.add(parsed.normalized);
     this.origins.add(parsed.origin);
+    const keys = this.queryKeysByOriginPath.get(parsed.originPath) ?? new Set<string>();
+    for (const key of parsed.queryKeys) keys.add(key);
+    this.queryKeysByOriginPath.set(parsed.originPath, keys);
   }
 
   /**
@@ -71,7 +77,9 @@ export class UrlProvenance {
     if (parsed === null) return false;
     if (this.allowedHosts.has(parsed.hostname)) return true;
     if (this.urls.has(parsed.normalized)) return true;
-    return parsed.isOriginRoot && this.origins.has(parsed.origin);
+    if (parsed.isOriginRoot && this.origins.has(parsed.origin)) return true;
+    const knownKeys = this.queryKeysByOriginPath.get(parsed.originPath);
+    return knownKeys !== undefined && parsed.queryKeys.every((key) => knownKeys.has(key));
   }
 
   /**
@@ -120,6 +128,8 @@ export class UrlProvenance {
 interface ParsedUrl {
   readonly normalized: string;
   readonly origin: string;
+  readonly originPath: string;
+  readonly queryKeys: readonly string[];
   readonly isOriginRoot: boolean;
   /** Lowercased hostname without the port, for user host allowlisting. */
   readonly hostname: string;
@@ -150,6 +160,8 @@ function parse(url: string): ParsedUrl | null {
   return {
     normalized: `${scheme}//${host}${path}${parsed.search}`,
     origin,
+    originPath: `${scheme}//${host}${path}`,
+    queryKeys: [...parsed.searchParams.keys()],
     isOriginRoot,
     hostname: parsed.hostname.toLowerCase(),
   };

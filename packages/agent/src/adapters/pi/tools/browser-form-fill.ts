@@ -11,9 +11,9 @@
  *    Autocomplete options and calendar cells do not exist when the model last
  *    observed, so it has no ref for them and cannot obtain one without spending
  *    a turn per field.
- *  - The model-visible observation is capped at 30 elements ranked by viewport
- *    position, so on a real site header links and marketing tiles routinely
- *    outrank the form's own controls.
+ *  - The model-visible observation is capped at 50 elements. Internal
+ *    resolution remains wider so a dense calendar or suggestion list can be
+ *    addressed without widening what the model receives.
  *
  * The logged run filled the destination box, then clicked what it believed was
  * the autocomplete suggestion. It was a marketing tile — *"View more deals for
@@ -47,12 +47,16 @@ import {
   browserController,
   browserFailure,
   isDomainFailure,
+  modelObservation,
   safeLocatorFor,
 } from './browser-common.js';
 import { resolveFormField } from './form-field-resolve.js';
 
 /** Interactables resolved for internal matching; never model-visible. */
 const RESOLUTION_CAP = 400;
+
+/** Hard bound on calendar navigation so a resistant widget cannot loop. */
+export const MAX_MONTH_PAGES = 12;
 
 /** How long to wait for an autocomplete suggestion to appear. */
 export const SUGGESTION_WAIT_MS = 3_000;
@@ -81,7 +85,8 @@ const BrowserFormFillParams = Type.Object(
             description:
               'The text to enter, the option to pick, or the date to choose. For a date field ' +
               'that opens a calendar, an ISO date such as "2026-08-05" is matched against the ' +
-              'rendered day. Never pass a credential here — use browser_fill.',
+              'rendered day, paging up to 12 months when needed. Never pass a credential here — ' +
+              'use browser_fill.',
           }),
           pick_suggestion: Type.Optional(
             Type.Boolean({
@@ -112,6 +117,7 @@ interface AppliedField {
   readonly ref: string;
   readonly role: string;
   readonly action: 'filled' | 'picked_suggestion' | 'chose_in_widget';
+  readonly resulting_value?: string;
 }
 
 /**
@@ -178,10 +184,7 @@ async function runFormFill(params: Params, services: RunServices): Promise<Domai
   return {
     ok: true,
     model: {
-      url: observation.url,
-      title: observation.title,
-      digest: observation.digest,
-      interactables: observation.interactables,
+      ...modelObservation(observation),
       applied,
       note: 'Nothing was submitted. Click the submit/search button with browser_click.',
     },
@@ -197,7 +200,7 @@ async function applyField(
 ): Promise<AppliedField | DomainFailure> {
   // Fresh and uncapped every time: the previous step may have revealed the
   // element this one needs, and it is very likely outside the model's cap.
-  const observation = await controller.observe({ cap: RESOLUTION_CAP });
+  const observation = await controller.observe({ cap: RESOLUTION_CAP, trackDigest: false });
   const resolved = resolveFormField(spec.field, observation);
   if (isDomainFailure(resolved)) return resolved;
 
@@ -283,7 +286,7 @@ async function pickSuggestion(
   const deadline = services.now() + SUGGESTION_WAIT_MS;
   let options: AgentInteractable[];
   for (;;) {
-    const observation = await controller.observe({ cap: RESOLUTION_CAP });
+    const observation = await controller.observe({ cap: RESOLUTION_CAP, trackDigest: false });
     options = observation.interactables.filter((entry) => entry.role === 'option');
     if (options.length > 0) break;
     if (services.now() >= deadline) {
@@ -327,24 +330,60 @@ async function chooseInWidget(
   controller: AgentBrowserController,
   services: RunServices,
 ): Promise<AppliedField | DomainFailure> {
+  const priorValue = renderedValue(target);
   const opened = await clickCandidate(target, controller, services);
   if (opened !== null) return opened;
 
-  const observation = await controller.observe({ cap: RESOLUTION_CAP });
-  const choice = bestNameMatch(observation.interactables, spec.value);
+  let observation = await controller.observe({ cap: RESOLUTION_CAP, trackDigest: false });
+  let choice = bestNameMatch(observation.interactables, spec.value);
+  let pagesAttempted = 0;
+  while (choice === null && pagesAttempted < MAX_MONTH_PAGES) {
+    const control = pagingControl(observation.interactables, spec.value);
+    if (control === null || control.disabled === true) break;
+    const paged = await clickCandidate(control, controller, services);
+    if (paged !== null) return paged;
+    pagesAttempted += 1;
+    observation = await controller.observe({ cap: RESOLUTION_CAP, trackDigest: false });
+    choice = bestNameMatch(observation.interactables, spec.value);
+  }
   if (choice === null) {
+    const paging =
+      pagesAttempted > 0 ? ` after paging ${pagesAttempted}/${MAX_MONTH_PAGES} months` : '';
     return {
       ok: false,
       errorCode: 'FORM_WIDGET_NO_MATCH',
       message:
-        `Opened "${spec.field}" but nothing in it matches "${spec.value}". Visible choices: ` +
-        `${describeNames(observation.interactables)}.`,
+        `Opened "${spec.field}" but nothing in it matches "${spec.value}"${paging}. ` +
+        `Visible choices: ${describeNames(observation.interactables)}. Month paging is bounded ` +
+        `at ${MAX_MONTH_PAGES}.`,
       retryable: true,
     };
   }
   const clicked = await clickCandidate(choice, controller, services);
   if (clicked !== null) return clicked;
-  return { field: spec.field, ref: choice.ref, role: target.role, action: 'chose_in_widget' };
+  const verified = await controller.observe({ cap: RESOLUTION_CAP, trackDigest: false });
+  const trigger =
+    verified.interactables.find((entry) => entry.ref === target.ref) ??
+    uniqueNamed(verified.interactables, target.name);
+  const resultingValue = trigger ? renderedValue(trigger) : '';
+  if (trigger && resultingValue === priorValue) {
+    return {
+      ok: false,
+      errorCode: 'FORM_WIDGET_NO_EFFECT',
+      message:
+        `Clicked "${choice.name}" for "${spec.field}", but the field still renders ` +
+        `"${resultingValue}". Re-observe the widget and choose a different control.`,
+      retryable: true,
+      details: { observed_value: resultingValue },
+    };
+  }
+  return {
+    field: spec.field,
+    ref: choice.ref,
+    role: target.role,
+    action: 'chose_in_widget',
+    ...(resultingValue ? { resulting_value: resultingValue } : {}),
+  };
 }
 
 /** Clicks a candidate and traces it; returns a failure, or `null` on success. */
@@ -410,6 +449,19 @@ export function bestNameMatch(
       return name.includes(month) && dayPattern.test(name);
     });
     if (loose.length === 1) return loose[0]!;
+
+    const year = date.getUTCFullYear();
+    const dayCells = named.filter(
+      (entry) =>
+        /^\d{1,2}$/.test(entry.name.trim()) && Number(entry.name.trim()) === date.getUTCDate(),
+    );
+    const grouped = dayCells.filter((entry) => {
+      const group = entry.group?.toLowerCase() ?? '';
+      if (!group.includes(month)) return false;
+      const groupYear = /\b(\d{4})\b/.exec(group)?.[1];
+      return groupYear === undefined || Number(groupYear) === year;
+    });
+    if (grouped.length === 1) return grouped[0]!;
   }
 
   const prefix = named.filter((entry) => entry.name.trim().toLowerCase().startsWith(wanted));
@@ -434,9 +486,66 @@ function parseIsoDate(value: string): Date | null {
 function describeNames(candidates: readonly AgentInteractable[]): string {
   const named = candidates.filter((entry) => entry.name.trim().length > 0);
   if (named.length === 0) return '(none)';
-  const names = named.slice(0, 8).map((entry) => `"${entry.name.trim()}"`);
+  const names = named
+    .slice(0, 8)
+    .map((entry) =>
+      entry.group ? `"${entry.name.trim()}" (${entry.group})` : `"${entry.name.trim()}"`,
+    );
   const extra = named.length - names.length;
   return extra > 0 ? `${names.join(', ')} (+${extra} more)` : names.join(', ');
+}
+
+function renderedValue(interactable: AgentInteractable): string {
+  return (interactable.value ?? interactable.name).trim();
+}
+
+function uniqueNamed(
+  candidates: readonly AgentInteractable[],
+  name: string,
+): AgentInteractable | undefined {
+  const wanted = name.trim().toLowerCase();
+  const matches = candidates.filter((entry) => entry.name.trim().toLowerCase() === wanted);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function pagingControl(
+  candidates: readonly AgentInteractable[],
+  value: string,
+): AgentInteractable | null {
+  const date = parseIsoDate(value);
+  const target = date ? date.getUTCFullYear() * 12 + date.getUTCMonth() : null;
+  const visible = candidates
+    .map((entry) => parseMonthGroup(entry.group))
+    .filter((month): month is number => month !== null);
+  const direction =
+    target !== null && visible.length > 0 && target < Math.min(...visible) ? 'previous' : 'next';
+  const pattern = direction === 'previous' ? /^previous(?: month)?$/i : /^next(?: month)?$/i;
+  const matches = candidates.filter((entry) => pattern.test(entry.name.trim()));
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function parseMonthGroup(group: string | undefined): number | null {
+  if (!group) return null;
+  const match =
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/i.exec(
+      group,
+    );
+  if (!match) return null;
+  const months = [
+    'january',
+    'february',
+    'march',
+    'april',
+    'may',
+    'june',
+    'july',
+    'august',
+    'september',
+    'october',
+    'november',
+    'december',
+  ];
+  return Number(match[2]) * 12 + months.indexOf(match[1]!.toLowerCase());
 }
 
 /** Attaches the applied-so-far summary to a failure's `details`. */

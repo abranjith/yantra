@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
+
 import type { LocatorCandidate } from '@yantra/protocol';
 import type { ElementHandle, Page as PuppeteerPage, Target } from 'puppeteer-core';
 
+import type { RawInteractable } from '../discovery/interactable-scan.js';
 import { buildAgentPageSnapshot } from '../discovery/observe.js';
 import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
@@ -35,7 +38,7 @@ const INTERACTABLE_SELECTOR =
   '[role="option"]';
 
 const DEFAULT_DIGEST_BYTES = 16 * 1024;
-const DEFAULT_INTERACTABLE_CAP = 30;
+const DEFAULT_INTERACTABLE_CAP = 50;
 /**
  * Ceiling on interactables resolved for an internal (uncapped) observation.
  * Bounds the handle set on pathological pages; never model-visible.
@@ -79,12 +82,24 @@ export interface AgentInteractable {
   readonly ref: string;
   readonly role: string;
   readonly name: string;
+  /** Nearest labelled widget/container, omitted when no context is available. */
+  readonly group?: string;
+  /** Omitted for enabled elements. */
+  readonly disabled?: true;
+  /** Current non-secret field/selection value, omitted when empty. */
+  readonly value?: string;
+  /** True when a sensitive field has a value that was withheld in-page. */
+  readonly value_present?: true;
+  readonly checked?: boolean;
+  readonly expanded?: boolean;
+  readonly selected?: boolean;
 }
 
 export interface AgentBrowserObservation {
   readonly url: string;
   readonly title: string;
   readonly digest: string;
+  readonly digestUnchanged: boolean;
   readonly interactables: readonly AgentInteractable[];
 }
 
@@ -103,7 +118,10 @@ interface InteractableRecord extends AgentInteractable {
 export class StaleElementRefError extends Error {
   public readonly code = 'STALE_ELEMENT_REF' as const;
   public constructor(ref: string) {
-    super(`Element ref "${ref}" is stale or unknown. Call browser_observe again before acting.`);
+    super(
+      `Element ref "${ref}" is stale or unknown. Use the fresh observation returned by the ` +
+        'latest action, or call browser_observe for a new read before acting.',
+    );
     this.name = 'StaleElementRefError';
   }
 }
@@ -177,6 +195,7 @@ export class AgentBrowserController {
   private readonly popupCaptureTasks = new Set<Promise<void>>();
   private readonly popupCaptureByTarget = new WeakMap<Target, Promise<void>>();
   private teardownPromise: Promise<void> | null = null;
+  private lastDigestHash: string | null = null;
 
   public constructor(options: AgentBrowserControllerOptions) {
     this.runId = options.runId;
@@ -223,7 +242,7 @@ export class AgentBrowserController {
    * handle is refreshed.
    *
    * @param options.cap - Maximum interactables to resolve, defaulting to the
-   *   controller's model-visible cap and clamped to
+   *   controller's 50-element model-visible cap and clamped to
    *   {@link MAX_RESOLUTION_INTERACTABLES} so a huge page cannot explode the
    *   handle set. **This is for internal resolution only** — a tool that needs
    *   to address an element the model never saw (`browser_form_fill` matching a
@@ -231,8 +250,13 @@ export class AgentBrowserController {
    *   must never be used to widen what is returned to the model: `browser_observe`
    *   calls `observe()` with no argument precisely so the model-visible surface
    *   stays bounded.
+   * @param options.trackDigest - Whether this model-visible observation updates
+   *   digest delta tracking. Internal uncapped resolution calls pass `false`,
+   *   because they must not consume a digest the model has never received.
    */
-  public async observe(options: { readonly cap?: number } = {}): Promise<AgentBrowserObservation> {
+  public async observe(
+    options: { readonly cap?: number; readonly trackDigest?: boolean } = {},
+  ): Promise<AgentBrowserObservation> {
     this.assertLaunched();
     await this.awaitReadable();
     const cap = Math.max(
@@ -272,14 +296,24 @@ export class AgentBrowserController {
         this.refIdByIdentity.set(identity, ref);
       }
       claimed.add(handle);
-      this.refs.set(ref, { ref, role, name, handle });
-      interactables.push({ ref, role, name });
+      const projected = projectAgentInteractable(ref, raw);
+      this.refs.set(ref, { ...projected, handle });
+      interactables.push(projected);
     }
     for (const record of superseded.values()) disposeHandle(record.handle);
     for (const handle of handles) {
       if (!claimed.has(handle)) disposeHandle(handle);
     }
-    return { ...snapshot, interactables };
+    const digestHash = createHash('sha256').update(snapshot.digest).digest('hex').slice(0, 16);
+    const trackDigest = options.trackDigest ?? true;
+    const digestUnchanged = trackDigest && digestHash === this.lastDigestHash;
+    if (trackDigest && !digestUnchanged) this.lastDigestHash = digestHash;
+    return {
+      ...snapshot,
+      digest: digestUnchanged ? '' : snapshot.digest,
+      digestUnchanged,
+      interactables,
+    };
   }
 
   /** Resolve a live opaque ref minted on the current document. */
@@ -292,7 +326,9 @@ export class AgentBrowserController {
   /** Return model-safe ref metadata for policy classification. */
   public describeRef(ref: string): AgentInteractable | undefined {
     const record = this.refs.get(ref);
-    return record ? { ref: record.ref, role: record.role, name: record.name } : undefined;
+    if (!record) return undefined;
+    const { handle: _handle, ...described } = record;
+    return described;
   }
 
   /**
@@ -544,6 +580,7 @@ export class AgentBrowserController {
       onNavigationCommitted: () => {
         this.invalidateObservation();
         this.refIdByIdentity.clear();
+        this.lastDigestHash = null;
       },
     });
 
@@ -652,6 +689,7 @@ export class AgentBrowserController {
   private async performTeardown(): Promise<void> {
     this.invalidateObservation();
     this.refIdByIdentity.clear();
+    this.lastDigestHash = null;
     this.settler?.dispose();
     this.settler = null;
     const session = this.session;
@@ -661,6 +699,30 @@ export class AgentBrowserController {
     if (session) await session.close();
     this.logger?.info({ runId: this.runId }, 'agent browser controller torn down');
   }
+}
+
+/** Internal raw-scan to model-visible projection; exported for shape contract tests. */
+export function projectAgentInteractable(ref: string, raw: RawInteractable): AgentInteractable {
+  const projected: {
+    ref: string;
+    role: string;
+    name: string;
+    group?: string;
+    disabled?: true;
+    value?: string;
+    value_present?: true;
+    checked?: boolean;
+    expanded?: boolean;
+    selected?: boolean;
+  } = { ref, role: raw.role, name: raw.name ?? '' };
+  if (raw.group) projected.group = raw.group;
+  if (raw.disabled) projected.disabled = true;
+  if (raw.value) projected.value = raw.value;
+  if (raw.valuePresent) projected.value_present = true;
+  if (raw.checked) projected.checked = true;
+  if (raw.expanded !== null) projected.expanded = raw.expanded;
+  if (raw.selected !== null) projected.selected = raw.selected;
+  return projected;
 }
 
 /**
@@ -720,7 +782,10 @@ async function assertActionable(handle: ElementHandle<Element>, ref: string): Pr
   if (!state.connected) throw new StaleElementRefError(ref);
   if (!state.visible) throw hiddenError();
   if (state.disabled)
-    throw new BrowserActionabilityError('ELEMENT_DISABLED', 'The observed element is disabled.');
+    throw new BrowserActionabilityError(
+      'ELEMENT_DISABLED',
+      'The observed element is disabled. Disabled elements are marked disabled: true in the observation; choose a different element.',
+    );
 }
 
 /** Dispose a handle without letting a dead-context rejection escape. */

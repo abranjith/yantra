@@ -125,7 +125,7 @@ describe('@no-llm real Chrome browser tools', () => {
     expect(stale.error_code).toBe('STALE_ELEMENT_REF');
   });
 
-  it('fills a literal and host-bound secret, submits, observes, and extracts a table capture', async () => {
+  it('fills a literal and host-bound secret, consumes the submit observation, and extracts a table capture', async () => {
     let observed = await observe();
     await call('browser_fill', {
       ref: refByName(observed, 'Username'),
@@ -141,8 +141,10 @@ describe('@no-llm real Chrome browser tools', () => {
     observed = await observe();
     const submitted = await call('browser_click', { ref: refByName(observed, 'Submit form') });
     expect(submitted.status).toBe('ok');
-    observed = await observe();
-    expect(observed.digest).toContain('Submitted');
+    const submitPayload = JSON.parse(submitted.modelText) as {
+      observation?: { digest?: string; interactables: { ref: string; name: string }[] };
+    };
+    expect(submitPayload.observation?.digest).toContain('Submitted');
 
     const extraction = await call('browser_extract', { kind: 'table' });
     const payload = JSON.parse(extraction.modelText) as { capture_ref: string; preview: unknown };

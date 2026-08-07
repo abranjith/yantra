@@ -4,7 +4,12 @@ import { Type, type Static } from 'typebox';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
-import { browserController, isDomainFailure } from './browser-common.js';
+import {
+  browserController,
+  isDomainFailure,
+  modelObservation,
+  observeAfterAction,
+} from './browser-common.js';
 
 const BrowserNavigateParams = Type.Object(
   {
@@ -26,7 +31,7 @@ export function browserNavigateSpec(
     name: 'browser_navigate',
     label: 'Browser Navigate',
     description:
-      'Navigate the run-scoped browser page to an absolute URL. Use it before observing a page. Do NOT use it to bypass robots, blocks, host policy, or an intercepted popup policy.',
+      'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. browser_observe is only needed for a read without acting. Do NOT use it to bypass robots, blocks, host policy, or an intercepted popup policy.',
     parameters: BrowserNavigateParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -44,9 +49,10 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       errorCode: 'URL_NOT_FROM_EVIDENCE',
       retryable: true,
       message:
-        'This URL did not come from a search result or a page you visited. Yantra does not ' +
-        'navigate to URLs the agent assembled. Use web_search to find the page, or click ' +
-        'through to it from a page you have observed.',
+        'This URL introduces a path or parameter name that no search result or visited page ' +
+        'attested. You may vary query values on an already-visited URL, but may not invent a ' +
+        'new path, parameter name, or identifier. Use web_search or click through from an ' +
+        'observed page to attest anything else.',
     };
   }
   const allowed = services.urlPolicy.check(params.url);
@@ -100,5 +106,13 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     url: allowed.value.url,
     requires_confirmation: false,
   });
-  return { ok: true, model: result, details: { final_url: result.url } };
+  const observation = await observeAfterAction(controller);
+  return {
+    ok: true,
+    model: {
+      ...result,
+      ...(observation ? { observation: modelObservation(observation) } : {}),
+    },
+    details: { final_url: result.url },
+  };
 }

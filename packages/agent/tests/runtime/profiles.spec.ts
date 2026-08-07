@@ -118,6 +118,19 @@ describe('@no-llm command task profiles', () => {
     }
   });
 
+  it('adds browser efficiency and bounded widget guidance only to do', () => {
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+    expect(task).toMatch(/browser_form_fill/i);
+    expect(task).toMatch(/do not chain browser_observe/i);
+    expect(task).toMatch(/disabled: true/i);
+    expect(task).toMatch(/bounded number of attempts/i);
+    expect(task).toMatch(/do not switch to web_search/i);
+    for (const command of ['ask', 'research'] as const) {
+      expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/browser_form_fill/i);
+      expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/disabled: true/i);
+    }
+  });
+
   it('keeps the superseded research prompt stack removed', () => {
     expect(existsSync(new URL('../../src/research/prompt.ts', import.meta.url))).toBe(false);
   });

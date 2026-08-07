@@ -12,6 +12,7 @@ function observation(
     url: 'https://example.com/search',
     title: 'Search',
     digest: 'a page',
+    digestUnchanged: false,
     interactables: entries.map(([ref, role, name]) => ({ ref, role, name })),
   };
 }

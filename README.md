@@ -261,15 +261,15 @@ default to denial; waits are bounded, and `--json`/non-TTY runs fail closed
 without prompting. CAPTCHA, bot walls, robots restrictions, and other controls
 produce an honest handoff—Yantra never evades them.
 
-**Two rules keep a `do` run grounded in what it actually saw.** Navigation is
-restricted to URLs a tool result actually produced, plus the hosts and URLs you
-supplied yourself (`--allow-host`, or a link in the goal) — so the agent cannot
-assemble a "deep link" and publish from whatever page it happens to serve
-(`URL_NOT_FROM_EVIDENCE`). And `browser_form_fill` lets
-it drive a real multi-field search form — autocomplete destinations and calendar
-date pickers included — in one call, so hand-building a URL is not the only way
-through. It is available to `do` only, never submits, and never handles
-credentials; use `browser_fill` for those. See
+**Two rules keep a `do` run grounded in what it actually saw.** Navigation
+requires an attested origin, path, and query-parameter names, plus the hosts and
+URLs you supplied yourself (`--allow-host`, or a link in the goal). Query values
+on an already-visited URL may vary, but a new path, parameter name, or identifier
+is refused with `URL_NOT_FROM_EVIDENCE`. And `browser_form_fill` drives a real
+multi-field search form — autocomplete destinations and calendar date pickers
+included — in one call. Calendar days use month/year group context, bounded
+month paging, and post-click value verification. It is available to `do` only,
+never submits, and never handles credentials; use `browser_fill` for those. See
 [docs/agent-tools.md](docs/agent-tools.md).
 
 Hard budgets cover wall-clock time, per-tool timeout, provider tokens,

@@ -3,7 +3,12 @@ import { Type } from 'typebox';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
-import { browserController, browserFailure, isDomainFailure } from './browser-common.js';
+import {
+  browserController,
+  browserFailure,
+  isDomainFailure,
+  modelObservation,
+} from './browser-common.js';
 
 const BrowserObserveParams = Type.Object({}, { additionalProperties: false });
 
@@ -15,7 +20,7 @@ export function browserObserveSpec(
     name: 'browser_observe',
     label: 'Browser Observe',
     description:
-      'Observe the current page as bounded sanitized text and opaque interactable refs. Use it after navigating and to verify changes; refs stay valid across actions on the same page. Do NOT invent refs or reuse them after a navigation.',
+      'Read the current page without acting, as bounded sanitized text and opaque interactable refs. Action tools already return a fresh observation, so do not chain this after every action. Use it for an independent fresh read; never invent refs or reuse them after navigation.',
     parameters: BrowserObserveParams,
     sanitizationProfile: 'public',
     run: async (_params, ctx): Promise<DomainResult> => {
@@ -32,7 +37,7 @@ export function browserObserveSpec(
           host: controller.host(),
           requires_confirmation: false,
         });
-        return { ok: true, model: observation };
+        return { ok: true, model: modelObservation(observation) };
       } catch (error) {
         return browserFailure(error);
       }

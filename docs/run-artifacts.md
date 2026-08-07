@@ -87,12 +87,21 @@ record for the provider session:
 | `auth_source`       | `managed`, `runtime-key`, or `environment`; never a credential. |
 | `session_id`        | Provider session identity.                                      |
 | `session_file`      | Relative pointer to the raw JSONL under `agent/`.               |
-| `prompt_version`    | Authoritative prompt version (currently `agent-v6`).            |
+| `prompt_version`    | Authoritative prompt version (currently `agent-v7`).            |
 | `prompt_hash`       | SHA-256 of the exact system prompt text.                        |
 | `tool_catalog_hash` | SHA-256 of canonical tool names, schemas, and descriptions.     |
 
 Every version ever shipped stays valid in the schema, so manifests written by
 older releases keep validating.
+
+### `agent-v7` — bounded URL variation and browser efficiency
+
+`agent-v7` permits changing query **values** on an already-visited URL while
+continuing to forbid invented paths, parameter names, and identifiers. Its
+`do` guidance also reflects post-action observations, disabled markers,
+multi-field form filling, and bounded widget failure behavior. This semantic
+system-prompt change produces a new `prompt_hash`; `agent-v6` manifests remain
+valid and retain the meaning documented below.
 
 ### `agent-v6` — grant-aware ambient context
 

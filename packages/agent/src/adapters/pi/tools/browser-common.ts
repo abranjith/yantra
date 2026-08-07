@@ -2,6 +2,7 @@ import {
   BrowserActionabilityError,
   StaleElementRefError,
   type AgentBrowserController,
+  type AgentBrowserObservation,
 } from '@yantra/core';
 import type { LocatorCandidate } from '@yantra/protocol';
 
@@ -71,4 +72,39 @@ export async function safeLocatorFor(
   } catch {
     return [];
   }
+}
+
+/** Best-effort fresh read after a successful action. */
+export async function observeAfterAction(
+  controller: AgentBrowserController,
+): Promise<AgentBrowserObservation | undefined> {
+  try {
+    return await controller.observe();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Convert the controller's internal camelCase digest state to the tool shape. */
+export function modelObservation(observation: AgentBrowserObservation): {
+  readonly url: string;
+  readonly title: string;
+  readonly digest?: string;
+  readonly digest_unchanged?: true;
+  readonly interactables: AgentBrowserObservation['interactables'];
+} {
+  const model: {
+    url: string;
+    title: string;
+    digest?: string;
+    digest_unchanged?: true;
+    interactables: AgentBrowserObservation['interactables'];
+  } = {
+    url: observation.url,
+    title: observation.title,
+    interactables: observation.interactables,
+  };
+  if (observation.digestUnchanged) model.digest_unchanged = true;
+  else if (observation.digest.length > 0) model.digest = observation.digest;
+  return model;
 }

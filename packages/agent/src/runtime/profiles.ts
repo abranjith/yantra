@@ -81,7 +81,13 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
-      'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task Brief.',
+      'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
+      'Brief. Prefer browser_form_fill for multi-field forms; it re-observes between fields and ' +
+      'can reach controls revealed by the previous step. Action tools return a fresh observation, ' +
+      'so do not chain browser_observe after every action. Disabled elements are marked ' +
+      'disabled: true; choose a different element. If a site widget still resists after a bounded ' +
+      'number of attempts, publish what you verified and state the gap precisely. Do not switch ' +
+      'to web_search for data the goal asked you to read from a specific site.',
     briefKind: 'task',
   },
 };

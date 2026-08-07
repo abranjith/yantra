@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Page } from '../../src/browser/types.js';
 import {
@@ -17,10 +17,15 @@ interface FakePageOpts {
   readonly url?: string;
   readonly pageData?: { title: string; html: string } | 'throw';
   readonly rawInteractables?: readonly RawInteractable[] | 'throw';
+  readonly locatorHost?: Page['locatorHost'];
 }
 
 class FakePage implements Pick<Page, 'evaluate' | 'url'> {
-  public constructor(private readonly opts: FakePageOpts) {}
+  public readonly locatorHost: Page['locatorHost'];
+
+  public constructor(private readonly opts: FakePageOpts) {
+    this.locatorHost = opts.locatorHost;
+  }
 
   public url(): string {
     return this.opts.url ?? 'https://example.com/page';
@@ -76,12 +81,34 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
     kind: 'button',
     disabled: false,
     top: 0,
+    left: 0,
+    group: null,
+    scope: 'page',
+    value: null,
+    valuePresent: false,
+    checked: null,
+    expanded: null,
+    selected: null,
     visible: true,
     ...overrides,
   };
 }
 
 describe('@no-llm buildObservation', () => {
+  it('best-effort injects the locator runtime and degrades when injection rejects', async () => {
+    const ensureInjected = vi.fn().mockRejectedValue(new Error('cross-origin'));
+    const page = makePage({ locatorHost: { ensureInjected } as Page['locatorHost'] });
+
+    await expect(
+      buildObservation(
+        page,
+        { outcome: 'completed', reason: null },
+        { extractor: new FakeExtractor() },
+      ),
+    ).resolves.toBeDefined();
+    expect(ensureInjected).toHaveBeenCalledWith('main');
+  });
+
   it('builds a full observation from a normal page', async () => {
     const page = makePage({
       url: 'https://example.com/results',

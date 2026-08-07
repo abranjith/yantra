@@ -294,7 +294,7 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
-  it('caps the model-visible observation at 30 but resolves more under an explicit cap', async () => {
+  it('caps the model-visible observation at 50 but resolves more under an explicit cap', async () => {
     // `browser_form_fill` needs to address elements outside the model-visible
     // cap; `browser_observe` must not be widened by that. The cap argument is
     // for internal resolution only.
@@ -307,12 +307,12 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.navigate(`${baseUrl}/many`);
 
     const modelVisible = await controller.observe();
-    const internal = await controller.observe({ cap: 400 });
+    const internal = await controller.observe({ cap: 400, trackDigest: false });
 
-    expect(modelVisible.interactables).toHaveLength(30);
-    expect(internal.interactables.length).toBeGreaterThan(30);
+    expect(modelVisible.interactables).toHaveLength(50);
+    expect(internal.interactables.length).toBeGreaterThan(50);
     // The cap is clamped, so an absurd request cannot explode the handle set.
-    const clamped = await controller.observe({ cap: 10_000 });
+    const clamped = await controller.observe({ cap: 10_000, trackDigest: false });
     expect(clamped.interactables.length).toBeLessThanOrEqual(400);
     await controller.teardown();
   }, 45_000);
@@ -709,18 +709,62 @@ describe('@no-llm AgentBrowserController', () => {
       browserProvider: tracked.provider,
       logger,
       maxDigestBytes: 1_024,
-      maxInteractables: 10,
+      maxInteractables: 20,
     });
     await controller.navigate(`${baseUrl}/`);
+    await tracked.page!.puppeteerPage!.evaluate(() => {
+      document.querySelector<HTMLInputElement>('input[name="u"]')!.value = 'Frisco, Texas';
+      document.querySelector<HTMLInputElement>('input[name="p"]')!.value = 'hunter2';
+      document
+        .querySelector<HTMLButtonElement>('button[onclick*="hideable"]')!
+        .setAttribute('aria-expanded', 'false');
+    });
     const observation = await controller.observe();
     expect(Buffer.byteLength(observation.digest, 'utf8')).toBeLessThanOrEqual(1_024);
     expect(observation.digest).not.toContain('admin@example.com');
     expect(observation.digest).not.toContain('sk-ABCDEF0123456789abcdef01');
-    expect(observation.interactables).toHaveLength(10);
+    expect(observation.interactables).toHaveLength(20);
+    expect(observation.interactables.find((entry) => entry.name === 'Username')).toMatchObject({
+      value: 'Frisco, Texas',
+    });
+    expect(observation.interactables.find((entry) => entry.name === 'Password')).toMatchObject({
+      value_present: true,
+    });
+    expect(JSON.stringify(observation)).not.toContain('hunter2');
+    expect(
+      observation.interactables.find((entry) => entry.name === 'Disabled action'),
+    ).toMatchObject({ disabled: true });
+    expect(observation.interactables.find((entry) => entry.name === 'Hide it')).toMatchObject({
+      expanded: false,
+    });
     const second = await controller.observe();
+    expect(second.digest).toBe('');
+    expect(second.digestUnchanged).toBe(true);
     expect(second.interactables.map((entry) => entry.name)).toEqual(
       observation.interactables.map((entry) => entry.name),
     );
+    await controller.teardown();
+  }, 45_000);
+
+  it('does not let an internal observation consume the model-visible digest', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'digest-tracking-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+
+    const internal = await controller.observe({ cap: 400, trackDigest: false });
+    const visible = await controller.observe();
+    expect(internal.digest).not.toBe('');
+    expect(visible.digest).not.toBe('');
+    expect(visible.digestUnchanged).toBe(false);
+
+    await controller.navigate(`${baseUrl}/`);
+    const afterNavigation = await controller.observe();
+    expect(afterNavigation.digest).not.toBe('');
+    expect(afterNavigation.digestUnchanged).toBe(false);
     await controller.teardown();
   }, 45_000);
 

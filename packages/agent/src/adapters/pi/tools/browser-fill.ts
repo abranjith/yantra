@@ -9,6 +9,8 @@ import {
   browserController,
   browserFailure,
   isDomainFailure,
+  modelObservation,
+  observeAfterAction,
   safeLocatorFor,
 } from './browser-common.js';
 
@@ -78,7 +80,7 @@ export function browserFillSpec(services: RunServices): ToolWrapperSpec<typeof B
     name: 'browser_fill',
     label: 'Browser Fill',
     description:
-      'Fill one observed field. Pass "value" as a plain string for ordinary text, or as a secret_ref object for a stored credential. Use it only after observing the field. Do NOT put credentials in the plain-string/literal form or supply host bindings yourself.',
+      'Fill one observed field and return a fresh post-action observation; browser_observe is only needed for a read without acting. Pass "value" as a plain string for ordinary text, or as a secret_ref object for a stored credential. Do NOT put credentials in the plain-string/literal form or supply host bindings yourself.',
     parameters: BrowserFillParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -142,7 +144,14 @@ async function runFill(params: Params, services: RunServices): Promise<DomainRes
       // promotable artifact — record the masked (placeholder) form, never the
       // raw value, mirroring the secret-ref rule.
       recordTrace({ kind: 'literal', value: services.userInput?.mask(literal) ?? literal });
-      return { ok: true, model: result };
+      const observation = await observeAfterAction(controller);
+      return {
+        ok: true,
+        model: {
+          ...result,
+          ...(observation ? { observation: modelObservation(observation) } : {}),
+        },
+      };
     } catch (error) {
       return browserFailure(error);
     }
@@ -193,7 +202,15 @@ async function runFill(params: Params, services: RunServices): Promise<DomainRes
   try {
     const result = await withSecret(resolved.value, (value) => controller.fill(params.ref, value));
     recordTrace({ kind: 'secret_ref', key: params.value.key });
-    return { ok: true, model: result, details: { secret_key: params.value.key } };
+    const observation = await observeAfterAction(controller);
+    return {
+      ok: true,
+      model: {
+        ...result,
+        ...(observation ? { observation: modelObservation(observation) } : {}),
+      },
+      details: { secret_key: params.value.key },
+    };
   } catch (error) {
     return browserFailure(error);
   } finally {

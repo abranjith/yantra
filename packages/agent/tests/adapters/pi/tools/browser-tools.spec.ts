@@ -222,6 +222,7 @@ describe('@no-llm browser tools', () => {
       url: 'https://example.com',
       title: 'Page',
       digest: 'hello',
+      digestUnchanged: false,
       interactables: [{ ref: 'e1', role: 'button', name: 'Go' }],
     });
     const services = browserServices(controller);
@@ -233,6 +234,70 @@ describe('@no-llm browser tools', () => {
       undefined,
     );
     expect(clicked.error_code).toBe('STALE_ELEMENT_REF');
+  });
+
+  it('returns a fresh post-click observation and omits it when the read fails', async () => {
+    const controller = fakeController();
+    controller.click.mockResolvedValue({ url: 'https://example.com', title: 'Page' });
+    controller.observe.mockResolvedValue({
+      url: 'https://example.com',
+      title: 'Page',
+      digest: 'Updated',
+      digestUnchanged: false,
+      interactables: [{ ref: 'e2', role: 'button', name: 'Next' }],
+    });
+    const services = browserServices(controller);
+
+    const clicked = await wrapTool(browserClickSpec(services), services).execute(
+      { ref: 'e1' },
+      undefined,
+    );
+    expect(clicked.status).toBe('ok');
+    expect(clicked.modelText).toContain('"observation"');
+    expect(clicked.modelText).toContain('"ref":"e2"');
+
+    controller.observe.mockRejectedValue(new Error('read failed'));
+    const degraded = await wrapTool(browserClickSpec(services), services).execute(
+      { ref: 'e1' },
+      undefined,
+    );
+    expect(degraded.status).toBe('ok');
+    expect(degraded.modelText).not.toContain('"observation"');
+  });
+
+  it('projects unchanged digests as a flag and omits the empty digest', async () => {
+    const controller = fakeController();
+    controller.observe.mockResolvedValue({
+      url: 'https://example.com',
+      title: 'Page',
+      digest: '',
+      digestUnchanged: true,
+      interactables: [],
+    });
+    const services = browserServices(controller);
+
+    const observed = await wrapTool(browserObserveSpec(services), services).execute({}, undefined);
+    const payload = JSON.parse(observed.modelText) as Record<string, unknown>;
+    expect(payload.digest_unchanged).toBe(true);
+    expect(payload).not.toHaveProperty('digest');
+  });
+
+  it('sanitizes page-origin field values before the model sees them', async () => {
+    const controller = fakeController();
+    controller.observe.mockResolvedValue({
+      url: 'https://example.com',
+      title: 'Page',
+      digest: '',
+      digestUnchanged: false,
+      interactables: [
+        { ref: 'e1', role: 'textbox', name: 'Contact', value: 'outsider@example.com' },
+      ],
+    });
+    const services = browserServices(controller);
+
+    const observed = await wrapTool(browserObserveSpec(services), services).execute({}, undefined);
+    expect(observed.modelText).not.toContain('outsider@example.com');
+    expect(observed.modelText).toContain('[redacted-email]');
   });
 
   it('denies a protected click when no confirmation surface is available', async () => {
@@ -351,6 +416,13 @@ describe('@no-llm browser tools', () => {
     controller.fill.mockResolvedValue({ url: 'https://shop.example/signup', title: 'Signup' });
     controller.host.mockReturnValue('shop.example');
     controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Email' });
+    controller.observe.mockResolvedValue({
+      url: 'https://shop.example/signup',
+      title: 'Signup',
+      digest: '',
+      digestUnchanged: true,
+      interactables: [{ ref: 'e1', role: 'textbox', name: 'Email', value: 'john@example.com' }],
+    });
     const vault = new UserInputVault();
     expect(vault.redact('sign up with john@example.com')).toContain('{{user:email:1}}');
     const trace = new AgentTrace();
@@ -377,6 +449,7 @@ describe('@no-llm browser tools', () => {
     expect(result.status).toBe('ok');
     expect(controller.fill).toHaveBeenCalledWith('e1', 'john@example.com');
     expect(JSON.stringify(result)).not.toContain('john@example.com');
+    expect(result.modelText).toContain('{{user:email:1}}');
     const step = trace.steps()[0];
     expect(step?.kind).toBe('fill');
     if (step?.kind === 'fill') {

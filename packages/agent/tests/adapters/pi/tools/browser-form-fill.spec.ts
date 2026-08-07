@@ -9,21 +9,36 @@ import type {
 } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { browserFormFillSpec } from '../../../../src/adapters/pi/tools/browser-form-fill.js';
+import {
+  bestNameMatch,
+  browserFormFillSpec,
+  MAX_MONTH_PAGES,
+} from '../../../../src/adapters/pi/tools/browser-form-fill.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { RunServices } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 
 import { assertToolContract, buildServices } from './test-support.js';
 
-type Entry = readonly [ref: string, role: string, name: string];
+type Entry = readonly [
+  ref: string,
+  role: string,
+  name: string,
+  metadata?: Partial<AgentInteractable>,
+];
 
 function observationOf(entries: readonly Entry[]): AgentBrowserObservation {
   return {
     url: 'https://www.kayak.com/hotels',
     title: 'Hotels',
     digest: 'Find your stay',
-    interactables: entries.map(([ref, role, name]) => ({ ref, role, name })),
+    digestUnchanged: false,
+    interactables: entries.map(([ref, role, name, metadata]) => ({
+      ref,
+      role,
+      name,
+      ...metadata,
+    })),
   };
 }
 
@@ -39,6 +54,8 @@ class ScriptedPage {
   /** Transitions applied when a given ref is clicked or filled. */
   private readonly onFill = new Map<string, readonly Entry[]>();
   private readonly onClick = new Map<string, readonly Entry[]>();
+  private readonly clickSequences = new Map<string, (readonly Entry[])[]>();
+  private activeTrigger: string | null = null;
 
   public constructor(initial: readonly Entry[]) {
     this.stage = initial;
@@ -54,6 +71,11 @@ class ScriptedPage {
     return this;
   }
 
+  public revealOnClicks(ref: string, next: readonly (readonly Entry[])[]): this {
+    this.clickSequences.set(ref, [...next]);
+    return this;
+  }
+
   public controller(): AgentBrowserController {
     return {
       observe: () => Promise.resolve(observationOf(this.stage)),
@@ -65,14 +87,36 @@ class ScriptedPage {
       },
       click: (ref: string) => {
         this.clicks.push(ref);
-        const next = this.onClick.get(ref);
-        if (next) this.stage = next;
+        const clicked = this.stage.find(([entryRef]) => entryRef === ref);
+        if (
+          clicked?.[2] === 'Check-in' ||
+          clicked?.[2] === 'Check-out' ||
+          clicked?.[2] === 'Dates'
+        ) {
+          this.activeTrigger = ref;
+        }
+        const sequence = this.clickSequences.get(ref);
+        const next = sequence?.shift() ?? this.onClick.get(ref);
+        if (next) {
+          this.stage = next;
+        } else if (
+          this.activeTrigger !== null &&
+          clicked &&
+          !/^(?:next|previous)(?: month)?$/i.test(clicked[2])
+        ) {
+          const selected = clicked[3]?.group ? `${clicked[3].group} ${clicked[2]}` : clicked[2];
+          this.stage = this.stage.map((entry) =>
+            entry[0] === this.activeTrigger
+              ? [entry[0], entry[1], entry[2], { ...entry[3], value: selected }]
+              : entry,
+          );
+        }
         return Promise.resolve({ url: 'https://www.kayak.com/hotels', title: 'Hotels' });
       },
       host: () => 'www.kayak.com',
       describeRef: (ref: string): AgentInteractable | undefined => {
         const found = this.stage.find(([entryRef]) => entryRef === ref);
-        return found ? { ref: found[0], role: found[1], name: found[2] } : undefined;
+        return found ? { ref: found[0], role: found[1], name: found[2], ...found[3] } : undefined;
       },
       locatorFor: () => Promise.resolve([]),
     } as unknown as AgentBrowserController;
@@ -124,6 +168,25 @@ describe('@no-llm browser_form_fill', () => {
     return wrapTool(browserFormFillSpec(svc), svc).execute({ fields }, undefined);
   }
 
+  it('matches bare calendar days only with unambiguous month/year group context', () => {
+    const candidates: AgentInteractable[] = [
+      { ref: 'e1', role: 'button', name: '6', group: 'August 2026' },
+      { ref: 'e2', role: 'button', name: '6', group: 'September 2026' },
+    ];
+
+    expect(bestNameMatch(candidates, '2026-08-06')?.ref).toBe('e1');
+    expect(bestNameMatch(candidates, '2026-09-06')?.ref).toBe('e2');
+    expect(
+      bestNameMatch(
+        candidates.map(({ group: _group, ...entry }) => entry),
+        '2026-08-06',
+      ),
+    ).toBeNull();
+    expect(
+      bestNameMatch([{ ref: 'e3', role: 'button', name: '6', group: 'August 2025' }], '2026-08-06'),
+    ).toBeNull();
+  });
+
   it('passes the reusable tool contract harness', async () => {
     const svc = services(new ScriptedPage(KAYAK_FORM));
     await assertToolContract(browserFormFillSpec(svc), { fields: 'not an array' });
@@ -148,12 +211,16 @@ describe('@no-llm browser_form_fill', () => {
     expect(result.status).toBe('ok');
     const payload = JSON.parse(result.modelText) as {
       interactables: AgentInteractable[];
-      applied: { field: string; action: string }[];
+      applied: { field: string; action: string; resulting_value?: string }[];
     };
     expect(payload.applied.map((entry) => entry.action)).toEqual([
       'picked_suggestion',
       'chose_in_widget',
       'chose_in_widget',
+    ]);
+    expect(payload.applied.slice(1).map((entry) => entry.resulting_value)).toEqual([
+      'August 5, 2026',
+      'August 7, 2026',
     ]);
     // The agent can now see the submit button and click it itself.
     expect(payload.interactables.some((entry) => entry.name === 'Search')).toBe(true);
@@ -225,6 +292,64 @@ describe('@no-llm browser_form_fill', () => {
     expect(result.error_code).toBe('FORM_WIDGET_NO_MATCH');
     expect(result.modelText).toContain('2026-08-05');
     expect(result.modelText).toContain('September 9, 2026');
+  });
+
+  it('pages a calendar until the target month and reports the resulting value', async () => {
+    const september: readonly Entry[] = [
+      ...KAYAK_FORM,
+      ['e70', 'button', 'Next month'],
+      ['e71', 'button', '6', { group: 'September 2026' }],
+    ];
+    const october: readonly Entry[] = [
+      ...KAYAK_FORM,
+      ['e70', 'button', 'Next month'],
+      ['e72', 'button', '6', { group: 'October 2026' }],
+    ];
+    const november: readonly Entry[] = [
+      ...KAYAK_FORM,
+      ['e70', 'button', 'Next month'],
+      ['e73', 'button', '6', { group: 'November 2026' }],
+    ];
+    const december: readonly Entry[] = [
+      ...KAYAK_FORM,
+      ['e70', 'button', 'Next month'],
+      ['e74', 'button', '6', { group: 'December 2026' }],
+    ];
+    const page = new ScriptedPage(KAYAK_FORM)
+      .revealOnClick('e20', september)
+      .revealOnClicks('e70', [october, november, december]);
+
+    const result = await run(page, [{ field: 'Check-in', value: '2026-12-06' }]);
+
+    expect(result.status).toBe('ok');
+    expect(page.clicks).toEqual(['e20', 'e70', 'e70', 'e70', 'e74']);
+    expect(result.modelText).toContain('December 2026 6');
+  });
+
+  it('bounds month paging at MAX_MONTH_PAGES', async () => {
+    const page = new ScriptedPage(KAYAK_FORM).revealOnClick('e20', [
+      ...KAYAK_FORM,
+      ['e70', 'button', 'Next month'],
+      ['e71', 'button', '6', { group: 'September 2026' }],
+    ]);
+
+    const result = await run(page, [{ field: 'Check-in', value: '2028-12-06' }]);
+
+    expect(result.error_code).toBe('FORM_WIDGET_NO_MATCH');
+    expect(page.clicks.filter((ref) => ref === 'e70')).toHaveLength(MAX_MONTH_PAGES);
+    expect(result.modelText).toContain(String(MAX_MONTH_PAGES));
+  });
+
+  it('returns FORM_WIDGET_NO_EFFECT when a day click leaves the trigger unchanged', async () => {
+    const opened: readonly Entry[] = [...KAYAK_FORM, ['e60', 'button', 'August 5, 2026']];
+    const page = new ScriptedPage(KAYAK_FORM)
+      .revealOnClick('e20', opened)
+      .revealOnClick('e60', opened);
+
+    const result = await run(page, [{ field: 'Check-in', value: '2026-08-05' }]);
+
+    expect(result.error_code).toBe('FORM_WIDGET_NO_EFFECT');
+    expect(result.modelText).toContain('Check-in');
   });
 
   it('returns FORM_FIELD_NOT_FOUND with candidates for an unknown field', async () => {
