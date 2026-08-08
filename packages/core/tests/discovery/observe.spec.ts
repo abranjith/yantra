@@ -9,6 +9,7 @@ import {
   MAX_PAGE_DIGEST_LEN,
   buildObservation,
   mapRunOutcomeToStepOutcome,
+  orderAgentInteractables,
 } from '../../src/discovery/observe.js';
 import type { Extractor } from '../../src/extraction/readability.js';
 import type { ExtractedArticle, FetchedDoc } from '../../src/extraction/types.js';
@@ -93,6 +94,29 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
     ...overrides,
   };
 }
+
+describe('@no-llm panel-major agent interactable ordering', () => {
+  it('keeps side-by-side calendar panels contiguous', () => {
+    const ordered = orderAgentInteractables([
+      raw({ name: 'Aug 1', group: 'August 2026', scope: 'dialog', top: 100, left: 100 }),
+      raw({ name: 'Sep 1', group: 'September 2026', scope: 'dialog', top: 100, left: 400 }),
+      raw({ name: 'Aug 2', group: 'August 2026', scope: 'dialog', top: 150, left: 100 }),
+      raw({ name: 'Sep 2', group: 'September 2026', scope: 'dialog', top: 150, left: 400 }),
+    ]);
+
+    expect(ordered.map((entry) => entry.name)).toEqual(['Aug 1', 'Aug 2', 'Sep 1', 'Sep 2']);
+  });
+
+  it('retains ungrouped page chrome relative reading order', () => {
+    const ordered = orderAgentInteractables([
+      raw({ name: 'Footer', top: 300, left: 0 }),
+      raw({ name: 'Header', top: 10, left: 0 }),
+      raw({ name: 'Content', top: 100, left: 0 }),
+    ]);
+
+    expect(ordered.map((entry) => entry.name)).toEqual(['Header', 'Content', 'Footer']);
+  });
+});
 
 describe('@no-llm buildObservation', () => {
   it('best-effort injects the locator runtime and degrades when injection rejects', async () => {

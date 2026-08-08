@@ -48,7 +48,7 @@ export function scanInteractablesInPage(): RawInteractable[] {
     document.querySelectorAll<HTMLElement>(
       'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
         '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
-        '[role="option"]',
+        '[role="option"], [data-yantra-widget-target]',
     ),
   );
   const results: RawInteractable[] = [];
@@ -96,6 +96,7 @@ export function scanInteractablesInPage(): RawInteractable[] {
   function computeRole(element: HTMLElement): string | null {
     const explicit = element.getAttribute('role');
     if (explicit) return explicit;
+    if (element.hasAttribute('data-yantra-widget-target')) return 'button';
     const tag = element.tagName.toLowerCase();
     if (tag === 'button') return 'button';
     if (tag === 'a') return 'link';
@@ -107,6 +108,31 @@ export function scanInteractablesInPage(): RawInteractable[] {
     if (type === 'radio') return 'radio';
     if (['submit', 'button', 'reset', 'image'].includes(type)) return 'button';
     return 'textbox';
+  }
+
+  /**
+   * Offline mirror of the locator runtime's accname "name from content" step.
+   * Kept in sync with `getAccessibleName` deliberately: a page that names its
+   * controls through a labelling child would otherwise be readable only when
+   * injection succeeded, and unreadable in exactly the same way as before when
+   * it did not.
+   */
+  function nameFromContent(element: Element, depth = 0): string {
+    if (depth > 16) return '';
+    const parts: string[] = [];
+    for (const child of Array.from(element.childNodes)) {
+      if (child.nodeType === 3) {
+        parts.push(child.nodeValue ?? '');
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const node = child as Element;
+      if (node.getAttribute('aria-hidden') === 'true') continue;
+      const declared =
+        node.getAttribute('aria-label')?.trim() ?? node.getAttribute('alt')?.trim() ?? '';
+      parts.push(declared || nameFromContent(node, depth + 1));
+    }
+    return parts.join('');
   }
 
   function computeName(element: HTMLElement): string | null {
@@ -143,7 +169,7 @@ export function scanInteractablesInPage(): RawInteractable[] {
         'button,a,[role="button"],[role="link"],[role="option"],[role="menuitem"],[role="tab"]',
       )
     ) {
-      const text = element.textContent?.trim();
+      const text = nameFromContent(element);
       if (text) return truncate(normalize(text));
     }
     const fallback =
@@ -151,13 +177,18 @@ export function scanInteractablesInPage(): RawInteractable[] {
     return fallback ? truncate(fallback) : null;
   }
 
+  /**
+   * Return the nearest labelled container. An unlabelled matching ancestor is
+   * skipped rather than treated as terminal: calendar cells commonly meet an
+   * inner table before the outer month panel that actually names the group.
+   */
   function computeGroup(element: HTMLElement): string | null {
     const groupSelector =
       '[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"], ' +
       '[role="grid"], [role="table"], [role="group"], [role="region"], ' +
       '[role="tabpanel"], table, [aria-label], [aria-labelledby]';
     let ancestor = element.parentElement;
-    for (let depth = 0; ancestor && ancestor !== document.body && depth < 8; depth += 1) {
+    for (let depth = 0; ancestor && ancestor !== document.body && depth < 12; depth += 1) {
       if (ancestor.matches(groupSelector)) {
         const ariaLabel = ancestor.getAttribute('aria-label');
         if (ariaLabel?.trim()) return truncateGroup(normalize(ariaLabel));
@@ -181,7 +212,20 @@ export function scanInteractablesInPage(): RawInteractable[] {
         const heading = ancestor.querySelector<HTMLElement>(
           'h1,h2,h3,h4,h5,h6,[role="heading"]',
         )?.textContent;
-        return heading?.trim() ? truncateGroup(normalize(heading)) : null;
+        if (heading?.trim()) return truncateGroup(normalize(heading));
+
+        let sibling = ancestor.previousElementSibling;
+        while (sibling) {
+          if (sibling.matches('h1,h2,h3,h4,h5,h6,[role="heading"]')) {
+            const preceding = sibling.textContent;
+            if (preceding?.trim()) return truncateGroup(normalize(preceding));
+          }
+          const nested = sibling.querySelector<HTMLElement>(
+            'h1,h2,h3,h4,h5,h6,[role="heading"]',
+          )?.textContent;
+          if (nested?.trim()) return truncateGroup(normalize(nested));
+          sibling = sibling.previousElementSibling;
+        }
       }
       ancestor = ancestor.parentElement;
     }

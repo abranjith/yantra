@@ -17,6 +17,7 @@ export * from './profile/index.js';
 export * from './discovery/index.js';
 export * from './scheduler/index.js';
 export * from './ranking/index.js';
+export * from './widgets/index.js';
 
 export {
   DefaultSanitizer,

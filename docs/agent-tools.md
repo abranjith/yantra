@@ -184,6 +184,10 @@ absent from it with **`URL_NOT_FROM_EVIDENCE`** (retryable):
 > page attested. Query values on an already-visited URL may vary; new paths,
 > parameter names, and identifiers still require `web_search` or a click-through.
 
+If the same normalized URL is refused again in one run, the message points to
+the concrete grounded routes: submit the visible form with `browser_click`, or
+open a search result. Repeating the guessed URL does not relax provenance.
+
 The check runs **before** the URL policy, because `check()` reserves navigation
 and host budget and a refused guess must not consume it.
 
@@ -215,19 +219,21 @@ Gating it needs its own design.
 
 `ask`, `research`, and `do` share the same wrappers and audit projection, but do not receive the same capabilities. `ask` is web-only and may only list saved workflows; `research` is web-only unless `YANTRA_AGENT_RESEARCH_BROWSE=1` explicitly enables read-only browsing; only `do` receives browser mutation tools. This is capability removal at registration time, not a prompt-only restriction.
 
-| Tool                | What it does                                                                                                                                 | Key constraints                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web_search`        | Search the public web and return the top hits **with their extracted page content** and references, plus a snippet-only `more_results` tail. | Combined search-that-fetches: fetches the top `search.fetch_top` hits (1–5, default 3) through the same per-source path as the deterministic pipeline. Every fetched URL passes the URL policy and ethics gate individually; per-site failures are data (`failures[]`), never a whole-tool error. Snippets **and** fetched content are untrusted, sanitized before the model sees them; oversized site text becomes a capture reference. |
-| `web_fetch`         | Fetch + extract readable article text from **one specific public URL** you already have.                                                     | Secondary to `web_search` (which already returns page content for a query): use it only for a direct link or a link discovered inside previously fetched content. URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                                                         |
-| `browser_navigate`  | Lazily open the single run page at a policy-checked URL and return its fresh observation.                                                    | Origin + path + parameter names must be attested by a tool result or goal; query values may vary. `--allow-host` grants the user-named host. URL/host budgets and ethics checks run before navigation.                                                                                                                                                                                                                                   |
-| `browser_observe`   | Read bounded page text and ranked opaque refs without acting.                                                                                | Side-effect free. Action tools already return a fresh observation, so use this for an independent read rather than chaining it after every action. Refs stay stable on the same document and reset on navigation.                                                                                                                                                                                                                        |
-| `browser_click`     | Click an actionable opaque ref and return the post-click observation.                                                                        | Dispatched as a user-shaped held press. Late navigation, redirects, and fetch/XHR updates settle before the observation is captured. Hidden, disabled, and stale targets return structured errors; protected actions require confirmation. A post-action read failure omits `observation` without changing a successful click into failure.                                                                                              |
-| `browser_fill`      | Fill an observed field and return the post-fill observation.                                                                                 | Accepts a literal, `{{user:...}}` placeholder, or host-bound secret reference. Native `<select>` uses option label/value. Credential-shaped literals are refused; secret refs require confirmation. A successful fill never returns/logs its supplied value, and a post-action read failure only omits `observation`.                                                                                                                    |
-| `browser_form_fill` | Fill several fields of one form in a single call, addressing them by visible name and re-observing between steps. **`do` only.**             | Never submits and never handles credentials (no `secret_ref` form; credential-shaped values are refused). Resolves each field against a fresh uncapped observation, so autocomplete options and calendar days revealed by the previous step are addressable. Stops at the first failing field and reports what was applied. Returns the post-fill observation so the submit button can be clicked with `browser_click`.                  |
-| `browser_extract`   | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview. A `content` extraction also records the page in the evidence ledger, so a browser-driven run cites the pages its answer came from.                                                                                                    |
-| `script_run`        | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                        |
-| `workflow_run`      | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                       |
-| `result_publish`    | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned plus every page `browser_extract` read), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                       |
+| Tool                  | What it does                                                                                                                                 | Key constraints                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`          | Search the public web and return the top hits **with their extracted page content** and references, plus a snippet-only `more_results` tail. | Combined search-that-fetches: fetches the top `search.fetch_top` hits (1–5, default 3) through the same per-source path as the deterministic pipeline. Every fetched URL passes the URL policy and ethics gate individually; per-site failures are data (`failures[]`), never a whole-tool error. Snippets **and** fetched content are untrusted, sanitized before the model sees them; oversized site text becomes a capture reference. |
+| `web_fetch`           | Fetch + extract readable article text from **one specific public URL** you already have.                                                     | Secondary to `web_search` (which already returns page content for a query): use it only for a direct link or a link discovered inside previously fetched content. URL policy, ethics gate (robots/blocklist/rate limit), content-type allowlist, streamed size limit; large content becomes a capture reference.                                                                                                                         |
+| `browser_navigate`    | Lazily open the single run page at a policy-checked URL and return its fresh observation.                                                    | Origin + path + parameter names must be attested by a tool result or goal; query values may vary. `--allow-host` grants the user-named host. URL/host budgets and ethics checks run before navigation.                                                                                                                                                                                                                                   |
+| `browser_observe`     | Read bounded page text and ranked opaque refs without acting.                                                                                | Side-effect free. Action tools already return a fresh observation, so use this for an independent read rather than chaining it after every action. Refs stay stable on the same document and reset on navigation.                                                                                                                                                                                                                        |
+| `browser_click`       | Click an actionable opaque ref and return the post-click observation.                                                                        | Dispatched as a user-shaped held press. Late navigation, redirects, and fetch/XHR updates settle before the observation is captured. Hidden, disabled, and stale targets return structured errors; protected actions require confirmation. A post-action read failure omits `observation` without changing a successful click into failure.                                                                                              |
+| `browser_fill`        | Fill an observed field and return the post-fill observation.                                                                                 | Accepts a literal, `{{user:...}}` placeholder, or host-bound secret reference. Native `<select>` uses option label/value. Credential-shaped literals are refused; secret refs require confirmation. A successful fill never returns/logs its supplied value, and a post-action read failure only omits `observation`.                                                                                                                    |
+| `browser_form_fill`   | Fill several fields of one form in a single call, addressing them by visible name and re-observing between steps. **`do` only.**             | Never submits and never handles credentials (no `secret_ref` form; credential-shaped values are refused). Resolves each field against a fresh uncapped observation, so autocomplete options and calendar days revealed by the previous step are addressable. Stops at the first failing field and reports what was applied. Returns the post-fill observation so the submit button can be clicked with `browser_click`.                  |
+| `browser_pick_option` | Commit one offered choice from a dropdown, autocomplete, listbox, menu, or similar control. **`do` only.**                                   | Accepts a visible field name or current `eNN` ref, uses the shared option drivers, refuses credential-shaped values, and returns the verified committed value plus a post-action observation.                                                                                                                                                                                                                                            |
+| `browser_pick_date`   | Commit one date or date range through a calendar popup or date input. **`do` only.**                                                         | Accepts exactly one of `date` or the complete `from`+`to` pair in calendar-valid `YYYY-MM-DD` form; the root schema is a plain object (a top-level union is not a valid provider function schema), so a half-specified, over-specified, invalid, or descending range is refused in-tool before page interaction; unsafe calendar mappings are never clicked.                                                                             |
+| `browser_extract`     | Extract current-page content (`kind:"content"`, the default) or the first table (`kind:"table"`).                                            | Common synonyms resolve; any other kind is a retryable `INVALID_INPUT` naming the accepted kinds. Output is schema-checked and sanitized; oversized data becomes a capture reference plus preview. A `content` extraction also records the page in the evidence ledger, so a browser-driven run cites the pages its answer came from.                                                                                                    |
+| `script_run`          | Run a named, allowlisted transformation script.                                                                                              | Registered ids only, validated args, out-of-process with time/memory/output caps.                                                                                                                                                                                                                                                                                                                                                        |
+| `workflow_run`        | Discover (`mode:list`) and run (`mode:run`) a saved deterministic workflow.                                                                  | Catalog is secret-free (name/description/params/hosts only); a run replays through the deterministic executor with no LLM, in its own nested run directory, returning a sanitized status/outputs summary plus the nested `run_id`.                                                                                                                                                                                                       |
+| `result_publish`      | Publish the final result content; complete the task.                                                                                         | Yantra builds and validates the formal Brief from agent content; sources attach automatically from the run's evidence ledger (every site `web_search`/`web_fetch` returned plus every page `browser_extract` read), so the model never re-types URLs; exactly one successful publication; closes the action phase.                                                                                                                       |
 
 Web tool outcomes also feed Yantra's local domain-ranking signal: search hits
 add a positive observation, while blocked, failed, or unreadable pages add a
@@ -239,68 +245,151 @@ goal: it replays reliably and cheaply with no model involvement. The agent never
 sees a workflow's secrets or internal locators, and must never pass secret values
 as workflow params.
 
+### Widget drivers
+
+Stateful controls are operated through one semantic driver contract in
+`@yantra/core`. A caller supplies a target plus a date, date range, or option
+intent; pattern-based drivers inspect the control, perform bounded actions, and
+re-read its committed value. Drivers identify standards-based shapes such as a
+native select, listbox, typeahead, calendar grid, or date input. They must never
+branch on a hostname, vendor class, or site-specific test id.
+
+A driver's target survives the page replacing it. Opening a widget routinely
+makes the framework behind it re-render the trigger, and the ref the driver
+holds was minted internally — the caller very often named the control instead.
+Surfacing `STALE_ELEMENT_REF` there would tell the model to re-observe and use a
+fresh ref for an element it never saw, so the tool re-acquires the control
+itself and retries once. Re-acquisition matches on the caller's own `field`
+string, then the target's original name, then that name's leading segment,
+which is what survives a trigger whose value is part of its label
+(`"Dates, Fri, Aug 21 - …"` → `"Dates, Sun, Sep 6 - …"`). A trigger whose whole
+name is replaced by its committed value cannot be re-found, and returns
+`WIDGET_ELEMENT_REPLACED` — retryable, and named for the control rather than
+for an internal ref.
+
+Detection is read-only and never opens a control. During execution, open state
+is checked instead of assumed, and a control that was already open is not
+toggled shut. Each operation is bounded by a deadline, action count, and (for
+calendars) paging count. A driver reports success only after the control's own
+rendered value matches the intent; ambiguity, an unsafe date mapping, or a click
+that did not commit becomes a typed `WIDGET_*` failure carrying the observed
+state.
+
+Open state is decided from what is rendered, not from what the trigger claims.
+`aria-expanded` counts only as a positive signal: many production triggers ship
+it hard-coded to `"false"`, or update it on a different node than the one the
+observation resolved. Trusting that over a container that is plainly on screen
+inverts the whole operation — the driver concludes "closed", clicks to open,
+and thereby closes the control it was asked to drive. A container is located
+through `aria-controls`, `aria-owns`, then an `aria-haspopup` trigger's popup
+sibling. When none of those declare the link, a driver already committed to a
+target may fall back to a scan for a single unambiguously open popup; detection
+never may, or an unrelated open dialog would make every field on the page look
+like a date control.
+
+A declared target must still look like a popup. Tabbed pickers routinely point
+`aria-controls` at an empty tabpanel placeholder and render the panel's content
+as a sibling, so a target with no children is treated as a label for the popup
+rather than the popup, and resolution continues. A container counts as rendered
+only with a non-zero width **and** height — an empty block-level element
+stretches to its parent's width at zero height, and width alone would pass it.
+Container scope is an optimization, not a safety property: a scoped calendar
+read that finds no day cells means the container is wrong, not that the page has
+no calendar, so the driver re-reads the document rather than reporting a visible
+month unreachable. The guarantees that matter — a date matching exactly one
+cell, the weekday cross-check, and refusing a disabled cell — run on whichever
+read is used.
+
+Option drivers cover native `<select>` controls, listbox/menu popups, and
+typeaheads. Candidate collection does not require `role="option"`: buttons,
+links, menu items, clickable list items, and homogeneous named siblings inside
+the resolved popup are eligible. This matters on production autocomplete
+widgets that expose suggestions as buttons. Matching proceeds through exact,
+prefix, all-token, and substring tiers; two choices tied in the winning tier
+produce `WIDGET_AMBIGUOUS_CHOICE` and no click.
+
+Date drivers cover native/format-signalled date inputs and popup calendar
+grids. Calendar cells are derived in a strict order: machine-readable date
+attributes first, then a complete accessible date label, then the owning
+month/year label plus the bare day number. The structural path cross-checks the
+derived weekday against the cell's weekday-header column; any disagreement in
+the target panel returns `WIDGET_MAPPING_UNSAFE` without clicking. Month paging
+must advance monotonically toward the target and is capped at 12 steps.
+
+The accessible date label is read from the cell's whole subtree, not from an
+`aria-label` on the clickable element. Pickers routinely attach the full date to
+an inert child and leave the bare number on the ancestor, with the number itself
+`aria-hidden`:
+
+```html
+<div role="button">
+  <div aria-label="Sunday, September 6, 2026"></div>
+  <div aria-hidden="true">6</div>
+</div>
+```
+
+Reading only the ancestor's own attribute discards the one unambiguous date on
+the page and keeps the one string that cannot identify the cell — a two-month
+panel offers several cells named `6`. The same rule governs the month/year
+label, which is frequently a plain styled `<span>` rather than a `<caption>`,
+heading, or `aria-label`; a preceding-sibling text node that parses as an exact
+`Month YYYY` is accepted.
+
+Use the dedicated tools when changing one control:
+
+```json
+{ "field": "Where to?", "value": "Frisco, Texas" }
+```
+
+is a `browser_pick_option` call. An Expedia-style range is one
+`browser_pick_date` call:
+
+```json
+{ "field": "Dates", "from": "2026-09-06", "to": "2026-09-08" }
+```
+
+Both return `committed`, the winning `driver`, and the post-action
+interactables. They preserve `WIDGET_*` error details verbatim so the next
+attempt can respond to what the control actually offered or rendered.
+
+| Goal                                               | Tool                  |
+| -------------------------------------------------- | --------------------- |
+| Enter plain text or a host-bound credential        | `browser_fill`        |
+| Fill several text/date/choice fields in order      | `browser_form_fill`   |
+| Change one dropdown/autocomplete/listbox choice    | `browser_pick_option` |
+| Change one date or date range                      | `browser_pick_date`   |
+| Activate a button, link, toggle, or submit control | `browser_click`       |
+
+The pick/form tools verify the committed value themselves. Do not follow a
+successful call with `browser_observe` solely to confirm it, and do not operate
+a dropdown or calendar one `browser_click` at a time.
+
 ### `browser_form_fill` — multi-field forms
 
-`browser_fill` sets one field addressed by an opaque ref from the model's last
-observation. A real search form defeats that in two compounding ways:
+`browser_form_fill` takes an ordered array of 1–10 `{ field, value,
+pick_suggestion? }` entries. Before every field it makes a fresh uncapped
+internal observation and resolves `field` by current `eNN` ref or visible name.
+It then asks the shared registry to detect a native select, listbox, typeahead,
+calendar grid, or date input. A detected control is driven and verified by that
+driver; only an unrecognized text/search/combobox field falls back to ordinary
+text fill.
 
-- The elements that matter often appear **because of** the previous step.
-  Autocomplete suggestions and calendar days do not exist when the model last
-  observed, so it has no ref for them.
-- The model-visible observation is capped at 50 elements. Open dialog/widget
-  scope ranks ahead of page chrome, with stable `(top, left)` ordering inside
-  each scope.
+Values shaped as `YYYY-MM-DD` become date intents. Two ISO dates separated by
+`..` or `,` become a range; other values become option intents when a driver is
+recognized. `pick_suggestion` remains accepted for compatibility but is
+deprecated and advisory only: typeahead suggestions are detected, awaited, and
+committed whether the flag is true, false, or absent.
 
-In run `20260803T033803Z-do-f1d9f01b` the agent filled a destination box and then
-clicked what it believed was the suggestion. It was a marketing tile — _"View
-more deals for Chicago Hotels"_. The real options were `[role="option"]` elements
-the scanner did not even select. The check-in/check-out fields were
-`role: button` opening a calendar widget, not fillable inputs, so the agent never
-solved them, gave up, and assembled a URL instead.
+Every applied item reports `{ field, ref, driver, action, committed }`. The tool
+stops on the first failure and attaches the successfully applied prefix. The old
+`FORM_WIDGET_NO_MATCH` and `SUGGESTION_NOT_OFFERED` codes are retired; widget
+failures use the shared `WIDGET_*` set with observed candidates, dates, or
+committed value in `details`.
 
-`browser_form_fill` takes an ordered `fields` array (1–10) of
-`{ field, value, pick_suggestion? }` and, for each in turn:
-
-1. re-observes the live page **uncapped** (internal resolution only — the
-   model-visible surface is unchanged) and resolves `field`, which may be a
-   visible name (exact, then prefix, then substring) or an `eNN` ref;
-2. dispatches on the resolved element's role — text/search/combobox fields are
-   typed into (a native `<select>` still routes through the controller's option
-   matching, so `OPTION_NOT_FOUND` surfaces unchanged); a **button** is treated
-   as a widget: click to open, re-observe, then click the matching choice;
-3. when `pick_suggestion` is true, polls for a real `role="option"` element for
-   up to 3 s and clicks the closest match — only page-declared options are
-   eligible, so a same-named marketing tile can never win.
-
-An ISO date value (`"2026-08-05"`) is matched against a full rendered date or a
-bare day number whose `group` identifies the target month (and year, when the
-group supplies one). Identical day numbers without group context are ambiguous
-and never guessed. When the month is not visible, the tool chooses a
-`Next month`/`Previous month` control from observed month groups and pages at
-most 12 times. After clicking the day it re-reads the trigger and returns
-`resulting_value`; an unchanged trigger is `FORM_WIDGET_NO_EFFECT`.
-
-**It stops at the first failing field** and returns the fields applied so far
-alongside the typed error — it never continues past a failure and never
-substitutes a guess. Ambiguity is an error too: `"Check-"` matching both
-"Check-in" and "Check-out" returns `FORM_FIELD_AMBIGUOUS` rather than silently
-filling the wrong date and looking like success.
-
-| Error                         | Meaning                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------- |
-| `FORM_FIELD_NOT_FOUND`        | No field matches; lists up to 8 available names.                          |
-| `FORM_FIELD_AMBIGUOUS`        | Several fields match at the winning tier; lists them.                     |
-| `FORM_FIELD_UNSUPPORTED_ROLE` | Checkbox/radio or a non-fillable element — use `browser_click`.           |
-| `FORM_WIDGET_NO_MATCH`        | The widget opened but nothing in it matches the value.                    |
-| `FORM_WIDGET_NO_EFFECT`       | A widget choice clicked, but the trigger's rendered value did not change. |
-| `SUGGESTION_NOT_OFFERED`      | No autocomplete option appeared within the wait window.                   |
-| `SECRET_SHAPED_LITERAL`       | A credential-shaped value; use `browser_fill` with a `secret_ref`.        |
-
-**Boundaries.** It never submits — the returned observation includes the submit
-button and the model clicks it with `browser_click`, which keeps the
-protected-action confirmation path exactly where it already was. It never
-resolves credentials: there is no `secret_ref` form, so `browser_fill` remains
-the sole credentialed fill path. Use `browser_fill` for a single field.
+The tool never submits and never resolves credentials. Credential-shaped values
+are refused before any field is touched. Use `browser_fill` with a bound
+`secret_ref` for credentials, and activate the form's submit/search control with
+`browser_click` after the returned observation.
 
 ## Browser session and observation model
 
@@ -363,9 +452,22 @@ Each interactable always has `{ref, role, name}` and may add `group`,
 `disabled: true`, `value`, `value_present: true`, `checked`, `expanded`, or
 `selected`. Falsey/empty fields are generally omitted (`expanded: false` and
 other explicit ARIA state remain meaningful). `group` is the nearest labelled
-widget/container, including a calendar month heading. Visible open dialogs,
-listboxes, menus, and grids rank before page scope; each scope then uses stable
-`(top, left)` order. Password, one-time-code, and payment-secret field contents
+widget/container, including a calendar month heading.
+
+`name` is the accessible name, computed per accname rather than taken from the
+element's text. Two rules do the work, and composite controls depend on both: a
+descendant contributes its own declared label in place of its text, and an
+`aria-hidden` subtree contributes nothing. A day cell built as
+`<div role="button"><div aria-label="Sunday, September 6, 2026"></div><div aria-hidden="true">6</div></div>`
+is therefore named for its date and not `6` — the name a two-month calendar
+repeats across panels. Inline content is concatenated without an inserted
+separator, matching browsers, so `Track<span>chevron_right</span>` stays one
+token. Visible open dialogs,
+listboxes, menus, and grids rank before page scope. Within a scope, labelled
+groups are panel-major: groups are ordered by their first `(top, left)` position
+and every member of one group is contiguous in `(top, left)` order before the
+next group. Ungrouped page chrome retains its ordinary relative reading order.
+Password, one-time-code, and payment-secret field contents
 are never read in-page: only `value_present: true` may reveal that one is set.
 All other values still pass user-input masking and the selected sanitizer before
 the model sees them.

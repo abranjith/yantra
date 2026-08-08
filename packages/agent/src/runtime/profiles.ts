@@ -15,6 +15,8 @@ export type YantraToolName =
   | 'browser_click'
   | 'browser_fill'
   | 'browser_form_fill'
+  | 'browser_pick_date'
+  | 'browser_pick_option'
   | 'browser_extract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
@@ -45,6 +47,8 @@ const ALL_TOOLS = [
   'browser_click',
   'browser_fill',
   'browser_form_fill',
+  'browser_pick_date',
+  'browser_pick_option',
 ] as const;
 
 /** Stable default profiles. Configured copies are obtained with `resolveCommandTaskProfile`. */
@@ -82,8 +86,11 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      'Brief. Prefer browser_form_fill for multi-field forms; it re-observes between fields and ' +
-      'can reach controls revealed by the previous step. Action tools return a fresh observation, ' +
+      'Brief. Use browser_form_fill to fill a form; use browser_pick_date or ' +
+      'browser_pick_option to change one date or choice control. Use browser_click only to ' +
+      'activate something, never to operate a dropdown or calendar by hand. The form/pick tools ' +
+      'verify their own result and return the committed value, so a success needs no confirming ' +
+      'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Disabled elements are marked ' +
       'disabled: true; choose a different element. If a site widget still resists after a bounded ' +
       'number of attempts, publish what you verified and state the gap precisely. Do not switch ' +

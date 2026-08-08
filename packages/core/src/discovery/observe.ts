@@ -56,7 +56,9 @@ export interface AgentPageSnapshot {
 /**
  * Builds the browser tool's bounded observation while retaining internal
  * scanner indexes. Dialog/widget elements rank before page elements; each
- * partition is ordered by viewport `(top, left)` before the cap is applied.
+ * partition is ordered panel-major: labelled groups are contiguous (groups by
+ * their first viewport position, then elements by `(top, left)`), while
+ * ungrouped page chrome retains its ordinary reading order before the cap.
  * Opaque refs are minted later by the controller and are the only identifiers
  * exposed to the model.
  */
@@ -75,11 +77,7 @@ export async function buildAgentPageSnapshot(
   const sanitized = sanitize(digestText, 'public', safeHost(url) ?? undefined).text;
   const digest = truncateUtf8(sanitized, options.maxDigestBytes);
   const raw = (await safeEvaluate(page, scanInteractablesInPage)) ?? [];
-  const interactables = raw
-    .filter((entry) => entry.visible)
-    .slice()
-    .sort(compareInteractables)
-    .slice(0, options.maxInteractables);
+  const interactables = orderAgentInteractables(raw).slice(0, options.maxInteractables);
   return {
     url,
     title: clampChars(pageData?.title ?? '', 300),
@@ -199,9 +197,62 @@ async function ensureLocatorRuntime(page: Page): Promise<void> {
   }
 }
 
-function compareInteractables(left: RawInteractable, right: RawInteractable): number {
-  if (left.scope !== right.scope) return left.scope === 'dialog' ? -1 : 1;
-  return left.top - right.top || left.left - right.left;
+/** Order one agent observation in scope-first, panel-major reading order. */
+export function orderAgentInteractables(raw: readonly RawInteractable[]): RawInteractable[] {
+  const visible = raw.filter((entry) => entry.visible);
+  const result: RawInteractable[] = [];
+  for (const scope of ['dialog', 'page'] as const) {
+    const scoped = visible
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.scope === scope)
+      .sort(
+        (left, right) =>
+          left.entry.top - right.entry.top ||
+          left.entry.left - right.entry.left ||
+          left.index - right.index,
+      );
+    const groups = new Map<string, typeof scoped>();
+    for (const item of scoped) {
+      if (!item.entry.group) continue;
+      const members = groups.get(item.entry.group) ?? [];
+      members.push(item);
+      groups.set(item.entry.group, members);
+    }
+    const emittedGroups = new Set<string>();
+    const blocks: {
+      readonly top: number;
+      readonly left: number;
+      readonly index: number;
+      readonly entries: typeof scoped;
+    }[] = [];
+    for (const item of scoped) {
+      const group = item.entry.group;
+      if (!group) {
+        blocks.push({
+          top: item.entry.top,
+          left: item.entry.left,
+          index: item.index,
+          entries: [item],
+        });
+        continue;
+      }
+      if (emittedGroups.has(group)) continue;
+      emittedGroups.add(group);
+      const entries = groups.get(group)!;
+      const first = entries[0]!;
+      blocks.push({
+        top: first.entry.top,
+        left: first.entry.left,
+        index: Math.min(...entries.map((entry) => entry.index)),
+        entries,
+      });
+    }
+    blocks.sort(
+      (left, right) => left.top - right.top || left.left - right.left || left.index - right.index,
+    );
+    for (const block of blocks) result.push(...block.entries.map(({ entry }) => entry));
+  }
+  return result;
 }
 
 function safeHost(url: string): string | null {

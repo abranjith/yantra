@@ -23,6 +23,8 @@ describe('@no-llm createYantraTools factory', () => {
       'browser_form_fill',
       'browser_navigate',
       'browser_observe',
+      'browser_pick_date',
+      'browser_pick_option',
       'result_publish',
       'script_run',
       'web_fetch',
@@ -52,6 +54,23 @@ describe('@no-llm createYantraTools factory', () => {
       expect(typeof tool.label).toBe('string');
       expect(tool.parameters).toBeDefined();
       expect(typeof tool.execute).toBe('function');
+    }
+  });
+
+  it('gives every registered tool a closed object root schema', () => {
+    // Providers reject a function whose parameter schema is not `type: "object"`
+    // — a top-level Type.Union serializes to `anyOf` with no `type` and fails the
+    // whole catalog at request time, not just the offending tool.
+    for (const tool of buildYantraWrappedTools(buildServices())) {
+      const schema = tool.parameters as { type?: string; additionalProperties?: unknown };
+      expect({ name: tool.name, type: schema.type }).toEqual({
+        name: tool.name,
+        type: 'object',
+      });
+      expect({ name: tool.name, additionalProperties: schema.additionalProperties }).toEqual({
+        name: tool.name,
+        additionalProperties: false,
+      });
     }
   });
 

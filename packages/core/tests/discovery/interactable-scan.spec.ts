@@ -87,6 +87,20 @@ describe('@no-llm scanInteractablesInPage', () => {
     expect(scanInteractablesInPage()[0]?.name).toBe('6');
   });
 
+  // The offline naming path must agree with the injected runtime. A day cell
+  // that labels itself through an inert child and hides its number is the shape
+  // that made a two-month calendar unaddressable: every panel offers a "6".
+  it('names a day cell from its labelling child, not the aria-hidden number', () => {
+    const day = document.createElement('div');
+    day.setAttribute('role', 'button');
+    day.innerHTML =
+      '<div aria-label="Sunday, September 6, 2026"></div>' + '<div aria-hidden="true">6</div>';
+    document.body.appendChild(day);
+    stubVisible(day);
+
+    expect(scanInteractablesInPage()[0]?.name).toBe('Sunday, September 6, 2026');
+  });
+
   it('keeps aria-label ahead of role=link text content', () => {
     const link = document.createElement('a');
     link.href = '#';
@@ -425,6 +439,53 @@ describe('@no-llm scanInteractablesInPage', () => {
 
     grid.setAttribute('aria-label', 'Departure calendar');
     expect(scanInteractablesInPage()[0]?.group).toBe('Departure calendar');
+  });
+
+  it('continues past an unlabelled inner table to the labelled calendar panel', () => {
+    document.body.innerHTML =
+      '<div aria-label="August 2026"><table><tbody><tr><td><button>6</button></td></tr></tbody></table></div>';
+    const day = document.querySelector('button')!;
+    stubVisible(day);
+
+    expect(scanInteractablesInPage()[0]?.group).toBe('August 2026');
+  });
+
+  it('uses a container preceding-sibling heading as its group label', () => {
+    document.body.innerHTML =
+      '<section><h2>September 2026</h2><div role="grid"><button>6</button></div></section>';
+    const grid = document.querySelector('[role="grid"]')!;
+    const day = document.querySelector('button')!;
+    stubVisible(grid);
+    stubVisible(day);
+
+    expect(scanInteractablesInPage()[0]?.group).toBe('September 2026');
+  });
+
+  it('returns null when no labelled ancestor is found within twelve levels', () => {
+    const labelled = document.createElement('div');
+    labelled.setAttribute('aria-label', 'Too far away');
+    let current = labelled;
+    for (let index = 0; index < 13; index += 1) {
+      const child = document.createElement('div');
+      current.appendChild(child);
+      current = child;
+    }
+    const day = document.createElement('button');
+    day.textContent = '6';
+    current.appendChild(day);
+    document.body.appendChild(labelled);
+    stubVisible(day);
+
+    expect(scanInteractablesInPage()[0]?.group).toBeNull();
+  });
+
+  it('prefers the nearest labelled ancestor over a farther label', () => {
+    document.body.innerHTML =
+      '<div aria-label="Far"><div aria-label="Near"><table><tr><td><button>6</button></td></tr></table></div></div>';
+    const day = document.querySelector('button')!;
+    stubVisible(day);
+
+    expect(scanInteractablesInPage()[0]?.group).toBe('Near');
   });
 
   it('does not promote children of a hidden dialog to dialog scope', () => {

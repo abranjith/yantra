@@ -115,6 +115,47 @@ describe('@no-llm getAccessibleName', () => {
     expect(getAccessibleName(btn)).toBe('Save');
   });
 
+  // Name from content (accname step 2F). `textContent` fails both halves of
+  // this and the two failures compound: a date picker's day cell loses the one
+  // label that identifies it and keeps the number that does not.
+  it('takes a descendant’s aria-label over its text', () => {
+    document.body.innerHTML =
+      '<div role="button"><div aria-label="Sunday, September 6, 2026"></div>' +
+      '<div aria-hidden="true">6</div></div>';
+    const cell = document.querySelector('[role="button"]')!;
+    expect(getAccessibleName(cell)).toBe('Sunday, September 6, 2026');
+  });
+
+  it('excludes aria-hidden subtrees from the name', () => {
+    const el = makeElement('<button>Delete<span aria-hidden="true"> ✕</span></button>');
+    expect(getAccessibleName(el)).toBe('Delete');
+  });
+
+  it('recurses through unlabelled wrappers to reach text', () => {
+    const el = makeElement('<button><span><em>Sign</em> in</span></button>');
+    expect(getAccessibleName(el)).toBe('Sign in');
+  });
+
+  it('uses a descendant image’s alt text', () => {
+    const el = makeElement('<button><img src="x.png" alt="Print"></button>');
+    expect(getAccessibleName(el)).toBe('Print');
+  });
+
+  it('joins a labelled descendant with adjacent text', () => {
+    const el = makeElement('<button>Go to <span aria-label="September 2026">Sep</span></button>');
+    expect(getAccessibleName(el)).toBe('Go to September 2026');
+  });
+
+  it('collapses whitespace introduced by nested markup', () => {
+    const el = makeElement('<button>\n  <span>Add</span>\n  <span>item</span>\n</button>');
+    expect(getAccessibleName(el)).toBe('Add item');
+  });
+
+  it('is empty for a button whose only content is hidden', () => {
+    const el = makeElement('<button><span aria-hidden="true">✕</span></button>');
+    expect(getAccessibleName(el)).toBe('');
+  });
+
   it('aria-labelledby wins over aria-label', () => {
     document.body.innerHTML =
       '<span id="lbl">From labelledby</span><button aria-labelledby="lbl" aria-label="From aria-label">X</button>';

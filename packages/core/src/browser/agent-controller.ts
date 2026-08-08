@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 
 import type { LocatorCandidate } from '@yantra/protocol';
-import type { ElementHandle, Page as PuppeteerPage, Target } from 'puppeteer-core';
+import type { ElementHandle, KeyInput, Page as PuppeteerPage, Target } from 'puppeteer-core';
 
 import type { RawInteractable } from '../discovery/interactable-scan.js';
 import { buildAgentPageSnapshot } from '../discovery/observe.js';
 import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
 import type { ElementDescription } from '../locator/types.js';
+import type { WidgetPort } from '../widgets/types.js';
 
 import {
   CLICK_NAV_DETECT_MS,
@@ -35,7 +36,7 @@ import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 const INTERACTABLE_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
   '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
-  '[role="option"]';
+  '[role="option"], [data-yantra-widget-target]';
 
 const DEFAULT_DIGEST_BYTES = 16 * 1024;
 const DEFAULT_INTERACTABLE_CAP = 50;
@@ -174,7 +175,7 @@ export interface AgentBrowserControllerOptions {
  * resets on navigation, so an id from a previous document can never silently
  * alias an element on a new one.
  */
-export class AgentBrowserController {
+export class AgentBrowserController implements WidgetPort {
   public readonly runId: string;
 
   private readonly provider: BrowserProvider;
@@ -472,6 +473,45 @@ export class AgentBrowserController {
       watch.dispose();
     }
     return this.currentActionResult();
+  }
+
+  /** Evaluate a serializable function in the live page document. */
+  public async evaluate<T, Args extends readonly unknown[]>(
+    fn: (...args: Args) => T | Promise<T>,
+    ...args: Args
+  ): Promise<T> {
+    this.assertLaunched();
+    const evaluate = this.page!.evaluate.bind(this.page!) as unknown as (
+      pageFunction: (...values: Args) => T | Promise<T>,
+      ...values: Args
+    ) => Promise<T>;
+    return evaluate(fn, ...args);
+  }
+
+  /** Evaluate a serializable function against an observed live element. */
+  public async evaluateOn<T, Args extends readonly unknown[]>(
+    ref: string,
+    fn: (element: HTMLElement, ...args: Args) => T | Promise<T>,
+    ...args: Args
+  ): Promise<T> {
+    const handle = this.resolveRef(ref);
+    return evaluateOnRef(
+      handle,
+      ref,
+      fn as (element: Element, ...values: Args) => T | Promise<T>,
+      ...args,
+    );
+  }
+
+  /** Send a key to the active page (used to restore popup state with Escape). */
+  public async press(key: string): Promise<void> {
+    this.assertLaunched();
+    await this.page!.keyboard.press(key as KeyInput);
+  }
+
+  /** Millisecond clock used by bounded widget polling. */
+  public now(): number {
+    return Date.now();
   }
 
   /**

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
 import { parseTemplate } from '@yantra/core';
@@ -73,6 +74,14 @@ describe('@no-llm command task profiles', () => {
     expect(askCatalog).not.toContain('browser_form_fill');
   });
 
+  it('gives semantic date and option pickers to do only', () => {
+    for (const name of ['browser_pick_date', 'browser_pick_option'] as const) {
+      expect(COMMAND_TASK_PROFILES.do.toolNames).toContain(name);
+      expect(COMMAND_TASK_PROFILES.ask.toolNames).not.toContain(name);
+      expect(COMMAND_TASK_PROFILES.research.toolNames).not.toContain(name);
+    }
+  });
+
   it('records the tool_catalog_hash after adding browser_form_fill', () => {
     // The catalog is name-sorted and hashed per run, so adding a tool changes
     // this value by design. Recorded so an unintended catalog change is visible.
@@ -121,6 +130,12 @@ describe('@no-llm command task profiles', () => {
   it('adds browser efficiency and bounded widget guidance only to do', () => {
     const task = COMMAND_TASK_PROFILES.do.promptAddendum;
     expect(task).toMatch(/browser_form_fill/i);
+    expect(task).toMatch(/browser_pick_date/i);
+    expect(task).toMatch(/browser_pick_option/i);
+    expect(task).toMatch(/browser_click only to activate/i);
+    expect(task).toMatch(/never to operate a dropdown or calendar by hand/i);
+    expect(task).toMatch(/return the committed value/i);
+    expect(task).toMatch(/needs no confirming browser_observe/i);
     expect(task).toMatch(/do not chain browser_observe/i);
     expect(task).toMatch(/disabled: true/i);
     expect(task).toMatch(/bounded number of attempts/i);
@@ -129,6 +144,16 @@ describe('@no-llm command task profiles', () => {
       expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/browser_form_fill/i);
       expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/disabled: true/i);
     }
+  });
+
+  it('keeps ask and research addenda byte-identical while do guidance changes', () => {
+    const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
+    expect(digest(COMMAND_TASK_PROFILES.ask.promptAddendum)).toBe(
+      'ee8fe1634fd2a09ad7c9c78ffb3da050121a74648082e62d16649adb0b85f40b',
+    );
+    expect(digest(COMMAND_TASK_PROFILES.research.promptAddendum)).toBe(
+      'a2b284bef5c60dc165f2211ea1f984e1794440d4a956d907a2676817694ebe6c',
+    );
   });
 
   it('keeps the superseded research prompt stack removed', () => {

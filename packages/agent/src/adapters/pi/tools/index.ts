@@ -24,6 +24,8 @@ import { browserFillSpec } from './browser-fill.js';
 import { browserFormFillSpec } from './browser-form-fill.js';
 import { browserNavigateSpec } from './browser-navigate.js';
 import { browserObserveSpec } from './browser-observe.js';
+import { browserPickDateSpec } from './browser-pick-date.js';
+import { browserPickOptionSpec } from './browser-pick-option.js';
 import { resultPublishSpec } from './result-publish.js';
 import { scriptRunSpec } from './script-run.js';
 import { webFetchSpec } from './web-fetch.js';
@@ -49,6 +51,8 @@ export { browserFillSpec } from './browser-fill.js';
 export { browserFormFillSpec } from './browser-form-fill.js';
 export { browserNavigateSpec } from './browser-navigate.js';
 export { browserObserveSpec } from './browser-observe.js';
+export { browserPickDateSpec } from './browser-pick-date.js';
+export { browserPickOptionSpec } from './browser-pick-option.js';
 export { workflowRunSpec } from './workflow-run.js';
 
 /**
@@ -74,6 +78,8 @@ export function buildYantraWrappedTools(
     wrapTool(browserClickSpec(toolServices), toolServices),
     wrapTool(browserFillSpec(toolServices), toolServices),
     wrapTool(browserFormFillSpec(toolServices), toolServices),
+    wrapTool(browserPickDateSpec(toolServices), toolServices),
+    wrapTool(browserPickOptionSpec(toolServices), toolServices),
     wrapTool(browserExtractSpec(toolServices), toolServices),
     wrapTool(webSearchSpec(toolServices), toolServices),
     wrapTool(webFetchSpec(toolServices), toolServices),

@@ -32,7 +32,9 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
     "@yantra/test-helpers": "workspace:*",
-    "fast-check": "^4.7.0"
+    "fast-check": "^4.7.0",
+    "jsdom": "^26.0.0"
   }
 }

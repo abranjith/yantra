@@ -23,6 +23,8 @@ const BrowserNavigateParams = Type.Object(
 );
 type Params = Static<typeof BrowserNavigateParams>;
 
+const refusalCounts = new WeakMap<RunServices, Map<string, number>>();
+
 /** Build the policy-checked single-page navigation tool. */
 export function browserNavigateSpec(
   _services: RunServices,
@@ -44,6 +46,13 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
   // and host budget, and a refused guess must not consume the budget a
   // legitimate navigation still needs.
   if (!services.urlProvenance.has(params.url)) {
+    const count = recordRefusal(services, params.url);
+    const escalation =
+      count >= 2
+        ? " This same normalized URL has already been refused. Submit the page's form with " +
+          'browser_click on its submit/search control, or reach the target by clicking a ' +
+          'search result. Repeating this URL will keep failing.'
+        : '';
     return {
       ok: false,
       errorCode: 'URL_NOT_FROM_EVIDENCE',
@@ -52,7 +61,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
         'This URL introduces a path or parameter name that no search result or visited page ' +
         'attested. You may vary query values on an already-visited URL, but may not invent a ' +
         'new path, parameter name, or identifier. Use web_search or click through from an ' +
-        'observed page to attest anything else.',
+        `observed page to attest anything else.${escalation}`,
     };
   }
   const allowed = services.urlPolicy.check(params.url);
@@ -115,4 +124,28 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     },
     details: { final_url: result.url },
   };
+}
+
+function recordRefusal(services: RunServices, value: string): number {
+  let perRun = refusalCounts.get(services);
+  if (!perRun) {
+    perRun = new Map();
+    refusalCounts.set(services, perRun);
+  }
+  const normalized = normalizeRefusedUrl(value);
+  const count = (perRun.get(normalized) ?? 0) + 1;
+  perRun.set(normalized, count);
+  return count;
+}
+
+function normalizeRefusedUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    url.hostname = url.hostname.toLowerCase();
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return value.trim();
+  }
 }

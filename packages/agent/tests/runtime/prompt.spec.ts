@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +59,9 @@ describe('@no-llm agent-v1 prompt governance', () => {
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
     expect(PROMPT_VERSION).toBe('agent-v7');
+    expect(createHash('sha256').update(AGENT_SYSTEM_PROMPT).digest('hex')).toBe(
+      '7f669e6b19591aca5eda50eaf4658cd69e8e1e7c4dc3f7aa75b3a7022ff7cdec',
+    );
   });
 
   it('keeps the completion section flow-neutral but anti-stall (agent-v4)', () => {

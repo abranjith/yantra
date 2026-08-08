@@ -207,7 +207,7 @@ export function getRole(el: Element): AriaRole | null {
  * computation algorithm (https://www.w3.org/TR/accname-1.1/).
  *
  * Priority order: aria-labelledby > aria-label > native label (for form controls)
- * > placeholder > title > inner text (for non-form elements).
+ * > placeholder > title > name from content (for roles that support it).
  *
  * @param el - The element to compute an accessible name for
  * @returns The accessible name string (may be empty)
@@ -216,7 +216,7 @@ export function getAccessibleName(el: Element): string {
   const explicit = explicitAccessibleName(el);
   if (explicit) return explicit;
 
-  // For buttons, headings, links — inner text content
+  // For buttons, headings, links — name from content (accname step 2F)
   const role = getRole(el);
   if (
     role === 'button' ||
@@ -225,10 +225,73 @@ export function getAccessibleName(el: Element): string {
     role === 'tab' ||
     role === 'menuitem'
   ) {
-    return (el.textContent ?? '').trim();
+    return nameFromContent(el);
   }
 
   return '';
+}
+
+/**
+ * Accname step 2F — "name from content".
+ *
+ * `textContent` is not a valid implementation of this step and gets composite
+ * controls exactly backwards. Two rules make the difference, and real widgets
+ * depend on both: a descendant recursively contributes *its own* accessible
+ * name (so a labelling child speaks for the whole control), and an
+ * `aria-hidden` subtree contributes nothing at all.
+ *
+ * The pattern this exists for is the labelled day cell, which every major date
+ * picker emits in some form:
+ *
+ * ```html
+ * <div role="button">
+ *   <div aria-label="Sunday, September 6, 2026"></div>
+ *   <div aria-hidden="true">6</div>
+ * </div>
+ * ```
+ *
+ * `textContent` yields `"6"` — the one string that cannot identify the cell,
+ * since a two-month panel shows several of them. The algorithm yields
+ * `"Sunday, September 6, 2026"`, which is unique by construction. Reading the
+ * name correctly is what makes such a grid addressable at all; no amount of
+ * downstream inference recovers the day from `"6"`.
+ *
+ * Recursion calls {@link explicitAccessibleName} rather than
+ * {@link getAccessibleName} on descendants, so the `getRole` → name → `getRole`
+ * cycle guarded elsewhere in this module is never re-entered.
+ */
+function nameFromContent(el: Element): string {
+  const MAX_DEPTH = 16;
+  const walk = (node: Element, depth: number): string => {
+    if (depth > MAX_DEPTH) return '';
+    const parts: string[] = [];
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3 /* TEXT_NODE */) {
+        parts.push(child.nodeValue ?? '');
+        continue;
+      }
+      if (child.nodeType !== 1 /* ELEMENT_NODE */) continue;
+      const element = child as Element;
+      // aria-hidden subtrees are excluded from the name entirely.
+      if (element.getAttribute('aria-hidden') === 'true') continue;
+      const declared = explicitAccessibleName(element);
+      if (declared) {
+        parts.push(declared);
+        continue;
+      }
+      const alt = element.getAttribute('alt')?.trim();
+      if (alt) {
+        parts.push(alt);
+        continue;
+      }
+      parts.push(walk(element, depth + 1));
+    }
+    // Concatenated without a separator, matching how browsers name inline
+    // content: `Track<span>chevron_right</span>` is one word to the a11y tree,
+    // and any real whitespace in the markup survives the collapse below.
+    return parts.join('');
+  };
+  return walk(el, 0).replace(/\s+/g, ' ').trim();
 }
 
 /**
