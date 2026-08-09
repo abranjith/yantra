@@ -13,10 +13,8 @@ export type YantraToolName =
   | 'browser_navigate'
   | 'browser_observe'
   | 'browser_click'
-  | 'browser_fill'
-  | 'browser_form_fill'
-  | 'browser_pick_date'
-  | 'browser_pick_option'
+  | 'browser_fill_element'
+  | 'browser_fill_form'
   | 'browser_extract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
@@ -37,18 +35,16 @@ export interface CommandTaskProfile {
 
 const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'] as const;
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
-// `browser_form_fill` is a mutation tool, so it belongs here beside
-// `browser_click`/`browser_fill` and deliberately NOT in BROWSE_TOOLS — that set
+// Browser fill tools mutate the page, so they belong here beside
+// `browser_click` and deliberately NOT in BROWSE_TOOLS — that set
 // is `research`'s opt-in *read-only* browse mode.
 const ALL_TOOLS = [
   ...READ_TOOLS,
   'workflow_run',
   ...BROWSE_TOOLS,
   'browser_click',
-  'browser_fill',
-  'browser_form_fill',
-  'browser_pick_date',
-  'browser_pick_option',
+  'browser_fill_element',
+  'browser_fill_form',
 ] as const;
 
 /** Stable default profiles. Configured copies are obtained with `resolveCommandTaskProfile`. */
@@ -86,9 +82,10 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      'Brief. Use browser_form_fill to fill a form; use browser_pick_date or ' +
-      'browser_pick_option to change one date or choice control. Use browser_click only to ' +
-      'activate something, never to operate a dropdown or calendar by hand. The form/pick tools ' +
+      'Brief. Prefer browser_fill_form for multiple controls and browser_fill_element for one ' +
+      'control. Both tools handle text, stored secrets, dates, ranges, suggestions, dropdowns, ' +
+      'radio groups, and toggles. Use browser_click only to ' +
+      'activate something or submit a completed form, never to operate a field widget by hand. The fill tools ' +
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Disabled elements are marked ' +

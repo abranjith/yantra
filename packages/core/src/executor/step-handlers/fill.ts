@@ -62,13 +62,15 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
 
   try {
     if (step.value.kind === 'secret') {
-      const resolved = await new ValueResolver(ctx.captures, {}, ctx.secrets).resolveSecret(
-        step.value,
-      );
+      const resolved = await new ValueResolver(
+        ctx.captures,
+        ctx.params ?? {},
+        ctx.secrets,
+      ).resolveSecret(step.value);
       plaintext = resolved.plaintext;
       zeroSecret = resolved.zero;
     } else {
-      const resolver = new ValueResolver(ctx.captures, {}, ctx.secrets);
+      const resolver = new ValueResolver(ctx.captures, ctx.params ?? {}, ctx.secrets);
       plaintext = await resolver.resolveToString(step.value);
     }
   } catch (err) {

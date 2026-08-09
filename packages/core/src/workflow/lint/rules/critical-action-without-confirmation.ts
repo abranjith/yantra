@@ -12,7 +12,7 @@ export const criticalActionWithoutConfirmation: LintRule = {
     for (let i = 0; i < workflow.steps.length; i++) {
       const step = workflow.steps[i];
       if (!step) continue;
-      if (step.verb !== 'click' && step.verb !== 'fill') continue;
+      if (step.verb !== 'click' && step.verb !== 'fill' && step.verb !== 'fill_element') continue;
       if (step.requires_confirmation) continue;
       const locatorName = 'locator' in step ? (step as { locator: string }).locator : '';
       const locatorCandidates = workflow._locators[locatorName] ?? [];

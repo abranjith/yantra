@@ -401,8 +401,8 @@ function formScenario(publishOnSuccess: boolean): Scenario {
   return async (session) => {
     await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/form.html` });
     let observed = parseModel(await session.call('browser_observe', {}));
-    await session.call('browser_fill', {
-      ref: refByName(observed, 'Username'),
+    await session.call('browser_fill_element', {
+      field: refByName(observed, 'Username'),
       value: { kind: 'literal', value: 'alice' },
     });
     observed = parseModel(await session.call('browser_observe', {}));

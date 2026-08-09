@@ -38,6 +38,23 @@ describe('@no-llm widget committed-value verification', () => {
     expect(matchesIntent('Toyota Stadium', { kind: 'option', value: 'Frisco' })).toBe(false);
   });
 
+  it('reads a slashed numeric date in either field order', () => {
+    // The rendered text carries no signal about its own order, and the engine
+    // used to keep a second, month-first-only matcher that called a correct
+    // day-first commit uncommitted.
+    expect(matchesIntent('21/08/2026', { kind: 'date', date: '2026-08-21' })).toBe(true);
+    expect(matchesIntent('08/21/2026', { kind: 'date', date: '2026-08-21' })).toBe(true);
+    expect(matchesIntent('08/21/2026', { kind: 'date', date: '2026-08-08' })).toBe(false);
+  });
+
+  it('accepts a committed date that renders no year', () => {
+    // Compact pickers render "Sun, Sep 6"; demanding a year rejects them.
+    expect(matchesIntent('Sun, Sep 6', { kind: 'date', date: '2026-09-06' })).toBe(true);
+    expect(matchesIntent('Sun, Sep 6', { kind: 'date', date: '2026-09-07' })).toBe(false);
+    // A year that is present must still agree.
+    expect(matchesIntent('Sep 6, 2025', { kind: 'date', date: '2026-09-06' })).toBe(false);
+  });
+
   it('never reads credential, OTP, or payment input values', async () => {
     for (const input of [
       '<input id="trigger" type="password" value="password-canary">',

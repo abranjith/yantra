@@ -1,0 +1,268 @@
+import {
+  assertHostBinding,
+  defaultWidgetBudget,
+  dismissWidget,
+  fillField,
+  fillSecretField,
+  parseFillValue,
+  withSecret,
+  type AgentBrowserController,
+  type FillOutcome,
+  type WidgetPort,
+  type WidgetTarget,
+} from '@yantra/core';
+import { Type, type Static } from 'typebox';
+
+import type { DomainFailure, DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
+import type { RunServices } from '../../../runtime/run-services.js';
+import { toCandidateChain, type TraceFillValue } from '../../../runtime/trace.js';
+
+import {
+  browserController,
+  browserFailure,
+  browserWidgetPort,
+  isDomainFailure,
+  mapFillFailure,
+  modelObservation,
+  resolveFillTarget,
+  safeLocatorFor,
+} from './browser-common.js';
+
+export const FillValueSchema = Type.Union(
+  [
+    Type.String({
+      maxLength: 4096,
+      description: 'Non-secret text, offered option, checked state, ISO date, or ISO date range.',
+    }),
+    Type.Object(
+      {
+        kind: Type.Literal('literal'),
+        value: Type.String({ maxLength: 4096, description: 'Non-secret value to commit.' }),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        kind: Type.Literal('secret_ref'),
+        key: Type.String({
+          pattern: '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$',
+          description: 'Website secret key; host bindings come from trusted metadata.',
+        }),
+      },
+      { additionalProperties: false },
+    ),
+  ],
+  {
+    description:
+      'A plain non-secret value, an explicit literal, or a host-bound stored-secret reference.',
+  },
+);
+
+const BrowserFillElementParams = Type.Object(
+  {
+    field: Type.String({
+      minLength: 1,
+      maxLength: 200,
+      description: 'Visible accessible field name or current eNN ref from browser_observe.',
+    }),
+    value: FillValueSchema,
+  },
+  { additionalProperties: false },
+);
+
+export type BrowserFillValue = Static<typeof FillValueSchema>;
+type Params = Static<typeof BrowserFillElementParams>;
+
+export interface AppliedBrowserFill {
+  readonly field: string;
+  readonly ref: string;
+  readonly driver: string;
+  readonly dismissed: boolean;
+  readonly actions: number;
+  readonly committed?: string;
+}
+
+/** Build the unified single-control fill tool. */
+export function browserFillElementSpec(
+  services: RunServices,
+): ToolWrapperSpec<typeof BrowserFillElementParams> {
+  return {
+    name: 'browser_fill_element',
+    label: 'Browser Fill Element',
+    description:
+      'Fill one named or observed control through the deterministic semantic fill engine. Use it for text, suggestions, choices, toggles, dates, ranges, and stored secrets; do not use browser_click to operate a field widget or submit the form.',
+    parameters: BrowserFillElementParams,
+    sanitizationProfile: 'authenticated',
+    mutating: true,
+    requiresConfirmation: (params: Params) => isSecretRef(params.value),
+    buildConfirmation: () => ({
+      action_kind: 'fill',
+      host: services.domain.browser?.controller.host() ?? '',
+      description: 'Fill a protected website field using a host-bound secret.',
+      consequence: 'reversible',
+    }),
+    run: (params: Params, ctx): Promise<DomainResult> => runFillElement(params, ctx.services),
+  };
+}
+
+async function runFillElement(params: Params, services: RunServices): Promise<DomainResult> {
+  const applied = await applyBrowserFill(params.field, params.value, services);
+  if (isDomainFailure(applied)) return applied;
+  const controller = browserController(services);
+  if (isDomainFailure(controller)) return controller;
+  const observation = await controller.observe();
+  return {
+    ok: true,
+    model: {
+      ...(applied.committed === undefined ? {} : { committed: applied.committed }),
+      driver: applied.driver,
+      dismissed: applied.dismissed,
+      observation: modelObservation(observation),
+    },
+    details: {
+      actions: applied.actions,
+      ...(isSecretRef(params.value) ? { secret_key: params.value.key } : {}),
+    },
+  };
+}
+
+/** Apply one field without taking the caller-owned post-action observation. */
+export async function applyBrowserFill(
+  field: string,
+  value: BrowserFillValue,
+  services: RunServices,
+): Promise<AppliedBrowserFill | DomainFailure> {
+  const deps = services.domain.browser;
+  const controller = browserController(services);
+  if (!deps || isDomainFailure(controller)) {
+    return isDomainFailure(controller)
+      ? controller
+      : {
+          ok: false,
+          errorCode: 'BROWSER_UNAVAILABLE',
+          message: 'Browser services are not configured.',
+          retryable: false,
+        };
+  }
+  const target = await resolveFillTarget(field, controller);
+  if (isDomainFailure(target)) return target;
+  const port = browserWidgetPort(controller, services.now);
+  const identity = { field, target };
+
+  if (!isSecretRef(value)) {
+    const literal = literalText(value);
+    const intent = parseFillValue(literal, target.role);
+    if (!('kind' in intent)) return mapFillFailure(intent);
+    let outcome: FillOutcome;
+    try {
+      outcome = await fillField(port, identity, intent, defaultWidgetBudget(port));
+    } catch (error) {
+      return browserFailure(error);
+    }
+    if (!outcome.ok) {
+      await bestEffortDismiss(port, target);
+      return mapFillFailure(outcome);
+    }
+    await appendSemanticTrace(
+      controller,
+      target,
+      { kind: 'literal', value: services.userInput?.mask(literal) ?? literal },
+      services,
+    );
+    return {
+      field,
+      ref: target.ref,
+      driver: outcome.driver,
+      committed: outcome.committed,
+      dismissed: outcome.dismissed,
+      actions: outcome.actions,
+    };
+  }
+
+  if (!deps.secretResolver) {
+    return {
+      ok: false,
+      errorCode: 'SECRET_RESOLVER_UNAVAILABLE',
+      message: 'Website secret resolution is unavailable.',
+      retryable: false,
+    };
+  }
+  const hosts = await deps.secretHosts(value.key);
+  try {
+    assertHostBinding({ kind: 'secret', key: value.key, hosts: [...hosts] }, controller.host());
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'SECRET_HOST_MISMATCH') {
+      return {
+        ok: false,
+        errorCode: 'SECRET_HOST_MISMATCH',
+        message: error.message,
+        retryable: false,
+      };
+    }
+    throw error;
+  }
+  const resolved = await deps.secretResolver.resolve(
+    { kind: 'secret', key: value.key },
+    {
+      taskParams: {},
+      captures: {},
+      stepId: 'browser_fill_element',
+      taskId: services.runId,
+      secretFieldExpected: true,
+    },
+  );
+  try {
+    const outcome = await withSecret(resolved.value, (secret) =>
+      fillSecretField(port, identity, secret, defaultWidgetBudget(port)),
+    );
+    if (!outcome.ok) return mapFillFailure(outcome);
+    await appendSemanticTrace(controller, target, { kind: 'secret_ref', key: value.key }, services);
+    return {
+      field,
+      ref: target.ref,
+      driver: outcome.driver,
+      dismissed: outcome.dismissed,
+      actions: outcome.actions,
+    };
+  } catch (error) {
+    return browserFailure(error);
+  } finally {
+    resolved.dispose();
+  }
+}
+
+export function isSecretRef(
+  value: BrowserFillValue,
+): value is Extract<BrowserFillValue, { kind: 'secret_ref' }> {
+  return typeof value === 'object' && value.kind === 'secret_ref';
+}
+
+function literalText(value: Exclude<BrowserFillValue, { kind: 'secret_ref' }>): string {
+  return typeof value === 'string' ? value : value.value;
+}
+
+async function appendSemanticTrace(
+  controller: AgentBrowserController,
+  target: WidgetTarget,
+  value: TraceFillValue,
+  services: RunServices,
+): Promise<void> {
+  const described = controller.describeRef(target.ref) ?? target;
+  const ranked = await safeLocatorFor(controller, target.ref);
+  services.trace?.append({
+    kind: 'fill_element',
+    host: controller.host(),
+    field: {
+      role: described.role,
+      name: described.name,
+      group: described.group ?? null,
+    },
+    locator: ranked.length > 0 ? ranked : toCandidateChain(described.role, described.name),
+    value,
+    requires_confirmation: value.kind === 'secret_ref',
+  });
+}
+
+async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promise<void> {
+  await dismissWidget(port, target, '', () => true).catch(() => undefined);
+}

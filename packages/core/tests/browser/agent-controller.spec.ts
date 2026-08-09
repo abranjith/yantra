@@ -698,7 +698,88 @@ describe('@no-llm AgentBrowserController', () => {
     const observation = await controller.observe();
     const vanish = observation.interactables.find((entry) => entry.name === 'Vanish')!;
     await controller.click(vanish.ref);
-    await expect(controller.click(vanish.ref)).rejects.toThrow(StaleElementRefError);
+    await expect(controller.click(vanish.ref)).rejects.toThrow('element left the page');
+    await controller.teardown();
+  }, 45_000);
+
+  it('heals click, fill, and evaluateOn once by exact role/name/group identity', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'identity-heal-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const mutate = observation.interactables.find((entry) => entry.name === 'Mutate')!;
+    const username = observation.interactables.find((entry) => entry.name === 'Username')!;
+    const hideable = observation.interactables.find((entry) => entry.name === 'Hideable field')!;
+
+    await tracked.page!.puppeteerPage!.evaluate(() => {
+      for (const selector of ['button[onclick*="state"]', 'input[name="u"]', '#hideable']) {
+        const previous = document.querySelector(selector)!;
+        previous.replaceWith(previous.cloneNode(true));
+      }
+    });
+
+    await controller.click(mutate.ref);
+    await controller.fill(username.ref, 'healed value');
+    const evaluated = await controller.evaluateOn(hideable.ref, (element) => {
+      element.dataset['healed'] = 'yes';
+      return element.getAttribute('aria-label');
+    });
+
+    expect(evaluated).toBe('Hideable field');
+    expect(await controller.locatorFor(mutate.ref)).not.toEqual([]);
+    expect(
+      await tracked.page!.puppeteerPage!.evaluate(() => ({
+        state: document.querySelector('#state')!.textContent,
+        username: document.querySelector<HTMLInputElement>('input[name="u"]')!.value,
+        evaluated: document.querySelector<HTMLElement>('#hideable')!.dataset['healed'],
+      })),
+    ).toEqual({ state: 'changed', username: 'healed value', evaluated: 'yes' });
+    await controller.teardown();
+  }, 45_000);
+
+  it('refuses stale-ref healing when the exact identity becomes ambiguous', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'identity-ambiguous-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const vanish = observation.interactables.find((entry) => entry.name === 'Vanish')!;
+    await tracked.page!.puppeteerPage!.evaluate(() => {
+      const previous = Array.from(document.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Vanish',
+      )!;
+      previous.replaceWith(previous.cloneNode(true), previous.cloneNode(true));
+    });
+
+    await expect(controller.click(vanish.ref)).rejects.toThrow(
+      '2 elements now share this identity',
+    );
+    await controller.teardown();
+  }, 45_000);
+
+  it('does not rescan for non-stale actionability failures', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'identity-non-stale-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const disabled = observation.interactables.find((entry) => entry.name === 'Disabled action')!;
+    const observe = vi.spyOn(controller, 'observe');
+
+    await expect(controller.click(disabled.ref)).rejects.toMatchObject({
+      code: 'ELEMENT_DISABLED',
+    });
+    expect(observe).not.toHaveBeenCalled();
     await controller.teardown();
   }, 45_000);
 

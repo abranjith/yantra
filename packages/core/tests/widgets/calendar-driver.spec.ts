@@ -136,12 +136,25 @@ describe('@no-llm calendar widget driver', () => {
     expect(port.clickLog).toEqual([]);
   });
 
-  it('reports an unchanged trigger as not committed', async () => {
+  it('reports an unchanged trigger as not committed once the picker has closed', async () => {
     const port = new CalendarTestPort(
-      '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
-        '<div id="calendar" role="dialog"><table><caption>September 2026</caption>' +
+      '<button id="trigger" aria-controls="calendar" aria-expanded="false">Dates</button>' +
+        '<div id="calendar" role="dialog" style="display:none">' +
+        '<table><caption>September 2026</caption>' +
         '<tbody><tr><td><button data-date="2026-09-06">6</button></td></tr></tbody></table></div>',
     );
+    // Opening reveals the picker; nothing closes it again, so the trigger is
+    // read while the widget has already reported everything it is going to.
+    const trigger = port.document.querySelector<HTMLElement>('#trigger')!;
+    const popup = port.document.querySelector<HTMLElement>('#calendar')!;
+    trigger.addEventListener('click', () => {
+      popup.style.display = 'block';
+      trigger.setAttribute('aria-expanded', 'true');
+    });
+    port.document.querySelector<HTMLElement>('#calendar button')!.addEventListener('click', () => {
+      popup.style.display = 'none';
+      trigger.setAttribute('aria-expanded', 'false');
+    });
 
     const outcome = await calendarDriver.drive(
       port,
@@ -155,6 +168,25 @@ describe('@no-llm calendar widget driver', () => {
       errorCode: 'WIDGET_NOT_COMMITTED',
       details: { committed: 'Dates' },
     });
+  });
+
+  it('defers the verdict while the picker is still open, since it may commit on release', async () => {
+    const port = new CalendarTestPort(
+      '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
+        '<div id="calendar" role="dialog"><table><caption>September 2026</caption>' +
+        '<tbody><tr><td><button data-date="2026-09-06">6</button></td></tr></tbody></table></div>',
+    );
+
+    const outcome = await calendarDriver.drive(
+      port,
+      calendarTarget(),
+      { kind: 'date', date: '2026-09-06' },
+      BUDGET,
+    );
+
+    // The engine releases the widget and performs the authoritative check;
+    // failing here would reject a selection that is about to land.
+    expect(outcome).toMatchObject({ ok: true, driver: 'calendar-grid' });
   });
 
   it('sets and verifies a native date input without opening anything', async () => {

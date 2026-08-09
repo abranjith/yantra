@@ -37,6 +37,7 @@ import type { LocatorTable, OutputBinding, TranslatedWorkflow } from './types.js
 const SECRET_EXPR = /^\{\{\s*secret:([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)\s*\}\}$/;
 const PARAM_EXPR = /^\{\{\s*param:([a-z][a-z0-9_]*)\s*\}\}$/;
 const CAPTURE_EXPR = /^\{\{\s*capture:([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?)\s*\}\}$/;
+const EMBEDDED_REF = /\{\{\s*(param|capture):([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?)\s*\}\}/g;
 
 /** Converts a `WorkflowValueExpression` to a protocol `ValueRef`. */
 function exprToValueRef(raw: string | number | boolean | null): ValueRef {
@@ -62,6 +63,32 @@ function exprToValueRef(raw: string | number | boolean | null): ValueRef {
       return { kind: 'capture', step_id: ref, field: null };
     }
     return { kind: 'capture', step_id: ref.slice(0, dotIdx), field: ref.slice(dotIdx + 1) };
+  }
+
+  const bindings: Record<string, ValueRef> = {};
+  let template = '';
+  let cursor = 0;
+  let index = 0;
+  for (const match of raw.matchAll(EMBEDDED_REF)) {
+    const key = `value_${index++}`;
+    template += `${raw.slice(cursor, match.index)}{{${key}}}`;
+    const kind = match[1]!;
+    const reference = match[2]!;
+    if (kind === 'param') {
+      bindings[key] = { kind: 'param', key: reference };
+    } else {
+      const dotIdx = reference.indexOf('.');
+      bindings[key] = {
+        kind: 'capture',
+        step_id: dotIdx === -1 ? reference : reference.slice(0, dotIdx),
+        field: dotIdx === -1 ? null : reference.slice(dotIdx + 1),
+      };
+    }
+    cursor = (match.index ?? 0) + match[0].length;
+  }
+  if (index > 0) {
+    template += raw.slice(cursor);
+    return { kind: 'template', template, bindings };
   }
 
   return { kind: 'literal', value: raw };
@@ -242,6 +269,18 @@ function translateStep(wfStep: WorkflowStep, stepId: string): Step {
         locator: workflowLocator(wfStep.locator),
         value: exprToValueRef(wfStep.value),
         submit: wfStep.submit,
+      };
+
+    case 'fill_element':
+      return {
+        ...base,
+        confirmation_description: wfStep.confirmation_description,
+        expected_cost: wfStep.expected_cost,
+        consequence: wfStep.consequence,
+        type: 'fill_element',
+        field_name: wfStep.field_name,
+        locator: workflowLocator(wfStep.locator),
+        value: exprToValueRef(wfStep.value),
       };
 
     case 'extract':

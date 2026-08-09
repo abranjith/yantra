@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  WidgetRegistry,
   type WidgetDriver,
   type WidgetIntent,
   type WidgetPort,
   type WidgetTarget,
 } from '../../src/widgets/index.js';
+import { WidgetRegistry } from '../../src/widgets/registry.js';
 
 const TARGET: WidgetTarget = {
   ref: 'e1',

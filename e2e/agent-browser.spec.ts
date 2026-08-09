@@ -127,13 +127,13 @@ describe('@no-llm real Chrome browser tools', () => {
 
   it('fills a literal and host-bound secret, consumes the submit observation, and extracts a table capture', async () => {
     let observed = await observe();
-    await call('browser_fill', {
-      ref: refByName(observed, 'Username'),
+    await call('browser_fill_element', {
+      field: refByName(observed, 'Username'),
       value: { kind: 'literal', value: 'alice' },
     });
     observed = await observe();
-    const secretFill = await call('browser_fill', {
-      ref: refByName(observed, 'Password'),
+    const secretFill = await call('browser_fill_element', {
+      field: refByName(observed, 'Password'),
       value: { kind: 'secret_ref', key: 'site.password' },
     });
     expect(secretFill.status).toBe('ok');
@@ -174,8 +174,8 @@ describe('@no-llm real Chrome browser tools', () => {
       url: `${fixture.baseUrl.replace('127.0.0.1', 'localhost')}/form.html`,
     });
     const observed = await observe();
-    const mismatch = await call('browser_fill', {
-      ref: refByName(observed, 'Password'),
+    const mismatch = await call('browser_fill_element', {
+      field: refByName(observed, 'Password'),
       value: { kind: 'secret_ref', key: 'site.password' },
     });
     expect(mismatch.error_code).toBe('SECRET_HOST_MISMATCH');

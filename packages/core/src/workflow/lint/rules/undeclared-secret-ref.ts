@@ -22,7 +22,7 @@ function collectAllStringValues(workflow: WorkflowFile): { path: string; value: 
     const step = workflow.steps[i];
     if (!step) continue;
 
-    if (step.verb === 'fill' && typeof step.value === 'string') {
+    if ((step.verb === 'fill' || step.verb === 'fill_element') && typeof step.value === 'string') {
       results.push({ path: `steps[${i}].value`, value: step.value });
     }
     if (step.verb === 'navigate' && typeof step.url === 'string') {

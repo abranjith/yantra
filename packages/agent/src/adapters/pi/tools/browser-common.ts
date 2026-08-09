@@ -3,11 +3,19 @@ import {
   StaleElementRefError,
   type AgentBrowserController,
   type AgentBrowserObservation,
+  type FillFailure,
+  type WidgetPort,
+  type WidgetTarget,
 } from '@yantra/core';
 import type { LocatorCandidate } from '@yantra/protocol';
 
 import type { DomainFailure } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+
+import { resolveFormField } from './form-field-resolve.js';
+
+/** Internal observation cap used for deterministic field resolution. */
+export const FILL_RESOLUTION_CAP = 400;
 
 export function browserController(services: RunServices): AgentBrowserController | DomainFailure {
   const controller = services.domain.browser?.controller;
@@ -45,6 +53,53 @@ export function browserFailure(error: unknown): DomainFailure {
     return { ok: false, errorCode: 'BROWSER_NOT_STARTED', message: error.message, retryable: true };
   }
   throw error;
+}
+
+/** Preserve a core fill failure verbatim at the provider-neutral tool seam. */
+export function mapFillFailure(failure: FillFailure): DomainFailure {
+  return {
+    ok: false,
+    errorCode: failure.errorCode,
+    message: failure.message,
+    retryable: failure.retryable,
+    details: failure.details,
+  };
+}
+
+/** Resolve a visible field name or current eNN ref from a fresh observation. */
+export async function resolveFillTarget(
+  field: string,
+  controller: AgentBrowserController,
+): Promise<WidgetTarget | DomainFailure> {
+  const observation = await controller.observe({
+    cap: FILL_RESOLUTION_CAP,
+    trackDigest: false,
+  });
+  const resolved = resolveFormField(field, observation);
+  if (isDomainFailure(resolved)) return resolved;
+  return {
+    ref: resolved.ref,
+    role: resolved.role,
+    name: resolved.name,
+    group: resolved.group ?? null,
+    value: resolved.value ?? null,
+  };
+}
+
+/** Thin core port adapter; action healing belongs to the controller. */
+export function browserWidgetPort(
+  controller: AgentBrowserController,
+  now: () => number,
+): WidgetPort {
+  return {
+    observe: (options) => controller.observe(options),
+    click: (ref) => controller.click(ref),
+    fill: (ref, value) => controller.fill(ref, value),
+    evaluateOn: (ref, fn, ...args) => controller.evaluateOn(ref, fn, ...args),
+    evaluate: (fn, ...args) => controller.evaluate(fn, ...args),
+    press: (key) => controller.press(key),
+    now,
+  };
 }
 
 export const PROTECTED_ACTION_RE =

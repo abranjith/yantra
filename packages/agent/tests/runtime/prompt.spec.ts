@@ -127,7 +127,8 @@ describe('@no-llm agent-v1 prompt governance', () => {
       'browser_navigate',
       'browser_observe',
       'browser_click',
-      'browser_fill',
+      'browser_fill_element',
+      'browser_fill_form',
       'browser_extract',
     ];
 

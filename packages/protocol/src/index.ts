@@ -94,6 +94,7 @@ export {
   ExtractStep,
   ExtractionSchema,
   FillStep,
+  FillElementStep,
   LLMSummarizeStep,
   LoopStep,
   NavigateStep,

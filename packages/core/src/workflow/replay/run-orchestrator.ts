@@ -235,6 +235,7 @@ export class RunOrchestrator {
         runId,
         taskId,
         plan,
+        params,
         runDir,
         browser,
         secrets: {
@@ -376,6 +377,7 @@ export class RunOrchestrator {
         runId,
         taskId: manifest.taskId,
         plan,
+        params: manifest.params,
         runDir,
         browser,
         secrets: {

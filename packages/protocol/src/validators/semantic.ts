@@ -157,7 +157,7 @@ export const validateSemantics = (
       valueRefs.push(...collectValueRefs(step.url, `/steps/${index}/url`));
     }
 
-    if (step.type === 'fill') {
+    if (step.type === 'fill' || step.type === 'fill_element') {
       valueRefs.push(...collectValueRefs(step.value, `/steps/${index}/value`));
       locatorRefs.push(...collectLocatorChains(step.locator, `/steps/${index}/locator`));
     }
@@ -301,6 +301,7 @@ const getWorkflowStepLocator = (step: WorkflowStep): string | null => {
   switch (step.verb) {
     case 'click':
     case 'fill':
+    case 'fill_element':
     case 'extract':
     case 'wait_for':
     case 'assert':
@@ -333,7 +334,7 @@ export const validateWorkflowSemantics = (
       );
     }
 
-    if (step.verb === 'fill') {
+    if (step.verb === 'fill' || step.verb === 'fill_element') {
       validateWorkflowTemplateRefs(step.value, `/steps/${index}/value`, workflow, errors);
     }
 

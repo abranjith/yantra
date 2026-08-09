@@ -24,6 +24,14 @@ export interface CalendarCell {
 export interface CalendarGridRead {
   readonly cells: readonly CalendarCell[];
   readonly displayedMonths: readonly string[];
+  /** Whether the caller-supplied popup container still resolved in the DOM. */
+  readonly containerResolved: boolean;
+  /** Number of recognizable day cells produced by this read. */
+  readonly cellsSeen: number;
+  /** Month captions parsed even when no safe day cells were recognized. */
+  readonly monthsParsed: readonly string[];
+  /** Elements examined as possible day cells, used in diagnostic messages. */
+  readonly elementsScanned: number;
 }
 
 /**
@@ -159,11 +167,17 @@ export function readCalendarGrid(
       return normalize(ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' '));
     };
     /**
-     * The cell's own label plus any label its non-hidden descendants declare.
+     * The cell's own label plus any label its non-decorative descendants declare.
      *
      * Pickers routinely put the full date on an inert child and leave the bare
      * day number on the clickable ancestor, so reading only the ancestor's own
      * `aria-label` discards the single unambiguous date on the page.
+     *
+     * Only an `aria-hidden` wrapper *inside* the cell marks a label decorative.
+     * The search must not escape the cell: real pickers sit under app-level
+     * containers that carry `aria-hidden="true"` while an overlay is up, and a
+     * cell may carry it itself to mark an out-of-range date. Honouring either
+     * discards every date on the page.
      */
     const cellLabelText = (candidate: Element): string => {
       const parts: string[] = [];
@@ -171,12 +185,24 @@ export function readCalendarGrid(
       if (own) parts.push(own);
       const descendants = candidate.querySelectorAll('[aria-label],[aria-labelledby]');
       for (const descendant of Array.from(descendants).slice(0, 8)) {
-        if (descendant.closest('[aria-hidden="true"]')) continue;
+        const hiddenHost = descendant.closest('[aria-hidden="true"]');
+        if (hiddenHost && hiddenHost !== candidate && candidate.contains(hiddenHost)) continue;
         const text = labelledText(descendant);
         if (text) parts.push(text);
       }
       return parts.join(' ').trim();
     };
+    /**
+     * Whether a cell is offered to the user at all.
+     *
+     * `aria-disabled` is the conventional marker, but a picker that removes
+     * out-of-range dates from the accessibility tree instead expresses the same
+     * thing with `aria-hidden="true"` on the cell and no disabled attribute of
+     * any kind, so a reader that ignores it would click an inert date.
+     */
+    const unavailable = (candidate: Element | null): boolean =>
+      candidate?.getAttribute('aria-disabled') === 'true' ||
+      candidate?.getAttribute('aria-hidden') === 'true';
     const nearestHeading = (candidate: Element): string => {
       let current: Element | null = candidate;
       for (let depth = 0; current && depth < 8; depth += 1) {
@@ -259,7 +285,16 @@ export function readCalendarGrid(
     };
 
     const root = fromPath(containerPath);
-    if (!root) return { cells: [], displayedMonths: [] };
+    if (!root) {
+      return {
+        cells: [],
+        displayedMonths: [],
+        containerResolved: false,
+        cellsSeen: 0,
+        monthsParsed: [],
+        elementsScanned: 0,
+      };
+    }
     const grids = Array.from(root.querySelectorAll('table,[role="grid"]')).filter(visible);
     if (root instanceof Element && root.matches('table,[role="grid"]') && visible(root)) {
       grids.unshift(root);
@@ -278,12 +313,20 @@ export function readCalendarGrid(
       derivation: 'machine' | 'aria-label' | 'structural';
       unsafe: boolean;
     }[] = [];
+    const parsedMonths = new Set<string>();
+    let elementsScanned = 0;
     for (const grid of [...new Set(grids)]) {
       const month = monthForGrid(grid);
+      if (month) {
+        parsedMonths.add(
+          `${String(month.year).padStart(4, '0')}-${String(month.month).padStart(2, '0')}`,
+        );
+      }
       const headers = headersFor(grid);
       const rawTargets = Array.from(
         grid.querySelectorAll<HTMLElement>('button,[role="button"],[role="gridcell"],td'),
       ).filter(visible);
+      elementsScanned += rawTargets.length;
       const targets = rawTargets.filter(
         (candidate) =>
           !rawTargets.some(
@@ -332,8 +375,8 @@ export function readCalendarGrid(
           weekdayFromColumn,
           weekdayFromDate,
           disabled:
-            target.getAttribute('aria-disabled') === 'true' ||
-            owner.getAttribute('aria-disabled') === 'true' ||
+            unavailable(target) ||
+            unavailable(owner) ||
             ('disabled' in target && Boolean((target as HTMLButtonElement).disabled)),
           selected:
             target.getAttribute('aria-selected') === 'true' ||
@@ -346,7 +389,64 @@ export function readCalendarGrid(
         });
       }
     }
+
+    // Some calendars expose no table/grid semantics at all. A complete date
+    // in an aria label is stronger than structure, so accept those targets
+    // directly and do not apply the weekday-column cross-check to them.
+    const looseLabelled = Array.from(
+      root.querySelectorAll<HTMLElement>('[aria-label],[aria-labelledby]'),
+    ).filter(visible);
+    elementsScanned += looseLabelled.length;
+    const existingPaths = new Set(cells.map((cell) => cell.path.join('.')));
+    for (const labelled of looseLabelled) {
+      if (labelled.closest('table,[role="grid"]')) continue;
+      if (
+        labelled.hasAttribute('aria-controls') ||
+        labelled.hasAttribute('aria-owns') ||
+        labelled.hasAttribute('aria-haspopup')
+      ) {
+        continue;
+      }
+      const labelledDate = parseNamedDate(cellLabelText(labelled));
+      if (!labelledDate) continue;
+      const target = labelled.closest<HTMLElement>('button,[role="button"],[role="gridcell"],td');
+      if (!target) continue;
+      if (!visible(target)) continue;
+      const path = toPath(target);
+      if (path.length === 0 || existingPaths.has(path.join('.'))) continue;
+      const day = Number(labelledDate.slice(8, 10));
+      const date = new Date(`${labelledDate}T00:00:00Z`);
+      const name = normalize(
+        cellLabelText(target) || cellLabelText(labelled) || target.textContent,
+      );
+      cells.push({
+        day,
+        monthLabel: labelledDate.slice(0, 7),
+        derivedDate: labelledDate,
+        weekdayFromColumn: null,
+        weekdayFromDate: date.getUTCDay(),
+        disabled:
+          unavailable(target) ||
+          unavailable(target.closest('td,[role="gridcell"]')) ||
+          ('disabled' in target && Boolean((target as HTMLButtonElement).disabled)),
+        selected: target.getAttribute('aria-selected') === 'true',
+        name,
+        group: null,
+        path,
+        derivation: 'aria-label',
+        unsafe: false,
+      });
+      existingPaths.add(path.join('.'));
+      parsedMonths.add(labelledDate.slice(0, 7));
+    }
     const displayedMonths = [...new Set(cells.map((cell) => cell.derivedDate.slice(0, 7)))].sort();
-    return { cells, displayedMonths };
+    return {
+      cells,
+      displayedMonths,
+      containerResolved: containerPath !== undefined,
+      cellsSeen: cells.length,
+      monthsParsed: [...parsedMonths].sort(),
+      elementsScanned,
+    };
   }, container?.path);
 }

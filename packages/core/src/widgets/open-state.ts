@@ -188,20 +188,6 @@ export async function openIfClosed(
   );
 }
 
-/** Restore the entry state after a driver finishes. */
-export async function restore(
-  port: WidgetPort,
-  target: WidgetTarget,
-  wasOpen: boolean,
-): Promise<void> {
-  if (wasOpen) return;
-  const container = await resolveContainer(port, target, { allowUnlinked: true });
-  if (!container || !(await isOpen(port, target, container))) return;
-  await port.press('Escape');
-  await sleep(POLL_MS);
-  if (await isOpen(port, target, container)) await port.click(target.ref);
-}
-
 async function visibleContainerPaths(port: WidgetPort): Promise<readonly (readonly number[])[]> {
   return port.evaluate(() => {
     const selector =

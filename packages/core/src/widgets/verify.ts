@@ -117,13 +117,17 @@ export function matchesIntent(committed: string, intent: WidgetIntent): boolean 
 
 function matchesIntlRenderedDates(committed: string, expected: readonly ParsedDatePart[]): boolean {
   const normalized = normalizeDateText(committed);
+  // Compact pickers render "Sun, Sep 6" and a year the widget never shows
+  // cannot be required. A year it *does* show still has to agree, so the
+  // year-less forms are offered only when there is no year to disagree with.
+  const rendersYear = /\b\d{4}\b/.test(committed);
   let cursor = 0;
   for (const part of expected) {
     const date = new Date(Date.UTC(part.year!, part.month - 1, part.day));
     const variants = new Set<string>();
     for (const locale of TEXTUAL_DATE_LOCALES) {
       for (const month of ['long', 'short'] as const) {
-        for (const includeYear of [true, false]) {
+        for (const includeYear of rendersYear ? [true] : [true, false]) {
           variants.add(
             normalizeDateText(
               new Intl.DateTimeFormat(locale, {
@@ -185,13 +189,25 @@ function parseRenderedDates(value: string): ParsedDatePart[] {
       found.push({ month, day, year, index: match.index ?? 0 });
     }
   }
+  // A slashed numeric date carries no signal about its own field order, and the
+  // page that rendered it is as likely to be day-first as month-first. Both
+  // readings are offered so either order verifies; when only one is calendar-
+  // valid (a leading 21 cannot be a month) that one stands alone.
   const numeric = /\b(\d{1,2})[/.](\d{1,2})[/.](\d{4})\b/g;
   for (const match of value.matchAll(numeric)) {
-    const month = Number(match[1]);
-    const day = Number(match[2]);
+    const first = Number(match[1]);
+    const second = Number(match[2]);
     const year = Number(match[3]);
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      found.push({ month, day, year, index: match.index ?? 0 });
+    const index = match.index ?? 0;
+    for (const [month, day] of [
+      [first, second],
+      [second, first],
+    ]) {
+      if (month! < 1 || month! > 12 || day! < 1 || day! > 31) continue;
+      if (found.some((part) => part.index === index && part.month === month && part.day === day)) {
+        continue;
+      }
+      found.push({ month: month!, day: day!, year, index });
     }
   }
   return found.sort((left, right) => left.index - right.index);

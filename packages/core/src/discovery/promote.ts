@@ -67,11 +67,16 @@ export type PromotableFillValue =
  * agent passes its real trace steps in directly.
  */
 export interface PromotableTraceStep {
-  readonly kind: 'navigate' | 'click' | 'fill' | 'extract' | 'observe';
+  readonly kind: 'navigate' | 'click' | 'fill' | 'fill_element' | 'extract' | 'observe';
   readonly host: string;
   readonly url?: string;
   readonly locator?: readonly LocatorCandidate[];
   readonly value?: PromotableFillValue;
+  readonly field?: {
+    readonly role: string;
+    readonly name: string;
+    readonly group: string | null;
+  };
   readonly submit?: boolean;
   readonly extractionKind?: 'content' | 'table';
   readonly requires_confirmation: boolean;
@@ -310,6 +315,22 @@ function convertTraceStep(
         submit: step.submit ?? false,
       };
     }
+    case 'fill_element': {
+      const value = step.value ?? { kind: 'literal', value: '' };
+      if (value.kind === 'secret_ref') secrets.add(value.key);
+      return {
+        id,
+        verb: 'fill_element',
+        scope: null,
+        requires_confirmation: step.requires_confirmation,
+        confirmation_description: null,
+        expected_cost: null,
+        consequence: null,
+        field_name: step.field?.name ?? '',
+        locator: registerCandidateChain(step.locator, id, locators),
+        value: value.kind === 'secret_ref' ? `{{ secret:${value.key} }}` : value.value,
+      };
+    }
     case 'extract': {
       const index = nextExtractIndex();
       const kind = step.extractionKind ?? 'content';
@@ -511,6 +532,21 @@ function convertStep(
         expected_cost: step.expected_cost,
         consequence: step.consequence,
         url: literalToScalar(step.url),
+      };
+      return workflowStep;
+    }
+    case 'fill_element': {
+      const workflowStep: WorkflowStep = {
+        id,
+        verb: 'fill_element',
+        scope: step.scope,
+        requires_confirmation: step.requires_confirmation,
+        confirmation_description: step.confirmation_description,
+        expected_cost: step.expected_cost,
+        consequence: step.consequence,
+        field_name: step.field_name,
+        locator: registerLocator(step.locator, id, locators),
+        value: literalToScalar(step.value),
       };
       return workflowStep;
     }

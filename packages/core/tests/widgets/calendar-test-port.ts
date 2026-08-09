@@ -62,8 +62,22 @@ export class CalendarTestPort implements WidgetPort {
 
   public async fill(ref: string, value: string): Promise<void> {
     const element = this.element(ref);
-    if (!(element instanceof this.window.HTMLInputElement)) throw new Error('not an input');
-    element.value = value;
+    if (
+      !(element instanceof this.window.HTMLInputElement) &&
+      !(element instanceof this.window.HTMLTextAreaElement) &&
+      !(element instanceof this.window.HTMLSelectElement)
+    ) {
+      throw new Error('not a fillable control');
+    }
+    if (element instanceof this.window.HTMLSelectElement) {
+      const option = Array.from(element.options).find(
+        (candidate) => candidate.value === value || candidate.text.trim() === value.trim(),
+      );
+      if (!option) throw new Error(`missing option ${value}`);
+      element.value = option.value;
+    } else {
+      element.value = value;
+    }
     element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
     element.dispatchEvent(new this.window.Event('change', { bubbles: true }));
   }

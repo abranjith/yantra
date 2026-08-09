@@ -7,6 +7,7 @@ import { handleBranch } from './branch.js';
 import { handleCallWorkflow } from './call_workflow.js';
 import { handleClick } from './click.js';
 import { handleExtract } from './extract.js';
+import { handleFillElement } from './fill-element.js';
 import { handleFill } from './fill.js';
 import { handleLlmSummarize } from './llm_summarize.js';
 import { handleLoop } from './loop.js';
@@ -20,6 +21,7 @@ export {
   handleClick,
   handleExtract,
   handleFill,
+  handleFillElement,
   handleLlmSummarize,
   handleLoop,
   handleNavigate,
@@ -40,6 +42,7 @@ export const STEP_DISPATCH: ReadonlyMap<Step['type'], StepHandler<Step>> = new M
   ['navigate', handleNavigate],
   ['click', handleClick],
   ['fill', handleFill],
+  ['fill_element', handleFillElement],
   ['extract', handleExtract],
   ['wait_for', handleWaitFor],
   ['assert', handleAssert],

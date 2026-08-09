@@ -57,6 +57,18 @@ export type AgentTraceStep =
       readonly requires_confirmation: boolean;
     }
   | {
+      readonly kind: 'fill_element';
+      readonly host: string;
+      readonly field: {
+        readonly role: string;
+        readonly name: string;
+        readonly group: string | null;
+      };
+      readonly locator: readonly LocatorCandidateType[];
+      readonly value: TraceFillValue;
+      readonly requires_confirmation: boolean;
+    }
+  | {
       readonly kind: 'extract';
       readonly host: string;
       readonly extractionKind: 'content' | 'table';
@@ -113,6 +125,18 @@ const AgentTraceStepSchema = z.discriminatedUnion('kind', [
       locator: z.array(LocatorCandidate).min(1),
       value: TraceFillValueSchema,
       submit: z.boolean(),
+      requires_confirmation: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('fill_element'),
+      host: z.string(),
+      field: z
+        .object({ role: z.string(), name: z.string(), group: z.string().nullable() })
+        .strict(),
+      locator: z.array(LocatorCandidate).min(1),
+      value: TraceFillValueSchema,
       requires_confirmation: z.boolean(),
     })
     .strict(),

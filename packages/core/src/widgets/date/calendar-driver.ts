@@ -1,10 +1,4 @@
-import {
-  isOpen,
-  openIfClosed,
-  resolveContainer,
-  restore,
-  type WidgetContainer,
-} from '../open-state.js';
+import { isOpen, openIfClosed, resolveContainer, type WidgetContainer } from '../open-state.js';
 import { clickCandidate } from '../option/candidates.js';
 import {
   widgetFailure,
@@ -17,12 +11,15 @@ import { matchesIntent, readCommitted } from '../verify.js';
 
 import { readCalendarGrid, type CalendarGridRead } from './calendar-grid.js';
 
-interface ClickDateResult {
+interface ClickDateSuccess {
   readonly ok: true;
   readonly actions: number;
+  readonly read: CalendarGridRead;
 }
 
-/** Driver for popup calendars rendered as table/grid day cells. */
+type ClickDateResult = ClickDateSuccess | (WidgetFailure & { readonly read: CalendarGridRead });
+
+/** Driver for popup calendars rendered as table/grid or labelled day cells. */
 export const calendarDriver: WidgetDriver = {
   kind: 'calendar-grid',
   family: 'date',
@@ -47,54 +44,68 @@ export const calendarDriver: WidgetDriver = {
     return port.evaluate((path) => {
       let current: Element | null = document.documentElement;
       for (const index of path) current = current?.children.item(index) ?? null;
-      return current?.querySelector('table,[role="grid"]') ? 0.75 : 0;
+      return current?.querySelector('table,[role="grid"],[aria-label]') ? 0.75 : 0;
     }, container.path);
   },
   drive: async (port, target, intent, budget) => {
     if (intent.kind !== 'date' && intent.kind !== 'date_range') {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'A calendar accepts only date intents.');
+      return calendarFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'A calendar accepts only date intents.',
+        emptyRead(),
+      );
     }
+
+    // This is the sole trigger-open decision for the entire drive. From here
+    // onward the driver may re-read/re-resolve state, but never clicks the
+    // trigger again between range endpoints to "ensure" openness.
     const opened = await openIfClosed(port, target);
-    if (!opened.ok) return opened;
-    let actions = opened.wasOpen ? 0 : 1;
-    let container: WidgetContainer;
-    const displayed = new Set<string>();
-    try {
-      const dates = intent.kind === 'date' ? [intent.date] : [intent.from, intent.to];
-      for (const date of dates) {
-        const current = await resolveContainer(port, target, { allowUnlinked: true });
-        if (!current || !(await isOpen(port, target, current))) {
-          const reopened = await openIfClosed(port, target);
-          if (!reopened.ok) return reopened;
-          container = reopened.container;
-          if (!reopened.wasOpen) actions += 1;
-        } else {
-          container = current;
-        }
-        const clicked = await findAndClickDate(
-          port,
-          target,
-          container,
-          date,
-          budget,
-          displayed,
-          actions,
-        );
-        if (!clicked.ok) return clicked;
-        actions = clicked.actions;
-      }
-      const committed = await readCommitted(port, target);
-      if (!matchesIntent(committed, intent)) {
-        return widgetFailure(
-          'WIDGET_NOT_COMMITTED',
-          `The calendar clicks landed, but "${target.name}" does not reflect the requested date${intent.kind === 'date_range' ? ' range' : ''}.`,
-          { committed },
-        );
-      }
-      return { ok: true, driver: 'calendar-grid', committed, actions };
-    } finally {
-      await restore(port, target, opened.wasOpen);
+    if (!opened.ok) {
+      return calendarFailure(opened.errorCode, opened.message, emptyRead(), opened.details);
     }
+    let actions = opened.wasOpen ? 0 : 1;
+    let container = opened.container;
+    let lastRead = emptyRead();
+    const displayed = new Set<string>();
+    const dates = intent.kind === 'date' ? [intent.date] : [intent.from, intent.to];
+
+    for (const date of dates) {
+      const current = await resolveContainer(port, target, { allowUnlinked: true });
+      if (current) container = current;
+      const clicked = await findAndClickDate(
+        port,
+        target,
+        container,
+        date,
+        budget,
+        displayed,
+        actions,
+      );
+      lastRead = clicked.read;
+      if (!clicked.ok) return clicked;
+      actions = clicked.actions;
+    }
+
+    const committed = await readCommitted(port, target);
+    if (matchesIntent(committed, intent)) {
+      return { ok: true, driver: 'calendar-grid', committed, actions };
+    }
+    // An open picker has not finished reporting. Some commit only when released,
+    // and some spread a range over a check-in/check-out pair whose second copy
+    // exists only while the popup is up. Either way the trigger legitimately
+    // still reads its old value here, so the authoritative check belongs to the
+    // engine, which releases the widget first and fails there if it never lands.
+    const open = await resolveContainer(port, target, { allowUnlinked: true });
+    if (open && (await isOpen(port, target, open))) {
+      return { ok: true, driver: 'calendar-grid', committed, actions };
+    }
+    return calendarFailure(
+      'WIDGET_NOT_COMMITTED',
+      `The calendar clicks landed, but "${target.name}" does not reflect the requested date${intent.kind === 'date_range' ? ' range' : ''}.`,
+      lastRead,
+      { committed },
+      displayed,
+    );
   },
 };
 
@@ -106,60 +117,86 @@ async function findAndClickDate(
   budget: Parameters<WidgetDriver['drive']>[3],
   displayed: Set<string>,
   initialActions: number,
-): Promise<ClickDateResult | WidgetFailure> {
+): Promise<ClickDateResult> {
   let container = initialContainer;
   let actions = initialActions;
   let pagingSteps = 0;
+  let lastRead = emptyRead();
   const targetMonth = date.slice(0, 7);
+
   for (;;) {
     if (port.now() > budget.deadlineMs || actions >= budget.maxActions) {
-      return widgetFailure(
-        'WIDGET_TARGET_UNREACHABLE',
-        'The calendar action budget was exhausted.',
-        {
-          reason: 'budget',
-          displayedMonths: [...displayed],
-        },
+      return withRead(
+        calendarFailure(
+          'WIDGET_TARGET_UNREACHABLE',
+          'The calendar action budget was exhausted.',
+          lastRead,
+          { reason: 'budget' },
+          displayed,
+        ),
+        lastRead,
       );
     }
-    // Container scope is an optimization, not a safety property: it narrows
-    // where we look, and nothing about correctness rests on it. A scoped read
-    // that finds no day cells at all therefore means the container is wrong,
-    // not that the page has no calendar — so widen to the document rather than
-    // report a month unreachable that is sitting there on screen. Every real
-    // guard still runs on the wider read: a date must match exactly one cell,
-    // structural derivations are weekday-checked, and a disabled cell refuses.
-    let grid = await readCalendarGrid(port, container);
-    if (grid.cells.length === 0) grid = await readCalendarGrid(port);
+
+    const grid = await readWithFallback(port, container);
     grid.displayedMonths.forEach((month) => displayed.add(month));
+    if (grid.cells.length === 0) {
+      return withRead(
+        calendarFailure(
+          'WIDGET_TARGET_UNREACHABLE',
+          `The calendar container is open, ${grid.elementsScanned} elements were scanned, and 0 day cells were recognized.`,
+          grid,
+          { reason: 'empty_calendar' },
+          displayed,
+        ),
+        grid,
+      );
+    }
+
     const panelCells = grid.cells.filter((cell) => cell.derivedDate.startsWith(`${targetMonth}-`));
     const unsafe = panelCells.find((cell) => cell.unsafe);
     if (unsafe) {
-      return widgetFailure(
-        'WIDGET_MAPPING_UNSAFE',
-        `The ${unsafe.monthLabel} calendar disagrees with its weekday headers, so no date was clicked.`,
-        {
-          derived: unsafe.weekdayFromDate,
-          column: unsafe.weekdayFromColumn,
-          date: unsafe.derivedDate,
-        },
+      return withRead(
+        calendarFailure(
+          'WIDGET_MAPPING_UNSAFE',
+          `The ${unsafe.monthLabel} calendar disagrees with its weekday headers, so no date was clicked.`,
+          grid,
+          {
+            derived: unsafe.weekdayFromDate,
+            column: unsafe.weekdayFromColumn,
+            date: unsafe.derivedDate,
+          },
+          displayed,
+        ),
+        grid,
       );
     }
+
     const matches = grid.cells.filter((cell) => cell.derivedDate === date);
     if (matches.length > 1) {
-      return widgetFailure(
-        'WIDGET_AMBIGUOUS_CHOICE',
-        `The calendar exposes ${matches.length} cells for ${date}.`,
-        { offered: matches.slice(0, 10).map((cell) => `${cell.monthLabel}: ${cell.name}`) },
+      return withRead(
+        calendarFailure(
+          'WIDGET_AMBIGUOUS_CHOICE',
+          `The calendar exposes ${matches.length} cells for ${date}.`,
+          grid,
+          { offered: matches.slice(0, 10).map((cell) => `${cell.monthLabel}: ${cell.name}`) },
+          displayed,
+        ),
+        grid,
       );
     }
     if (matches.length === 1) {
       const match = matches[0]!;
       if (match.disabled) {
-        return widgetFailure(
-          'WIDGET_TARGET_UNREACHABLE',
-          `The requested date ${date} is disabled.`,
-          { reason: 'disabled', date },
+        return withRead(
+          calendarFailure(
+            'WIDGET_TARGET_UNREACHABLE',
+            `The requested date ${date} is disabled.`,
+            grid,
+            { reason: 'disabled', date },
+            displayed,
+          ),
+          grid,
         );
       }
       await clickCandidate(port, {
@@ -169,27 +206,37 @@ async function findAndClickDate(
         path: match.path,
         group: match.group,
       });
-      return { ok: true, actions: actions + 1 };
+      return { ok: true, actions: actions + 1, read: grid };
     }
+
     if (pagingSteps >= budget.maxPagingSteps) {
-      return unreachable(date, displayed, 'paging bound reached');
+      return withRead(unreachable(date, displayed, 'paging bound reached', grid), grid);
     }
     const direction = directionFor(targetMonth, grid);
-    if (!direction) return unreachable(date, displayed, 'target month is not represented safely');
+    if (!direction) {
+      return withRead(
+        unreachable(date, displayed, 'target month is not represented safely', grid),
+        grid,
+      );
+    }
     const control = await pagingControl(port, direction);
-    if (!control || control.disabled)
-      return unreachable(date, displayed, `${direction} control unavailable`);
+    if (!control || control.disabled) {
+      return withRead(unreachable(date, displayed, `${direction} control unavailable`, grid), grid);
+    }
     const before = grid.displayedMonths;
     await port.click(control.ref);
     actions += 1;
     pagingSteps += 1;
     const resolved = await resolveContainer(port, target, { allowUnlinked: true });
     if (resolved) container = resolved;
-    let after = await readCalendarGrid(port, container);
-    if (after.cells.length === 0) after = await readCalendarGrid(port);
+    const after = await readWithFallback(port, container);
+    lastRead = after;
     after.displayedMonths.forEach((month) => displayed.add(month));
     if (!advancedToward(before, after.displayedMonths, direction)) {
-      return unreachable(date, displayed, 'paging did not advance the displayed month');
+      return withRead(
+        unreachable(date, displayed, 'paging did not advance the displayed month', after),
+        after,
+      );
     }
   }
 }
@@ -224,10 +271,66 @@ function advancedToward(
     : after[0]! < before[0]!;
 }
 
-function unreachable(date: string, displayed: Set<string>, reason: string): WidgetFailure {
-  return widgetFailure(
+function unreachable(
+  date: string,
+  displayed: Set<string>,
+  reason: string,
+  read: CalendarGridRead,
+): WidgetFailure {
+  return calendarFailure(
     'WIDGET_TARGET_UNREACHABLE',
     `The calendar could not reach ${date}: ${reason}.`,
-    { displayedMonths: [...displayed], reason },
+    read,
+    { reason },
+    displayed,
   );
+}
+
+async function readWithFallback(
+  port: WidgetPort,
+  container: WidgetContainer,
+): Promise<CalendarGridRead> {
+  const scoped = await readCalendarGrid(port, container);
+  if (scoped.cells.length > 0) return scoped;
+  const wide = await readCalendarGrid(port);
+  return {
+    ...wide,
+    containerResolved: scoped.containerResolved,
+    elementsScanned: scoped.elementsScanned + wide.elementsScanned,
+    monthsParsed: [...new Set([...scoped.monthsParsed, ...wide.monthsParsed])].sort(),
+  };
+}
+
+function emptyRead(): CalendarGridRead {
+  return {
+    cells: [],
+    displayedMonths: [],
+    containerResolved: false,
+    cellsSeen: 0,
+    monthsParsed: [],
+    elementsScanned: 0,
+  };
+}
+
+function calendarFailure(
+  errorCode: WidgetFailure['errorCode'],
+  message: string,
+  read: CalendarGridRead,
+  details: Readonly<Record<string, unknown>> = {},
+  displayed?: ReadonlySet<string>,
+): WidgetFailure {
+  return widgetFailure(errorCode, message, {
+    ...details,
+    containerResolved: read.containerResolved,
+    cellsSeen: read.cellsSeen,
+    monthsParsed: read.monthsParsed,
+    displayedMonths: displayed ? [...displayed] : read.displayedMonths,
+  });
+}
+
+function withRead(
+  failure: WidgetFailure,
+  read: CalendarGridRead,
+): WidgetFailure & { readonly read: CalendarGridRead } {
+  return { ...failure, read };
 }

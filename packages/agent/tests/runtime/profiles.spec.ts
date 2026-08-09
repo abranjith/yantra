@@ -53,16 +53,17 @@ describe('@no-llm command task profiles', () => {
     expect(task).toEqual(full);
     expect(research.toolNames).toContain('browser_navigate');
     expect(research.toolNames).not.toContain('browser_click');
-    expect(research.toolNames).not.toContain('browser_fill');
-    // browser_form_fill mutates the page, so opt-in research browsing (a
+    expect(research.toolNames).not.toContain('browser_fill_element');
+    // browser_fill_form mutates the page, so opt-in research browsing (a
     // read-only mode) must not gain it either.
-    expect(research.toolNames).not.toContain('browser_form_fill');
+    expect(research.toolNames).not.toContain('browser_fill_form');
   });
 
-  it('gives browser_form_fill to do only', () => {
-    expect(COMMAND_TASK_PROFILES.do.toolNames).toContain('browser_form_fill');
-    expect(COMMAND_TASK_PROFILES.ask.toolNames).not.toContain('browser_form_fill');
-    expect(COMMAND_TASK_PROFILES.research.toolNames).not.toContain('browser_form_fill');
+  it('gives the unified fill tools to do only', () => {
+    expect(COMMAND_TASK_PROFILES.do.toolNames).toContain('browser_fill_form');
+    expect(COMMAND_TASK_PROFILES.do.toolNames).toContain('browser_fill_element');
+    expect(COMMAND_TASK_PROFILES.ask.toolNames).not.toContain('browser_fill_form');
+    expect(COMMAND_TASK_PROFILES.research.toolNames).not.toContain('browser_fill_form');
 
     const doCatalog = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map(
       (tool) => tool.name,
@@ -70,19 +71,12 @@ describe('@no-llm command task profiles', () => {
     const askCatalog = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.ask).map(
       (tool) => tool.name,
     );
-    expect(doCatalog).toContain('browser_form_fill');
-    expect(askCatalog).not.toContain('browser_form_fill');
+    expect(doCatalog).toContain('browser_fill_form');
+    expect(doCatalog).toContain('browser_fill_element');
+    expect(askCatalog).not.toContain('browser_fill_form');
   });
 
-  it('gives semantic date and option pickers to do only', () => {
-    for (const name of ['browser_pick_date', 'browser_pick_option'] as const) {
-      expect(COMMAND_TASK_PROFILES.do.toolNames).toContain(name);
-      expect(COMMAND_TASK_PROFILES.ask.toolNames).not.toContain(name);
-      expect(COMMAND_TASK_PROFILES.research.toolNames).not.toContain(name);
-    }
-  });
-
-  it('records the tool_catalog_hash after adding browser_form_fill', () => {
+  it('records the tool_catalog_hash after replacing the fill surface', () => {
     // The catalog is name-sorted and hashed per run, so adding a tool changes
     // this value by design. Recorded so an unintended catalog change is visible.
     const hash = hashToolCatalog(yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do));
@@ -129,11 +123,10 @@ describe('@no-llm command task profiles', () => {
 
   it('adds browser efficiency and bounded widget guidance only to do', () => {
     const task = COMMAND_TASK_PROFILES.do.promptAddendum;
-    expect(task).toMatch(/browser_form_fill/i);
-    expect(task).toMatch(/browser_pick_date/i);
-    expect(task).toMatch(/browser_pick_option/i);
-    expect(task).toMatch(/browser_click only to activate/i);
-    expect(task).toMatch(/never to operate a dropdown or calendar by hand/i);
+    expect(task).toMatch(/browser_fill_form/i);
+    expect(task).toMatch(/browser_fill_element/i);
+    expect(task).toMatch(/browser_click only to/i);
+    expect(task).toMatch(/never to operate a field widget by hand/i);
     expect(task).toMatch(/return the committed value/i);
     expect(task).toMatch(/needs no confirming browser_observe/i);
     expect(task).toMatch(/do not chain browser_observe/i);
@@ -141,7 +134,7 @@ describe('@no-llm command task profiles', () => {
     expect(task).toMatch(/bounded number of attempts/i);
     expect(task).toMatch(/do not switch to web_search/i);
     for (const command of ['ask', 'research'] as const) {
-      expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/browser_form_fill/i);
+      expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/browser_fill_form/i);
       expect(COMMAND_TASK_PROFILES[command].promptAddendum).not.toMatch(/disabled: true/i);
     }
   });

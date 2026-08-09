@@ -312,7 +312,7 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
     expect(trace.steps.map((s) => s.kind)).toEqual([
       'navigate',
       'observe',
-      'fill',
+      'fill_element',
       'observe',
       'click',
       'observe',
@@ -325,7 +325,12 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
     const saved = await workflowStore.load('fixture-login');
     expect(saved.isOk).toBe(true);
     if (!saved.isOk) return;
-    expect(saved.value.steps.map((s) => s.verb)).toEqual(['navigate', 'fill', 'click', 'extract']);
+    expect(saved.value.steps.map((s) => s.verb)).toEqual([
+      'navigate',
+      'fill_element',
+      'click',
+      'extract',
+    ]);
     // The terminal read is bound to an output, so the replay below reports the
     // data it captured instead of only a status.
     expect(saved.value.outputs).toEqual([
@@ -430,8 +435,8 @@ function promotionScenario(): Scenario {
   return async (session) => {
     await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/form.html` });
     let observed = parseModel(await session.call('browser_observe', {}));
-    await session.call('browser_fill', {
-      ref: refByName(observed, 'Username'),
+    await session.call('browser_fill_element', {
+      field: refByName(observed, 'Username'),
       value: { kind: 'literal', value: 'alice' },
     });
     observed = parseModel(await session.call('browser_observe', {}));

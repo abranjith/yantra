@@ -5,18 +5,14 @@ import { join } from 'node:path';
 import {
   EthicsRefusedError,
   StaleElementRefError,
-  UserInputVault,
   type AgentBrowserController,
-  type OpaqueRefResolver,
 } from '@yantra/core';
-import type { ConfirmationGateway, ConfirmationOutcome } from '@yantra/core';
-import type { ConfirmationRequest } from '@yantra/protocol';
 import { Compile } from 'typebox/compile';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { browserClickSpec } from '../../../../src/adapters/pi/tools/browser-click.js';
 import { browserExtractSpec } from '../../../../src/adapters/pi/tools/browser-extract.js';
-import { browserFillSpec } from '../../../../src/adapters/pi/tools/browser-fill.js';
+import { browserFillElementSpec } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-observe.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
@@ -42,7 +38,7 @@ describe('@no-llm browser tools', () => {
     await assertToolContract(browserClickSpec(services), { ref: 'button.css' });
     // A bare string is now a valid literal value, so the invalid case must use a
     // type the whole value union rejects (neither string nor tagged object).
-    await assertToolContract(browserFillSpec(services), { ref: 'e1', value: 42 });
+    await assertToolContract(browserFillElementSpec(services), { field: 'Search', value: 42 });
     // `kind` is a plain string (small models cannot recover from a literal-union
     // rejection raised before the middleware), so the schema-invalid case must
     // use a non-string value.
@@ -312,183 +308,6 @@ describe('@no-llm browser tools', () => {
     expect(controller.click).not.toHaveBeenCalled();
   });
 
-  it('checks secret host binding before resolution and never echoes a canary', async () => {
-    const controller = fakeController();
-    controller.host.mockReturnValue('evil.example');
-    const resolver = fakeSecretResolver('CANARY-super-secret');
-    const services = withGrant(
-      browserServices(controller, {
-        secretResolver: resolver,
-        secretHosts: () => Promise.resolve(['safe.example']),
-      }),
-    );
-    const mismatch = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: { kind: 'secret_ref', key: 'site.password' } },
-      undefined,
-    );
-    expect(mismatch.error_code).toBe('SECRET_HOST_MISMATCH');
-    expect(resolver.resolve).not.toHaveBeenCalled();
-
-    controller.host.mockReturnValue('login.safe.example');
-    const filled = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: { kind: 'secret_ref', key: 'site.password' } },
-      undefined,
-    );
-    expect(filled.status).toBe('ok');
-    expect(JSON.stringify(filled)).not.toContain('CANARY-super-secret');
-  });
-
-  it('rejects credential-shaped literals', async () => {
-    const controller = fakeController();
-    const services = browserServices(controller);
-    const result = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: { kind: 'literal', value: 'sk-ABCDEFGHIJKLMNOPQRSTUV' } },
-      undefined,
-    );
-    expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
-    expect(controller.fill).not.toHaveBeenCalled();
-  });
-
-  it('accepts a bare string value as a non-secret literal', async () => {
-    // Regression: the discriminated-union-only schema rejected the plain-string
-    // form small models emit ("value must be object"), so they looped on an
-    // impossible retry. A bare string must now fill the field as a literal.
-    const controller = fakeController();
-    controller.fill.mockResolvedValue({ url: 'https://example.com', title: 'Page' });
-    const services = browserServices(controller);
-    const result = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: 'tomsmith' },
-      undefined,
-    );
-    expect(result.status).toBe('ok');
-    expect(controller.fill).toHaveBeenCalledWith('e1', 'tomsmith');
-  });
-
-  it('rejects a credential-shaped bare string just like an object literal', async () => {
-    const controller = fakeController();
-    const services = browserServices(controller);
-    const result = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: 'sk-ABCDEFGHIJKLMNOPQRSTUV' },
-      undefined,
-    );
-    expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
-    expect(controller.fill).not.toHaveBeenCalled();
-  });
-
-  it('records a bare-string fill as a non-confirmation literal in the trace', async () => {
-    const controller = fakeController();
-    controller.fill.mockResolvedValue({ url: 'https://shop.example/login', title: 'Login' });
-    controller.host.mockReturnValue('shop.example');
-    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Username' });
-    const trace = new AgentTrace();
-    const services = buildServices({
-      runDir,
-      trace,
-      domain: {
-        browser: {
-          controller: controller as unknown as AgentBrowserController,
-          ethics: { check: () => Promise.resolve() },
-          secretResolver: null,
-          secretHosts: () => Promise.resolve([]),
-          captureThresholdBytes: 1024,
-        },
-      },
-    });
-    await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: 'tomsmith' },
-      undefined,
-    );
-    const step = trace.steps()[0];
-    expect(step?.kind).toBe('fill');
-    if (step?.kind === 'fill') {
-      expect(step.value).toEqual({ kind: 'literal', value: 'tomsmith' });
-      expect(step.requires_confirmation).toBe(false);
-    }
-  });
-
-  it('fills the REAL user value when the model passes a vault placeholder', async () => {
-    // Regression: the goal sanitizer produced irreversible '[redacted-email]'
-    // markers, so the model could only type the marker into the field — the
-    // fill "succeeded" with junk. The vault placeholder must resolve to the
-    // real user-provided value at the execution boundary, while the model-visible
-    // result and the persisted trace keep only the placeholder.
-    const controller = fakeController();
-    controller.fill.mockResolvedValue({ url: 'https://shop.example/signup', title: 'Signup' });
-    controller.host.mockReturnValue('shop.example');
-    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Email' });
-    controller.observe.mockResolvedValue({
-      url: 'https://shop.example/signup',
-      title: 'Signup',
-      digest: '',
-      digestUnchanged: true,
-      interactables: [{ ref: 'e1', role: 'textbox', name: 'Email', value: 'john@example.com' }],
-    });
-    const vault = new UserInputVault();
-    expect(vault.redact('sign up with john@example.com')).toContain('{{user:email:1}}');
-    const trace = new AgentTrace();
-    const services = buildServices({
-      runDir,
-      trace,
-      userInput: vault,
-      domain: {
-        browser: {
-          controller: controller as unknown as AgentBrowserController,
-          ethics: { check: () => Promise.resolve() },
-          secretResolver: null,
-          secretHosts: () => Promise.resolve([]),
-          captureThresholdBytes: 1024,
-        },
-      },
-    });
-
-    const result = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: '{{user:email:1}}' },
-      undefined,
-    );
-
-    expect(result.status).toBe('ok');
-    expect(controller.fill).toHaveBeenCalledWith('e1', 'john@example.com');
-    expect(JSON.stringify(result)).not.toContain('john@example.com');
-    expect(result.modelText).toContain('{{user:email:1}}');
-    const step = trace.steps()[0];
-    expect(step?.kind).toBe('fill');
-    if (step?.kind === 'fill') {
-      expect(step.value).toEqual({ kind: 'literal', value: '{{user:email:1}}' });
-    }
-  });
-
-  it('still rejects a credential-shaped user value resolved from a placeholder', async () => {
-    // The vault must not become a bypass around the credential-literal guard:
-    // an API-key-shaped value in the goal resolves at the boundary and is then
-    // rejected exactly like a raw credential literal, without echoing it.
-    const controller = fakeController();
-    const vault = new UserInputVault();
-    const redacted = vault.redact('use key sk-ABCDEFGHIJKLMNOPQRSTUV');
-    expect(redacted).toContain('{{user:api_key:1}}');
-    const services = buildServices({
-      runDir,
-      userInput: vault,
-      domain: {
-        browser: {
-          controller: controller as unknown as AgentBrowserController,
-          ethics: { check: () => Promise.resolve() },
-          secretResolver: null,
-          secretHosts: () => Promise.resolve([]),
-          captureThresholdBytes: 1024,
-        },
-      },
-    });
-
-    const result = await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: '{{user:api_key:1}}' },
-      undefined,
-    );
-
-    expect(result.error_code).toBe('SECRET_SHAPED_LITERAL');
-    expect(controller.fill).not.toHaveBeenCalled();
-    expect(JSON.stringify(result)).not.toContain('sk-ABCDEFGHIJKLMNOPQRSTUV');
-  });
-
   it('extracts tables and stores oversized results as a capture reference', async () => {
     const controller = fakeController();
     controller.extract.mockResolvedValue({
@@ -693,54 +512,6 @@ describe('@no-llm browser tools', () => {
     expect(result.modelText).toContain('content');
   });
 
-  it('records successful navigate/fill/click into the run trace with candidate chains', async () => {
-    const controller = fakeController();
-    controller.navigate.mockResolvedValue({ url: 'https://shop.example/login', title: 'Login' });
-    controller.fill.mockResolvedValue({ url: 'https://shop.example/login', title: 'Login' });
-    controller.click.mockResolvedValue({ url: 'https://shop.example/home', title: 'Home' });
-    controller.host.mockReturnValue('shop.example');
-    controller.describeRef.mockReturnValue({ ref: 'e1', role: 'textbox', name: 'Email' });
-
-    const trace = new AgentTrace();
-    const services = buildServices({
-      runDir,
-      trace,
-      urlProvenance: seeded('https://shop.example/login'),
-      domain: {
-        browser: {
-          controller: controller as unknown as AgentBrowserController,
-          ethics: { check: () => Promise.resolve() },
-          secretResolver: null,
-          secretHosts: () => Promise.resolve([]),
-          captureThresholdBytes: 1024,
-        },
-      },
-    });
-
-    await wrapTool(browserNavigateSpec(services), services).execute(
-      { url: 'https://shop.example/login' },
-      undefined,
-    );
-    await wrapTool(browserFillSpec(services), services).execute(
-      { ref: 'e1', value: { kind: 'literal', value: 'ada@example.com' } },
-      undefined,
-    );
-    controller.describeRef.mockReturnValue({ ref: 'e2', role: 'button', name: 'Continue' });
-    await wrapTool(browserClickSpec(services), services).execute({ ref: 'e2' }, undefined);
-
-    const steps = trace.steps();
-    expect(steps.map((s) => s.kind)).toEqual(['navigate', 'fill', 'click']);
-    const fill = steps[1];
-    const click = steps[2];
-    if (fill?.kind === 'fill') {
-      expect(fill.locator).toEqual([{ kind: 'role', role: 'textbox', name: 'Email' }]);
-      expect(fill.value).toEqual({ kind: 'literal', value: 'ada@example.com' });
-    }
-    if (click?.kind === 'click') {
-      expect(click.locator).toEqual([{ kind: 'role', role: 'button', name: 'Continue' }]);
-    }
-  });
-
   it('prefers the engine-derived locator chain over the observed role and name', async () => {
     // The observed role/name comes from the observation scanner, whose role map
     // is a simplification of the locator engine's. When the engine can describe
@@ -942,31 +713,4 @@ function fakeController() {
     // so tests exercise the observed-role fallback unless they opt in.
     locatorFor: vi.fn().mockResolvedValue([]),
   };
-}
-
-function fakeSecretResolver(
-  value: string,
-): OpaqueRefResolver & { resolve: ReturnType<typeof vi.fn> } {
-  return {
-    resolve: vi.fn().mockResolvedValue({
-      value,
-      isSecret: true,
-      source: 'secret',
-      sourceKey: 'site.password',
-      dispose: vi.fn(),
-    }),
-  };
-}
-
-function withGrant(services: RunServices): RunServices {
-  const gateway: ConfirmationGateway = {
-    request: (request: ConfirmationRequest): Promise<ConfirmationOutcome> =>
-      Promise.resolve({
-        confirmation_id: request.confirmation_id,
-        decision: 'granted',
-        decided_at: new Date().toISOString(),
-        decided_by: 'user_interactive',
-      }),
-  };
-  return { ...services, confirmation: { gateway, store: null } };
 }

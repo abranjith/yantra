@@ -8,7 +8,7 @@ const STEP_ID_PATTERN = /^s[0-9]+$/;
 const CAPTURE_ALIAS_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 /** Step types that may carry `requires_confirmation`. */
-const CONFIRMABLE_STEP_TYPES = new Set(['navigate', 'click', 'fill']);
+const CONFIRMABLE_STEP_TYPES = new Set(['navigate', 'click', 'fill', 'fill_element']);
 
 /**
  * Optional annotations that enrich the `ConfirmationRequest` when a
@@ -38,7 +38,7 @@ export const StepHeader = {
     .boolean()
     .default(false)
     .describe(
-      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps.',
+      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps.',
     ),
 } as const;
 
@@ -155,6 +155,17 @@ export const FillStep = z
   })
   .describe('Fill an input-like field.');
 
+export const FillElementStep = z
+  .object({
+    ...StepHeader,
+    ...ConfirmationAnnotations,
+    type: z.literal('fill_element').describe('Semantic fill-element step discriminator.'),
+    field_name: z.string().min(1).describe('Accessible field name used for fresh resolution.'),
+    locator: LocatorChain.describe('Fallback locator chain for the target field.'),
+    value: ValueRef.describe('Semantic value committed through the unified fill engine.'),
+  })
+  .describe('Resolve and semantically fill one browser field.');
+
 export const ExtractStep = z
   .object({
     ...StepHeader,
@@ -256,6 +267,7 @@ export const Step = z
     NavigateStep,
     ClickStep,
     FillStep,
+    FillElementStep,
     ExtractStep,
     WaitForStep,
     AssertStep,
@@ -267,7 +279,7 @@ export const Step = z
   .refine(
     (step) => !step.requires_confirmation || CONFIRMABLE_STEP_TYPES.has(step.type),
     (step) => ({
-      message: `requires_confirmation is not legal on "${step.type}" steps — only click, fill, and navigate may require confirmation.`,
+      message: `requires_confirmation is not legal on "${step.type}" steps — only click, fill, fill_element, and navigate may require confirmation.`,
       path: ['requires_confirmation'],
     }),
   )
@@ -276,6 +288,7 @@ export const Step = z
 export type NavigateStep = z.infer<typeof NavigateStep>;
 export type ClickStep = z.infer<typeof ClickStep>;
 export type FillStep = z.infer<typeof FillStep>;
+export type FillElementStep = z.infer<typeof FillElementStep>;
 export type ExtractStep = z.infer<typeof ExtractStep>;
 export type WaitForStep = z.infer<typeof WaitForStep>;
 export type AssertStep = z.infer<typeof AssertStep>;

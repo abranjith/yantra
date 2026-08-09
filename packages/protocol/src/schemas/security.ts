@@ -47,6 +47,7 @@ export const STEP_VERBS = [
   'navigate',
   'click',
   'fill',
+  'fill_element',
   'extract',
   'wait_for',
   'assert',

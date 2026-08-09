@@ -267,11 +267,12 @@ URLs you supplied yourself (`--allow-host`, or a link in the goal). Query values
 on an already-visited URL may vary, but a new path, parameter name, or identifier
 is refused with `URL_NOT_FROM_EVIDENCE`; a repeated refusal points back to the
 visible form or an attested search result instead of relaxing provenance.
-Browser-driven `do` runs use `browser_form_fill` for an ordered multi-field form,
-`browser_pick_option` or `browser_pick_date` for one semantic choice, and
-`browser_click` only to activate controls. The form and picker tools verify the
-committed value themselves. They never submit or handle credentials; use
-`browser_fill` for credentialed fields. See
+Browser-driven `do` runs use `browser_fill_form` for an ordered multi-field form,
+`browser_fill_element` for one text, secret, suggestion, choice, toggle, date, or
+date-range control, and `browser_click` only to activate controls or submit a
+completed form. Both fill tools verify the committed value and release any
+floating widget themselves; secret refs remain host-bound and confirmation-gated.
+See
 [docs/agent-tools.md](docs/agent-tools.md).
 
 Hard budgets cover wall-clock time, per-tool timeout, provider tokens,

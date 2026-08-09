@@ -14,7 +14,7 @@
  *     live proposals). Only `intent` locators (role + name_match) are allowed.
  *   - `SecretRef` is rejected anywhere in proposal step values — discovery
  *     has no secret access in this feature.
- *   - Mutating verbs (`navigate`, `click`, `fill`) get `requires_confirmation`
+ *   - Mutating verbs (`navigate`, `click`, `fill`, `fill_element`) get `requires_confirmation`
  *     forced to `true` by the `normalizeProposal` transform, regardless of
  *     what the model set — defense in depth.
  *   - Bounded string lengths on `rationale` and `summary_md` to cap context.
@@ -33,7 +33,7 @@ import { Step } from './steps.js';
 // ---------------------------------------------------------------------------
 
 /** Step verbs that mutate state and must always carry confirmation in discovery. */
-const MUTATING_VERBS = new Set(['navigate', 'click', 'fill']);
+const MUTATING_VERBS = new Set(['navigate', 'click', 'fill', 'fill_element']);
 
 /** Maximum steps in a single discovery proposal. */
 const MAX_PROPOSAL_STEPS = 3;
@@ -253,7 +253,7 @@ export type DiscoverySession = z.infer<typeof DiscoverySession>;
 
 /**
  * Forces `requires_confirmation: true` on any step with a mutating verb
- * (`navigate`, `click`, `fill`), regardless of what the model set.
+ * (`navigate`, `click`, `fill`, `fill_element`), regardless of what the model set.
  *
  * This is defense in depth: even if the LLM sets `requires_confirmation: false`
  * on a click step, this transform overrides it so the executor's consent
@@ -350,7 +350,7 @@ export function validateDiscoveryProposal(
         reasons.push(`${stepPath}/url: SecretRef is not allowed in discovery proposals`);
       }
     }
-    if (step.type === 'fill') {
+    if (step.type === 'fill' || step.type === 'fill_element') {
       if (containsSecretRef(step.value)) {
         reasons.push(`${stepPath}/value: SecretRef is not allowed in discovery proposals`);
       }

@@ -151,7 +151,7 @@
                   "requires_confirmation": {
                     "type": "boolean",
                     "default": false,
-                    "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+                    "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps."
                   },
                   "confirmation_description": {
                     "anyOf": [
@@ -344,6 +344,62 @@
                   "requires_confirmation": {
                     "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
                   },
+                  "confirmation_description": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/confirmation_description"
+                  },
+                  "expected_cost": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/expected_cost"
+                  },
+                  "consequence": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/consequence"
+                  },
+                  "verb": {
+                    "type": "string",
+                    "const": "fill_element",
+                    "description": "Semantic fill-element workflow step."
+                  },
+                  "field_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Accessible field name used for fresh resolution."
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Fallback named locator key from _locators."
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean",
+                      "null"
+                    ],
+                    "description": "Semantic fill value or template expression."
+                  }
+                },
+                "required": [
+                  "id",
+                  "scope",
+                  "verb",
+                  "field_name",
+                  "locator",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/id"
+                  },
+                  "scope": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/scope"
+                  },
+                  "requires_confirmation": {
+                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                  },
                   "verb": {
                     "type": "string",
                     "const": "extract",
@@ -429,7 +485,7 @@
                                     "description": "Array extraction schema node."
                                   },
                                   "items": {
-                                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items",
+                                    "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items",
                                     "description": "Item schema for extracted arrays."
                                   }
                                 },
@@ -450,7 +506,7 @@
                                   "fields": {
                                     "type": "object",
                                     "additionalProperties": {
-                                      "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                      "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
                                     },
                                     "description": "Field mapping for extracted object rows."
                                   }
@@ -482,7 +538,7 @@
                           "fields": {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                              "$ref": "#/definitions/WorkflowFile/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
                             },
                             "description": "Field mapping for extracted object rows."
                           }

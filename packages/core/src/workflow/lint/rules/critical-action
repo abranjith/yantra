@@ -28,7 +28,7 @@ export const criticalActionWithoutConfirmation: LintRule = {
       if (!step) continue;
 
       // Only check mutating verbs that can carry requires_confirmation
-      if (step.verb !== 'click' && step.verb !== 'fill') continue;
+      if (step.verb !== 'click' && step.verb !== 'fill' && step.verb !== 'fill_element') continue;
 
       // Skip steps that already have the flag
       if (step.requires_confirmation) continue;

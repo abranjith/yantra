@@ -9,6 +9,7 @@ function collectReferencedLocators(workflow: WorkflowFile): Set<string> {
     if (
       step.verb === 'click' ||
       step.verb === 'fill' ||
+      step.verb === 'fill_element' ||
       step.verb === 'extract' ||
       step.verb === 'wait_for' ||
       step.verb === 'assert'

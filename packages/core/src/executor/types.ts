@@ -150,7 +150,11 @@ export interface CheckpointStore {
 // ---------------------------------------------------------------------------
 
 export type StepResult =
-  | { readonly kind: 'completed'; readonly captureKeys?: readonly string[] }
+  | {
+      readonly kind: 'completed';
+      readonly captureKeys?: readonly string[];
+      readonly details?: Readonly<Record<string, unknown>>;
+    }
   | { readonly kind: 'retried'; readonly attempt: number; readonly reason: string }
   | { readonly kind: 'failed'; readonly failureClass: FailureClass; readonly error: Error }
   | { readonly kind: 'handoff_requested'; readonly reason: HandoffReason }
@@ -188,6 +192,7 @@ export interface ExecutionContext {
   /** Step index cursor — mutable. Updated by the executor loop. */
   currentStepIdx: number;
   readonly captures: CaptureStore;
+  readonly params?: Readonly<Record<string, unknown>>;
   readonly secrets: SecretResolver | null;
   readonly sanitizer: Sanitizer | null;
   readonly llmClient: LLMClient | null;

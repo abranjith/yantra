@@ -250,14 +250,10 @@ function minimalValidFor(spec: ToolWrapperSpec<TObject>): Record<string, unknown
       return {};
     case 'browser_click':
       return { ref: 'e1' };
-    case 'browser_fill':
-      return { ref: 'e1', value: { kind: 'literal', value: 'hello' } };
-    case 'browser_form_fill':
+    case 'browser_fill_element':
+      return { field: 'Search', value: { kind: 'literal', value: 'hello' } };
+    case 'browser_fill_form':
       return { fields: [{ field: 'Search', value: 'hello' }] };
-    case 'browser_pick_date':
-      return { field: 'Dates', date: '2026-09-06' };
-    case 'browser_pick_option':
-      return { field: 'City', value: 'Frisco' };
     case 'browser_extract':
       return { kind: 'content' };
     case 'workflow_run':

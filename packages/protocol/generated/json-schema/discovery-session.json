@@ -118,7 +118,7 @@
                             "requires_confirmation": {
                               "type": "boolean",
                               "default": false,
-                              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps."
+                              "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps."
                             },
                             "confirmation_description": {
                               "anyOf": [
@@ -877,6 +877,181 @@
                             "requires_confirmation": {
                               "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
                             },
+                            "confirmation_description": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                            },
+                            "expected_cost": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                            },
+                            "consequence": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                            },
+                            "type": {
+                              "type": "string",
+                              "const": "fill_element",
+                              "description": "Semantic fill-element step discriminator."
+                            },
+                            "field_name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "description": "Accessible field name used for fresh resolution."
+                            },
+                            "locator": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "recorded",
+                                      "description": "Recorded locator candidate index reference."
+                                    },
+                                    "step_index": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "description": "Recorded step index."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step_index"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "workflow",
+                                      "description": "Named workflow locator chain reference."
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                      "description": "Human-readable workflow locator key."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "name"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "intent",
+                                      "description": "Semantic intent locator that engine resolves."
+                                    },
+                                    "role": {
+                                      "type": "string",
+                                      "enum": [
+                                        "button",
+                                        "link",
+                                        "textbox",
+                                        "searchbox",
+                                        "table",
+                                        "heading",
+                                        "region",
+                                        "dialog",
+                                        "listitem",
+                                        "cell",
+                                        "checkbox",
+                                        "radio",
+                                        "combobox",
+                                        "listbox",
+                                        "slider",
+                                        "spinbutton",
+                                        "option",
+                                        "tab",
+                                        "tabpanel",
+                                        "menuitem",
+                                        "row",
+                                        "grid"
+                                      ],
+                                      "description": "Target ARIA role."
+                                    },
+                                    "name_match": {
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "Optional accessible-name matcher."
+                                    },
+                                    "near": {
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "Optional relative anchor."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "role",
+                                    "name_match",
+                                    "near"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ],
+                              "description": "Fallback locator chain for the target field."
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                },
+                                {
+                                  "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                },
+                                {
+                                  "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                },
+                                {
+                                  "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                },
+                                {
+                                  "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                }
+                              ],
+                              "description": "Semantic value committed through the unified fill engine."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "scope",
+                            "type",
+                            "field_name",
+                            "locator",
+                            "value"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Resolve and semantically fill one browser field."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                            },
+                            "scope": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                            },
+                            "requires_confirmation": {
+                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                            },
                             "type": {
                               "type": "string",
                               "const": "extract",
@@ -1069,7 +1244,7 @@
                                               "description": "Array extraction schema node."
                                             },
                                             "items": {
-                                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items",
+                                              "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items",
                                               "description": "Item schema for extracted arrays."
                                             }
                                           },
@@ -1090,7 +1265,7 @@
                                             "fields": {
                                               "type": "object",
                                               "additionalProperties": {
-                                                "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                                "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
                                               },
                                               "description": "Field mapping for extracted object rows."
                                             }
@@ -1122,7 +1297,7 @@
                                     "fields": {
                                       "type": "object",
                                       "additionalProperties": {
-                                        "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/3/properties/extraction_schema/anyOf/1/properties/items"
+                                        "$ref": "#/definitions/DiscoverySession/properties/cycles/items/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
                                       },
                                       "description": "Field mapping for extracted object rows."
                                     }

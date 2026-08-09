@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   OPEN_WAIT_MS,
   openIfClosed,
-  restore,
   withTag,
   type AgentBrowserObservation,
   type WidgetPort,
@@ -32,7 +31,7 @@ describe('@no-llm widget open state', () => {
     expect(port.clicks).toBe(0);
   });
 
-  it('opens a closed widget once and restores it with Escape', async () => {
+  it('opens a closed widget exactly once and leaves dismissal to the fill engine', async () => {
     const port = new DomPort(
       '<button id="trigger" aria-controls="popup" aria-expanded="false">Dates</button>' +
         '<div id="popup" role="dialog" style="display:none"><button>6</button></div>',
@@ -54,25 +53,9 @@ describe('@no-llm widget open state', () => {
     const opened = await openIfClosed(port, TARGET);
     expect(opened).toMatchObject({ ok: true, wasOpen: false });
     expect(port.clicks).toBe(1);
-    if (!opened.ok) throw new Error('fixture did not open');
-
-    await restore(port, TARGET, opened.wasOpen);
-
-    expect(port.presses).toEqual(['Escape']);
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(port.clicks).toBe(1);
-  });
-
-  it('leaves a widget that was already open alone during restore', async () => {
-    const port = new DomPort(
-      '<button id="trigger" aria-controls="popup" aria-expanded="true">Dates</button>' +
-        '<div id="popup" role="dialog"><button>6</button></div>',
-    );
-
-    await restore(port, TARGET, true);
-
     expect(port.presses).toEqual([]);
-    expect(port.clicks).toBe(0);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(port.clicks).toBe(1);
   });
 
   it('returns a bounded typed failure when a closed widget never opens', async () => {

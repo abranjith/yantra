@@ -1,4 +1,4 @@
-import { isOpen, resolveContainer, restore } from '../open-state.js';
+import { isOpen, resolveContainer } from '../open-state.js';
 import { widgetFailure, type WidgetDriver, type WidgetOutcome } from '../types.js';
 import { readCommitted } from '../verify.js';
 
@@ -39,8 +39,6 @@ export const typeaheadDriver: WidgetDriver = {
     if (intent.kind !== 'option') {
       return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'A typeahead accepts only option intents.');
     }
-    const initialContainer = await resolveContainer(port, target);
-    const wasOpen = initialContainer ? await isOpen(port, target, initialContainer) : false;
     if (port.now() > budget.deadlineMs || budget.maxActions < 2) {
       return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'The widget action budget was exhausted.', {
         reason: 'budget',
@@ -49,62 +47,58 @@ export const typeaheadDriver: WidgetDriver = {
     await port.fill(target.ref, intent.value);
     let actions = 1;
     const waitDeadline = Math.min(budget.deadlineMs, port.now() + SUGGESTION_WAIT_MS);
-    try {
-      let offered: readonly string[] = [];
-      while (port.now() <= waitDeadline) {
-        const container = await resolveContainer(port, target);
-        if (container && (await isOpen(port, target, container))) {
-          const candidates = await collectCandidates(port, container);
-          const ranked = rankCandidate(candidates, intent.value);
-          offered = candidates.slice(0, 10).map((candidate) => candidate.name);
-          if (ranked.kind === 'ambiguous') {
-            return widgetFailure(
-              'WIDGET_AMBIGUOUS_CHOICE',
-              `Several suggestions match "${intent.value}" at the same rank.`,
-              { offered: ranked.offered },
-            );
-          }
-          if (ranked.kind === 'match') {
-            await clickCandidate(port, ranked.candidate);
-            actions += 1;
-            const committed = await readCommitted(port, target);
-            const committedText = normalizeCandidateText(committed);
-            const candidateText = normalizeCandidateText(ranked.candidate.name);
-            const rawText = normalizeCandidateText(intent.value);
-            if (committedText === rawText) {
-              return widgetFailure(
-                'WIDGET_NOT_COMMITTED',
-                `The suggestion was clicked, but "${target.name}" still contains the raw typed text.`,
-                { committed },
-              );
-            }
-            if (!committedText.includes(candidateText) && committedText.length === 0) {
-              return widgetFailure(
-                'WIDGET_NOT_COMMITTED',
-                `The suggestion was clicked, but "${target.name}" has no committed value.`,
-                { committed },
-              );
-            }
-            return { ok: true, driver: 'typeahead', committed, actions };
-          }
-        }
-        if (port.now() >= waitDeadline) {
+    let offered: readonly string[] = [];
+    while (port.now() <= waitDeadline) {
+      const container = await resolveContainer(port, target);
+      if (container && (await isOpen(port, target, container))) {
+        const candidates = await collectCandidates(port, container);
+        const ranked = rankCandidate(candidates, intent.value);
+        offered = candidates.slice(0, 10).map((candidate) => candidate.name);
+        if (ranked.kind === 'ambiguous') {
           return widgetFailure(
-            'WIDGET_TARGET_UNREACHABLE',
-            `No matching suggestion appeared within ${SUGGESTION_WAIT_MS} ms.`,
-            { waitMs: SUGGESTION_WAIT_MS, offered },
+            'WIDGET_AMBIGUOUS_CHOICE',
+            `Several suggestions match "${intent.value}" at the same rank.`,
+            { offered: ranked.offered },
           );
         }
-        await sleep(SUGGESTION_POLL_MS);
+        if (ranked.kind === 'match') {
+          await clickCandidate(port, ranked.candidate);
+          actions += 1;
+          const committed = await readCommitted(port, target);
+          const committedText = normalizeCandidateText(committed);
+          const candidateText = normalizeCandidateText(ranked.candidate.name);
+          const rawText = normalizeCandidateText(intent.value);
+          if (committedText === rawText) {
+            return widgetFailure(
+              'WIDGET_NOT_COMMITTED',
+              `The suggestion was clicked, but "${target.name}" still contains the raw typed text.`,
+              { committed },
+            );
+          }
+          if (!committedText.includes(candidateText) && committedText.length === 0) {
+            return widgetFailure(
+              'WIDGET_NOT_COMMITTED',
+              `The suggestion was clicked, but "${target.name}" has no committed value.`,
+              { committed },
+            );
+          }
+          return { ok: true, driver: 'typeahead', committed, actions };
+        }
       }
-      return widgetFailure(
-        'WIDGET_TARGET_UNREACHABLE',
-        `No matching suggestion appeared within ${SUGGESTION_WAIT_MS} ms.`,
-        { waitMs: SUGGESTION_WAIT_MS },
-      );
-    } finally {
-      await restore(port, target, wasOpen);
+      if (port.now() >= waitDeadline) {
+        return widgetFailure(
+          'WIDGET_TARGET_UNREACHABLE',
+          `No matching suggestion appeared within ${SUGGESTION_WAIT_MS} ms.`,
+          { waitMs: SUGGESTION_WAIT_MS, offered },
+        );
+      }
+      await sleep(SUGGESTION_POLL_MS);
     }
+    return widgetFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      `No matching suggestion appeared within ${SUGGESTION_WAIT_MS} ms.`,
+      { waitMs: SUGGESTION_WAIT_MS },
+    );
   },
 };
 

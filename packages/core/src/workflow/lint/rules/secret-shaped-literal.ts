@@ -55,7 +55,7 @@ function extractStringValues(workflow: WorkflowFile): { path: string; value: str
     const step = workflow.steps[i];
     if (!step) continue;
 
-    if (step.verb === 'fill' && typeof step.value === 'string') {
+    if ((step.verb === 'fill' || step.verb === 'fill_element') && typeof step.value === 'string') {
       results.push({ path: `steps[${i}].value`, value: step.value });
     }
 

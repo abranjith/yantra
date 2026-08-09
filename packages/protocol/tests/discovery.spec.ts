@@ -395,6 +395,34 @@ describe('normalizeProposal — confirmation-forcing transform', () => {
     expect(normalized.steps[0]?.requires_confirmation).toBe(true);
   });
 
+  it('forces requires_confirmation true on a fill_element step', () => {
+    const proposal = DiscoveryProposal.parse({
+      rationale: 'Fill the destination field.',
+      steps: [
+        {
+          id: 's1',
+          type: 'fill_element',
+          scope: null,
+          requires_confirmation: false,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
+          field_name: 'Destination',
+          locator: {
+            kind: 'intent',
+            role: 'textbox',
+            name_match: { kind: 'exact', value: 'Destination' },
+            near: null,
+          },
+          value: { kind: 'literal', value: 'Frisco, Texas' },
+        },
+      ],
+      done: null,
+    });
+    const normalized = normalizeProposal(proposal);
+    expect(normalized.steps[0]?.requires_confirmation).toBe(true);
+  });
+
   it('does not set requires_confirmation on a non-mutating step (extract)', () => {
     const proposal = DiscoveryProposal.parse({
       rationale: 'Extract the results table.',

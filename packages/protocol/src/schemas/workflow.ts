@@ -12,7 +12,7 @@ const PARAM_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 const STEP_ID_PATTERN = /^s[0-9]+$/;
 
 /** Workflow verbs that may carry `requires_confirmation`. */
-const CONFIRMABLE_WORKFLOW_VERBS = new Set(['navigate', 'click', 'fill']);
+const CONFIRMABLE_WORKFLOW_VERBS = new Set(['navigate', 'click', 'fill', 'fill_element']);
 
 /**
  * Optional confirmation annotations for workflow steps — mirrors the
@@ -96,7 +96,7 @@ const WorkflowStepBase = {
     .boolean()
     .default(false)
     .describe(
-      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps.',
+      'If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps.',
     ),
 } as const;
 
@@ -121,6 +121,14 @@ export const WorkflowStep = z
       locator: z.string().min(1).describe('Named locator key from _locators.'),
       value: WorkflowValueExpression.describe('Fill value or template expression.'),
       submit: z.boolean().default(false).describe('Whether to submit after fill.'),
+    }),
+    z.object({
+      ...WorkflowStepBase,
+      ...WorkflowConfirmationAnnotations,
+      verb: z.literal('fill_element').describe('Semantic fill-element workflow step.'),
+      field_name: z.string().min(1).describe('Accessible field name used for fresh resolution.'),
+      locator: z.string().min(1).describe('Fallback named locator key from _locators.'),
+      value: WorkflowValueExpression.describe('Semantic fill value or template expression.'),
     }),
     z.object({
       ...WorkflowStepBase,
@@ -197,7 +205,7 @@ export const WorkflowStep = z
   .refine(
     (step) => !step.requires_confirmation || CONFIRMABLE_WORKFLOW_VERBS.has(step.verb),
     (step) => ({
-      message: `requires_confirmation is not legal on "${step.verb}" steps — only click, fill, and navigate may require confirmation.`,
+      message: `requires_confirmation is not legal on "${step.verb}" steps — only click, fill, fill_element, and navigate may require confirmation.`,
       path: ['requires_confirmation'],
     }),
   )

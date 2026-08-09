@@ -35,6 +35,7 @@ export interface ExecutionContextOptions {
   readonly runId?: string;
   readonly taskId: string;
   readonly plan: Plan;
+  readonly params?: Readonly<Record<string, unknown>>;
   readonly runDir: string;
   readonly browser?: BrowserSession | null;
   readonly page?: Page | null;
@@ -94,6 +95,7 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     plan: opts.plan,
     currentStepIdx: 0,
     captures,
+    params: opts.params ?? {},
     secrets: opts.secrets ?? null,
     sanitizer: opts.sanitizer ?? null,
     llmClient: opts.llmClient ?? null,

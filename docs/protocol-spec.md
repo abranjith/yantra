@@ -77,14 +77,14 @@ Example:
 
 Assert state against the current page.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Assert step discriminator.                                                                                                |
-| locator               | Locator chain for assertion target.                                                                                       |
-| condition             | Assertion condition payload.                                                                                              |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Assert step discriminator.                                                                                                              |
+| locator               | Locator chain for assertion target.                                                                                                     |
+| condition             | Assertion condition payload.                                                                                                            |
 
 Example:
 
@@ -113,15 +113,15 @@ Example:
 
 Explicit branch to another step id.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Branch step discriminator.                                                                                                |
-| condition             | Branch condition payload.                                                                                                 |
-| then_step_id          | Step id for true branch.                                                                                                  |
-| else_step_id          | Optional step id for false branch.                                                                                        |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Branch step discriminator.                                                                                                              |
+| condition             | Branch condition payload.                                                                                                               |
+| then_step_id          | Step id for true branch.                                                                                                                |
+| else_step_id          | Optional step id for false branch.                                                                                                      |
 
 Example:
 
@@ -315,15 +315,15 @@ Example:
 
 Invoke another workflow from the current plan.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Call-workflow step discriminator.                                                                                         |
-| workflow_name         | Name of workflow to invoke.                                                                                               |
-| params                | Param values passed to called workflow.                                                                                   |
-| capture_as            | Optional capture alias for workflow output.                                                                               |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Call-workflow step discriminator.                                                                                                       |
+| workflow_name         | Name of workflow to invoke.                                                                                                             |
+| params                | Param values passed to called workflow.                                                                                                 |
+| capture_as            | Optional capture alias for workflow output.                                                                                             |
 
 Example:
 
@@ -439,17 +439,17 @@ Example:
 
 Click on a resolved locator target.
 
-| Field                    | Description                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| id                       | Step identifier, unique within the plan.                                                                                  |
-| scope                    | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                          |
-| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                  |
-| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                       |
-| type                     | Click step discriminator.                                                                                                 |
-| locator                  | Locator chain for click target.                                                                                           |
-| modifiers                | Optional click modifier keys.                                                                                             |
+| Field                    | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                       | Step identifier, unique within the plan.                                                                                                |
+| scope                    | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                                        |
+| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                                |
+| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                                     |
+| type                     | Click step discriminator.                                                                                                               |
+| locator                  | Locator chain for click target.                                                                                                         |
+| modifiers                | Optional click modifier keys.                                                                                                           |
 
 Example:
 
@@ -775,15 +775,15 @@ Example:
 
 Extract data from the page using a declared schema.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Extract step discriminator.                                                                                               |
-| locator               | Locator chain for extraction target.                                                                                      |
-| extraction_schema     | Expected extracted data shape.                                                                                            |
-| capture_as            | Capture alias for downstream references.                                                                                  |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Extract step discriminator.                                                                                                             |
+| locator               | Locator chain for extraction target.                                                                                                    |
+| extraction_schema     | Expected extracted data shape.                                                                                                          |
+| capture_as            | Capture alias for downstream references.                                                                                                |
 
 Example:
 
@@ -887,22 +887,56 @@ Example:
 }
 ```
 
+## FillElementStep
+
+Resolve and semantically fill one browser field.
+
+| Field                    | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                       | Step identifier, unique within the plan.                                                                                                |
+| scope                    | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                                        |
+| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                                |
+| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                                     |
+| type                     | Semantic fill-element step discriminator.                                                                                               |
+| field_name               | Accessible field name used for fresh resolution.                                                                                        |
+| locator                  | Fallback locator chain for the target field.                                                                                            |
+| value                    | Semantic value committed through the unified fill engine.                                                                               |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "scope": "<scope>",
+  "requires_confirmation": "<requires_confirmation>",
+  "confirmation_description": "<confirmation_description>",
+  "expected_cost": "<expected_cost>",
+  "consequence": "<consequence>",
+  "type": "<type>",
+  "field_name": "<field_name>",
+  "locator": "<locator>",
+  "value": "<value>"
+}
+```
+
 ## FillStep
 
 Fill an input-like field.
 
-| Field                    | Description                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| id                       | Step identifier, unique within the plan.                                                                                  |
-| scope                    | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                          |
-| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                  |
-| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                       |
-| type                     | Fill step discriminator.                                                                                                  |
-| locator                  | Locator chain for fill target.                                                                                            |
-| value                    | Value inserted into the target input.                                                                                     |
-| submit                   | Whether to submit after filling.                                                                                          |
+| Field                    | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                       | Step identifier, unique within the plan.                                                                                                |
+| scope                    | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                                        |
+| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                                |
+| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                                     |
+| type                     | Fill step discriminator.                                                                                                                |
+| locator                  | Locator chain for fill target.                                                                                                          |
+| value                    | Value inserted into the target input.                                                                                                   |
+| submit                   | Whether to submit after filling.                                                                                                        |
 
 Example:
 
@@ -991,15 +1025,15 @@ Example:
 
 Summarize extracted captures with an LLM.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | LLM summarize step discriminator.                                                                                         |
-| input                 | Capture reference fed to summarization.                                                                                   |
-| prompt                | Summarization instruction prompt.                                                                                         |
-| output_as             | Capture alias for summarization output.                                                                                   |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | LLM summarize step discriminator.                                                                                                       |
+| input                 | Capture reference fed to summarization.                                                                                                 |
+| prompt                | Summarization instruction prompt.                                                                                                       |
+| output_as             | Capture alias for summarization output.                                                                                                 |
 
 Example:
 
@@ -1057,16 +1091,16 @@ Example:
 
 Iterate over collection values.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Loop step discriminator.                                                                                                  |
-| over                  | Collection reference iterated by loop.                                                                                    |
-| as                    | Loop variable alias.                                                                                                      |
-| body_step_ids         | Step ids that form the loop body.                                                                                         |
-| max_iterations        | Hard cap for loop iterations at runtime.                                                                                  |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Loop step discriminator.                                                                                                                |
+| over                  | Collection reference iterated by loop.                                                                                                  |
+| as                    | Loop variable alias.                                                                                                                    |
+| body_step_ids         | Step ids that form the loop body.                                                                                                       |
+| max_iterations        | Hard cap for loop iterations at runtime.                                                                                                |
 
 Example:
 
@@ -1123,16 +1157,16 @@ Example:
 
 Navigate browser to a URL.
 
-| Field                    | Description                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| id                       | Step identifier, unique within the plan.                                                                                  |
-| scope                    | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                          |
-| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                  |
-| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                       |
-| type                     | Navigate step discriminator.                                                                                              |
-| url                      | Target URL as a value reference.                                                                                          |
+| Field                    | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                       | Step identifier, unique within the plan.                                                                                                |
+| scope                    | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation    | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| confirmation_description | Human-readable override for the consent card. Falls back to step name when null.                                                        |
+| expected_cost            | Best-effort cost estimate shown on the consent card, or null if unknown.                                                                |
+| consequence              | Reversibility hint for the action, or null to default to "unknown".                                                                     |
+| type                     | Navigate step discriminator.                                                                                                            |
+| url                      | Target URL as a value reference.                                                                                                        |
 
 Example:
 
@@ -1795,15 +1829,15 @@ Example:
 
 Wait for target element state transitions.
 
-| Field                 | Description                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| id                    | Step identifier, unique within the plan.                                                                                  |
-| scope                 | Step scope; null inherits the plan default.                                                                               |
-| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, and navigate steps. |
-| type                  | Wait-for step discriminator.                                                                                              |
-| locator               | Locator chain for awaited target.                                                                                         |
-| state                 | Target state to wait for.                                                                                                 |
-| timeout_ms            | Optional timeout override.                                                                                                |
+| Field                 | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | Step identifier, unique within the plan.                                                                                                |
+| scope                 | Step scope; null inherits the plan default.                                                                                             |
+| requires_confirmation | If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps. |
+| type                  | Wait-for step discriminator.                                                                                                            |
+| locator               | Locator chain for awaited target.                                                                                                       |
+| state                 | Target state to wait for.                                                                                                               |
+| timeout_ms            | Optional timeout override.                                                                                                              |
 
 Example:
 

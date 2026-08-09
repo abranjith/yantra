@@ -106,6 +106,104 @@ describe('@no-llm promoteAgentTrace', () => {
     expect(lint(result.value, { strict: true }).errors).toHaveLength(0);
   });
 
+  it('promotes semantic fill-element traces without leaking opaque refs', async () => {
+    const store = makeFakeStore();
+    const result = await promoteAgentTrace(
+      [
+        navigate,
+        {
+          kind: 'fill_element',
+          host: 'shop.example',
+          field: { role: 'combobox', name: 'Cabin', group: 'Flight search' },
+          locator: [{ kind: 'role', role: 'combobox', name: 'Cabin' }],
+          value: { kind: 'literal', value: 'Business' },
+          requires_confirmation: false,
+        },
+      ],
+      { workflowName: 'semantic-fill', store },
+    );
+
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    const fill = result.value.steps.find((step) => step.verb === 'fill_element');
+    expect(fill).toMatchObject({
+      verb: 'fill_element',
+      field_name: 'Cabin',
+      value: 'Business',
+      locator: 's2_locator',
+    });
+    expect(JSON.stringify(result.value)).not.toMatch(/"e[0-9]+"/);
+    expect(lint(result.value, { strict: true }).errors).toHaveLength(0);
+  });
+
+  it('declares and preserves a semantic secret fill reference', async () => {
+    const store = makeFakeStore();
+    const result = await promoteAgentTrace(
+      [
+        navigate,
+        {
+          kind: 'fill_element',
+          host: 'shop.example',
+          field: { role: 'textbox', name: 'Password', group: null },
+          locator: [{ kind: 'role', role: 'textbox', name: 'Password' }],
+          value: { kind: 'secret_ref', key: 'shop.password' },
+          requires_confirmation: true,
+        },
+      ],
+      { workflowName: 'semantic-secret-fill', store },
+    );
+
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(result.value.secrets).toEqual(['shop.password']);
+    expect(result.value.security_class).toBe('authenticated');
+    const fill = result.value.steps.find((step) => step.verb === 'fill_element');
+    expect(fill?.requires_confirmation).toBe(true);
+    if (fill?.verb === 'fill_element') {
+      expect(fill.value).toBe('{{ secret:shop.password }}');
+    }
+  });
+
+  it('preserves mixed navigate, semantic fill, click, and extract ordering', async () => {
+    const store = makeFakeStore();
+    const result = await promoteAgentTrace(
+      [
+        navigate,
+        {
+          kind: 'fill_element',
+          host: 'shop.example',
+          field: { role: 'textbox', name: 'Destination', group: null },
+          locator: [{ kind: 'role', role: 'textbox', name: 'Destination' }],
+          value: { kind: 'literal', value: 'Frisco, Texas' },
+          requires_confirmation: false,
+        },
+        {
+          kind: 'click',
+          host: 'shop.example',
+          locator: [{ kind: 'role', role: 'button', name: 'Search' }],
+          requires_confirmation: false,
+        },
+        {
+          kind: 'extract',
+          host: 'shop.example',
+          extractionKind: 'content',
+          requires_confirmation: false,
+        },
+      ],
+      { workflowName: 'mixed-semantic-fill', store },
+    );
+
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(result.value.steps.map((step) => step.verb)).toEqual([
+      'navigate',
+      'fill_element',
+      'click',
+      'extract',
+    ]);
+    expect(lint(result.value, { strict: true }).errors).toHaveLength(0);
+  });
+
   it('preserves requires_confirmation flags through promotion', async () => {
     const store = makeFakeStore();
     const steps: PromotableTraceStep[] = [

@@ -1,8 +1,8 @@
 /**
- * Field-name → element-ref resolution for `browser_form_fill`.
+ * Field-name → element-ref resolution for the unified browser fill tools.
  *
- * `browser_fill` addresses elements by opaque ref, which works because the model
- * has just seen a (capped, 30-element) observation containing it. A multi-field
+ * A current opaque ref works when the model has just seen a capped observation
+ * containing it. A multi-field
  * form tool cannot rely on that: the fields it must reach are frequently outside
  * the model-visible cap, and the ones revealed *by* an earlier step —
  * autocomplete options, calendar cells — did not exist when the model last

@@ -20,12 +20,10 @@ import type { RunServices } from '../../../runtime/run-services.js';
 
 import { browserClickSpec } from './browser-click.js';
 import { browserExtractSpec } from './browser-extract.js';
-import { browserFillSpec } from './browser-fill.js';
-import { browserFormFillSpec } from './browser-form-fill.js';
+import { browserFillElementSpec } from './browser-fill-element.js';
+import { browserFillFormSpec } from './browser-fill-form.js';
 import { browserNavigateSpec } from './browser-navigate.js';
 import { browserObserveSpec } from './browser-observe.js';
-import { browserPickDateSpec } from './browser-pick-date.js';
-import { browserPickOptionSpec } from './browser-pick-option.js';
 import { resultPublishSpec } from './result-publish.js';
 import { scriptRunSpec } from './script-run.js';
 import { webFetchSpec } from './web-fetch.js';
@@ -47,12 +45,10 @@ export { templateParamsFor } from './template-params.js';
 export { validateSlots, type TemplateSlotIssue } from './template-validate.js';
 export { browserClickSpec } from './browser-click.js';
 export { browserExtractSpec } from './browser-extract.js';
-export { browserFillSpec } from './browser-fill.js';
-export { browserFormFillSpec } from './browser-form-fill.js';
+export { browserFillElementSpec } from './browser-fill-element.js';
+export { browserFillFormSpec } from './browser-fill-form.js';
 export { browserNavigateSpec } from './browser-navigate.js';
 export { browserObserveSpec } from './browser-observe.js';
-export { browserPickDateSpec } from './browser-pick-date.js';
-export { browserPickOptionSpec } from './browser-pick-option.js';
 export { workflowRunSpec } from './workflow-run.js';
 
 /**
@@ -76,10 +72,8 @@ export function buildYantraWrappedTools(
     wrapTool(browserNavigateSpec(toolServices), toolServices),
     wrapTool(browserObserveSpec(toolServices), toolServices),
     wrapTool(browserClickSpec(toolServices), toolServices),
-    wrapTool(browserFillSpec(toolServices), toolServices),
-    wrapTool(browserFormFillSpec(toolServices), toolServices),
-    wrapTool(browserPickDateSpec(toolServices), toolServices),
-    wrapTool(browserPickOptionSpec(toolServices), toolServices),
+    wrapTool(browserFillElementSpec(toolServices), toolServices),
+    wrapTool(browserFillFormSpec(toolServices), toolServices),
     wrapTool(browserExtractSpec(toolServices), toolServices),
     wrapTool(webSearchSpec(toolServices), toolServices),
     wrapTool(webFetchSpec(toolServices), toolServices),

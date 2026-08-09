@@ -1,5 +1,4 @@
 export * from './types.js';
-export * from './registry.js';
 export * from './open-state.js';
 export * from './verify.js';
 export * from './tagging.js';

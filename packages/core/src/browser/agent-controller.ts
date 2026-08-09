@@ -115,13 +115,21 @@ interface InteractableRecord extends AgentInteractable {
   readonly handle: ElementHandle<Element>;
 }
 
+interface ElementIdentity {
+  readonly role: string;
+  readonly name: string;
+  readonly group: string | null;
+}
+
 /** Expected stale-ref failure that directs the agent back to observation. */
 export class StaleElementRefError extends Error {
   public readonly code = 'STALE_ELEMENT_REF' as const;
-  public constructor(ref: string) {
+  public constructor(ref: string, reason?: string) {
     super(
-      `Element ref "${ref}" is stale or unknown. Use the fresh observation returned by the ` +
-        'latest action, or call browser_observe for a new read before acting.',
+      reason
+        ? `Element ref "${ref}" is stale: ${reason}.`
+        : `Element ref "${ref}" is stale or unknown. Use the fresh observation returned by the ` +
+            'latest action, or call browser_observe for a new read before acting.',
     );
     this.name = 'StaleElementRefError';
   }
@@ -190,6 +198,7 @@ export class AgentBrowserController implements WidgetPort {
   private nextRef = 1;
   private refs = new Map<string, InteractableRecord>();
   private refIdByIdentity = new Map<string, string>();
+  private identityByRef = new Map<string, ElementIdentity>();
   private settler: PageSettler | null = null;
   private popupUrls: string[] = [];
   private dialogMessages: string[] = [];
@@ -299,6 +308,11 @@ export class AgentBrowserController implements WidgetPort {
       claimed.add(handle);
       const projected = projectAgentInteractable(ref, raw);
       this.refs.set(ref, { ...projected, handle });
+      this.identityByRef.set(ref, {
+        role: projected.role,
+        name: projected.name,
+        group: projected.group ?? null,
+      });
       interactables.push(projected);
     }
     for (const record of superseded.values()) disposeHandle(record.handle);
@@ -390,6 +404,10 @@ export class AgentBrowserController implements WidgetPort {
 
   /** Click a current ref after deterministic visibility/hit-target checks. */
   public async click(ref: string): Promise<BrowserActionResult> {
+    return this.withIdentityHealing(ref, () => this.clickOnce(ref));
+  }
+
+  private async clickOnce(ref: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
     const page = this.page!;
@@ -447,6 +465,10 @@ export class AgentBrowserController implements WidgetPort {
 
   /** Fill a current ref without returning or logging the supplied value. */
   public async fill(ref: string, value: string): Promise<BrowserActionResult> {
+    return this.withIdentityHealing(ref, () => this.fillOnce(ref, value));
+  }
+
+  private async fillOnce(ref: string, value: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
     const watch = this.watchNavigation();
@@ -490,6 +512,14 @@ export class AgentBrowserController implements WidgetPort {
 
   /** Evaluate a serializable function against an observed live element. */
   public async evaluateOn<T, Args extends readonly unknown[]>(
+    ref: string,
+    fn: (element: HTMLElement, ...args: Args) => T | Promise<T>,
+    ...args: Args
+  ): Promise<T> {
+    return this.withIdentityHealing(ref, () => this.evaluateOnOnce(ref, fn, ...args));
+  }
+
+  private async evaluateOnOnce<T, Args extends readonly unknown[]>(
     ref: string,
     fn: (element: HTMLElement, ...args: Args) => T | Promise<T>,
     ...args: Args
@@ -620,6 +650,7 @@ export class AgentBrowserController implements WidgetPort {
       onNavigationCommitted: () => {
         this.invalidateObservation();
         this.refIdByIdentity.clear();
+        this.identityByRef.clear();
         this.lastDigestHash = null;
       },
     });
@@ -670,6 +701,51 @@ export class AgentBrowserController implements WidgetPort {
   private invalidateObservation(): void {
     for (const record of this.refs.values()) disposeHandle(record.handle);
     this.refs.clear();
+  }
+
+  private async withIdentityHealing<T>(ref: string, operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!(error instanceof StaleElementRefError)) throw error;
+      const identity = this.identityByRef.get(ref);
+      if (!identity) throw error;
+      const observation = await this.observe({
+        cap: MAX_RESOLUTION_INTERACTABLES,
+        trackDigest: false,
+      });
+      const matches = observation.interactables.filter(
+        (entry) =>
+          entry.role === identity.role &&
+          entry.name === identity.name &&
+          (entry.group ?? null) === identity.group,
+      );
+      if (matches.length === 0) {
+        throw new StaleElementRefError(ref, 'element left the page');
+      }
+      if (matches.length > 1) {
+        throw new StaleElementRefError(
+          ref,
+          `${matches.length} elements now share this identity (role="${identity.role}", name="${identity.name}")`,
+        );
+      }
+      this.rebindRef(ref, matches[0]!.ref, identity);
+      return operation();
+    }
+  }
+
+  private rebindRef(ref: string, liveRef: string, identity: ElementIdentity): void {
+    const live = this.refs.get(liveRef);
+    if (!live) throw new StaleElementRefError(ref, 'element left the page');
+    if (liveRef !== ref) {
+      this.refs.delete(liveRef);
+      this.identityByRef.delete(liveRef);
+      for (const [key, mappedRef] of this.refIdByIdentity) {
+        if (mappedRef === liveRef) this.refIdByIdentity.set(key, ref);
+      }
+    }
+    this.refs.set(ref, { ...live, ref });
+    this.identityByRef.set(ref, identity);
   }
 
   private async currentActionResult(): Promise<BrowserActionResult> {
@@ -729,6 +805,7 @@ export class AgentBrowserController implements WidgetPort {
   private async performTeardown(): Promise<void> {
     this.invalidateObservation();
     this.refIdByIdentity.clear();
+    this.identityByRef.clear();
     this.lastDigestHash = null;
     this.settler?.dispose();
     this.settler = null;

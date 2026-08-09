@@ -207,6 +207,21 @@ describe('Step schema — requires_confirmation', () => {
     expect(Step.safeParse(step).success).toBe(true);
   });
 
+  it('accepts requires_confirmation on a fill_element step', () => {
+    const step = {
+      ...base,
+      requires_confirmation: true,
+      confirmation_description: 'Fill a protected field',
+      expected_cost: null,
+      consequence: 'reversible',
+      type: 'fill_element',
+      field_name: 'Password',
+      locator: { kind: 'workflow', name: 'Password field' },
+      value: { kind: 'secret', key: 'shop.password' },
+    };
+    expect(Step.safeParse(step).success).toBe(true);
+  });
+
   it('rejects requires_confirmation on an extract step', () => {
     const step = {
       ...base,
@@ -311,6 +326,22 @@ describe('WorkflowStep schema — requires_confirmation', () => {
       consequence: null,
       verb: 'click',
       locator: 'Buy button',
+    };
+    expect(WorkflowStep.safeParse(step).success).toBe(true);
+  });
+
+  it('accepts requires_confirmation on a fill_element workflow step', () => {
+    const step = {
+      id: 's1',
+      scope: null,
+      requires_confirmation: true,
+      confirmation_description: 'Fill a protected field',
+      expected_cost: null,
+      consequence: 'reversible',
+      verb: 'fill_element',
+      field_name: 'Password',
+      locator: 'Password field',
+      value: '{{ secret:shop.password }}',
     };
     expect(WorkflowStep.safeParse(step).success).toBe(true);
   });
