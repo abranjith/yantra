@@ -328,7 +328,161 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(result.error_code).toBe('WIDGET_AMBIGUOUS_CHOICE');
     expect(popup.style.display).toBe('none');
   });
+
+  it('tells the model what to do next in the message, not only in details', async () => {
+    const controller = new FormController(
+      '<div id="city" role="combobox" aria-label="City" aria-controls="choices" aria-expanded="true"></div>' +
+        '<div id="choices" role="listbox"><button role="option">New York, NY</button><button role="option">New York, USA</button></div>',
+    );
+
+    const result = await run(controller, { fields: [{ field: 'City', value: 'New York' }] });
+
+    // A bare typed code is what pushed the model off these tools and onto raw
+    // clicks, so the one actionable sentence has to be where it cannot miss it.
+    expect(result.modelText).toContain('details.offered');
+  });
+
+  it('re-resolves the field and drives again when the page replaces the control', async () => {
+    // The single-page shape from the run: opening the picker re-mounts the
+    // trigger and clones it into the popup, so the engine's own re-acquisition
+    // can be outrun and the caller is left holding a target that no longer
+    // exists. Re-resolving by the caller's field name is the recovery the model
+    // would otherwise perform by hand — which is what pulled it into operating
+    // the calendar with raw clicks.
+    const controller = new FormController(
+      '<div id="host"><input id="ci" aria-label="Check-in" aria-controls="cal" value="Aug 10"></div>' +
+        '<div id="cal" role="dialog" style="display:none">' +
+        '<table><caption>September 2026</caption><tbody><tr>' +
+        '<td><button data-date="2026-09-06">6</button></td></tr></tbody></table></div>',
+    );
+    const popup = controller.document.querySelector<HTMLElement>('#cal')!;
+    const bind = (): void => {
+      controller.document.querySelector<HTMLElement>('#ci')!.addEventListener(
+        'click',
+        () => {
+          popup.style.display = 'block';
+          // Opening mounts a second control with the same name inside the
+          // popup and re-mounts the trigger, exactly as the real page does.
+          const duplicate = controller.document.createElement('input');
+          duplicate.setAttribute('aria-label', 'Check-in');
+          duplicate.value = 'Aug 10';
+          popup.prepend(duplicate);
+          const previous = controller.document.querySelector<HTMLElement>('#ci')!;
+          previous.replaceWith(previous.cloneNode(true));
+          bind();
+        },
+        { once: true },
+      );
+    };
+    bind();
+    controller.document.querySelector<HTMLElement>('#cal button')!.addEventListener('click', () => {
+      controller.document.querySelector<HTMLInputElement>('#ci')!.value = 'Sep 6';
+    });
+    controller.document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      popup.style.display = 'none';
+      popup.querySelector('input')?.remove();
+    });
+
+    const result = await run(controller, { fields: [{ field: 'Check-in', value: '2026-09-06' }] });
+
+    expect(result.error_code).toBeUndefined();
+    expect(controller.document.querySelector<HTMLInputElement>('#ci')!.value).toBe('Sep 6');
+  });
+
+  it('sets both ends of a date range as one range, not two single dates', async () => {
+    const controller = rangePickerController();
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Check-in', value: '2026-09-06' },
+        { field: 'Check-out', value: '2026-09-12' },
+      ],
+    });
+
+    // The picker commits the pair and nothing less, so driven as two
+    // independent fills the first can never survive its own release however
+    // carefully it is retried. A caller sending both ends is asking for a
+    // range; the tool now says so instead of taking the request apart.
+    expect(result.error_code).toBeUndefined();
+    expect(controller.dateClicks).toEqual(['2026-09-06', '2026-09-12']);
+    expect(controller.document.querySelector<HTMLInputElement>('#ci')!.value).toBe('Sep 6');
+    expect(controller.document.querySelector<HTMLInputElement>('#co')!.value).toBe('Sep 12');
+    // One fill, reported as accounting for both fields the caller named.
+    expect(appliedFields(result.modelText)).toEqual([['Check-in', 'Check-out']]);
+  });
+
+  it('leaves two unrelated dates as separate fills', async () => {
+    const controller = new FormController(
+      '<input id="a" type="date" aria-label="Born on">' +
+        '<input id="b" type="date" aria-label="Hired on">',
+    );
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Born on', value: '1990-04-01' },
+        { field: 'Hired on', value: '2020-04-01' },
+      ],
+    });
+
+    // Fusion is for the two ends of one range. Two dates the page does not
+    // label as a pair are two dates.
+    expect(result.error_code).toBeUndefined();
+    expect(appliedFields(result.modelText)).toEqual([['Born on'], ['Hired on']]);
+  });
 });
+
+/** The caller fields each reported fill accounts for, in order. */
+function appliedFields(modelText: string | undefined): readonly (readonly string[])[] {
+  const model = JSON.parse(modelText ?? '{}') as {
+    readonly applied?: readonly { readonly field: string; readonly covers?: readonly string[] }[];
+  };
+  return (model.applied ?? []).map((entry) => entry.covers ?? [entry.field]);
+}
+
+/**
+ * A check-in/check-out picker that only ever commits a complete range, the
+ * shape measured on the page behind the run this fixes.
+ */
+function rangePickerController(): FormController {
+  const controller = new FormController(
+    '<input id="ci" aria-label="Check-in" aria-controls="cal" value="Aug 10">' +
+      '<input id="co" aria-label="Check-out" value="Aug 11">' +
+      '<div id="cal" role="dialog" style="display:none">' +
+      '<table><caption>September 2026</caption><tbody><tr>' +
+      '<td><button data-date="2026-09-06">6</button></td>' +
+      '<td><button data-date="2026-09-12">12</button></td>' +
+      '</tr></tbody></table></div>',
+  );
+  const popup = controller.document.querySelector<HTMLElement>('#cal')!;
+  const from = controller.document.querySelector<HTMLInputElement>('#ci')!;
+  const to = controller.document.querySelector<HTMLInputElement>('#co')!;
+  let committed: readonly [string, string] = [from.value, to.value];
+  let pending: string[] = [];
+
+  from.addEventListener('click', () => {
+    popup.style.display = 'block';
+    pending = [];
+  });
+  for (const button of controller.document.querySelectorAll<HTMLElement>('#cal button')) {
+    button.addEventListener('click', () => {
+      controller.dateClicks.push(button.getAttribute('data-date')!);
+      if (pending.length >= 2) pending = [];
+      pending.push(
+        `${button.getAttribute('data-date')!.slice(5, 7) === '09' ? 'Sep' : '?'} ${button.textContent}`,
+      );
+      [from.value, to.value] = [pending[0] ?? '', pending[1] ?? ''];
+    });
+  }
+  controller.document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    popup.style.display = 'none';
+    if (pending.length === 2) committed = [pending[0]!, pending[1]!];
+    [from.value, to.value] = committed;
+    pending = [];
+  });
+  return controller;
+}
 
 async function run(controller: FormController, params: unknown, trace = new AgentTrace()) {
   const browser: BrowserToolDeps = {
@@ -431,6 +585,8 @@ class FormController {
   public readonly window: JSDOM['window'];
   public readonly document: Document;
   public readonly clickLog: string[] = [];
+  /** Day cells clicked, in order, for tests that care how a range was driven. */
+  public readonly dateClicks: string[] = [];
   public observationCount = 0;
   private readonly refsByElement = new Map<HTMLElement, string>();
   private readonly elementsByRef = new Map<string, HTMLElement>();
@@ -544,7 +700,13 @@ class FormController {
 
   private element(ref: string): HTMLElement {
     const element = this.elementsByRef.get(ref);
-    if (!element) throw new Error(`unknown ref ${ref}`);
+    // Mirror the real controller: a node that has left the document is a typed
+    // stale-ref failure, which is what drives re-acquisition and retry.
+    if (!element || !this.document.contains(element)) {
+      const error: Error & { code?: string } = new Error(`Element ref "${ref}" is stale.`);
+      error.code = 'STALE_ELEMENT_REF';
+      throw error;
+    }
     return element;
   }
 

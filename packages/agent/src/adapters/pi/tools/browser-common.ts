@@ -3,6 +3,7 @@ import {
   StaleElementRefError,
   type AgentBrowserController,
   type AgentBrowserObservation,
+  type AgentInteractable,
   type FillFailure,
   type WidgetPort,
   type WidgetTarget,
@@ -57,10 +58,15 @@ export function browserFailure(error: unknown): DomainFailure {
 
 /** Preserve a core fill failure verbatim at the provider-neutral tool seam. */
 export function mapFillFailure(failure: FillFailure): DomainFailure {
+  // The next step rides in the message, not only in `details`. A model that
+  // sees a bare typed code tends to abandon the tool and operate the widget by
+  // hand with browser_click, which is the behaviour these tools exist to
+  // replace, so the one actionable sentence has to be somewhere it cannot miss.
+  const hint = typeof failure.details.hint === 'string' ? failure.details.hint : null;
   return {
     ok: false,
     errorCode: failure.errorCode,
-    message: failure.message,
+    message: hint ? `${failure.message} ${hint}` : failure.message,
     retryable: failure.retryable,
     details: failure.details,
   };
@@ -70,19 +76,37 @@ export function mapFillFailure(failure: FillFailure): DomainFailure {
 export async function resolveFillTarget(
   field: string,
   controller: AgentBrowserController,
+  preferred?: WidgetTarget,
 ): Promise<WidgetTarget | DomainFailure> {
   const observation = await controller.observe({
     cap: FILL_RESOLUTION_CAP,
     trackDigest: false,
   });
   const resolved = resolveFormField(field, observation);
-  if (isDomainFailure(resolved)) return resolved;
+  if (!isDomainFailure(resolved)) return toWidgetTarget(resolved);
+  // With `preferred` the caller is re-finding a control it already resolved
+  // once, so same-named duplicates are ranked instead of refused. Deciding
+  // *which field was meant* stays strict — "Check-in" and "Check-out" share a
+  // prefix and picking one would fill the wrong date — but by now that choice
+  // is made, and an open picker having mounted a second copy of its own
+  // trigger must not strand the retry that exists to recover from it.
+  if (!preferred || resolved.errorCode !== 'FORM_FIELD_AMBIGUOUS') return resolved;
+  const wanted = preferred.name.trim().toLowerCase();
+  const sameName = observation.interactables.filter(
+    (entry) => entry.name.trim().toLowerCase() === wanted && entry.role === preferred.role,
+  );
+  if (sameName.length === 0) return resolved;
+  const grouped = sameName.filter((entry) => (entry.group ?? null) === preferred.group);
+  return toWidgetTarget((grouped.length > 0 ? grouped : sameName)[0]!);
+}
+
+function toWidgetTarget(entry: AgentInteractable): WidgetTarget {
   return {
-    ref: resolved.ref,
-    role: resolved.role,
-    name: resolved.name,
-    group: resolved.group ?? null,
-    value: resolved.value ?? null,
+    ref: entry.ref,
+    role: entry.role,
+    name: entry.name,
+    group: entry.group ?? null,
+    value: entry.value ?? null,
   };
 }
 

@@ -151,6 +151,20 @@ describe('@no-llm AgentBrowserController', () => {
             .addEventListener('click', () => window.open('/popup-target'));</script>`);
         return;
       }
+      if (path === '/history-nav') {
+        // The single-page shape behind the real failure: choosing a control
+        // pushes a new URL *and* re-mounts the control, so the commit event
+        // fires while every element is still live and the old ref still names
+        // something real.
+        response.end(`<!doctype html><title>History nav</title>
+          <button id="pick" aria-label="Check-in">Check-in</button>
+          <script>document.getElementById('pick').addEventListener('click', () => {
+            history.pushState({}, '', '/history-nav?picked=1');
+            const previous = document.getElementById('pick');
+            previous.replaceWith(previous.cloneNode(true));
+          });</script>`);
+        return;
+      }
       if (path === '/spa') {
         response.end(`<!doctype html><title>Spa</title>
           <button id="load">Load data</button><p id="out">empty</p>
@@ -741,7 +755,7 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
-  it('refuses stale-ref healing when the exact identity becomes ambiguous', async () => {
+  it('heals to the first of several elements that now share one identity', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({
       runId: 'identity-ambiguous-run',
@@ -755,11 +769,66 @@ describe('@no-llm AgentBrowserController', () => {
       const previous = Array.from(document.querySelectorAll('button')).find(
         (button) => button.textContent === 'Vanish',
       )!;
-      previous.replaceWith(previous.cloneNode(true), previous.cloneNode(true));
+      const first = previous.cloneNode(true) as HTMLElement;
+      first.id = 'vanish-first';
+      const second = previous.cloneNode(true) as HTMLElement;
+      second.id = 'vanish-second';
+      previous.replaceWith(first, second);
     });
 
+    // Opening a widget routinely mounts a second copy of the control that
+    // opened it, and refusing there stranded the caller on exactly the pages
+    // where recovery matters. The copies are interchangeable, so document order
+    // settles it; this re-finds a control the caller already named rather than
+    // deciding which control they meant.
+    await expect(controller.click(vanish.ref)).resolves.toBeDefined();
+    expect(
+      await tracked.page!.puppeteerPage!.evaluate(
+        () => document.querySelector('#vanish-first') === null,
+      ),
+    ).toBe(true);
+    await controller.teardown();
+  }, 45_000);
+
+  it('still heals a ref after an in-page route change replaced the control', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'identity-history-nav-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/history-nav`);
+    const observation = await controller.observe();
+    const pick = observation.interactables.find((entry) => entry.name === 'Check-in')!;
+
+    // The click pushes a URL and re-mounts the button, so the navigation-commit
+    // event fires even though the document never changed. Discarding identities
+    // there is what left the caller with an unhealable ref on single-page sites.
+    await controller.click(pick.ref);
+    await expect(controller.click(pick.ref)).resolves.toBeDefined();
+
+    expect(await tracked.page!.puppeteerPage!.url()).toContain('picked=1');
+    await controller.teardown();
+  }, 45_000);
+
+  it('refuses stale-ref healing once the document itself has been replaced', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'identity-new-document-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const vanish = observation.interactables.find((entry) => entry.name === 'Vanish')!;
+
+    // A real load discards the marker stamped on the previous document, so a
+    // same-named control on the next page is a different control and must not
+    // be adopted — unlike an in-page route change, where everything stays put.
+    await controller.navigate(`${baseUrl}/second`);
+
     await expect(controller.click(vanish.ref)).rejects.toThrow(
-      '2 elements now share this identity',
+      'the page navigated to a new document',
     );
     await controller.teardown();
   }, 45_000);

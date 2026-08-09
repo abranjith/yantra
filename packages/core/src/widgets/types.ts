@@ -74,12 +74,29 @@ export type WidgetErrorCode =
   | 'WIDGET_NOT_COMMITTED'
   | 'WIDGET_ELEMENT_REPLACED';
 
+/** Serializable location of a widget container in the live DOM. */
+export interface WidgetContainer {
+  readonly path: readonly number[];
+}
+
 /** Verified success returned by a widget driver. */
 export interface WidgetSuccess {
   readonly ok: true;
   readonly driver: string;
   readonly committed: string;
   readonly actions: number;
+  /**
+   * The floating container this driver operated, when it had one.
+   *
+   * Releasing a picker is part of committing to it — many hold the selection in
+   * their own copy of the field and write it back to the page only on close —
+   * so the caller has to know which container to release. Re-deriving it from
+   * the trigger afterwards cannot distinguish the picker the driver just drove
+   * from an unrelated dialog the field happens to sit inside, and closing the
+   * wrong one is worse than closing nothing. The driver already knows, so it
+   * says.
+   */
+  readonly container?: WidgetContainer;
 }
 
 /** Typed, model-actionable widget failure. */

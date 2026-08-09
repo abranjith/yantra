@@ -69,10 +69,11 @@ export const calendarDriver: WidgetDriver = {
     const displayed = new Set<string>();
     const dates = intent.kind === 'date' ? [intent.date] : [intent.from, intent.to];
 
-    for (const date of dates) {
+    let resetTried = false;
+    for (const [index, date] of dates.entries()) {
       const current = await resolveContainer(port, target, { allowUnlinked: true });
       if (current) container = current;
-      const clicked = await findAndClickDate(
+      let clicked = await findAndClickDate(
         port,
         target,
         container,
@@ -81,6 +82,31 @@ export const calendarDriver: WidgetDriver = {
         displayed,
         actions,
       );
+      // A range picker that is mid-selection greys out everything before the
+      // start it is waiting to pair — so "disabled" can describe the widget's
+      // transient state rather than the date's availability. A previous
+      // interaction (this run's own earlier attempt, or the model's) is enough
+      // to leave it there. Reopening reverts a picker to its last committed
+      // pair, so the claim is re-tested against a clean widget once before it
+      // is believed. Only the opening endpoint qualifies: once this drive has
+      // clicked a start, a disabled end really is out of range.
+      if (!clicked.ok && index === 0 && !resetTried && isDisabledDate(clicked)) {
+        resetTried = true;
+        const reopened = await reopenWidget(port, target);
+        if (reopened) {
+          container = reopened;
+          actions += 1;
+          clicked = await findAndClickDate(
+            port,
+            target,
+            container,
+            date,
+            budget,
+            displayed,
+            actions,
+          );
+        }
+      }
       lastRead = clicked.read;
       if (!clicked.ok) return clicked;
       actions = clicked.actions;
@@ -88,7 +114,7 @@ export const calendarDriver: WidgetDriver = {
 
     const committed = await readCommitted(port, target);
     if (matchesIntent(committed, intent)) {
-      return { ok: true, driver: 'calendar-grid', committed, actions };
+      return { ok: true, driver: 'calendar-grid', committed, actions, container };
     }
     // An open picker has not finished reporting. Some commit only when released,
     // and some spread a range over a check-in/check-out pair whose second copy
@@ -97,7 +123,7 @@ export const calendarDriver: WidgetDriver = {
     // engine, which releases the widget first and fails there if it never lands.
     const open = await resolveContainer(port, target, { allowUnlinked: true });
     if (open && (await isOpen(port, target, open))) {
-      return { ok: true, driver: 'calendar-grid', committed, actions };
+      return { ok: true, driver: 'calendar-grid', committed, actions, container: open };
     }
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
@@ -239,6 +265,31 @@ async function findAndClickDate(
       );
     }
   }
+}
+
+/** True for the "that day is greyed out" outcome specifically. */
+function isDisabledDate(result: ClickDateResult): boolean {
+  return (
+    !result.ok &&
+    result.errorCode === 'WIDGET_TARGET_UNREACHABLE' &&
+    result.details.reason === 'disabled'
+  );
+}
+
+/**
+ * Close and reopen the picker to clear any half-finished selection, returning
+ * the fresh container, or null when it could not be brought back.
+ *
+ * Escape is the close: it is the one gesture every popup honours, and unlike a
+ * second trigger click it cannot toggle the widget back open.
+ */
+async function reopenWidget(
+  port: WidgetPort,
+  target: WidgetTarget,
+): Promise<WidgetContainer | null> {
+  await port.press('Escape');
+  const reopened = await openIfClosed(port, target);
+  return reopened.ok ? reopened.container : null;
 }
 
 function directionFor(targetMonth: string, grid: CalendarGridRead): 'next' | 'previous' | null {

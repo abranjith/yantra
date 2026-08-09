@@ -1,4 +1,4 @@
-import { parseFillValue } from '@yantra/core';
+import { parseFillValue, resolveDatePair, type WidgetTarget } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
@@ -6,9 +6,11 @@ import type { RunServices } from '../../../runtime/run-services.js';
 
 import {
   browserController,
+  browserWidgetPort,
   isDomainFailure,
   mapFillFailure,
   modelObservation,
+  resolveFillTarget,
 } from './browser-common.js';
 import { applyBrowserFill, type AppliedBrowserFill } from './browser-fill-element.js';
 
@@ -67,8 +69,9 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
   }
   const controller = browserController(services);
   if (isDomainFailure(controller)) return controller;
+  const plan = await fuseDatePair(params.fields, services);
   const applied: AppliedBrowserFill[] = [];
-  for (const spec of params.fields) {
+  for (const spec of plan) {
     const outcome = await applyBrowserFill(spec.field, spec.value, services);
     if (isDomainFailure(outcome)) {
       return {
@@ -76,7 +79,10 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
         details: { ...asDetails(outcome.details), applied },
       };
     }
-    applied.push(outcome);
+    // A fused range is reported as the one fill it was, listing both field
+    // names it accounts for. Emitting a second entry would have to invent a ref
+    // for a control that was never driven.
+    applied.push(spec.covers.length > 1 ? { ...outcome, covers: spec.covers } : outcome);
   }
   const observation = await controller.observe();
   return {
@@ -88,6 +94,72 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
     },
     details: { fields: applied.length },
   };
+}
+
+/** One fill to perform, and the caller's field names it accounts for. */
+interface PlannedFill {
+  readonly field: string;
+  readonly value: string;
+  readonly covers: readonly string[];
+}
+
+/**
+ * Collapse the two ends of one date range into a single range fill.
+ *
+ * A picker that spreads a range over a check-in/check-out pair commits the pair
+ * and nothing less: filling one end clears the other, and releasing the widget
+ * there discards the choice. Driven as two independent fills the first one can
+ * therefore never survive, however carefully it is retried — the caller has to
+ * be asking for a range for the widget to have anything it can accept. When a
+ * caller sends both ends in one call it *is* asking for a range, so the tool
+ * says so rather than taking the request apart and failing on the first half.
+ *
+ * Fusion needs both ends to be unambiguous, so it applies only when the request
+ * holds exactly two dates, the page resolves exactly one control per side, and
+ * those controls are the two fields named. Anything else fills in order as
+ * before, and a page with a single-date picker is untouched by this.
+ */
+async function fuseDatePair(
+  fields: readonly { readonly field: string; readonly value: string }[],
+  services: RunServices,
+): Promise<readonly PlannedFill[]> {
+  const asIs = fields.map((spec) => ({ ...spec, covers: [spec.field] }));
+  const dates = fields.filter((spec) => {
+    const parsed = parseFillValue(spec.value, 'textbox');
+    return 'kind' in parsed && parsed.kind === 'date';
+  });
+  if (dates.length !== 2) return asIs;
+
+  const controller = browserController(services);
+  if (isDomainFailure(controller)) return asIs;
+  const first = await resolveFillTarget(dates[0]!.field, controller);
+  if (isDomainFailure(first)) return asIs;
+  const pair = await resolveDatePair(browserWidgetPort(controller, services.now), first);
+  if (!pair) return asIs;
+
+  const from = dates.find((spec) => names(spec.field, pair.from));
+  const to = dates.find((spec) => names(spec.field, pair.to));
+  if (!from || !to || from === to) return asIs;
+  // A reversed range is the caller's mistake, not something to quietly reorder.
+  // Left unfused it is reported by the engine against the field they named.
+  if (from.value.trim() > to.value.trim()) return asIs;
+
+  const fused: PlannedFill = {
+    field: from.field,
+    value: `${from.value.trim()}..${to.value.trim()}`,
+    covers: [from.field, to.field],
+  };
+  // Position is preserved: the range takes the place of the first end named,
+  // and any non-date fields keep filling in the order the caller asked for.
+  return fields.flatMap((spec) =>
+    spec === to ? [] : [spec === from ? fused : { ...spec, covers: [spec.field] }],
+  );
+}
+
+/** True when a caller's field string denotes this side of the pair. */
+function names(field: string, side: WidgetTarget): boolean {
+  const wanted = field.trim().toLocaleLowerCase();
+  return field === side.ref || side.name.trim().toLocaleLowerCase() === wanted;
 }
 
 function asDetails(value: unknown): Record<string, unknown> {

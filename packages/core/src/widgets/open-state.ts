@@ -1,14 +1,17 @@
-import { widgetFailure, type WidgetFailure, type WidgetPort, type WidgetTarget } from './types.js';
+import {
+  widgetFailure,
+  type WidgetContainer,
+  type WidgetFailure,
+  type WidgetPort,
+  type WidgetTarget,
+} from './types.js';
 
 /** Maximum time allowed for a trigger to reveal its controlled popup. */
 export const OPEN_WAIT_MS = 3_000;
 /** Polling cadence while waiting for a popup state transition. */
 export const POLL_MS = 100;
 
-/** Serializable location of a widget container in the live DOM. */
-export interface WidgetContainer {
-  readonly path: readonly number[];
-}
+export type { WidgetContainer };
 
 /** Successful open-state transition. */
 export interface OpenWidgetState {

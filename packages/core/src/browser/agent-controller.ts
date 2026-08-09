@@ -206,6 +206,17 @@ export class AgentBrowserController implements WidgetPort {
   private readonly popupCaptureByTarget = new WeakMap<Target, Promise<void>>();
   private teardownPromise: Promise<void> | null = null;
   private lastDigestHash: string | null = null;
+  /**
+   * Marks the document the recorded identities were read from.
+   *
+   * A history-API navigation fires the same commit event as a real one but
+   * keeps the document, so refs minted before it still name live elements and
+   * are worth healing. Loading a new document destroys `window` and takes the
+   * marker with it, which is exactly when an identity must not be reused: a
+   * "Search" button on the next page is a different button. The marker
+   * distinguishes the two without guessing from the event.
+   */
+  private documentMarker: string | null = null;
 
   public constructor(options: AgentBrowserControllerOptions) {
     this.runId = options.runId;
@@ -281,6 +292,10 @@ export class AgentBrowserController implements WidgetPort {
         maxInteractables: cap,
       },
     );
+    // Stamp the document these identities are being read from, so a later heal
+    // can tell an in-page route change (marker survives) from a real navigation
+    // (new window, marker gone) without trusting the commit event alone.
+    this.documentMarker = await this.stampDocument();
     const handles = await this.page!.$$(INTERACTABLE_SELECTOR);
     const superseded = this.refs;
     this.refs = new Map();
@@ -650,7 +665,11 @@ export class AgentBrowserController implements WidgetPort {
       onNavigationCommitted: () => {
         this.invalidateObservation();
         this.refIdByIdentity.clear();
-        this.identityByRef.clear();
+        // `identityByRef` deliberately survives: this event cannot tell a
+        // history-API navigation from a real one, and single-page sites fire it
+        // while every element stays put. Healing checks the document marker
+        // before trusting an identity, so a genuine document swap still refuses
+        // — without discarding recovery on every in-page route change.
         this.lastDigestHash = null;
       },
     });
@@ -703,6 +722,37 @@ export class AgentBrowserController implements WidgetPort {
     this.refs.clear();
   }
 
+  /**
+   * Re-read the marker stamped on the document the identities came from.
+   *
+   * Returns false once the document has been replaced, which is the only case
+   * where a recorded identity may name a different element than it did.
+   */
+  /** Write a fresh marker onto the live document, or null if the page refuses. */
+  private async stampDocument(): Promise<string | null> {
+    const marker = `y${Math.random().toString(36).slice(2)}`;
+    try {
+      await this.evaluate((value: string) => {
+        (globalThis as { __yantraDocument?: string }).__yantraDocument = value;
+      }, marker);
+      return marker;
+    } catch {
+      return null;
+    }
+  }
+
+  private async isSameDocument(): Promise<boolean> {
+    if (this.documentMarker === null) return false;
+    try {
+      const seen = await this.evaluate(
+        () => (globalThis as { __yantraDocument?: string }).__yantraDocument ?? null,
+      );
+      return seen === this.documentMarker;
+    } catch {
+      return false;
+    }
+  }
+
   private async withIdentityHealing<T>(ref: string, operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
@@ -710,26 +760,30 @@ export class AgentBrowserController implements WidgetPort {
       if (!(error instanceof StaleElementRefError)) throw error;
       const identity = this.identityByRef.get(ref);
       if (!identity) throw error;
+      if (!(await this.isSameDocument())) {
+        this.identityByRef.clear();
+        throw new StaleElementRefError(ref, 'the page navigated to a new document');
+      }
       const observation = await this.observe({
         cap: MAX_RESOLUTION_INTERACTABLES,
         trackDigest: false,
       });
-      const matches = observation.interactables.filter(
-        (entry) =>
-          entry.role === identity.role &&
-          entry.name === identity.name &&
-          (entry.group ?? null) === identity.group,
+      const named = observation.interactables.filter(
+        (entry) => entry.role === identity.role && entry.name === identity.name,
       );
-      if (matches.length === 0) {
+      if (named.length === 0) {
         throw new StaleElementRefError(ref, 'element left the page');
       }
-      if (matches.length > 1) {
-        throw new StaleElementRefError(
-          ref,
-          `${matches.length} elements now share this identity (role="${identity.role}", name="${identity.name}")`,
-        );
-      }
-      this.rebindRef(ref, matches[0]!.ref, identity);
+      // Several live elements can legitimately share one identity: opening a
+      // picker or a filter panel routinely mounts a second copy of the control
+      // that opened it, and the copies mirror each other. Refusing there
+      // stranded the caller on exactly the sites where recovery matters most,
+      // so the group narrows the field and document order settles the rest.
+      // This re-finds an element the caller already named; it never decides
+      // which element the caller meant.
+      const grouped = named.filter((entry) => (entry.group ?? null) === identity.group);
+      const chosen = (grouped.length > 0 ? grouped : named)[0]!;
+      this.rebindRef(ref, chosen.ref, identity);
       return operation();
     }
   }

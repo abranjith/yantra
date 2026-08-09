@@ -49,7 +49,13 @@ const checkIn = (ref: string): WidgetTarget => ({
 
 /**
  * Commit the way the real page does: the first day click fills check-in, the
- * second fills check-out, and neither is echoed into any single trigger.
+ * second fills check-out, neither is echoed into any single trigger, and Escape
+ * closes the picker.
+ *
+ * The close matters as much as the commit. The captured markup is inert DOM, so
+ * without it the popover can never go away, and a fill that correctly releases
+ * the picker it drove would be judged against a page where releasing is
+ * impossible.
  */
 function installPairCommit(port: CalendarTestPort): void {
   const from = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-in"]')!;
@@ -66,6 +72,87 @@ function installPairCommit(port: CalendarTestPort): void {
       else to.value = rendered;
     });
   }
+  const popup = port.document.querySelector<HTMLElement>('[role="grid"]')!;
+  port.document.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Escape') popup.style.display = 'none';
+  });
+}
+
+/**
+ * Model the captured widget's range protocol, which is what the markup alone
+ * cannot express.
+ *
+ * Measured against the live page: the picker starts closed; opening it from a
+ * field decides which end the next click fills; choosing one end clears the
+ * other and the pair is held pending, visible in the fields but not yet the
+ * page's; and closing keeps the pending pair only if it is complete and was
+ * begun from the start field — anything else is discarded and the previous
+ * range comes back. Opened from the end field the same two clicks select the
+ * same two days and commit nothing, which is why a range has to be driven from
+ * the opening end.
+ */
+function installRangePicker(
+  port: CalendarTestPort,
+  { startOpen = false }: { readonly startOpen?: boolean } = {},
+): void {
+  const from = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-in"]')!;
+  const to = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-out"]')!;
+  const popup = port.document.querySelector<HTMLElement>('[role="grid"]')!;
+  popup.style.display = startOpen ? '' : 'none';
+
+  let committed: readonly [string, string] = [from.value, to.value];
+  let leading = from;
+  let pending: string[] = [];
+
+  const show = (starting: HTMLInputElement): void => {
+    if (popup.style.display !== 'none') return;
+    popup.style.display = '';
+    leading = starting;
+    pending = [];
+  };
+  for (const [field, other] of [
+    [from, to],
+    [to, from],
+  ] as const) {
+    field.addEventListener('click', () => {
+      show(field);
+      void other;
+    });
+  }
+
+  for (const cell of port.document.querySelectorAll<HTMLElement>('[role="button"]')) {
+    const label = cell.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+    const match = /^[A-Za-z]+day, ([A-Za-z]+) (\d{1,2}), \d{4}$/.exec(label);
+    if (!match) continue;
+    cell.addEventListener('click', () => {
+      if (popup.style.display === 'none') return;
+      if (pending.length >= 2) pending = [];
+      pending.push(`${match[1]!.slice(0, 3)} ${match[2]}`);
+      const [first, second] = [pending[0] ?? '', pending[1] ?? ''];
+      if (leading === from) [from.value, to.value] = [first, second];
+      else [to.value, from.value] = [first, second];
+    });
+  }
+
+  port.document.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key !== 'Escape') return;
+    popup.style.display = 'none';
+    if (pending.length === 2 && leading === from) committed = [pending[0]!, pending[1]!];
+    [from.value, to.value] = committed;
+    pending = [];
+  });
+}
+
+/** The pair the page is actually holding, ignoring anything still pending. */
+function committedPair(port: CalendarTestPort): readonly string[] {
+  return ['Check-in', 'Check-out'].map(
+    (label) => port.document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!.value,
+  );
+}
+
+/** Whether the picker is still on screen. */
+function pickerOpen(port: CalendarTestPort): boolean {
+  return port.document.querySelector<HTMLElement>('[role="grid"]')!.style.display !== 'none';
 }
 
 describe('@no-llm google travel capture — grid reading', () => {
@@ -165,7 +252,116 @@ describe('@no-llm google travel capture — end to end', () => {
       errorCode: 'WIDGET_TARGET_UNREACHABLE',
       details: { reason: 'disabled' },
     });
-    expect(port.clickLog).toEqual([]);
+    // No day was clicked. The trigger is clicked once, by the reopen that
+    // re-tests a disabled opening date against a clean widget before believing
+    // it — a range picker mid-selection greys out perfectly available days.
+    expect(port.clickLog.filter((entry) => /^\d+$/.test(entry.name))).toEqual([]);
+    expect(port.clickLog.map((entry) => entry.name)).toEqual(['Check-in']);
+  });
+
+  it('names the pair when half a range is asked of a picker that commits both', async () => {
+    const port = new CalendarTestPort(popover);
+    installRangePicker(port);
+    const ref = port.refFor('input[aria-label="Check-in"]');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: checkIn(ref) },
+      { kind: 'date', date: '2026-09-06' },
+      BUDGET,
+    );
+
+    // The picker took the date and the release threw it away, which reads as an
+    // uncooperative overlay and is really a request the widget cannot answer.
+    // Reported as WIDGET_DISMISS_FAILED it sent the model off to open the
+    // calendar and click cells itself; the fix is to say what to send instead.
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_RANGE_INCOMPLETE',
+      details: { field: 'Check-in', partner: 'Check-out', requested: '2026-09-06' },
+    });
+    expect(outcome.ok ? '' : outcome.message).toContain('2026-09-06..<Check-out date>');
+    // The page is left exactly as it was found — not half-changed.
+    expect(committedPair(port)).toEqual(['Mon, Aug 10', 'Tue, Aug 11']);
+  });
+
+  it('commits the same widget when both ends arrive together', async () => {
+    const port = new CalendarTestPort(popover);
+    installRangePicker(port);
+    const ref = port.refFor('input[aria-label="Check-in"]');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: checkIn(ref) },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-12' },
+      BUDGET,
+    );
+
+    expect(outcome).toMatchObject({ ok: true, committed: 'Sep 6..Sep 12', dismissed: true });
+    expect(committedPair(port)).toEqual(['Sep 6', 'Sep 12']);
+  });
+
+  it('releases a picker it drove even though it found it already open', async () => {
+    const port = new CalendarTestPort(popover);
+    installRangePicker(port, { startOpen: true });
+    const ref = port.refFor('input[aria-label="Check-in"]');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: checkIn(ref) },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-12' },
+      BUDGET,
+    );
+
+    // "Leave open whatever was open when I arrived" is right for a modal the
+    // field sits inside and wrong for the picker being driven: this widget
+    // holds the range in its own copy of the fields and writes it to the page
+    // only on release, so skipping the release reported a committed range the
+    // page had never seen.
+    expect(outcome).toMatchObject({ ok: true, dismissed: true });
+    expect(pickerOpen(port)).toBe(false);
+    expect(committedPair(port)).toEqual(['Sep 6', 'Sep 12']);
+  });
+
+  it('opens a range from the start field even when the end field is addressed', async () => {
+    const port = new CalendarTestPort(popover);
+    installRangePicker(port);
+    const ref = port.refFor('input[aria-label="Check-out"]');
+
+    const outcome = await fillField(
+      port,
+      {
+        field: 'Check-out',
+        target: { ref, role: 'textbox', name: 'Check-out', group: null, value: 'Tue, Aug 11' },
+      },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-12' },
+      BUDGET,
+    );
+
+    // Driven from the closing field this picker reads the first click as an end
+    // and the second as the start of a fresh range, so it selected the right
+    // two days and committed nothing at all.
+    expect(outcome).toMatchObject({ ok: true, committed: 'Sep 6..Sep 12' });
+    expect(committedPair(port)).toEqual(['Sep 6', 'Sep 12']);
+  });
+
+  it('does not release a picker the fill found open and never drove', async () => {
+    const port = new CalendarTestPort('<div role="dialog"><input aria-label="Notes"></div>');
+    const ref = port.refFor('input[aria-label="Notes"]');
+
+    const outcome = await fillField(
+      port,
+      {
+        field: 'Notes',
+        target: { ref, role: 'textbox', name: 'Notes', group: null, value: '' },
+      },
+      { kind: 'text', text: 'a quiet note' },
+      BUDGET,
+    );
+
+    // Only a container a driver operated is the fill's to close. A dialog the
+    // field merely sits inside stays up.
+    expect(outcome).toMatchObject({ ok: true, dismissed: false });
   });
 
   it('reports what it saw when a calendar genuinely has no day cells', async () => {

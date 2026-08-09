@@ -359,7 +359,74 @@ endpoint — resolved only when exactly one control matches each side.
 Verification happens **after** the widget is released, not before. A picker that
 commits on release still reads its old value while open, and a paired range
 cannot be read at all while the popup's duplicate copy of that pair is on the
-page.
+page. The far side of a paired range is often written a beat after the near
+side, so the post-release check polls briefly rather than reading once — only on
+the path that would otherwise fail.
+
+Releasing is part of committing, so the container a driver **operated** is
+always released, whether or not it was already open when the fill arrived.
+"Leave open whatever I found open" still governs a container no driver touched —
+a modal the field merely sits inside — but applied to the picker being driven it
+reported ranges as committed that the page had never accepted, because the
+widget was still holding them in its own copy of the fields.
+
+### A date range is one value, not two dates
+
+Many sites spread one range over a check-in/check-out pair and commit **the pair
+as a unit**: choosing one end clears the other, and closing the picker with only
+one end set discards it and restores the previous range. Two independent
+single-date fills therefore cannot work on such a widget, no matter how they are
+retried — the first is thrown away by its own release before the second begins.
+
+- Send both ends together. `browser_fill_form` collapses two dates into one
+  range fill when the page resolves exactly one control per side and those are
+  the two fields named; otherwise fields fill in order as usual.
+  `browser_fill_element` takes the same range directly as
+  `"YYYY-MM-DD..YYYY-MM-DD"`.
+- A range is driven from the **opening** end even when the caller addresses the
+  closing one. Opened from the closing field, these pickers read the first click
+  as an end and the next as the start of a fresh range, so the right two days
+  get selected and nothing commits.
+- Half a range returns `WIDGET_RANGE_INCOMPLETE`, naming the partner field and
+  the exact call that works, with the page left as it was found. Reported as
+  `WIDGET_DISMISS_FAILED` — an uncooperative overlay — it read as a tool
+  malfunction and sent callers off to click day cells by hand.
+
+A page with a single-date picker, or two dates it does not label as a pair, is
+unaffected by any of this.
+
+### Recovering from a page that moves underneath the fill
+
+Single-page sites re-mount controls constantly: opening a picker can replace the
+trigger's node, push a new URL without loading a document, and mount a second
+control carrying the same accessible name inside the popup. Each of those alone
+is enough to lose a target mid-fill, so recovery is layered and bounded.
+
+- A ref whose node has left the page is re-found by its recorded
+  `(role, name, group)` identity, in the controller, for every tool that takes a
+  ref — `browser_click` included.
+- Identities survive an in-page route change and are discarded only when the
+  document itself is replaced, which is detected by a marker on the document
+  rather than inferred from the navigation event.
+- Inside one fill, the engine re-acquires its target up to four times; opening a
+  widget is itself a re-render, and a range clicks twice more.
+- If a fill still reports `WIDGET_ELEMENT_REPLACED`, the tool re-resolves the
+  field by name against a fresh observation and drives it once more.
+
+Duplicates are ranked, not refused, whenever the control has **already** been
+identified: the copies mirror each other, and the fill is verified end to end
+afterwards. Choosing which field the caller _meant_ stays strict — `Check-in`
+and `Check-out` share a prefix, and picking one would silently fill the wrong
+date, so an ambiguous first resolution is still an error.
+
+A range picker waiting to pair a start greys out every earlier date, so a
+`disabled` opening endpoint is re-tested once against a freshly reopened widget
+before it is reported unreachable.
+
+Every fill failure carries a `hint` naming one concrete next step, and that hint
+is appended to the message rather than left only in `details`. A caller that
+sees a bare typed code tends to abandon the tool and operate the widget with raw
+clicks, which is the behaviour these tools exist to replace.
 
 Use the single-control tool for any field shape:
 

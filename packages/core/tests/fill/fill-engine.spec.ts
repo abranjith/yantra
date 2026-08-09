@@ -313,6 +313,180 @@ describe('@no-llm commit-and-dismiss lifecycle', () => {
   });
 });
 
+describe('@no-llm fill engine recovery', () => {
+  it('completes a fill when opening the widget replaces the trigger and clones it', async () => {
+    const port = remountingCalendarPort();
+    const field = target(port, '#ci', 'textbox', 'Check-in');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: field },
+      { kind: 'date', date: '2026-09-06' },
+      budget(port),
+    );
+
+    // Opening re-mounts the trigger *and* mounts a second control with the same
+    // name inside the popup. Re-acquisition used to refuse that as ambiguous
+    // and abandon the drive on the first click, every time, on any site built
+    // this way.
+    expect(outcome).toMatchObject({ ok: true });
+    expect(port.clickLog.map((entry) => entry.name)).toContain('6');
+  });
+
+  it('re-tests a disabled range start against a freshly reopened picker', async () => {
+    const port = remountingCalendarPort({ startsDisabled: true });
+    const field = target(port, '#ci', 'textbox', 'Check-in');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: field },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-08' },
+      budget(port),
+    );
+
+    // A picker left mid-selection greys out everything before the start it is
+    // waiting to pair, so "disabled" can describe the widget's state rather
+    // than the date. Reopening clears that, and only then is the claim final.
+    expect(outcome).toMatchObject({ ok: true });
+    // The reopen costs one extra trigger click; what matters is that both
+    // endpoints then landed, in order.
+    expect(port.clickLog.map((entry) => entry.name).filter((name) => /^\d+$/.test(name))).toEqual([
+      '6',
+      '8',
+    ]);
+  });
+
+  it('reports a genuinely unavailable date after the reopen has been tried', async () => {
+    const port = remountingCalendarPort({ startsDisabled: true, staysDisabled: true });
+    const field = target(port, '#ci', 'textbox', 'Check-in');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: field },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-08' },
+      budget(port),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_TARGET_UNREACHABLE',
+      details: { reason: 'disabled' },
+    });
+    expect(port.clickLog.map((entry) => entry.name)).not.toContain('6');
+  });
+
+  it('waits for a paired range whose second field is written after release', async () => {
+    const port = new CalendarTestPort(
+      '<input id="ci" aria-label="Check-in" aria-controls="cal" value="Aug 10">' +
+        '<input id="co" aria-label="Check-out" value="Aug 11">' +
+        '<div id="cal" role="dialog"><table><caption>September 2026</caption><tbody><tr>' +
+        '<td><button data-date="2026-09-06">6</button></td>' +
+        '<td><button data-date="2026-09-08">8</button></td></tr></tbody></table></div>',
+    );
+    const checkIn = port.document.querySelector<HTMLInputElement>('#ci')!;
+    const checkOut = port.document.querySelector<HTMLInputElement>('#co')!;
+    const cells = port.document.querySelectorAll<HTMLElement>('#cal button');
+    cells[0]!.addEventListener('click', () => {
+      checkIn.value = 'Sep 6';
+    });
+    // The page writes the far side of the range a beat later, as real pickers
+    // do while they settle. Reading once races that and calls a landed range
+    // uncommitted.
+    cells[1]!.addEventListener('click', () => {
+      setTimeout(() => {
+        checkOut.value = 'Sep 8';
+      }, 250);
+    });
+    const popup = port.document.querySelector<HTMLElement>('#cal')!;
+    port.document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') popup.style.display = 'none';
+    });
+    const field = target(port, '#ci', 'textbox', 'Check-in');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: field },
+      { kind: 'date_range', from: '2026-09-06', to: '2026-09-08' },
+      { deadlineMs: port.now() + 10_000, maxActions: 8, maxPagingSteps: 12 },
+    );
+
+    expect(outcome).toMatchObject({ ok: true, committed: 'Sep 6..Sep 8' });
+  });
+
+  it('carries a next step on both rejected input and a widget that would not commit', async () => {
+    // A typed code says what happened; without a next step the caller tends to
+    // abandon the tool and drive the widget by hand, which is the behaviour
+    // these tools exist to replace.
+    const rejected = parseFillValue('2026-02-31', 'textbox');
+    expect((rejected as { details: { hint?: string } }).details.hint).toMatch(/YYYY-MM-DD/);
+
+    const port = new CalendarTestPort(
+      '<input id="d" aria-label="Check-in" placeholder="YYYY-MM-DD">',
+    );
+    const rejecting = port.document.querySelector<HTMLInputElement>('#d')!;
+    rejecting.addEventListener('input', () => {
+      rejecting.value = '';
+    });
+    const field = target(port, '#d', 'textbox', 'Check-in');
+    const outcome = await fillField(
+      port,
+      { field: 'Check-in', target: field },
+      { kind: 'date', date: '2026-09-06' },
+      budget(port),
+    );
+
+    expect(outcome).toMatchObject({ ok: false });
+    expect((outcome as { details: { hint?: string } }).details.hint).toMatch(/re-observe/i);
+  });
+});
+
+/**
+ * A calendar that re-mounts its trigger on open and clones it into the popup —
+ * the single-page shape that defeated re-acquisition on the real page.
+ */
+function remountingCalendarPort(
+  options: { readonly startsDisabled?: boolean; readonly staysDisabled?: boolean } = {},
+): CalendarTestPort {
+  const cell = (day: number, disabled: boolean): string =>
+    `<td><button data-date="2026-09-0${day}"${disabled ? ' aria-disabled="true"' : ''}>${day}</button></td>`;
+  const port = new CalendarTestPort(
+    '<div id="host"><input id="ci" aria-label="Check-in" aria-controls="cal" value="Aug 10"></div>' +
+      '<div id="cal" role="dialog" style="display:none">' +
+      '<input aria-label="Check-in" value="Aug 10">' +
+      `<table><caption>September 2026</caption><tbody><tr>${cell(6, options.startsDisabled === true)}${cell(8, false)}</tr></tbody></table>` +
+      '</div>',
+  );
+  const popup = port.document.querySelector<HTMLElement>('#cal')!;
+  const open = (): void => {
+    popup.style.display = 'block';
+    const previous = port.document.querySelector<HTMLElement>('#ci')!;
+    previous.replaceWith(previous.cloneNode(true));
+    bind();
+  };
+  const bind = (): void => {
+    port.document
+      .querySelector<HTMLElement>('#ci')!
+      .addEventListener('click', open, { once: true });
+  };
+  port.document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    popup.style.display = 'none';
+    if (options.staysDisabled === true) return;
+    // Reopening reverts the picker to its committed pair, which is what frees
+    // a date the pending half-selection had greyed out.
+    for (const button of popup.querySelectorAll('button')) button.removeAttribute('aria-disabled');
+  });
+  for (const button of popup.querySelectorAll('button')) {
+    button.addEventListener('click', () => {
+      const input = port.document.querySelector<HTMLInputElement>('#ci')!;
+      const day = button.textContent ?? '';
+      input.value = input.value.startsWith('Sep') ? `${input.value} - Sep ${day}` : `Sep ${day}`;
+    });
+  }
+  bind();
+  return port;
+}
+
 function suggestionPort(options: readonly string[]): CalendarTestPort {
   const port = new CalendarTestPort(
     '<input id="airport" aria-label="Going to" aria-controls="suggestions">' +

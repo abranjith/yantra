@@ -84,8 +84,16 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
       'Brief. Prefer browser_fill_form for multiple controls and browser_fill_element for one ' +
       'control. Both tools handle text, stored secrets, dates, ranges, suggestions, dropdowns, ' +
-      'radio groups, and toggles. Use browser_click only to ' +
-      'activate something or submit a completed form, never to operate a field widget by hand. The fill tools ' +
+      'radio groups, and toggles, and each owns the whole widget lifecycle — opening a calendar ' +
+      'or dropdown, choosing, and closing it again. Set a date range in one call: send both ends ' +
+      'together in one browser_fill_form, or one field with the value "YYYY-MM-DD..YYYY-MM-DD". ' +
+      'A check-in/check-out picker commits the pair as a unit, so filling one end by itself is ' +
+      'discarded. Use browser_click only to ' +
+      'activate something or submit a completed form, never to operate a field widget by hand: ' +
+      'opening a picker yourself and clicking day cells is slower and loses the verification the ' +
+      'fill tools perform. They also recover from the page replacing a control mid-fill, so a ' +
+      'failure means recovery was already tried — read its suggestion and follow that rather ' +
+      'than repeating the identical call. The fill tools ' +
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Disabled elements are marked ' +

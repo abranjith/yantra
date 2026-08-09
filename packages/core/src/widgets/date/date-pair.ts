@@ -1,4 +1,5 @@
 import type { WidgetPort, WidgetTarget } from '../types.js';
+import { readCommitted } from '../verify.js';
 
 const FROM_NAME_RE = /\b(check[ -]?in|arrival|start date|depart(?:ure|ing)?)\b/i;
 const TO_NAME_RE = /\b(check[ -]?out|return(?:ing)?|end date)\b/i;
@@ -38,6 +39,49 @@ export async function resolveDatePair(
   const to = pool.filter((entry) => TO_NAME_RE.test(entry.name));
   if (from.length !== 1 || to.length !== 1) return null;
   return { from: toTarget(from[0]!), to: toTarget(to[0]!) };
+}
+
+/**
+ * The other end of the range when this field is half of a pair the page has
+ * left unset, otherwise null.
+ *
+ * A picker that spreads one range over two controls commits the pair, not the
+ * endpoint: choosing a start clears the end and the widget withholds the whole
+ * selection until both are set, so releasing it there throws the choice away
+ * and restores what was there before. Telling that apart from "the page
+ * rejected this date" is the difference between an answer the caller can act on
+ * and a dead end, and only the live page can distinguish them — hence the
+ * partner is read rather than inferred from the shape of the request.
+ */
+export async function pendingRangePartner(
+  port: WidgetPort,
+  target: WidgetTarget,
+): Promise<WidgetTarget | null> {
+  const pair = await resolveDatePair(port, target);
+  if (!pair) return null;
+  const partner = partnerOf(pair, target);
+  if (!partner) return null;
+  const committed = await readCommitted(port, partner);
+  return committed.trim().length === 0 ? partner : null;
+}
+
+/**
+ * Which half of the pair the target is not.
+ *
+ * Matched on the accessible name before the ref, because by this point the
+ * drive has usually been re-bound to whichever copy of the control the open
+ * popup mounted, and that copy carries a different ref than the pair just
+ * observed while naming the same field.
+ */
+function partnerOf(pair: DateFieldPair, target: WidgetTarget): WidgetTarget | null {
+  const name = target.name.trim().toLocaleLowerCase();
+  if (target.ref === pair.from.ref || pair.from.name.trim().toLocaleLowerCase() === name) {
+    return pair.to;
+  }
+  if (target.ref === pair.to.ref || pair.to.name.trim().toLocaleLowerCase() === name) {
+    return pair.from;
+  }
+  return null;
 }
 
 function toTarget(entry: {

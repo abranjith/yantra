@@ -9,4 +9,5 @@ export * from './option/typeahead-driver.js';
 export * from './date/calendar-grid.js';
 export * from './date/calendar-driver.js';
 export * from './date/date-input-driver.js';
+export * from './date/date-pair.js';
 export * from './default-registry.js';

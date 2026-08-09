@@ -129,7 +129,14 @@ export class CalendarTestPort implements WidgetPort {
 
   private element(ref: string): HTMLElement {
     const element = this.elementsByRef.get(ref);
-    if (!element) throw new Error(`unknown ref ${ref}`);
+    // Match the real controller: a ref whose node has left the document is a
+    // typed stale-ref failure, which is what triggers re-acquisition. Without
+    // the code the engine's healing path cannot be exercised at all.
+    if (!element || !this.document.contains(element)) {
+      const error: Error & { code?: string } = new Error(`Element ref "${ref}" is stale.`);
+      error.code = 'STALE_ELEMENT_REF';
+      throw error;
+    }
     return element;
   }
 

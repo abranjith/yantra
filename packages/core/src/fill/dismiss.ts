@@ -28,6 +28,24 @@ export interface DismissSuccess {
 /** Result of closing a field's floating container without losing its value. */
 export type DismissOutcome = DismissSuccess | FillFailure;
 
+/** Which container this pass may close, and which it must leave alone. */
+export interface DismissScope {
+  /**
+   * A container that was already open before the fill began and is therefore
+   * not the fill's to close — typically a modal the field merely lives inside.
+   */
+  readonly ignoredContainer?: WidgetContainer | null;
+  /**
+   * The container a widget driver actually operated.
+   *
+   * This outranks `ignoredContainer`. A picker the driver drove is the fill's
+   * business whether or not it was already open when the fill arrived, and
+   * "leave open what I found open" quietly turned a range that only lands on
+   * release into a reported success the page had not accepted.
+   */
+  readonly driven?: WidgetContainer | null;
+}
+
 /**
  * Close any floating container associated with a field and verify both that the
  * overlay is gone and that a value the widget had already committed survived.
@@ -44,10 +62,14 @@ export async function dismissWidget(
   target: WidgetTarget,
   committedBefore: string,
   matches: (committed: string) => boolean,
-  ignoredContainer?: WidgetContainer | null,
+  scope: DismissScope = {},
 ): Promise<DismissOutcome> {
-  const container = await resolveContainer(port, target, { allowUnlinked: true });
-  if (container && container.path.join('.') === ignoredContainer?.path.join('.')) {
+  const container = scope.driven ?? (await resolveContainer(port, target, { allowUnlinked: true }));
+  if (
+    !scope.driven &&
+    container &&
+    container.path.join('.') === scope.ignoredContainer?.path.join('.')
+  ) {
     return { ok: true, dismissed: false, committed: committedBefore, actions: 0 };
   }
   if (!container || !(await isOpen(port, target, container))) {
@@ -79,6 +101,14 @@ export async function dismissWidget(
         actions += 1;
         await sleep(DISMISS_SETTLE_MS);
         committed = await readCommitted(port, target);
+        stillOpen = await isOpen(port, target, reopened.container);
+      } else {
+        // Reopening was a probe for a commit control this widget turns out not
+        // to have. Escape has already put the value back the way it was, so
+        // there is nothing here to save — and leaving the picker standing open
+        // hands the caller a page with an overlay across it for no gain.
+        await port.press('Escape');
+        await sleep(DISMISS_SETTLE_MS);
         stillOpen = await isOpen(port, target, reopened.container);
       }
     }

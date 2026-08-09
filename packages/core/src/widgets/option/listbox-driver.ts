@@ -70,6 +70,6 @@ export const listboxDriver: WidgetDriver = {
         { committed },
       );
     }
-    return { ok: true, driver: 'listbox', committed, actions };
+    return { ok: true, driver: 'listbox', committed, actions, container: opened.container };
   },
 };

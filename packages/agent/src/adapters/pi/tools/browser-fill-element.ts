@@ -7,6 +7,7 @@ import {
   parseFillValue,
   withSecret,
   type AgentBrowserController,
+  type FillIntent,
   type FillOutcome,
   type WidgetPort,
   type WidgetTarget,
@@ -80,6 +81,8 @@ export interface AppliedBrowserFill {
   readonly dismissed: boolean;
   readonly actions: number;
   readonly committed?: string;
+  /** Every caller field this one fill accounts for, when it covers more than its own. */
+  readonly covers?: readonly string[];
 }
 
 /** Build the unified single-control fill tool. */
@@ -147,7 +150,6 @@ export async function applyBrowserFill(
   const target = await resolveFillTarget(field, controller);
   if (isDomainFailure(target)) return target;
   const port = browserWidgetPort(controller, services.now);
-  const identity = { field, target };
 
   if (!isSecretRef(value)) {
     const literal = literalText(value);
@@ -155,7 +157,7 @@ export async function applyBrowserFill(
     if (!('kind' in intent)) return mapFillFailure(intent);
     let outcome: FillOutcome;
     try {
-      outcome = await fillField(port, identity, intent, defaultWidgetBudget(port));
+      outcome = await driveWithRetry(port, controller, field, target, intent);
     } catch (error) {
       return browserFailure(error);
     }
@@ -213,7 +215,7 @@ export async function applyBrowserFill(
   );
   try {
     const outcome = await withSecret(resolved.value, (secret) =>
-      fillSecretField(port, identity, secret, defaultWidgetBudget(port)),
+      fillSecretField(port, { field, target }, secret, defaultWidgetBudget(port)),
     );
     if (!outcome.ok) return mapFillFailure(outcome);
     await appendSemanticTrace(controller, target, { kind: 'secret_ref', key: value.key }, services);
@@ -265,4 +267,32 @@ async function appendSemanticTrace(
 
 async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promise<void> {
   await dismissWidget(port, target, '', () => true).catch(() => undefined);
+}
+
+/**
+ * Drive one field, and when the page replaced the control out from under the
+ * engine, resolve the field again from scratch and drive it once more.
+ *
+ * The engine already re-acquires a replaced node mid-drive, but a site that
+ * re-mounts its whole search form can outrun that from the very first click and
+ * leave the caller holding a target that no longer exists. Re-resolving by the
+ * caller's own field name against a fresh observation is the recovery a model
+ * would otherwise have to perform by hand — and in the run that motivated this,
+ * doing it by hand is what pulled the agent into operating the calendar with
+ * raw clicks. Only `WIDGET_ELEMENT_REPLACED` is retried: every other failure
+ * describes a page that answered, where a second identical attempt would answer
+ * the same way.
+ */
+async function driveWithRetry(
+  port: WidgetPort,
+  controller: AgentBrowserController,
+  field: string,
+  target: WidgetTarget,
+  intent: FillIntent,
+): Promise<FillOutcome> {
+  const first = await fillField(port, { field, target }, intent, defaultWidgetBudget(port));
+  if (first.ok || first.errorCode !== 'WIDGET_ELEMENT_REPLACED') return first;
+  const fresh = await resolveFillTarget(field, controller, target);
+  if (isDomainFailure(fresh)) return first;
+  return fillField(port, { field, target: fresh }, intent, defaultWidgetBudget(port));
 }
