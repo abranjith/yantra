@@ -517,10 +517,26 @@ Popups and new tabs are closed instead of adopted — whether declared
 (`target=_blank`, inline `window.open`) or opened by dynamically wired event
 listeners. The popup is given a bounded moment to reach its real URL (not
 `about:blank`), and that URL is returned as `popup_intercepted` so a later
-explicit navigation re-enters URL and ethics policy. JS dialogs are
+explicit navigation re-enters URL and ethics policy. That navigation is
+possible because every action result — `browser_navigate` and `browser_click`
+alike — records both where it landed and any intercepted popup target as URL
+provenance: the page produced those URLs, so they are attested, while a URL the
+model assembles still is not. JS dialogs are
 auto-handled so they can never deadlock the page: `beforeunload` is accepted
 (agent-initiated navigation proceeds), alert/confirm/prompt are dismissed —
 never silently accepted — and the message is returned as `dialog_intercepted`.
+
+In-page overlays the _site_ raises are closed after a navigation, since the
+caller asked for a page rather than a dialog: a rendered, floating
+dialog/listbox/menu/grid is sent Escape (at most three presses, stopping the
+moment one closes nothing) and the count is returned as `overlays_dismissed`.
+This is what keeps a hotel site that serves its date picker already open from
+filling the entire capped observation with day cells while the search form
+stays invisible. Statically positioned content — results marked up as
+`role="grid"` — is not an overlay and is never Escaped, and an overlay the
+agent opened _itself_ by clicking is left alone: it may be the thing it means
+to operate. Widgets the fill engine opens are released by the fill engine
+(`packages/core/src/fill/dismiss.ts`).
 
 Every action (navigate/click/fill) holds its result until the page has stopped
 moving: a main-frame navigation watcher installed before the action catches

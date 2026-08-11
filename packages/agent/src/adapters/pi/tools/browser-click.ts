@@ -11,6 +11,7 @@ import {
   modelObservation,
   observeAfterAction,
   PROTECTED_ACTION_RE,
+  recordActionProvenance,
   safeLocatorFor,
 } from './browser-common.js';
 
@@ -59,6 +60,10 @@ export function browserClickSpec(
       const ranked = await safeLocatorFor(controller, params.ref);
       try {
         const result = await controller.click(params.ref);
+        // A click is how a page hands the run a new URL — by navigating, or by
+        // opening a popup this policy closes and reports. Either way the page
+        // produced it, so it is attested.
+        recordActionProvenance(ctx.services, result);
         ctx.services.trace?.append({
           kind: 'click',
           host,

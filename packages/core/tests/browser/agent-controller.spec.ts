@@ -165,6 +165,64 @@ describe('@no-llm AgentBrowserController', () => {
           });</script>`);
         return;
       }
+      if (path === '/overlay-calendar') {
+        // The shape behind the reported failure: the site serves its date
+        // picker already open, and its markup precedes the form. The day cells
+        // therefore fill the model-visible cap and the search form the agent
+        // came for is structurally invisible.
+        const days = Array.from(
+          { length: 60 },
+          (_, index) => `<button>August ${index + 1}, 2026</button>`,
+        ).join('');
+        response.end(`<!doctype html><title>Overlay calendar</title>
+          <div id="picker" role="dialog"
+               style="position:absolute;left:0;top:0;width:300px;height:200px">${days}</div>
+          <form><input aria-label="Destination"><button>Search</button></form>
+          <script>document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') document.getElementById('picker').style.display = 'none';
+          });</script>`);
+        return;
+      }
+      if (path === '/overlay-static-grid') {
+        // Results marked up as a grid are page content, not a popover. The
+        // title records whether anything pressed Escape at all.
+        response.end(`<!doctype html><title>Static grid</title>
+          <div role="grid"><div role="gridcell"><button>Row action</button></div></div>
+          <input aria-label="Filter">
+          <script>document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') document.title = 'Escaped';
+          });</script>`);
+        return;
+      }
+      if (path === '/overlay-stubborn') {
+        // A consent wall that ignores Escape: the pass must cost one keypress
+        // and then report the overlay rather than keep hammering it.
+        response.end(`<!doctype html><title>Stubborn</title>
+          <div role="dialog" aria-modal="true"
+               style="position:fixed;left:0;top:0;width:400px;height:300px">
+            <button>Accept all</button>
+          </div>
+          <script>let presses = 0;
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') { presses += 1; document.title = 'Escaped ' + presses; }
+          });</script>`);
+        return;
+      }
+      if (path === '/click-dialog') {
+        response.end(`<!doctype html><title>Click dialog</title>
+          <button id="open">Change dates</button>
+          <div id="panel" role="dialog"
+               style="position:absolute;left:0;top:0;width:200px;height:100px;display:none">
+            <button>Apply</button>
+          </div>
+          <script>document.getElementById('open').addEventListener('click', () => {
+            document.getElementById('panel').style.display = 'block';
+          });
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') document.getElementById('panel').style.display = 'none';
+          });</script>`);
+        return;
+      }
       if (path === '/spa') {
         response.end(`<!doctype html><title>Spa</title>
           <button id="load">Load data</button><p id="out">empty</p>
@@ -305,6 +363,91 @@ describe('@no-llm AgentBrowserController', () => {
     expect(windowResult.popup_intercepted).toBe(`${baseUrl}/popup-target`);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+    await controller.teardown();
+  }, 45_000);
+
+  it('closes a picker the site served open, restoring the form to the observation', async () => {
+    // Regression for runs 20260811T023421Z-do-83684cb3 and
+    // 20260811T025845Z-do-963e62f1: every landing returned 50 interactables of
+    // which 50 were day cells, so `browser_fill_element` could not find
+    // "Destination" and answered with a list of dates instead.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'overlay-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+
+    const result = await controller.navigate(`${baseUrl}/overlay-calendar`);
+
+    expect(result.overlays_dismissed).toBe(1);
+    const names = (await controller.observe()).interactables.map((entry) => entry.name);
+    expect(names).toContain('Destination');
+    expect(names).toContain('Search');
+    expect(names.filter((name) => name.startsWith('August'))).toHaveLength(0);
+    await controller.teardown();
+  }, 45_000);
+
+  it('leaves statically positioned page content alone, without pressing Escape', async () => {
+    // A results table marked up as role="grid" is content. Escaping it on every
+    // load would be a keystroke into a page that is showing what it should.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'overlay-content-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+
+    const result = await controller.navigate(`${baseUrl}/overlay-static-grid`);
+
+    expect(result.overlays_dismissed).toBeUndefined();
+    expect(result.title).toBe('Static grid');
+    expect((await controller.observe()).interactables.map((entry) => entry.name)).toContain(
+      'Row action',
+    );
+    await controller.teardown();
+  }, 45_000);
+
+  it('gives up on an overlay that ignores Escape after a single press', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'overlay-stubborn-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+
+    const result = await controller.navigate(`${baseUrl}/overlay-stubborn`);
+
+    expect(result.overlays_dismissed).toBeUndefined();
+    // One press, not three: an Escape that closed nothing will not close
+    // anything on a second try, and the navigation still succeeds.
+    expect(result.title).toBe('Escaped 1');
+    expect((await controller.observe()).interactables.map((entry) => entry.name)).toContain(
+      'Accept all',
+    );
+    await controller.teardown();
+  }, 45_000);
+
+  it('keeps a dialog the agent opened by clicking', async () => {
+    // Ownership is the whole safety property: the site's overlays are closed,
+    // the agent's own are not — it may have opened this one to operate it.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'overlay-owned-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/click-dialog`);
+    const opener = (await controller.observe()).interactables.find(
+      (entry) => entry.name === 'Change dates',
+    )!;
+
+    const result = await controller.click(opener.ref);
+
+    expect(result.overlays_dismissed).toBeUndefined();
+    expect((await controller.observe()).interactables.map((entry) => entry.name)).toContain(
+      'Apply',
+    );
     await controller.teardown();
   }, 45_000);
 

@@ -96,7 +96,10 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'than repeating the identical call. The fill tools ' +
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
-      'so do not chain browser_observe after every action. Disabled elements are marked ' +
+      'so do not chain browser_observe after every action. Many sites open their results in a ' +
+      'new tab; that tab is closed and its address returned as popup_intercepted, so the search ' +
+      'did work — pass that URL to browser_navigate to follow it instead of retrying the click. ' +
+      'Disabled elements are marked ' +
       'disabled: true; choose a different element. If a site widget still resists after a bounded ' +
       'number of attempts, publish what you verified and state the gap precisely. Do not switch ' +
       'to web_search for data the goal asked you to read from a specific site.',

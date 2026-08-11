@@ -4,6 +4,7 @@ import {
   type AgentBrowserController,
   type AgentBrowserObservation,
   type AgentInteractable,
+  type BrowserActionResult,
   type FillFailure,
   type WidgetPort,
   type WidgetTarget,
@@ -150,6 +151,39 @@ export async function safeLocatorFor(
     return await controller.locatorFor(ref);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Attest what a completed browser action put in front of the run.
+ *
+ * Every action result carries URLs the *page itself* produced, and provenance
+ * exists to separate those from URLs a model assembled. Two of them:
+ *
+ * - **Where the action landed.** A click that navigates, or a navigation the
+ *   site redirected, arrives somewhere the run reached organically. Returning
+ *   to it later must not be refused as a guess.
+ * - **An intercepted popup's target.** The single-page policy closes popups and
+ *   reports the URL precisely so a later explicit navigation can re-enter it
+ *   through URL and ethics policy — that is the documented contract.
+ *
+ * Only `browser_navigate` used to do this, and popups are opened by *clicks*.
+ * So a search button with `target=_blank` produced a `popup_intercepted` URL
+ * the agent was then forbidden to visit: runs
+ * `20260811T023421Z-do-83684cb3` (Priceline) and
+ * `20260811T025845Z-do-963e62f1` (KAYAK) each burned their remaining budget
+ * alternating between clicking Search and being refused
+ * `URL_NOT_FROM_EVIDENCE` for the URL the tool had just handed them, and both
+ * published results for the wrong dates. Recording lives here, at the seam
+ * every action result passes through, so no future tool can forget it.
+ */
+export function recordActionProvenance(
+  services: RunServices,
+  result: Pick<BrowserActionResult, 'url' | 'popup_intercepted'>,
+): void {
+  services.urlProvenance.record(result.url);
+  if (result.popup_intercepted !== undefined) {
+    services.urlProvenance.record(result.popup_intercepted);
   }
 }
 

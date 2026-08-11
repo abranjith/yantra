@@ -9,6 +9,7 @@ import {
   isDomainFailure,
   modelObservation,
   observeAfterAction,
+  recordActionProvenance,
 } from './browser-common.js';
 
 const BrowserNavigateParams = Type.Object(
@@ -33,7 +34,7 @@ export function browserNavigateSpec(
     name: 'browser_navigate',
     label: 'Browser Navigate',
     description:
-      'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. browser_observe is only needed for a read without acting. Do NOT use it to bypass robots, blocks, host policy, or an intercepted popup policy.',
+      'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. browser_observe is only needed for a read without acting. When an action reports popup_intercepted, that URL is where the site was sending you: navigate to it to continue. Do NOT use it to bypass robots, blocks, or host policy.',
     parameters: BrowserNavigateParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -102,13 +103,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     throw error;
   }
   const result = await controller.navigate(allowed.value.url);
-  // Record where we actually landed, so returning to a visited page always
-  // works even when the site redirected us somewhere we never asked for. An
-  // intercepted popup's target is equally attested: the page itself offered it.
-  services.urlProvenance.record(result.url);
-  if (result.popup_intercepted !== undefined) {
-    services.urlProvenance.record(result.popup_intercepted);
-  }
+  recordActionProvenance(services, result);
   services.trace?.append({
     kind: 'navigate',
     host: allowed.value.host,

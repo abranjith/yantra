@@ -182,6 +182,67 @@ describe('@no-llm browser tools', () => {
       expect(popup.status).toBe('ok');
     });
 
+    it('records a popup a click intercepted, so the agent can follow the search', async () => {
+      // Regression for runs 20260811T023421Z-do-83684cb3 (Priceline) and
+      // 20260811T025845Z-do-963e62f1 (KAYAK): the Search button opens the
+      // results in a new tab, the controller closes it and reports the URL —
+      // and `browser_navigate` then refused that very URL as unattested,
+      // because only navigate recorded provenance and popups come from clicks.
+      const controller = fakeController();
+      controller.click.mockResolvedValue({
+        url: 'https://www.kayak.com/hotels',
+        title: 'Hotels',
+        popup_intercepted: 'https://www.kayak.com/hotels/Frisco-p56772/2026-09-06/2026-09-12',
+      });
+      const services = browserServices(controller, {}, seeded('https://www.kayak.com/hotels'));
+
+      const clicked = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e72' },
+        undefined,
+      );
+      const followed = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://www.kayak.com/hotels/Frisco-p56772/2026-09-06/2026-09-12' },
+        undefined,
+      );
+
+      expect(clicked.status).toBe('ok');
+      expect(clicked.modelText).toContain('popup_intercepted');
+      expect(followed.status).toBe('ok');
+    });
+
+    it('records where a click landed, so navigating back to that page succeeds', async () => {
+      const controller = fakeController();
+      controller.click.mockResolvedValue({ url: 'https://example.com/results', title: 'Results' });
+      const services = browserServices(controller, {}, seeded('https://example.com/'));
+
+      await wrapTool(browserClickSpec(services), services).execute({ ref: 'e1' }, undefined);
+      const back = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://example.com/results' },
+        undefined,
+      );
+
+      expect(back.status).toBe('ok');
+    });
+
+    it('still refuses a URL no click or popup produced', async () => {
+      // Attesting action results must not become a blanket grant for the host.
+      const controller = fakeController();
+      controller.click.mockResolvedValue({
+        url: 'https://example.com/results',
+        title: 'Results',
+        popup_intercepted: 'https://example.com/popup',
+      });
+      const services = browserServices(controller, {}, seeded('https://example.com/'));
+
+      await wrapTool(browserClickSpec(services), services).execute({ ref: 'e1' }, undefined);
+      const guessed = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://example.com/results/invented-id-4821' },
+        undefined,
+      );
+
+      expect(guessed.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+    });
+
     it('names an actionable remedy in the refusal message', async () => {
       const services = browserServices(fakeController(), {}, new UrlProvenance());
 
@@ -699,10 +760,15 @@ function seeded(...urls: readonly string[]): UrlProvenance {
 }
 
 function fakeController() {
+  // Navigate and click resolve to a well-formed action result by default: the
+  // real controller always returns one, and the tools now read it (to attest
+  // where the page took the run), so a bare vi.fn() would be testing a shape
+  // the controller cannot produce. Tests that care override it.
+  const landed = { url: 'https://example.com/page', title: 'Page' };
   return {
-    navigate: vi.fn(),
+    navigate: vi.fn().mockResolvedValue(landed),
     observe: vi.fn(),
-    click: vi.fn(),
+    click: vi.fn().mockResolvedValue(landed),
     fill: vi.fn(),
     extract: vi.fn(),
     url: vi.fn().mockReturnValue('https://example.com/page'),

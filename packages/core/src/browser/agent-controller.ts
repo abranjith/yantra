@@ -10,6 +10,7 @@ import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
 import type { ElementDescription } from '../locator/types.js';
 import type { WidgetPort } from '../widgets/types.js';
 
+import { dismissSiteOverlays, type OverlayDismissal } from './overlay-dismiss.js';
 import {
   CLICK_NAV_DETECT_MS,
   FILL_NAV_DETECT_MS,
@@ -109,6 +110,12 @@ export interface BrowserActionResult {
   readonly title: string;
   readonly popup_intercepted?: string;
   readonly dialog_intercepted?: string;
+  /**
+   * Site-raised overlays closed before this result was observed, omitted when
+   * none were. Surfaced rather than done silently: the page the model is about
+   * to read is not the page a person would have landed on.
+   */
+  readonly overlays_dismissed?: number;
 }
 
 interface InteractableRecord extends AgentInteractable {
@@ -254,7 +261,23 @@ export class AgentBrowserController implements WidgetPort {
     } finally {
       watch.dispose();
     }
-    return this.currentActionResult();
+    // The caller asked for a page, not for a dialog, so anything floating over
+    // the document that just loaded is the site's and nobody's to keep. Doing
+    // this only here is deliberate — see `overlay-dismiss.ts`.
+    return this.currentActionResult(await this.dismissOverlays());
+  }
+
+  /** Close site-raised overlays without ever failing the navigation. */
+  private async dismissOverlays(): Promise<OverlayDismissal | null> {
+    try {
+      return await dismissSiteOverlays(this);
+    } catch (error) {
+      this.logger?.debug?.(
+        { err: error instanceof Error ? error.message : String(error) },
+        'overlay dismissal skipped',
+      );
+      return null;
+    }
   }
 
   /**
@@ -802,7 +825,9 @@ export class AgentBrowserController implements WidgetPort {
     this.identityByRef.set(ref, identity);
   }
 
-  private async currentActionResult(): Promise<BrowserActionResult> {
+  private async currentActionResult(
+    overlays: OverlayDismissal | null = null,
+  ): Promise<BrowserActionResult> {
     await settle();
     await Promise.allSettled([...this.popupCaptureTasks]);
     const popup = this.popupUrls.shift();
@@ -811,6 +836,8 @@ export class AgentBrowserController implements WidgetPort {
     let result: BrowserActionResult = { url: this.page?.url() ?? '', title };
     if (popup) result = { ...result, popup_intercepted: popup };
     if (dialog) result = { ...result, dialog_intercepted: dialog };
+    if (overlays && overlays.dismissed > 0)
+      result = { ...result, overlays_dismissed: overlays.dismissed };
     return result;
   }
 
