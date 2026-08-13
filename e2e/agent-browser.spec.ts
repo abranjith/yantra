@@ -154,19 +154,32 @@ describe('@no-llm real Chrome browser tools', () => {
     ).toContain('accepted');
   });
 
-  it('surfaces disabled actionability and intercepts both popup mechanisms', async () => {
+  it('surfaces disabled actionability and follows both popup mechanisms', async () => {
     await call('browser_navigate', { url: `${fixture.baseUrl}/form.html` });
     const form = await observe();
     const disabled = await call('browser_click', { ref: refByName(form, 'Disabled action') });
     expect(disabled.error_code).toBe('ELEMENT_DISABLED');
 
+    // A tab the site opens on its own domain is where the click was going, so
+    // the run continues in it and says so, rather than handing back an address.
     await call('browser_navigate', { url: `${fixture.baseUrl}/` });
     let observed = await observe();
     const target = await call('browser_click', { ref: refByName(observed, 'Target popup') });
-    expect(target.modelText).toContain('popup_intercepted');
+    expect(target.modelText).toContain('switched_to_new_tab');
+    expect(target.modelText).toContain('/popup.html');
+
+    await call('browser_navigate', { url: `${fixture.baseUrl}/` });
     observed = await observe();
     const windowPopup = await call('browser_click', { ref: refByName(observed, 'Window popup') });
-    expect(windowPopup.modelText).toContain('popup_intercepted');
+    expect(windowPopup.modelText).toContain('switched_to_new_tab');
+
+    // A popup onto another site is still closed on sight and reported as an
+    // address for the model to decide about explicitly.
+    await call('browser_navigate', { url: `${fixture.baseUrl}/` });
+    observed = await observe();
+    const offsite = await call('browser_click', { ref: refByName(observed, 'Offsite popup') });
+    expect(offsite.modelText).toContain('popup_intercepted');
+    expect(offsite.modelText).not.toContain('switched_to_new_tab');
   });
 
   it('refuses a wrong-host secret before resolution and leaves no canary artifact', async () => {

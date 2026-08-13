@@ -3,7 +3,17 @@ import { readCommitted } from '../verify.js';
 
 const FROM_NAME_RE = /\b(check[ -]?in|arrival|start date|depart(?:ure|ing)?)\b/i;
 const TO_NAME_RE = /\b(check[ -]?out|return(?:ing)?|end date)\b/i;
-const DATE_FIELD_ROLES = ['textbox', 'searchbox', 'combobox'];
+/**
+ * Roles a half of a date pair is allowed to have.
+ *
+ * `button` earns its place because that is what a compact picker's two ends
+ * usually are — KAYAK's "Select start date from calendar input" is a
+ * `div[role=button]`, not a text box, and excluding it meant every paired
+ * range on such a site was driven and verified as if it were a lone date.
+ * Breadth here is safe: the pair is still accepted only when the page's own
+ * labelling matches exactly one control per side.
+ */
+const DATE_FIELD_ROLES = ['textbox', 'searchbox', 'combobox', 'button'];
 
 /** The two controls a date range is spread across, when the page uses that shape. */
 export interface DateFieldPair {
@@ -35,10 +45,44 @@ export async function resolveDatePair(
     ? candidates.filter((entry) => (entry.group ?? null) === target.group)
     : candidates;
   const pool = scoped.length >= 2 ? scoped : candidates;
-  const from = pool.filter((entry) => FROM_NAME_RE.test(entry.name));
-  const to = pool.filter((entry) => TO_NAME_RE.test(entry.name));
+  const from = await withoutDayCells(
+    port,
+    pool.filter((entry) => FROM_NAME_RE.test(entry.name)),
+  );
+  const to = await withoutDayCells(
+    port,
+    pool.filter((entry) => TO_NAME_RE.test(entry.name)),
+  );
   if (from.length !== 1 || to.length !== 1) return null;
   return { from: toTarget(from[0]!), to: toTarget(to[0]!) };
+}
+
+/**
+ * Drop the calendar's own day cells from a list of candidate range ends.
+ *
+ * An open picker labels its chosen days "August 13, 2026. Selected as start
+ * date", which reads as the start of a range to any name-based test — and being
+ * `role="button"`, exactly like the field that opened it, no role test tells
+ * them apart either. Mistaking one for the field is not a near miss: the engine
+ * re-points a range drive at the pair's opening end, so the whole fill is then
+ * driven from a day cell, which opens nothing. Where the control *sits* is the
+ * fact that separates them — a date field is never inside the grid it opens.
+ */
+async function withoutDayCells<T extends { readonly ref: string }>(
+  port: WidgetPort,
+  candidates: readonly T[],
+): Promise<readonly T[]> {
+  const kept: T[] = [];
+  for (const candidate of candidates) {
+    // `[role=grid]`/`[role=listbox]` and not a bare `<table>`: a legacy
+    // table-laid-out form holds real fields, an ARIA grid holds cells.
+    const inGrid = await port.evaluateOn(
+      candidate.ref,
+      (element) => element.closest('[role="grid"],[role="listbox"]') !== null,
+    );
+    if (!inGrid) kept.push(candidate);
+  }
+  return kept;
 }
 
 /**

@@ -55,6 +55,57 @@ describe('@no-llm widget committed-value verification', () => {
     expect(matchesIntent('Sep 6, 2025', { kind: 'date', date: '2026-09-06' })).toBe(false);
   });
 
+  it('accepts a slashed numeric date that renders no year', () => {
+    // KAYAK's date trigger shows "Sun 9/6" and nothing else; requiring a year
+    // called its landed selection uncommitted.
+    expect(matchesIntent('Sun 9/6', { kind: 'date', date: '2026-09-06' })).toBe(true);
+    expect(matchesIntent('Sun 9/6', { kind: 'date', date: '2026-06-09' })).toBe(true);
+    expect(matchesIntent('Sun 9/6', { kind: 'date', date: '2026-09-07' })).toBe(false);
+    // A full date still yields one reading per field order, not four.
+    expect(matchesIntent('9/6/2026', { kind: 'date', date: '2026-09-06' })).toBe(true);
+    expect(matchesIntent('9/6/2026', { kind: 'date', date: '2025-09-06' })).toBe(false);
+    // A decimal is a number. Only the slash admits the year-less form.
+    expect(matchesIntent('1.5 miles away', { kind: 'date', date: '2026-01-05' })).toBe(false);
+  });
+
+  it('reads a control that labels itself one thing and displays another', async () => {
+    // KAYAK's trigger keeps the fixed label "Select start date from calendar
+    // input" and renders the chosen day as its text. Reading only the first
+    // non-empty source meant reading the one that never changes.
+    const port = new CalendarTestPort(
+      '<div id="trigger" role="button" aria-label="Select start date from calendar input">Sun 9/6</div>',
+    );
+    const target = {
+      ref: 'e1',
+      role: 'button',
+      name: 'Select start date from calendar input',
+      group: null,
+      value: null,
+    };
+    const committed = await readCommitted(port, target);
+    expect(committed).toBe('Select start date from calendar input Sun 9/6');
+    expect(matchesIntent(committed, { kind: 'date', date: '2026-09-06' })).toBe(true);
+  });
+
+  it('never repeats a value a control states twice', async () => {
+    // A label and text that agree must not read as two dates, or an ordered
+    // range check accepts "Sep 6" as the range Sep 6 → Sep 6.
+    const port = new CalendarTestPort(
+      '<div id="trigger" role="button" aria-label="Sep 6">Sep 6</div>',
+    );
+    const committed = await readCommitted(port, {
+      ref: 'e1',
+      role: 'button',
+      name: 'Sep 6',
+      group: null,
+      value: null,
+    });
+    expect(committed).toBe('Sep 6');
+    expect(
+      matchesIntent(committed, { kind: 'date_range', from: '2026-09-06', to: '2026-09-06' }),
+    ).toBe(false);
+  });
+
   it('never reads credential, OTP, or payment input values', async () => {
     for (const input of [
       '<input id="trigger" type="password" value="password-canary">',

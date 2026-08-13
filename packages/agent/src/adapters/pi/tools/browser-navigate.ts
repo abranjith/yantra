@@ -111,10 +111,14 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     requires_confirmation: false,
   });
   const observation = await observeAfterAction(controller);
+  // Internal handshake between the controller and the tab-follow policy check
+  // in browser_click; never part of what the model reads. See
+  // `followSiteOpenedTab`.
+  const { popup_followable: _followable, ...model } = result;
   return {
     ok: true,
     model: {
-      ...result,
+      ...model,
       ...(observation ? { observation: modelObservation(observation) } : {}),
     },
     details: { final_url: result.url },

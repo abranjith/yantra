@@ -61,6 +61,95 @@ describe('@no-llm browser tools', () => {
     expect(result.modelText).toContain('popup_intercepted');
   });
 
+  describe('following a tab the site opened', () => {
+    /** A click that opened the site's own results tab and held it open. */
+    const opened = {
+      url: 'https://www.kayak.com/stays',
+      title: 'Places to Stay',
+      popup_intercepted: 'https://www.kayak.com/hotels/Frisco/2026-09-06;map',
+      popup_followable: 'https://www.kayak.com/hotels/Frisco/2026-09-06;map',
+    };
+
+    it('continues in the tab and reports the switch instead of the address', async () => {
+      // The run this exists for: KAYAK opened its results in a new tab and
+      // redirected the page behind them to a partner site, so the URL the tool
+      // used to hand back loaded booking.com when the model navigated to it.
+      const controller = fakeController();
+      controller.click.mockResolvedValue(opened);
+      controller.adoptPopup.mockResolvedValue({
+        url: 'https://www.kayak.com/hotels/Frisco/2026-09-06;map',
+        title: 'Frisco, 9/6 – 9/12',
+        switched_to_new_tab: 'https://www.kayak.com/hotels/Frisco/2026-09-06;map',
+      });
+      const services = browserServices(controller, {}, seeded('https://www.kayak.com/stays'));
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(controller.adoptPopup).toHaveBeenCalledOnce();
+      expect(result.modelText).toContain('switched_to_new_tab');
+      expect(result.modelText).toContain('Frisco');
+      // Two addresses for one destination is how a run navigates back off the
+      // tab it just adopted.
+      expect(result.modelText).not.toContain('popup_intercepted');
+      expect(result.modelText).not.toContain('popup_followable');
+    });
+
+    it('leaves the tab alone when the ethics gate refuses it', async () => {
+      const controller = fakeController();
+      controller.click.mockResolvedValue(opened);
+      const services = browserServices(
+        controller,
+        {
+          ethics: {
+            check: (url: string) =>
+              url.includes('/hotels/')
+                ? Promise.reject(
+                    new EthicsRefusedError(
+                      {
+                        host: 'www.kayak.com',
+                        rule: 'Disallow: /hotels/',
+                        reason: 'robots.txt disallows this path',
+                        source: 'robots',
+                      },
+                      { taskId: 'task', runId: 'run', stepId: 'browser_follow_new_tab' },
+                    ),
+                  )
+                : Promise.resolve(),
+          },
+        },
+        seeded('https://www.kayak.com/stays'),
+      );
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(controller.adoptPopup).not.toHaveBeenCalled();
+      // The click itself still succeeded, and the address is still offered for
+      // the model to decide about explicitly.
+      expect(result.status).toBe('ok');
+      expect(result.modelText).toContain('popup_intercepted');
+      expect(result.modelText).not.toContain('switched_to_new_tab');
+    });
+
+    it('leaves an ordinary click untouched', async () => {
+      const controller = fakeController();
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(controller.adoptPopup).not.toHaveBeenCalled();
+      expect(result.status).toBe('ok');
+    });
+  });
+
   describe('URL provenance', () => {
     /** The fabricated Kayak deep link from run 20260803T033803Z-do-f1d9f01b. */
     const FABRICATED =
@@ -771,6 +860,8 @@ function fakeController() {
     click: vi.fn().mockResolvedValue(landed),
     fill: vi.fn(),
     extract: vi.fn(),
+    // Nothing to follow by default; the tab-follow tests supply their own.
+    adoptPopup: vi.fn().mockResolvedValue(null),
     url: vi.fn().mockReturnValue('https://example.com/page'),
     host: vi.fn().mockReturnValue('example.com'),
     describeRef: vi.fn().mockReturnValue({ ref: 'e1', role: 'button', name: 'Continue' }),

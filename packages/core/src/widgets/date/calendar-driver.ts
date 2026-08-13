@@ -10,6 +10,7 @@ import {
 import { matchesIntent, readCommitted } from '../verify.js';
 
 import { readCalendarGrid, type CalendarGridRead } from './calendar-grid.js';
+import { resolveDatePair } from './date-pair.js';
 
 interface ClickDateSuccess {
   readonly ok: true;
@@ -124,6 +125,14 @@ export const calendarDriver: WidgetDriver = {
     const open = await resolveContainer(port, target, { allowUnlinked: true });
     if (open && (await isOpen(port, target, open))) {
       return { ok: true, driver: 'calendar-grid', committed, actions, container: open };
+    }
+    // A picker that spreads the range over two controls holds half of it in
+    // each, so this control cannot show the range whatever it does — reading it
+    // alone and calling the drive failed condemns a selection that landed. The
+    // engine reads both ends after release and is the only place that can
+    // decide; the driver's job here is to not decide it wrongly first.
+    if (intent.kind === 'date_range' && (await resolveDatePair(port, target))) {
+      return { ok: true, driver: 'calendar-grid', committed, actions, container };
     }
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',

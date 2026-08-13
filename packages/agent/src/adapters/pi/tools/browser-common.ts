@@ -179,12 +179,74 @@ export async function safeLocatorFor(
  */
 export function recordActionProvenance(
   services: RunServices,
-  result: Pick<BrowserActionResult, 'url' | 'popup_intercepted'>,
+  result: {
+    readonly url: string;
+    readonly popup_intercepted?: string | undefined;
+    readonly popup_followable?: string | undefined;
+  },
 ): void {
   services.urlProvenance.record(result.url);
   if (result.popup_intercepted !== undefined) {
     services.urlProvenance.record(result.popup_intercepted);
   }
+  // A held-open popup reports its *live* address, which is where it settled
+  // after any redirect the site ran inside it. That is the URL the follow check
+  // below re-validates, so it is the URL that has to be attested.
+  if (result.popup_followable !== undefined) {
+    services.urlProvenance.record(result.popup_followable);
+  }
+}
+
+/**
+ * Continue in a tab the site opened for itself, when policy allows it.
+ *
+ * Handing back a URL is not the same as handing back the page. A search that
+ * submits into a new tab leaves its results *in that tab* — behind a session
+ * token, a POST, or plain server-side state — so the address on its own
+ * reproduces an empty listings page as often as not, and the opener is
+ * frequently sent somewhere else entirely in the same gesture (run
+ * `20260812T025402Z-do-7af96d55`: KAYAK opened its results and redirected the
+ * page behind them to booking.com, so the URL the tool returned loaded the
+ * partner site instead). Following the tab keeps the page the click actually
+ * produced.
+ *
+ * This is the last check, not the first: the controller only offers a popup it
+ * opened on the acting page's own site, and the caller reaches here only after
+ * the action itself is complete. The URL still passes exactly what
+ * `browser_navigate` would apply to it — provenance (recorded from this very
+ * result), host/URL policy, and the ethics gate — because arriving somewhere
+ * new is a navigation however the site phrased it. Anything refused simply
+ * leaves `popup_intercepted` in place for the model to navigate explicitly.
+ *
+ * @returns The result to report: the adopted tab's, or the original unchanged.
+ */
+export async function followSiteOpenedTab(
+  services: RunServices,
+  controller: AgentBrowserController,
+  result: BrowserActionResult,
+): Promise<BrowserActionResult> {
+  const candidate = result.popup_followable;
+  if (candidate === undefined) return result;
+  const deps = services.domain.browser;
+  if (!deps) return result;
+  if (!services.urlProvenance.has(candidate)) return result;
+  const allowed = services.urlPolicy.check(candidate);
+  if (!allowed.isOk) return result;
+  try {
+    await deps.ethics.check(allowed.value.url, 'navigate', {
+      taskId: services.runId,
+      runId: services.runId,
+      stepId: 'browser_follow_new_tab',
+    });
+  } catch {
+    // Refused, rate-limited, or unreachable: the tab stays unadopted and the
+    // model still has `popup_intercepted` to decide about explicitly.
+    return result;
+  }
+  const adopted = await controller.adoptPopup();
+  if (!adopted) return result;
+  recordActionProvenance(services, adopted);
+  return adopted;
 }
 
 /** Best-effort fresh read after a successful action. */

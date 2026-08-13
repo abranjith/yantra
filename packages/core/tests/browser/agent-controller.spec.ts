@@ -7,6 +7,7 @@ import {
   AgentBrowserController,
   type BrowserActionabilityError,
   isNoLayoutBoxError,
+  isSameSitePopup,
   StaleElementRefError,
 } from '../../src/browser/agent-controller.js';
 import { isNavigationRaceError, isUnsettleableRequestUrl } from '../../src/browser/page-settle.js';
@@ -58,6 +59,42 @@ describe('@no-llm isNoLayoutBoxError', () => {
   });
 });
 
+describe('@no-llm isSameSitePopup', () => {
+  it('accepts a site continuing into its own tab and refuses anyone else', () => {
+    // The shapes from the runs this rule exists for.
+    expect(
+      isSameSitePopup('https://www.kayak.com/stays', 'https://www.kayak.com/hotels/Frisco;map'),
+    ).toBe(true);
+    expect(
+      isSameSitePopup('https://www.priceline.com/hotels/', 'https://www.priceline.com/relax-ui/'),
+    ).toBe(true);
+    expect(isSameSitePopup('https://google.com/travel', 'https://accounts.google.com/x')).toBe(
+      true,
+    );
+    expect(isSameSitePopup('https://accounts.google.com/x', 'https://google.com/travel')).toBe(
+      true,
+    );
+    expect(isSameSitePopup('https://WWW.Kayak.com/a', 'http://kayak.com/b')).toBe(true);
+
+    // The monetization redirect that made following the URL worse than useless.
+    expect(isSameSitePopup('https://www.kayak.com/stays', 'https://www.booking.com/x')).toBe(false);
+    expect(isSameSitePopup('https://www.kayak.com/stays', 'https://www.vrbo.com/search')).toBe(
+      false,
+    );
+    // A shared public suffix is not a shared site — the trap a "last two
+    // labels" rule falls into.
+    expect(isSameSitePopup('https://bbc.co.uk/news', 'https://evil.co.uk/news')).toBe(false);
+    // Lookalikes that merely end with the same text are not subdomains.
+    expect(isSameSitePopup('https://kayak.com/a', 'https://notkayak.com/b')).toBe(false);
+
+    // Nowhere to continue a run.
+    expect(isSameSitePopup('https://kayak.com/a', 'about:blank')).toBe(false);
+    expect(isSameSitePopup('https://kayak.com/a', 'blob:https://kayak.com/abc')).toBe(false);
+    expect(isSameSitePopup('https://kayak.com/a', 'javascript:void(0)')).toBe(false);
+    expect(isSameSitePopup('', 'https://kayak.com/a')).toBe(false);
+  });
+});
+
 describe('@no-llm isUnsettleableRequestUrl', () => {
   // These schemes are why the network-quiet wait cannot read a raw in-flight
   // count: the page hears the request start and never hears it end, so one of
@@ -91,7 +128,24 @@ describe('@no-llm AgentBrowserController', () => {
       response.writeHead(200, { 'content-type': 'text/html' });
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       if (path === '/popup-target') {
-        response.end('<title>Popup</title><p>popup target</p>');
+        response.end('<title>Popup</title><p>popup target</p><button>Continue in tab</button>');
+        return;
+      }
+      if (path === '/cross-popup') {
+        // `localhost` and `127.0.0.1` are the same server and different sites,
+        // which is exactly the distinction popup handling turns on — without
+        // needing a second listener or a real third-party host.
+        const elsewhere = `http://${(request.headers.host ?? '').replace('127.0.0.1', 'localhost')}/popup-target`;
+        response.end(`<!doctype html><title>Cross popup</title>
+          <a href="${elsewhere}" target="_blank">Open elsewhere</a>`);
+        return;
+      }
+      if (path === '/bounce-opener') {
+        // KAYAK's shape: the results open in a new tab and the tab you are
+        // standing on is sent to a partner in the same gesture.
+        const partner = `http://${(request.headers.host ?? '').replace('127.0.0.1', 'localhost')}/next`;
+        response.end(`<!doctype html><title>Bounce opener</title>
+          <button onclick="window.open('/popup-target'); location.href='${partner}'">Search</button>`);
         return;
       }
       if (path === '/tall') {
@@ -361,7 +415,109 @@ describe('@no-llm AgentBrowserController', () => {
 
     const windowResult = await controller.click(windowButton.ref);
     expect(windowResult.popup_intercepted).toBe(`${baseUrl}/popup-target`);
+    // The second click discarded the first click's unadopted tab, so a run that
+    // never follows one still accumulates at most a single spare page.
     await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(2);
+    await controller.teardown();
+  }, 45_000);
+
+  it('offers a same-site popup for adoption and closes it if nobody adopts', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'popup-offer-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const target = observation.interactables.find((entry) => entry.name === 'Open target')!;
+
+    const opened = await controller.click(target.ref);
+    expect(opened.popup_followable).toBe(`${baseUrl}/popup-target`);
+    expect(controller.followablePopupUrl()).toBe(`${baseUrl}/popup-target`);
+
+    // Declining is the default: the next navigation closes the held tab and the
+    // run is still on the page it was on.
+    await controller.navigate(`${baseUrl}/next`);
+    expect(controller.followablePopupUrl()).toBeNull();
+    expect(controller.url()).toBe(`${baseUrl}/next`);
+    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+    await controller.teardown();
+  }, 45_000);
+
+  it('adopts a same-site popup as the run page, retiring the tab that opened it', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'popup-adopt-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const target = observation.interactables.find((entry) => entry.name === 'Open target')!;
+    await controller.click(target.ref);
+
+    const adopted = await controller.adoptPopup();
+    expect(adopted?.switched_to_new_tab).toBe(`${baseUrl}/popup-target`);
+    expect(adopted?.title).toBe('Popup');
+    expect(controller.url()).toBe(`${baseUrl}/popup-target`);
+    // The opener is gone, so the run holds one page — the adopted one.
+    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+
+    // Adoption replaces the document, so refs minted on the opener are dead and
+    // the adopted page is observable in its own right.
+    await expect(controller.click(target.ref)).rejects.toBeInstanceOf(StaleElementRefError);
+    const after = await controller.observe();
+    expect(after.interactables.map((entry) => entry.name)).toContain('Continue in tab');
+
+    // Nothing is left to adopt twice.
+    expect(await controller.adoptPopup()).toBeNull();
+    await controller.teardown();
+  }, 45_000);
+
+  it('still adopts the results tab when the site bounces the opener elsewhere', async () => {
+    // The failure this whole path exists for: following the returned address
+    // would have loaded the partner site, because the tab doing the loading is
+    // the one that was bounced. Adoption must key on where the popup came from,
+    // not on where its opener has since ended up.
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'popup-bounce-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/bounce-opener`);
+    const observation = await controller.observe();
+    const search = observation.interactables.find((entry) => entry.name === 'Search')!;
+
+    const clicked = await controller.click(search.ref);
+    expect(clicked.url).toContain('localhost');
+    expect(clicked.popup_followable).toBe(`${baseUrl}/popup-target`);
+
+    const adopted = await controller.adoptPopup();
+    expect(adopted?.switched_to_new_tab).toBe(`${baseUrl}/popup-target`);
+    expect(controller.url()).toBe(`${baseUrl}/popup-target`);
+    await controller.teardown();
+  }, 45_000);
+
+  it('closes a cross-site popup on sight and never offers it for adoption', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'popup-cross-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/cross-popup`);
+    const observation = await controller.observe();
+    const link = observation.interactables.find((entry) => entry.name === 'Open elsewhere')!;
+
+    const result = await controller.click(link.ref);
+    expect(result.popup_intercepted).toContain('localhost');
+    expect(result.popup_followable).toBeUndefined();
+    expect(controller.followablePopupUrl()).toBeNull();
+    expect(await controller.adoptPopup()).toBeNull();
+    expect(controller.url()).toBe(`${baseUrl}/cross-popup`);
     expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
     await controller.teardown();
   }, 45_000);
@@ -636,7 +792,8 @@ describe('@no-llm AgentBrowserController', () => {
     // attribute this popup, and the click result must still carry it.
     const result = await controller.click(opener.ref);
     expect(result.popup_intercepted).toBe(`${baseUrl}/popup-target`);
-    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(1);
+    expect(result.popup_followable).toBe(`${baseUrl}/popup-target`);
+    expect(await tracked.page!.puppeteerPage!.browser().pages()).toHaveLength(2);
     await controller.teardown();
   }, 45_000);
 

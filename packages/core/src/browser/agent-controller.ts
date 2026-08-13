@@ -19,6 +19,7 @@ import {
   REDIRECT_CHAIN_DETECT_MS,
   type NavigationWatch,
 } from './page-settle.js';
+import { wrapPuppeteerPage } from './session.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 
 // Note: page settling (navigation watching, redirect chains, network quiet)
@@ -80,6 +81,37 @@ export function isNoLayoutBoxError(error: unknown): error is Error {
   return error instanceof Error && NO_LAYOUT_BOX_MESSAGE_RE.test(error.message);
 }
 
+/**
+ * True when a popup is the opening page's own site continuing the same task.
+ *
+ * The test is host containment after dropping a leading `www.`, not a public-
+ * suffix lookup: `www.kayak.com` opening `www.kayak.com`, and `google.com`
+ * opening `accounts.google.com`, both pass, while `kayak.com` opening
+ * `booking.com` does not — and neither does `bbc.co.uk` versus `evil.co.uk`,
+ * which a naive "last two labels" rule would wave through. Only http(s)
+ * qualifies; a `blob:`/`javascript:`/`about:` popup is not somewhere to
+ * continue a run.
+ */
+export function isSameSitePopup(openerUrl: string, popupUrl: string): boolean {
+  const opener = siteHost(openerUrl);
+  const popup = siteHost(popupUrl);
+  if (opener === null || popup === null) return false;
+  return opener === popup || opener.endsWith(`.${popup}`) || popup.endsWith(`.${opener}`);
+}
+
+function siteHost(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  const host = url.hostname.toLowerCase();
+  if (host.length === 0) return null;
+  return host.startsWith('www.') ? host.slice(4) : host;
+}
+
 export interface AgentInteractable {
   readonly ref: string;
   readonly role: string;
@@ -109,6 +141,15 @@ export interface BrowserActionResult {
   readonly url: string;
   readonly title: string;
   readonly popup_intercepted?: string;
+  /**
+   * Address of a popup the run is *holding open* and could continue in, set
+   * alongside `popup_intercepted` when the site opened the tab on its own
+   * domain. See {@link AgentBrowserController.adoptPopup} — the caller decides,
+   * because switching tabs is a navigation and navigations are policy-checked.
+   */
+  readonly popup_followable?: string;
+  /** Address the run switched to after {@link AgentBrowserController.adoptPopup}. */
+  readonly switched_to_new_tab?: string;
   readonly dialog_intercepted?: string;
   /**
    * Site-raised overlays closed before this result was observed, omitted when
@@ -126,6 +167,13 @@ interface ElementIdentity {
   readonly role: string;
   readonly name: string;
   readonly group: string | null;
+}
+
+/** A popup held open for a possible adoption, with the address that opened it. */
+interface RetainedPopup {
+  readonly page: PuppeteerPage;
+  /** The opener's URL at capture time — see {@link AgentBrowserController.followablePopupUrl}. */
+  readonly openerUrl: string;
 }
 
 /** Expected stale-ref failure that directs the agent back to observation. */
@@ -211,6 +259,15 @@ export class AgentBrowserController implements WidgetPort {
   private dialogMessages: string[] = [];
   private readonly popupCaptureTasks = new Set<Promise<void>>();
   private readonly popupCaptureByTarget = new WeakMap<Target, Promise<void>>();
+  /**
+   * The one popup held open for a possible {@link adoptPopup}, or null.
+   *
+   * At most one, and it lives only until the next action: a tab nobody adopted
+   * is a tab nobody wants, and bounding it here means no tool can leak one by
+   * forgetting to decide.
+   */
+  private pendingPopup: RetainedPopup | null = null;
+  private browserPopupListener: ((target: Target) => void) | null = null;
   private teardownPromise: Promise<void> | null = null;
   private lastDigestHash: string | null = null;
   /**
@@ -251,6 +308,7 @@ export class AgentBrowserController implements WidgetPort {
    */
   public async navigate(url: string): Promise<BrowserActionResult> {
     await this.ensureLaunched();
+    await this.discardPendingPopup();
     await this.page!.goto(url, { waitUntil: 'domcontentloaded', timeout: NAVIGATE_TIMEOUT_MS });
     // Real pages often bounce once more right after DOMContentLoaded (JS or
     // meta-refresh redirects, client-side routers). Settle those before the
@@ -448,6 +506,8 @@ export class AgentBrowserController implements WidgetPort {
   private async clickOnce(ref: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
+    // Whatever the previous action opened and nobody adopted is stale now.
+    await this.discardPendingPopup();
     const page = this.page!;
     const declaresPopup = await evaluateOnRef(handle, ref, (element) => {
       const target = element.getAttribute('target')?.toLowerCase();
@@ -509,6 +569,7 @@ export class AgentBrowserController implements WidgetPort {
   private async fillOnce(ref: string, value: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
+    await this.discardPendingPopup();
     const watch = this.watchNavigation();
     try {
       try {
@@ -697,12 +758,20 @@ export class AgentBrowserController implements WidgetPort {
       },
     });
 
-    page.browser().on('targetcreated', (target) => {
-      if (target.opener() !== page.target()) return;
-      // Intercepting a popup does not change the main document, so the main
-      // page's refs stay valid.
-      void this.capturePopupTarget(target);
-    });
+    // Registered against the browser, not the page, so it has to survive a
+    // page swap (adoption) without being installed twice — a second copy would
+    // capture, and close, the same popup from a listener whose page is gone.
+    // Keying on the *live* page keeps one listener correct across every swap.
+    if (this.browserPopupListener === null) {
+      this.browserPopupListener = (target: Target): void => {
+        const current = this.page;
+        if (!current || target.opener() !== current.target()) return;
+        // Intercepting a popup does not change the main document, so the main
+        // page's refs stay valid.
+        void this.capturePopupTarget(target);
+      };
+      page.browser().on('targetcreated', this.browserPopupListener);
+    }
     page.on('dialog', (dialog) => {
       // A JS dialog freezes every evaluate on the page until it is handled —
       // left alone it deadlocks the run. Accept beforeunload so an agent-
@@ -731,13 +800,120 @@ export class AgentBrowserController implements WidgetPort {
         if (popup.isClosed()) break;
         url = popup.url() || target.url();
       }
-      if (url && url !== 'about:blank') this.popupUrls.push(url);
+      if (!url || url === 'about:blank') {
+        await popup.close().catch(() => undefined);
+        return;
+      }
+      this.popupUrls.push(url);
+      // A tab the site opened on its own domain is where it just sent the run:
+      // the results of the search that was submitted, carrying state the URL
+      // alone often cannot reproduce. Hold it open so the caller can adopt it
+      // after a policy check. A third-party popup is an interstitial or an ad
+      // and is closed on sight, exactly as before.
+      const openerUrl = this.page?.url() ?? '';
+      if (isSameSitePopup(openerUrl, url)) {
+        await this.retainPopup({ page: popup, openerUrl });
+        return;
+      }
       await popup.close().catch(() => undefined);
     })();
     this.popupCaptureByTarget.set(target, task);
     this.popupCaptureTasks.add(task);
     void task.finally(() => this.popupCaptureTasks.delete(task));
     return task;
+  }
+
+  private async retainPopup(retained: RetainedPopup): Promise<void> {
+    const previous = this.pendingPopup;
+    this.pendingPopup = retained;
+    if (previous && previous.page !== retained.page) {
+      await previous.page.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Live address of the held popup while it is still worth following, or null.
+   *
+   * Re-tested rather than remembered, because the tab keeps moving after it is
+   * captured: a site that opens its results and then bounces that tab onto a
+   * partner has not handed the run its results. The comparison is against the
+   * URL the *opener* had when the popup was created — the opener's own address
+   * is no use here, since bouncing the opener onto a partner is the other half
+   * of the same trick, and reading it live would refuse exactly the case this
+   * exists for (KAYAK sends the opener to vrbo.com as its results tab opens).
+   */
+  public followablePopupUrl(): string | null {
+    const retained = this.pendingPopup;
+    if (!retained || retained.page.isClosed()) return null;
+    const url = retained.page.url();
+    if (!url || url === 'about:blank') return null;
+    return isSameSitePopup(retained.openerUrl, url) ? url : null;
+  }
+
+  /**
+   * Continue the run in the popup the last action opened, closing the tab it
+   * came from.
+   *
+   * The caller — not this controller — decides whether to call: landing on a
+   * new address is a navigation, and every navigation in this system passes URL
+   * provenance, host policy, and the ethics gate first. What is settled here is
+   * only the mechanics, and one fact the caller cannot see: the popup must
+   * still be the same-site tab that was captured, so a page that redirected it
+   * onto a partner domain in the meantime is refused rather than followed.
+   *
+   * Adopting replaces the document, so every ref minted before it is dead —
+   * the same contract as any other navigation.
+   *
+   * @returns The action result for the adopted tab, or null when there is no
+   *   popup left to adopt (it closed, or it moved off-site).
+   */
+  public async adoptPopup(): Promise<BrowserActionResult | null> {
+    const retained = this.pendingPopup;
+    const opener = this.page;
+    if (!retained || !opener || this.followablePopupUrl() === null) return null;
+    const popup = retained.page;
+
+    this.pendingPopup = null;
+    this.invalidateObservation();
+    this.refIdByIdentity.clear();
+    this.identityByRef.clear();
+    this.documentMarker = null;
+    this.lastDigestHash = null;
+    this.settler?.dispose();
+    this.settler = null;
+
+    this.page = popup;
+    this.pageFacade = wrapPuppeteerPage(popup);
+    this.installPagePolicies(popup);
+    // A background tab is throttled by Chrome; the run's page has to be the
+    // foreground one or every later wait measures the wrong page.
+    await popup.bringToFront().catch(() => undefined);
+    await opener.close().catch(() => undefined);
+    // Drained *after* the opener is gone, then dropped: popups and dialogs it
+    // raised describe the page being left, whose result has already been
+    // returned, and the one still in flight here is reliably the monetization
+    // redirect the site sent the opener to as it opened this tab. Reporting it
+    // hands the model a second address to chase off the page it just landed on.
+    await Promise.allSettled([...this.popupCaptureTasks]);
+    this.popupUrls = [];
+    this.dialogMessages = [];
+    await this.awaitReadable();
+    const overlays = await this.dismissOverlays();
+    // A popup the adopted page raises while it is loading is a partner or ad
+    // impression by construction — it is cross-site, or it would have been
+    // retained instead — and reporting it alongside the switch gives the model
+    // two destinations for one action, one of which it is told elsewhere to
+    // follow. It belongs to the next action's result, not to arriving here.
+    const { popup_intercepted: _partner, ...result } = await this.currentActionResult(overlays);
+    this.logger?.info({ runId: this.runId, url: result.url }, 'adopted site-opened tab');
+    return { ...result, switched_to_new_tab: result.url };
+  }
+
+  /** Close a popup nobody adopted. Called before the next action and at teardown. */
+  private async discardPendingPopup(): Promise<void> {
+    const retained = this.pendingPopup;
+    this.pendingPopup = null;
+    if (retained) await retained.page.close().catch(() => undefined);
   }
 
   private invalidateObservation(): void {
@@ -835,6 +1011,8 @@ export class AgentBrowserController implements WidgetPort {
     const title = await this.currentTitle();
     let result: BrowserActionResult = { url: this.page?.url() ?? '', title };
     if (popup) result = { ...result, popup_intercepted: popup };
+    const followable = this.followablePopupUrl();
+    if (followable) result = { ...result, popup_followable: followable };
     if (dialog) result = { ...result, dialog_intercepted: dialog };
     if (overlays && overlays.dismissed > 0)
       result = { ...result, overlays_dismissed: overlays.dismissed };
@@ -888,6 +1066,16 @@ export class AgentBrowserController implements WidgetPort {
     this.refIdByIdentity.clear();
     this.identityByRef.clear();
     this.lastDigestHash = null;
+    await this.discardPendingPopup();
+    const listener = this.browserPopupListener;
+    this.browserPopupListener = null;
+    if (listener && this.page) {
+      try {
+        this.page.browser().off('targetcreated', listener);
+      } catch {
+        // The browser is already gone; nothing to detach from.
+      }
+    }
     this.settler?.dispose();
     this.settler = null;
     const session = this.session;

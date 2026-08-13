@@ -1,9 +1,23 @@
 <!doctype html>
-<html><head><title>Yantra browser fixture</title></head><body>
-  <h1>Browser fixture</h1>
-  <a href="/form.html">Open form</a>
-  <a href="/popup.html" target="_blank">Target popup</a>
-  <button onclick="window.open('/popup.html')">Window popup</button>
-  <button onclick="document.querySelector('#state').textContent='changed'">Mutate page</button>
-  <p id="state">initial</p>
-</body></html>
+<html>
+  <head>
+    <title>Yantra browser fixture</title>
+  </head>
+  <body>
+    <h1>Browser fixture</h1>
+    <a href="/form.html">Open form</a>
+    <a href="/popup.html" target="_blank">Target popup</a>
+    <button onclick="window.open('/popup.html')">Window popup</button>
+    <!-- Same server, different site: `localhost` is not `127.0.0.1`, which is
+       the distinction popup handling turns on. -->
+    <button
+      onclick="
+        window.open(location.href.replace('127.0.0.1', 'localhost').replace(/[^/]*$/, 'popup.html'))
+      "
+    >
+      Offsite popup
+    </button>
+    <button onclick="document.querySelector('#state').textContent = 'changed'">Mutate page</button>
+    <p id="state">initial</p>
+  </body>
+</html>

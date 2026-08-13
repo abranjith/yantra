@@ -10,6 +10,18 @@ import {
 export const OPEN_WAIT_MS = 3_000;
 /** Polling cadence while waiting for a popup state transition. */
 export const POLL_MS = 100;
+/**
+ * Grace given to a container that may still be rendering after some *other*
+ * container disappeared in the same click.
+ *
+ * Real search forms keep more than one popup in play — the destination
+ * typeahead's listbox is commonly still up when the date field is driven — so a
+ * disappearance immediately after the click usually means "the unrelated popup
+ * closed", not "we just shut the widget we were asked to open". Waiting this
+ * long before drawing the second conclusion costs a beat in the case that was
+ * already slow, and stops the retry from clicking a freshly opened widget shut.
+ */
+export const REOPEN_GRACE_MS = 750;
 
 export type { WidgetContainer };
 
@@ -147,6 +159,11 @@ export async function isOpen(
  * is blind to the case that matters most: the widget was already open, the
  * trigger click shut it, and nothing new ever arrives. That is detected here as
  * a container that vanished, and undone with a single re-opening click.
+ *
+ * Each attempt gets its own {@link OPEN_WAIT_MS} budget. Sharing one deadline
+ * meant the retry that exists for the closed-it-ourselves case was, in
+ * practice, never taken: the first attempt spent the budget waiting, and the
+ * second was skipped for being out of time.
  */
 export async function openIfClosed(
   port: WidgetPort,
@@ -157,31 +174,61 @@ export async function openIfClosed(
     return { ok: true, container: existing, wasOpen: true };
   }
 
-  const deadline = port.now() + OPEN_WAIT_MS;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const before = (await visibleContainerPaths(port)).map((path) => path.join('.'));
     const beforeSet = new Set(before);
     await port.click(target.ref);
-    let closedSomething = false;
-    do {
-      const controlled = await resolveContainer(port, target, { allowUnlinked: true });
-      if (controlled && (await isOpen(port, target, controlled))) {
+    const deadline = port.now() + OPEN_WAIT_MS;
+    let vanishedAt: number | null = null;
+    for (;;) {
+      // A container the trigger *declares* is its own, whether or not the
+      // click changed anything about it.
+      const declared = await resolveContainer(port, target);
+      if (declared && (await isOpen(port, target, declared))) {
         // A second attempt only happens after our own click closed the widget,
         // so reaching here means it was open when the driver was called.
-        return { ok: true, container: controlled, wasOpen: attempt > 0 };
+        return { ok: true, container: declared, wasOpen: attempt > 0 };
+      }
+      // An undeclared one is only this widget's if the click produced it.
+      // Otherwise the scan settles on whatever popup-shaped furniture the page
+      // was already showing — a header drawer, a hidden-but-rendered listbox —
+      // and hands the driver a container with nothing in it to operate.
+      const scanned = await resolveContainer(port, target, { allowUnlinked: true });
+      if (
+        scanned &&
+        !beforeSet.has(scanned.path.join('.')) &&
+        (await isOpen(port, target, scanned))
+      ) {
+        return { ok: true, container: scanned, wasOpen: attempt > 0 };
       }
       const after = await visibleContainerPaths(port);
-      const appeared = after.find((path) => !beforeSet.has(path.join('.')));
-      if (appeared) return { ok: true, container: { path: appeared }, wasOpen: attempt > 0 };
-      const afterSet = new Set(after.map((path) => path.join('.')));
-      if (before.some((path) => !afterSet.has(path))) {
-        closedSomething = true;
-        break;
+      const appeared = after.filter((path) => !beforeSet.has(path.join('.')));
+      if (appeared.length > 0) {
+        return { ok: true, container: openedContainer(appeared), wasOpen: attempt > 0 };
       }
+      const afterSet = new Set(after.map((path) => path.join('.')));
+      if (vanishedAt === null && before.some((path) => !afterSet.has(path))) {
+        vanishedAt = port.now();
+      }
+      // Something closed and, after a grace period, nothing has opened: the
+      // click landed on an already-open widget and shut it. Go around once to
+      // put it back. Breaking the instant a container vanished — which is what
+      // this used to do — mistook an unrelated popup closing for that, and the
+      // retry then clicked the widget this call had just opened closed again.
+      if (vanishedAt !== null && port.now() - vanishedAt >= REOPEN_GRACE_MS) break;
       if (port.now() >= deadline) break;
       await sleep(POLL_MS);
-    } while (port.now() <= deadline);
-    if (!closedSomething || port.now() >= deadline) break;
+    }
+    if (vanishedAt === null) break;
+  }
+
+  // Last resort: an unambiguously open popup that was there all along. The
+  // clicks produced nothing to prefer over it, and a driver handed a container
+  // with nothing in it still recovers — its own read widens to the document —
+  // whereas a hard failure here ends the fill.
+  const standing = await resolveContainer(port, target, { allowUnlinked: true });
+  if (standing && (await isOpen(port, target, standing))) {
+    return { ok: true, container: standing, wasOpen: true };
   }
 
   return widgetFailure(
@@ -189,6 +236,32 @@ export async function openIfClosed(
     `The widget "${target.name}" did not expose a visible container within ${OPEN_WAIT_MS} ms.`,
     { waitMs: OPEN_WAIT_MS },
   );
+}
+
+/**
+ * One container for everything that opened together.
+ *
+ * Popups arrive as several sibling boxes more often than not — a two-month
+ * calendar is two `<table role="grid">` elements, a filter panel is a column of
+ * listboxes — and returning the first of them scopes the driver to a fragment
+ * of the widget it was asked to operate: the September date is "not offered"
+ * because only August was handed over. Everything that appeared in the same
+ * click is one popup, so their nearest shared ancestor is the container.
+ */
+function openedContainer(appeared: readonly (readonly number[])[]): WidgetContainer {
+  const [first, ...rest] = appeared;
+  let path = [...first!];
+  for (const other of rest) {
+    let shared = 0;
+    while (shared < path.length && shared < other.length && path[shared] === other[shared]) {
+      shared += 1;
+    }
+    path = path.slice(0, shared);
+  }
+  // "Together" has to mean inside the same box, not merely on the same page:
+  // an ancestor at `<body>` or above is the whole document, which is what the
+  // drivers' own document-wide fallback is for. Below that, take the first.
+  return { path: path.length >= 2 ? path : [...first!] };
 }
 
 async function visibleContainerPaths(port: WidgetPort): Promise<readonly (readonly number[])[]> {

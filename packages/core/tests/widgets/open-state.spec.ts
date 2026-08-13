@@ -71,6 +71,68 @@ describe('@no-llm widget open state', () => {
     expect(port.clicks).toBe(1);
   });
 
+  it('recovers when its own click shuts a widget that was already open', async () => {
+    // The shape a real search form has once a previous field was filled: the
+    // page carries permanent popup-shaped furniture, the typeahead from that
+    // fill is still up, and the calendar auto-opened — undeclared, so no
+    // `aria-controls` names it and the page offers four candidates at once.
+    const port = new DomPort(
+      '<div id="trigger" role="button">Select start date</div>' +
+        '<div id="chrome" role="dialog"><span>menu</span></div>' +
+        '<div id="typeahead" role="listbox"><span>Frisco, Texas</span></div>' +
+        '<div id="cal"><table role="grid"><tr><td>1</td></tr></table>' +
+        '<table role="grid"><tr><td>2</td></tr></table></div>',
+    );
+    const trigger = port.document.querySelector<HTMLElement>('#trigger')!;
+    const typeahead = port.document.querySelector<HTMLElement>('#typeahead')!;
+    const calendar = port.document.querySelector<HTMLElement>('#cal')!;
+    // Each month is hidden in its own right: jsdom resolves `display` per
+    // element, so hiding only the wrapper would leave the grids readable.
+    const months = [...calendar.querySelectorAll<HTMLElement>('table')];
+    trigger.addEventListener('click', () => {
+      // Clicking anywhere dismisses the leftover typeahead, and the trigger
+      // toggles the calendar — so the first click closes the very widget the
+      // caller asked to have open.
+      typeahead.style.display = 'none';
+      const opening = months[0]!.style.display === 'none';
+      for (const month of months) month.style.display = opening ? 'table' : 'none';
+    });
+
+    const result = await openIfClosed(port, TARGET);
+
+    expect(result).toMatchObject({ ok: true, wasOpen: true });
+    // Once to discover the toggle, once to put it back — and no further.
+    expect(port.clicks).toBe(2);
+    expect(months.map((month) => month.style.display)).toEqual(['table', 'table']);
+    // Both month grids opened together, so the container is the panel holding
+    // them, not whichever one the diff happened to list first.
+    expect(
+      elementAt(port.document, (result as { container: { path: number[] } }).container.path),
+    ).toBe(calendar);
+  }, 20_000);
+
+  it('does not retry when the trigger opens nothing and closes nothing', async () => {
+    // No container vanished, so there is nothing a second click could restore;
+    // clicking again would only toggle noise into the page.
+    let clock = 0;
+    const port = new DomPort(
+      // Two candidates, so the unlinked scan cannot claim either — the state
+      // the retry logic has to reason about without a resolved container.
+      '<div id="trigger" role="button">Dates</div>' +
+        '<div id="chrome" role="dialog"><span>menu</span></div>' +
+        '<div id="sidebar" role="menu"><span>filters</span></div>',
+      () => {
+        clock += OPEN_WAIT_MS;
+        return clock;
+      },
+    );
+
+    const result = await openIfClosed(port, TARGET);
+
+    expect(result).toMatchObject({ ok: false, errorCode: 'WIDGET_DID_NOT_OPEN' });
+    expect(port.clicks).toBe(1);
+  });
+
   it('removes a temporary tag on success and when the body throws', async () => {
     const port = new DomPort('<button id="trigger">Dates</button><button id="choice">6</button>');
     const selector = (attribute: string, token: string): boolean => {
@@ -91,6 +153,13 @@ describe('@no-llm widget open state', () => {
     expect(port.document.querySelector('[data-yantra-widget-target]')).toBeNull();
   });
 });
+
+/** Resolve a container path the way the in-page readers do, for assertions. */
+function elementAt(document: Document, path: readonly number[]): Element | null {
+  let current: Element | null = document.documentElement;
+  for (const index of path) current = current?.children.item(index) ?? null;
+  return current;
+}
 
 class DomPort implements WidgetPort {
   public readonly document: Document;

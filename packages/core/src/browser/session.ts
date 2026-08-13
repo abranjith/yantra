@@ -16,6 +16,19 @@ import type {
   ResolvedProfile,
 } from './types.js';
 
+/**
+ * Wrap an arbitrary Puppeteer page in Yantra's minimal facade.
+ *
+ * Exported for the one caller that acquires a page the session did not hand
+ * out: {@link AgentBrowserController} adopting a tab the site opened for
+ * itself. Adoption has to leave the run holding the same shape of page it
+ * started with — locator bridge included — or every later action silently
+ * degrades on the adopted tab.
+ */
+export function wrapPuppeteerPage(puppeteerPage: PuppeteerPage): Page {
+  return wrapPage(puppeteerPage, () => undefined);
+}
+
 /** Wraps a puppeteer Page into Yantra's minimal Page facade. */
 function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
   const locatorHost = new PuppeteerInjectedScriptHost(puppeteerPage);

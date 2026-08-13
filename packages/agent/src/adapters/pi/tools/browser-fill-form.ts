@@ -52,7 +52,7 @@ export function browserFillFormSpec(
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
     description:
-      'Fill an ordered list of non-secret form controls through the same semantic engine as browser_fill_element, including dates, choices, toggles, and suggestions. Use browser_fill_element for a credential. Processing stops at the first failure; do not use this tool to submit the form.',
+      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Processing stops at the first failure; do not use this tool to submit the form.',
     parameters: BrowserFillFormParams,
     sanitizationProfile: 'authenticated',
     mutating: true,

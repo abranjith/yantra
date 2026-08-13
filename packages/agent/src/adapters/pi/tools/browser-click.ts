@@ -7,6 +7,7 @@ import { toCandidateChain } from '../../../runtime/trace.js';
 import {
   browserController,
   browserFailure,
+  followSiteOpenedTab,
   isDomainFailure,
   modelObservation,
   observeAfterAction,
@@ -59,11 +60,13 @@ export function browserClickSpec(
       const name = described?.name ?? '';
       const ranked = await safeLocatorFor(controller, params.ref);
       try {
-        const result = await controller.click(params.ref);
+        const clicked = await controller.click(params.ref);
         // A click is how a page hands the run a new URL — by navigating, or by
         // opening a popup this policy closes and reports. Either way the page
-        // produced it, so it is attested.
-        recordActionProvenance(ctx.services, result);
+        // produced it, so it is attested. Attesting BEFORE following the tab is
+        // what lets the follow re-check it like any other navigation target.
+        recordActionProvenance(ctx.services, clicked);
+        const result = await followSiteOpenedTab(ctx.services, controller, clicked);
         ctx.services.trace?.append({
           kind: 'click',
           host,
@@ -71,10 +74,15 @@ export function browserClickSpec(
           requires_confirmation: PROTECTED_ACTION_RE.test(name),
         });
         const observation = await observeAfterAction(controller);
+        // `popup_followable` is the handshake between the controller and the
+        // policy check above; by now it is either followed or refused, and
+        // showing the model a second copy of the URL it must not act on twice
+        // is how a run ends up navigating away from the tab it just adopted.
+        const { popup_followable: _followable, ...model } = result;
         return {
           ok: true,
           model: {
-            ...result,
+            ...model,
             ...(observation ? { observation: modelObservation(observation) } : {}),
           },
         };

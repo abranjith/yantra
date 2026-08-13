@@ -56,7 +56,13 @@ describe('@no-llm browser_fill_form engine delegation', () => {
       expect.objectContaining({
         field: 'Dates',
         driver: 'calendar-grid',
-        committed: 'Sep 6, 2026 - Sep 8, 2026',
+        // The trigger writes its selection into `aria-label` and keeps "Dates"
+        // as its text; other pickers do the opposite (KAYAK labels itself
+        // "Select start date from calendar input" forever and shows "Sun 9/6").
+        // Neither surface can be declared the value without knowing the site,
+        // so the committed read is what the control says about itself, both
+        // parts, value first.
+        committed: 'Sep 6, 2026 - Sep 8, 2026 Dates',
       }),
     ]);
     expect(trace.steps().map((step) => step.kind)).toEqual([

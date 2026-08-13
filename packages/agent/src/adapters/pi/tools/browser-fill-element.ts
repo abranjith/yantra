@@ -93,7 +93,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill one named or observed control through the deterministic semantic fill engine. Use it for text, suggestions, choices, toggles, dates, ranges, and stored secrets; do not use browser_click to operate a field widget or submit the form.',
+      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges; do not use browser_click to operate a field widget or submit the form.',
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,

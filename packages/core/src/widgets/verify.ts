@@ -42,7 +42,20 @@ interface ParsedDatePart {
   readonly day: number;
 }
 
-/** Read the trigger's current non-secret value, falling back to its accessible name. */
+/**
+ * Read the trigger's current non-secret value.
+ *
+ * For anything that is not a form element there is no single place the value
+ * lives, so every source the control offers about itself is returned together —
+ * `aria-valuetext`, then its accessible name, then its rendered text — rather
+ * than the first non-empty one. Stopping at the accessible name is what made a
+ * committed range read as uncommitted on pickers that keep a *fixed* label:
+ * KAYAK's date trigger is permanently labelled "Select start date from calendar
+ * input" and shows the chosen day as its text ("Sun 9/6"), so the one source
+ * consulted was the one guaranteed never to change. The opposite shape — an
+ * icon-only cell whose date is only in `aria-label` — is equally common, and
+ * including both is what serves them both.
+ */
 export async function readCommitted(port: WidgetPort, target: WidgetTarget): Promise<string> {
   return port.evaluateOn(target.ref, (element) => {
     const normalize = (value: string | null | undefined): string =>
@@ -65,16 +78,23 @@ export async function readCommitted(port: WidgetPort, target: WidgetTarget): Pro
       }
       return normalize(element.value);
     }
-    const ariaValue = element.getAttribute('aria-valuetext');
-    if (ariaValue?.trim()) return normalize(ariaValue);
-    const ariaLabel = element.getAttribute('aria-label');
-    if (ariaLabel?.trim()) return normalize(ariaLabel);
     const labelledBy = element.getAttribute('aria-labelledby')?.split(/\s+/) ?? [];
-    const linkedLabel = labelledBy
-      .map((id) => document.getElementById(id)?.textContent ?? '')
-      .join(' ');
-    if (linkedLabel.trim()) return normalize(linkedLabel);
-    return normalize(element.textContent);
+    const sources = [
+      element.getAttribute('aria-valuetext'),
+      element.getAttribute('aria-label'),
+      labelledBy.map((id) => document.getElementById(id)?.textContent ?? '').join(' '),
+      element.textContent,
+    ].map(normalize);
+    const parts: string[] = [];
+    for (const source of sources) {
+      // Skip anything already said: a control whose label and text agree must
+      // not report its value twice, or an ordered range check reading "Sep 6
+      // Sep 6" would accept it as the range Sep 6 → Sep 6.
+      if (source.length === 0) continue;
+      if (parts.some((part) => part.includes(source) || source.includes(part))) continue;
+      parts.push(source);
+    }
+    return parts.join(' ');
   });
 }
 
@@ -193,11 +213,18 @@ function parseRenderedDates(value: string): ParsedDatePart[] {
   // page that rendered it is as likely to be day-first as month-first. Both
   // readings are offered so either order verifies; when only one is calendar-
   // valid (a leading 21 cannot be a month) that one stands alone.
-  const numeric = /\b(\d{1,2})[/.](\d{1,2})[/.](\d{4})\b/g;
+  //
+  // The year is optional for the same reason it is optional after a month name:
+  // compact triggers render "Sun 9/6" and no year they never showed can be
+  // required of them. Only `/` admits the short form — `1.5` is a number far
+  // more often than it is a date — and the lookarounds keep it from carving a
+  // second reading out of a full `9/6/2026`.
+  const numeric = /(?<![\d/.])(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?(?![\d/.])/g;
   for (const match of value.matchAll(numeric)) {
     const first = Number(match[1]);
     const second = Number(match[2]);
-    const year = Number(match[3]);
+    const year = match[3] === undefined ? null : Number(match[3]);
+    if (year === null && !match[0].includes('/')) continue;
     const index = match.index ?? 0;
     for (const [month, day] of [
       [first, second],

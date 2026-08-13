@@ -82,8 +82,13 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      'Brief. Prefer browser_fill_form for multiple controls and browser_fill_element for one ' +
-      'control. Both tools handle text, stored secrets, dates, ranges, suggestions, dropdowns, ' +
+      'Brief. When a form needs more than one field set, fill it with a single ' +
+      'browser_fill_form listing every field — one call for the whole search form (destination, ' +
+      'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +
+      'field to set, or for a stored secret. Filling fields one at a time is what makes a search ' +
+      'form fall apart: each call re-reads a page the previous call just re-rendered, so the ' +
+      'later fields resolve against controls that have moved or been replaced. ' +
+      'Both tools handle text, stored secrets, dates, ranges, suggestions, dropdowns, ' +
       'radio groups, and toggles, and each owns the whole widget lifecycle — opening a calendar ' +
       'or dropdown, choosing, and closing it again. Set a date range in one call: send both ends ' +
       'together in one browser_fill_form, or one field with the value "YYYY-MM-DD..YYYY-MM-DD". ' +
@@ -97,9 +102,11 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Many sites open their results in a ' +
-      'new tab; that tab is closed and its address returned as popup_intercepted, so the search ' +
-      'did work — pass that URL to browser_navigate to follow it instead of retrying the click. ' +
-      'Disabled elements are marked ' +
+      'new tab. When the site opens that tab on its own domain the run follows it for you and ' +
+      'the result says switched_to_new_tab — you are already on the results page, so read it ' +
+      'rather than navigating anywhere. Otherwise the tab is closed and its address returned as ' +
+      'popup_intercepted, which still means the search worked: pass that URL to browser_navigate ' +
+      'instead of retrying the click. Disabled elements are marked ' +
       'disabled: true; choose a different element. If a site widget still resists after a bounded ' +
       'number of attempts, publish what you verified and state the gap precisely. Do not switch ' +
       'to web_search for data the goal asked you to read from a specific site.',
