@@ -29,7 +29,16 @@ export const AgentManifestSection = z
     // Every version ever shipped stays listed so previously persisted run
     // manifests keep validating (run-artifact compatibility).
     prompt_version: z
-      .enum(['agent-v1', 'agent-v2', 'agent-v3', 'agent-v4', 'agent-v5', 'agent-v6', 'agent-v7'])
+      .enum([
+        'agent-v1',
+        'agent-v2',
+        'agent-v3',
+        'agent-v4',
+        'agent-v5',
+        'agent-v6',
+        'agent-v7',
+        'agent-v8',
+      ])
       .describe('Version of the authoritative agent prompt.'),
     prompt_hash: z
       .string()

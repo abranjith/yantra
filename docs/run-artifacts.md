@@ -87,12 +87,26 @@ record for the provider session:
 | `auth_source`       | `managed`, `runtime-key`, or `environment`; never a credential. |
 | `session_id`        | Provider session identity.                                      |
 | `session_file`      | Relative pointer to the raw JSONL under `agent/`.               |
-| `prompt_version`    | Authoritative prompt version (currently `agent-v7`).            |
+| `prompt_version`    | Authoritative prompt version (currently `agent-v8`).            |
 | `prompt_hash`       | SHA-256 of the exact system prompt text.                        |
 | `tool_catalog_hash` | SHA-256 of canonical tool names, schemas, and descriptions.     |
 
 Every version ever shipped stays valid in the schema, so manifests written by
 older releases keep validating.
+
+### `agent-v8` — scope discipline
+
+`agent-v8` adds a sixth governed section, **Scope**, placed directly after
+**Role**. It holds a run to what the goal actually asked for: no unrequested
+actions and no side experiments run to explain a surprising result; the values
+the user supplied are used exactly as supplied, never swapped for one read off a
+page and never retried with different inputs; an adverse outcome — a rejection,
+an error, an empty result — is a finding to report rather than an obstacle to
+engineer around; and "verify" means confirming the agent's own action landed.
+Interpretation latitude over a broad goal is explicitly narrowed to _how_ the
+goal is accomplished, so the anti-stall rule is preserved. This semantic
+system-prompt change produces a new `prompt_hash`; `agent-v7` manifests remain
+valid and retain the meaning documented below.
 
 ### `agent-v7` — bounded URL variation and browser efficiency
 
