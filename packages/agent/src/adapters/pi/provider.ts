@@ -149,7 +149,7 @@ export class PiAgentProvider implements AgentProvider {
         options.model.provider,
         'managed store (pinned auth.json), runtime key overrides, provider environment variables',
         `Set the provider's API key environment variable, seed the managed store, or configure a ` +
-          `runtime-key secret reference — see docs/model-configuration.md.`,
+          `runtime-key secret reference — see docs/usage.md.`,
       );
     }
 
@@ -191,7 +191,7 @@ export class PiAgentProvider implements AgentProvider {
           `Pi assumes ${PI_DEFAULT_CUSTOM_CONTEXT_WINDOW} tokens. If the model server enforces a smaller ` +
           'window (Ollama defaults num_ctx to 4096), prompts are silently truncated and the agent can lose ' +
           'its goal and tools mid-run. Declare "contextWindow" to match the server limit and raise the ' +
-          'server limit (e.g. OLLAMA_CONTEXT_LENGTH) for agentic use — see docs/model-configuration.md.',
+          'server limit (e.g. OLLAMA_CONTEXT_LENGTH) for agentic use — see docs/usage.md.',
       );
     }
 

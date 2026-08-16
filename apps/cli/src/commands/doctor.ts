@@ -309,7 +309,7 @@ function doctorRuntime(runtime?: Partial<DoctorRuntime>): DoctorRuntime {
 
 /**
  * Read the documented `agent.pi_auth_path` opt-in from config.yaml
- * (docs/model-configuration.md). Missing/unreadable config yields undefined —
+ * (docs/usage.md). Missing/unreadable config yields undefined —
  * the pinned auth store stays the default.
  */
 async function readPiAuthPathOptIn(): Promise<string | undefined> {

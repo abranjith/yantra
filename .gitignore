@@ -472,3 +472,6 @@ specs/
 # Cline agent
 .cline/*
 .clinerules
+
+.codex
+.pi

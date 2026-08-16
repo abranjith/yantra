@@ -226,7 +226,7 @@ describe('@no-llm PiAgentProvider.open — startup validation', () => {
     await expect(attempt).rejects.toBeInstanceOf(AgentAuthUnavailableError);
     await expect(attempt).rejects.toMatchObject({
       code: 'AGENT_AUTH_UNAVAILABLE',
-      message: expect.stringContaining('docs/model-configuration.md') as unknown,
+      message: expect.stringContaining('docs/usage.md') as unknown,
     });
     expect(factoryCalls).toBe(0);
   });

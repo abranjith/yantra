@@ -98,7 +98,7 @@ export function makeRunCommand(): Command {
   addAgentOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
     if (options.template !== undefined) {
       process.stderr.write(
-        'templates are not yet supported on run; see docs/report-templates.md\n',
+        'templates are not yet supported on run; see docs/features/report-templates.md\n',
       );
       process.exit(1);
     }

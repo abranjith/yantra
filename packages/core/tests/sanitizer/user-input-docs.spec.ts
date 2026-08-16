@@ -12,7 +12,7 @@ interface DocumentedParserExample {
 describe('@no-llm user-input masking documentation', () => {
   it('keeps every machine-checked grammar example synchronized with the parser', async () => {
     const markdown = await readFile(
-      new URL('../../../../docs/user-input-masking.md', import.meta.url),
+      new URL('../../../../docs/features/safety-and-privacy.md', import.meta.url),
       'utf8',
     );
     const examples = [...markdown.matchAll(/<!-- parser-example: (\{.*\}) -->/g)].map(

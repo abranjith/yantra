@@ -143,7 +143,9 @@ describe('@no-llm yantra run flag surface', () => {
     await expect(
       makeRunCommand().parseAsync(['weekly', '--template', 'exec-brief'], { from: 'user' }),
     ).rejects.toThrow('exit:1');
-    expect(stderr).toBe('templates are not yet supported on run; see docs/report-templates.md\n');
+    expect(stderr).toBe(
+      'templates are not yet supported on run; see docs/features/report-templates.md\n',
+    );
   });
 
   it('registers no --llm opt-in flag', () => {
