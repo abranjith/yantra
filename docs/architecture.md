@@ -52,7 +52,7 @@ flowchart TD
   Agent --> Protocol
   Core --> Protocol
   Agent --> PiAdapter[packages/agent/src/adapters/pi<br/>Pi SDK translation]
-  PiAdapter --> PiSDK[@earendil-works/pi-coding-agent]
+  PiAdapter --> PiSDK["@earendil-works/pi-coding-agent"]
   Tests[e2e and workspace tests] -. verify .-> CLI
   Tests -. verify .-> Agent
   Tests -. verify .-> Core
