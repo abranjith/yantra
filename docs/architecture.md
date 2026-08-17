@@ -39,25 +39,39 @@ flowchart LR
 
 ## Components
 
-The production code is a strict TypeScript, ESM-only pnpm workspace. TypeScript project
-references and workspace dependencies establish the build direction: protocol first, then core,
-then agent, then CLI. Runtime imports point toward the lower layers as shown below.
+The production code is a strict TypeScript, ESM-only pnpm workspace. Rather than showing every
+workspace import, the component view below shows the dependency layers: arrows point toward the
+lower-level dependency. TypeScript project references build protocol first, then core, agent, and
+CLI.
 
 ```mermaid
 flowchart TD
-  CLI[apps/cli<br/>commands, option resolution, rendering] --> Agent[packages/agent<br/>agent orchestration and provider seam]
-  CLI --> Core[packages/core<br/>browser, deterministic engines, policy, persistence]
-  CLI --> Protocol[packages/protocol<br/>Zod contracts and validation]
-  Agent --> Core
-  Agent --> Protocol
-  Core --> Protocol
-  Agent --> PiAdapter[packages/agent/src/adapters/pi<br/>Pi SDK translation]
-  PiAdapter --> PiSDK["@earendil-works/pi-coding-agent"]
-  Tests[e2e and workspace tests] -. verify .-> CLI
-  Tests -. verify .-> Agent
-  Tests -. verify .-> Core
-  Tests -. verify .-> Protocol
+  CLI[apps/cli<br/>commands, option resolution, rendering]
+  Agent[packages/agent<br/>live agent orchestration]
+  Core[packages/core<br/>browser, deterministic engines,<br/>policy, persistence]
+  Protocol[packages/protocol<br/>Zod contracts and validation]
+
+  CLI --> Agent --> Core --> Protocol
 ```
+
+The CLI is the composition root, so it also imports core and protocol for deterministic commands
+and shared validation; those direct imports are intentionally omitted from the diagram. They still
+point downward. `@yantra/test-helpers` provides fixtures, while workspace and end-to-end tests
+verify the production packages without participating in their runtime dependency graph.
+
+### Provider integration boundary
+
+The provider SDK is not another platform layer. It is an implementation detail of the agent
+package, isolated behind one small adapter seam:
+
+```mermaid
+flowchart LR
+  Agent[packages/agent<br/>provider-neutral orchestration] --> Adapter[src/adapters/pi<br/>Pi SDK translation]
+  Adapter --> PiSDK["@earendil-works/pi-coding-agent"]
+```
+
+Only `packages/agent/src/adapters/pi/` may import the Pi SDK; boundary tests and static checks
+enforce that confinement and prevent core from importing agent.
 
 ### `packages/protocol`
 
