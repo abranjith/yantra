@@ -26,7 +26,11 @@ export interface FakeSessionScript {
   /** Per-run terminal results. */
   readonly resultsByRun?: readonly AgentRunResult[];
   /** Hook for artifact creation or additional scripted assertions. */
-  readonly onRun?: (prompt: string, runIndex: number, session: FakeAgentSession) => Promise<void> | void;
+  readonly onRun?: (
+    prompt: string,
+    runIndex: number,
+    session: FakeAgentSession,
+  ) => Promise<void> | void;
 }
 
 const DEFAULT_RUN_RESULT: AgentRunResult = {

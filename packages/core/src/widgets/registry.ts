@@ -30,6 +30,43 @@ export class WidgetRegistry {
   }
 
   /**
+   * Every driver confident enough to act, strongest first.
+   *
+   * Detection is a guess made from closed-state reads, and a wrong guess used
+   * to end the attempt: a read-only trigger whose accessible name contains
+   * "date" was handed to the driver that types into date inputs, which typed
+   * into a control that cannot be typed into and stopped there — with the
+   * calendar driver that would have paged to the requested month sitting
+   * unconsulted. Returning the ordered field lets the caller fall through when
+   * the strongest candidate turns out to be wrong about itself.
+   *
+   * Ties keep registration order, so selection stays deterministic.
+   */
+  public async detectDrivers(
+    port: WidgetPort,
+    target: WidgetTarget,
+    family?: WidgetFamily,
+  ): Promise<readonly DetectedWidgetDriver[]> {
+    const detected: DetectedWidgetDriver[] = [];
+    for (const driver of this.drivers) {
+      if (family !== undefined && driver.family !== family) continue;
+      const raw = await driver.detect(port, target);
+      const confidence = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+      if (confidence < MIN_CONFIDENCE) continue;
+      detected.push({ driver, confidence });
+    }
+    // A stable sort keeps registration order among equal confidences.
+    return detected
+      .map((entry, index) => ({ entry, index }))
+      .sort((left, right) =>
+        right.entry.confidence === left.entry.confidence
+          ? left.index - right.index
+          : right.entry.confidence - left.entry.confidence,
+      )
+      .map(({ entry }) => entry);
+  }
+
+  /**
    * Detect the highest-confidence driver, optionally within one family.
    * Ties keep the earlier registered driver.
    */

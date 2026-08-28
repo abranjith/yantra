@@ -139,6 +139,55 @@ describe('@no-llm command task profiles', () => {
     }
   });
 
+  it('tells the model how to read a fill result instead of guessing at it', () => {
+    // The motivating run inferred, wrongly, that a fill had failed because the
+    // committed value was not the text it typed. Every clause here removes one
+    // such inference.
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+    expect(task).toMatch(/requested/);
+    expect(task).toMatch(/committed/);
+    expect(task).toMatch(/resolution/);
+    expect(task).toMatch(/differs from what you sent is normal/i);
+    expect(task).toMatch(/never re-fill a field to force your original wording/i);
+    expect(task).toMatch(/never repeat anything named in "attempted"/i);
+    expect(task).toMatch(/re-issue the same call with one of those strings exactly as written/i);
+    expect(task).toMatch(/observed/);
+  });
+
+  it('drops the guidance the results now carry themselves', () => {
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+    // Superseded by the `attempted` field, which names what was actually tried.
+    expect(task).not.toMatch(/recovery was already tried/i);
+    expect(task).not.toMatch(/repeating the identical call/i);
+  });
+
+  it('names no website anywhere in the agent-facing guidance', () => {
+    // The standing rule: automation works from structural signals, never from
+    // knowledge of a particular site, and the guidance must not smuggle one in.
+    const sites =
+      /expedia|kayak|priceline|orbitz|skyscanner|booking[.]com|trip[.]com|google flights/i;
+    for (const profile of Object.values(COMMAND_TASK_PROFILES)) {
+      expect(profile.promptAddendum).not.toMatch(sites);
+    }
+    for (const tool of yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do)) {
+      expect(tool.description).not.toMatch(sites);
+    }
+  });
+
+  it('names the disclosure fields in the tool descriptions the model reads', () => {
+    const byName = new Map(
+      yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map((tool) => [
+        tool.name,
+        tool.description,
+      ]),
+    );
+    expect(byName.get('browser_fill_element')).toMatch(/resolution/);
+    expect(byName.get('browser_fill_element')).toMatch(/attempted/);
+    expect(byName.get('browser_fill_element')).toMatch(/offered/);
+    expect(byName.get('browser_fill_form')).toMatch(/resolution/);
+    expect(byName.get('browser_click')).toMatch(/resolved_by/);
+  });
+
   it('keeps ask and research addenda byte-identical while do guidance changes', () => {
     const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
     expect(digest(COMMAND_TASK_PROFILES.ask.promptAddendum)).toBe(

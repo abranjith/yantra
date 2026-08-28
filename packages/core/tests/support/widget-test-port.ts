@@ -1,9 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { JSDOM } from 'jsdom';
 
 import type { AgentBrowserObservation, AgentInteractable, WidgetPort } from '../../src/index.js';
 
-/** Small jsdom-backed WidgetPort used by deterministic calendar-driver tests. */
-export class CalendarTestPort implements WidgetPort {
+/**
+ * Small jsdom-backed {@link WidgetPort} for deterministic widget tests.
+ *
+ * Shared by the calendar suites and the behaviour-fixture regressions, so a
+ * fixture exercised end to end runs through exactly the port shape the drivers
+ * see everywhere else.
+ */
+export class WidgetTestPort implements WidgetPort {
   public readonly window: JSDOM['window'];
   public readonly document: Document;
   public readonly clickLog: { readonly name: string; readonly group: string | null }[] = [];
@@ -12,9 +22,27 @@ export class CalendarTestPort implements WidgetPort {
   private readonly elementsByRef = new Map<string, HTMLElement>();
   private nextRef = 1;
 
-  public constructor(html: string, clock: () => number = () => Date.now()) {
+  /**
+   * Load one behaviour fixture from `tests/fixtures/widgets` by file name.
+   *
+   * Fixture scripts are executed, because the behaviours being reproduced —
+   * a swallowed keystroke, a list that arrives late, a picker that pages
+   * months — are behaviours, not markup.
+   */
+  public static fromFixture(name: string, clock?: () => number): WidgetTestPort {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const html = readFileSync(join(here, '..', 'fixtures', 'widgets', name), 'utf8');
+    return new WidgetTestPort(html, clock, { runScripts: true });
+  }
+
+  public constructor(
+    html: string,
+    clock: () => number = () => Date.now(),
+    options: { readonly runScripts?: boolean } = {},
+  ) {
     const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
       pretendToBeVisual: true,
+      ...(options.runScripts ? { runScripts: 'dangerously' as const } : {}),
     });
     this.window = dom.window;
     this.document = dom.window.document;
@@ -58,6 +86,30 @@ export class CalendarTestPort implements WidgetPort {
       group: this.groupOf(element),
     });
     element.click();
+  }
+
+  public async clear(ref: string): Promise<void> {
+    const element = this.element(ref);
+    if (
+      element instanceof this.window.HTMLInputElement ||
+      element instanceof this.window.HTMLTextAreaElement
+    ) {
+      element.value = '';
+      element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+    }
+  }
+
+  public async type(ref: string, text: string): Promise<void> {
+    const element = this.element(ref);
+    if (
+      element instanceof this.window.HTMLInputElement ||
+      element instanceof this.window.HTMLTextAreaElement
+    ) {
+      for (const character of text) {
+        element.value += character;
+        element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+      }
+    }
   }
 
   public async fill(ref: string, value: string): Promise<void> {

@@ -161,12 +161,12 @@ not exist and none is introduced.
 
 - **`AgentTraceStep`** (`agent/src/runtime/trace.ts`) — new member:
   - `{ kind: 'fill_element', host, field: { name: string, role: string, group: string | null },
- locator: LocatorCandidate[], value: TraceFillValue, requires_confirmation: boolean }` —
+locator: LocatorCandidate[], value: TraceFillValue, requires_confirmation: boolean }` —
     one per field; the engine's internal clicks/fills no longer append primitive trace steps
 
 - **`WorkflowStep`** (`protocol/src/schemas/workflow.ts`) — new union member:
   - `{ verb: 'fill_element', locator: string, field_name: string,
- value: WorkflowValueExpression, requires_confirmation?: boolean, … }` — `locator` names a
+value: WorkflowValueExpression, requires_confirmation?: boolean, … }` — `locator` names a
     `_locators` chain (fallback resolution), `field_name` is the accessible-name identity the
     engine resolves first; added to `CONFIRMABLE_WORKFLOW_VERBS`
 

@@ -98,6 +98,28 @@ export async function readCommitted(port: WidgetPort, target: WidgetTarget): Pro
   });
 }
 
+/**
+ * Compare a committed value with the option the widget was actually made to
+ * choose, rather than with the text that was typed to find it.
+ *
+ * This is the whole point of recording `chosen`. A search field asked for an
+ * airport code offers a city name and commits that; a store locator asked for a
+ * postcode commits a branch. In every such case the widget has resolved the
+ * request to something it genuinely offers, and the right question is "does the
+ * field hold the option we clicked", not "does the field contain what we
+ * typed" — which is the question that reported a landed fill as a failure.
+ *
+ * Containment runs both ways because a control legitimately renders more than
+ * the label ("Dallas (DFW), United States" for an option reading "Dallas") or
+ * less of it ("Dallas" for "Dallas Fort Worth International").
+ */
+export function matchesCommitment(committed: string, chosenLabel: string): boolean {
+  const actual = normalizeOption(committed);
+  const chosen = normalizeOption(chosenLabel);
+  if (actual.length === 0 || chosen.length === 0) return false;
+  return actual.includes(chosen) || chosen.includes(actual);
+}
+
 /** Compare a rendered committed value with the semantic intent. */
 export function matchesIntent(committed: string, intent: WidgetIntent): boolean {
   if (intent.kind === 'option') {

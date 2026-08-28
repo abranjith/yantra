@@ -29,4 +29,9 @@ export const forbiddenPaths = [
 ] as const;
 
 /** These were specific to the removed task-shaped agent client surface. */
-export const forbiddenAgentSymbols = ['LLMClient', 'NullLLMClient', 'generatePlan(', 'discovery.jsonl'] as const;
+export const forbiddenAgentSymbols = [
+  'LLMClient',
+  'NullLLMClient',
+  'generatePlan(',
+  'discovery.jsonl',
+] as const;

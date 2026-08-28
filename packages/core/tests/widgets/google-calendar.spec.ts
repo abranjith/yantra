@@ -5,8 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { fillField } from '../../src/fill/engine.js';
 import { readCalendarGrid } from '../../src/widgets/date/calendar-grid.js';
 import type { WidgetBudget, WidgetTarget } from '../../src/widgets/types.js';
-
-import { CalendarTestPort } from './calendar-test-port.js';
+import { WidgetTestPort } from '../support/widget-test-port.js';
 
 /**
  * Regression suite for run 20260809T024548Z-do-4a2225cc, driven by a verbatim
@@ -57,7 +56,7 @@ const checkIn = (ref: string): WidgetTarget => ({
  * the picker it drove would be judged against a page where releasing is
  * impossible.
  */
-function installPairCommit(port: CalendarTestPort): void {
+function installPairCommit(port: WidgetTestPort): void {
   const from = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-in"]')!;
   const to = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-out"]')!;
   let clicks = 0;
@@ -92,7 +91,7 @@ function installPairCommit(port: CalendarTestPort): void {
  * the opening end.
  */
 function installRangePicker(
-  port: CalendarTestPort,
+  port: WidgetTestPort,
   { startOpen = false }: { readonly startOpen?: boolean } = {},
 ): void {
   const from = port.document.querySelector<HTMLInputElement>('input[aria-label="Check-in"]')!;
@@ -144,20 +143,20 @@ function installRangePicker(
 }
 
 /** The pair the page is actually holding, ignoring anything still pending. */
-function committedPair(port: CalendarTestPort): readonly string[] {
+function committedPair(port: WidgetTestPort): readonly string[] {
   return ['Check-in', 'Check-out'].map(
     (label) => port.document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!.value,
   );
 }
 
 /** Whether the picker is still on screen. */
-function pickerOpen(port: CalendarTestPort): boolean {
+function pickerOpen(port: WidgetTestPort): boolean {
   return port.document.querySelector<HTMLElement>('[role="grid"]')!.style.display !== 'none';
 }
 
 describe('@no-llm google travel capture — grid reading', () => {
   it('reads every day cell despite an app-level aria-hidden ancestor', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -168,7 +167,7 @@ describe('@no-llm google travel capture — grid reading', () => {
   });
 
   it('derives each date from the label on the cell’s inert child', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -179,7 +178,7 @@ describe('@no-llm google travel capture — grid reading', () => {
   });
 
   it('still ignores a decorative label nested inside the cell itself', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     const cell = port.document.querySelector<HTMLElement>('[role="button"]')!;
     const decoy = cell.querySelector<HTMLElement>('[aria-hidden="true"]')!;
     decoy.setAttribute('aria-label', 'Friday, January 1, 2027');
@@ -192,7 +191,7 @@ describe('@no-llm google travel capture — grid reading', () => {
   });
 
   it('treats an aria-hidden cell as unavailable even with no disabled attribute', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -205,7 +204,7 @@ describe('@no-llm google travel capture — grid reading', () => {
   });
 
   it('never marks a label-derived cell unsafe, since no weekday was guessed', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -215,7 +214,7 @@ describe('@no-llm google travel capture — grid reading', () => {
 
 describe('@no-llm google travel capture — end to end', () => {
   it('commits a range that lands in the check-in/check-out pair, not the trigger', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installPairCommit(port);
     const ref = port.refFor('input[aria-label="Check-in"]');
 
@@ -236,7 +235,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('refuses an out-of-range date instead of clicking an inert cell', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installPairCommit(port);
     const ref = port.refFor('input[aria-label="Check-in"]');
 
@@ -260,7 +259,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('names the pair when half a range is asked of a picker that commits both', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installRangePicker(port);
     const ref = port.refFor('input[aria-label="Check-in"]');
 
@@ -286,7 +285,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('commits the same widget when both ends arrive together', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installRangePicker(port);
     const ref = port.refFor('input[aria-label="Check-in"]');
 
@@ -302,7 +301,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('releases a picker it drove even though it found it already open', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installRangePicker(port, { startOpen: true });
     const ref = port.refFor('input[aria-label="Check-in"]');
 
@@ -324,7 +323,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('opens a range from the start field even when the end field is addressed', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
     installRangePicker(port);
     const ref = port.refFor('input[aria-label="Check-out"]');
 
@@ -346,7 +345,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('does not release a picker the fill found open and never drove', async () => {
-    const port = new CalendarTestPort('<div role="dialog"><input aria-label="Notes"></div>');
+    const port = new WidgetTestPort('<div role="dialog"><input aria-label="Notes"></div>');
     const ref = port.refFor('input[aria-label="Notes"]');
 
     const outcome = await fillField(
@@ -365,7 +364,7 @@ describe('@no-llm google travel capture — end to end', () => {
   });
 
   it('reports what it saw when a calendar genuinely has no day cells', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<input aria-label="Check-in" aria-controls="cal" value="Mon, Aug 10">' +
         '<div id="cal" role="grid"><div role="row"><div role="gridcell">Flexible</div></div></div>',
     );

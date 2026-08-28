@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchesIntent, readCommitted } from '../../src/widgets/index.js';
-
-import { CalendarTestPort } from './calendar-test-port.js';
+import { matchesCommitment, matchesIntent, readCommitted } from '../../src/widgets/index.js';
+import { WidgetTestPort } from '../support/widget-test-port.js';
 
 describe('@no-llm widget committed-value verification', () => {
   it('matches locale-rendered date ranges in order', () => {
@@ -72,7 +71,7 @@ describe('@no-llm widget committed-value verification', () => {
     // KAYAK's trigger keeps the fixed label "Select start date from calendar
     // input" and renders the chosen day as its text. Reading only the first
     // non-empty source meant reading the one that never changes.
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<div id="trigger" role="button" aria-label="Select start date from calendar input">Sun 9/6</div>',
     );
     const target = {
@@ -90,7 +89,7 @@ describe('@no-llm widget committed-value verification', () => {
   it('never repeats a value a control states twice', async () => {
     // A label and text that agree must not read as two dates, or an ordered
     // range check accepts "Sep 6" as the range Sep 6 → Sep 6.
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<div id="trigger" role="button" aria-label="Sep 6">Sep 6</div>',
     );
     const committed = await readCommitted(port, {
@@ -113,7 +112,7 @@ describe('@no-llm widget committed-value verification', () => {
       '<input id="trigger" autocomplete="cc-number" value="4111111111111111">',
       '<input id="trigger" data-yantra-secret value="secret-canary">',
     ]) {
-      const port = new CalendarTestPort(input);
+      const port = new WidgetTestPort(input);
       await expect(
         readCommitted(port, {
           ref: 'e1',
@@ -124,5 +123,35 @@ describe('@no-llm widget committed-value verification', () => {
         }),
       ).resolves.toBe('');
     }
+  });
+});
+
+describe('@no-llm commitment verification against the chosen option', () => {
+  it('accepts a short display name for the option that carried the code', () => {
+    // The motivating case: typed "DFW", the list offered the full airport
+    // name, and the field settled on "Dallas". Checked against the typed text
+    // this reads as a failure; checked against the option actually clicked, it
+    // is plainly correct.
+    expect(matchesCommitment('Dallas', 'Dallas Fort Worth International Airport (DFW)')).toBe(true);
+  });
+
+  it('accepts a control that renders more than the option label', () => {
+    expect(matchesCommitment('Dallas (DFW), United States', 'Dallas')).toBe(true);
+  });
+
+  it('rejects a value with nothing in common with the chosen option', () => {
+    expect(matchesCommitment('Fort Wayne', 'Dallas Fort Worth International Airport (DFW)')).toBe(
+      false,
+    );
+  });
+
+  it('rejects an empty commitment on either side', () => {
+    expect(matchesCommitment('', 'Dallas')).toBe(false);
+    expect(matchesCommitment('Dallas', '')).toBe(false);
+    expect(matchesCommitment('   ', 'Dallas')).toBe(false);
+  });
+
+  it('ignores case and punctuation differences', () => {
+    expect(matchesCommitment('SAN JOSE, CA', 'San Jose (CA)')).toBe(true);
   });
 });

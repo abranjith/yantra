@@ -201,5 +201,5 @@ export type { Step as StepType } from './schemas/steps.js';
 export type { WorkflowFile as WorkflowFileType } from './schemas/workflow.js';
 
 // Compatibility export used by FEAT-001 scaffold smoke tests.
-export const PROTOCOL_VERSION = '0.0.0' as const;
+export const PROTOCOL_VERSION = '0.0.1' as const;
 export type ProtocolVersion = typeof PROTOCOL_VERSION;

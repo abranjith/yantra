@@ -1,0 +1,39 @@
+<!--
+  Shape: typing a code offers one option whose label is different text, and the
+  control commits a shorter display name than either.
+
+  Observed in run 20260827T045106Z-do-9a58de7e (seq 9-11): the field held
+  "Dallas" after "DFW" was typed, and verification against the typed text
+  reported that landed fill as WIDGET_NOT_COMMITTED.
+-->
+<input
+  id="q"
+  aria-label="Where from?"
+  aria-autocomplete="list"
+  aria-controls="opts"
+  aria-expanded="false"
+/>
+<div id="opts" role="listbox" style="display: none">
+  <button role="option">Dallas Fort Worth International Airport (DFW)</button>
+</div>
+<script>
+  (function () {
+    var input = document.getElementById('q');
+    var popup = document.getElementById('opts');
+    input.addEventListener('input', function () {
+      popup.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
+    });
+    popup.querySelector('button').addEventListener('click', function () {
+      input.value = 'Dallas';
+      popup.style.display = 'none';
+      input.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+</script>

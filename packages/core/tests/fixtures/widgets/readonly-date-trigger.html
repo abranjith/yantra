@@ -1,0 +1,64 @@
+<!--
+  Shape: a read-only textbox named for dates, showing a formatted value and
+  opening a month-paged calendar.
+
+  Observed in run 20260827T045106Z-do-9a58de7e (seq 40): the accessible name
+  contained "date", so the driver that types into date inputs was chosen; it
+  typed into a control that cannot be typed into and stopped, leaving December
+  unreachable for the rest of the run.
+-->
+<input
+  id="trigger"
+  readonly
+  aria-label="Choose date"
+  aria-controls="cal"
+  aria-expanded="false"
+  value="Fri, Aug 28"
+/>
+<div id="cal" role="dialog" style="display: none">
+  <button id="next" aria-label="Next month">&rsaquo;</button>
+  <table>
+    <caption>
+      August 2026
+    </caption>
+    <tbody>
+      <tr></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var dialog = document.getElementById('cal');
+    var caption = document.querySelector('#cal caption');
+    var row = document.querySelector('#cal tbody tr');
+    var months = ['August', 'September', 'October', 'November', 'December'];
+    var index = 0;
+    function render() {
+      caption.textContent = months[index] + ' 2026';
+      var month = String(index + 8);
+      if (month.length === 1) month = '0' + month;
+      row.innerHTML = '<td><button data-date="2026-' + month + '-02">2</button></td>';
+      row.querySelector('button').addEventListener('click', function () {
+        trigger.value = months[index].slice(0, 3) + ' 2, 2026';
+        dialog.style.display = 'none';
+        trigger.setAttribute('aria-expanded', 'false');
+      });
+    }
+    trigger.addEventListener('click', function () {
+      dialog.style.display = 'block';
+      trigger.setAttribute('aria-expanded', 'true');
+      render();
+    });
+    document.getElementById('next').addEventListener('click', function () {
+      if (index < months.length - 1) index += 1;
+      render();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        dialog.style.display = 'none';
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+</script>

@@ -1,3 +1,4 @@
+import { MATCH_TIERS, normalizeText, type MatchTier } from '../../interaction/index.js';
 import type { WidgetContainer } from '../open-state.js';
 import { withTag } from '../tagging.js';
 import type { WidgetPort } from '../types.js';
@@ -94,7 +95,17 @@ export function collectCandidates(
   }, container.path);
 }
 
-/** Rank exact, prefix, all-token, then substring matches without tie-breaking guesses. */
+/**
+ * Rank offered options against what the caller typed.
+ *
+ * Deliberately a separate function from `resolveInteractable`, because it
+ * answers a different question — "which of these offers answers the request"
+ * rather than "which node did the caller mean" — and the two have different
+ * safety properties: an unresolved tie here is a real choice the caller must
+ * make, never a duplicate to settle by document order. What they do share is
+ * the tier ladder and the normalization, imported rather than restated so the
+ * two ideas of "the same text" cannot drift apart again.
+ */
 export function rankCandidate(
   candidates: readonly WidgetCandidate[],
   requested: string,
@@ -103,21 +114,41 @@ export function rankCandidate(
     (candidate) => !candidate.disabled && candidate.name.trim().length > 0,
   );
   const wanted = normalize(requested);
-  const wantedTokens = new Set(wanted.split(' ').filter(Boolean));
-  const tiers = [
-    usable.filter((candidate) => normalize(candidate.name) === wanted),
-    usable.filter((candidate) => normalize(candidate.name).startsWith(wanted)),
-    usable.filter((candidate) => {
-      const tokens = new Set(normalize(candidate.name).split(' ').filter(Boolean));
-      return wantedTokens.size > 0 && [...wantedTokens].every((token) => tokens.has(token));
-    }),
-    usable.filter((candidate) => normalize(candidate.name).includes(wanted)),
-  ];
-  const winner = tiers.find((tier) => tier.length > 0);
+  const wantedTokens = wanted.split(' ').filter(Boolean);
   const offered = usable.slice(0, 10).map((candidate) => candidate.name);
-  if (!winner) return { kind: 'none', offered };
-  if (winner.length > 1) return { kind: 'ambiguous', offered };
-  return { kind: 'match', candidate: winner[0]! };
+  for (const tier of MATCH_TIERS) {
+    const hits = usable.filter((candidate) =>
+      matchesCandidateTier(candidate.name, wanted, wantedTokens, tier),
+    );
+    if (hits.length === 0) continue;
+    if (hits.length > 1)
+      return { kind: 'ambiguous', offered: hits.slice(0, 10).map((c) => c.name) };
+    return { kind: 'match', candidate: hits[0]! };
+  }
+  return { kind: 'none', offered };
+}
+
+/** One option name against the request, at one tier. Mirrors the shared tiers. */
+function matchesCandidateTier(
+  name: string,
+  wanted: string,
+  wantedTokens: readonly string[],
+  tier: Exclude<MatchTier, 'ref'>,
+): boolean {
+  const actual = normalize(name);
+  switch (tier) {
+    case 'exact':
+      return actual === wanted;
+    case 'prefix':
+      return actual.startsWith(wanted);
+    case 'all-tokens': {
+      if (wantedTokens.length === 0) return false;
+      const tokens = new Set(actual.split(' ').filter(Boolean));
+      return wantedTokens.every((token) => tokens.has(token));
+    }
+    case 'substring':
+      return actual.includes(wanted);
+  }
 }
 
 /**
@@ -182,9 +213,5 @@ export function normalizeCandidateText(value: string): string {
 }
 
 function normalize(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeText(value);
 }

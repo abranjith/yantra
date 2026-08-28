@@ -1,0 +1,600 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-08-28T03:25:18.380Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-08-28T03:33:27.656Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-08-28T03:38:07.766Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-08-28T03:48:31.045Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-08-28T03:53:46.075Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-08-28T04:07:49.451Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-08-28T04:12:28.162Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-008",
+      "at": "2026-08-28T04:14:48.898Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-009",
+      "at": "2026-08-28T04:24:32.711Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-08-28T04:30:11.408Z",
+      "head": "5c8f973e66cf338d6c8e77a47323f49d6262a959"
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/form-field-resolve.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/form-field-resolve.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/_lint-fixtures/site-specific-logic.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/fill/react.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/attempt.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/resolution.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/interaction/settle.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/types.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/typing.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/widgets/date/date-input-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/widgets/default-registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/widgets/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/widgets/option/candidates.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/option/listbox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/option/typeahead-driver.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/widgets/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/widgets/verify.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/executor/fill-element.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fill/fill-engine.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/ambiguous-suggestions.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/code-to-label-typeahead.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/dropped-keystroke-input.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/duplicate-trigger-combobox.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/late-suggestions.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/readonly-date-trigger.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/interaction/attempt.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/resolution.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/settle.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/typing.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/support/widget-test-port.ts",
+      "status": "R",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/calendar-driver.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/calendar-grid.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/calendar-test-port.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/date-pair.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/google-calendar.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/open-state.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/option-drivers.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/real-calendar.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/widgets/registry.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/verify.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-030-resilient_browser_interaction/changeset.json",
+    ".spec-lite/features/FEAT-030-resilient_browser_interaction/spec.md"
+  ],
+  "baseline": {
+    "sha": "5c8f973e66cf338d6c8e77a47323f49d6262a959",
+    "capturedAt": "2026-08-28T03:20:19.361Z",
+    "dirtyAtBaseline": [
+      ".gitignore",
+      ".spec-lite.json",
+      ".spec-lite/feature-summary.md",
+      ".spec-lite/features/FEAT-001-monorepo_scaffold/spec.md",
+      "ec-lite/features/feature_monorepo_scaffold.md",
+      ".spec-lite/features/FEAT-003-chrome_launcher/spec.md",
+      "ec-lite/features/feature_chrome_launcher.md",
+      ".spec-lite/features/FEAT-004-locator_engine/spec.md",
+      "ec-lite/features/feature_locator_engine.md",
+      ".spec-lite/features/FEAT-006-security_envelope/spec.md",
+      "ec-lite/features/feature_security_envelope.md",
+      ".spec-lite/features/FEAT-007-ask_pipeline/spec.md",
+      "ec-lite/features/feature_ask_pipeline.md",
+      ".spec-lite/features/FEAT-009-annotate_and_yaml/spec.md",
+      "ec-lite/features/feature_annotate_and_yaml.md",
+      ".spec-lite/features/FEAT-010-workflow_replay/spec.md",
+      "ec-lite/features/feature_workflow_replay.md",
+      ".spec-lite/features/FEAT-012-cli_polish_distribution/spec.md",
+      "ec-lite/features/feature_cli_polish_distribution.md",
+      ".spec-lite/features/FEAT-013-brief_protocol/spec.md",
+      "ec-lite/features/feature_brief_protocol.md",
+      ".spec-lite/features/FEAT-014-synthesis_engine/spec.md",
+      "ec-lite/features/feature_synthesis_engine.md",
+      ".spec-lite/features/FEAT-015-rich_renderer/spec.md",
+      "ec-lite/features/feature_rich_renderer.md",
+      ".spec-lite/features/FEAT-016-search_registry/spec.md",
+      "ec-lite/features/feature_search_registry.md",
+      ".spec-lite/features/FEAT-017-deep_research/spec.md",
+      "ec-lite/features/feature_deep_research.md",
+      ".spec-lite/features/FEAT-018-profiles_and_history/spec.md",
+      "ec-lite/features/feature_profiles_and_history.md",
+      ".spec-lite/features/FEAT-019-human_in_the_loop/spec.md",
+      "ec-lite/features/feature_human_in_the_loop.md",
+      ".spec-lite/features/FEAT-020-discovery_mode/spec.md",
+      "ec-lite/features/feature_discovery_mode.md",
+      ".spec-lite/features/FEAT-021-scheduling_runner/spec.md",
+      "ec-lite/features/feature_scheduling_runner.md",
+      ".spec-lite/features/FEAT-022-agent_provider_foundation/spec.md",
+      "ec-lite/features/feature_agent_provider_foundation.md",
+      ".spec-lite/features/FEAT-023-agent_run_persistence/spec.md",
+      "ec-lite/features/feature_agent_run_persistence.md",
+      ".spec-lite/features/FEAT-024-agent_web_tools/spec.md",
+      "ec-lite/features/feature_agent_web_tools.md",
+      ".spec-lite/features/FEAT-025-agent_browser_tools/spec.md",
+      "ec-lite/features/feature_agent_browser_tools.md",
+      ".spec-lite/features/FEAT-026-agentic_task_orchestrator/spec.md",
+      "ec-lite/features/feature_agentic_task_orchestrator.md",
+      ".spec-lite/features/FEAT-027-agent_workflow_bridge/spec.md",
+      "ec-lite/features/feature_agent_workflow_bridge.md",
+      ".spec-lite/features/FEAT-028-agentic_ask_research/spec.md",
+      "ec-lite/features/feature_agentic_ask_research.md",
+      ".spec-lite/features/FEAT-029-agentic_cleanup_release/spec.md",
+      "ec-lite/features/feature_agentic_cleanup_release.md",
+      ".spec-lite/features/feature_browser_fill_engine.md",
+      ".spec-lite/memory.md",
+      ".spec-lite/plan.md",
+      ".spec-lite/plan_agentic.md",
+      ".spec-lite/plan_v2.md",
+      "e2e/fixtures/site/bot-wall.html",
+      "e2e/fixtures/site/form.html",
+      "e2e/fixtures/site/hostile.html",
+      "e2e/fixtures/site/popup.html",
+      "package.json",
+      "packages/agent/src/adapters/pi/tools/workflow-run.ts",
+      "packages/agent/src/index.ts",
+      "packages/agent/tests/adapters/pi/tools/script-run.spec.ts",
+      "packages/agent/tests/boundaries/forbidden.spec.ts",
+      "packages/agent/tests/boundaries/forbidden.ts",
+      "packages/agent/tests/index.spec.ts",
+      "packages/agent/tests/provider/fake-provider.ts",
+      "packages/core/src/scripts/definitions.ts",
+      "packages/core/src/scripts/registry.ts",
+      "packages/core/src/workflow/recorder/session.ts",
+      "packages/core/tests/fixtures/expedia-date-popover.html",
+      "packages/core/tests/fixtures/google-travel-date-popover.html",
+      "packages/core/tests/scripts/registry.spec.ts",
+      "packages/core/tests/workflow/catalog.spec.ts",
+      "packages/protocol/src/index.ts",
+      ".spec-lite/features/FEAT-030-resilient_browser_interaction/spec.md",
+      ".spec-lite/hooks.json"
+    ],
+    "dirtyBlobHashes": {
+      ".gitignore": "c5a4757a2bb3e5c34b4652cc91745cfe64acf50a",
+      ".spec-lite.json": "4a5474abf69c88a0a99837a13176cafa15a7e5ef",
+      ".spec-lite/feature-summary.md": "cbd2a4faa59c2557f5fd61e68d1612aea04a129f",
+      ".spec-lite/features/FEAT-001-monorepo_scaffold/spec.md": "73c954addbbc3e8a38d8aa9b3f9c6663e2c44d1c",
+      "ec-lite/features/feature_monorepo_scaffold.md": null,
+      ".spec-lite/features/FEAT-003-chrome_launcher/spec.md": "dbfeafd8a1abe390afd99a8f6476b9e928b82ade",
+      "ec-lite/features/feature_chrome_launcher.md": null,
+      ".spec-lite/features/FEAT-004-locator_engine/spec.md": "43d35d77d5eb7b3ee5318ede01b9e2de3931503d",
+      "ec-lite/features/feature_locator_engine.md": null,
+      ".spec-lite/features/FEAT-006-security_envelope/spec.md": "da53767502421c5d062833ed9a90efd8b73f1c89",
+      "ec-lite/features/feature_security_envelope.md": null,
+      ".spec-lite/features/FEAT-007-ask_pipeline/spec.md": "4db4b42d235e13badd4a4c78c8db0c2824b9d368",
+      "ec-lite/features/feature_ask_pipeline.md": null,
+      ".spec-lite/features/FEAT-009-annotate_and_yaml/spec.md": "e9f9e575c1cf93951363c60e1f69748c31dc2780",
+      "ec-lite/features/feature_annotate_and_yaml.md": null,
+      ".spec-lite/features/FEAT-010-workflow_replay/spec.md": "10423e7121e0498140faeb497125ed2ccb2e7c09",
+      "ec-lite/features/feature_workflow_replay.md": null,
+      ".spec-lite/features/FEAT-012-cli_polish_distribution/spec.md": "c9b49f4f4d9b91ed6ed90c92ab9c3cd86f3a73b9",
+      "ec-lite/features/feature_cli_polish_distribution.md": null,
+      ".spec-lite/features/FEAT-013-brief_protocol/spec.md": "a92d1bec9fe74ab294b691b0ed288a40932ef819",
+      "ec-lite/features/feature_brief_protocol.md": null,
+      ".spec-lite/features/FEAT-014-synthesis_engine/spec.md": "184caa49b12cd2f41500ecede85fb17312f7b764",
+      "ec-lite/features/feature_synthesis_engine.md": null,
+      ".spec-lite/features/FEAT-015-rich_renderer/spec.md": "1c5b79306c8a9dd2335c21d43696ed8897ff788b",
+      "ec-lite/features/feature_rich_renderer.md": null,
+      ".spec-lite/features/FEAT-016-search_registry/spec.md": "fc1cda7a21e7e3e09ef7967870bb77d80c7dc7c2",
+      "ec-lite/features/feature_search_registry.md": null,
+      ".spec-lite/features/FEAT-017-deep_research/spec.md": "87a3ba662b9782010ce3f0e9bea6c01e5e0de665",
+      "ec-lite/features/feature_deep_research.md": null,
+      ".spec-lite/features/FEAT-018-profiles_and_history/spec.md": "07b4fc1f97fd90794dea731e14a138005f229114",
+      "ec-lite/features/feature_profiles_and_history.md": null,
+      ".spec-lite/features/FEAT-019-human_in_the_loop/spec.md": "a9cbe9d607f3a20e190c8dab9925c14ea03a856d",
+      "ec-lite/features/feature_human_in_the_loop.md": null,
+      ".spec-lite/features/FEAT-020-discovery_mode/spec.md": "8b6a161e37be26a0ad139745fe0d61d5043d749d",
+      "ec-lite/features/feature_discovery_mode.md": null,
+      ".spec-lite/features/FEAT-021-scheduling_runner/spec.md": "6a14c1d7155ef265d572a793fb219805c0aac1bf",
+      "ec-lite/features/feature_scheduling_runner.md": null,
+      ".spec-lite/features/FEAT-022-agent_provider_foundation/spec.md": "cac585ebdc7cf863c8ceb7bcb26a6d314582fc34",
+      "ec-lite/features/feature_agent_provider_foundation.md": null,
+      ".spec-lite/features/FEAT-023-agent_run_persistence/spec.md": "90b14774773ad9a38919f1e6cf3ac2a461df8c45",
+      "ec-lite/features/feature_agent_run_persistence.md": null,
+      ".spec-lite/features/FEAT-024-agent_web_tools/spec.md": "724c79913539374c2b8eeaba0f9e84c873c14b34",
+      "ec-lite/features/feature_agent_web_tools.md": null,
+      ".spec-lite/features/FEAT-025-agent_browser_tools/spec.md": "754ada8aba5df41763d63a1d096b1e141d59a94f",
+      "ec-lite/features/feature_agent_browser_tools.md": null,
+      ".spec-lite/features/FEAT-026-agentic_task_orchestrator/spec.md": "6c1d153d9fc2e7207e2c8aceb04a0e982e0d78da",
+      "ec-lite/features/feature_agentic_task_orchestrator.md": null,
+      ".spec-lite/features/FEAT-027-agent_workflow_bridge/spec.md": "d084d441bf36abee694d00f78365ca36863c03fb",
+      "ec-lite/features/feature_agent_workflow_bridge.md": null,
+      ".spec-lite/features/FEAT-028-agentic_ask_research/spec.md": "5fd84dbaa983f5e23e0d99c93b6397084d5a5f52",
+      "ec-lite/features/feature_agentic_ask_research.md": null,
+      ".spec-lite/features/FEAT-029-agentic_cleanup_release/spec.md": "84459624d93f6805bc20dcfd72d4606075a2bbff",
+      "ec-lite/features/feature_agentic_cleanup_release.md": null,
+      ".spec-lite/features/feature_browser_fill_engine.md": "533c1b3003577b84629073c700222c71b2edbe95",
+      ".spec-lite/memory.md": "84cbc5512618b8a62ab480cd8a23a1d19d1c511c",
+      ".spec-lite/plan.md": "a5a740da380b8608611823d401b00368911cb87e",
+      ".spec-lite/plan_agentic.md": "0543a726503124383169761f4097aa316c8da6f4",
+      ".spec-lite/plan_v2.md": "0bbd43c83cb393f892b5016ef648237c67f974e4",
+      "e2e/fixtures/site/bot-wall.html": "594b596cdb742ca6b0ef06dbb727569f66df004a",
+      "e2e/fixtures/site/form.html": "19df4ca67143f45bec0f955f92c5b6406f080ae7",
+      "e2e/fixtures/site/hostile.html": "c7503092082ae10951379f05b8be978192a4271b",
+      "e2e/fixtures/site/popup.html": "635428283ceefa60d3a97173116ce4924b485165",
+      "package.json": "7685d3db2ad46433bc030d35ed15806445092297",
+      "packages/agent/src/adapters/pi/tools/workflow-run.ts": "55d6b1ff04b974400d3c7887948c16377a804bec",
+      "packages/agent/src/index.ts": "6b892d50ef5259b0ab810beebb8124702a0d93be",
+      "packages/agent/tests/adapters/pi/tools/script-run.spec.ts": "95de25f0a164e9f02476bd8a10849a3c7de5b8e4",
+      "packages/agent/tests/boundaries/forbidden.spec.ts": "cb03c529ae4a53773918f4746bfeaa84c1c73558",
+      "packages/agent/tests/boundaries/forbidden.ts": "e74137fc2261ac3398f81b23c1b68260bc633453",
+      "packages/agent/tests/index.spec.ts": "bc1f257f02749173f12c0184625df72999de049c",
+      "packages/agent/tests/provider/fake-provider.ts": "0737416118d5fce58b022b3b430c386df1e7d150",
+      "packages/core/src/scripts/definitions.ts": "d7bd50b39627d46167ba41ea4c5044f391e1b3ae",
+      "packages/core/src/scripts/registry.ts": "66b854dde0ec9fcfbc0231ab5768374ff456ddf6",
+      "packages/core/src/workflow/recorder/session.ts": "67a22a59b216bf5ea8902b95692c30e691b60b41",
+      "packages/core/tests/fixtures/expedia-date-popover.html": "fc99cfc83a2b79f7f8d9e298c13004d652391c5b",
+      "packages/core/tests/fixtures/google-travel-date-popover.html": "069e70d283d77d048d161f950847e011166523f3",
+      "packages/core/tests/scripts/registry.spec.ts": "c3c1c3ae8ba0e789cdb8806ae659b6cdbd54f04f",
+      "packages/core/tests/workflow/catalog.spec.ts": "5cb54b318e37349261fdab54860fcace3d27ba4b",
+      "packages/protocol/src/index.ts": "6906c37eeedfc35f50f7b9a610b0b541298fd367",
+      ".spec-lite/features/FEAT-030-resilient_browser_interaction/spec.md": "ad68c76e3899a0cc3d793368f82344572acfa2e6",
+      ".spec-lite/hooks.json": "8d642588e765736b23ed99bcc2107f7b7cd94a80"
+    }
+  },
+  "featureId": "FEAT-030"
+}

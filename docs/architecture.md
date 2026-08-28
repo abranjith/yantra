@@ -298,6 +298,17 @@ ephemeral browser profiles are cleaned up on close or crash.
 - **Layered dependency direction.** Core cannot import agent, and provider SDK types cannot cross
   the agent provider seam. The adapter confinement makes provider-specific change local and keeps
   deterministic execution independent of model availability.
+- **No website-specific automation logic, enforced rather than trusted.** There are millions of
+  websites; a browser tool that works only because someone hand-tuned it for the top ten has
+  failed at its job. No branch, heuristic, selector table, wait tuning, or driver hint may key off
+  a particular site, brand, or host — everything works from generic structural signals: ARIA
+  roles, accessible names, widget shape, observed DOM state. An ESLint `no-restricted-syntax` rule
+  over `packages/*/src` and `apps/*/src` rejects site names appearing in any value the code can
+  evaluate, with a fixture in `packages/core/src/_lint-fixtures/` and assertions in
+  `packages/core/tests/boundary-rules.spec.ts`. Because the rule matches AST nodes, a site named
+  in an explanatory _comment_ stays legal, and that distinction is deliberate: naming the site
+  that demonstrated a general defect is useful evidence, while branching on one is a bug whose
+  correct fix is always a more general pattern.
 - **Deterministic selection before provider construction.** No-LLM `ask`/`research`, nested
   workflow calls, and scheduled runs do not silently open model sessions. Saved replay has a fixed
   plan before any optional post-run synthesis.

@@ -19,7 +19,12 @@ const tableNormalize: ScriptDefinition<{ text: string; delimiter: string; hasHea
   argsSchema: z
     .object({
       text: z.string().min(1).max(200_000).describe('The delimited text to normalize.'),
-      delimiter: z.string().min(1).max(4).default(',').describe('Field delimiter (e.g. "," or "\\t").'),
+      delimiter: z
+        .string()
+        .min(1)
+        .max(4)
+        .default(',')
+        .describe('Field delimiter (e.g. "," or "\\t").'),
       hasHeader: z.boolean().default(true).describe('Treat the first row as a header row.'),
     })
     .strict(),

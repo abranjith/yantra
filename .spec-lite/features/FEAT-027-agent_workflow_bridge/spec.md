@@ -66,7 +66,7 @@ No new storage formats; reuses workflow YAML, run dirs, and the candidate-chain 
 
 ### TASK-003: Agent trace recording during browser tool use
 
-- [x] **Implementation**: `runtime/trace.ts` — run-scoped accumulator; FEAT-025 browser tools append an AgentTraceStep on each *successful* navigate/click/fill/extract, capturing the resolved element's candidate-chain locator from the observation's internal record (never the opaque ref), literal values or `SecretRef` **references** for fills, and the confirmation classification. Trace lives in memory + is written to `runs/<id>/trace.json` at finalize (sanitized; secret references only).
+- [x] **Implementation**: `runtime/trace.ts` — run-scoped accumulator; FEAT-025 browser tools append an AgentTraceStep on each _successful_ navigate/click/fill/extract, capturing the resolved element's candidate-chain locator from the observation's internal record (never the opaque ref), literal values or `SecretRef` **references** for fills, and the confirmation classification. Trace lives in memory + is written to `runs/<id>/trace.json` at finalize (sanitized; secret references only).
 - [x] **Unit Tests**: trace ordering matches execution; failed/denied actions excluded; fill via secret records the reference not the value (canary); candidate chains present for every interactive step; `trace.json` validates against schema.
 - [x] **Documentation Update**: run-artifacts docs: `trace.json`.
 - **Verify**: Fixture run (fake agent) produces a trace whose steps replay the same interactions when converted (spot-checked in TASK-004).
@@ -81,7 +81,7 @@ No new storage formats; reuses workflow YAML, run dirs, and the candidate-chain 
 
 ### TASK-005: e2e — bridge round-trips
 
-- [x] **Implementation**: `e2e/agent-workflow-bridge.spec.ts` on the FEAT-025 fixture site: (1) *promotion round-trip* (plan §11 browser case 8): fake-agent run performs navigate→fill→click→extract, `--save-as` produces a workflow, `yantra run <name>` replays it green with `LLM_PROVIDER=none`; (2) *invocation path*: an agent run (fake provider scripting `workflow_run`) lists the catalog, runs the saved workflow, and the nested run replays without any LLM call (assert zero agent-session events in the nested run dir); (3) audit joins parent↔nested runs.
+- [x] **Implementation**: `e2e/agent-workflow-bridge.spec.ts` on the FEAT-025 fixture site: (1) _promotion round-trip_ (plan §11 browser case 8): fake-agent run performs navigate→fill→click→extract, `--save-as` produces a workflow, `yantra run <name>` replays it green with `LLM_PROVIDER=none`; (2) _invocation path_: an agent run (fake provider scripting `workflow_run`) lists the catalog, runs the saved workflow, and the nested run replays without any LLM call (assert zero agent-session events in the nested run dir); (3) audit joins parent↔nested runs.
 - [x] **Unit Tests**: N/A (e2e task).
 - [x] **Documentation Update**: release-gate checklist entries (plan §11 end-to-end scenarios 4 and the workflow-choice scenario).
 - **Verify**: Suite green on CI matrix including Windows; `LLM_PROVIDER=none` leg proves LLM-free replay.
@@ -89,7 +89,7 @@ No new storage formats; reuses workflow YAML, run dirs, and the candidate-chain 
 
 ## 6. Cross-Cutting Concerns
 
-- **Auth**: nested workflow runs resolve their own secrets inside the executor (existing `with-secret` boundary); the agent sees `SecretRef` names in *workflow YAML params it authored* but never values; catalog hides even the names of secrets used internally by existing workflows.
+- **Auth**: nested workflow runs resolve their own secrets inside the executor (existing `with-secret` boundary); the agent sees `SecretRef` names in _workflow YAML params it authored_ but never values; catalog hides even the names of secrets used internally by existing workflows.
 - **Error Handling**: nested run failures are expected structured tool results; promotion failures are reported but never fail the parent run; existing exit-code conventions unchanged.
 - **Logging**: nested runs log to their own run dirs (existing behavior); parent records the join key in audit.
 - **Security**: plan §8 items inherited via middleware; the specific guarantee here is the two-way secret firewall (catalog projection + nested-run isolation) and that replay stays deterministic/LLM-free (locked decision §14.8).

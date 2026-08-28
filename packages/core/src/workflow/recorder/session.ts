@@ -141,7 +141,7 @@ export class RecordingSession {
   // Metadata fields
   private chromeVersion = 'unknown';
   private chromeMajor = 0;
-  private yantraVersion = '0.0.0';
+  private yantraVersion = '0.0.1';
 
   // Handle internals
   private eventEmitter = new EventEmitter();
@@ -187,7 +187,7 @@ export class RecordingSession {
       const pkgJson = JSON.parse(
         await readFile(join(__dirname, '..', '..', '..', '..', 'package.json'), 'utf8'),
       ) as { version?: string };
-      this.yantraVersion = pkgJson.version ?? '0.0.0';
+      this.yantraVersion = pkgJson.version ?? '0.0.1';
     } catch {
       // Non-fatal
     }

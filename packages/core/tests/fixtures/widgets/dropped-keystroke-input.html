@@ -1,0 +1,19 @@
+<!--
+  Shape: an input that swallows its first keystroke on the first render pass.
+
+  Observed in run 20260827T045106Z-do-9a58de7e (assistant turn 3): "DFW" was
+  typed into an origin field and the page showed "FW", whose autocomplete then
+  offered an unrelated city. Nothing verified that the characters had landed.
+-->
+<input id="q" aria-label="Where from?" />
+<script>
+  (function () {
+    var input = document.getElementById('q');
+    var swallowed = false;
+    input.addEventListener('input', function () {
+      if (swallowed) return;
+      swallowed = true;
+      input.value = input.value.slice(1);
+    });
+  })();
+</script>

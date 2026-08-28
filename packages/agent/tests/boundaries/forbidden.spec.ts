@@ -7,7 +7,13 @@ import { describe, expect, it } from 'vitest';
 import { forbiddenAgentSymbols, forbiddenPaths } from './forbidden.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const skippedDirectories = new Set(['node_modules', 'dist', '.turbo', 'coverage', '_lint-fixtures']);
+const skippedDirectories = new Set([
+  'node_modules',
+  'dist',
+  '.turbo',
+  'coverage',
+  '_lint-fixtures',
+]);
 
 function collectSourceFiles(root: string, files: string[] = []): string[] {
   for (const entry of readdirSync(root, { withFileTypes: true })) {

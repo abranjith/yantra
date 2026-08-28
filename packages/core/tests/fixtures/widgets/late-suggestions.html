@@ -1,0 +1,38 @@
+<!--
+  Shape: a remote autocomplete whose list appears well after typing stops.
+
+  The old fixed 1.5s reaction wait read an empty popup and moved on, so a
+  suggestion that arrived later was never seen at all.
+-->
+<input
+  id="q"
+  aria-label="Going to"
+  aria-autocomplete="list"
+  aria-controls="opts"
+  aria-expanded="false"
+/>
+<div id="opts" role="listbox" style="display: none"></div>
+<script>
+  (function () {
+    var input = document.getElementById('q');
+    var popup = document.getElementById('opts');
+    var started = false;
+    input.addEventListener('input', function () {
+      popup.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
+      if (started) return;
+      started = true;
+      setTimeout(function () {
+        popup.innerHTML = '<button role="option">Reykjavik, Iceland</button>';
+        popup.querySelector('button').addEventListener('click', function () {
+          input.value = 'Reykjavik, Iceland';
+          popup.style.display = 'none';
+          input.setAttribute('aria-expanded', 'false');
+        });
+      }, 2500);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') popup.style.display = 'none';
+    });
+  })();
+</script>

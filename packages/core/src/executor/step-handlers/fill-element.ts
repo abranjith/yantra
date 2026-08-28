@@ -7,12 +7,16 @@ import {
   type AgentInteractable,
 } from '../../browser/agent-controller.js';
 import { fillField, fillSecretField, parseFillValue, type FillFailure } from '../../fill/index.js';
+import { resolveInteractable } from '../../interaction/index.js';
 import { defaultWidgetBudget, type WidgetPort, type WidgetTarget } from '../../widgets/types.js';
 import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
 
 import { resolveLocatorChain } from './locator-helpers.js';
 import { CLICK_NAV_DETECT_MS, FILL_NAV_DETECT_MS, withPageSettling } from './settle-helpers.js';
+
+/** The platform's select-all chord; mirrors the agent controller's choice. */
+const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 const INTERACTABLE_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
@@ -198,20 +202,12 @@ type FieldResolution =
   | { readonly kind: 'ambiguous'; readonly offered: readonly string[] }
   | { readonly kind: 'none' };
 
+/** Replay resolves fields through the same shared resolver as the live tools. */
 function resolveField(field: string, interactables: readonly AgentInteractable[]): FieldResolution {
-  const wanted = normalize(field);
-  const named = interactables.filter((entry) => entry.name.trim().length > 0);
-  const tiers = [
-    named.filter((entry) => normalize(entry.name) === wanted),
-    named.filter((entry) => normalize(entry.name).startsWith(wanted)),
-    named.filter((entry) => normalize(entry.name).includes(wanted)),
-  ];
-  const winner = tiers.find((tier) => tier.length > 0);
-  if (!winner) return { kind: 'none' };
-  if (winner.length > 1) {
-    return { kind: 'ambiguous', offered: winner.slice(0, 10).map((entry) => entry.name) };
-  }
-  return { kind: 'match', target: winner[0]! };
+  const resolved = resolveInteractable(field, interactables);
+  if (resolved.kind === 'match') return { kind: 'match', target: resolved.entry };
+  if (resolved.kind === 'none') return { kind: 'none' };
+  return { kind: 'ambiguous', offered: resolved.offered.slice(0, 10).map((entry) => entry.name) };
 }
 
 function toTarget(entry: AgentInteractable): WidgetTarget {
@@ -222,14 +218,6 @@ function toTarget(entry: AgentInteractable): WidgetTarget {
     group: entry.group ?? null,
     value: entry.value ?? null,
   };
-}
-
-function normalize(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 class ReplayWidgetPort implements WidgetPort {
@@ -322,6 +310,29 @@ class ReplayWidgetPort implements WidgetPort {
       await handle.focus();
       await handle.click({ clickCount: 3 });
       await handle.type(value);
+    });
+  }
+
+  public async clear(ref: string): Promise<void> {
+    const handle = this.handle(ref);
+    await withPageSettling(this.ctx, FILL_NAV_DETECT_MS, async () => {
+      await handle.focus();
+      await this.page.keyboard.down(SELECT_ALL_MODIFIER);
+      await this.page.keyboard.press('a');
+      await this.page.keyboard.up(SELECT_ALL_MODIFIER);
+      await this.page.keyboard.press('Backspace');
+    });
+  }
+
+  public async type(
+    ref: string,
+    text: string,
+    options: { readonly delayMs?: number } = {},
+  ): Promise<void> {
+    const handle = this.handle(ref);
+    await withPageSettling(this.ctx, FILL_NAV_DETECT_MS, async () => {
+      await handle.focus();
+      await handle.type(text, { delay: options.delayMs ?? 0 });
     });
   }
 

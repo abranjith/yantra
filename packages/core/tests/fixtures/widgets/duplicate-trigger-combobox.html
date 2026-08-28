@@ -1,0 +1,35 @@
+<!--
+  Shape: opening the picker mounts a second control carrying the same
+  accessible name and role as the page's own field.
+
+  Observed in run 20260827T045106Z-do-9a58de7e (seq 22): "Where to?" matched
+  two interactables and the resolver refused rather than recognising them as
+  copies of one control.
+-->
+<input
+  id="page-field"
+  role="combobox"
+  aria-label="Where to?"
+  aria-controls="opts"
+  aria-expanded="true"
+/>
+<div id="overlay">
+  <input id="overlay-field" role="combobox" aria-label="Where to?" />
+  <div id="opts" role="listbox">
+    <button role="option">San Jose, CA, United States</button>
+  </div>
+</div>
+<script>
+  (function () {
+    var page = document.getElementById('page-field');
+    var popup = document.getElementById('opts');
+    popup.querySelector('button').addEventListener('click', function () {
+      page.value = 'San Jose, CA, United States';
+      popup.style.display = 'none';
+      page.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') popup.style.display = 'none';
+    });
+  })();
+</script>

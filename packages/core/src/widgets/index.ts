@@ -5,7 +5,6 @@ export * from './tagging.js';
 export * from './option/candidates.js';
 export * from './option/native-select-driver.js';
 export * from './option/listbox-driver.js';
-export * from './option/typeahead-driver.js';
 export * from './date/calendar-grid.js';
 export * from './date/calendar-driver.js';
 export * from './date/date-input-driver.js';

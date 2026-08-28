@@ -1,6 +1,6 @@
 import { openIfClosed, resolveContainer } from '../open-state.js';
 import { widgetFailure, type WidgetDriver, type WidgetOutcome } from '../types.js';
-import { matchesIntent, readCommitted } from '../verify.js';
+import { matchesCommitment, matchesIntent, readCommitted } from '../verify.js';
 
 import { clickCandidate, collectCandidates, rankCandidate } from './candidates.js';
 
@@ -60,16 +60,31 @@ export const listboxDriver: WidgetDriver = {
         { offered: ranked.offered },
       );
     }
+    const offered = candidates
+      .filter((candidate) => !candidate.disabled)
+      .slice(0, 10)
+      .map((candidate) => candidate.name);
     await clickCandidate(port, ranked.candidate);
     actions += 1;
     const committed = await readCommitted(port, target);
-    if (!matchesIntent(committed, intent)) {
+    // Verified against the option that was clicked, not against the text used
+    // to find it: a list asked for a code and offering a name has answered the
+    // request, and checking the typed text instead calls that a failure.
+    if (!matchesCommitment(committed, ranked.candidate.name) && !matchesIntent(committed, intent)) {
       return widgetFailure(
         'WIDGET_NOT_COMMITTED',
-        `The choice was clicked, but "${target.name}" did not commit it.`,
-        { committed },
+        `The choice "${ranked.candidate.name}" was clicked, but "${target.name}" did not commit it.`,
+        { committed, offered, chosen: ranked.candidate.name },
       );
     }
-    return { ok: true, driver: 'listbox', committed, actions, container: opened.container };
+    return {
+      ok: true,
+      driver: 'listbox',
+      committed,
+      actions,
+      container: opened.container,
+      chosen: ranked.candidate.name,
+      offered,
+    };
   },
 };

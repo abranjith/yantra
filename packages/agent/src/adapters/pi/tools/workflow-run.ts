@@ -38,11 +38,9 @@ const WorkflowRunParams = Type.Object(
       }),
     ),
     params: Type.Optional(
-      Type.Record(
-        Type.String(),
-        Type.Union([Type.String(), Type.Number(), Type.Boolean()]),
-        { description: 'Declared workflow parameters by name (run mode only).' },
-      ),
+      Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]), {
+        description: 'Declared workflow parameters by name (run mode only).',
+      }),
     ),
   },
   { additionalProperties: false },
@@ -57,8 +55,7 @@ export function workflowRunSpec(services: RunServices): ToolWrapperSpec<typeof W
     description:
       services.workflowToolMode === 'list'
         ? 'Discover saved deterministic Yantra workflows with mode:list. This command may NOT run workflows; use the catalog only to identify a suitable saved automation. Do NOT use it to see workflow secrets or internal locators.'
-        :
-      'Discover (mode:list) and run (mode:run) a saved, deterministic Yantra workflow. Prefer a saved workflow over ad-hoc browsing when one matches the goal — it replays reliably with no model involvement. Do NOT use it to see workflow secrets or internal locators, and do NOT pass secret values as params.',
+        : 'Discover (mode:list) and run (mode:run) a saved, deterministic Yantra workflow. Prefer a saved workflow over ad-hoc browsing when one matches the goal — it replays reliably with no model involvement. Do NOT use it to see workflow secrets or internal locators, and do NOT pass secret values as params.',
     parameters: WorkflowRunParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -208,7 +205,10 @@ function validateParams(
 }
 
 /** True when a supplied JS value matches a declared scalar param type. */
-function typeMatches(type: WorkflowCatalogEntry['params'][number]['type'], value: unknown): boolean {
+function typeMatches(
+  type: WorkflowCatalogEntry['params'][number]['type'],
+  value: unknown,
+): boolean {
   switch (type) {
     case 'number':
       return typeof value === 'number';

@@ -5,7 +5,11 @@ import { AgentAuthUnavailableError, exitCodeForAgenticOutcome } from '../src/ind
 
 describe('@yantra/agent barrel exports', () => {
   it('exports typed startup errors', () => {
-    const error = new AgentAuthUnavailableError('anthropic', 'environment', 'Set ANTHROPIC_API_KEY.');
+    const error = new AgentAuthUnavailableError(
+      'anthropic',
+      'environment',
+      'Set ANTHROPIC_API_KEY.',
+    );
     expect(error.toAgentError().code).toBe('AGENT_AUTH_UNAVAILABLE');
   });
 

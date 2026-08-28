@@ -1,0 +1,41 @@
+<!--
+  Shape: two suggestions match the typed text equally well.
+
+  The engine used to press Escape and report plain-text success with the raw
+  typed text still in the box, which the site discards on submit — a form that
+  looked filled and was not.
+-->
+<input
+  id="q"
+  aria-label="Going to"
+  aria-autocomplete="list"
+  aria-controls="opts"
+  aria-expanded="false"
+/>
+<div id="opts" role="listbox" style="display: none">
+  <button role="option">San Jose, CA, United States</button>
+  <button role="option">San Jose, Costa Rica</button>
+</div>
+<script>
+  (function () {
+    var input = document.getElementById('q');
+    var popup = document.getElementById('opts');
+    input.addEventListener('input', function () {
+      popup.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
+    });
+    Array.prototype.forEach.call(popup.querySelectorAll('button'), function (option) {
+      option.addEventListener('click', function () {
+        input.value = option.textContent;
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+      });
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+</script>

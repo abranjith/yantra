@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hooks": [
+    {
+      "name": "format-after-implement",
+      "description": "Run the formatter after implementation; block on failure.",
+      "events": ["implement.post"],
+      "type": "command",
+      "run": "npm run format",
+      "onFailure": "abort",
+      "timeoutMs": 120000
+    }
+  ]
+}

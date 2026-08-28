@@ -10,7 +10,7 @@ import {
 import { STEP_DISPATCH } from '../../src/executor/step-handlers/index.js';
 import { realClock, type ExecutionContext } from '../../src/executor/types.js';
 import type { WidgetTarget } from '../../src/widgets/types.js';
-import { CalendarTestPort } from '../widgets/calendar-test-port.js';
+import { WidgetTestPort } from '../support/widget-test-port.js';
 
 describe('@no-llm fill_element replay handler', () => {
   it('is registered in the executor dispatch table', () => {
@@ -18,7 +18,7 @@ describe('@no-llm fill_element replay handler', () => {
   });
 
   it('resolves embedded params and returns the verified committed range', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<input id="from" aria-label="Check-in" placeholder="MM/DD/YYYY">' +
         '<input id="to" aria-label="Check-out" placeholder="MM/DD/YYYY">',
     );
@@ -47,9 +47,7 @@ describe('@no-llm fill_element replay handler', () => {
   });
 
   it('resolves a secret only at the handler boundary and omits it from the report', async () => {
-    const port = new CalendarTestPort(
-      '<input id="password" type="password" aria-label="Password">',
-    );
+    const port = new WidgetTestPort('<input id="password" type="password" aria-label="Password">');
     const resolve = vi.fn().mockResolvedValue('CANARY-super-secret');
     const result = await driveFillElement(
       fillStep({ kind: 'secret', key: 'site.password' }),
@@ -67,7 +65,7 @@ describe('@no-llm fill_element replay handler', () => {
   });
 
   it('surfaces typed engine failures without an LLM fallback', async () => {
-    const port = new CalendarTestPort('<button id="action" aria-label="Action">Action</button>');
+    const port = new WidgetTestPort('<button id="action" aria-label="Action">Action</button>');
     const result = await driveFillElement(
       fillStep({ kind: 'literal', value: 'text' }),
       context(),
@@ -83,7 +81,7 @@ describe('@no-llm fill_element replay handler', () => {
   });
 
   it('returns a bounded retry for retryable widget state', async () => {
-    const port = new CalendarTestPort('<button id="action" aria-label="Action">Action</button>');
+    const port = new WidgetTestPort('<button id="action" aria-label="Action">Action</button>');
     const result = await driveFillElement(
       fillStep({ kind: 'literal', value: 'text' }),
       context({ canRetry: true }),
@@ -114,7 +112,7 @@ function fillStep(value: FillElementStep['value']): FillElementStep {
 }
 
 function target(
-  port: CalendarTestPort,
+  port: WidgetTestPort,
   selector: string,
   name: string,
   role = 'textbox',

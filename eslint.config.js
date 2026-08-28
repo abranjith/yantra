@@ -12,6 +12,20 @@ const PI_AGENT_CORE_BOUNDARY_MESSAGE =
 const PI_SDK_BOUNDARY_MESSAGE =
   '@earendil-works/pi-coding-agent may only be imported under packages/agent/src/adapters/pi/ (plan_agentic.md §3). Use the AgentProvider seam.';
 
+/**
+ * Site names that must never appear in a value the code can evaluate.
+ *
+ * Not exhaustive, and not meant to be: it is a tripwire for the habit, not a
+ * blocklist of the web. Extend it whenever a review catches a new one.
+ */
+const SITE_TOKEN_SOURCE =
+  'expedia|kayak|priceline|orbitz|skyscanner|booking\.com|trip\.com|google flights|google travel';
+const SITE_SPECIFIC_LOGIC_MESSAGE =
+  'Website-specific logic is forbidden: automation must work from generic structural signals ' +
+  '(ARIA roles, accessible names, widget shape, observed DOM state), never from a named site. ' +
+  'A site name may appear in a comment as evidence for a general rule, never in a value the ' +
+  'code evaluates. See .spec-lite/memory.md -> General.';
+
 export default tseslint.config(
   {
     ignores: [
@@ -157,6 +171,34 @@ export default tseslint.config(
               message: PI_SDK_BOUNDARY_MESSAGE,
             },
           ],
+        },
+      ],
+    },
+  },
+
+  // Standing rule: browser automation must never branch on a particular site.
+  //
+  // There are millions of websites; a tool that works only because someone
+  // hand-tuned it for the top ten has failed at its job. Everything must work
+  // from generic structural signals — ARIA roles, accessible names, widget
+  // shape, observed DOM state.
+  //
+  // The selectors match AST nodes, so a site named in an explanatory comment
+  // stays legal, and that is deliberate: naming the site that *demonstrated* a
+  // general defect is valuable evidence. What is forbidden is a site name the
+  // code can evaluate — a literal, a template chunk, a lookup key.
+  {
+    files: ['packages/*/src/**/*.ts', 'apps/*/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `Literal[value=/${SITE_TOKEN_SOURCE}/i]`,
+          message: SITE_SPECIFIC_LOGIC_MESSAGE,
+        },
+        {
+          selector: `TemplateElement[value.raw=/${SITE_TOKEN_SOURCE}/i]`,
+          message: SITE_SPECIFIC_LOGIC_MESSAGE,
         },
       ],
     },

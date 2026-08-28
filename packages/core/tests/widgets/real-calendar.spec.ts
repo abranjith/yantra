@@ -6,8 +6,7 @@ import { calendarDriver } from '../../src/widgets/date/calendar-driver.js';
 import { readCalendarGrid } from '../../src/widgets/date/calendar-grid.js';
 import { isOpen, openIfClosed, resolveContainer } from '../../src/widgets/open-state.js';
 import type { WidgetBudget, WidgetTarget } from '../../src/widgets/types.js';
-
-import { CalendarTestPort } from './calendar-test-port.js';
+import { WidgetTestPort } from '../support/widget-test-port.js';
 
 /**
  * Regression suite for run 20260808T015833Z-do-2f43c685, driven by the verbatim
@@ -36,7 +35,7 @@ const withStuckTrigger = (extra = ''): string =>
 
 describe('@no-llm real calendar capture — grid reading', () => {
   it('reads every day cell from a grid with no caption and no machine-readable dates', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -45,7 +44,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
   });
 
   it('derives each date from the label on the cell’s inert child, not the bare number', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -56,7 +55,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
   });
 
   it('separates the two panels’ identically numbered cells', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -67,7 +66,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
   });
 
   it('marks past days disabled and future days selectable', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -77,7 +76,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
   });
 
   it('labels each panel from the bare <span> month caption', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -90,7 +89,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
   });
 
   it('never marks a label-derived cell unsafe, since no weekday guess was made', async () => {
-    const port = new CalendarTestPort(popover);
+    const port = new WidgetTestPort(popover);
 
     const read = await readCalendarGrid(port);
 
@@ -100,7 +99,7 @@ describe('@no-llm real calendar capture — grid reading', () => {
 
 describe('@no-llm real calendar capture — open state', () => {
   it('finds the open popover even though it has no id for aria-controls', async () => {
-    const port = new CalendarTestPort(withStuckTrigger());
+    const port = new WidgetTestPort(withStuckTrigger());
     const ref = port.refFor('button[aria-label^="Dates"]');
 
     const container = await resolveContainer(port, target(ref), { allowUnlinked: true });
@@ -109,7 +108,7 @@ describe('@no-llm real calendar capture — open state', () => {
   });
 
   it('reports an on-screen popover open despite aria-expanded="false"', async () => {
-    const port = new CalendarTestPort(withStuckTrigger());
+    const port = new WidgetTestPort(withStuckTrigger());
     const ref = port.refFor('button[aria-label^="Dates"]');
     const container = await resolveContainer(port, target(ref), { allowUnlinked: true });
 
@@ -120,7 +119,7 @@ describe('@no-llm real calendar capture — open state', () => {
   // Letting it claim an unrelated open dialog is how a search box gets driven
   // as a calendar, so the loose scan stays off unless a caller opts in.
   it('does not hand an undeclared popover to a caller that did not opt in', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<input aria-label="Search"><button aria-label="Dates, Fri, Aug 21 - Sat, Aug 22">Dates</button>${popover}`,
     );
     const searchRef = port.refFor('input[aria-label="Search"]');
@@ -137,7 +136,7 @@ describe('@no-llm real calendar capture — open state', () => {
   });
 
   it('does not click a widget that is already open', async () => {
-    const port = new CalendarTestPort(withStuckTrigger());
+    const port = new WidgetTestPort(withStuckTrigger());
     const ref = port.refFor('button[aria-label^="Dates"]');
 
     const opened = await openIfClosed(port, target(ref));
@@ -150,7 +149,7 @@ describe('@no-llm real calendar capture — open state', () => {
   it('refuses to guess when a second popover is open and nothing declares the link', async () => {
     // No aria-controls, aria-owns, or aria-haspopup: only the last-resort scan
     // applies, and two candidates must resolve to none rather than a coin flip.
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<div><button aria-label="Dates, Fri, Aug 21 - Sat, Aug 22">Dates</button></div>` +
         `${popover}<div role="listbox"><button>other</button></div>`,
     );
@@ -160,7 +159,7 @@ describe('@no-llm real calendar capture — open state', () => {
   });
 
   it('still resolves the lone popover when the trigger declares nothing', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<div><button aria-label="Dates, Fri, Aug 21 - Sat, Aug 22">Dates</button></div>${popover}`,
     );
     const ref = port.refFor('button[aria-label^="Dates"]');
@@ -178,7 +177,7 @@ const BUDGET: WidgetBudget = {
 };
 
 /** Echo each picked day back onto the trigger, the way the live page does. */
-function installCommit(port: CalendarTestPort): void {
+function installCommit(port: WidgetTestPort): void {
   const trigger = port.document.querySelector<HTMLElement>('button[aria-label^="Dates"]')!;
   const picked: string[] = [];
   for (const cell of port.document.querySelectorAll<HTMLElement>(
@@ -206,7 +205,7 @@ describe('@no-llm real calendar capture — container resolution', () => {
     `aria-controls="date_form_nested_flexible_tab_calendar">Dates</button>${popover}`;
 
   it('skips an empty aria-controls placeholder and finds the real popover', async () => {
-    const port = new CalendarTestPort(withPlaceholderTrigger());
+    const port = new WidgetTestPort(withPlaceholderTrigger());
     const ref = port.refFor('button[aria-label^="Dates"]');
 
     const container = await resolveContainer(port, target(ref), { allowUnlinked: true });
@@ -217,7 +216,7 @@ describe('@no-llm real calendar capture — container resolution', () => {
   });
 
   it('does not call an empty zero-height element an open container', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<button aria-label="Dates" aria-expanded="false" aria-controls="empty">Dates</button>` +
         `<div id="empty"></div>`,
     );
@@ -230,7 +229,7 @@ describe('@no-llm real calendar capture — container resolution', () => {
   it('widens to the document when the resolved container holds no day cells', async () => {
     // A non-empty but wrong container: it survives the placeholder check, so
     // only the driver's own "no cells means wrong scope" retry can save it.
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<button aria-label="Dates, Fri, Aug 21 - Sat, Aug 22" aria-expanded="false" ` +
         `aria-controls="decoy">Dates</button>` +
         `<div id="decoy"><span>Flexible dates</span></div>${popover}`,
@@ -259,7 +258,7 @@ describe('@no-llm real calendar capture — container resolution', () => {
 
 describe('@no-llm real calendar capture — end to end', () => {
   it('picks a September range from the already-open popover in two clicks', async () => {
-    const port = new CalendarTestPort(withStuckTrigger());
+    const port = new WidgetTestPort(withStuckTrigger());
     installCommit(port);
     const ref = port.refFor('button[aria-label^="Dates"]');
 
@@ -285,7 +284,7 @@ describe('@no-llm real calendar capture — end to end', () => {
   });
 
   it('refuses a past date instead of clicking a disabled cell', async () => {
-    const port = new CalendarTestPort(withStuckTrigger());
+    const port = new WidgetTestPort(withStuckTrigger());
     installCommit(port);
     const ref = port.refFor('button[aria-label^="Dates"]');
 

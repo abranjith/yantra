@@ -345,7 +345,61 @@ describe('@no-llm browser_fill_element contract', () => {
 
     // A bare typed code is what pushed the model off these tools and onto raw
     // clicks, so the one actionable sentence has to be where it cannot miss it.
-    expect(result.modelText).toContain('details.offered');
+    // The hint now carries the offered strings themselves rather than pointing
+    // at `details.offered` — the caller can act on the message alone.
+    // modelText is JSON, so the quotes around each option arrive escaped.
+    expect(result.modelText).toContain('New York, NY');
+    expect(result.modelText).toContain('New York, USA');
+    expect(result.modelText).toContain('exactly as written');
+  });
+
+  it('surfaces the resolution when the widget commits a value of its own', async () => {
+    // The motivating run's first failure, at the tool seam: the model must be
+    // able to read "I asked for DFW, the field holds Dallas, that is the widget
+    // resolving my value" without inferring any of it.
+    const controller = new FormController(
+      '<input id="from" role="combobox" aria-label="Where from?" aria-autocomplete="list" ' +
+        'aria-controls="opts" aria-expanded="false">' +
+        '<div id="opts" role="listbox" style="display:none">' +
+        '<button role="option">Dallas Fort Worth International Airport (DFW)</button></div>',
+    );
+    const input = controller.document.querySelector<HTMLInputElement>('#from')!;
+    const popup = controller.document.querySelector<HTMLElement>('#opts')!;
+    input.addEventListener('input', () => {
+      input.setAttribute('aria-expanded', 'true');
+      popup.style.display = 'block';
+    });
+    popup.querySelector('button')!.addEventListener('click', () => {
+      input.value = 'Dallas';
+      input.setAttribute('aria-expanded', 'false');
+      popup.style.display = 'none';
+    });
+
+    const result = await run(controller, { fields: [{ field: 'Where from?', value: 'DFW' }] });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly Record<string, unknown>[];
+    };
+
+    expect(result.status).toBe('ok');
+    expect(model.applied[0]).toMatchObject({
+      field: 'Where from?',
+      requested: 'DFW',
+      committed: 'Dallas',
+      resolution: 'single_offered_match',
+    });
+    expect(String(model.applied[0]?.note)).toContain('not a failure');
+  });
+
+  it('reports a plain unchanged fill as exact and adds no note', async () => {
+    const controller = new FormController('<input id="q" aria-label="Search">');
+
+    const result = await run(controller, { fields: [{ field: 'Search', value: 'boots' }] });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly Record<string, unknown>[];
+    };
+
+    expect(model.applied[0]).toMatchObject({ resolution: 'exact', committed: 'boots' });
+    expect(model.applied[0]).not.toHaveProperty('note');
   });
 
   it('re-resolves the field and drives again when the page replaces the control', async () => {

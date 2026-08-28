@@ -457,6 +457,7 @@ specs/
 .spec-lite/brainstorm*.md
 .spec-lite/browser*.md
 .spec-lite/refs/
+hooks.log.jsonl
 
 # Yantra monorepo
 *.tsbuildinfo

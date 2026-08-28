@@ -96,9 +96,22 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'discarded. Use browser_click only to ' +
       'activate something or submit a completed form, never to operate a field widget by hand: ' +
       'opening a picker yourself and clicking day cells is slower and loses the verification the ' +
-      'fill tools perform. They also recover from the page replacing a control mid-fill, so a ' +
-      'failure means recovery was already tried — read its suggestion and follow that rather ' +
-      'than repeating the identical call. The fill tools ' +
+      'fill tools perform. ' +
+      // How to read what these tools return. Every clause below replaces a
+      // guess the model would otherwise have to make about whether its own
+      // action worked — which is the failure this guidance exists to prevent.
+      'READ THE RESULT BEFORE ACTING AGAIN. A successful fill reports "requested" (what you ' +
+      'sent), "committed" (what the control now holds), and "resolution" (how the two relate). ' +
+      'A "committed" that differs from what you sent is normal and is the widget resolving your ' +
+      'value to something it actually offers — a location field asked for an airport code ' +
+      'commits a city name — so accept it and move on. Never re-fill a field to force your ' +
+      'original wording back into it. A failure carries "observed" (what the control holds right ' +
+      'now, which is often not empty), "attempted" (recovery the tool already performed, such as ' +
+      'several ways of entering the text or several widget drivers), and sometimes "offered" ' +
+      '(what the widget will actually accept). Never repeat anything named in "attempted" — it ' +
+      'has already failed. When "offered" is present, re-issue the same call with one of those ' +
+      'strings exactly as written; that is the fastest path through an ambiguous suggestion ' +
+      'list. The fill tools ' +
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Many sites open their results in a ' +

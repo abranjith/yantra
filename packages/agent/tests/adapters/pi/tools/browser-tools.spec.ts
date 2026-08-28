@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  BrowserActionabilityError,
   EthicsRefusedError,
   StaleElementRefError,
   type AgentBrowserController,
@@ -59,6 +60,110 @@ describe('@no-llm browser tools', () => {
     );
     expect(result.status).toBe('ok');
     expect(result.modelText).toContain('popup_intercepted');
+  });
+
+  describe('click recovery when the page replaces the element', () => {
+    const landed = { url: 'https://example.com/page', title: 'Page' };
+
+    it('re-resolves a ref that went stale and lands the click', async () => {
+      const controller = fakeController();
+      controller.click
+        .mockRejectedValueOnce(new StaleElementRefError('e1'))
+        .mockResolvedValueOnce(landed);
+      controller.observe.mockResolvedValue({
+        url: 'https://example.com/page',
+        title: 'Page',
+        digest: '',
+        digestUnchanged: false,
+        interactables: [{ ref: 'e7', role: 'button', name: 'Continue' }],
+      });
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+      expect(controller.click).toHaveBeenNthCalledWith(2, 'e7');
+      expect(result.modelText).toContain('re-resolved');
+      expect(result.modelText).toContain('re-resolve-ref');
+    });
+
+    it('refuses a same-named replacement that carries a different role', async () => {
+      // Recovering an identity is not choosing a different element. A link
+      // named "Continue" is not the button that vanished.
+      const controller = fakeController();
+      controller.click.mockRejectedValue(new StaleElementRefError('e1'));
+      controller.observe.mockResolvedValue({
+        url: 'https://example.com/page',
+        title: 'Page',
+        digest: '',
+        digestUnchanged: false,
+        interactables: [{ ref: 'e7', role: 'link', name: 'Continue' }],
+      });
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('STALE_ELEMENT_REF');
+      expect(controller.click).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports the attempts it made when the element is simply gone', async () => {
+      const controller = fakeController();
+      controller.click.mockRejectedValue(new StaleElementRefError('e1'));
+      controller.observe.mockResolvedValue({
+        url: 'https://example.com/page',
+        title: 'Page',
+        digest: '',
+        digestUnchanged: false,
+        interactables: [],
+      });
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('STALE_ELEMENT_REF');
+      const details = result.details as { readonly attempted?: readonly unknown[] };
+      expect(details.attempted?.length).toBeGreaterThan(1);
+    });
+
+    it('does not retry a disabled element', async () => {
+      const controller = fakeController();
+      controller.click.mockRejectedValue(
+        new BrowserActionabilityError('ELEMENT_DISABLED', 'The element is disabled.'),
+      );
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('ELEMENT_DISABLED');
+      expect(controller.click).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing about recovery when the first click simply worked', async () => {
+      const controller = fakeController();
+      const services = browserServices(controller);
+
+      const result = await wrapTool(browserClickSpec(services), services).execute(
+        { ref: 'e1' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+      expect(result.modelText).not.toContain('resolved_by');
+      expect(result.modelText).not.toContain('attempted');
+    });
   });
 
   describe('following a tab the site opened', () => {

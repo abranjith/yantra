@@ -2,21 +2,25 @@
  * Field-name → element-ref resolution for the unified browser fill tools.
  *
  * A current opaque ref works when the model has just seen a capped observation
- * containing it. A multi-field
- * form tool cannot rely on that: the fields it must reach are frequently outside
- * the model-visible cap, and the ones revealed *by* an earlier step —
- * autocomplete options, calendar cells — did not exist when the model last
- * looked. So this resolver matches human-meaningful names against a fresh,
- * uncapped observation, and accepts a literal `eNN` when the model does have one.
+ * containing it. A multi-field form tool cannot rely on that: the fields it
+ * must reach are frequently outside the model-visible cap, and the ones
+ * revealed *by* an earlier step — autocomplete options, calendar cells — did not
+ * exist when the model last looked. So this resolver matches human-meaningful
+ * names against a fresh, uncapped observation, and accepts a literal `eNN` when
+ * the model does have one.
  *
- * Matching is tiered — exact, then prefix, then substring — and stops at the
- * first tier that matches anything. A tier with more than one hit is an
- * **error**, never a guess: on a real search form "Check-in" and "Check-out"
- * share a prefix, and silently picking one would fill the wrong date and look
- * like success.
+ * The matching itself lives in `@yantra/core`'s shared resolver, alongside the
+ * fill engine's re-acquisition and deterministic replay, because four copies of
+ * this logic had already drifted apart. This module owns only what is specific
+ * to the tool seam: turning a `Resolution` into the tool's typed failures and
+ * their model-facing wording.
  */
 
-import type { AgentBrowserObservation, AgentInteractable } from '@yantra/core';
+import {
+  resolveInteractable,
+  type AgentBrowserObservation,
+  type AgentInteractable,
+} from '@yantra/core';
 
 import type { DomainFailure } from '../../../runtime/middleware.js';
 
@@ -47,9 +51,12 @@ export function resolveFormField(
     };
   }
 
-  if (REF_PATTERN.test(query)) {
-    const byRef = observation.interactables.find((entry) => entry.ref === query);
-    if (byRef !== undefined) return byRef;
+  const resolved = resolveInteractable(query, observation.interactables);
+  if (resolved.kind === 'match') return resolved.entry;
+
+  // A ref the model supplied but the page no longer has is a different problem
+  // from a name nobody can find, and it has a different remedy.
+  if (resolved.kind === 'none' && REF_PATTERN.test(query)) {
     return {
       ok: false,
       errorCode: 'STALE_ELEMENT_REF',
@@ -60,36 +67,27 @@ export function resolveFormField(
     };
   }
 
-  const needle = query.toLowerCase();
-  const named = observation.interactables.filter((entry) => entry.name.trim().length > 0);
-  const tiers: readonly AgentInteractable[][] = [
-    named.filter((entry) => entry.name.trim().toLowerCase() === needle),
-    named.filter((entry) => entry.name.trim().toLowerCase().startsWith(needle)),
-    named.filter((entry) => entry.name.trim().toLowerCase().includes(needle)),
-  ];
-
-  const winning = tiers.find((tier) => tier.length > 0);
-  if (winning === undefined) {
+  if (resolved.kind === 'none') {
     return {
       ok: false,
       errorCode: 'FORM_FIELD_NOT_FOUND',
       message:
         `No field named "${query}" is present on the page. Fields available: ` +
-        `${describe(named)}. Re-observe if the page has changed.`,
+        `${describe(resolved.offered)}. Re-observe if the page has changed.`,
       retryable: true,
     };
   }
-  if (winning.length > 1) {
-    return {
-      ok: false,
-      errorCode: 'FORM_FIELD_AMBIGUOUS',
-      message:
-        `"${query}" matches ${winning.length} fields: ${describe(winning)}. Use a longer, ` +
-        'more specific name, or an eNN ref from browser_observe.',
-      retryable: true,
-    };
-  }
-  return winning[0]!;
+
+  return {
+    ok: false,
+    errorCode: 'FORM_FIELD_AMBIGUOUS',
+    message:
+      `"${query}" matches ${resolved.offered.length} different fields: ` +
+      `${describe(resolved.offered)}. Re-issue this call with one of those names in full, ` +
+      'or with an eNN ref from browser_observe.',
+    retryable: true,
+    details: { offered: resolved.offered.slice(0, MAX_SUGGESTIONS).map((e) => e.name.trim()) },
+  };
 }
 
 /** Renders up to {@link MAX_SUGGESTIONS} candidate names for an error message. */

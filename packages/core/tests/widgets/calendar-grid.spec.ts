@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { readCalendarGrid } from '../../src/index.js';
-
-import { CalendarTestPort, monthTable } from './calendar-test-port.js';
+import { WidgetTestPort, monthTable } from '../support/widget-test-port.js';
 
 describe('@no-llm calendar grid structural reader', () => {
   it('de-interleaves identical bare day numbers by their owning month', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<div role="dialog">${monthTable(2026, 8)}${monthTable(2026, 9)}</div>`,
     );
 
@@ -19,7 +18,7 @@ describe('@no-llm calendar grid structural reader', () => {
   });
 
   it('marks a structurally shifted panel unsafe', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       `<div role="dialog">${monthTable(2026, 8, { shift: -1 })}</div>`,
     );
 
@@ -34,7 +33,7 @@ describe('@no-llm calendar grid structural reader', () => {
   });
 
   it('lets machine-readable dates bypass structural weekday derivation', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<div role="dialog"><table><caption>August 2026</caption>' +
         '<thead><tr><th>Sun</th><th>Mon</th></tr></thead>' +
         '<tbody><tr><td><button data-date="2026-09-06">6</button></td></tr></tbody></table></div>',
@@ -50,9 +49,9 @@ describe('@no-llm calendar grid structural reader', () => {
   });
 
   it('derives safe dates for Sunday-first and Monday-first grids', async () => {
-    const sunday = await readCalendarGrid(new CalendarTestPort(monthTable(2026, 9)));
+    const sunday = await readCalendarGrid(new WidgetTestPort(monthTable(2026, 9)));
     const monday = await readCalendarGrid(
-      new CalendarTestPort(monthTable(2026, 9, { mondayFirst: true })),
+      new WidgetTestPort(monthTable(2026, 9, { mondayFirst: true })),
     );
 
     expect(sunday.cells.every((cell) => !cell.unsafe)).toBe(true);
@@ -62,7 +61,7 @@ describe('@no-llm calendar grid structural reader', () => {
   });
 
   it('derives a complete localized aria-label through Intl month names', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<div role="grid"><div role="row"><button aria-label="dimanche 6 septembre 2026">6</button></div></div>',
     );
     port.document.documentElement.lang = 'fr-FR';

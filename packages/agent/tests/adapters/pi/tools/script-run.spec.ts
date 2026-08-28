@@ -29,7 +29,10 @@ describe('@no-llm script_run tool', () => {
   it('returns a retryable SCRIPT_INVALID_ARGS for bad arguments', async () => {
     const services = buildServices();
     const tool = wrapTool(scriptRunSpec(services), services);
-    const result = await tool.execute({ script_id: 'table_normalize', args: { text: 5 } }, undefined);
+    const result = await tool.execute(
+      { script_id: 'table_normalize', args: { text: 5 } },
+      undefined,
+    );
     expect(result.error_code).toBe('SCRIPT_INVALID_ARGS');
     expect(result.retryable).toBe(true);
   });

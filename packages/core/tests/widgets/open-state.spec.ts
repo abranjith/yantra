@@ -202,6 +202,16 @@ class DomPort implements WidgetPort {
     if (element instanceof this.window.HTMLInputElement) element.value = value;
   }
 
+  public async clear(ref: string): Promise<void> {
+    const element = this.element(ref);
+    if (element instanceof this.window.HTMLInputElement) element.value = '';
+  }
+
+  public async type(ref: string, text: string): Promise<void> {
+    const element = this.element(ref);
+    if (element instanceof this.window.HTMLInputElement) element.value += text;
+  }
+
   public evaluateOn<T, Args extends readonly unknown[]>(
     ref: string,
     fn: (element: HTMLElement, ...args: Args) => T | Promise<T>,

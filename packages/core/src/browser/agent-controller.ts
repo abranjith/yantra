@@ -67,6 +67,8 @@ const STABILITY_POLL_MS = 25;
  * long values so a large fill cannot blow the tool budget. */
 const FILL_TYPE_DELAY_MS = 45;
 const FILL_TYPE_DELAY_MAX_CHARS = 128;
+/** The platform's select-all chord; Chrome maps Meta on macOS, Control elsewhere. */
+const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
  * Puppeteer failures raised when Chrome could not produce a box for the node
@@ -589,6 +591,70 @@ export class AgentBrowserController implements WidgetPort {
       }
       // Fills can navigate too (search-as-you-type, auto-submitting forms);
       // settle before the agent's next call the same way clicks do.
+      await this.awaitPageStable(watch, FILL_NAV_DETECT_MS);
+    } finally {
+      watch.dispose();
+    }
+    return this.currentActionResult();
+  }
+
+  /** Empty a text control with real selection + delete key events. */
+  public async clear(ref: string): Promise<BrowserActionResult> {
+    return this.withIdentityHealing(ref, () => this.clearOnce(ref));
+  }
+
+  private async clearOnce(ref: string): Promise<BrowserActionResult> {
+    const handle = this.resolveRef(ref);
+    await assertActionable(handle, ref);
+    const watch = this.watchNavigation();
+    try {
+      try {
+        await handle.focus();
+        // Select-all through the platform chord rather than `element.value = ''`:
+        // a framework-controlled input ignores a direct assignment it did not
+        // author, and reinstates its own value on the next render.
+        await this.page!.keyboard.down(SELECT_ALL_MODIFIER);
+        await this.page!.keyboard.press('a');
+        await this.page!.keyboard.up(SELECT_ALL_MODIFIER);
+        await this.page!.keyboard.press('Backspace');
+      } catch (error) {
+        if (isNoLayoutBoxError(error)) throw hiddenError();
+        if (isNavigationRaceError(error)) throw new StaleElementRefError(ref);
+        throw error;
+      }
+      await this.awaitPageStable(watch, FILL_NAV_DETECT_MS);
+    } finally {
+      watch.dispose();
+    }
+    return this.currentActionResult();
+  }
+
+  /** Type into a control at a caller-chosen pace, without clearing it first. */
+  public async type(
+    ref: string,
+    text: string,
+    options: { readonly delayMs?: number } = {},
+  ): Promise<BrowserActionResult> {
+    return this.withIdentityHealing(ref, () => this.typeOnce(ref, text, options));
+  }
+
+  private async typeOnce(
+    ref: string,
+    text: string,
+    options: { readonly delayMs?: number },
+  ): Promise<BrowserActionResult> {
+    const handle = this.resolveRef(ref);
+    await assertActionable(handle, ref);
+    const watch = this.watchNavigation();
+    try {
+      try {
+        await handle.focus();
+        await handle.type(text, { delay: options.delayMs ?? typeDelayFor(text) });
+      } catch (error) {
+        if (isNoLayoutBoxError(error)) throw hiddenError();
+        if (isNavigationRaceError(error)) throw new StaleElementRefError(ref);
+        throw error;
+      }
       await this.awaitPageStable(watch, FILL_NAV_DETECT_MS);
     } finally {
       watch.dispose();

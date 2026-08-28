@@ -6,8 +6,7 @@ import {
   type WidgetBudget,
   type WidgetTarget,
 } from '../../src/index.js';
-
-import { CalendarTestPort, installDateCommit, monthTable } from './calendar-test-port.js';
+import { WidgetTestPort, installDateCommit, monthTable } from '../support/widget-test-port.js';
 
 const BUDGET: WidgetBudget = {
   deadlineMs: Number.MAX_SAFE_INTEGER,
@@ -48,7 +47,7 @@ describe('@no-llm calendar widget driver', () => {
   });
 
   it('refuses an unsafe weekday mapping without clicking', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
         `<div id="calendar" role="dialog">${monthTable(2026, 8, { shift: -1 })}</div>`,
     );
@@ -115,7 +114,7 @@ describe('@no-llm calendar widget driver', () => {
   });
 
   it('does not click a disabled target date', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
         '<div id="calendar" role="dialog"><table><caption>September 2026</caption>' +
         '<tbody><tr><td><button data-date="2026-09-06" disabled>6</button></td></tr></tbody></table></div>',
@@ -137,7 +136,7 @@ describe('@no-llm calendar widget driver', () => {
   });
 
   it('reports an unchanged trigger as not committed once the picker has closed', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<button id="trigger" aria-controls="calendar" aria-expanded="false">Dates</button>' +
         '<div id="calendar" role="dialog" style="display:none">' +
         '<table><caption>September 2026</caption>' +
@@ -171,7 +170,7 @@ describe('@no-llm calendar widget driver', () => {
   });
 
   it('defers the verdict while the picker is still open, since it may commit on release', async () => {
-    const port = new CalendarTestPort(
+    const port = new WidgetTestPort(
       '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
         '<div id="calendar" role="dialog"><table><caption>September 2026</caption>' +
         '<tbody><tr><td><button data-date="2026-09-06">6</button></td></tr></tbody></table></div>',
@@ -190,7 +189,7 @@ describe('@no-llm calendar widget driver', () => {
   });
 
   it('sets and verifies a native date input without opening anything', async () => {
-    const port = new CalendarTestPort('<input id="trigger" type="date" aria-label="Check-in">');
+    const port = new WidgetTestPort('<input id="trigger" type="date" aria-label="Check-in">');
 
     const outcome = await dateInputDriver.drive(
       port,
@@ -213,8 +212,8 @@ function calendarTarget(): WidgetTarget {
   return { ref: 'e1', role: 'button', name: 'Dates', group: null, value: null };
 }
 
-function twoPanelPort(): CalendarTestPort {
-  const port = new CalendarTestPort(
+function twoPanelPort(): WidgetTestPort {
+  const port = new WidgetTestPort(
     '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
       `<div id="calendar" role="dialog">${monthTable(2026, 8)}${monthTable(2026, 9)}</div>`,
   );
@@ -225,8 +224,8 @@ function twoPanelPort(): CalendarTestPort {
 function pagingPort(options: {
   readonly advancing: boolean;
   readonly disabled?: boolean;
-}): CalendarTestPort {
-  const port = new CalendarTestPort(
+}): WidgetTestPort {
+  const port = new WidgetTestPort(
     '<button id="trigger" aria-controls="calendar" aria-expanded="true">Dates</button>' +
       `<div id="calendar" role="dialog"><button id="next"${options.disabled ? ' disabled' : ''}>Next month</button>` +
       '<div id="month"></div></div>',

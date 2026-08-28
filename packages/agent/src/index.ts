@@ -56,5 +56,5 @@ export type { AgentStartupErrorCode } from './errors.js';
 
 export * from './runtime/index.js';
 
-export const AGENT_PROTOCOL_VERSION = '0.0.0' as const;
+export const AGENT_PROTOCOL_VERSION = '0.0.1' as const;
 export type AgentProtocolVersion = typeof AGENT_PROTOCOL_VERSION;

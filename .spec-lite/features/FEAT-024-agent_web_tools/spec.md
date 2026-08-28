@@ -24,7 +24,7 @@ No new storage. Contracts:
 - **BudgetTracker** counters: wall-clock, total tool calls, per-tool calls, per-tool timeout, agent-visible bytes per result, cumulative agent-visible bytes per run, navigations/hosts (consumed by FEAT-025).
 - **Outbound URL policy record** (per §8.13): full URL audited, max length (config), credential-shape scan (reuse lint shapes: `sk-`, `ghp_`, `AKIA`, `eyJ…`), new-host budget decrement.
 - **Script registry entry** (`script_run`): `id` (string, registry key), `description`, `argsSchema` (Zod), `limits` (`timeout_ms`, `max_output_bytes`, memory cap), implementation module path. Registry is code-defined — no user-supplied script strings.
-- **PublishedResult** (`result_publish` input): Brief payload validated against the existing protocol Brief schema + citation/evidence validation; exactly one *successful* publication per run.
+- **PublishedResult** (`result_publish` input): Brief payload validated against the existing protocol Brief schema + citation/evidence validation; exactly one _successful_ publication per run.
 
 ### Indexes & Constraints
 
@@ -92,7 +92,7 @@ No new storage. Contracts:
 
 ### TASK-006: `script_run` allowlisted transformation registry
 
-- [x] **Implementation**: `packages/core/src/scripts/registry.ts` — code-defined registry of named trusted transformation scripts (id → argsSchema + limits + implementation). Executor runs the script **out-of-process** (child process or worker) with enforced wall-clock timeout, output-byte cap, and best-effort memory cap; no network/filesystem access is *granted* by the executor (no ambient capabilities passed; document that Node cannot fully sandbox — the trust boundary is the code-defined registry, per plan §8.8 as revised). Tool wrapper accepts only registered ids + validated args — never an arbitrary command string.
+- [x] **Implementation**: `packages/core/src/scripts/registry.ts` — code-defined registry of named trusted transformation scripts (id → argsSchema + limits + implementation). Executor runs the script **out-of-process** (child process or worker) with enforced wall-clock timeout, output-byte cap, and best-effort memory cap; no network/filesystem access is _granted_ by the executor (no ambient capabilities passed; document that Node cannot fully sandbox — the trust boundary is the code-defined registry, per plan §8.8 as revised). Tool wrapper accepts only registered ids + validated args — never an arbitrary command string.
 - [x] **Unit Tests**: unknown id → stable `SCRIPT_NOT_FOUND`; args failing schema → validation error; runaway script killed at timeout; oversized output truncated with flag; property test — no input string ever reaches a shell.
 - [x] **Documentation Update**: docs page: what scripts exist, how limits work, and the explicit trust statement.
 - **Verify**: Registry smoke: run a real transformation (e.g. table normalize) end-to-end through the tool wrapper.

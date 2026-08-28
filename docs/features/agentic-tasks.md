@@ -26,6 +26,28 @@ Browser actions return a fresh observation after the page settles, so the agent 
 
 Form filling uses one deterministic engine for ordinary controls and stateful widgets. `browser_fill_form` fills up to ten non-secret fields in order and never submits the form. `browser_fill_element` handles a single field and is the only fill path for a host-bound stored website secret. Successful fills verify the committed state; ambiguity, stale controls, incomplete date ranges, or values that do not commit return typed failures instead of guessed success.
 
+**A fill reports how its value was resolved.** A widget frequently commits something other than what was typed — a location field asked for an airport code offers a city name and stores that. The committed value is the fact, and the result says how it came about rather than leaving the agent to guess whether its fill worked:
+
+| Field        | Meaning                                                               |
+| ------------ | --------------------------------------------------------------------- |
+| `requested`  | What the caller asked for, as it was expressed.                       |
+| `committed`  | What the control holds now.                                           |
+| `resolution` | How the two relate — see below.                                       |
+| `offered`    | What the widget was showing when it chose, up to ten labels.          |
+| `note`       | One sentence, present only when `committed` differs from `requested`. |
+
+`resolution` is one of `exact` (the control holds what was asked for), `single_offered_match` (the widget offered one match and committed it), `selected_from_offered` (several were offered and one ranked uniquely), `typed_literal` (nothing matched, so the typed text stands), or `reformatted` (the control rewrote the value — an input mask — and accepted it). When a value came from the widget's own offered list, that choice is what the commit is verified against, not the text used to find it.
+
+The agent-facing guidance for `do` states this contract directly: a `committed` value that differs from what was sent is the widget resolving it and must be accepted rather than re-filled; anything named in `attempted` has already failed and must not be repeated; and `offered` is re-issued verbatim. That guidance lives in the command's completion criteria and the tool descriptions, never in the governed system prompt, so `prompt_version` is unchanged and only `tool_catalog_hash` moves.
+
+`browser_click` shares the same bounded recovery. When the page replaces the node behind a ref mid-click, the tool re-observes and finds the element again — constrained to the same accessible name **and** role it described before the click, and refusing anything ambiguous, because recovering an identity is not the same as choosing a different control. A recovered click reports `resolved_by: "re-resolved"` and lists its attempts; a click that simply worked reports neither. A disabled element is a definite answer and is never retried. No new pass/fail gate was added: a click that legitimately changes nothing visible still succeeds.
+
+**A field is driven by the widget driver most confident about it, with fallback.** Detection is a guess made from the control's closed state, and a wrong guess used to end the attempt: a read-only trigger whose accessible name contains "date" was handed to the driver that types into date inputs, which typed into a control that cannot be typed into and stopped there — while the calendar driver that would have paged to the requested month was never consulted. Drivers are now ordered by their own confidence and tried in turn, falling through when one turns out to be wrong about itself. A definite answer from the page — a disabled date, a calendar that disagrees with its own weekday headers — stops the chain immediately rather than asking a second driver the same question. When more than one driver was tried, `attempted` names each one and why it was abandoned.
+
+When several suggestions match equally well, the engine picks none of them: it releases the popup and fails with `WIDGET_AMBIGUOUS_CHOICE` carrying the offered labels, so the caller re-issues with the one it wants. Committing a guess would look like success while filling the wrong value. When nothing matches, whether the typed text stands is read from the page rather than assumed — text the control keeps becomes the value (`typed_literal`), and a control that discards it on release is reported unreachable along with what it does offer.
+
+Failures carry the same kind of disclosure: `observed` is what the control holds right now, `offered` is what the widget will actually accept, and `attempted` lists the recovery the engine already performed — a typing ladder that escalated through three entry mechanisms, or a driver fallback that tried two widget drivers. Repeating anything named in `attempted` cannot succeed, and the failure message names one concrete next step derived from that state rather than a generic sentence per error code.
+
 The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. Without both, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
 
 ## How to Use It

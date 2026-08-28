@@ -6,10 +6,7 @@ import { join } from 'node:path';
 import type { WorkflowFile } from '@yantra/protocol';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import {
-  WorkflowCatalogEntry,
-  projectCatalogEntry,
-} from '../../src/workflow/catalog.js';
+import { WorkflowCatalogEntry, projectCatalogEntry } from '../../src/workflow/catalog.js';
 import { FileWorkflowStore } from '../../src/workflow/store.js';
 
 function makeWorkflow(name: string, overrides: Partial<WorkflowFile> = {}): WorkflowFile {
@@ -129,9 +126,7 @@ describe('projectCatalogEntry', () => {
     // The strict schema rejects any extra field, so a clean parse proves the
     // projection contains only the four allowed keys.
     expect(() => WorkflowCatalogEntry.parse(entry)).not.toThrow();
-    expect(() =>
-      WorkflowCatalogEntry.parse({ ...entry, secrets: ['x.y'] }),
-    ).toThrow();
+    expect(() => WorkflowCatalogEntry.parse({ ...entry, secrets: ['x.y'] })).toThrow();
   });
 });
 

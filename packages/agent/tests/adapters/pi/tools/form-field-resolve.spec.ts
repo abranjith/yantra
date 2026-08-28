@@ -122,6 +122,30 @@ describe('@no-llm resolveFormField', () => {
     expect(isFailure(result) && result.errorCode).toBe('FORM_FIELD_NOT_FOUND');
   });
 
+  it('resolves an open picker duplicate of the page field instead of refusing', () => {
+    // Run 20260827T045106Z-do-9a58de7e, seq 22: `"Where to?"` matched two
+    // interactables — the page's combobox and the copy the open picker mounted
+    // — and FORM_FIELD_AMBIGUOUS sent the agent off to operate the widget by
+    // hand. They are one control, so document order settles it.
+    const withDuplicate = observation(
+      ['e66', 'combobox', 'Where to?'],
+      ['e131', 'combobox', 'Where to?'],
+    );
+    expect(resolveFormField('Where to?', withDuplicate)).toMatchObject({ ref: 'e66' });
+  });
+
+  it('still refuses when the same-named controls differ in role', () => {
+    const mixed = observation(['e1', 'button', 'Date'], ['e2', 'textbox', 'Date']);
+    const result = resolveFormField('Date', mixed);
+    expect(isFailure(result) && result.errorCode).toBe('FORM_FIELD_AMBIGUOUS');
+  });
+
+  it('offers the tied names back in details so the caller can re-issue', () => {
+    const result = resolveFormField('Check-', KAYAK);
+    if (!isFailure(result)) throw new Error('expected a failure');
+    expect(result.details).toMatchObject({ offered: ['Check-in', 'Check-out'] });
+  });
+
   it('matches an autocomplete option by name (the e38 confusion)', () => {
     // The logged run clicked "View more deals for Chicago Hotels" — a marketing
     // tile — believing it was the suggestion. A real option must win on name.

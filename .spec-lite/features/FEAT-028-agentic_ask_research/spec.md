@@ -22,7 +22,7 @@ No new storage. Contracts are specializations of FEAT-026's orchestration types:
 
 ### Relationships
 
-- 1 `ask`/`research` invocation : 1 run dir with identical layout to `do` (manifest agent section, tool-calls.jsonl, usage.json, brief.*) — `yantra audit` needs no command-specific logic.
+- 1 `ask`/`research` invocation : 1 run dir with identical layout to `do` (manifest agent section, tool-calls.jsonl, usage.json, brief.\*) — `yantra audit` needs no command-specific logic.
 - Deterministic paths keep their existing pipeline (`AskPipeline`, research loop, `DeterministicSynthesizer`) and run artifacts — untouched surfaces, guarded by `@no-llm` tests.
 
 ### Indexes & Constraints
@@ -57,7 +57,7 @@ No new storage. Contracts are specializations of FEAT-026's orchestration types:
 ### TASK-002: Agentic `ask` cutover
 
 - [ ] **Implementation**: `ask.ts`: mode selection first (`--no-llm`/`LLM_PROVIDER=none` → existing deterministic pipeline, untouched); LLM mode → `runAgenticTask` with the ask profile; render streamed progress + final Brief per existing ask output conventions; remove the old LLM synthesis plumbing from the command (the `LLMClient`-based synthesis adapter path), leaving the deterministic synthesizer intact.
-- [ ] **Unit Tests**: mode-selection matrix (flag, env var, config precedence — deterministic path chosen *before* agent construction, assert no provider touched); LLM path publishes through `result_publish` (fake provider scripting the tools); deterministic path output unchanged (snapshot vs current).
+- [ ] **Unit Tests**: mode-selection matrix (flag, env var, config precedence — deterministic path chosen _before_ agent construction, assert no provider touched); LLM path publishes through `result_publish` (fake provider scripting the tools); deterministic path output unchanged (snapshot vs current).
 - [ ] **Documentation Update**: `yantra ask` docs: agentic vs deterministic behavior and how to force each.
 - **Verify**: `e2e/ask-no-llm.spec.ts` and golden-brief suite stay green **without modification to their expectations**; live `@requires-llm` ask smoke publishes a cited Brief.
 - **Depends on**: TASK-001

@@ -57,12 +57,21 @@ export function browserFailure(error: unknown): DomainFailure {
   throw error;
 }
 
-/** Preserve a core fill failure verbatim at the provider-neutral tool seam. */
+/**
+ * Preserve a core fill failure verbatim at the provider-neutral tool seam.
+ *
+ * The next step rides in the message, not only in `details`. A model that sees
+ * a bare typed code tends to abandon the tool and operate the widget by hand
+ * with browser_click, which is the behaviour these tools exist to replace, so
+ * the one actionable sentence has to be somewhere it cannot miss. The hint is
+ * now composed from the observed state rather than looked up by code, so two
+ * failures sharing a code but not a cause no longer read identically.
+ *
+ * `observed`, `offered`, and `attempted` ride along in `details` and are the
+ * three facts a caller needs to avoid repeating work: what the control holds
+ * now, what the widget will actually accept, and what recovery already ran.
+ */
 export function mapFillFailure(failure: FillFailure): DomainFailure {
-  // The next step rides in the message, not only in `details`. A model that
-  // sees a bare typed code tends to abandon the tool and operate the widget by
-  // hand with browser_click, which is the behaviour these tools exist to
-  // replace, so the one actionable sentence has to be somewhere it cannot miss.
   const hint = typeof failure.details.hint === 'string' ? failure.details.hint : null;
   return {
     ok: false,
@@ -120,6 +129,8 @@ export function browserWidgetPort(
     observe: (options) => controller.observe(options),
     click: (ref) => controller.click(ref),
     fill: (ref, value) => controller.fill(ref, value),
+    clear: (ref) => controller.clear(ref),
+    type: (ref, text, options) => controller.type(ref, text, options ?? {}),
     evaluateOn: (ref, fn, ...args) => controller.evaluateOn(ref, fn, ...args),
     evaluate: (fn, ...args) => controller.evaluate(fn, ...args),
     press: (key) => controller.press(key),

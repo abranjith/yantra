@@ -61,7 +61,7 @@ try {
  * out-of-process, resource-capped executor.
  */
 export class ScriptRegistry {
-  private readonly scripts = new Map<string, ScriptDefinition>;
+  private readonly scripts = new Map<string, ScriptDefinition>();
 
   /**
    * @param definitions Registered scripts (defaults to {@link DEFAULT_SCRIPTS}).
@@ -140,7 +140,11 @@ export class ScriptRegistry {
     return new Promise<ScriptRunOutcome>((resolve) => {
       const worker = new Worker(WORKER_SOURCE, {
         eval: true,
-        workerData: { source: def.transform.toString(), args, maxOutputBytes: def.limits.maxOutputBytes },
+        workerData: {
+          source: def.transform.toString(),
+          args,
+          maxOutputBytes: def.limits.maxOutputBytes,
+        },
         resourceLimits: { maxOldGenerationSizeMb: def.limits.memoryMb },
       });
 
@@ -165,7 +169,12 @@ export class ScriptRegistry {
       if (typeof timer.unref === 'function') timer.unref();
 
       const onAbort = (): void => {
-        finish({ ok: false, errorCode: 'SCRIPT_ABORTED', message: 'Run aborted.', retryable: false });
+        finish({
+          ok: false,
+          errorCode: 'SCRIPT_ABORTED',
+          message: 'Run aborted.',
+          retryable: false,
+        });
       };
       signal.addEventListener('abort', onAbort, { once: true });
 

@@ -7,8 +7,10 @@ import {
   parseFillValue,
   withSecret,
   type AgentBrowserController,
+  type AttemptRecord,
   type FillIntent,
   type FillOutcome,
+  type FillResolution,
   type WidgetPort,
   type WidgetTarget,
 } from '@yantra/core';
@@ -81,6 +83,16 @@ export interface AppliedBrowserFill {
   readonly dismissed: boolean;
   readonly actions: number;
   readonly committed?: string;
+  /** What was asked for, so a differing `committed` reads as a resolution. */
+  readonly requested?: string;
+  /** How `committed` relates to `requested`. */
+  readonly resolution?: FillResolution;
+  /** What the widget was offering when it chose. */
+  readonly offered?: readonly string[];
+  /** One sentence, present only when `committed` differs from `requested`. */
+  readonly note?: string;
+  /** The recovery the engine performed, when it needed more than one attempt. */
+  readonly attempted?: readonly AttemptRecord[];
   /** Every caller field this one fill accounts for, when it covers more than its own. */
   readonly covers?: readonly string[];
 }
@@ -93,7 +105,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges; do not use browser_click to operate a field widget or submit the form.',
+      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. Failure reports observed, attempted (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -118,6 +130,11 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
     ok: true,
     model: {
       ...(applied.committed === undefined ? {} : { committed: applied.committed }),
+      ...(applied.requested === undefined ? {} : { requested: applied.requested }),
+      ...(applied.resolution === undefined ? {} : { resolution: applied.resolution }),
+      ...(applied.offered === undefined ? {} : { offered: applied.offered }),
+      ...(applied.note === undefined ? {} : { note: applied.note }),
+      ...(applied.attempted === undefined ? {} : { attempted: applied.attempted }),
       driver: applied.driver,
       dismissed: applied.dismissed,
       observation: modelObservation(observation),
@@ -178,6 +195,11 @@ export async function applyBrowserFill(
       committed: outcome.committed,
       dismissed: outcome.dismissed,
       actions: outcome.actions,
+      ...(outcome.requested === undefined ? {} : { requested: outcome.requested }),
+      ...(outcome.resolution === undefined ? {} : { resolution: outcome.resolution }),
+      ...(outcome.offered === undefined ? {} : { offered: outcome.offered }),
+      ...(outcome.note === undefined ? {} : { note: outcome.note }),
+      ...(outcome.attempted === undefined ? {} : { attempted: outcome.attempted }),
     };
   }
 

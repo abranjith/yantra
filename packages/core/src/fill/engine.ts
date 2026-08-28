@@ -1,19 +1,29 @@
 import type { AgentInteractable } from '../browser/agent-controller.js';
-import { calendarDriver } from '../widgets/date/calendar-driver.js';
-import { dateInputDriver } from '../widgets/date/date-input-driver.js';
+import {
+  commitText,
+  EMPTY_LEDGER,
+  ledgerOf,
+  resolveInteractable,
+  type AttemptLedger,
+  type AttemptRecord,
+  type TypingFailure,
+} from '../interaction/index.js';
 import { pendingRangePartner, resolveDatePair } from '../widgets/date/date-pair.js';
+import { createDefaultWidgetRegistry } from '../widgets/default-registry.js';
 import { resolveContainer } from '../widgets/open-state.js';
-import { listboxDriver } from '../widgets/option/listbox-driver.js';
 import { nativeSelectDriver } from '../widgets/option/native-select-driver.js';
 import {
   defaultWidgetBudget,
+  widgetFailure,
   type WidgetContainer,
   type WidgetFailure,
+  type WidgetFamily,
   type WidgetIntent,
   type WidgetPort,
+  type WidgetSuccess,
   type WidgetTarget,
 } from '../widgets/types.js';
-import { matchesIntent, readCommitted } from '../widgets/verify.js';
+import { matchesCommitment, matchesIntent, readCommitted } from '../widgets/verify.js';
 
 import { dismissWidget } from './dismiss.js';
 import { watchAndSelect } from './react.js';
@@ -24,9 +34,8 @@ import {
   type FillFailure,
   type FillIntent,
   type FillOutcome,
+  type FillResolution,
 } from './types.js';
-
-const REF_PATTERN = /^e[0-9]+$/;
 
 /**
  * Deterministically fill one named control, verify its committed value, and
@@ -46,6 +55,17 @@ export async function fillField(
   let actions = 0;
   let reactionDismissed = false;
   let driven: WidgetContainer | null = null;
+  let typingLedger: AttemptLedger = EMPTY_LEDGER;
+  /** The option label the widget was actually made to choose, when it chose. */
+  let chosen: string | null = null;
+  /** What the widget was showing at that moment. */
+  let offered: readonly string[] = [];
+  /** True when the control rewrote the typed text rather than truncating it. */
+  let reformatted = false;
+  /** What the control itself held after accepting the typed text, if anything. */
+  let acceptedText: string | null = null;
+  /** Which widget drivers were tried, when more than one was. */
+  let driverLedger: AttemptLedger = EMPTY_LEDGER;
 
   try {
     const shape = await healed.port.evaluateOn(target.ref, (element) => {
@@ -107,34 +127,47 @@ export async function fillField(
       const outcome = await nativeSelectDriver.drive(healed.port, target, optionIntent, budget);
       if (!outcome.ok) return fromWidgetFailure(outcome);
       ({ driver, committed, actions } = outcome);
-    } else if (
-      (intent.kind === 'date' || intent.kind === 'date_range') &&
-      shape.tag === 'input' &&
-      shape.dateHint
-    ) {
-      const outcome = await dateInputDriver.drive(healed.port, target, intent, budget);
-      if (!outcome.ok) return fromWidgetFailure(outcome);
-      ({ driver, committed, actions } = outcome);
+      chosen = outcome.chosen ?? null;
+      offered = outcome.offered ?? [];
     } else if (intent.kind === 'date' || intent.kind === 'date_range') {
-      const outcome = await calendarDriver.drive(healed.port, target, intent, budget);
-      if (!outcome.ok) return fromWidgetFailure(outcome);
-      ({ driver, committed, actions } = outcome);
-      driven = outcome.container ?? null;
+      // Ordered by each driver's own confidence, and tried in turn. A trigger
+      // that will not accept typed text falls through to the calendar that
+      // opens from it — which is the difference between reaching a month four
+      // pages away and reporting the date as uncommittable.
+      const attempt = await driveWithFallback(healed.port, target, intent, budget, 'date');
+      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
+      ({ driver, committed, actions } = attempt.outcome);
+      driven = attempt.outcome.container ?? null;
+      driverLedger = attempt.ledger;
     } else if (!shape.textLike && intent.kind === 'option') {
-      const outcome = await listboxDriver.drive(healed.port, target, intent, budget);
-      if (!outcome.ok) return fromWidgetFailure(outcome);
-      ({ driver, committed, actions } = outcome);
-      driven = outcome.container ?? null;
+      const attempt = await driveWithFallback(healed.port, target, intent, budget, 'option');
+      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
+      ({ driver, committed, actions } = attempt.outcome);
+      driven = attempt.outcome.container ?? null;
+      chosen = attempt.outcome.chosen ?? null;
+      offered = attempt.outcome.offered ?? [];
+      driverLedger = attempt.ledger;
     } else if ((intent.kind === 'text' || intent.kind === 'option') && shape.textLike) {
       const text = intent.kind === 'text' ? intent.text : intent.value;
-      await healed.port.fill(target.ref, text);
-      actions += 1;
+      // Confirm the characters landed before anything downstream reasons about
+      // them. A control that swallows the leading keystroke used to send its
+      // own truncated fragment to the site's autocomplete, and the suggestion
+      // that came back was ranked and committed as though it answered the
+      // request.
+      const typed = await commitText(healed.port, target, text, budget);
+      if (!typed.ok) return fromTypingFailure(typed);
+      actions += typed.ledger.records.length;
+      typingLedger = typed.ledger;
+      reformatted = typed.reformatted;
+      acceptedText = typed.committed;
       const reacted = await watchAndSelect(healed.port, target, text, budget, ignoredContainer);
       if (!reacted.ok) return reacted;
       actions += reacted.actions;
       committed = reacted.committed;
       reactionDismissed = reacted.dismissed;
       driver = reacted.selected ? 'typeahead' : 'plain-text';
+      chosen = reacted.chosen ?? null;
+      offered = reacted.offered ?? [];
     } else {
       return incompatible(target, intent);
     }
@@ -148,35 +181,79 @@ export async function fillField(
         ? await pendingRangePartner(healed.port, target)
         : null;
 
+    // What the committed value is checked against. When the widget was made to
+    // choose from its own offered list, that choice is the authority: a field
+    // asked for "DFW" that offers and commits "Dallas" has answered the request,
+    // and checking it against the typed text instead is what reported a landed
+    // fill as WIDGET_NOT_COMMITTED and cost the run everything downstream of it.
+    //
+    // With nothing chosen, the typed text is the authority — except that a
+    // control which rewrote the value as it was typed has already told us what
+    // it accepts. An input mask turning "5551234567" into "(555) 123-4567" was
+    // otherwise failed here as uncommitted, condemning a fill the page had
+    // plainly taken.
+    const satisfied = (value: string): boolean => {
+      if (chosen !== null) return matchesCommitment(value, chosen);
+      if (matchesFillIntent(value, intent)) return true;
+      return acceptedText !== null && matchesCommitment(value, acceptedText);
+    };
+
     // Release before the authoritative verification, not after. A picker that
     // commits on release reports its old value until it closes, and a range
     // spread over a check-in/check-out pair cannot be read while the popup's
     // duplicate copy of that pair is still on the page.
-    const dismissed = await dismissWidget(
+    const dismissed = await dismissWidget(healed.port, target, committed, satisfied, {
+      ignoredContainer,
+      driven,
+    });
+    if (!dismissed.ok) return rangeIncomplete(target, intent, pendingPartner) ?? dismissed;
+    const settled = await settledCommit(
       healed.port,
       target,
-      committed,
-      (value) => matchesFillIntent(value, intent),
-      { ignoredContainer, driven },
+      intent,
+      dismissed.committed,
+      satisfied,
     );
-    if (!dismissed.ok) return rangeIncomplete(target, intent, pendingPartner) ?? dismissed;
-    const settled = await settledCommit(healed.port, target, intent, dismissed.committed);
     if (settled === null) {
       return (
         rangeIncomplete(target, intent, pendingPartner) ??
         fillFailure(
           'WIDGET_NOT_COMMITTED',
           `The "${target.name}" control does not reflect the requested value.`,
-          { committed: dismissed.committed },
+          {
+            committed: dismissed.committed,
+            observed: dismissed.committed,
+            ...(offered.length > 0 ? { offered } : {}),
+            ...(chosen === null ? {} : { chosen }),
+            ...(typingLedger.records.length > 0 || driverLedger.records.length > 0
+              ? { attempted: [...driverLedger.records, ...typingLedger.records] }
+              : {}),
+          },
         )
       );
     }
+    const requested = describeIntent(intent);
+    const allAttempts = [...driverLedger.records, ...typingLedger.records];
+    const resolution = resolutionFor({
+      requested,
+      committed: settled,
+      chosen,
+      offered,
+      reformatted,
+    });
     return {
       ok: true,
       driver,
       committed: settled,
       actions: actions + dismissed.actions,
       dismissed: reactionDismissed || dismissed.dismissed,
+      requested,
+      resolution,
+      ...(offered.length > 0 ? { offered } : {}),
+      ...(noteFor(target.name, requested, settled, resolution, offered) ?? {}),
+      // Only when it says something. One driver, one successful attempt is the
+      // ordinary case and reporting it as recovery is noise.
+      ...(allAttempts.length > 1 ? { attempted: allAttempts } : {}),
     };
   } catch (error) {
     if (isStaleRefError(error)) {
@@ -241,13 +318,20 @@ export async function fillSecretField(
   }
   const healed = fieldHealingPort(port, identity);
   try {
-    await healed.port.fill(healed.target.ref, secretValue);
+    // `allowEscalation: false` is load-bearing, not defensive: it keeps the
+    // single-rung path AND suppresses the readback, so a resolved credential is
+    // never pulled back out of the page into a ledger or a failure detail.
+    const typed = await commitText(healed.port, healed.target, secretValue, budget, {
+      allowEscalation: false,
+    });
+    if (!typed.ok) return fromTypingFailure(typed);
     return {
       ok: true,
       driver: 'plain-text',
       committed: '',
       actions: 1,
       dismissed: false,
+      attempted: typed.ledger.records,
     };
   } catch (error) {
     if (isStaleRefError(error)) {
@@ -302,8 +386,9 @@ async function settledCommit(
   target: WidgetTarget,
   intent: FillIntent,
   committed: string,
+  satisfied: (value: string) => boolean,
 ): Promise<string | null> {
-  if (matchesFillIntent(committed, intent)) return committed;
+  if (satisfied(committed)) return committed;
   if (intent.kind !== 'date_range') return null;
   // Releasing the widget is what makes a paired range readable, and the second
   // field is frequently written a beat after the first as the page settles. A
@@ -361,6 +446,180 @@ function rangeIncomplete(
   );
 }
 
+/** The shared driver set; built once because registration is fixed. */
+const WIDGET_REGISTRY = createDefaultWidgetRegistry();
+
+/**
+ * Failures that mean "this driver was the wrong choice", not "the page said no".
+ *
+ * Only these fall through to the next candidate. A disabled date and a calendar
+ * that disagrees with its own weekday headers are definite answers, and trying
+ * a second driver against them spends the budget to hear the same thing twice.
+ */
+function isWrongDriver(failure: WidgetFailure): boolean {
+  if (failure.details.reason === 'disabled' || failure.details.reason === 'budget') return false;
+  if (failure.errorCode === 'WIDGET_TARGET_UNREACHABLE') {
+    return failure.details.reason === 'paired_inputs_not_found';
+  }
+  return ['WIDGET_NOT_RECOGNIZED', 'WIDGET_NOT_COMMITTED', 'WIDGET_DID_NOT_OPEN'].includes(
+    failure.errorCode,
+  );
+}
+
+/** One family's drive attempt, and the record of which drivers were tried. */
+type DriverAttempt =
+  | { readonly ok: true; readonly outcome: WidgetSuccess; readonly ledger: AttemptLedger }
+  | { readonly ok: false; readonly failure: WidgetFailure; readonly ledger: AttemptLedger };
+
+/**
+ * Drive a control through its candidate drivers, strongest confidence first.
+ *
+ * The last failure is returned verbatim so the caller sees what the page
+ * actually said, with the ledger naming every driver tried and why each was
+ * abandoned.
+ */
+async function driveWithFallback(
+  port: WidgetPort,
+  target: WidgetTarget,
+  intent: WidgetIntent,
+  budget: FillBudget,
+  family: WidgetFamily,
+): Promise<DriverAttempt> {
+  const candidates = await WIDGET_REGISTRY.detectDrivers(port, target, family);
+  const records: AttemptRecord[] = [];
+  let last: WidgetFailure | null = null;
+
+  for (const [index, candidate] of candidates.entries()) {
+    const startedAt = port.now();
+    const outcome = await candidate.driver.drive(port, target, intent, budget);
+    if (outcome.ok) {
+      records.push({
+        attempt: index + 1,
+        strategy: `driver:${candidate.driver.kind}`,
+        errorCode: null,
+        elapsedMs: port.now() - startedAt,
+      });
+      return { ok: true, outcome, ledger: ledgerOf(records) };
+    }
+    records.push({
+      attempt: index + 1,
+      strategy: `driver:${candidate.driver.kind}`,
+      errorCode: outcome.errorCode,
+      elapsedMs: port.now() - startedAt,
+      detail: outcome.message,
+    });
+    last = outcome;
+    if (!isWrongDriver(outcome)) break;
+    if (port.now() > budget.deadlineMs) break;
+  }
+
+  return {
+    ok: false,
+    failure:
+      last ??
+      widgetFailure(
+        'WIDGET_NOT_RECOGNIZED',
+        `No ${family} widget driver recognized "${target.name}" with sufficient confidence.`,
+        { family },
+      ),
+    ledger: ledgerOf(records),
+  };
+}
+
+/** Render a semantic intent as the caller expressed it, for `requested`. */
+function describeIntent(intent: FillIntent): string {
+  switch (intent.kind) {
+    case 'text':
+      return intent.text;
+    case 'option':
+      return intent.value;
+    case 'date':
+      return intent.date;
+    case 'date_range':
+      return `${intent.from}..${intent.to}`;
+    case 'toggle':
+      return intent.checked ? 'checked' : 'unchecked';
+    case 'secret':
+      return '';
+  }
+}
+
+/**
+ * Name the relationship between what was asked for and what landed.
+ *
+ * The distinction that matters to a caller is whether a differing value came
+ * from the widget's own list — in which case the widget answered the request
+ * and there is nothing to fix — or from the caller's text simply standing as
+ * typed.
+ */
+function resolutionFor(state: {
+  readonly requested: string;
+  readonly committed: string;
+  readonly chosen: string | null;
+  readonly offered: readonly string[];
+  readonly reformatted: boolean;
+}): FillResolution {
+  if (state.chosen !== null) {
+    return state.offered.length <= 1 ? 'single_offered_match' : 'selected_from_offered';
+  }
+  if (normalize(state.committed) === normalize(state.requested)) return 'exact';
+  if (state.reformatted) return 'reformatted';
+  // No list was offered and the text is not literally what was sent — a date
+  // rendered as "Wed, Dec 2" for "2026-12-02" is the everyday case, and it got
+  // here only because the semantic matcher already confirmed it means the same
+  // thing.
+  return state.offered.length > 0 ? 'typed_literal' : 'exact';
+}
+
+/**
+ * One sentence, and only when the committed value is not what was sent.
+ *
+ * A caller reading `committed: "Dallas"` after asking for `"DFW"` has to decide
+ * whether its fill worked. Saying so outright is the difference between
+ * accepting the result and spending a turn — in the motivating run, a whole run
+ * — trying to force the original text back into the field.
+ */
+function noteFor(
+  field: string,
+  requested: string,
+  committed: string,
+  resolution: FillResolution,
+  offered: readonly string[],
+): { readonly note: string } | null {
+  if (resolution === 'exact') return null;
+  if (resolution === 'single_offered_match') {
+    return {
+      note: `"${field}" offered one match for "${requested}" and committed "${committed}"; that is the widget resolving your value, not a failure.`,
+    };
+  }
+  if (resolution === 'selected_from_offered') {
+    return {
+      note: `"${field}" offered ${offered.length} matches for "${requested}" and committed "${committed}"; that is the widget resolving your value, not a failure.`,
+    };
+  }
+  if (resolution === 'reformatted') {
+    return { note: `"${field}" reformatted "${requested}" to "${committed}" and accepted it.` };
+  }
+  return {
+    note: `"${field}" offered no matching suggestion, so the typed text "${committed}" stands as the value.`,
+  };
+}
+
+/**
+ * Translate the interaction layer's typing outcome into the fill vocabulary.
+ *
+ * The ledger travels with it: a control that refused three different entry
+ * mechanisms must not read like one nobody tried, or the caller repeats work
+ * the tool already exhausted.
+ */
+function fromTypingFailure(failure: TypingFailure): FillFailure {
+  return fillFailure(failure.errorCode, failure.message, {
+    observed: failure.observed,
+    attempted: failure.ledger.records,
+    ...(failure.reason === undefined ? {} : { reason: failure.reason }),
+  });
+}
+
 function asOptionIntent(intent: FillIntent): WidgetIntent | null {
   if (intent.kind === 'option') return intent;
   if (intent.kind === 'text') return { kind: 'option', value: intent.text };
@@ -375,11 +634,15 @@ function incompatible(target: WidgetTarget, intent: FillIntent): FillFailure {
   );
 }
 
-function fromWidgetFailure(failure: WidgetFailure): FillFailure {
+function fromWidgetFailure(failure: WidgetFailure, ledger?: AttemptLedger): FillFailure {
+  const details =
+    ledger && ledger.records.length > 1
+      ? { ...failure.details, attempted: ledger.records }
+      : failure.details;
   if (failure.errorCode === 'WIDGET_NOT_RECOGNIZED') {
-    return fillFailure('WIDGET_TARGET_UNREACHABLE', failure.message, failure.details);
+    return fillFailure('WIDGET_TARGET_UNREACHABLE', failure.message, details);
   }
-  return fillFailure(failure.errorCode, failure.message, failure.details, failure.retryable);
+  return fillFailure(failure.errorCode, failure.message, details, failure.retryable);
 }
 
 async function readChecked(port: WidgetPort, target: WidgetTarget): Promise<boolean> {
@@ -428,6 +691,8 @@ function fieldHealingPort(
     observe: (options) => port.observe(options),
     click: (ref) => run(ref, (liveRef) => port.click(liveRef)),
     fill: (ref, value) => run(ref, (liveRef) => port.fill(liveRef, value)),
+    clear: (ref) => run(ref, (liveRef) => port.clear(liveRef)),
+    type: (ref, text, options) => run(ref, (liveRef) => port.type(liveRef, text, options)),
     evaluateOn: (ref, fn, ...args) => run(ref, (liveRef) => port.evaluateOn(liveRef, fn, ...args)),
     evaluate: (fn, ...args) => port.evaluate(fn, ...args),
     press: (key) => port.press(key),
@@ -469,37 +734,19 @@ async function reacquireTarget(
 }
 
 /**
- * Resolve a field string to one interactable.
+ * Resolve a field string to one interactable through the shared resolver.
  *
- * With `preferred` supplied the caller is re-acquiring a control it already
- * identified, so same-named duplicates are ranked rather than rejected: an
- * exact name match wins over a prefix, the original role wins over a different
- * one, and document order settles the rest. Without it, an ambiguous tier is
- * still no answer at all.
+ * `preferred` is what makes same-named duplicates rankable rather than
+ * refusable: the caller is re-acquiring a control it already identified, so the
+ * value decision is behind it and only the "which live node" question remains.
  */
 function resolveField(
   field: string,
   interactables: readonly AgentInteractable[],
   preferred?: WidgetTarget,
 ): AgentInteractable | null {
-  if (REF_PATTERN.test(field)) {
-    return interactables.find((entry) => entry.ref === field) ?? null;
-  }
-  const wanted = normalize(field);
-  const named = interactables.filter((entry) => entry.name.trim().length > 0);
-  const tiers = [
-    named.filter((entry) => normalize(entry.name) === wanted),
-    named.filter((entry) => normalize(entry.name).startsWith(wanted)),
-    named.filter((entry) => normalize(entry.name).includes(wanted)),
-  ];
-  const winner = tiers.find((tier) => tier.length > 0);
-  if (!winner || winner.length === 0) return null;
-  if (winner.length === 1) return winner[0]!;
-  if (!preferred) return null;
-  const sameRole = winner.filter((entry) => entry.role === preferred.role);
-  const pool = sameRole.length > 0 ? sameRole : winner;
-  const sameGroup = pool.filter((entry) => (entry.group ?? null) === preferred.group);
-  return (sameGroup.length > 0 ? sameGroup : pool)[0]!;
+  const resolved = resolveInteractable(field, interactables, preferred ? { preferred } : {});
+  return resolved.kind === 'match' ? resolved.entry : null;
 }
 
 function toTarget(entry: AgentInteractable): WidgetTarget {

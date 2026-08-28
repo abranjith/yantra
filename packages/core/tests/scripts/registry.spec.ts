@@ -69,7 +69,6 @@ describe('@no-llm ScriptRegistry out-of-process execution', () => {
       limits: { timeoutMs: 100, maxOutputBytes: 1024, memoryMb: 64 },
       // Self-contained infinite loop — no closure over test scope.
       transform: () => {
-         
         while (true) {
           /* spin */
         }
@@ -99,9 +98,13 @@ describe('@no-llm ScriptRegistry out-of-process execution', () => {
     const registry = new ScriptRegistry();
     const controller = new AbortController();
     controller.abort();
-    const outcome = await registry.run('table_normalize', { text: 'a\n1' }, {
-      signal: controller.signal,
-    });
+    const outcome = await registry.run(
+      'table_normalize',
+      { text: 'a\n1' },
+      {
+        signal: controller.signal,
+      },
+    );
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.errorCode).toBe('SCRIPT_ABORTED');
   });

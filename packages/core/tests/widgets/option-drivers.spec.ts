@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   listboxDriver,
   nativeSelectDriver,
-  typeaheadDriver,
+  watchAndSelect,
   type AgentBrowserObservation,
   type WidgetBudget,
   type WidgetPort,
@@ -20,36 +20,51 @@ const BUDGET: WidgetBudget = {
 describe('@no-llm option widget drivers', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('picks an Expedia-shaped button suggestion without requiring role=option', async () => {
-    const port = typeaheadFixture('button');
+  // There is now exactly one typeahead implementation — `watchAndSelect`, the
+  // fill engine's post-typing step. The dedicated `typeaheadDriver` that used
+  // to sit beside it in the widget registry was never reachable from
+  // production code and had already drifted from this one, so it is gone.
+  it.each([['button'] as const, ['option'] as const])(
+    'commits a %s-shaped suggestion, without requiring role=option',
+    async (role) => {
+      const port = typeaheadFixture(role);
 
-    const outcome = await typeaheadDriver.drive(
-      port,
-      target('Where to?'),
-      { kind: 'option', value: 'Frisco, Texas' },
-      BUDGET,
+      const outcome = await watchAndSelect(port, target('Where to?'), 'Frisco, Texas', BUDGET);
+
+      expect(outcome).toMatchObject({
+        ok: true,
+        selected: true,
+        committed: 'Frisco Texas, United States',
+        chosen: 'Frisco Texas, United States',
+      });
+      expect(port.clickedNames()).toEqual(['Frisco Texas, United States']);
+    },
+  );
+
+  it('reports not committed when the suggestion click leaves the field empty', async () => {
+    const port = new DomOptionPort(
+      '<input id="trigger" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="true">' +
+        '<div id="suggestions" role="listbox"><button>Frisco Texas</button><button>Plano Texas</button></div>',
     );
 
-    expect(outcome).toMatchObject({
-      ok: true,
-      driver: 'typeahead',
-      committed: 'Frisco Texas, United States',
-    });
-    expect(port.clickedNames()).toEqual(['Frisco Texas, United States']);
+    const outcome = await watchAndSelect(port, target('Where to?'), 'Frisco Texas', BUDGET);
+
+    expect(outcome).toMatchObject({ ok: false, errorCode: 'WIDGET_NOT_COMMITTED' });
   });
 
-  it('continues to support role=option suggestions', async () => {
-    const port = typeaheadFixture('option');
-
-    const outcome = await typeaheadDriver.drive(
-      port,
-      target('Where to?'),
-      { kind: 'option', value: 'Frisco, Texas' },
-      BUDGET,
+  it('leaves the typed text standing when an open popup offers nothing', async () => {
+    const port = new DomOptionPort(
+      '<input id="trigger" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="true">' +
+        '<div id="suggestions" role="listbox"></div>',
     );
+    port.setInputValue('Nowhere');
 
-    expect(outcome.ok).toBe(true);
-    expect(port.clickedNames()).toEqual(['Frisco Texas, United States']);
+    const outcome = await watchAndSelect(port, target('Where to?'), 'Nowhere', {
+      ...BUDGET,
+      deadlineMs: Date.now() + 600,
+    });
+
+    expect(outcome).toMatchObject({ ok: true, selected: false, committed: 'Nowhere' });
   });
 
   it('selects a native option by visible label and by value', async () => {
@@ -76,61 +91,6 @@ describe('@no-llm option widget drivers', () => {
     expect(valueOutcome).toMatchObject({ ok: true, committed: 'Frisco' });
   });
 
-  it('polls until a suggestion arriving after 1.2 seconds can be picked', async () => {
-    vi.useFakeTimers();
-    const port = new DomOptionPort(
-      '<input id="trigger" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false">' +
-        '<div id="suggestions" role="listbox" style="display:none"></div>',
-      (instance, _ref, value) => {
-        instance.window.setTimeout(() => {
-          const popup = instance.document.querySelector<HTMLElement>('#suggestions')!;
-          popup.style.display = 'block';
-          instance.document.querySelector('#trigger')!.setAttribute('aria-expanded', 'true');
-          popup.innerHTML =
-            '<button>Frisco Texas, United States</button><button>Plano Texas</button>';
-          instance.installCommitHandlers();
-        }, 1_200);
-        instance.setInputValue(value);
-      },
-    );
-
-    const pending = typeaheadDriver.drive(
-      port,
-      target('Where to?'),
-      { kind: 'option', value: 'Frisco, Texas' },
-      { ...BUDGET, deadlineMs: Date.now() + 10_000 },
-    );
-    await vi.advanceTimersByTimeAsync(1_500);
-
-    await expect(pending).resolves.toMatchObject({ ok: true, driver: 'typeahead' });
-  });
-
-  it('returns a bounded unreachable failure when no candidate appears', async () => {
-    let now = 0;
-    const port = new DomOptionPort(
-      '<input id="trigger" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="true">' +
-        '<div id="suggestions" role="listbox"></div>',
-      undefined,
-      () => {
-        now += 1_000;
-        return now;
-      },
-    );
-
-    const outcome = await typeaheadDriver.drive(
-      port,
-      target('Where to?'),
-      { kind: 'option', value: 'Nowhere' },
-      { ...BUDGET, deadlineMs: 20_000 },
-    );
-
-    expect(outcome).toMatchObject({
-      ok: false,
-      errorCode: 'WIDGET_TARGET_UNREACHABLE',
-      details: { waitMs: 3_000 },
-    });
-  });
-
   it('returns ambiguity with offered names and dispatches no choice click', async () => {
     const port = new DomOptionPort(
       '<button id="trigger" aria-controls="choices" aria-expanded="true">City</button>' +
@@ -150,22 +110,6 @@ describe('@no-llm option widget drivers', () => {
       details: { offered: ['Frisco', 'Frisco'] },
     });
     expect(port.clickedNames()).toEqual([]);
-  });
-
-  it('reports not committed when a suggestion click leaves the raw text unchanged', async () => {
-    const port = new DomOptionPort(
-      '<input id="trigger" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="true">' +
-        '<div id="suggestions" role="listbox"><button>Frisco Texas</button><button>Plano Texas</button></div>',
-    );
-
-    const outcome = await typeaheadDriver.drive(
-      port,
-      target('Where to?'),
-      { kind: 'option', value: 'Frisco Texas' },
-      BUDGET,
-    );
-
-    expect(outcome).toMatchObject({ ok: false, errorCode: 'WIDGET_NOT_COMMITTED' });
   });
 
   it('does not dispatch an opening click for an already-open listbox', async () => {
@@ -273,6 +217,24 @@ class DomOptionPort implements WidgetPort {
     const element = this.element(ref);
     if (element.id !== 'trigger') this.clickLog.push(element.textContent?.trim() ?? '');
     element.click();
+  }
+
+  public async clear(ref: string): Promise<void> {
+    const element = this.element(ref);
+    if (element instanceof this.window.HTMLInputElement) {
+      element.value = '';
+      element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+    }
+  }
+
+  public async type(ref: string, text: string): Promise<void> {
+    const element = this.element(ref);
+    if (element instanceof this.window.HTMLInputElement) {
+      for (const character of text) {
+        element.value += character;
+        element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+      }
+    }
   }
 
   public async fill(ref: string, value: string): Promise<void> {

@@ -20,6 +20,25 @@ export interface WidgetPort {
   click(ref: string): Promise<unknown>;
   /** Perform a settle-aware fill through an opaque element reference. */
   fill(ref: string, value: string): Promise<unknown>;
+  /**
+   * Empty a text control with real selection and key events.
+   *
+   * `fill` already replaces a value by overtyping a triple-click selection,
+   * which is enough for most controls and is the reason this is separate rather
+   * than folded in: the typing ladder needs *clearing* and *entering* as
+   * distinct steps so it can re-enter text at a different pace without
+   * re-running the select-all that some controls answer by re-rendering.
+   */
+  clear(ref: string): Promise<unknown>;
+  /**
+   * Type text into the focused control without clearing it first.
+   *
+   * `delayMs` paces the keystrokes. A control that drops characters under a
+   * fast burst — the shape that turned a typed airport code into a two-letter
+   * fragment matching an unrelated city — usually keeps all of them when the
+   * page is given time to process each one.
+   */
+  type(ref: string, text: string, options?: { readonly delayMs?: number }): Promise<unknown>;
   /** Evaluate a serializable function against an observed element. */
   evaluateOn<T, Args extends readonly unknown[]>(
     ref: string,
@@ -86,6 +105,18 @@ export interface WidgetSuccess {
   readonly committed: string;
   readonly actions: number;
   /**
+   * The label of the option the driver actually clicked, when it chose one.
+   *
+   * This is what makes the committed value verifiable on its own terms. A
+   * widget asked for "DFW" that offers and commits "Dallas" has answered the
+   * request — checking the result against the *typed text* instead reported
+   * that success as `WIDGET_NOT_COMMITTED`, and the caller spent the rest of
+   * its run working around a fill that had already landed.
+   */
+  readonly chosen?: string;
+  /** What the widget showed at the moment of choosing, capped by the driver. */
+  readonly offered?: readonly string[];
+  /**
    * The floating container this driver operated, when it had one.
    *
    * Releasing a picker is part of committing to it — many hold the selection in
@@ -138,12 +169,19 @@ export interface WidgetDriver {
   ): Promise<WidgetOutcome>;
 }
 
-/** Default bounded work allowance for one widget operation. */
+/**
+ * Default bounded work allowance for one widget operation.
+ *
+ * The deadline funds in-call recovery — a typing ladder, a driver fallback, a
+ * suggestion list waited out until it settles — rather than pushing each of
+ * those back to the caller as a failed turn. It stays well inside the agent
+ * runtime's 45s per-tool timeout, which remains the outer bound.
+ */
 export function defaultWidgetBudget(port: Pick<WidgetPort, 'now'>): WidgetBudget {
   return {
-    deadlineMs: port.now() + 15_000,
+    deadlineMs: port.now() + 25_000,
     maxPagingSteps: 12,
-    maxActions: 24,
+    maxActions: 32,
   };
 }
 

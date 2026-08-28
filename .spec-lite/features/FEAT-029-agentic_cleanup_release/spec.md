@@ -70,7 +70,7 @@ No runtime data model. The artifacts here are enforcement lists and gates:
 
 - [x] **Implementation**: Run the Memorize workflow to update `.spec-lite/memory.md` per plan §12: `@earendil-works/pi-coding-agent` (replacing `pi-agent-core` references), dependency direction `protocol -> core -> agent -> cli` (removing the `agent ↛ core` ban), direct tools for live agentic work / finite plans for deterministic replay, adapter-confined SDK imports, fresh session per run + explicit sanitized profile context, no unrestricted filesystem/shell tools, no ambient Pi resource discovery, no silent null provider. Remove the plan's now-obsolete override preamble note (plan §preamble says the override stands only "until memory is updated").
 - [x] **Unit Tests**: N/A (documentation task); the architecture checks from TASK-002 are the enforcement.
-- [x] **Documentation Update**: this task *is* documentation; also update `README.md` architecture section and regenerate `docs/` (protocol spec picks up FEAT-023 schemas).
+- [x] **Documentation Update**: this task _is_ documentation; also update `README.md` architecture section and regenerate `docs/` (protocol spec picks up FEAT-023 schemas).
 - **Verify**: `memory.md` and plan agree (no contradiction left for the next feature to trip on); grep docs for `pi-agent-core` → only historical plan files.
 - **Depends on**: TASK-001
 

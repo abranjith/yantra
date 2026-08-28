@@ -56,4 +56,38 @@ describe('@no-llm lint boundary rules', () => {
       'Direct pi-agent-core imports are forbidden outside packages/agent',
     );
   }, 30_000);
+
+  it('rejects website-specific logic in package source', async () => {
+    // The standing rule: automation works from generic structural signals, and
+    // a site name in a value the code evaluates is a bug. Enforced rather than
+    // trusted, because the habit is easy to fall back into under pressure.
+    const fixturePath = resolve(
+      repoRoot,
+      'packages/core/src/_lint-fixtures/site-specific-logic.ts',
+    );
+
+    const messages = await lintMessagesFor(fixturePath);
+    const restricted = messages.filter((message) => message.ruleId === 'no-restricted-syntax');
+
+    // One string literal comparison and one template chunk.
+    expect(restricted).toHaveLength(2);
+    expect(restricted[0]?.message).toContain('Website-specific logic is forbidden');
+  }, 30_000);
+
+  it('leaves a site named in an explanatory comment alone', async () => {
+    // The same fixture carries KAYAK in its header comment as evidence for why
+    // a general rule exists. AST selectors do not see comments, and that is the
+    // point: the distinction is between naming a cause and branching on one.
+    const fixturePath = resolve(
+      repoRoot,
+      'packages/core/src/_lint-fixtures/site-specific-logic.ts',
+    );
+
+    const messages = await lintMessagesFor(fixturePath);
+    const fromComment = messages.filter(
+      (message) => message.ruleId === 'no-restricted-syntax' && (message.line ?? 0) < 10,
+    );
+
+    expect(fromComment).toHaveLength(0);
+  }, 30_000);
 });

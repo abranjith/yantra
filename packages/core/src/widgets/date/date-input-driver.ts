@@ -9,14 +9,34 @@ type DateFormat = 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
 export const dateInputDriver: WidgetDriver = {
   kind: 'date-input',
   family: 'date',
+  /**
+   * Confidence that this control accepts a *typed* date.
+   *
+   * The name hint alone is far too eager. A calendar trigger is very often an
+   * `<input readonly>` labelled "Choose date" and showing a formatted value —
+   * this driver typed an ISO date into one of those, the control kept its own
+   * value, and the whole fill stopped there rather than reaching the calendar
+   * the trigger exists to open.
+   *
+   * So the disqualifying signals come first, and they are structural: a control
+   * that cannot be typed into, or that declares it opens something, is not a
+   * date input however it is named.
+   */
   detect: async (port, target) =>
     port.evaluateOn(target.ref, (element) => {
       if (!(element instanceof HTMLInputElement)) return 0;
+      if (element.readOnly || element.disabled) return 0;
+      const popup = element.getAttribute('aria-haspopup')?.toLowerCase() ?? '';
+      if (['dialog', 'grid', 'listbox', 'menu', 'tree'].includes(popup)) return 0;
       if (element.type.toLowerCase() === 'date') return 1;
       const hint = [element.placeholder, element.pattern, element.getAttribute('aria-label') ?? '']
         .join(' ')
         .toLowerCase();
-      return /(?:date|mm|dd|yyyy)/.test(hint) ? 0.8 : 0;
+      // An explicit format hint is a real signal that typing is expected; a
+      // bare mention of "date" in an accessible name is not, so it ranks below
+      // the calendar driver rather than pre-empting it.
+      if (/(?:mm|dd|yyyy)/.test(hint)) return 0.9;
+      return hint.includes('date') ? 0.6 : 0;
     }),
   drive: async (port, target, intent, budget) => {
     if (port.now() > budget.deadlineMs || budget.maxActions < 1) {

@@ -1,6 +1,6 @@
 {
   "name": "yantra",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "AI-orchestrated browser automation platform (monorepo root).",
