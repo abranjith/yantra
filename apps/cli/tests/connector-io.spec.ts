@@ -83,7 +83,7 @@ describe('@no-llm cli/connector-io', () => {
         },
       ],
       overall: 'ok',
-      version: '0.0.0',
+      version: '0.0.1',
       platform: process.platform,
       nodeVersion: process.versions.node,
     };

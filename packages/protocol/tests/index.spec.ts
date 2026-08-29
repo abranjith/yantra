@@ -11,7 +11,7 @@ import { makePlan } from './factories.js';
 
 describe('@no-llm protocol smoke', () => {
   it('exports a PROTOCOL_VERSION constant matching the package version', () => {
-    expect(PROTOCOL_VERSION).toBe('0.0.0');
+    expect(PROTOCOL_VERSION).toBe('0.0.1');
   });
 
   it('exports schema version 0.2 and parses both supported versions', () => {

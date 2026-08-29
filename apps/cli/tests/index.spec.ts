@@ -11,9 +11,9 @@ describe('@no-llm cli smoke', () => {
     expect(writeSpy).toHaveBeenCalled();
     const message = (writeSpy.mock.calls[0]?.[0] as string | undefined) ?? '';
     expect(message).toContain('yantra');
-    expect(message).toContain('protocol=0.0.0');
-    expect(message).toContain('core=0.0.0');
-    expect(message).toContain('agent=0.0.0');
+    expect(message).toContain('protocol=0.0.1');
+    expect(message).toContain('core=0.0.1');
+    expect(message).toContain('agent=0.0.1');
     expect(exitCode).toBe(0);
 
     writeSpy.mockRestore();

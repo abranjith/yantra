@@ -19,7 +19,7 @@ const PI_SDK_BOUNDARY_MESSAGE =
  * blocklist of the web. Extend it whenever a review catches a new one.
  */
 const SITE_TOKEN_SOURCE =
-  'expedia|kayak|priceline|orbitz|skyscanner|booking\.com|trip\.com|google flights|google travel';
+  'expedia|kayak|priceline|orbitz|skyscanner|booking[.]com|trip[.]com|google flights|google travel';
 const SITE_SPECIFIC_LOGIC_MESSAGE =
   'Website-specific logic is forbidden: automation must work from generic structural signals ' +
   '(ARIA roles, accessible names, widget shape, observed DOM state), never from a named site. ' +
