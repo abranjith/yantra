@@ -1,3 +1,4 @@
+import { globSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +18,15 @@ const lintMessagesFor = async (filePath: string) => {
 };
 
 describe('@no-llm lint boundary rules', () => {
+  it('contains no literal NUL bytes in production TypeScript source', () => {
+    const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
+    const withNul = sourceFiles.filter((filePath) =>
+      readFileSync(resolve(repoRoot, filePath)).includes(0),
+    );
+
+    expect(withNul).toEqual([]);
+  });
+
   it('rejects @yantra/agent imports from packages/core', async () => {
     const fixturePath = resolve(repoRoot, 'packages/core/src/_lint-fixtures/core-imports-agent.ts');
 
@@ -73,6 +83,35 @@ describe('@no-llm lint boundary rules', () => {
     expect(restricted).toHaveLength(2);
     expect(restricted[0]?.message).toContain('Website-specific logic is forbidden');
   }, 30_000);
+
+  it('keeps the query-plan module free of widget-layer imports', () => {
+    // The WHAT rung is pure string and ranking logic, and staying that way is
+    // what lets it be tested with no port at all — and what stops the single
+    // ranking rule from acquiring a second implementation inside a driver.
+    const source = readFileSync(
+      resolve(repoRoot, 'packages/core/src/interaction/query-plan.ts'),
+      'utf8',
+    );
+    const imports = [...source.matchAll(/^import[^;]*from '([^']+)';/gm)].map(
+      (match) => match[1] ?? '',
+    );
+
+    expect(imports.filter((specifier) => specifier.includes('widgets/'))).toEqual([]);
+    expect(imports.every((specifier) => specifier.startsWith('./'))).toBe(true);
+  });
+
+  it('keeps candidate ranking to exactly one implementation', () => {
+    // Two ideas of "which offer answers this request" is the defect the WHAT
+    // rung exists to remove, so the widget-layer entry point delegates rather
+    // than restating the tier ladder.
+    const source = readFileSync(
+      resolve(repoRoot, 'packages/core/src/widgets/option/candidates.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('return rankAgainstRequested(candidates, requested);');
+    expect(source).not.toContain('MATCH_TIERS');
+  });
 
   it('leaves a site named in an explanatory comment alone', async () => {
     // The same fixture carries KAYAK in its header comment as evidence for why

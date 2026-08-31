@@ -105,13 +105,26 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'A "committed" that differs from what you sent is normal and is the widget resolving your ' +
       'value to something it actually offers — a location field asked for an airport code ' +
       'commits a city name — so accept it and move on. Never re-fill a field to force your ' +
-      'original wording back into it. A failure carries "observed" (what the control holds right ' +
+      'original wording back into it. An "editee" in a result means the page routed the edit to ' +
+      'a different control and the value did land there; the field you named staying empty is ' +
+      'not a failure and is not something to fix. A failure carries "observed" (what the control ' +
+      'holds right ' +
       'now, which is often not empty), "attempted" (recovery the tool already performed, such as ' +
       'several ways of entering the text or several widget drivers), and sometimes "offered" ' +
       '(what the widget will actually accept). Never repeat anything named in "attempted" — it ' +
       'has already failed. When "offered" is present, re-issue the same call with one of those ' +
       'strings exactly as written; that is the fastest path through an ambiguous suggestion ' +
-      'list. The fill tools ' +
+      'list. ' +
+      // How to read a batch. Each clause replaces a wrong inference the model
+      // would otherwise draw from a result that is neither a clean success nor
+      // a clean failure.
+      'A browser_fill_form result reports three sets: "applied" (fields that landed), "failed" ' +
+      '(fields attempted that did not take), and "skipped" (fields not attempted). A batch with ' +
+      'both applied and failed fields is progress, not a retry trigger — the applied fields are ' +
+      'set, so re-sending them undoes work and wastes a turn. Send only the failed fields again, ' +
+      'and only after reading why each one failed. A "skipped" field names the field blocking it ' +
+      'in "blocked_by": it shares a widget with a field that failed, so resolve that field first ' +
+      'and then send the skipped one. The fill tools ' +
       'verify their own result and return the committed value, so a success needs no confirming ' +
       'browser_observe. Action tools return a fresh observation, ' +
       'so do not chain browser_observe after every action. Many sites open their results in a ' +

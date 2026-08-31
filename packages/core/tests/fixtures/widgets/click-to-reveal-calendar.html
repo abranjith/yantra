@@ -1,0 +1,58 @@
+<!--
+  Shape: a bare textbox with no popup attribute, no format hint and no rendered
+  value, which mounts a month-paged calendar only when it is clicked. Nothing
+  about its closed state says it is a date control at all.
+
+  Observed in run 20260829T171218Z-do-0ae073f1 (seq 30 and 58): both fills
+  reported that no date widget driver recognised the field, and between them the
+  agent gave up on the tool and drove the calendar with eleven browser_click
+  calls — about thirty-five seconds of wall time plus eleven model round-trips,
+  doing what calendarDriver does in one call.
+-->
+<input id="trigger" aria-label="Departure" />
+<div id="cal" role="dialog" style="display: none">
+  <button id="next" aria-label="Next month">&rsaquo;</button>
+  <table>
+    <caption>
+      August 2026
+    </caption>
+    <tbody>
+      <tr></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var dialog = document.getElementById('cal');
+    var caption = document.querySelector('#cal caption');
+    var row = document.querySelector('#cal tbody tr');
+    var months = ['August', 'September', 'October', 'November', 'December'];
+    var index = 0;
+
+    function render() {
+      caption.textContent = months[index] + ' 2026';
+      var month = String(index + 8);
+      if (month.length === 1) month = '0' + month;
+      row.innerHTML = '<td><button data-date="2026-' + month + '-02">2</button></td>';
+      row.querySelector('button').addEventListener('click', function () {
+        trigger.value = months[index].slice(0, 3) + ' 2, 2026';
+        dialog.style.display = 'none';
+      });
+    }
+
+    // The whole point: the calendar exists only after a click, and the trigger
+    // advertises nothing about it beforehand.
+    trigger.addEventListener('click', function () {
+      dialog.style.display = 'block';
+      render();
+    });
+    document.getElementById('next').addEventListener('click', function () {
+      if (index < months.length - 1) index += 1;
+      render();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') dialog.style.display = 'none';
+    });
+  })();
+</script>

@@ -52,18 +52,24 @@ export async function resolveContainer(
     (element, unlinked) => {
       const visible = (candidate: Element): boolean => {
         if (!(candidate instanceof HTMLElement)) return false;
-        const style = window.getComputedStyle(candidate);
         const rect = candidate.getBoundingClientRect();
+        // Ancestors count. `getComputedStyle` reports an element's own display,
+        // not its effective one, so a listbox inside a portal overlay the page
+        // just set to `display: none` still reads as rendered — which is how a
+        // finished fill came back as "the overlay could not be released".
+        // Walking up is also the only visibility signal that survives where
+        // there is no layout engine at all.
+        for (let node: Element | null = candidate; node; node = node.parentElement) {
+          if (!(node instanceof HTMLElement)) break;
+          if (node.hidden) return false;
+          const style = window.getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+        }
         // Both dimensions, not either: an empty block-level placeholder stretches
         // to its parent's width at zero height, and `width > 0` alone waves it
         // through as a rendered popup. The child-count clause is what keeps this
         // usable where there is no layout engine at all.
-        return (
-          !candidate.hidden &&
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          ((rect.width > 0 && rect.height > 0) || candidate.childElementCount > 0)
-        );
+        return (rect.width > 0 && rect.height > 0) || candidate.childElementCount > 0;
       };
       const toPath = (candidate: Element): number[] => {
         const result: number[] = [];
@@ -141,14 +147,17 @@ export async function isOpen(
     let current: Element | null = document.documentElement;
     for (const index of path) current = current?.children.item(index) ?? null;
     if (!(current instanceof HTMLElement)) return false;
-    const style = window.getComputedStyle(current);
+    // Ancestors count — see the note in `resolveContainer`. A page that closes
+    // a portal by hiding the whole overlay leaves the listbox inside it with an
+    // unchanged computed display of its own.
+    for (let node: Element | null = current; node; node = node.parentElement) {
+      if (!(node instanceof HTMLElement)) break;
+      if (node.hidden) return false;
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
     const rect = current.getBoundingClientRect();
-    return (
-      !current.hidden &&
-      style.display !== 'none' &&
-      style.visibility !== 'hidden' &&
-      ((rect.width > 0 && rect.height > 0) || current.childElementCount > 0)
-    );
+    return (rect.width > 0 && rect.height > 0) || current.childElementCount > 0;
   }, container.path);
 }
 
@@ -233,6 +242,7 @@ export async function openIfClosed(
 
   return widgetFailure(
     'WIDGET_DID_NOT_OPEN',
+    'picker-did-not-open',
     `The widget "${target.name}" did not expose a visible container within ${OPEN_WAIT_MS} ms.`,
     { waitMs: OPEN_WAIT_MS },
   );
@@ -282,14 +292,14 @@ async function visibleContainerPaths(port: WidgetPort): Promise<readonly (readon
     return Array.from(document.querySelectorAll(selector))
       .filter((candidate): candidate is HTMLElement => candidate instanceof HTMLElement)
       .filter((candidate) => {
-        const style = window.getComputedStyle(candidate);
+        for (let node: Element | null = candidate; node; node = node.parentElement) {
+          if (!(node instanceof HTMLElement)) break;
+          if (node.hidden) return false;
+          const style = window.getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+        }
         const rect = candidate.getBoundingClientRect();
-        return (
-          !candidate.hidden &&
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          ((rect.width > 0 && rect.height > 0) || candidate.childElementCount > 0)
-        );
+        return (rect.width > 0 && rect.height > 0) || candidate.childElementCount > 0;
       })
       .map(toPath)
       .filter((path) => path.length > 0);

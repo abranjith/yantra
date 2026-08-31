@@ -119,7 +119,15 @@ describe('@no-llm withAttempts', () => {
     );
 
     expect(run.ledger.records).toEqual([
-      { attempt: 1, strategy: 'attempt-1', errorCode: null, elapsedMs: expect.any(Number) },
+      {
+        attempt: 1,
+        strategy: 'attempt-1',
+        // Every rung that predates the axes varies mechanism against one fixed
+        // node and one fixed query, so `how` is the honest default.
+        axis: 'how',
+        errorCode: null,
+        elapsedMs: expect.any(Number),
+      },
     ]);
   });
 

@@ -79,7 +79,7 @@ hosts:
 
 The value lives in the OS keychain under the `yantra` service. For a website fill, trusted host metadata must contain at least one host. Yantra compares that metadata with the browser's live host before resolving the secret. An exact host or a host under the same registrable domain is accepted; an unrelated host returns `SECRET_HOST_MISMATCH` before keychain access.
 
-`browser_fill_element` is the only live agent tool that accepts a stored `secret_ref`. It requires confirmation, resolves the secret after the host check, skips suggestion and committed-value readback, and returns no secret value. `browser_fill_form` accepts only non-secret strings and never submits.
+`browser_fill_element` is the only live agent tool that accepts a stored `secret_ref`. It requires confirmation, resolves the secret after the host check, skips suggestion and committed-value readback, and returns no secret value. It also performs no editee resolution: locating the control a page routed keystrokes into means searching every observed control for the value that was sent, which for a credential would be a readback of secret-derived state compared against the whole page, so that path is structurally unavailable to a secret fill rather than merely unused. `browser_fill_form` accepts only non-secret strings and never submits.
 
 Resolution writes only the reference key, step, time, and `resolved`, `not_found`, or `error` outcome to `secrets.jsonl`. A semantic trace stores only the key. Explicit buffers are cleared after use on a best-effort basis, but JavaScript strings and runtime copies cannot be guaranteed to be erased from memory.
 

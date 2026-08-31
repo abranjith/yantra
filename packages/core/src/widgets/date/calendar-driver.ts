@@ -1,3 +1,4 @@
+import type { InteractionFailureCause } from '../../interaction/index.js';
 import { isOpen, openIfClosed, resolveContainer, type WidgetContainer } from '../open-state.js';
 import { clickCandidate } from '../option/candidates.js';
 import {
@@ -48,10 +49,33 @@ export const calendarDriver: WidgetDriver = {
       return current?.querySelector('table,[role="grid"],[aria-label]') ? 0.75 : 0;
     }, container.path);
   },
+  /**
+   * What an opened container says about itself.
+   *
+   * A month grid is unmistakable once it is on the page — a table or a
+   * `role="grid"`, or a run of day-shaped cells — and that is precisely the
+   * evidence a closed trigger withholds. Reached only from the engine's open
+   * probe, which knows the container came from its own click.
+   */
+  detectOpen: async (port, _target, container) =>
+    port.evaluate((path) => {
+      let current: Element | null = document.documentElement;
+      for (const index of path) current = current?.children.item(index) ?? null;
+      if (!(current instanceof HTMLElement)) return 0;
+      if (current.querySelector('table,[role="grid"],[role="rowgroup"]')) return 0.9;
+      const cells = Array.from(current.querySelectorAll('[role="gridcell"],td,button'));
+      const dayShaped = cells.filter((cell) =>
+        /^\s*\d{1,2}\s*$/.test(cell.textContent ?? ''),
+      ).length;
+      // A week's worth of bare day numbers is a calendar; two or three is a
+      // pager, a rating, or a list of quantities.
+      return dayShaped >= 7 ? 0.8 : 0;
+    }, container.path),
   drive: async (port, target, intent, budget) => {
     if (intent.kind !== 'date' && intent.kind !== 'date_range') {
       return calendarFailure(
         'WIDGET_TARGET_UNREACHABLE',
+        'intent-incompatible',
         'A calendar accepts only date intents.',
         emptyRead(),
       );
@@ -62,7 +86,13 @@ export const calendarDriver: WidgetDriver = {
     // trigger again between range endpoints to "ensure" openness.
     const opened = await openIfClosed(port, target);
     if (!opened.ok) {
-      return calendarFailure(opened.errorCode, opened.message, emptyRead(), opened.details);
+      return calendarFailure(
+        opened.errorCode,
+        opened.cause,
+        opened.message,
+        emptyRead(),
+        opened.details,
+      );
     }
     let actions = opened.wasOpen ? 0 : 1;
     let container = opened.container;
@@ -136,6 +166,7 @@ export const calendarDriver: WidgetDriver = {
     }
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
+      'value-rejected-on-release',
       `The calendar clicks landed, but "${target.name}" does not reflect the requested date${intent.kind === 'date_range' ? ' range' : ''}.`,
       lastRead,
       { committed },
@@ -164,6 +195,7 @@ async function findAndClickDate(
       return withRead(
         calendarFailure(
           'WIDGET_TARGET_UNREACHABLE',
+          'budget',
           'The calendar action budget was exhausted.',
           lastRead,
           { reason: 'budget' },
@@ -179,6 +211,7 @@ async function findAndClickDate(
       return withRead(
         calendarFailure(
           'WIDGET_TARGET_UNREACHABLE',
+          'driver-not-recognized',
           `The calendar container is open, ${grid.elementsScanned} elements were scanned, and 0 day cells were recognized.`,
           grid,
           { reason: 'empty_calendar' },
@@ -194,6 +227,7 @@ async function findAndClickDate(
       return withRead(
         calendarFailure(
           'WIDGET_MAPPING_UNSAFE',
+          'mapping-unsafe',
           `The ${unsafe.monthLabel} calendar disagrees with its weekday headers, so no date was clicked.`,
           grid,
           {
@@ -212,6 +246,7 @@ async function findAndClickDate(
       return withRead(
         calendarFailure(
           'WIDGET_AMBIGUOUS_CHOICE',
+          'several-matched-equally',
           `The calendar exposes ${matches.length} cells for ${date}.`,
           grid,
           { offered: matches.slice(0, 10).map((cell) => `${cell.monthLabel}: ${cell.name}`) },
@@ -226,6 +261,7 @@ async function findAndClickDate(
         return withRead(
           calendarFailure(
             'WIDGET_TARGET_UNREACHABLE',
+            'date-not-reachable',
             `The requested date ${date} is disabled.`,
             grid,
             { reason: 'disabled', date },
@@ -339,6 +375,7 @@ function unreachable(
 ): WidgetFailure {
   return calendarFailure(
     'WIDGET_TARGET_UNREACHABLE',
+    'date-not-reachable',
     `The calendar could not reach ${date}: ${reason}.`,
     read,
     { reason },
@@ -374,12 +411,13 @@ function emptyRead(): CalendarGridRead {
 
 function calendarFailure(
   errorCode: WidgetFailure['errorCode'],
+  cause: InteractionFailureCause,
   message: string,
   read: CalendarGridRead,
   details: Readonly<Record<string, unknown>> = {},
   displayed?: ReadonlySet<string>,
 ): WidgetFailure {
-  return widgetFailure(errorCode, message, {
+  return widgetFailure(errorCode, cause, message, {
     ...details,
     containerResolved: read.containerResolved,
     cellsSeen: read.cellsSeen,

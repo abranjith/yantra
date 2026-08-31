@@ -1,3 +1,4 @@
+import { comboboxDriver } from './combobox/combobox-driver.js';
 import { calendarDriver } from './date/calendar-driver.js';
 import { dateInputDriver } from './date/date-input-driver.js';
 import { listboxDriver } from './option/listbox-driver.js';
@@ -9,6 +10,7 @@ export function createDefaultWidgetRegistry(): WidgetRegistry {
   return new WidgetRegistry()
     .registerDriver(nativeSelectDriver)
     .registerDriver(listboxDriver)
+    .registerDriver(comboboxDriver)
     .registerDriver(dateInputDriver)
     .registerDriver(calendarDriver);
 }

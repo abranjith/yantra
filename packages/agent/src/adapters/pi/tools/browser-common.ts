@@ -88,26 +88,40 @@ export async function resolveFillTarget(
   controller: AgentBrowserController,
   preferred?: WidgetTarget,
 ): Promise<WidgetTarget | DomainFailure> {
+  const resolved = await resolveFillField(field, controller, preferred);
+  return isDomainFailure(resolved) ? resolved : resolved.target;
+}
+
+/** A resolved fill target together with the observation it came from. */
+export interface ResolvedFillField {
+  readonly target: WidgetTarget;
+  /**
+   * The observation the target was resolved from.
+   *
+   * Kept because it is the before-picture the fill engine's editee resolution
+   * needs. Taking it here and handing it on costs nothing; letting the engine
+   * take its own would charge every fill an extra page read for a question most
+   * fills never have to ask.
+   */
+  readonly observation: AgentBrowserObservation;
+}
+
+/** Resolve a fill target and keep the observation that produced it. */
+export async function resolveFillField(
+  field: string,
+  controller: AgentBrowserController,
+  preferred?: WidgetTarget,
+): Promise<ResolvedFillField | DomainFailure> {
   const observation = await controller.observe({
     cap: FILL_RESOLUTION_CAP,
     trackDigest: false,
   });
-  const resolved = resolveFormField(field, observation);
-  if (!isDomainFailure(resolved)) return toWidgetTarget(resolved);
-  // With `preferred` the caller is re-finding a control it already resolved
-  // once, so same-named duplicates are ranked instead of refused. Deciding
-  // *which field was meant* stays strict — "Check-in" and "Check-out" share a
-  // prefix and picking one would fill the wrong date — but by now that choice
-  // is made, and an open picker having mounted a second copy of its own
-  // trigger must not strand the retry that exists to recover from it.
-  if (!preferred || resolved.errorCode !== 'FORM_FIELD_AMBIGUOUS') return resolved;
-  const wanted = preferred.name.trim().toLowerCase();
-  const sameName = observation.interactables.filter(
-    (entry) => entry.name.trim().toLowerCase() === wanted && entry.role === preferred.role,
+  const resolved = resolveFormField(
+    field,
+    observation,
+    preferred ? { preferred, allowEquivalentCopies: true } : {},
   );
-  if (sameName.length === 0) return resolved;
-  const grouped = sameName.filter((entry) => (entry.group ?? null) === preferred.group);
-  return toWidgetTarget((grouped.length > 0 ? grouped : sameName)[0]!);
+  return isDomainFailure(resolved) ? resolved : { target: toWidgetTarget(resolved), observation };
 }
 
 function toWidgetTarget(entry: AgentInteractable): WidgetTarget {

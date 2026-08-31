@@ -25,6 +25,14 @@
 import type { Result } from '@yantra/protocol';
 import { err, ok } from '@yantra/protocol';
 
+/**
+ * Whether a refusal message already carries the publish instruction.
+ *
+ * Read from the message rather than tracked per limit, so a reworded decision
+ * cannot silently reintroduce the duplicate.
+ */
+const PUBLISH_REMEDY_RE = /\bpublish\b/i;
+
 /** Monotonic millisecond clock (injectable for deterministic tests). */
 export type NowMs = () => number;
 
@@ -47,6 +55,15 @@ export interface BudgetDecision {
   readonly limit: BudgetLimit;
   /** Human-readable, secret-free explanation. */
   readonly message: string;
+  /**
+   * Whether {@link message} already tells the caller to publish what it has.
+   *
+   * The remedy belongs to the decision that knows whether one is present. It
+   * used to be appended unconditionally one layer up, so a soft wall-clock
+   * refusal — whose own message already says exactly that — carried the same
+   * instruction twice and the agent read it twice.
+   */
+  readonly carriesPublishRemedy: boolean;
 }
 
 /** Configurable safety limits; the soft fraction starts publication wind-down. */
@@ -284,6 +301,11 @@ export class BudgetTracker {
   }
 
   private decide(limit: BudgetLimit, message: string): BudgetDecision {
-    return { code: 'BUDGET_EXHAUSTED', limit, message };
+    return {
+      code: 'BUDGET_EXHAUSTED',
+      limit,
+      message,
+      carriesPublishRemedy: PUBLISH_REMEDY_RE.test(message),
+    };
   }
 }

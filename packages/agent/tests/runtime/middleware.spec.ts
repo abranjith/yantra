@@ -153,6 +153,31 @@ describe('@no-llm middleware stage short-circuiting', () => {
     expect(denied.modelText).toContain('Publish your result now');
   });
 
+  it('does not repeat a publish instruction the budget decision already made', async () => {
+    // The soft wall-clock refusal's own message ends "Publish now using the
+    // evidence already gathered." Appending the caller's near-identical
+    // sentence on top of it made the agent read the same instruction twice for
+    // every non-terminal tool.
+    let now = 0;
+    const budgets = new BudgetTracker(
+      { ...DEFAULT_BUDGET_LIMITS, wallClockMs: 1_000, softWallClockFraction: 0.5 },
+      () => now,
+    );
+    const services = { ...makeServices(), budgets };
+    const tool = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+
+    now = 600;
+    const denied = await tool.execute({ q: 'b' }, undefined);
+
+    expect(denied.error_code).toBe('BUDGET_EXHAUSTED');
+    expect(denied.details).toMatchObject({ budget_limit: 'wall-clock-soft' });
+    expect(denied.modelText).not.toContain('Publish your result now');
+    expect((denied.modelText.match(/publish/gi) ?? []).length).toBe(1);
+  });
+
   it('runs a terminal tool after the cumulative byte budget is spent', async () => {
     // Regression: `result_publish` is the only way to complete a run. Charging
     // it against the exploration pool let a fully-researched run be denied its

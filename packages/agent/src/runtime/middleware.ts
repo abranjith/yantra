@@ -249,10 +249,15 @@ async function runPipeline<TParams extends TSchema>(
     const reserved = services.budgets.reserveCall(spec.name, { terminal });
     if (!reserved.isOk) {
       // The remedy only makes sense for the tools that can be starved; the
-      // terminal tool itself has nowhere else to go.
-      const remedy = terminal
-        ? ''
-        : ' Publish your result now with the evidence you already gathered — it is attached automatically.';
+      // terminal tool itself has nowhere else to go. And it is only appended
+      // when the budget decision does not already carry one — the soft
+      // wall-clock refusal says exactly this in its own words, and appending a
+      // near-identical second sentence made the agent read the instruction
+      // twice for every non-terminal tool.
+      const remedy =
+        terminal || reserved.error.carriesPublishRemedy
+          ? ''
+          : ' Publish your result now with the evidence you already gathered — it is attached automatically.';
       return failure(
         spec,
         services,

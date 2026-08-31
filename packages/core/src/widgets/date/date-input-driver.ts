@@ -40,9 +40,12 @@ export const dateInputDriver: WidgetDriver = {
     }),
   drive: async (port, target, intent, budget) => {
     if (port.now() > budget.deadlineMs || budget.maxActions < 1) {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'The widget action budget was exhausted.', {
-        reason: 'budget',
-      });
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'budget',
+        'The widget action budget was exhausted.',
+        { reason: 'budget' },
+      );
     }
 
     if (intent.kind === 'date') {
@@ -52,17 +55,25 @@ export const dateInputDriver: WidgetDriver = {
     }
 
     if (intent.kind !== 'date_range') {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'A date input accepts only date intents.');
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'intent-incompatible',
+        'A date input accepts only date intents.',
+      );
     }
     if (budget.maxActions < 2) {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'The widget action budget was exhausted.', {
-        reason: 'budget',
-      });
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'budget',
+        'The widget action budget was exhausted.',
+        { reason: 'budget' },
+      );
     }
     const pair = await resolveDatePair(port, target);
     if (!pair) {
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
+        'driver-not-recognized',
         `The date range field "${target.name}" did not resolve to one check-in and one check-out input.`,
         { reason: 'paired_inputs_not_found' },
       );
@@ -101,10 +112,12 @@ async function fillDateInput(
   if (parseCommitted(committed, format) !== isoDate) {
     return {
       ok: false,
-      failure: widgetFailure('WIDGET_NOT_COMMITTED', `The date input did not commit ${isoDate}.`, {
-        committed,
-        format,
-      }),
+      failure: widgetFailure(
+        'WIDGET_NOT_COMMITTED',
+        'control-refused-value',
+        `The date input did not commit ${isoDate}.`,
+        { committed, observed: committed, format },
+      ),
     };
   }
   return { ok: true, value: committed };

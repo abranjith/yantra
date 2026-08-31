@@ -9,21 +9,21 @@
  * dutifully offered a city matching the fragment, and the whole run proceeded
  * from a value nobody had asked for.
  *
- * So: read the field back, and when the readback is a *truncation* of the
- * request, try again by a different mechanism. Only truncation escalates. A
- * control that rewrites what it was given — an input mask inserting its own
- * punctuation — has accepted the value, and fighting it would replace working
- * text with a second, worse attempt.
+ * So: read the field back, and try another mechanism unless the control holds
+ * the requested letters and numbers. An input mask inserting punctuation has
+ * accepted the value; a control replacing `DFW` with unrelated text has not.
  *
  * This module deliberately owns no `FillFailure`: the fill layer depends on
  * interaction, never the reverse, so the outcome here is self-describing and
  * the caller maps it into its own vocabulary.
  */
 
+import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js';
 
 import { withAttempts, type AttemptOutcome } from './attempt.js';
-import { normalizeText, type AttemptLedger } from './types.js';
+import { locateEditee, type EditeeEvidence } from './editee.js';
+import { ledgerOf, normalizeText, type AttemptLedger, type AttemptRecord } from './types.js';
 
 /** How the text was ultimately entered. */
 export type TypingStrategy = 'overtype' | 'clear-then-type' | 'native-setter';
@@ -59,6 +59,16 @@ export interface TypingFailure {
   readonly observed: string;
   /** Set when the ladder never started because the budget was spent. */
   readonly reason?: 'budget';
+  /**
+   * The live control the page routed the keystrokes to.
+   *
+   * Present only when the WHERE rung found exactly one, and the reason the
+   * ladder stopped at rung 1: varying the mechanism against a node that is not
+   * the editee cannot succeed, so two more rungs would buy nothing but time.
+   */
+  readonly editee?: WidgetTarget;
+  /** Which structural signal identified — or failed to identify — the editee. */
+  readonly editeeEvidence?: EditeeEvidence;
   readonly ledger: AttemptLedger;
 }
 
@@ -77,10 +87,38 @@ export interface CommitTextOptions {
    * nothing, exactly as it did before this module existed.
    */
   readonly allowEscalation?: boolean;
+  /**
+   * Enable the WHERE rung.
+   *
+   * Opt-in, and supplied by the caller rather than taken from `port.observe`
+   * directly, so the cost belongs to whoever decided the rung was worth it —
+   * a plain text box with no popup to delegate to pays nothing at all.
+   *
+   * **It is never supplied on the secret path**: locating an editee means
+   * searching every observed interactable for the value that was sent, which
+   * for a credential is a readback of secret-derived state compared against the
+   * whole page. See the security note on `fillSecretField`.
+   */
+  readonly editee?: EditeeProbeOptions;
+}
+
+/** How the WHERE rung gets its two observations. */
+export interface EditeeProbeOptions {
+  /** Takes a fresh observation. Called once, after rung 1 comes back empty. */
+  readonly observe: () => Promise<AgentBrowserObservation>;
+  /**
+   * The before-picture, when the caller already has one.
+   *
+   * The agent's fill tools resolve a field from an observation taken
+   * immediately beforehand, which *is* the before-picture — so passing it makes
+   * the ordinary path cost nothing extra and the delegated path cost exactly
+   * one observation. Without it the rung takes its own baseline before typing.
+   */
+  readonly baseline?: AgentBrowserObservation;
 }
 
 /**
- * Enter `text` into `target`, escalating only while the control truncates it.
+ * Enter `text` into `target`, escalating until it is semantically preserved.
  *
  * Returns the committed text rather than the requested text: what the control
  * holds is the fact, and the caller decides what it means.
@@ -116,30 +154,79 @@ export async function commitText(
       strategy: 'overtype',
       committed: '',
       reformatted: false,
-      ledger: { records: [{ attempt: 1, strategy: 'overtype', errorCode: null, elapsedMs: 0 }] },
+      ledger: {
+        records: [{ attempt: 1, strategy: 'overtype', axis: 'how', errorCode: null, elapsedMs: 0 }],
+      },
     };
   }
 
+  // The before-picture, because "which control's value changed" is not a
+  // question that can be asked after the fact. Reused from the caller when it
+  // already has one; only a caller with none pays for a read here, and only
+  // when it asked for the rung at all.
+  const probe = options.editee;
+  const before = probe ? (probe.baseline ?? (await probe.observe())) : null;
+
   let lastCommitted = '';
+  /** The WHERE rung's own ledger entries, merged after the ladder returns. */
+  const whereRecords: AttemptRecord[] = [];
   const run = await withAttempts<TypedText, TypingFailure>(
     async (attempt) => {
       const strategy = TYPING_LADDER[attempt - 1]!;
       await applyStrategy(port, target, text, strategy);
       const committed = await readRawValue(port, target);
       lastCommitted = committed;
-      if (!isTruncationOf(committed, text)) {
+      if (isFormattingEquivalent(committed, text)) {
         return {
           ok: true,
           value: {
             ok: true,
             strategy,
             committed,
-            reformatted: normalizeText(committed) !== normalizeText(text),
+            reformatted: committed !== text,
             // Replaced by the caller-visible ledger below; an attempt cannot
             // see the record it is itself being written into.
             ledger: { records: [] },
           },
         } satisfies AttemptOutcome<TypedText, TypingFailure>;
+      }
+      // The WHERE rung, and the only place it fires: rung 1 sent the whole
+      // value and the control is empty, which is exactly the state that says
+      // nothing about *how* the text was typed and everything about where it
+      // went. A control that kept part of the value did take the keystrokes,
+      // so mechanism is still the right question for it.
+      if (before !== null && attempt === 1 && committed.length === 0) {
+        const startedAt = port.now();
+        const after = await probe!.observe();
+        const retainedFocus = await targetHasFocus(port, target);
+        const located = locateEditee(before, after, target, text, {
+          targetRetainedFocus: retainedFocus,
+        });
+        whereRecords.push({
+          attempt: 1,
+          strategy: 'locate-editee',
+          axis: 'where',
+          errorCode: located.kind === 'delegated' ? null : 'WIDGET_NOT_COMMITTED',
+          elapsedMs: port.now() - startedAt,
+          detail:
+            located.kind === 'delegated'
+              ? `keystrokes landed in "${located.target.name}"`
+              : `editee not located (${located.kind === 'same' ? 'none' : located.evidence})`,
+        });
+        if (located.kind === 'delegated') {
+          return {
+            ok: false,
+            failure: {
+              ok: false,
+              errorCode: 'WIDGET_NOT_COMMITTED',
+              message: `The "${target.name}" control is still empty because the page routed the typed value to "${located.target.name}" instead.`,
+              observed: committed,
+              editee: located.target,
+              editeeEvidence: located.evidence,
+              ledger: { records: [] },
+            },
+          };
+        }
       }
       return {
         ok: false,
@@ -149,7 +236,9 @@ export async function commitText(
           message:
             committed.length === 0
               ? `The "${target.name}" control is still empty after the value was typed.`
-              : `The "${target.name}" control kept only "${committed}" of the value that was typed.`,
+              : isTruncationOf(committed, text)
+                ? `The "${target.name}" control kept only "${committed}" of the value that was typed.`
+                : `The "${target.name}" control changed the typed value to unrelated text "${committed}".`,
           observed: committed,
           ledger: { records: [] },
         },
@@ -163,18 +252,54 @@ export async function commitText(
       // truncated the text — and the point of the ladder is to answer it with a
       // *different mechanism*, so it is transient by construction rather than
       // by the shared classification table.
-      classify: () => 'transient',
+      //
+      // Except one, and it is the whole point of the WHERE rung: keystrokes
+      // proven to be landing in another control are a definite answer, and
+      // retrying that into rung 2 would silently negate the fast exit this
+      // exists to provide. Cause-aware, not code-aware — both arms carry the
+      // same `WIDGET_NOT_COMMITTED`.
+      classify: (failure) => (failure.editee ? 'terminal' : 'transient'),
       describe: (failure) => ({
         errorCode: failure.errorCode,
-        detail: failure.observed.length > 0 ? `kept "${failure.observed}"` : 'field stayed empty',
+        detail:
+          failure.observed.length > 0 ? `observed "${failure.observed}"` : 'field stayed empty',
       }),
       now: () => port.now(),
       label: (attempt) => TYPING_LADDER[attempt - 1] ?? `attempt-${attempt}`,
     },
   );
 
-  if (run.outcome.ok) return { ...run.outcome.value, ledger: run.ledger };
-  return { ...run.outcome.failure, observed: lastCommitted, ledger: run.ledger };
+  const ledger = mergeLedger(run.ledger, whereRecords);
+  if (run.outcome.ok) return { ...run.outcome.value, ledger };
+  return { ...run.outcome.failure, observed: lastCommitted, ledger };
+}
+
+/**
+ * Splice the WHERE rung's records in after the HOW rung that provoked them.
+ *
+ * `withAttempts` owns the ladder's own ledger and cannot see a rung the runner
+ * did not run, so the two are joined here and renumbered in order. Reading the
+ * ledger back must show the sequence as it happened — `overtype` (how), then
+ * `locate-editee` (where) — because "which axis did this waste time on" is the
+ * question the axis field exists to answer.
+ */
+function mergeLedger(ladder: AttemptLedger, where: readonly AttemptRecord[]): AttemptLedger {
+  if (where.length === 0) return ladder;
+  const merged = ladder.records.flatMap((record) =>
+    record.attempt === 1 ? [record, ...where] : [record],
+  );
+  return ledgerOf(merged.map((record, index) => ({ ...record, attempt: index + 1 })));
+}
+
+/**
+ * Whether the target still holds focus.
+ *
+ * Read structurally and used only as *evidence*: focus moving proves the page
+ * reacted to the keystrokes, never that the value landed on whatever now has
+ * it, so it never selects an editee. See {@link locateEditee}.
+ */
+async function targetHasFocus(port: WidgetPort, target: WidgetTarget): Promise<boolean> {
+  return port.evaluateOn(target.ref, (element) => element.ownerDocument.activeElement === element);
 }
 
 /** Enter the text by one specific mechanism. */
@@ -287,6 +412,17 @@ export function isTruncationOf(committed: string, requested: string): boolean {
   return isSubsequence(actual, wanted);
 }
 
+/** True for the same letters/numbers with only case, punctuation, or spacing changed. */
+export function isFormattingEquivalent(committed: string, requested: string): boolean {
+  const actual = formattingKey(committed);
+  const wanted = formattingKey(requested);
+  return wanted.length > 0 && actual === wanted;
+}
+
+function formattingKey(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
 /** True when every character of `part` appears in `whole`, in order. */
 function isSubsequence(part: string, whole: string): boolean {
   let cursor = 0;
@@ -295,4 +431,76 @@ function isSubsequence(part: string, whole: string): boolean {
     if (cursor === part.length) return true;
   }
   return cursor === part.length;
+}
+
+/**
+ * How many interactables the WHERE rung's observations may carry.
+ *
+ * The same cap the re-acquisition path already uses: an editee that a bounded
+ * observation cannot see is one no other part of the engine could have driven
+ * either, so widening it here would only produce targets nothing else can use.
+ */
+export const EDITEE_OBSERVATION_CAP = 400;
+
+/** The standard probe for a caller holding a port and nothing else. */
+export function editeeProbe(
+  port: WidgetPort,
+  baseline?: AgentBrowserObservation,
+): EditeeProbeOptions {
+  return {
+    observe: () => port.observe({ cap: EDITEE_OBSERVATION_CAP, trackDigest: false }),
+    ...(baseline ? { baseline } : {}),
+  };
+}
+
+/** Text entered into a control, and which control ended up holding it. */
+export interface EnteredText {
+  readonly typed: CommitTextOutcome;
+  /** The control that was actually driven — the target, or its editee. */
+  readonly target: WidgetTarget;
+  /** Set only when the drive re-targeted. */
+  readonly editee: WidgetTarget | null;
+  readonly ledger: AttemptLedger;
+}
+
+/**
+ * Type into the control the page actually edits.
+ *
+ * The first pass runs with the WHERE rung enabled. When it reports that the
+ * keystrokes landed in a different live node, the drive re-targets and types
+ * there instead — with the rung disabled the second time, because a delegation
+ * chain is a page this cannot read and one more observation pair would only
+ * find the same thing again.
+ *
+ * The substitution is reported the way `tieBreak` already reports a narrowed
+ * resolution: the caller is told which control was edited, never left to infer
+ * it from a value appearing somewhere it did not ask about.
+ */
+export async function enterText(
+  port: WidgetPort,
+  target: WidgetTarget,
+  text: string,
+  budget: WidgetBudget,
+  probe?: EditeeProbeOptions,
+): Promise<EnteredText> {
+  const first = await commitText(port, target, text, budget, probe ? { editee: probe } : {});
+  if (first.ok || first.editee === undefined) {
+    return { typed: first, target, editee: null, ledger: first.ledger };
+  }
+
+  const editee = first.editee;
+  const startedAt = port.now();
+  const second = await commitText(port, editee, text, budget);
+  const retarget: AttemptRecord = {
+    attempt: 0,
+    strategy: 'retarget-editee',
+    axis: 'where',
+    errorCode: second.ok ? null : second.errorCode,
+    elapsedMs: port.now() - startedAt,
+    detail: `re-targeted to "${editee.name}"`,
+  };
+  const records = [...first.ledger.records, retarget, ...second.ledger.records].map(
+    (record, index) => ({ ...record, attempt: index + 1 }),
+  );
+  return { typed: second, target: editee, editee, ledger: ledgerOf(records) };
 }

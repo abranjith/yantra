@@ -2,6 +2,7 @@ import {
   defaultWidgetBudget,
   widgetFailure,
   type WidgetBudget,
+  type WidgetContainer,
   type WidgetDriver,
   type WidgetFamily,
   type WidgetIntent,
@@ -67,6 +68,39 @@ export class WidgetRegistry {
   }
 
   /**
+   * Every driver confident enough to act on a container the open probe revealed.
+   *
+   * Separate from {@link detectDrivers} because it asks a different question of
+   * a different state, and because it must stay unreachable from ordinary
+   * detection: the container is trusted to belong to this trigger only because
+   * the engine's probe produced it with its own click.
+   */
+  public async detectOpenDrivers(
+    port: WidgetPort,
+    target: WidgetTarget,
+    container: WidgetContainer,
+    family?: WidgetFamily,
+  ): Promise<readonly DetectedWidgetDriver[]> {
+    const detected: DetectedWidgetDriver[] = [];
+    for (const driver of this.drivers) {
+      if (family !== undefined && driver.family !== family) continue;
+      if (driver.detectOpen === undefined) continue;
+      const raw = await driver.detectOpen(port, target, container);
+      const confidence = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+      if (confidence < MIN_CONFIDENCE) continue;
+      detected.push({ driver, confidence });
+    }
+    return detected
+      .map((entry, index) => ({ entry, index }))
+      .sort((left, right) =>
+        right.entry.confidence === left.entry.confidence
+          ? left.index - right.index
+          : right.entry.confidence - left.entry.confidence,
+      )
+      .map(({ entry }) => entry);
+  }
+
+  /**
    * Detect the highest-confidence driver, optionally within one family.
    * Ties keep the earlier registered driver.
    */
@@ -100,6 +134,7 @@ export class WidgetRegistry {
     if (detected === null) {
       return widgetFailure(
         'WIDGET_NOT_RECOGNIZED',
+        'driver-not-recognized',
         `No ${family ?? 'registered'} widget driver recognized "${target.name}" with sufficient confidence.`,
         { family: family ?? null, threshold: MIN_CONFIDENCE },
       );

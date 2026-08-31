@@ -67,6 +67,7 @@ async function reacquireClickTarget(
       group: described.group ?? null,
       value: described.value ?? null,
     },
+    allowEquivalentCopies: true,
   });
   if (resolved.kind !== 'match') return null;
   const sameControl =
@@ -149,7 +150,10 @@ export function browserClickSpec(
             ranked = await safeLocatorFor(controller, activeRef);
           }
           try {
-            return { ok: true, value: await controller.click(activeRef) };
+            return {
+              ok: true,
+              value: await controller.click(activeRef, { healStale: false }),
+            };
           } catch (error) {
             // `browserFailure` re-throws anything it does not recognise, so an
             // unexpected error still surfaces rather than being retried blindly.

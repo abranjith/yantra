@@ -70,6 +70,11 @@ const FILL_TYPE_DELAY_MAX_CHARS = 128;
 /** The platform's select-all chord; Chrome maps Meta on macOS, Control elsewhere. */
 const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
 
+/** Controls whether a click owns stale-identity recovery or exposes one attempt. */
+export interface BrowserClickOptions {
+  readonly healStale?: boolean;
+}
+
 /**
  * Puppeteer failures raised when Chrome could not produce a box for the node
  * at action time — it has no content quads or no layout. After the pre-flight
@@ -394,10 +399,10 @@ export class AgentBrowserController implements WidgetPort {
       if (!handle || claimed.has(handle)) continue;
       const role = raw.role;
       const name = raw.name ?? '';
-      const ordinalKey = `${role} ${name}`;
+      const ordinalKey = `${role}\u0000${name}`;
       const ordinal = ordinals.get(ordinalKey) ?? 0;
       ordinals.set(ordinalKey, ordinal + 1);
-      const identity = `${ordinalKey} ${ordinal}`;
+      const identity = `${ordinalKey}\u0000${ordinal}`;
       let ref = this.refIdByIdentity.get(identity);
       if (!ref) {
         ref = `e${this.nextRef++}`;
@@ -501,7 +506,8 @@ export class AgentBrowserController implements WidgetPort {
   }
 
   /** Click a current ref after deterministic visibility/hit-target checks. */
-  public async click(ref: string): Promise<BrowserActionResult> {
+  public async click(ref: string, options: BrowserClickOptions = {}): Promise<BrowserActionResult> {
+    if (options.healStale === false) return this.clickOnce(ref);
     return this.withIdentityHealing(ref, () => this.clickOnce(ref));
   }
 

@@ -12,6 +12,7 @@ export function parseFillValue(raw: string, controlKind: string): FillIntent | F
   if (SECRET_SHAPE.test(raw)) {
     return fillFailure(
       'FILL_VALUE_INVALID',
+      'value-malformed',
       'Credential-shaped text must be supplied as a secret_ref, not a literal fill value.',
       { expected: 'a non-secret literal or secret_ref' },
     );
@@ -64,7 +65,7 @@ export function isIsoDate(value: string): boolean {
 }
 
 function invalidDate(value: string, message: string): FillFailure {
-  return fillFailure('FILL_VALUE_INVALID', message, {
+  return fillFailure('FILL_VALUE_INVALID', 'value-malformed', message, {
     value,
     expected: 'YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD',
   });

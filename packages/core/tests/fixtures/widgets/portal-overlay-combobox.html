@@ -1,0 +1,86 @@
+<!--
+  Shape: the addressed control is a trigger that mounts a detached overlay and
+  routes every keystroke into the overlay's own input. The trigger itself never
+  holds the text, so it looks empty however the text is typed.
+
+  Observed in run 20260829T171218Z-do-0ae073f1 (seq 14, 18, 24): three fills
+  spent 8-14 seconds each running all four typing rungs against this trigger and
+  reported "field stayed empty" three times over. Every rung varied *how* to
+  type into a node that was never the editee.
+
+  The real port's `fill` clicks and focuses the control before typing, which is
+  what opens such an overlay on a live page; here the same effect is produced by
+  the trigger's own input handler, because jsdom has no pointer.
+-->
+<input
+  id="trigger"
+  role="combobox"
+  aria-label="Where from?"
+  aria-autocomplete="list"
+  aria-controls="overlay"
+  aria-expanded="false"
+/>
+<div id="overlay" style="display: none">
+  <input id="overlay-field" aria-label="Search airports" />
+  <div id="opts" role="listbox"></div>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var overlay = document.getElementById('overlay');
+    var field = document.getElementById('overlay-field');
+    var opts = document.getElementById('opts');
+    var catalog = ['San Jose Mineta International Airport (SJC)'];
+
+    function open() {
+      overlay.style.display = 'block';
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+
+    function render(query) {
+      var wanted = query.trim().toLowerCase();
+      opts.innerHTML = '';
+      if (wanted.length === 0) return;
+      catalog
+        .filter(function (label) {
+          return label.toLowerCase().indexOf(wanted) === 0;
+        })
+        .forEach(function (label) {
+          var button = document.createElement('button');
+          button.setAttribute('role', 'option');
+          button.textContent = label;
+          button.addEventListener('click', function () {
+            field.value = label;
+            trigger.value = label;
+            overlay.style.display = 'none';
+            trigger.setAttribute('aria-expanded', 'false');
+          });
+          opts.appendChild(button);
+        });
+    }
+
+    // The defect being reproduced: the trigger forwards what it was given and
+    // keeps nothing, so a readback of the trigger is empty no matter how the
+    // value arrived.
+    trigger.addEventListener('input', function () {
+      var forwarded = trigger.value;
+      trigger.value = '';
+      open();
+      if (forwarded.length === 0) return;
+      field.value = forwarded;
+      render(field.value);
+    });
+
+    field.addEventListener('input', function () {
+      open();
+      render(field.value);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        overlay.style.display = 'none';
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+</script>

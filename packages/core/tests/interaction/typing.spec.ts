@@ -28,10 +28,15 @@ class TypingPort implements WidgetPort {
   public readonly window: JSDOM['window'];
   public readonly input: HTMLInputElement;
   public readonly calls: string[] = [];
+  /** Where the page routed the keystrokes, when it routed them away. */
+  public delegatedValue = '';
   private dropsRemaining = 0;
   private resetting = false;
   private mask: ((value: string) => string) | null = null;
   private clock = 0;
+  private delegateTo: { readonly ref: string; readonly name: string } | null = null;
+  private observations = 0;
+  private focused = true;
 
   public constructor() {
     const dom = new JSDOM('<!doctype html><html><body><input id="f" /></body></html>', {
@@ -60,8 +65,59 @@ class TypingPort implements WidgetPort {
     return this;
   }
 
+  /**
+   * Model the run's worst shape: a closed trigger that takes no text at all and
+   * forwards every keystroke to a control inside the overlay it opens.
+   */
+  public delegatesTo(ref: string, name: string): this {
+    this.delegateTo = { ref, name };
+    this.focused = false;
+    return this;
+  }
+
+  /** Model a page that swallows the keystrokes and routes them nowhere. */
+  public swallowsKeystrokes(): this {
+    this.resetting = true;
+    return this;
+  }
+
+  /** How many observations the WHERE rung took. */
+  public get observationCount(): number {
+    return this.observations;
+  }
+
+  /** How many typing mechanisms actually ran against the page. */
+  public get strategyCount(): number {
+    return this.calls.filter((call) => call === 'fill' || call === 'clear').length;
+  }
+
   public async observe(): Promise<AgentBrowserObservation> {
-    return { url: '', title: '', digest: '', digestUnchanged: false, interactables: [] };
+    this.observations += 1;
+    const delegated = this.delegateTo;
+    return {
+      url: '',
+      title: '',
+      digest: '',
+      digestUnchanged: false,
+      interactables: [
+        {
+          ref: 'e1',
+          role: 'combobox',
+          name: 'Where from?',
+          ...(this.input.value.length > 0 ? { value: this.input.value } : {}),
+        },
+        ...(delegated
+          ? [
+              {
+                ref: delegated.ref,
+                role: 'textbox',
+                name: delegated.name,
+                ...(this.delegatedValue.length > 0 ? { value: this.delegatedValue } : {}),
+              },
+            ]
+          : []),
+      ],
+    };
   }
 
   public async click(): Promise<void> {
@@ -99,6 +155,7 @@ class TypingPort implements WidgetPort {
     globals.HTMLInputElement = this.window.HTMLInputElement;
     globals.HTMLTextAreaElement = this.window.HTMLTextAreaElement;
     globals.Event = this.window.Event;
+    if (!this.focused) this.input.blur();
     try {
       return Promise.resolve(fn(this.input as unknown as HTMLElement, ...args));
     } finally {
@@ -121,6 +178,10 @@ class TypingPort implements WidgetPort {
 
   /** Apply one keystroke-driven write, honoring the configured misbehavior. */
   private write(text: string): void {
+    if (this.delegateTo) {
+      this.delegatedValue += text;
+      return;
+    }
     for (const character of text) {
       if (this.dropsRemaining > 0 && this.input.value.length === 0) {
         this.dropsRemaining -= 1;
@@ -193,7 +254,7 @@ describe('@no-llm commitText escalation ladder', () => {
       'overtype',
       'clear-then-type',
     ]);
-    expect(outcome.ok && outcome.ledger.records[0]?.detail).toBe('kept "FW"');
+    expect(outcome.ok && outcome.ledger.records[0]?.detail).toBe('observed "FW"');
   });
 
   it('reaches the native-setter rung for a framework-controlled input', async () => {
@@ -220,6 +281,25 @@ describe('@no-llm commitText escalation ladder', () => {
       reformatted: true,
     });
     expect(port.calls).toEqual(['fill', 'evaluateOn']);
+  });
+
+  it('rejects an unrelated control rewrite and records every attempt', async () => {
+    const port = new TypingPort().withMask(() => 'xyz');
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET);
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      observed: 'xyz',
+    });
+    if (outcome.ok) return;
+    expect(outcome.message).toContain('unrelated text "xyz"');
+    expect(outcome.ledger.records.map((record) => record.strategy)).toEqual([
+      'overtype',
+      'clear-then-type',
+      'native-setter',
+    ]);
   });
 
   it('reports every strategy it tried when the control never holds the value', async () => {
@@ -283,5 +363,112 @@ describe('@no-llm commitText escalation ladder', () => {
     expect(outcome).toMatchObject({ ok: true, strategy: 'overtype', committed: '' });
     expect(port.calls).toEqual(['fill']);
     expect(JSON.stringify(outcome)).not.toContain('hunter2');
+  });
+});
+
+describe('@no-llm commitText WHERE rung', () => {
+  const observeFor = (port: TypingPort) => ({ editee: { observe: () => port.observe() } });
+
+  it('stops after one mechanism once the keystrokes are proven to land elsewhere', async () => {
+    // The run's seq 14/18/24, each of which spent 8-14 seconds running three
+    // typing mechanisms against a node that was never the editee.
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.editee).toEqual({
+      ref: 'e7',
+      role: 'textbox',
+      name: 'Origin',
+      group: null,
+      value: 'DFW',
+    });
+    expect(outcome.editeeEvidence).toBe('value-appeared-elsewhere');
+    // Asserted by call count, not by ledger length: a ledger with one record
+    // would also result from a retry that simply failed to record itself.
+    expect(port.strategyCount).toBe(1);
+    expect(outcome.message).toContain('Origin');
+  });
+
+  it('records the WHERE rung on the ledger, after the HOW rung that provoked it', async () => {
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.ledger.records.map((record) => [record.strategy, record.axis])).toEqual([
+      ['overtype', 'how'],
+      ['locate-editee', 'where'],
+    ]);
+    expect(outcome.ledger.records.map((record) => record.attempt)).toEqual([1, 2]);
+  });
+
+  it('classifies the delegated exit as terminal so the ladder cannot retry it', async () => {
+    // The ladder's classify used to be unconditionally transient, which would
+    // have retried this straight into rung 2 and negated the fast exit.
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+
+    await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
+
+    expect(port.calls.filter((call) => call === 'type')).toEqual([]);
+  });
+
+  it('escalates through all three rungs when no editee is found', async () => {
+    const port = new TypingPort().swallowsKeystrokes();
+    Object.defineProperty(port.input, 'value', {
+      get: () => '',
+      set: () => undefined,
+      configurable: true,
+    });
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.editee).toBeUndefined();
+    expect(outcome.ledger.records.map((record) => record.strategy)).toEqual([
+      'overtype',
+      'locate-editee',
+      'clear-then-type',
+      'native-setter',
+    ]);
+  });
+
+  it('takes no second observation when the first mechanism commits the value', async () => {
+    // The ordinary path pays for one observation, never two: the comparison is
+    // only worth making against a control that came back empty.
+    const port = new TypingPort();
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
+
+    expect(outcome).toMatchObject({ ok: true, committed: 'DFW' });
+    expect(port.observationCount).toBe(1);
+  });
+
+  it('pays for no observation at all when the caller supplies the baseline', async () => {
+    // The agent's fill tools resolve a field from an observation taken
+    // immediately beforehand, which *is* the before-picture. Reusing it is what
+    // keeps the rung free on the path that never needs it.
+    const port = new TypingPort();
+    const baseline = await port.observe();
+    const observedBefore = port.observationCount;
+
+    const outcome = await commitText(port, target(), 'DFW', BUDGET, {
+      editee: { observe: () => port.observe(), baseline },
+    });
+
+    expect(outcome).toMatchObject({ ok: true, committed: 'DFW' });
+    expect(port.observationCount).toBe(observedBefore);
+  });
+
+  it('observes nothing at all when the caller did not enable the rung', async () => {
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+
+    await commitText(port, target(), 'DFW', BUDGET);
+
+    expect(port.observationCount).toBe(0);
   });
 });

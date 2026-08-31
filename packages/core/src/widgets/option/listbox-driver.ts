@@ -32,23 +32,50 @@ export const listboxDriver: WidgetDriver = {
     if (signal.popup === 'listbox' || signal.popup === 'menu') return 0.8;
     return signal.controls ? 0.45 : 0;
   },
+  /**
+   * What an opened container says about itself.
+   *
+   * Reached only from the engine's open probe. A declared listbox or menu is
+   * conclusive; a homogeneous run of clickable choices is strong enough to act
+   * on, since the driver verifies the commit against the option it clicked.
+   */
+  detectOpen: async (port, _target, container) =>
+    port.evaluate((path) => {
+      let current: Element | null = document.documentElement;
+      for (const index of path) current = current?.children.item(index) ?? null;
+      if (!(current instanceof HTMLElement)) return 0;
+      const role = current.getAttribute('role')?.toLowerCase() ?? '';
+      if (role === 'listbox' || role === 'menu') return 0.95;
+      const choices = current.querySelectorAll(
+        '[role="option"],button,a[href],[role="menuitem"],li[onclick],li[tabindex]',
+      ).length;
+      return choices >= 2 ? 0.7 : 0;
+    }, container.path),
   drive: async (port, target, intent, budget): Promise<WidgetOutcome> => {
     if (intent.kind !== 'option') {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'A listbox accepts only option intents.');
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'intent-incompatible',
+        'A listbox accepts only option intents.',
+      );
     }
     const opened = await openIfClosed(port, target);
     if (!opened.ok) return opened;
     let actions = opened.wasOpen ? 0 : 1;
     if (port.now() > budget.deadlineMs || actions >= budget.maxActions) {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'The widget action budget was exhausted.', {
-        reason: 'budget',
-      });
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'budget',
+        'The widget action budget was exhausted.',
+        { reason: 'budget' },
+      );
     }
     const candidates = await collectCandidates(port, opened.container);
     const ranked = rankCandidate(candidates, intent.value);
     if (ranked.kind === 'ambiguous') {
       return widgetFailure(
         'WIDGET_AMBIGUOUS_CHOICE',
+        'several-matched-equally',
         `Several offered choices match "${intent.value}" at the same rank.`,
         { offered: ranked.offered },
       );
@@ -56,6 +83,7 @@ export const listboxDriver: WidgetDriver = {
     if (ranked.kind === 'none') {
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
+        'value-not-offered',
         `The widget does not offer a choice matching "${intent.value}".`,
         { offered: ranked.offered },
       );
@@ -73,8 +101,9 @@ export const listboxDriver: WidgetDriver = {
     if (!matchesCommitment(committed, ranked.candidate.name) && !matchesIntent(committed, intent)) {
       return widgetFailure(
         'WIDGET_NOT_COMMITTED',
+        'control-refused-value',
         `The choice "${ranked.candidate.name}" was clicked, but "${target.name}" did not commit it.`,
-        { committed, offered, chosen: ranked.candidate.name },
+        { committed, observed: committed, offered, chosen: ranked.candidate.name },
       );
     }
     return {

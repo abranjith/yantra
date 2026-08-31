@@ -1055,6 +1055,31 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
+  it('exposes a single non-healing click attempt to retry-owning callers', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'single-click-attempt-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const mutate = observation.interactables.find((entry) => entry.name === 'Mutate')!;
+
+    await tracked.page!.puppeteerPage!.evaluate(() => {
+      const previous = document.querySelector('button[onclick*="state"]')!;
+      previous.replaceWith(previous.cloneNode(true));
+    });
+
+    await expect(controller.click(mutate.ref, { healStale: false })).rejects.toBeDefined();
+    expect(
+      await tracked.page!.puppeteerPage!.evaluate(
+        () => document.querySelector('#state')!.textContent,
+      ),
+    ).not.toBe('changed');
+    await controller.teardown();
+  }, 45_000);
+
   it('heals to the first of several elements that now share one identity', async () => {
     const tracked = trackingProvider();
     const controller = new AgentBrowserController({

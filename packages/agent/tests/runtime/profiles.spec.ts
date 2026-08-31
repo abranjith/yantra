@@ -154,6 +154,55 @@ describe('@no-llm command task profiles', () => {
     expect(task).toMatch(/observed/);
   });
 
+  it('explains the three batch sets and that a partial success is progress', () => {
+    // The batch no longer stops at the first failure, so the model has to be
+    // able to read a result that is neither a clean success nor a clean
+    // failure — and above all must not re-send the fields that worked.
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+
+    expect(task).toMatch(/"applied"/);
+    expect(task).toMatch(/"failed"/);
+    expect(task).toMatch(/"skipped"/);
+    expect(task).toMatch(/progress, not a retry trigger/i);
+    expect(task).toMatch(/re-sending them undoes work/i);
+    expect(task).toMatch(/blocked_by/);
+    expect(task).toMatch(/resolve that field first/i);
+  });
+
+  it('explains an editee as a landed value rather than an empty field', () => {
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+
+    expect(task).toMatch(/"editee"/);
+    expect(task).toMatch(/the value did land there/i);
+    expect(task).toMatch(/is not a failure and is not something to fix/i);
+  });
+
+  it('keeps every rule the disclosure contract established', () => {
+    // Wave 1 adds to this guidance; it replaces none of it.
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+
+    expect(task).toMatch(/a single browser_fill_form listing every field/i);
+    expect(task).toMatch(/Set a date range in one call/i);
+    expect(task).toMatch(/check-in\/check-out picker commits the pair as a unit/i);
+    expect(task).toMatch(/switched_to_new_tab/);
+    expect(task).toMatch(/popup_intercepted/);
+    expect(task).toMatch(/never to operate a field widget by hand/i);
+    expect(task).toMatch(
+      /never submitting|do not use this tool to submit|submit a completed form/i,
+    );
+  });
+
+  it('tells the model to operate no widget by hand', () => {
+    // The motivating run gave up on the tools and drove a calendar with eleven
+    // clicks. Nothing in the guidance may invite that, and the engine now opens
+    // such a picker itself.
+    const task = COMMAND_TASK_PROFILES.do.promptAddendum;
+
+    expect(task).not.toMatch(/click (?:the )?day cells/i);
+    expect(task).not.toMatch(/open the (?:picker|calendar|dropdown) yourself/i);
+    expect(task).toMatch(/browser_click only to/i);
+  });
+
   it('drops the guidance the results now carry themselves', () => {
     const task = COMMAND_TASK_PROFILES.do.promptAddendum;
     // Superseded by the `attempted` field, which names what was actually tried.
@@ -184,7 +233,9 @@ describe('@no-llm command task profiles', () => {
     expect(byName.get('browser_fill_element')).toMatch(/resolution/);
     expect(byName.get('browser_fill_element')).toMatch(/attempted/);
     expect(byName.get('browser_fill_element')).toMatch(/offered/);
+    expect(byName.get('browser_fill_element')).toMatch(/editee/);
     expect(byName.get('browser_fill_form')).toMatch(/resolution/);
+    expect(byName.get('browser_fill_form')).toMatch(/skipped/);
     expect(byName.get('browser_click')).toMatch(/resolved_by/);
   });
 

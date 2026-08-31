@@ -1,14 +1,18 @@
 import {
   assertHostBinding,
+  classifyFailure,
   defaultWidgetBudget,
   dismissWidget,
   fillField,
   fillSecretField,
   parseFillValue,
+  withAttempts,
   withSecret,
   type AgentBrowserController,
+  type AgentBrowserObservation,
   type AttemptRecord,
   type FillIntent,
+  type FillFailure,
   type FillOutcome,
   type FillResolution,
   type WidgetPort,
@@ -27,8 +31,10 @@ import {
   isDomainFailure,
   mapFillFailure,
   modelObservation,
+  resolveFillField,
   resolveFillTarget,
   safeLocatorFor,
+  type ResolvedFillField,
 } from './browser-common.js';
 
 export const FillValueSchema = Type.Union(
@@ -93,6 +99,15 @@ export interface AppliedBrowserFill {
   readonly note?: string;
   /** The recovery the engine performed, when it needed more than one attempt. */
   readonly attempted?: readonly AttemptRecord[];
+  /**
+   * The control the engine actually edited, when the page routed the edit away.
+   *
+   * A trigger that opens an overlay and forwards keystrokes to the overlay's
+   * own input leaves the named control empty while the value lands correctly.
+   * Saying which node took it is what stops a caller re-filling a field that is
+   * already set.
+   */
+  readonly editee?: { readonly ref: string; readonly name: string; readonly role: string };
   /** Every caller field this one fill accounts for, when it covers more than its own. */
   readonly covers?: readonly string[];
 }
@@ -105,7 +120,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. Failure reports observed, attempted (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
+      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Failure reports observed, attempted (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -135,6 +150,7 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
       ...(applied.offered === undefined ? {} : { offered: applied.offered }),
       ...(applied.note === undefined ? {} : { note: applied.note }),
       ...(applied.attempted === undefined ? {} : { attempted: applied.attempted }),
+      ...(applied.editee === undefined ? {} : { editee: applied.editee }),
       driver: applied.driver,
       dismissed: applied.dismissed,
       observation: modelObservation(observation),
@@ -146,12 +162,25 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
   };
 }
 
+/**
+ * A failed field, carrying the control it resolved to.
+ *
+ * The target travels with the failure because the batch has to know which
+ * widget group the failure belongs to, and it must know that *after* the fill
+ * has already dismissed whatever it opened. Re-deriving it then would find a
+ * closed widget and answer null.
+ */
+export interface FailedBrowserFill extends DomainFailure {
+  readonly target?: WidgetTarget;
+}
+
 /** Apply one field without taking the caller-owned post-action observation. */
 export async function applyBrowserFill(
   field: string,
   value: BrowserFillValue,
   services: RunServices,
-): Promise<AppliedBrowserFill | DomainFailure> {
+  preresolved?: ResolvedFillField,
+): Promise<AppliedBrowserFill | FailedBrowserFill> {
   const deps = services.domain.browser;
   const controller = browserController(services);
   if (!deps || isDomainFailure(controller)) {
@@ -164,8 +193,9 @@ export async function applyBrowserFill(
           retryable: false,
         };
   }
-  const target = await resolveFillTarget(field, controller);
-  if (isDomainFailure(target)) return target;
+  const located = preresolved ?? (await resolveFillField(field, controller));
+  if (isDomainFailure(located)) return located;
+  const target = located.target;
   const port = browserWidgetPort(controller, services.now);
 
   if (!isSecretRef(value)) {
@@ -174,13 +204,15 @@ export async function applyBrowserFill(
     if (!('kind' in intent)) return mapFillFailure(intent);
     let outcome: FillOutcome;
     try {
-      outcome = await driveWithRetry(port, controller, field, target, intent);
+      outcome = await driveWithRetry(port, controller, field, target, intent, {
+        observation: located.observation,
+      });
     } catch (error) {
       return browserFailure(error);
     }
     if (!outcome.ok) {
       await bestEffortDismiss(port, target);
-      return mapFillFailure(outcome);
+      return { ...mapFillFailure(outcome), target };
     }
     await appendSemanticTrace(
       controller,
@@ -200,6 +232,7 @@ export async function applyBrowserFill(
       ...(outcome.offered === undefined ? {} : { offered: outcome.offered }),
       ...(outcome.note === undefined ? {} : { note: outcome.note }),
       ...(outcome.attempted === undefined ? {} : { attempted: outcome.attempted }),
+      ...(outcome.editee === undefined ? {} : { editee: outcome.editee }),
     };
   }
 
@@ -305,16 +338,120 @@ async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promis
  * describes a page that answered, where a second identical attempt would answer
  * the same way.
  */
-async function driveWithRetry(
+interface DriveWithRetryDependencies {
+  readonly drive: typeof fillField;
+  readonly resolve: typeof resolveFillTarget;
+}
+
+const DEFAULT_FILL_RETRY_DEPENDENCIES: DriveWithRetryDependencies = {
+  drive: fillField,
+  resolve: resolveFillTarget,
+};
+
+/** What the caller already knows about the page it resolved the field from. */
+export interface DriveContext {
+  /**
+   * The observation the target came from.
+   *
+   * Handed on so the engine's editee resolution has its before-picture for
+   * free. Only the first attempt can use it — a retry re-resolves against a
+   * page that has since changed, and comparing against a stale baseline would
+   * name a control whose value moved for unrelated reasons.
+   */
+  readonly observation?: AgentBrowserObservation;
+}
+
+export async function driveWithRetry(
   port: WidgetPort,
   controller: AgentBrowserController,
   field: string,
   target: WidgetTarget,
   intent: FillIntent,
+  context: DriveContext = {},
+  dependencies: DriveWithRetryDependencies = DEFAULT_FILL_RETRY_DEPENDENCIES,
 ): Promise<FillOutcome> {
-  const first = await fillField(port, { field, target }, intent, defaultWidgetBudget(port));
-  if (first.ok || first.errorCode !== 'WIDGET_ELEMENT_REPLACED') return first;
-  const fresh = await resolveFillTarget(field, controller, target);
-  if (isDomainFailure(fresh)) return first;
-  return fillField(port, { field, target: fresh }, intent, defaultWidgetBudget(port));
+  const budget = defaultWidgetBudget(port);
+  let activeTarget = target;
+  let replacementFailure: FillFailure | null = null;
+  let resolutionFailure: DomainFailure | null = null;
+  const nestedAttempts = new Map<number, readonly AttemptRecord[]>();
+
+  const run = await withAttempts<Extract<FillOutcome, { readonly ok: true }>, FillFailure>(
+    async (attempt) => {
+      if (attempt > 1) {
+        const fresh = await dependencies.resolve(field, controller, target);
+        if (isDomainFailure(fresh)) {
+          resolutionFailure = fresh;
+          return { ok: false, failure: replacementFailure! };
+        }
+        activeTarget = fresh;
+        if (port.now() >= budget.deadlineMs) {
+          return {
+            ok: false,
+            failure: {
+              ...replacementFailure!,
+              message: 'The field was re-resolved, but the original fill deadline expired.',
+              retryable: false,
+              details: { ...replacementFailure!.details, reason: 'budget' },
+            },
+          };
+        }
+      }
+
+      const outcome = await dependencies.drive(
+        port,
+        {
+          field,
+          target: activeTarget,
+          ...(attempt === 1 && context.observation ? { observation: context.observation } : {}),
+        },
+        intent,
+        budget,
+      );
+      nestedAttempts.set(attempt, attemptsFrom(outcome));
+      if (outcome.ok) return { ok: true, value: outcome };
+      replacementFailure = outcome;
+      return { ok: false, failure: outcome };
+    },
+    {
+      maxAttempts: 2,
+      deadlineMs: budget.deadlineMs,
+      backoffMs: [0],
+      classify: (failure) =>
+        failure.errorCode === 'WIDGET_ELEMENT_REPLACED'
+          ? classifyFailure(failure.errorCode, failure.details)
+          : 'terminal',
+      describe: (failure) => ({
+        errorCode: failure.errorCode,
+        detail: resolutionFailure
+          ? `field re-resolution failed with ${resolutionFailure.errorCode}`
+          : failure.message,
+      }),
+      now: () => port.now(),
+      label: (attempt) => (attempt === 1 ? 'fill' : 're-resolve-field-and-retry'),
+    },
+  );
+
+  const attempted = mergedAttempts(run.ledger.records, nestedAttempts);
+  if (run.outcome.ok) {
+    return run.ledger.records.length > 1 ? { ...run.outcome.value, attempted } : run.outcome.value;
+  }
+  return {
+    ...run.outcome.failure,
+    details: { ...run.outcome.failure.details, attempted },
+  };
+}
+
+function attemptsFrom(outcome: FillOutcome): readonly AttemptRecord[] {
+  if (outcome.ok) return outcome.attempted ?? [];
+  const attempted = outcome.details.attempted;
+  return Array.isArray(attempted) ? (attempted as readonly AttemptRecord[]) : [];
+}
+
+function mergedAttempts(
+  outer: readonly AttemptRecord[],
+  nested: ReadonlyMap<number, readonly AttemptRecord[]>,
+): readonly AttemptRecord[] {
+  const records = outer.flatMap((record) => [record, ...(nested.get(record.attempt) ?? [])]);
+  return records.map((record, index) => ({ ...record, attempt: index + 1 }));
 }

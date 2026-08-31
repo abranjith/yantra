@@ -10,7 +10,9 @@ import {
   isDomainFailure,
   mapFillFailure,
   modelObservation,
+  resolveFillField,
   resolveFillTarget,
+  type ResolvedFillField,
 } from './browser-common.js';
 import { applyBrowserFill, type AppliedBrowserFill } from './browser-fill-element.js';
 
@@ -35,7 +37,8 @@ const BrowserFillFormParams = Type.Object(
       {
         minItems: 1,
         maxItems: 10,
-        description: 'Fields to fill in order; processing stops at the first failure.',
+        description:
+          'Fields to fill in order. A field that fails does not end the batch: the rest are still attempted, except any that belong to the same widget as the one that failed.',
       },
     ),
   },
@@ -52,7 +55,7 @@ export function browserFillFormSpec(
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
     description:
-      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. Processing stops at the first failure, which carries observed, attempted, and any offered choices; do not use this tool to submit the form.',
+      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed, attempted, and any offered choices), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Partial success is progress to build on, not a reason to re-send the fields that worked. Do not use this tool to submit the form.',
     parameters: BrowserFillFormParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -60,6 +63,40 @@ export function browserFillFormSpec(
   };
 }
 
+/** A field the batch attempted and could not fill. */
+interface FailedField {
+  readonly field: string;
+  readonly error_code: string;
+  readonly message: string;
+  readonly observed?: unknown;
+  readonly offered?: unknown;
+  readonly attempted?: unknown;
+}
+
+/** A field the batch did not attempt, and what is blocking it. */
+interface SkippedField {
+  readonly field: string;
+  readonly reason: 'same-widget-group-as-failed';
+  readonly blocked_by: string;
+}
+
+/**
+ * Fill every field, and let a failure stop only what it actually blocks.
+ *
+ * Stopping at the first failure made a four-field call return `applied: []` —
+ * a call that existed to make four fields' worth of progress made none, and the
+ * three untouched fields were indistinguishable from three that had been tried
+ * and refused. Every remaining field is therefore attempted, **except** those
+ * belonging to the same widget group as the failed one: a shared range picker
+ * or a single overlay would fail again for a reason the caller cannot tell
+ * apart from a real problem with that field.
+ *
+ * Dependence is read from the observation's `group`, captured when the control
+ * was observed, and never from field ordering. It is deliberately not read from
+ * a live container: a failed fill dismisses whatever it opened, so resolving a
+ * container afterwards commonly answers null, and a rule written that way would
+ * quietly never fire.
+ */
 async function runFillForm(params: Params, services: RunServices): Promise<DomainResult> {
   for (const spec of params.fields) {
     const parsed = parseFillValue(spec.value, 'textbox');
@@ -71,28 +108,89 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
   if (isDomainFailure(controller)) return controller;
   const plan = await fuseDatePair(params.fields, services);
   const applied: AppliedBrowserFill[] = [];
+  const failed: FailedField[] = [];
+  const skipped: SkippedField[] = [];
+  /** The widget group a failure has made unreadable, and the field that owns it. */
+  let blocked: { readonly group: string; readonly field: string } | null = null;
+
   for (const spec of plan) {
-    const outcome = await applyBrowserFill(spec.field, spec.value, services);
+    let preresolved: ResolvedFillField | undefined;
+    if (blocked !== null) {
+      // Resolving up front only happens once something has failed, so the
+      // ordinary path pays nothing — and the resolution is handed to the fill
+      // rather than performed twice.
+      const resolved = await resolveFillField(spec.field, controller);
+      if (!isDomainFailure(resolved)) {
+        if (resolved.target.group !== null && resolved.target.group === blocked.group) {
+          skipped.push({
+            field: spec.field,
+            reason: 'same-widget-group-as-failed',
+            blocked_by: blocked.field,
+          });
+          continue;
+        }
+        preresolved = resolved;
+      }
+    }
+
+    const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved);
     if (isDomainFailure(outcome)) {
-      return {
-        ...outcome,
-        details: { ...asDetails(outcome.details), applied },
-      };
+      const details = asDetails(outcome.details);
+      failed.push({
+        field: spec.field,
+        error_code: outcome.errorCode,
+        message: outcome.message,
+        ...(details.observed === undefined ? {} : { observed: details.observed }),
+        ...(details.offered === undefined ? {} : { offered: details.offered }),
+        ...(details.attempted === undefined ? {} : { attempted: details.attempted }),
+      });
+      const group = outcome.target?.group ?? null;
+      if (group !== null) blocked = { group, field: spec.field };
+      continue;
     }
     // A fused range is reported as the one fill it was, listing both field
     // names it accounts for. Emitting a second entry would have to invent a ref
     // for a control that was never driven.
     applied.push(spec.covers.length > 1 ? { ...outcome, covers: spec.covers } : outcome);
   }
+
   const observation = await controller.observe();
+  // Counts ride in `details` so the audit projection can see them. The
+  // middleware records `status: "ok"` for any successful result, and report.md
+  // renders one line per call from that projection — a partial batch that
+  // appeared there as a flat `ok` would hide exactly the kind of defect this
+  // feature exists to surface.
+  const counts = {
+    partial: applied.length > 0 && failed.length > 0,
+    applied_count: applied.length,
+    failed_count: failed.length,
+    skipped_count: skipped.length,
+  };
+
+  if (applied.length === 0 && failed.length > 0) {
+    const first = failed[0]!;
+    return {
+      ok: false,
+      errorCode: first.error_code,
+      message: first.message,
+      retryable: true,
+      details: { ...counts, applied, failed, skipped },
+    };
+  }
+
   return {
     ok: true,
     model: {
       applied,
+      ...(failed.length > 0 ? { failed } : {}),
+      ...(skipped.length > 0 ? { skipped } : {}),
       observation: modelObservation(observation),
-      note: 'Nothing was submitted. Activate the submit/search control with browser_click.',
+      note:
+        failed.length > 0
+          ? 'Nothing was submitted, and some fields did not take. The applied fields are set — do not re-send them.'
+          : 'Nothing was submitted. Activate the submit/search control with browser_click.',
     },
-    details: { fields: applied.length },
+    details: { fields: applied.length, ...counts },
   };
 }
 

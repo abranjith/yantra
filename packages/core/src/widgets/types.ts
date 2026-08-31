@@ -1,7 +1,16 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
+import type { AttemptRecord, InteractionFailureCause } from '../interaction/types.js';
 
-/** Semantic family implemented by a widget driver. */
-export type WidgetFamily = 'date' | 'option';
+/**
+ * Semantic family implemented by a widget driver.
+ *
+ * `combobox` is its own family rather than a variant of `option` because the
+ * two are reached differently: an option control is opened and chosen from,
+ * while a combobox is *typed into* and then chosen from. Routing them together
+ * would make the engine ask a listbox to accept text, or a typeahead to be
+ * opened before it has anything to show.
+ */
+export type WidgetFamily = 'date' | 'option' | 'combobox';
 
 /**
  * Narrow browser seam used by deterministic widget drivers.
@@ -117,6 +126,41 @@ export interface WidgetSuccess {
   /** What the widget showed at the moment of choosing, capped by the driver. */
   readonly offered?: readonly string[];
   /**
+   * The control the driver re-targeted to, when the page routed the edit away.
+   *
+   * A trigger that opens an overlay and forwards keystrokes to the overlay's
+   * own input is edited through that input, not through the node the caller
+   * named. Saying so is what stops a caller concluding, from a trigger that
+   * stayed empty, that its fill did not land.
+   */
+  readonly editee?: WidgetTarget;
+  /**
+   * The rungs this driver ran on its way to the result.
+   *
+   * A driver that walks its own ladder — three query forms, a re-target to the
+   * real editee — has recovery to report, and a success that hides it leaves
+   * "which axis did this spend its time on" unanswerable from the run
+   * artifacts. The caller splices these in after its own record for the driver.
+   */
+  readonly attempted?: readonly AttemptRecord[];
+  /**
+   * True when the driver's own actions already released the widget's popup.
+   *
+   * Clicking a suggestion closes the list on most pages, and a caller that
+   * cannot tell that from "the list is still up" either reports a clean fill as
+   * having left an overlay across the page, or spends a release action on a
+   * popup that is already gone.
+   */
+  readonly released?: boolean;
+  /**
+   * True when the control rewrote the value rather than taking it as typed.
+   *
+   * An input mask turning "5551234567" into "(555) 123-4567" has accepted the
+   * value; reporting the difference as a mismatch condemns a fill the page
+   * plainly took.
+   */
+  readonly reformatted?: boolean;
+  /**
    * The floating container this driver operated, when it had one.
    *
    * Releasing a picker is part of committing to it — many hold the selection in
@@ -134,6 +178,14 @@ export interface WidgetSuccess {
 export interface WidgetFailure {
   readonly ok: false;
   readonly errorCode: WidgetErrorCode;
+  /**
+   * Why this happened, as distinct from what it is called.
+   *
+   * Internal. The fill layer uses it to pick the message, hint and required
+   * details together; it is dropped before anything crosses the tool seam, so
+   * the model still sees only `error_code`, `message`, and `details`.
+   */
+  readonly cause: InteractionFailureCause;
   readonly message: string;
   readonly retryable: boolean;
   readonly details: Readonly<Record<string, unknown>>;
@@ -160,6 +212,18 @@ export interface WidgetDriver {
    * never click, fill, or otherwise open a widget.
    */
   detect(port: WidgetPort, target: WidgetTarget): Promise<number>;
+  /**
+   * Confidence read from a container the engine-owned open probe just revealed.
+   *
+   * Optional, and reachable only from that stage. Some controls say nothing
+   * about themselves until they are opened — a bare textbox that mounts a
+   * calendar on click carries no popup attribute, no format hint and no
+   * rendered value — so `detect` correctly scores them zero and correctly
+   * refuses to click to find out. Once the engine has opened one deliberately,
+   * and knows the container came from that click, the driver can be asked what
+   * it makes of it. A driver without this member is simply never asked.
+   */
+  detectOpen?(port: WidgetPort, target: WidgetTarget, container: WidgetContainer): Promise<number>;
   /** Drive and verify the semantic intent within the supplied bounds. */
   drive(
     port: WidgetPort,
@@ -185,12 +249,20 @@ export function defaultWidgetBudget(port: Pick<WidgetPort, 'now'>): WidgetBudget
   };
 }
 
-/** Construct a fully populated typed widget failure. */
+/**
+ * Construct a fully populated typed widget failure.
+ *
+ * `cause` is required, and sits beside the code rather than being inferred from
+ * it later: a driver knows why it gave up, and reconstructing that at the seam
+ * from whichever detail keys happen to be present is exactly the arrangement
+ * this argument replaces.
+ */
 export function widgetFailure(
   errorCode: WidgetErrorCode,
+  cause: InteractionFailureCause,
   message: string,
   details: Readonly<Record<string, unknown>> = {},
   retryable = true,
 ): WidgetFailure {
-  return { ok: false, errorCode, message, retryable, details };
+  return { ok: false, errorCode, cause, message, retryable, details };
 }

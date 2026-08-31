@@ -1,0 +1,71 @@
+<!--
+  Shape: the suggestion list matches only on the leading characters of its own
+  index key, not on the label it displays. Typing an offered label back in
+  therefore matches nothing, because the label carries text the index does not.
+
+  Observed in run 20260829T171218Z-do-0ae073f1 (seq 22 and 24): the widget
+  correctly reported three offered labels, and the attached hint told the agent
+  to "re-issue this call with one of those strings exactly as written". It did,
+  with "San Jose Mineta International Airport (SJC)", and the call spent 13.9
+  seconds arriving at WIDGET_NOT_COMMITTED. The hint named a move the engine had
+  no path for.
+-->
+<input
+  id="q"
+  role="combobox"
+  aria-label="Where to?"
+  aria-autocomplete="list"
+  aria-controls="opts"
+  aria-expanded="false"
+/>
+<div id="opts" role="listbox" style="display: none"></div>
+<script>
+  (function () {
+    var input = document.getElementById('q');
+    var popup = document.getElementById('opts');
+    var catalog = [
+      { key: 'san jose', label: 'San Jose Mineta International Airport (SJC)' },
+      { key: 'san jose del cabo', label: 'San Jose del Cabo (SJD)' },
+      { key: 'santiago', label: 'Santiago Arturo Merino (SCL)' },
+    ];
+
+    function render() {
+      var wanted = input.value.trim().toLowerCase();
+      popup.innerHTML = '';
+      // Leading characters of the KEY only. A full display label is longer than
+      // the key it was derived from, so it can never be a prefix of it.
+      var hits =
+        wanted.length === 0
+          ? []
+          : catalog.filter(function (entry) {
+              return entry.key.indexOf(wanted) === 0;
+            });
+      if (hits.length === 0) {
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      hits.forEach(function (entry) {
+        var button = document.createElement('button');
+        button.setAttribute('role', 'option');
+        button.textContent = entry.label;
+        button.addEventListener('click', function () {
+          input.value = entry.label;
+          popup.style.display = 'none';
+          input.setAttribute('aria-expanded', 'false');
+        });
+        popup.appendChild(button);
+      });
+      popup.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    input.addEventListener('input', render);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+</script>

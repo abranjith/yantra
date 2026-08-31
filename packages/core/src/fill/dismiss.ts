@@ -117,6 +117,7 @@ export async function dismissWidget(
   if (stillOpen || (preserved && !matches(committed))) {
     return fillFailure(
       'WIDGET_DISMISS_FAILED',
+      'overlay-still-open',
       `The value was committed, but the floating widget for "${target.name}" could not be released without losing it.`,
       {
         stillOpen: stillOpen ? target.name : null,

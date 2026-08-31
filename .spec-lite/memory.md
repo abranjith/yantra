@@ -32,6 +32,7 @@
 - Use strict TypeScript, named exports, `const` and `readonly` by default, `unknown` plus narrowing for open input, and explicit `async`/`await`.
 - Use camelCase values/functions, PascalCase classes/interfaces/types, and UPPER_SNAKE_CASE constants. Prefer interfaces for extensible object shapes and discriminated unions for closed sets.
 - Use custom `Error` subclasses with safe, actionable context. Never silently swallow errors.
+- **Advice in a tool result may only name a move the engine has an engineered path for.** A hint that says "re-issue with one of these strings" is legal only because a select-by-offered-label path exists and is exercised; advice without a corresponding capability steers the agent into a dead end and is a bug class, not a wording problem. Enforce it mechanically: each hint template declares the detail keys it references and the engine capability it depends on, and a test asserts both resolve. _(auto-captured 2026-08-29)_
 - **A tool result must say what actually happened, not what was asked for.** When an operation resolves a request to something different (a widget committing "Dallas" for a typed "DFW"), report the outcome, how it was reached, and what the alternatives were — never verify a result against the input when the system offered its own answer. Failures carry what was observed, what recovery already ran, and one cause-specific next step; two failures sharing an error code must not read identically. _(auto-captured 2026-08-27)_
 
 ## Architecture
@@ -42,6 +43,9 @@
 - Pi paths are Yantra-owned and pinned. Application sessions load no ambient Pi settings, extensions, resources, prompts, skills, or context files.
 - No unrestricted filesystem or shell tools exist. `script_run` accepts only registered, validated transformations with time, memory, and output limits.
 - Keep sanitizer, secret resolution, ethics, consent, budgets, output validation, and audit enforcement outside prompt text.
+- **Keep recovery/retry policy separate from interaction business logic.** Escalation is declarative data — ordered, typed rungs (axis, entry condition, cost cap) executed by one runner that owns budgets and the attempt ledger. A new fallback is a plan edit, never a nested wrapper or an inline branch inside the action being retried. _(auto-captured 2026-08-29)_
+- **Widget detection must never mutate page state.** `detect()` reads closed state only, which is what makes it safe to run across every registered driver. Where a control reveals its nature only when opened, that belongs to a separate, explicitly engine-owned probe stage with its own entry condition, a single bounded attempt, a mandatory drive-or-dismiss, and a ledger record — never to a driver that clicks while deciding whether it applies. _(auto-captured 2026-08-29)_
+- **Diagnostic work is paid for only on the path that needs it.** A recovery step requiring a before-picture — an extra `observe()`, a baseline read — takes it from the caller when the caller already holds one, and otherwise runs behind a structural entry condition; it is never taken unconditionally on the hot path. Assert it by counting the operation in a test, because a silent extra page read is invisible in every other signal. _(auto-captured 2026-08-30)_
 - Use explicit dependency injection; avoid hidden singletons and provider SDK types outside the adapter seam.
 
 ## Error Handling
@@ -67,6 +71,7 @@
 - Sanitize every model-visible payload; website secret fills enforce trusted host bindings before resolution.
 - Outbound URLs are audited, length-capped, credential-shape scanned, and constrained by host budgets. Popups require explicit policy-checked navigation.
 - Browser profiles are ephemeral by default. Consent, ethics, budgets, and output validation are non-bypassable.
+- If screenshot/vision assistance ships, it is opt-in only: an explicit stored user grant with a loud warning that captures are raw, unmasked pixels sent to the model provider; structurally unavailable in zero-LLM contexts; every capture persisted to the run directory and surfaced by audit. _(auto-captured 2026-08-29)_
 
 ## Dependencies
 

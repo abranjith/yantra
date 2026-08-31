@@ -87,6 +87,9 @@ describe('@no-llm BudgetTracker two-phase wall clock', () => {
     if (!soft.isOk) {
       expect(soft.error.limit).toBe('wall-clock-soft');
       expect(soft.error.message).toMatch(/publish now.*evidence already gathered/i);
+      // The decision knows it already carries the remedy, so the caller does
+      // not append a second, near-identical one.
+      expect(soft.error.carriesPublishRemedy).toBe(true);
     }
 
     clock.advance(100);
@@ -98,6 +101,21 @@ describe('@no-llm BudgetTracker two-phase wall clock', () => {
       expect(hard.isOk).toBe(false);
       if (!hard.isOk) expect(hard.error.limit).toBe('wall-clock');
     }
+  });
+
+  it('marks a refusal that carries no publish remedy of its own', () => {
+    // The cumulative-byte refusal says nothing about publishing, so the caller
+    // is the right place for that sentence — and the only place.
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+
+    budgets.accountResultBytes(TIGHT_LIMITS.maxBytesPerRun + 1);
+    const denied = budgets.reserveCall('web_search');
+
+    expect(denied.isOk).toBe(false);
+    if (denied.isOk) return;
+    expect(denied.error.limit).toBe('cumulative-bytes');
+    expect(denied.error.carriesPublishRemedy).toBe(false);
   });
 
   it('moves the wind-down boundary with a custom fraction', () => {

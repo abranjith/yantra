@@ -1,7 +1,10 @@
 import type { AgentInteractable } from '../browser/agent-controller.js';
 import {
   commitText,
+  editeeProbe,
+  enterText,
   EMPTY_LEDGER,
+  isFormattingEquivalent,
   ledgerOf,
   resolveInteractable,
   type AttemptLedger,
@@ -10,6 +13,7 @@ import {
 } from '../interaction/index.js';
 import { pendingRangePartner, resolveDatePair } from '../widgets/date/date-pair.js';
 import { createDefaultWidgetRegistry } from '../widgets/default-registry.js';
+import { probeOpen, type ProbeOutcome } from '../widgets/open-probe.js';
 import { resolveContainer } from '../widgets/open-state.js';
 import { nativeSelectDriver } from '../widgets/option/native-select-driver.js';
 import {
@@ -35,6 +39,8 @@ import {
   type FillIntent,
   type FillOutcome,
   type FillResolution,
+  type CauseFor,
+  type FillCause,
 } from './types.js';
 
 /**
@@ -66,6 +72,8 @@ export async function fillField(
   let acceptedText: string | null = null;
   /** Which widget drivers were tried, when more than one was. */
   let driverLedger: AttemptLedger = EMPTY_LEDGER;
+  /** The control the drive re-targeted to, when the page routed the edit away. */
+  let editee: WidgetTarget | null = null;
 
   try {
     const shape = await healed.port.evaluateOn(target.ref, (element) => {
@@ -99,6 +107,7 @@ export async function fillField(
     if (intent.kind === 'secret') {
       return fillFailure(
         'FILL_VALUE_INVALID',
+        'value-malformed',
         'Secret intents must be resolved at the execution boundary and passed to fillField as text with secret verification disabled.',
         { key: intent.key },
         false,
@@ -115,8 +124,9 @@ export async function fillField(
       if (checked !== intent.checked) {
         return fillFailure(
           'WIDGET_NOT_COMMITTED',
+          'control-refused-value',
           `The ${target.role} "${target.name}" did not commit the requested checked state.`,
-          { checked },
+          { checked, observed: checked ? 'checked' : 'unchecked' },
         );
       }
       driver = 'toggle';
@@ -134,13 +144,27 @@ export async function fillField(
       // that will not accept typed text falls through to the calendar that
       // opens from it — which is the difference between reaching a month four
       // pages away and reporting the date as uncommittable.
-      const attempt = await driveWithFallback(healed.port, target, intent, budget, 'date');
+      const attempt = await withOpenProbe(
+        healed.port,
+        target,
+        intent,
+        budget,
+        'date',
+        await driveWithFallback(healed.port, target, intent, budget, 'date'),
+      );
       if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
       ({ driver, committed, actions } = attempt.outcome);
       driven = attempt.outcome.container ?? null;
       driverLedger = attempt.ledger;
     } else if (!shape.textLike && intent.kind === 'option') {
-      const attempt = await driveWithFallback(healed.port, target, intent, budget, 'option');
+      const attempt = await withOpenProbe(
+        healed.port,
+        target,
+        intent,
+        budget,
+        'option',
+        await driveWithFallback(healed.port, target, intent, budget, 'option'),
+      );
       if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
       ({ driver, committed, actions } = attempt.outcome);
       driven = attempt.outcome.container ?? null;
@@ -149,25 +173,70 @@ export async function fillField(
       driverLedger = attempt.ledger;
     } else if ((intent.kind === 'text' || intent.kind === 'option') && shape.textLike) {
       const text = intent.kind === 'text' ? intent.text : intent.value;
-      // Confirm the characters landed before anything downstream reasons about
-      // them. A control that swallows the leading keystroke used to send its
-      // own truncated fragment to the site's autocomplete, and the suggestion
-      // that came back was ranked and committed as though it answered the
-      // request.
-      const typed = await commitText(healed.port, target, text, budget);
-      if (!typed.ok) return fromTypingFailure(typed);
-      actions += typed.ledger.records.length;
-      typingLedger = typed.ledger;
-      reformatted = typed.reformatted;
-      acceptedText = typed.committed;
-      const reacted = await watchAndSelect(healed.port, target, text, budget, ignoredContainer);
-      if (!reacted.ok) return reacted;
-      actions += reacted.actions;
-      committed = reacted.committed;
-      reactionDismissed = reacted.dismissed;
-      driver = reacted.selected ? 'typeahead' : 'plain-text';
-      chosen = reacted.chosen ?? null;
-      offered = reacted.offered ?? [];
+      // The combobox family first. A control that declares itself a suggestion
+      // control gets the whole choreography — editee, query plan, ranking
+      // against the full request — instead of the one-shot type-and-watch the
+      // plain-text path performs. `asOptionIntent` is reused rather than
+      // widening `WidgetIntent`; the free-text decision it erases stays here,
+      // in `resolutionFor`, and never travels down to the driver.
+      const optionIntent = asOptionIntent(intent);
+      const combobox = optionIntent
+        ? await driveWithFallback(healed.port, target, optionIntent, budget, 'combobox')
+        : null;
+      if (combobox?.tried) {
+        if (!combobox.ok) return fromWidgetFailure(combobox.failure, combobox.ledger);
+        ({ driver, committed, actions } = combobox.outcome);
+        driven = combobox.outcome.container ?? null;
+        chosen = combobox.outcome.chosen ?? null;
+        offered = combobox.outcome.offered ?? [];
+        driverLedger = combobox.ledger;
+        editee = combobox.outcome.editee ?? null;
+        reformatted = combobox.outcome.reformatted ?? false;
+        reactionDismissed = combobox.outcome.released ?? false;
+        // With nothing chosen, the control's own value is the authority for a
+        // mask that rewrote what was typed — the same rule the plain-text path
+        // applies, reached through the driver's disclosure instead of its own
+        // typing outcome.
+        acceptedText = chosen === null ? committed : null;
+      } else {
+        // Confirm the characters landed before anything downstream reasons about
+        // them. A control that swallows the leading keystroke used to send its
+        // own truncated fragment to the site's autocomplete, and the suggestion
+        // that came back was ranked and committed as though it answered the
+        // request.
+        //
+        // And confirm they landed *here*. A trigger that opens an overlay and
+        // routes keystrokes into the overlay's own input answers all three typing
+        // rungs identically, so this asks where the text went before spending
+        // two more mechanisms on a node that was never the editee.
+        // The WHERE rung, only where it can pay for itself. A control that
+        // declares no popup has nothing to delegate to, and asking anyway would
+        // charge every plain text box an observation it can never use — so the
+        // rung runs when the caller already handed us a before-picture, or when
+        // the control says it opens something.
+        const probe =
+          entry.observation !== undefined
+            ? editeeProbe(healed.port, entry.observation)
+            : shape.linkedPopup
+              ? editeeProbe(healed.port)
+              : undefined;
+        const entered = await enterText(healed.port, target, text, budget, probe);
+        if (!entered.typed.ok) return fromTypingFailure(entered.typed, entered.ledger);
+        editee = entered.editee;
+        const live = entered.target;
+        actions += entered.ledger.records.length;
+        typingLedger = entered.ledger;
+        reformatted = entered.typed.reformatted;
+        acceptedText = entered.typed.committed;
+        const reacted = await watchAndSelect(healed.port, live, text, budget, ignoredContainer);
+        if (!reacted.ok) return reacted;
+        actions += reacted.actions;
+        committed = reacted.committed;
+        reactionDismissed = reacted.dismissed;
+        driver = reacted.selected ? 'typeahead' : 'plain-text';
+        chosen = reacted.chosen ?? null;
+        offered = reacted.offered ?? [];
+      }
     } else {
       return incompatible(target, intent);
     }
@@ -195,7 +264,14 @@ export async function fillField(
     const satisfied = (value: string): boolean => {
       if (chosen !== null) return matchesCommitment(value, chosen);
       if (matchesFillIntent(value, intent)) return true;
-      return acceptedText !== null && matchesCommitment(value, acceptedText);
+      const requestedText =
+        intent.kind === 'text' ? intent.text : intent.kind === 'option' ? intent.value : null;
+      return (
+        acceptedText !== null &&
+        requestedText !== null &&
+        isFormattingEquivalent(acceptedText, requestedText) &&
+        matchesCommitment(value, acceptedText)
+      );
     };
 
     // Release before the authoritative verification, not after. A picker that
@@ -213,12 +289,14 @@ export async function fillField(
       intent,
       dismissed.committed,
       satisfied,
+      editee,
     );
     if (settled === null) {
       return (
         rangeIncomplete(target, intent, pendingPartner) ??
         fillFailure(
           'WIDGET_NOT_COMMITTED',
+          'value-rejected-on-release',
           `The "${target.name}" control does not reflect the requested value.`,
           {
             committed: dismissed.committed,
@@ -249,6 +327,9 @@ export async function fillField(
       dismissed: reactionDismissed || dismissed.dismissed,
       requested,
       resolution,
+      ...(editee === null
+        ? {}
+        : { editee: { ref: editee.ref, name: editee.name, role: editee.role } }),
       ...(offered.length > 0 ? { offered } : {}),
       ...(noteFor(target.name, requested, settled, resolution, offered) ?? {}),
       // Only when it says something. One driver, one successful attempt is the
@@ -259,6 +340,7 @@ export async function fillField(
     if (isStaleRefError(error)) {
       return fillFailure(
         'WIDGET_ELEMENT_REPLACED',
+        'element-replaced',
         `The page replaced the "${entry.target.name}" control and it could not be found again.`,
         { field: entry.field, name: entry.target.name, role: entry.target.role },
       );
@@ -312,6 +394,7 @@ export async function fillSecretField(
   if (port.now() > budget.deadlineMs || budget.maxActions < 1) {
     return fillFailure(
       'WIDGET_TARGET_UNREACHABLE',
+      'budget',
       'The fill action budget was exhausted before the secret could be committed.',
       { reason: 'budget' },
     );
@@ -337,6 +420,7 @@ export async function fillSecretField(
     if (isStaleRefError(error)) {
       return fillFailure(
         'WIDGET_ELEMENT_REPLACED',
+        'element-replaced',
         `The page replaced the "${identity.target.name}" control and it could not be found again.`,
         { field: identity.field, name: identity.target.name, role: identity.target.role },
       );
@@ -387,8 +471,17 @@ async function settledCommit(
   intent: FillIntent,
   committed: string,
   satisfied: (value: string) => boolean,
+  editee: WidgetTarget | null = null,
 ): Promise<string | null> {
   if (satisfied(committed)) return committed;
+  // A page that routed the edit into an overlay's own input sometimes leaves
+  // the value there rather than writing it back to the control the caller
+  // named. Reading the node that was actually edited is not a relaxation of
+  // verification — it is verification against the right node.
+  if (editee) {
+    const fromEditee = await readCommitted(port, editee);
+    if (satisfied(fromEditee)) return fromEditee;
+  }
   if (intent.kind !== 'date_range') return null;
   // Releasing the widget is what makes a paired range readable, and the second
   // field is frequently written a beat after the first as the page settles. A
@@ -441,6 +534,7 @@ function rangeIncomplete(
   if (!partner || intent.kind !== 'date') return null;
   return fillFailure(
     'WIDGET_RANGE_INCOMPLETE',
+    'range-half-discarded',
     `"${target.name}" is one end of a date range that this picker commits together with "${partner.name}", so setting it on its own was discarded and the page is unchanged. Send both ends in one call: "${target.name}" with the value "${intent.date}..<${partner.name} date>", or both fields in one browser_fill_form.`,
     { field: target.name, partner: partner.name, requested: intent.date },
   );
@@ -468,8 +562,25 @@ function isWrongDriver(failure: WidgetFailure): boolean {
 
 /** One family's drive attempt, and the record of which drivers were tried. */
 type DriverAttempt =
-  | { readonly ok: true; readonly outcome: WidgetSuccess; readonly ledger: AttemptLedger }
-  | { readonly ok: false; readonly failure: WidgetFailure; readonly ledger: AttemptLedger };
+  | {
+      readonly ok: true;
+      readonly outcome: WidgetSuccess;
+      readonly ledger: AttemptLedger;
+      readonly tried: true;
+    }
+  | {
+      readonly ok: false;
+      readonly failure: WidgetFailure;
+      readonly ledger: AttemptLedger;
+      /**
+       * Whether any driver in the family was confident enough to act.
+       *
+       * A family that recognised nothing is not a failure to report — it is a
+       * routing answer, and the caller falls through to whatever path owns the
+       * control instead. Only a driver that ran and said no is a real failure.
+       */
+      readonly tried: boolean;
+    };
 
 /**
  * Drive a control through its candidate drivers, strongest confidence first.
@@ -496,14 +607,20 @@ async function driveWithFallback(
       records.push({
         attempt: index + 1,
         strategy: `driver:${candidate.driver.kind}`,
+        axis: 'how',
         errorCode: null,
         elapsedMs: port.now() - startedAt,
       });
-      return { ok: true, outcome, ledger: ledgerOf(records) };
+      // A driver that ran its own ladder reports it; splicing those records in
+      // after the driver's own entry is what keeps the ledger a readable
+      // sequence rather than two disjoint lists.
+      records.push(...(outcome.attempted ?? []));
+      return { ok: true, outcome, ledger: ledgerOf(renumbered(records)), tried: true };
     }
     records.push({
       attempt: index + 1,
       strategy: `driver:${candidate.driver.kind}`,
+      axis: 'how',
       errorCode: outcome.errorCode,
       elapsedMs: port.now() - startedAt,
       detail: outcome.message,
@@ -519,11 +636,65 @@ async function driveWithFallback(
       last ??
       widgetFailure(
         'WIDGET_NOT_RECOGNIZED',
+        'driver-not-recognized',
         `No ${family} widget driver recognized "${target.name}" with sufficient confidence.`,
         { family },
       ),
     ledger: ledgerOf(records),
+    tried: candidates.length > 0,
   };
+}
+
+/** Renumber a spliced ledger so the sequence reads in the order it happened. */
+function renumbered(records: readonly AttemptRecord[]): readonly AttemptRecord[] {
+  return records.map((record, index) => ({ ...record, attempt: index + 1 }));
+}
+
+/**
+ * Fall through to the open probe when a family recognised nothing.
+ *
+ * The single sanctioned exception to "detection never clicks", and the engine
+ * owns it: a control that only reveals what it is when opened is invisible to
+ * closed-state detection, and the alternative to one probing click is a failure
+ * that pushes the caller into operating the widget by hand. It runs at most
+ * once per fill, and only after the family's own detection came back empty.
+ */
+async function withOpenProbe(
+  port: WidgetPort,
+  target: WidgetTarget,
+  intent: WidgetIntent,
+  budget: FillBudget,
+  family: WidgetFamily,
+  attempt: DriverAttempt,
+): Promise<DriverAttempt> {
+  if (attempt.ok || attempt.tried) return attempt;
+  const probed: ProbeOutcome = await probeOpen(port, target, family, budget, {
+    intent,
+    detect: (probePort, probeTarget, probeFamily) =>
+      WIDGET_REGISTRY.detectDrivers(probePort, probeTarget, probeFamily),
+    detectOpen: (probePort, probeTarget, container, probeFamily) =>
+      WIDGET_REGISTRY.detectOpenDrivers(probePort, probeTarget, container, probeFamily),
+  });
+  if (probed.kind === 'skipped') return attempt;
+  const ledger = ledgerOf(renumbered([...attempt.ledger.records, ...probed.ledger.records]));
+  if (probed.kind === 'unrecognized') {
+    // Always surfaced, unlike the driver-fallback ledger's noise threshold: a
+    // probe that ran is the difference between "nothing recognised this" and
+    // "it was opened and still nothing recognised it", and a caller that cannot
+    // see which one happened learns nothing from the failure.
+    return {
+      ok: false,
+      failure: {
+        ...probed.failure,
+        details: { ...probed.failure.details, attempted: ledger.records },
+      },
+      ledger,
+      tried: true,
+    };
+  }
+  return probed.outcome.ok
+    ? { ok: true, outcome: probed.outcome, ledger, tried: true }
+    : { ok: false, failure: probed.outcome, ledger, tried: true };
 }
 
 /** Render a semantic intent as the caller expressed it, for `requested`. */
@@ -612,12 +783,28 @@ function noteFor(
  * mechanisms must not read like one nobody tried, or the caller repeats work
  * the tool already exhausted.
  */
-function fromTypingFailure(failure: TypingFailure): FillFailure {
-  return fillFailure(failure.errorCode, failure.message, {
+function fromTypingFailure(failure: TypingFailure, ledger?: AttemptLedger): FillFailure {
+  const details = {
     observed: failure.observed,
-    attempted: failure.ledger.records,
+    attempted: (ledger ?? failure.ledger).records,
+    ...(failure.editee === undefined ? {} : { editee: failure.editee.name }),
     ...(failure.reason === undefined ? {} : { reason: failure.reason }),
-  });
+  };
+  // The two arms are the whole point of the cause discriminator: both carry
+  // WIDGET_NOT_COMMITTED, and before this they read identically.
+  if (failure.errorCode === 'WIDGET_NOT_COMMITTED') {
+    return fillFailure(
+      'WIDGET_NOT_COMMITTED',
+      failure.editee !== undefined
+        ? 'keystrokes-landed-elsewhere'
+        : failure.reason === 'budget'
+          ? 'budget'
+          : 'typing-exhausted',
+      failure.message,
+      details,
+    );
+  }
+  return fillFailure('WIDGET_TARGET_UNREACHABLE', 'budget', failure.message, details);
 }
 
 function asOptionIntent(intent: FillIntent): WidgetIntent | null {
@@ -629,20 +816,113 @@ function asOptionIntent(intent: FillIntent): WidgetIntent | null {
 function incompatible(target: WidgetTarget, intent: FillIntent): FillFailure {
   return fillFailure(
     'WIDGET_TARGET_UNREACHABLE',
+    'intent-incompatible',
     `The ${target.role} "${target.name}" cannot accept a ${intent.kind} fill intent.`,
     { role: target.role, intent: intent.kind },
   );
 }
 
+/**
+ * Translate a driver's failure into the fill vocabulary, cause and all.
+ *
+ * An exhaustive switch rather than a lookup, because the remap from widget code
+ * to fill code has to leave a `(code, cause)` pair the table actually declares —
+ * and the compiler is a better guarantee of that than a comment. The narrowing
+ * helpers below map any incoming cause into the set its destination code can
+ * carry; they are total functions into a legal set, never a generic sentence.
+ */
 function fromWidgetFailure(failure: WidgetFailure, ledger?: AttemptLedger): FillFailure {
   const details =
     ledger && ledger.records.length > 1
       ? { ...failure.details, attempted: ledger.records }
       : failure.details;
-  if (failure.errorCode === 'WIDGET_NOT_RECOGNIZED') {
-    return fillFailure('WIDGET_TARGET_UNREACHABLE', failure.message, details);
+  switch (failure.errorCode) {
+    case 'WIDGET_NOT_RECOGNIZED':
+    case 'WIDGET_TARGET_UNREACHABLE':
+      return fillFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        unreachableCause(failure.cause, details),
+        failure.message,
+        details,
+        failure.retryable,
+      );
+    case 'WIDGET_NOT_COMMITTED':
+      return fillFailure(
+        'WIDGET_NOT_COMMITTED',
+        notCommittedCause(failure.cause),
+        failure.message,
+        details,
+        failure.retryable,
+      );
+    case 'WIDGET_DID_NOT_OPEN':
+      return fillFailure(
+        'WIDGET_DID_NOT_OPEN',
+        'picker-did-not-open',
+        failure.message,
+        details,
+        failure.retryable,
+      );
+    case 'WIDGET_AMBIGUOUS_CHOICE':
+      return fillFailure(
+        'WIDGET_AMBIGUOUS_CHOICE',
+        'several-matched-equally',
+        failure.message,
+        details,
+        failure.retryable,
+      );
+    case 'WIDGET_MAPPING_UNSAFE':
+      return fillFailure(
+        'WIDGET_MAPPING_UNSAFE',
+        'mapping-unsafe',
+        failure.message,
+        details,
+        failure.retryable,
+      );
+    case 'WIDGET_ELEMENT_REPLACED':
+      return fillFailure(
+        'WIDGET_ELEMENT_REPLACED',
+        'element-replaced',
+        failure.message,
+        details,
+        failure.retryable,
+      );
   }
-  return fillFailure(failure.errorCode, failure.message, details, failure.retryable);
+}
+
+/** Any cause, narrowed to one WIDGET_TARGET_UNREACHABLE can carry. */
+function unreachableCause(
+  cause: FillCause,
+  details: Readonly<Record<string, unknown>>,
+): CauseFor<'WIDGET_TARGET_UNREACHABLE'> {
+  switch (cause) {
+    case 'value-not-offered':
+    case 'date-not-reachable':
+    case 'no-suggestion-matched':
+    case 'picker-did-not-open':
+    case 'intent-incompatible':
+    case 'budget':
+      return cause;
+    case 'driver-not-recognized':
+      // The probe distinguishes these two by what it actually saw, and they
+      // read differently: nothing opened at all is a different next step from
+      // something opened that no driver understood.
+      return details.containerResolved === false ? 'picker-did-not-open' : 'driver-not-recognized';
+    default:
+      return 'driver-not-recognized';
+  }
+}
+
+/** Any cause, narrowed to one WIDGET_NOT_COMMITTED can carry. */
+function notCommittedCause(cause: FillCause): CauseFor<'WIDGET_NOT_COMMITTED'> {
+  switch (cause) {
+    case 'keystrokes-landed-elsewhere':
+    case 'typing-exhausted':
+    case 'value-rejected-on-release':
+    case 'budget':
+      return cause;
+    default:
+      return 'control-refused-value';
+  }
 }
 
 async function readChecked(port: WidgetPort, target: WidgetTarget): Promise<boolean> {
@@ -745,7 +1025,11 @@ function resolveField(
   interactables: readonly AgentInteractable[],
   preferred?: WidgetTarget,
 ): AgentInteractable | null {
-  const resolved = resolveInteractable(field, interactables, preferred ? { preferred } : {});
+  const resolved = resolveInteractable(
+    field,
+    interactables,
+    preferred ? { preferred, allowEquivalentCopies: true } : {},
+  );
   return resolved.kind === 'match' ? resolved.entry : null;
 }
 

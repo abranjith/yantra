@@ -6,14 +6,22 @@ import {
   type AgentBrowserController,
   type AgentBrowserObservation,
   type AgentInteractable,
+  fillFailure,
+  type FillOutcome,
   type OpaqueRefResolver,
   UserInputVault,
+  type WidgetPort,
+  type WidgetTarget,
 } from '@yantra/core';
 import type { ConfirmationGateway } from '@yantra/core';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { browserFillElementSpec } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
+import { mapFillFailure } from '../../../../src/adapters/pi/tools/browser-common.js';
+import {
+  browserFillElementSpec,
+  driveWithRetry,
+} from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserFillFormSpec } from '../../../../src/adapters/pi/tools/browser-fill-form.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps } from '../../../../src/runtime/run-services.js';
@@ -72,24 +80,127 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     ]);
   });
 
-  it('preserves field ordering and stops at the first failure', async () => {
+  it('fills the fields a failure does not block, and says which it did', async () => {
+    // The run's seq 14: a four-field call failed on the first field and
+    // returned `applied: []`, so a call that existed to make four fields'
+    // worth of progress made none — and the three untouched fields were
+    // indistinguishable from three that had been tried and refused.
     const controller = new FormController(
       '<input id="first" aria-label="First"><button id="toggle" aria-label="Toggle">Toggle</button>' +
-        '<input id="last" aria-label="Last">',
+        '<input id="third" aria-label="Third"><input id="last" aria-label="Last">',
     );
 
     const result = await run(controller, {
       fields: [
         { field: 'First', value: 'one' },
         { field: 'Toggle', value: 'two' },
-        { field: 'Last', value: 'three' },
+        { field: 'Third', value: 'three' },
+        { field: 'Last', value: 'four' },
       ],
     });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly Record<string, unknown>[];
+      readonly failed: readonly Record<string, unknown>[];
+      readonly skipped?: readonly unknown[];
+    };
+
+    expect(result.status).toBe('ok');
+    expect(model.applied.map((entry) => entry.field)).toEqual(['First', 'Third', 'Last']);
+    expect(model.failed).toEqual([
+      expect.objectContaining({ field: 'Toggle', error_code: 'WIDGET_TARGET_UNREACHABLE' }),
+    ]);
+    expect(model.skipped).toBeUndefined();
+    expect(controller.document.querySelector<HTMLInputElement>('#last')!.value).toBe('four');
+    expect(result.details).toMatchObject({
+      partial: true,
+      applied_count: 3,
+      failed_count: 1,
+      skipped_count: 0,
+    });
+    // Three plain-text fills, each waiting out the suggestion window that a
+    // late autocomplete needs.
+  }, 30_000);
+
+  it('skips a field belonging to the same widget as the one that failed', async () => {
+    // A shared range picker or one overlay would fail again for a reason the
+    // caller cannot tell apart from a real problem with that field.
+    const controller = groupedController();
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Search', value: 'one' },
+        { field: 'Check-in', value: 'two' },
+        { field: 'Check-out', value: 'three' },
+      ],
+    });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly Record<string, unknown>[];
+      readonly skipped: readonly Record<string, unknown>[];
+    };
+
+    expect(model.applied.map((entry) => entry.field)).toEqual(['Search']);
+    expect(model.skipped).toEqual([
+      { field: 'Check-out', reason: 'same-widget-group-as-failed', blocked_by: 'Check-in' },
+    ]);
+    // Not merely reported as skipped — never attempted.
+    expect(controller.document.querySelector<HTMLInputElement>('#checkout')!.value).toBe('');
+  }, 30_000);
+
+  it("still skips when the failed field's widget was dismissed before the next one", async () => {
+    // The regression guard for reading `group` rather than a live container: a
+    // failed fill dismisses whatever it opened, so resolving a container
+    // afterwards answers null and a rule written that way would never fire.
+    const controller = groupedController();
+    controller.document.querySelector<HTMLElement>('#picker')!.style.display = 'none';
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Check-in', value: 'two' },
+        { field: 'Check-out', value: 'three' },
+      ],
+    });
+    const details = result.details as Record<string, unknown>;
+
+    expect(result.status).toBe('error');
+    expect(details).toMatchObject({ applied_count: 0, failed_count: 1, skipped_count: 1 });
+    expect(details.skipped).toEqual([
+      { field: 'Check-out', reason: 'same-widget-group-as-failed', blocked_by: 'Check-in' },
+    ]);
+  });
+
+  it('reports every field failing as a failure, with all three sets', async () => {
+    const controller = new FormController(
+      '<button id="a" aria-label="Alpha">Alpha</button><button id="b" aria-label="Beta">Beta</button>',
+    );
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Alpha', value: 'one' },
+        { field: 'Beta', value: 'two' },
+      ],
+    });
+    const details = result.details as Record<string, unknown>;
+
+    expect(result.status).toBe('error');
     expect(result.error_code).toBe('WIDGET_TARGET_UNREACHABLE');
-    expect(
-      (result.details as { readonly applied: readonly Record<string, unknown>[] }).applied,
-    ).toEqual([expect.objectContaining({ field: 'First', committed: 'one' })]);
-    expect(controller.document.querySelector<HTMLInputElement>('#last')!.value).toBe('');
+    expect(details).toMatchObject({
+      partial: false,
+      applied_count: 0,
+      failed_count: 2,
+      skipped_count: 0,
+    });
+    expect(details.applied).toEqual([]);
+    expect(Array.isArray(details.failed)).toBe(true);
+  });
+
+  it('promises no stop-at-first-failure in the tool description', () => {
+    const description = browserFillFormSpec(buildServices({})).description;
+
+    expect(description).not.toMatch(/stops at the first failure/i);
+    expect(description).toMatch(/does not end the batch/i);
+    expect(description).toMatch(/applied/);
+    expect(description).toMatch(/failed/);
+    expect(description).toMatch(/skipped/);
   });
 
   it('does not toggle an already-open calendar shut', async () => {
@@ -150,6 +261,33 @@ describe('@no-llm browser_fill_form engine delegation', () => {
 
     expect(result.error_code).toBe('INVALID_INPUT');
     expect(controller.observationCount).toBe(0);
+  });
+});
+
+describe('@no-llm the failure cause never crosses the tool seam', () => {
+  it('emits error_code, message and details, and no cause', () => {
+    // `cause` selects the message, hint and required details together and is
+    // then dropped. The model's contract is the stable code; adding a second
+    // discriminator to it would make the tool seam and the tool-calls.jsonl
+    // projection depend on an internal one.
+    const failure = fillFailure(
+      'WIDGET_NOT_COMMITTED',
+      'keystrokes-landed-elsewhere',
+      'The control is still empty.',
+      { editee: 'Search airports', observed: '' },
+    );
+
+    const mapped = mapFillFailure(failure);
+
+    expect(Object.keys(mapped).sort()).toEqual([
+      'details',
+      'errorCode',
+      'message',
+      'ok',
+      'retryable',
+    ]);
+    expect(JSON.stringify(mapped)).not.toContain('keystrokes-landed-elsewhere');
+    expect(mapped.message).toContain('Search airports');
   });
 });
 
@@ -450,6 +588,72 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(controller.document.querySelector<HTMLInputElement>('#ci')!.value).toBe('Sep 6');
   });
 
+  it('shares one absolute deadline across re-resolution and both fill passes', async () => {
+    let clock = 0;
+    const deadlines: number[] = [];
+    const target: WidgetTarget = {
+      ref: 'e1',
+      role: 'textbox',
+      name: 'Destination',
+      group: null,
+      value: null,
+    };
+    const replacement = {
+      ok: false,
+      errorCode: 'WIDGET_ELEMENT_REPLACED',
+      message: 'The field was replaced.',
+      retryable: true,
+      details: {},
+    } as const;
+    const expired = {
+      ok: false,
+      errorCode: 'WIDGET_TARGET_UNREACHABLE',
+      message: 'The original budget expired.',
+      retryable: false,
+      details: { reason: 'budget' },
+    } as const;
+    let pass = 0;
+
+    const outcome = await driveWithRetry(
+      { now: () => clock } as WidgetPort,
+      {} as AgentBrowserController,
+      'Destination',
+      target,
+      { kind: 'text', text: 'DFW' },
+      // No resolving observation: this exercise builds its targets by hand, and
+      // the editee rung has nothing to compare against.
+      {},
+      {
+        drive: (_port, _identity, _intent, budget): Promise<FillOutcome> => {
+          deadlines.push(budget!.deadlineMs);
+          pass += 1;
+          if (pass === 1) {
+            clock = 24_999;
+            return Promise.resolve(replacement);
+          }
+          return Promise.resolve(expired);
+        },
+        resolve: () => {
+          clock = 25_000;
+          return Promise.resolve({ ...target, ref: 'e2' });
+        },
+      },
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_ELEMENT_REPLACED',
+      details: { reason: 'budget' },
+    });
+    expect(deadlines).toEqual([25_000]);
+    if (outcome.ok) return;
+    expect(
+      (outcome.details.attempted as readonly { strategy: string }[]).map(
+        (record) => record.strategy,
+      ),
+    ).toEqual(['fill', 're-resolve-field-and-retry']);
+  });
+
   it('sets both ends of a date range as one range, not two single dates', async () => {
     const controller = rangePickerController();
 
@@ -593,6 +797,23 @@ async function runElement(
     result: await wrapTool(browserFillElementSpec(services), services).execute(params, undefined),
     trace,
   };
+}
+
+/**
+ * A form whose two date fields sit inside one labelled widget.
+ *
+ * `group` is what the batch compares, and it is captured when the control is
+ * observed — which is what makes it survive the dismissal that a failed fill
+ * performs. Here the shared group is the picker's caption.
+ */
+function groupedController(): FormController {
+  return new FormController(
+    '<input id="search" aria-label="Search">' +
+      '<div id="picker"><table><caption>Trip dates</caption><tbody><tr>' +
+      '<td><button id="checkin" aria-label="Check-in">Check-in</button></td>' +
+      '<td><input id="checkout" aria-label="Check-out"></td>' +
+      '</tr></tbody></table></div>',
+  );
 }
 
 function formController(): FormController {

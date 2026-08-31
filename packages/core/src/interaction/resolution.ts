@@ -54,8 +54,8 @@ export interface ResolveInteractableOptions {
   /**
    * The control the caller already resolved once and is now re-finding.
    *
-   * Its presence is what turns same-named duplicates from a refusal into a
-   * ranking: the value decision was made when it was first resolved.
+   * Together with `allowEquivalentCopies`, this proves the value decision was
+   * already made and the caller is only re-finding its live node.
    */
   readonly preferred?: WidgetTarget;
   /**
@@ -65,6 +65,12 @@ export interface ResolveInteractableOptions {
    * pure and directly testable; the caller is the one holding a port.
    */
   readonly containedRefs?: ReadonlySet<string>;
+  /**
+   * Permit document order to choose between proven copies of an already
+   * resolved control. Callers must set this only while re-acquiring a target
+   * whose prior role, name, and group are available in {@link preferred}.
+   */
+  readonly allowEquivalentCopies?: boolean;
 }
 
 /** The outcome of resolving one query against one observation. */
@@ -190,21 +196,30 @@ function narrow(
     if (pool.length === 1) return { kind: 'match', entry: pool[0]!, tier, tieBreak };
   }
 
-  // THE SAFETY BOUNDARY. Document order settles a tie only when every survivor
-  // carries the same normalized name AND the same role — that is, when they are
-  // copies of one control rather than different controls that happen to match
-  // one query. Opening a picker routinely mounts a second copy of its own
-  // trigger, and refusing there left a page's own search field unaddressable.
+  // THE SAFETY BOUNDARY. Document order settles a tie only for explicit
+  // re-acquisition, and only when every survivor carries the same normalized
+  // name, role, and group. Initial resolution never guesses from repeated
+  // labels; opening a picker may mount a true copy, but separate forms may also
+  // contain independent controls that look identical.
   //
   // Differently-named fields can never reach this rung: "Check-in" and
   // "Check-out" tie on the prefix tier, differ in name, and fall through to
   // `ambiguous` exactly as they always have. No value decision is ever guessed.
   const firstName = normalizeText(pool[0]!.name);
   const firstRole = pool[0]!.role;
+  const firstGroup = pool[0]!.group ?? null;
   const copiesOfOneControl = pool.every(
-    (entry) => normalizeText(entry.name) === firstName && entry.role === firstRole,
+    (entry) =>
+      normalizeText(entry.name) === firstName &&
+      entry.role === firstRole &&
+      (entry.group ?? null) === firstGroup,
   );
-  if (copiesOfOneControl) {
+  const matchesPreferredIdentity =
+    options.preferred !== undefined &&
+    normalizeText(options.preferred.name) === firstName &&
+    options.preferred.role === firstRole &&
+    options.preferred.group === firstGroup;
+  if (options.allowEquivalentCopies === true && copiesOfOneControl && matchesPreferredIdentity) {
     tieBreak.push('same-name-and-role');
     return { kind: 'match', entry: pool[0]!, tier, tieBreak };
   }

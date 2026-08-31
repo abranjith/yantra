@@ -4,8 +4,10 @@ import {
   dismissWidget,
   fillFailure,
   fillField,
+  fillSecretField,
   parseFillValue,
   watchAndSelect,
+  type CauseFor,
   type WidgetTarget,
 } from '../../src/index.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
@@ -15,9 +17,14 @@ const budget = (port: WidgetTestPort) => ({
   maxActions: 8,
 });
 
-/** A WIDGET_NOT_COMMITTED failure carrying one particular observed state. */
-function fillFailureFor(details: Record<string, unknown>) {
-  return fillFailure('WIDGET_NOT_COMMITTED', 'The control did not commit the value.', details);
+/** A WIDGET_NOT_COMMITTED failure with one particular cause and observed state. */
+function fillFailureFor(cause: CauseFor<'WIDGET_NOT_COMMITTED'>, details: Record<string, unknown>) {
+  return fillFailure(
+    'WIDGET_NOT_COMMITTED',
+    cause,
+    'The control did not commit the value.',
+    details,
+  );
 }
 
 function target(port: WidgetTestPort, selector: string, role: string, name: string): WidgetTarget {
@@ -439,6 +446,30 @@ describe('@no-llm fill disclosure contract', () => {
     expect(outcome.ok && outcome.note).toContain('reformatted');
   });
 
+  it('fails when a controlled input rewrites the request to unrelated text', async () => {
+    const port = new WidgetTestPort('<input id="airport" aria-label="Airport">');
+    const input = port.document.querySelector<HTMLInputElement>('#airport')!;
+    input.addEventListener('input', () => {
+      input.value = 'xyz';
+    });
+    const field = target(port, '#airport', 'textbox', 'Airport');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Airport', target: field },
+      { kind: 'text', text: 'DFW' },
+      budget(port),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      details: { observed: 'xyz' },
+    });
+    if (outcome.ok) return;
+    expect((outcome.details.attempted as unknown[]).length).toBe(3);
+  });
+
   it('carries observed state and the attempt ledger on a failure', async () => {
     const port = new WidgetTestPort('<input id="q" aria-label="Search">');
     const input = port.document.querySelector<HTMLInputElement>('#q')!;
@@ -464,31 +495,48 @@ describe('@no-llm fill disclosure contract', () => {
     expect((outcome.details.attempted as unknown[]).length).toBeGreaterThan(1);
   });
 
-  it('gives two failures with the same code different next steps', async () => {
-    const emptied = fillFailureFor({ observed: '' });
-    const holding = fillFailureFor({ observed: 'Fort Wayne' });
-    const exhausted = fillFailureFor({
+  it('gives two failures with the same code different next steps', () => {
+    // The run received one identical sentence for four unrelated causes. The
+    // next step is now selected by why the failure happened, not inferred from
+    // whichever detail keys happen to be present.
+    const holding = fillFailureFor('control-refused-value', { observed: 'Fort Wayne' });
+    const exhausted = fillFailureFor('typing-exhausted', {
       observed: '',
       attempted: [
-        { attempt: 1, strategy: 'overtype', errorCode: 'WIDGET_NOT_COMMITTED', elapsedMs: 1 },
+        {
+          attempt: 1,
+          strategy: 'overtype',
+          axis: 'how',
+          errorCode: 'WIDGET_NOT_COMMITTED',
+          elapsedMs: 1,
+        },
         {
           attempt: 2,
           strategy: 'clear-then-type',
+          axis: 'how',
           errorCode: 'WIDGET_NOT_COMMITTED',
           elapsedMs: 1,
         },
       ],
     });
+    const delegated = fillFailureFor('keystrokes-landed-elsewhere', {
+      observed: '',
+      editee: 'Search airports',
+    });
 
-    // The run received one identical sentence for four unrelated causes.
-    expect(emptied.details.hint).not.toBe(holding.details.hint);
-    expect(exhausted.details.hint).not.toBe(emptied.details.hint);
+    expect(new Set([holding, exhausted, delegated].map((f) => f.details.hint)).size).toBe(3);
     expect(holding.details.hint).toContain('Fort Wayne');
-    expect(exhausted.details.hint).toContain('clear-then-type');
+    expect(exhausted.details.hint).toContain('details.attempted');
+    expect(delegated.details.hint).toContain('Search airports');
   });
 
-  it('prefers what the widget offers over any other next step', () => {
-    const failure = fillFailureFor({ observed: '', offered: ['Dallas', 'Denver'] });
+  it('points at what the widget offers when that is what the cause is', () => {
+    const failure = fillFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      'value-not-offered',
+      'The widget does not offer that.',
+      { observed: '', offered: ['Dallas', 'Denver'] },
+    );
     expect(failure.details.hint).toContain('"Dallas"');
     expect(failure.details.hint).toContain('exactly as written');
   });
@@ -980,3 +1028,41 @@ function suggestionPort(options: readonly string[], commitsAs?: string): WidgetT
   });
   return port;
 }
+
+describe('@no-llm secret fills are excluded from editee resolution', () => {
+  it('takes no observation and reads nothing back when committing a secret', async () => {
+    // Locating an editee means searching every observed interactable for the
+    // value that was sent. For a credential that is a readback of
+    // secret-derived state compared against the whole page, so the WHERE rung
+    // is structurally unreachable from the secret path — not merely unused.
+    const port = new WidgetTestPort('<input id="p" type="password" aria-label="Password" />');
+    const field = target(port, '#p', 'textbox', 'Password');
+    const observations: string[] = [];
+    const watched = new Proxy(port, {
+      get(source, key, receiver) {
+        if (key === 'observe') {
+          return async () => {
+            observations.push('observe');
+            return source.observe();
+          };
+        }
+        return Reflect.get(source, key, receiver) as unknown;
+      },
+    });
+
+    const outcome = await fillSecretField(
+      watched,
+      { field: 'Password', target: field },
+      'hunter2',
+      {
+        deadlineMs: port.now() + 10_000,
+        maxActions: 8,
+        maxPagingSteps: 12,
+      },
+    );
+
+    expect(outcome).toMatchObject({ ok: true, driver: 'plain-text', committed: '' });
+    expect(observations).toEqual([]);
+    expect(JSON.stringify(outcome)).not.toContain('hunter2');
+  });
+});

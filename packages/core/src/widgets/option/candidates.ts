@@ -1,4 +1,8 @@
-import { MATCH_TIERS, normalizeText, type MatchTier } from '../../interaction/index.js';
+import {
+  MAX_RANKED_OFFERED,
+  normalizeText,
+  rankAgainstRequested,
+} from '../../interaction/index.js';
 import type { WidgetContainer } from '../open-state.js';
 import { withTag } from '../tagging.js';
 import type { WidgetPort } from '../types.js';
@@ -96,59 +100,22 @@ export function collectCandidates(
 }
 
 /**
- * Rank offered options against what the caller typed.
+ * Rank offered options against what the caller asked for.
  *
- * Deliberately a separate function from `resolveInteractable`, because it
- * answers a different question — "which of these offers answers the request"
- * rather than "which node did the caller mean" — and the two have different
- * safety properties: an unresolved tie here is a real choice the caller must
- * make, never a duplicate to settle by document order. What they do share is
- * the tier ladder and the normalization, imported rather than restated so the
- * two ideas of "the same text" cannot drift apart again.
+ * A thin adapter over the one ranking implementation in `interaction/`, kept as
+ * a named export because every widget caller already addresses it by this name.
+ * The logic lives one layer down so the combobox driver and the plain-text path
+ * cannot drift into two ideas of which offer answers a request — which is the
+ * defect the WHAT rung exists to remove, not to reproduce.
+ *
+ * `requested` is the **full requested value**, never the possibly-shortened
+ * text that was typed to provoke the list. See `rankAgainstRequested`.
  */
 export function rankCandidate(
   candidates: readonly WidgetCandidate[],
   requested: string,
 ): WidgetCandidateRank {
-  const usable = candidates.filter(
-    (candidate) => !candidate.disabled && candidate.name.trim().length > 0,
-  );
-  const wanted = normalize(requested);
-  const wantedTokens = wanted.split(' ').filter(Boolean);
-  const offered = usable.slice(0, 10).map((candidate) => candidate.name);
-  for (const tier of MATCH_TIERS) {
-    const hits = usable.filter((candidate) =>
-      matchesCandidateTier(candidate.name, wanted, wantedTokens, tier),
-    );
-    if (hits.length === 0) continue;
-    if (hits.length > 1)
-      return { kind: 'ambiguous', offered: hits.slice(0, 10).map((c) => c.name) };
-    return { kind: 'match', candidate: hits[0]! };
-  }
-  return { kind: 'none', offered };
-}
-
-/** One option name against the request, at one tier. Mirrors the shared tiers. */
-function matchesCandidateTier(
-  name: string,
-  wanted: string,
-  wantedTokens: readonly string[],
-  tier: Exclude<MatchTier, 'ref'>,
-): boolean {
-  const actual = normalize(name);
-  switch (tier) {
-    case 'exact':
-      return actual === wanted;
-    case 'prefix':
-      return actual.startsWith(wanted);
-    case 'all-tokens': {
-      if (wantedTokens.length === 0) return false;
-      const tokens = new Set(actual.split(' ').filter(Boolean));
-      return wantedTokens.every((token) => tokens.has(token));
-    }
-    case 'substring':
-      return actual.includes(wanted);
-  }
+  return rankAgainstRequested(candidates, requested);
 }
 
 /**
@@ -211,6 +178,9 @@ export async function clickCandidate(port: WidgetPort, candidate: WidgetCandidat
 export function normalizeCandidateText(value: string): string {
   return normalize(value);
 }
+
+/** How many offered labels a widget result ever carries; page text, so capped. */
+export const MAX_CANDIDATE_OFFERED = MAX_RANKED_OFFERED;
 
 function normalize(value: string): string {
   return normalizeText(value);

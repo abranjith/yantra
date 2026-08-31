@@ -124,6 +124,9 @@ function renderAgenticReport(input: {
       lines.push(
         `- [${call.seq}] ${call.tool} - ${call.status}` +
           (call.errorCode === null ? '' : ` (${call.errorCode})`) +
+          (call.partial === null
+            ? ''
+            : ` (${call.partial.applied} applied, ${call.partial.failed} failed, ${call.partial.skipped} skipped)`) +
           (call.durationMs === null ? '' : ` - ${call.durationMs}ms`),
       );
     }
@@ -175,6 +178,7 @@ function summarizeToolCalls(entries: ToolAuditEntryType[]): {
   readonly status: string;
   readonly errorCode: string | null;
   readonly durationMs: number | null;
+  readonly partial: PartialCounts | null;
 }[] {
   const ends = new Map<string, ToolAuditEntryType>();
   for (const entry of entries) {
@@ -184,14 +188,45 @@ function summarizeToolCalls(entries: ToolAuditEntryType[]): {
     .filter((entry) => entry.phase === 'start')
     .map((start) => {
       const end = ends.get(start.call_id);
+      const partial = end === undefined ? null : partialCounts(end.output_sanitized);
       return {
         seq: start.seq,
         tool: start.tool,
-        status: end === undefined ? 'incomplete' : (end.status ?? 'ok'),
+        // A call that applied some fields and failed others succeeded as a
+        // call, so the middleware records it as `ok`. Rendering it that way
+        // hides the very shape this projection exists to make readable — the
+        // motivating investigation was conducted by reading these lines.
+        status: end === undefined ? 'incomplete' : partial ? 'partial' : (end.status ?? 'ok'),
         errorCode: end?.error_code ?? null,
         durationMs: end?.duration_ms ?? null,
+        partial,
       };
     });
+}
+
+/** How a partially-successful call describes itself. */
+interface PartialCounts {
+  readonly applied: number;
+  readonly failed: number;
+  readonly skipped: number;
+}
+
+/** Read the partial-batch counts a tool result carries, when it carries them. */
+function partialCounts(output: unknown): PartialCounts | null {
+  if (output === null || typeof output !== 'object') return null;
+  const details = (output as { readonly details?: unknown }).details;
+  if (details === null || typeof details !== 'object') return null;
+  const record = details as Readonly<Record<string, unknown>>;
+  if (record.partial !== true) return null;
+  return {
+    applied: countOf(record.applied_count),
+    failed: countOf(record.failed_count),
+    skipped: countOf(record.skipped_count),
+  };
+}
+
+function countOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function stringOr(value: unknown, fallback: string): string {

@@ -20,6 +20,7 @@ import {
   resolveInteractable,
   type AgentBrowserObservation,
   type AgentInteractable,
+  type ResolveInteractableOptions,
 } from '@yantra/core';
 
 import type { DomainFailure } from '../../../runtime/middleware.js';
@@ -40,6 +41,7 @@ const REF_PATTERN = /^e[0-9]+$/;
 export function resolveFormField(
   field: string,
   observation: AgentBrowserObservation,
+  options: ResolveInteractableOptions = {},
 ): AgentInteractable | DomainFailure {
   const query = field.trim();
   if (query.length === 0) {
@@ -51,7 +53,7 @@ export function resolveFormField(
     };
   }
 
-  const resolved = resolveInteractable(query, observation.interactables);
+  const resolved = resolveInteractable(query, observation.interactables, options);
   if (resolved.kind === 'match') return resolved.entry;
 
   // A ref the model supplied but the page no longer has is a different problem
@@ -86,14 +88,29 @@ export function resolveFormField(
       `${describe(resolved.offered)}. Re-issue this call with one of those names in full, ` +
       'or with an eNN ref from browser_observe.',
     retryable: true,
-    details: { offered: resolved.offered.slice(0, MAX_SUGGESTIONS).map((e) => e.name.trim()) },
+    details: {
+      offered: resolved.offered.slice(0, MAX_SUGGESTIONS).map((e) => e.name.trim()),
+      candidates: resolved.offered.slice(0, MAX_SUGGESTIONS).map(candidateDetails),
+    },
   };
 }
 
 /** Renders up to {@link MAX_SUGGESTIONS} candidate names for an error message. */
 function describe(candidates: readonly AgentInteractable[]): string {
   if (candidates.length === 0) return '(none)';
-  const names = candidates.slice(0, MAX_SUGGESTIONS).map((entry) => `"${entry.name.trim()}"`);
+  const names = candidates.slice(0, MAX_SUGGESTIONS).map((entry) => {
+    const group = entry.group ? `, group "${entry.group}"` : '';
+    return `"${entry.name.trim()}" (${entry.ref}, ${entry.role}${group})`;
+  });
   const extra = candidates.length - names.length;
   return extra > 0 ? `${names.join(', ')} (+${extra} more)` : names.join(', ');
+}
+
+function candidateDetails(entry: AgentInteractable): Record<string, string | null> {
+  return {
+    ref: entry.ref,
+    name: entry.name.trim(),
+    role: entry.role,
+    group: entry.group ?? null,
+  };
 }

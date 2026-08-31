@@ -122,7 +122,7 @@ describe('@no-llm resolveFormField', () => {
     expect(isFailure(result) && result.errorCode).toBe('FORM_FIELD_NOT_FOUND');
   });
 
-  it('resolves an open picker duplicate of the page field instead of refusing', () => {
+  it('refuses same-labeled fields during initial resolution and identifies each candidate', () => {
     // Run 20260827T045106Z-do-9a58de7e, seq 22: `"Where to?"` matched two
     // interactables — the page's combobox and the copy the open picker mounted
     // — and FORM_FIELD_AMBIGUOUS sent the agent off to operate the widget by
@@ -131,7 +131,19 @@ describe('@no-llm resolveFormField', () => {
       ['e66', 'combobox', 'Where to?'],
       ['e131', 'combobox', 'Where to?'],
     );
-    expect(resolveFormField('Where to?', withDuplicate)).toMatchObject({ ref: 'e66' });
+    const result = resolveFormField('Where to?', withDuplicate);
+    if (!isFailure(result)) throw new Error('expected a failure');
+    expect(result).toMatchObject({
+      errorCode: 'FORM_FIELD_AMBIGUOUS',
+      details: {
+        candidates: [
+          { ref: 'e66', name: 'Where to?', role: 'combobox', group: null },
+          { ref: 'e131', name: 'Where to?', role: 'combobox', group: null },
+        ],
+      },
+    });
+    expect(result.message).toContain('e66');
+    expect(result.message).toContain('e131');
   });
 
   it('still refuses when the same-named controls differ in role', () => {

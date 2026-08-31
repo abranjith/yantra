@@ -75,7 +75,7 @@ describe('@no-llm resolveInteractable tiers', () => {
 });
 
 describe('@no-llm resolveInteractable tie-break ladder', () => {
-  it('resolves an open picker duplicate of the page field by document order', () => {
+  it('refuses same-named controls during initial resolution', () => {
     // The motivating failure: `"Where to?"` matched two interactables — the
     // page's own combobox and the copy the open picker mounted — and the
     // resolver refused instead of recognising them as one control.
@@ -83,11 +83,35 @@ describe('@no-llm resolveInteractable tie-break ladder', () => {
       'Where to?',
       page(['e66', 'combobox', 'Where to?'], ['e131', 'combobox', 'Where to?']),
     );
+    expect(result.kind).toBe('ambiguous');
+  });
+
+  it('resolves a proven remount by document order during re-acquisition', () => {
+    const result = resolveInteractable(
+      'Where to?',
+      page(['e66', 'combobox', 'Where to?'], ['e131', 'combobox', 'Where to?']),
+      {
+        preferred: preferred('combobox', 'Where to?'),
+        allowEquivalentCopies: true,
+      },
+    );
     expect(result).toMatchObject({
       kind: 'match',
       entry: { ref: 'e66' },
       tieBreak: ['same-name-and-role'],
     });
+  });
+
+  it('does not let stale preferred identity authorize unrelated duplicates', () => {
+    const result = resolveInteractable(
+      'Date',
+      page(['e66', 'button', 'Date'], ['e131', 'button', 'Date']),
+      {
+        preferred: preferred('button', 'Continue'),
+        allowEquivalentCopies: true,
+      },
+    );
+    expect(result.kind).toBe('ambiguous');
   });
 
   it('prefers the copy inside the container currently being operated', () => {
@@ -137,10 +161,9 @@ describe('@no-llm resolveInteractable tie-break ladder', () => {
       { ref: 'e1', role: 'button', name: 'Search', disabled: true },
       { ref: 'e2', role: 'button', name: 'Search', disabled: true },
     ];
-    // Every survivor is disabled, so the `enabled` rung must not empty the pool;
-    // they are still copies of one control and resolve by document order.
+    // Every survivor is disabled, so the `enabled` rung must not empty the pool.
     const result = resolveInteractable('Search', entries);
-    expect(result).toMatchObject({ kind: 'match', entry: { ref: 'e1' } });
+    expect(result.kind).toBe('ambiguous');
   });
 
   it('narrows by the preferred role when re-acquiring a known control', () => {
@@ -163,6 +186,18 @@ describe('@no-llm resolveInteractable tie-break ladder', () => {
     });
     expect(result).toMatchObject({ kind: 'match', entry: { ref: 'e2' } });
     expect(result.kind === 'match' && result.tieBreak).toContain('preferred-group');
+  });
+
+  it('refuses same-labeled controls in distinct groups even during re-acquisition', () => {
+    const entries: AgentInteractable[] = [
+      { ref: 'e1', role: 'combobox', name: 'Where to?', group: 'Flight' },
+      { ref: 'e2', role: 'combobox', name: 'Where to?', group: 'Hotel' },
+    ];
+    const result = resolveInteractable('Where to?', entries, {
+      preferred: preferred('combobox', 'Where to?'),
+      allowEquivalentCopies: true,
+    });
+    expect(result.kind).toBe('ambiguous');
   });
 
   it('records an empty tieBreak when the tier already had one hit', () => {

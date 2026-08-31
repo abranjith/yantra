@@ -15,6 +15,7 @@ import {
   type AttemptDisposition,
   type AttemptLedger,
   type AttemptRecord,
+  type InteractionAxis,
 } from './types.js';
 
 /**
@@ -109,6 +110,14 @@ export interface AttemptOptions<TFailure> {
   readonly now: () => number;
   /** Names the strategy of each attempt; defaults to `attempt-N`. */
   readonly label?: (attempt: number) => string;
+  /**
+   * Which question each attempt varies; defaults to `how`.
+   *
+   * Every ladder that predates the axes varies mechanism against one fixed
+   * node and one fixed query, so `how` is the honest default rather than a
+   * placeholder — a runner that wanted another axis has to say so.
+   */
+  readonly axis?: (attempt: number) => InteractionAxis;
   /** Injectable delay, so tests never wait on real time. */
   readonly sleep?: (ms: number) => Promise<void>;
 }
@@ -132,6 +141,7 @@ export async function withAttempts<TValue, TFailure>(
 ): Promise<AttemptRun<TValue, TFailure>> {
   const sleep = options.sleep ?? realSleep;
   const label = options.label ?? ((attempt: number): string => `attempt-${attempt}`);
+  const axisOf = options.axis ?? ((): InteractionAxis => 'how');
   const records: AttemptRecord[] = [];
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts));
   let last: AttemptOutcome<TValue, TFailure> | null = null;
@@ -145,6 +155,7 @@ export async function withAttempts<TValue, TFailure>(
       records.push({
         attempt,
         strategy: label(attempt),
+        axis: axisOf(attempt),
         errorCode: null,
         elapsedMs: options.now() - startedAt,
       });
@@ -155,6 +166,7 @@ export async function withAttempts<TValue, TFailure>(
     records.push({
       attempt,
       strategy: label(attempt),
+      axis: axisOf(attempt),
       errorCode: described.errorCode,
       elapsedMs: options.now() - startedAt,
       ...(described.detail === undefined ? {} : { detail: described.detail }),

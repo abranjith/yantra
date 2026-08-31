@@ -85,7 +85,8 @@ describe('@no-llm browser tools', () => {
       );
 
       expect(result.status).toBe('ok');
-      expect(controller.click).toHaveBeenNthCalledWith(2, 'e7');
+      expect(controller.click).toHaveBeenNthCalledWith(1, 'e1', { healStale: false });
+      expect(controller.click).toHaveBeenNthCalledWith(2, 'e7', { healStale: false });
       expect(result.modelText).toContain('re-resolved');
       expect(result.modelText).toContain('re-resolve-ref');
     });
@@ -833,7 +834,7 @@ describe('@no-llm browser tools', () => {
     );
 
     expect(result.error_code).toBeUndefined();
-    expect(controller.click).toHaveBeenCalledWith('e1');
+    expect(controller.click).toHaveBeenCalledWith('e1', { healStale: false });
     const click = trace.steps()[0];
     if (click?.kind === 'click') {
       // Degraded to the observed role/name rather than losing the step.

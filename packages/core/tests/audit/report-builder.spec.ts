@@ -208,6 +208,52 @@ describe('@no-llm report builder — agentic runs', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
+  it('renders a partially-successful call distinctly instead of a flat ok', async () => {
+    // A batch that applied two fields and failed two succeeded as a *call*, so
+    // the middleware records status "ok". Rendering it that way here hides the
+    // shape this projection exists to make readable — the investigation behind
+    // this feature was conducted by reading these very lines.
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-agentic-partial-'));
+    await writeAgenticRun(runDir, [
+      toolCallLine({ seq: 0, call_id: 'p1', tool: 'browser_fill_form', phase: 'start' }),
+      toolCallLine({
+        seq: 1,
+        call_id: 'p1',
+        tool: 'browser_fill_form',
+        phase: 'end',
+        status: 'ok',
+        duration_ms: 4200,
+        output_sanitized: {
+          status: 'ok',
+          details: { partial: true, applied_count: 2, failed_count: 1, skipped_count: 1 },
+        },
+      }),
+      toolCallLine({ seq: 2, call_id: 'p2', tool: 'browser_fill_form', phase: 'start' }),
+      toolCallLine({
+        seq: 3,
+        call_id: 'p2',
+        tool: 'browser_fill_form',
+        phase: 'end',
+        status: 'ok',
+        duration_ms: 900,
+        output_sanitized: {
+          status: 'ok',
+          details: { partial: false, applied_count: 3, failed_count: 0, skipped_count: 0 },
+        },
+      }),
+    ]);
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain(
+      '- [0] browser_fill_form - partial (2 applied, 1 failed, 1 skipped) - 4200ms',
+    );
+    // A batch where everything landed still reads as an ordinary success.
+    expect(markdown).toContain('- [2] browser_fill_form - ok - 900ms');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
   it('renders "- none" tool calls for an agentic run that never called a tool', async () => {
     const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-agentic-empty-'));
     await writeAgenticRun(runDir, []);

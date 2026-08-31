@@ -11,13 +11,17 @@ export const nativeSelectDriver: WidgetDriver = {
     if (intent.kind !== 'option') {
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
+        'intent-incompatible',
         'A native select accepts only option intents.',
       );
     }
     if (port.now() > budget.deadlineMs || budget.maxActions < 1) {
-      return widgetFailure('WIDGET_TARGET_UNREACHABLE', 'The widget action budget was exhausted.', {
-        reason: 'budget',
-      });
+      return widgetFailure(
+        'WIDGET_TARGET_UNREACHABLE',
+        'budget',
+        'The widget action budget was exhausted.',
+        { reason: 'budget' },
+      );
     }
     await port.fill(target.ref, intent.value);
     const selection = await port.evaluateOn(target.ref, (element) => {
@@ -32,8 +36,9 @@ export const nativeSelectDriver: WidgetDriver = {
     ) {
       return widgetFailure(
         'WIDGET_NOT_COMMITTED',
+        'control-refused-value',
         `The native select did not commit "${intent.value}".`,
-        { committed },
+        { committed, observed: committed },
       );
     }
     return { ok: true, driver: 'native-select', committed, actions: 1 };

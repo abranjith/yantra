@@ -1,0 +1,421 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-08-30T04:18:04.064Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-08-30T04:23:12.600Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-08-30T04:57:03.785Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-08-30T05:05:48.965Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-08-30T05:26:20.793Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-08-30T05:35:27.058Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-08-30T05:50:47.310Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-08-30T05:51:15.454Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-08-30T05:57:42.020Z",
+      "head": "70fdee46d96ba1f7b186e33cc5517117cc346106"
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/budget.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/budget.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/fill/dismiss.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/fill/intent.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/fill/react.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/attempt.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/editee.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/query-plan.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/typing.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/widgets/combobox/combobox-driver.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/date/calendar-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/date/date-input-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/default-registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/open-probe.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/open-state.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/option/candidates.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/widgets/option/listbox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/option/native-select-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/fill/failure-causes.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/fill/fill-engine.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/click-to-reveal-calendar.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/portal-overlay-combobox.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/prefix-only-matcher.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/attempt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/editee.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/query-plan.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/interaction/typing.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/widgets/combobox-driver.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/widgets/open-probe.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-031-interaction_recovery_axes/changeset.json",
+    ".spec-lite/features/FEAT-031-interaction_recovery_axes/spec.md",
+    ".spec-lite/interaction_brainstorm.md"
+  ],
+  "baseline": {
+    "sha": "70fdee46d96ba1f7b186e33cc5517117cc346106",
+    "capturedAt": "2026-08-30T04:07:57.356Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/feature-summary.md",
+      ".spec-lite/memory.md",
+      "apps/cli/src/index.ts",
+      "docs/features/agentic-tasks.md",
+      "e2e/smoke.spec.ts",
+      "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "packages/agent/src/adapters/pi/tools/form-field-resolve.ts",
+      "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "packages/agent/tests/adapters/pi/tools/form-field-resolve.spec.ts",
+      "packages/core/src/browser/agent-controller.ts",
+      "packages/core/src/fill/engine.ts",
+      "packages/core/src/fill/react.ts",
+      "packages/core/src/index.ts",
+      "packages/core/src/interaction/resolution.ts",
+      "packages/core/src/interaction/typing.ts",
+      "packages/core/tests/boundary-rules.spec.ts",
+      "packages/core/tests/browser/agent-controller.spec.ts",
+      "packages/core/tests/fill/fill-engine.spec.ts",
+      "packages/core/tests/index.spec.ts",
+      "packages/core/tests/interaction/resolution.spec.ts",
+      "packages/core/tests/interaction/typing.spec.ts",
+      ".spec-lite/features/FEAT-031-interaction_recovery_axes/spec.md",
+      ".spec-lite/interaction_brainstorm.md"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/feature-summary.md": "5c3080515e1289498a4bde02d36fe6e95d2c9665",
+      ".spec-lite/memory.md": "265096666a9a074eadf0b889982aba940b215917",
+      "apps/cli/src/index.ts": "532a77ab4bb52bbf061ba67e0c7433ea6c96bbd9",
+      "docs/features/agentic-tasks.md": "5fc9f700233a56371f36053743796b26957a4d18",
+      "e2e/smoke.spec.ts": "31fa8ee8df0f7a79d8ee95f9a1c7a11edd1ea628",
+      "packages/agent/src/adapters/pi/tools/browser-click.ts": "da3c97a4752b842245c09866355db51209cb38bf",
+      "packages/agent/src/adapters/pi/tools/browser-common.ts": "f9cc67065503dec8d0a45c0dc6214759e33fd4f4",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts": "b737989ff78c73bde91d4707fb93322b0669ab4b",
+      "packages/agent/src/adapters/pi/tools/form-field-resolve.ts": "b5e218d7f74565341629f53a12dc17ccb94d6e19",
+      "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts": "4a7ce2c7547b67a9d29da7d0693af8324605c1a1",
+      "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts": "5ae9143182f60680a84a33c4847b54618642ece9",
+      "packages/agent/tests/adapters/pi/tools/form-field-resolve.spec.ts": "8763b7d1f10f7cac96560db523995758ba3db45f",
+      "packages/core/src/browser/agent-controller.ts": "a0a6daa0a2d65d78c8c2261c8003169d7be5669f",
+      "packages/core/src/fill/engine.ts": "268519b6e890b22d0ece803d2c373f917d243d05",
+      "packages/core/src/fill/react.ts": "87f217adcfbf0862f5314ae47b63a720678e03ac",
+      "packages/core/src/index.ts": "625c371d1eae8ff97f03c0303325a2adff032f4c",
+      "packages/core/src/interaction/resolution.ts": "095ff4e68318c46f67a34dca59d161464f424c22",
+      "packages/core/src/interaction/typing.ts": "78c0aa4ebee5cb254314f0121d10fbf662ad57a1",
+      "packages/core/tests/boundary-rules.spec.ts": "94a04e4351355d3553ea9bad2b2ee425594d4f99",
+      "packages/core/tests/browser/agent-controller.spec.ts": "a5f36f0c91741ed48bf9c125555f5313fd3e4a7b",
+      "packages/core/tests/fill/fill-engine.spec.ts": "6b688a5c7fc48cf4da3f83843f6163452e6728f7",
+      "packages/core/tests/index.spec.ts": "d594126f672ed76ec71ff62b3cabea822d79e72d",
+      "packages/core/tests/interaction/resolution.spec.ts": "40251a10c189106a7ec720f16d514bd9810de830",
+      "packages/core/tests/interaction/typing.spec.ts": "e5032e42d2f6e2870d24c4cf7a2ebe2a1968b97c",
+      ".spec-lite/features/FEAT-031-interaction_recovery_axes/spec.md": "dac99d8bdc6db554f0df5d8b64415568341dc3ee",
+      ".spec-lite/interaction_brainstorm.md": "10ca36c828a5243e99ab160a47063e711792a800"
+    }
+  },
+  "featureId": "FEAT-031"
+}
