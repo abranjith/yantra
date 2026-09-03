@@ -6,7 +6,7 @@ import {
   fillField,
   fillSecretField,
   parseFillValue,
-  watchAndSelect,
+  watchAndSelectOffered,
   type CauseFor,
   type WidgetTarget,
 } from '../../src/index.js';
@@ -707,9 +707,9 @@ describe('@no-llm reactive suggestion handling', () => {
     const field = target(port, '#airport', 'textbox', 'Going to');
 
     await port.fill(field.ref, 'Zurich');
-    const outcome = await watchAndSelect(port, field, 'Zurich', budget(port));
+    const outcome = await watchAndSelectOffered(port, field, 'Zurich', budget(port));
 
-    expect(outcome).toMatchObject({ ok: true, selected: false, dismissed: true });
+    expect(outcome).toMatchObject({ kind: 'unmatched-text-stands' });
     expect((port.document.querySelector('#airport') as HTMLInputElement).value).toBe('Zurich');
   });
 
@@ -722,15 +722,14 @@ describe('@no-llm reactive suggestion handling', () => {
     const field = target(port, '#note', 'textbox', 'Note');
 
     await port.fill(field.ref, 'quiet room');
-    const outcome = await watchAndSelect(port, field, 'quiet room', {
+    const outcome = await watchAndSelectOffered(port, field, 'quiet room', {
       deadlineMs: 100_000,
       maxActions: 8,
     });
 
     expect(outcome).toMatchObject({
-      ok: true,
+      kind: 'no-suggestions',
       committed: 'quiet room',
-      selected: false,
       dismissed: false,
     });
   });

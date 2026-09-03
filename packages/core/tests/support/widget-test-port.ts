@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url';
 
 import { JSDOM } from 'jsdom';
 
-import type { AgentBrowserObservation, AgentInteractable, WidgetPort } from '../../src/index.js';
+import type {
+  AgentBrowserObservation,
+  AgentInteractable,
+  ScrollFrame,
+  WidgetContainer,
+  WidgetPort,
+} from '../../src/index.js';
+import { scrollContainerInPage } from '../../src/widgets/scroll.js';
 
 /**
  * Small jsdom-backed {@link WidgetPort} for deterministic widget tests.
@@ -21,6 +28,7 @@ export class WidgetTestPort implements WidgetPort {
   private readonly refsByElement = new Map<HTMLElement, string>();
   private readonly elementsByRef = new Map<string, HTMLElement>();
   private nextRef = 1;
+  private readSignals = 0;
 
   /**
    * Load one behaviour fixture from `tests/fixtures/widgets` by file name.
@@ -51,6 +59,7 @@ export class WidgetTestPort implements WidgetPort {
   }
 
   public async observe(): Promise<AgentBrowserObservation> {
+    this.signalRead();
     this.refreshRefs();
     const interactables: AgentInteractable[] = [...this.elementsByRef].map(([ref, element]) => {
       const value =
@@ -139,6 +148,7 @@ export class WidgetTestPort implements WidgetPort {
     fn: (element: HTMLElement, ...args: Args) => T | Promise<T>,
     ...args: Args
   ): Promise<T> {
+    this.signalRead();
     return this.inDom(() => fn(this.element(ref), ...args));
   }
 
@@ -146,7 +156,21 @@ export class WidgetTestPort implements WidgetPort {
     fn: (...args: Args) => T | Promise<T>,
     ...args: Args
   ): Promise<T> {
+    this.signalRead();
     return this.inDom(() => fn(...args));
+  }
+
+  /**
+   * Advance a container's own scrollable region, through the one shared
+   * in-page implementation the real ports use.
+   *
+   * A mutation, so it takes no read signal. jsdom has no layout engine, so the
+   * region reports `scrollHeight`/`clientHeight` of `0` and the default step
+   * resolves to one unit — which is why termination is identity-first and a
+   * fixture re-mounts from `scrollTop` rather than from geometry.
+   */
+  public scrollContainer(container: WidgetContainer, step?: number): Promise<ScrollFrame | null> {
+    return this.inDom(() => scrollContainerInPage(container.path, step ?? null));
   }
 
   public async press(key: string): Promise<void> {
@@ -197,6 +221,13 @@ export class WidgetTestPort implements WidgetPort {
     return table?.querySelector('caption')?.textContent?.trim() ?? null;
   }
 
+  private signalRead(): void {
+    this.readSignals += 1;
+    this.document.dispatchEvent(
+      new this.window.CustomEvent('yantra-test-read', { detail: this.readSignals }),
+    );
+  }
+
   private async inDom<T>(body: () => T | Promise<T>): Promise<T> {
     const names = [
       'document',
@@ -209,6 +240,7 @@ export class WidgetTestPort implements WidgetPort {
       'HTMLTableElement',
       'HTMLTableCellElement',
       'HTMLButtonElement',
+      'Event',
     ] as const;
     const prior = new Map<string, PropertyDescriptor | undefined>();
     for (const name of names) {

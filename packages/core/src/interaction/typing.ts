@@ -21,9 +21,10 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js';
 
-import { withAttempts, type AttemptOutcome } from './attempt.js';
-import { locateEditee, type EditeeEvidence } from './editee.js';
+import type { EditeeEvidence } from './editee.js';
+import { runEscalationPlan, toLegacyLedger } from './escalation.js';
 import { ledgerOf, normalizeText, type AttemptLedger, type AttemptRecord } from './types.js';
+import { buildTypingPlan } from './typing-plan.js';
 
 /** How the text was ultimately entered. */
 export type TypingStrategy = 'overtype' | 'clear-then-type' | 'native-setter';
@@ -142,153 +143,41 @@ export async function commitText(
     };
   }
 
-  // With one rung there is nothing a readback could decide, and reading is the
-  // only reason this function reads at all. Skipping it is what makes the
-  // no-escalation mode safe for a secret by construction rather than by care:
-  // the value is never pulled back out of the page, so it cannot reach a
-  // ledger, a failure detail, or a log.
-  if (!allowEscalation) {
-    await applyStrategy(port, target, text, 'overtype');
-    return {
-      ok: true,
-      strategy: 'overtype',
-      committed: '',
-      reformatted: false,
-      ledger: {
-        records: [{ attempt: 1, strategy: 'overtype', axis: 'how', errorCode: null, elapsedMs: 0 }],
-      },
-    };
-  }
-
   // The before-picture, because "which control's value changed" is not a
   // question that can be asked after the fact. Reused from the caller when it
   // already has one; only a caller with none pays for a read here, and only
   // when it asked for the rung at all.
   const probe = options.editee;
   const before = probe ? (probe.baseline ?? (await probe.observe())) : null;
-
-  let lastCommitted = '';
-  /** The WHERE rung's own ledger entries, merged after the ladder returns. */
-  const whereRecords: AttemptRecord[] = [];
-  const run = await withAttempts<TypedText, TypingFailure>(
-    async (attempt) => {
-      const strategy = TYPING_LADDER[attempt - 1]!;
-      await applyStrategy(port, target, text, strategy);
-      const committed = await readRawValue(port, target);
-      lastCommitted = committed;
-      if (isFormattingEquivalent(committed, text)) {
-        return {
-          ok: true,
-          value: {
-            ok: true,
-            strategy,
-            committed,
-            reformatted: committed !== text,
-            // Replaced by the caller-visible ledger below; an attempt cannot
-            // see the record it is itself being written into.
-            ledger: { records: [] },
-          },
-        } satisfies AttemptOutcome<TypedText, TypingFailure>;
-      }
-      // The WHERE rung, and the only place it fires: rung 1 sent the whole
-      // value and the control is empty, which is exactly the state that says
-      // nothing about *how* the text was typed and everything about where it
-      // went. A control that kept part of the value did take the keystrokes,
-      // so mechanism is still the right question for it.
-      if (before !== null && attempt === 1 && committed.length === 0) {
-        const startedAt = port.now();
-        const after = await probe!.observe();
-        const retainedFocus = await targetHasFocus(port, target);
-        const located = locateEditee(before, after, target, text, {
-          targetRetainedFocus: retainedFocus,
-        });
-        whereRecords.push({
-          attempt: 1,
-          strategy: 'locate-editee',
-          axis: 'where',
-          errorCode: located.kind === 'delegated' ? null : 'WIDGET_NOT_COMMITTED',
-          elapsedMs: port.now() - startedAt,
-          detail:
-            located.kind === 'delegated'
-              ? `keystrokes landed in "${located.target.name}"`
-              : `editee not located (${located.kind === 'same' ? 'none' : located.evidence})`,
-        });
-        if (located.kind === 'delegated') {
-          return {
-            ok: false,
-            failure: {
-              ok: false,
-              errorCode: 'WIDGET_NOT_COMMITTED',
-              message: `The "${target.name}" control is still empty because the page routed the typed value to "${located.target.name}" instead.`,
-              observed: committed,
-              editee: located.target,
-              editeeEvidence: located.evidence,
-              ledger: { records: [] },
-            },
-          };
-        }
-      }
-      return {
-        ok: false,
-        failure: {
-          ok: false,
-          errorCode: 'WIDGET_NOT_COMMITTED',
-          message:
-            committed.length === 0
-              ? `The "${target.name}" control is still empty after the value was typed.`
-              : isTruncationOf(committed, text)
-                ? `The "${target.name}" control kept only "${committed}" of the value that was typed.`
-                : `The "${target.name}" control changed the typed value to unrelated text "${committed}".`,
-          observed: committed,
-          ledger: { records: [] },
-        },
-      };
+  const plan = buildTypingPlan({
+    port,
+    target,
+    text,
+    budget,
+    allowEscalation,
+    ...(probe ? { probe } : {}),
+    before,
+    operations: {
+      apply: applyStrategy,
+      read: readRawValue,
+      targetHasFocus,
+      equivalent: isFormattingEquivalent,
+      truncated: isTruncationOf,
     },
-    {
-      maxAttempts: allowEscalation ? TYPING_LADDER.length : 1,
-      deadlineMs: budget.deadlineMs,
-      backoffMs: [0],
-      // Every rung failure here is the same observed condition — the control
-      // truncated the text — and the point of the ladder is to answer it with a
-      // *different mechanism*, so it is transient by construction rather than
-      // by the shared classification table.
-      //
-      // Except one, and it is the whole point of the WHERE rung: keystrokes
-      // proven to be landing in another control are a definite answer, and
-      // retrying that into rung 2 would silently negate the fast exit this
-      // exists to provide. Cause-aware, not code-aware — both arms carry the
-      // same `WIDGET_NOT_COMMITTED`.
-      classify: (failure) => (failure.editee ? 'terminal' : 'transient'),
-      describe: (failure) => ({
-        errorCode: failure.errorCode,
-        detail:
-          failure.observed.length > 0 ? `observed "${failure.observed}"` : 'field stayed empty',
-      }),
-      now: () => port.now(),
-      label: (attempt) => TYPING_LADDER[attempt - 1] ?? `attempt-${attempt}`,
-    },
-  );
-
-  const ledger = mergeLedger(run.ledger, whereRecords);
-  if (run.outcome.ok) return { ...run.outcome.value, ledger };
-  return { ...run.outcome.failure, observed: lastCommitted, ledger };
-}
-
-/**
- * Splice the WHERE rung's records in after the HOW rung that provoked them.
- *
- * `withAttempts` owns the ladder's own ledger and cannot see a rung the runner
- * did not run, so the two are joined here and renumbered in order. Reading the
- * ledger back must show the sequence as it happened — `overtype` (how), then
- * `locate-editee` (where) — because "which axis did this waste time on" is the
- * question the axis field exists to answer.
- */
-function mergeLedger(ladder: AttemptLedger, where: readonly AttemptRecord[]): AttemptLedger {
-  if (where.length === 0) return ladder;
-  const merged = ladder.records.flatMap((record) =>
-    record.attempt === 1 ? [record, ...where] : [record],
-  );
-  return ledgerOf(merged.map((record, index) => ({ ...record, attempt: index + 1 })));
+  });
+  const run = await runEscalationPlan(plan);
+  const ledger = toLegacyLedger(run.ledger);
+  if (run.outcome === null) {
+    return {
+      ok: false,
+      errorCode: 'WIDGET_TARGET_UNREACHABLE',
+      message: 'The fill action budget was exhausted before the value could be typed.',
+      observed: '',
+      reason: 'budget',
+      ledger,
+    };
+  }
+  return run.outcome.ok ? { ...run.outcome.value, ledger } : { ...run.outcome.failure, ledger };
 }
 
 /**

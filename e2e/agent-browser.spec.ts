@@ -26,7 +26,7 @@ import {
   type ConfirmationOutcome,
 } from '@yantra/core';
 import type { ConfirmationRequest } from '@yantra/protocol';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 
@@ -198,6 +198,80 @@ describe('@no-llm real Chrome browser tools', () => {
       expect(await readFile(file, 'utf8')).not.toContain(SECRET_CANARY);
     }
   });
+
+  it('reports a true delta through the wrapped tools, at one observation per action', async () => {
+    // Real layout, real Chrome, through the tool seam the model actually uses.
+    await call('browser_navigate', { url: `${fixture.baseUrl}/delta.html` });
+    const observed = await observe();
+
+    // A control set replaced by an identical one is not a change: every ref
+    // trades hands, and a ref-keyed delta would report three of each. Done
+    // first, while nothing is covering the page.
+    const observations = vi.spyOn(controller, 'observe');
+    const refreshed = await call('browser_click', {
+      ref: refByName(observed, 'Refresh results'),
+    });
+    // Memory's rule, asserted at the outermost seam too: a whole wrapped action
+    // takes exactly one post-action observation, and the delta rides it.
+    expect(observations).toHaveBeenCalledTimes(1);
+    observations.mockRestore();
+
+    const refreshedModel = JSON.parse(refreshed.modelText) as {
+      delta?: { elements_appeared?: unknown; elements_vanished?: unknown; incomplete?: string[] };
+      observation?: unknown;
+    };
+    expect(refreshedModel.observation).toBeDefined();
+    expect(refreshedModel.delta?.elements_appeared).toBeUndefined();
+    expect(refreshedModel.delta?.elements_vanished).toBeUndefined();
+    expect(refreshedModel.delta?.incomplete).toBeUndefined();
+
+    // The cost evidence lands in the artifact projection, not in a new sink.
+    const details = refreshed.details as { delta_bytes?: number; observation_bytes?: number };
+    expect(details.delta_bytes).toBeGreaterThan(0);
+    expect(details.observation_bytes).toBeGreaterThan(0);
+
+    // A dialog opening is the most steering-relevant thing a delta can say.
+    const beforeOpen = await observe();
+    const opened = await call('browser_click', {
+      ref: refByName(beforeOpen, 'Open preferences'),
+    });
+    const openedModel = JSON.parse(opened.modelText) as {
+      delta?: { dialogs_opened?: { role: string; name: string }[] };
+    };
+    expect(openedModel.delta?.dialogs_opened).toEqual([{ role: 'dialog', name: 'Cookie consent' }]);
+
+    // And closing it is reported the same way, by the same signal.
+    const afterOpen = await observe();
+    const closed = await call('browser_click', { ref: refByName(afterOpen, 'Close') });
+    const closedModel = JSON.parse(closed.modelText) as {
+      delta?: { dialogs_closed?: { role: string; name: string }[] };
+    };
+    expect(closedModel.delta?.dialogs_closed).toEqual([{ role: 'dialog', name: 'Cookie consent' }]);
+  }, 90_000);
+
+  it('says a new document is a new document rather than counting its controls', async () => {
+    await call('browser_navigate', { url: `${fixture.baseUrl}/delta.html` });
+    await observe();
+    const navigated = await call('browser_navigate', { url: `${fixture.baseUrl}/form.html` });
+
+    const model = JSON.parse(navigated.modelText) as {
+      delta?: {
+        url_changed?: { from: string; to: string };
+        incomplete?: string[];
+        complete?: false;
+        elements_appeared?: unknown;
+        elements_vanished?: unknown;
+      };
+    };
+    expect(model.delta?.url_changed).toEqual({
+      from: `${fixture.baseUrl}/delta.html`,
+      to: `${fixture.baseUrl}/form.html`,
+    });
+    expect(model.delta?.complete).toBe(false);
+    expect(model.delta?.incomplete).toEqual(['document-replaced']);
+    expect(model.delta?.elements_appeared).toBeUndefined();
+    expect(model.delta?.elements_vanished).toBeUndefined();
+  }, 60_000);
 
   it('starts and stops the fixture harness cleanly', async () => {
     const extra = await serveFixtureSite();

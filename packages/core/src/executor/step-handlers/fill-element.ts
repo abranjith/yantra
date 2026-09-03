@@ -6,9 +6,17 @@ import {
   type AgentBrowserObservation,
   type AgentInteractable,
 } from '../../browser/agent-controller.js';
+import { collectComposedInteractables } from '../../discovery/composed-handles.js';
 import { fillField, fillSecretField, parseFillValue, type FillFailure } from '../../fill/index.js';
 import { resolveInteractable } from '../../interaction/index.js';
-import { defaultWidgetBudget, type WidgetPort, type WidgetTarget } from '../../widgets/types.js';
+import { scrollContainerInPage } from '../../widgets/scroll.js';
+import {
+  defaultWidgetBudget,
+  type ScrollFrame,
+  type WidgetContainer,
+  type WidgetPort,
+  type WidgetTarget,
+} from '../../widgets/types.js';
 import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
 
@@ -18,6 +26,15 @@ import { CLICK_NAV_DETECT_MS, FILL_NAV_DETECT_MS, withPageSettling } from './set
 /** The platform's select-all chord; mirrors the agent controller's choice. */
 const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
 
+/**
+ * What this port considers addressable.
+ *
+ * Deliberately its own, and deliberately wider than the agent observation's:
+ * a replayed calendar fill addresses `[role="gridcell"]`, which the model-facing
+ * observation has no kind for. The two paths answer different questions and
+ * must not be unified — only the composed-tree **walk** is shared, through
+ * `collectComposedInteractables`.
+ */
 const INTERACTABLE_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
   '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
@@ -234,7 +251,14 @@ class ReplayWidgetPort implements WidgetPort {
     options: { readonly cap?: number; readonly trackDigest?: boolean } = {},
   ): Promise<AgentBrowserObservation> {
     const cap = Math.min(Math.max(1, options.cap ?? 50), 400);
-    const handles = await this.page.$$(INTERACTABLE_SELECTOR);
+    // One composed-tree pass, so a control inside an open shadow root is
+    // addressable at replay time exactly as it is at agent time. Divergence
+    // there is how a promoted workflow silently stops working.
+    const { elements } = await collectComposedInteractables(this.page, {
+      max: 400,
+      selector: INTERACTABLE_SELECTOR,
+    });
+    const handles = elements.filter((handle): handle is ElementHandle<Element> => handle !== null);
     const next = new Map<string, ElementHandle<Element>>();
     const interactables: AgentInteractable[] = [];
     const ordinals = new Map<string, number>();
@@ -272,6 +296,13 @@ class ReplayWidgetPort implements WidgetPort {
       digestUnchanged: false,
       interactables,
     };
+  }
+
+  public async scrollContainer(
+    container: WidgetContainer,
+    step?: number,
+  ): Promise<ScrollFrame | null> {
+    return this.evaluate(scrollContainerInPage, container.path, step ?? null);
   }
 
   public async adopt(handle: ElementHandle<Element>, fieldName: string): Promise<WidgetTarget> {

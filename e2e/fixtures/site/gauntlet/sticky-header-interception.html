@@ -1,0 +1,61 @@
+<!--
+  Shape: a control whose clickable point falls under a viewport-pinned band once
+  the page scrolls it into view, so the element is visible, in view, and still
+  unreachable — and the band exposes no dismiss control, because a pinned band
+  is not something to dismiss.
+
+  Provenance: pinned headers and cookie bars routinely occupy the top strip a
+  scrolled-into-view target lands in. The pattern is layout-dependent and
+  therefore lives in the agent real-browser tier.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sticky header interception</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.4 system-ui,
+          sans-serif;
+      }
+      /* Pinned over the whole viewport: whatever the browser scrolls the target
+         to, the band owns the coordinate. */
+      #band {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        z-index: 30;
+        background: #e6e6e6;
+        padding: 12px;
+      }
+      #filler {
+        height: 2600px;
+      }
+      #status {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="band">
+      <strong>Site navigation</strong>
+      <p>This band stays pinned to the viewport as the page scrolls.</p>
+    </div>
+
+    <div id="filler"></div>
+    <button id="apply" type="button">Apply filters</button>
+    <p id="status">not applied</p>
+
+    <script>
+      (function () {
+        document.getElementById('apply').addEventListener('click', function () {
+          document.getElementById('status').textContent = 'applied';
+        });
+      })();
+    </script>
+  </body>
+</html>

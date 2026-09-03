@@ -5,6 +5,7 @@ import type { AgentBrowserController } from '@yantra/core';
 import { generateUlid } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
@@ -86,10 +87,9 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
     return {
       ok: false,
       errorCode: 'INVALID_INPUT',
-      message:
-        `"${params.kind?.slice(0, 40) ?? ''}" is not a supported extraction kind. ` +
-        'Retry with kind:"content" for the page title and readable text, or kind:"table" ' +
-        'for the first table.',
+      message: renderAgentMessage('tool', 'INVALID_INPUT', 'extraction-kind', {
+        kind: params.kind ?? '',
+      }),
       retryable: true,
     };
   const deps = services.domain.browser;
@@ -100,7 +100,7 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
       : {
           ok: false,
           errorCode: 'BROWSER_UNAVAILABLE',
-          message: 'Browser services are not configured.',
+          message: renderAgentMessage('tool', 'BROWSER_UNAVAILABLE', 'services-missing'),
           retryable: false,
         };
   const host = controller.host();
@@ -114,7 +114,9 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
     return {
       ok: false,
       errorCode: 'EXTRACTION_SCHEMA_INVALID',
-      message: `The page did not produce a valid ${kind} extraction.`,
+      message: renderAgentMessage('tool', 'EXTRACTION_SCHEMA_INVALID', 'invalid-extraction', {
+        kind,
+      }),
       retryable: true,
     };
   services.trace?.append({

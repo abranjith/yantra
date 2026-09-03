@@ -61,8 +61,50 @@ export interface WidgetPort {
   ): Promise<T>;
   /** Send a keyboard key to the active page. */
   press(key: string): Promise<void>;
+  /**
+   * Advance a widget container's **own** scrollable region by one step.
+   *
+   * A port method rather than a helper over `evaluate` precisely so it is
+   * counted: scrolling mutates the page, and a virtualized list that reveals
+   * its rows by scrolling must pay for them against the same action budget as
+   * every click and keystroke.
+   *
+   * Resolves the nearest scrollable region searched from the container's own
+   * subtree outward to the container itself. `window`,
+   * `document.scrollingElement`, `document.body`, and `document.documentElement`
+   * are excluded by construction — scrolling the window would move the whole
+   * page under an agent that asked only for a list to be advanced.
+   *
+   * Returns `null` when the container owns no scrollable region, which is a
+   * normal named outcome rather than a failure.
+   *
+   * **An action, never a probe**: reachable from `drive()` only. Detection must
+   * never mutate page state.
+   */
+  scrollContainer(container: WidgetContainer, step?: number): Promise<ScrollFrame | null>;
   /** Injectable millisecond clock used to bound polling and paging. */
   now(): number;
+}
+
+/**
+ * What one bounded container-scroll step observed.
+ *
+ * `scrollHeight` / `clientHeight` are **evidence, not a stop condition**: an
+ * environment without a layout engine reports them as `0`, which makes `atEnd`
+ * vacuously true there and would terminate a scan instantly. Termination is
+ * identity-first — see `VirtualListStop`.
+ */
+export interface ScrollFrame {
+  /** The region's scroll offset after the step. */
+  readonly scrollTop: number;
+  /** The region's full scrollable extent. Evidence only. */
+  readonly scrollHeight: number;
+  /** The region's visible extent. Evidence only. */
+  readonly clientHeight: number;
+  /** Whether `scrollTop` actually differs from its value before the step. */
+  readonly moved: boolean;
+  /** Whether the region is at its end, by its own reported geometry. */
+  readonly atEnd: boolean;
 }
 
 /** Model-observed trigger or form field passed to a driver. */
@@ -199,6 +241,14 @@ export interface WidgetBudget {
   readonly deadlineMs: number;
   readonly maxPagingSteps: number;
   readonly maxActions: number;
+  /**
+   * Container-scroll steps one operation may charge.
+   *
+   * Declared on the budget rather than hardcoded in a driver so a caller can
+   * lower it and a test can pin it — the same reason `maxPagingSteps` lives
+   * here.
+   */
+  readonly maxScrollSteps: number;
 }
 
 /** Pattern-based implementation of one stateful widget protocol. */
@@ -246,6 +296,7 @@ export function defaultWidgetBudget(port: Pick<WidgetPort, 'now'>): WidgetBudget
     deadlineMs: port.now() + 25_000,
     maxPagingSteps: 12,
     maxActions: 32,
+    maxScrollSteps: 8,
   };
 }
 

@@ -1,0 +1,82 @@
+<!--
+  Shape: a page raises a page-blocking modal over the control the caller asked
+  for, offering both an unambiguous dismissal and an acceptance the engine must
+  never press on the user's behalf.
+
+  Provenance: consent and promo interstitials commonly mount over ready page
+  content, so a click computed from content quads lands on the overlay while the
+  tool reports success. The pattern is layout-dependent and therefore lives in
+  the agent real-browser tier.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consent modal obstruction</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.4 system-ui,
+          sans-serif;
+      }
+      #page {
+        padding: 24px;
+      }
+      #scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        background: rgba(0, 0, 0, 0.45);
+      }
+      #consent {
+        position: fixed;
+        inset: 0;
+        z-index: 41;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+      }
+      #status {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="page">
+      <h1>Catalog</h1>
+      <button id="apply" type="button">Apply filters</button>
+      <p id="status">not applied</p>
+      <button id="page-close" type="button">Close this panel</button>
+    </div>
+
+    <div id="scrim"></div>
+    <div id="consent" role="dialog" aria-modal="true" aria-label="Cookie choices">
+      <p>We use cookies to personalise content.</p>
+      <button id="accept" type="button">Accept all</button>
+      <button id="dismiss" type="button">No thanks</button>
+      <a id="policy" href="/gauntlet/consent-modal-obstruction.html">Read the policy</a>
+    </div>
+
+    <script>
+      (function () {
+        document.getElementById('apply').addEventListener('click', function () {
+          document.getElementById('status').textContent = 'applied';
+        });
+        document.getElementById('dismiss').addEventListener('click', function () {
+          document.getElementById('scrim').remove();
+          document.getElementById('consent').remove();
+        });
+        document.getElementById('accept').addEventListener('click', function () {
+          document.getElementById('status').textContent = 'consent accepted';
+        });
+        document.getElementById('page-close').addEventListener('click', function () {
+          document.getElementById('status').textContent = 'page panel closed';
+        });
+      })();
+    </script>
+  </body>
+</html>

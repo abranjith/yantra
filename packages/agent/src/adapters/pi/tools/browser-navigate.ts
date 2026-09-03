@@ -1,12 +1,15 @@
 import { EthicsRefusedError } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import {
   browserController,
+  deltaDetails,
   isDomainFailure,
+  modelDelta,
   modelObservation,
   observeAfterAction,
   recordActionProvenance,
@@ -34,7 +37,7 @@ export function browserNavigateSpec(
     name: 'browser_navigate',
     label: 'Browser Navigate',
     description:
-      'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. browser_observe is only needed for a read without acting. When an action reports popup_intercepted, that URL is where the site was sending you: navigate to it to continue. Do NOT use it to bypass robots, blocks, or host policy.',
+      'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. It also returns delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming the navigation caused every change, and says complete: false with a reason wherever a bound stopped it being definite; a navigation to a new document reports document-replaced and no element counts, because a new page’s controls are not the old page’s. browser_observe is only needed for a read without acting. When an action reports popup_intercepted, that URL is where the site was sending you: navigate to it to continue. Do NOT use it to bypass robots, blocks, or host policy.',
     parameters: BrowserNavigateParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -48,21 +51,13 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
   // legitimate navigation still needs.
   if (!services.urlProvenance.has(params.url)) {
     const count = recordRefusal(services, params.url);
-    const escalation =
-      count >= 2
-        ? " This same normalized URL has already been refused. Submit the page's form with " +
-          'browser_click on its submit/search control, or reach the target by clicking a ' +
-          'search result. Repeating this URL will keep failing.'
-        : '';
     return {
       ok: false,
       errorCode: 'URL_NOT_FROM_EVIDENCE',
       retryable: true,
-      message:
-        'This URL introduces a path or parameter name that no search result or visited page ' +
-        'attested. You may vary query values on an already-visited URL, but may not invent a ' +
-        'new path, parameter name, or identifier. Use web_search or click through from an ' +
-        `observed page to attest anything else.${escalation}`,
+      message: renderAgentMessage('tool', 'URL_NOT_FROM_EVIDENCE', 'unattested-url', {
+        repeated: count >= 2,
+      }),
     };
   }
   const allowed = services.urlPolicy.check(params.url);
@@ -81,7 +76,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       : {
           ok: false,
           errorCode: 'BROWSER_UNAVAILABLE',
-          message: 'Browser services are not configured.',
+          message: renderAgentMessage('tool', 'BROWSER_UNAVAILABLE', 'services-missing'),
           retryable: false,
         };
   try {
@@ -95,7 +90,10 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       return {
         ok: false,
         errorCode: 'ETHICS_BLOCKED',
-        message: `Navigation refused for ${allowed.value.host}: ${error.ethicsContext.reason}.`,
+        message: renderAgentMessage('tool', 'ETHICS_BLOCKED', 'navigation-refused', {
+          host: allowed.value.host,
+          reason: error.ethicsContext.reason,
+        }),
         retryable: false,
         details: { host: allowed.value.host, handoff: true },
       };
@@ -110,7 +108,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     url: allowed.value.url,
     requires_confirmation: false,
   });
-  const observation = await observeAfterAction(controller);
+  const { observation, delta } = await observeAfterAction(controller);
   // Internal handshake between the controller and the tab-follow policy check
   // in browser_click; never part of what the model reads. See
   // `followSiteOpenedTab`.
@@ -120,8 +118,9 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     model: {
       ...model,
       ...(observation ? { observation: modelObservation(observation) } : {}),
+      ...(delta ? { delta: modelDelta(delta) } : {}),
     },
-    details: { final_url: result.url },
+    details: { final_url: result.url, ...deltaDetails(observation, delta) },
   };
 }
 

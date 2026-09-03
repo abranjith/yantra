@@ -17,6 +17,8 @@
  * tested, rather than a sequence spread across two modules.
  */
 
+import { buildComboboxPlan } from '../../fill/plans.js';
+import { runEscalationPlan } from '../../interaction/escalation.js';
 import {
   distinguishingPrefix,
   editeeProbe,
@@ -167,75 +169,94 @@ export const comboboxDriver: WidgetDriver = {
     const ignoredContainer = declaresPopup
       ? null
       : await resolveContainer(port, target, { allowUnlinked: true });
-    const plan = shapeQuery(requested);
+    const queryForms = shapeQuery(requested);
     const records: AttemptRecord[] = [];
     let actions = 0;
     let live = target;
     let editee: WidgetTarget | null = null;
     let reformatted = false;
-    let lastSelection: OfferedSelection | null = null;
 
-    for (const [index, form] of plan.entries()) {
-      if (port.now() > budget.deadlineMs) break;
-      const startedAt = port.now();
-      // One baseline per drive, on the first form only. By the second form the
-      // editee question is settled — either the drive re-targeted, or the page
-      // routes nothing — and asking again would buy a second observation to
-      // hear the same answer.
-      const entered = await enterText(
-        port,
-        live,
-        form.text,
-        budget,
-        index === 0 ? editeeProbe(port) : undefined,
-      );
-      records.push(...entered.ledger.records);
-      actions += entered.ledger.records.length;
-      if (entered.editee) {
-        editee = entered.editee;
-        live = entered.target;
-      }
-      reformatted = entered.typed.ok && entered.typed.reformatted;
-      if (!entered.typed.ok) {
-        records.push(queryRecord(form, startedAt, port.now(), entered.typed.errorCode));
-        return widgetFailure(
-          'WIDGET_NOT_COMMITTED',
-          typingCause(entered.typed),
-          entered.typed.message,
-          {
-            observed: entered.typed.observed,
-            attempted: renumber(records),
-            ...(entered.editee ? { editee: entered.editee.name } : {}),
-            ...(entered.typed.reason === undefined ? {} : { reason: entered.typed.reason }),
-          },
+    const escalation = buildComboboxPlan({
+      port,
+      budget,
+      forms: queryForms,
+      runForm: async (context, form, index) => {
+        const startedAt = context.port.now();
+        // One baseline per drive, on the first form only. By the second form the
+        // editee question is settled, so taking another observation pair would
+        // pay twice to hear the same answer.
+        const entered = await enterText(
+          context.port,
+          live,
+          form.text,
+          budget,
+          index === 0 ? editeeProbe(context.port) : undefined,
         );
-      }
+        records.push(...entered.ledger.records);
+        actions += entered.ledger.records.length;
+        if (entered.editee) {
+          editee = entered.editee;
+          live = entered.target;
+        }
+        reformatted = entered.typed.ok && entered.typed.reformatted;
+        if (!entered.typed.ok) {
+          records.push(queryRecord(form, startedAt, context.port.now(), entered.typed.errorCode));
+          return {
+            ok: false,
+            failure: widgetFailure(
+              'WIDGET_NOT_COMMITTED',
+              typingCause(entered.typed),
+              entered.typed.message,
+              {
+                observed: entered.typed.observed,
+                attempted: renumber(records),
+                ...(entered.editee ? { editee: entered.editee.name } : {}),
+                ...(entered.typed.reason === undefined ? {} : { reason: entered.typed.reason }),
+              },
+            ),
+          };
+        }
 
-      // Ranking is against the FULL requested value, never against `form.text`.
-      // Typing "San Jose" and ranking against "San Jose Mineta International
-      // Airport (SJC)" is the whole point of retreating the query.
-      const selection = await watchAndSelectOffered(port, live, requested, budget, {
-        ignoredContainer: sameTarget(live, target) ? ignoredContainer : null,
-      });
-      lastSelection = selection;
-      actions += selection.actions;
-      records.push(queryRecord(form, startedAt, port.now(), errorCodeOf(selection)));
+        // Ranking is against the full request, never the shortened form.
+        const selection = await watchAndSelectOffered(context.port, live, requested, budget, {
+          ignoredContainer: sameTarget(live, target) ? ignoredContainer : null,
+        });
+        actions += selection.actions;
+        records.push(queryRecord(form, startedAt, context.port.now(), errorCodeOf(selection)));
 
-      // Lazily consumed: the plan is generated up front because a pure function
-      // of a string cannot know what a page offered, and walked here until one
-      // form actually produces candidates.
-      if (selection.kind !== 'no-suggestions' || form === plan[plan.length - 1]) {
-        return toOutcome(port, live, requested, selection, {
+        if (selection.kind === 'no-suggestions' && index < queryForms.length - 1) {
+          return {
+            ok: false,
+            failure: widgetFailure(
+              'WIDGET_NOT_RECOGNIZED',
+              'driver-not-recognized',
+              `The query form "${form.kind}" produced no suggestions.`,
+              { planTransient: true },
+            ),
+            evidence: { 'previous-form-no-suggestions': true },
+          };
+        }
+        const outcome = toOutcome(context.port, live, requested, selection, {
           actions,
           records,
           editee,
           reformatted,
           container: selection.container,
         });
-      }
-    }
-
-    if (lastSelection === null) {
+        const evidence = {
+          'previous-form-no-suggestions': false,
+          offered: 'offered' in selection ? selection.offered : [],
+          ...('chosen' in selection ? { chosen: selection.chosen } : {}),
+          ...('committed' in selection ? { committed: selection.committed } : {}),
+          container: selection.container,
+        };
+        return outcome.ok
+          ? { ok: true, value: outcome, evidence }
+          : { ok: false, failure: outcome, evidence };
+      },
+    });
+    const run = await runEscalationPlan(escalation);
+    if (run.outcome === null) {
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
         'budget',
@@ -243,13 +264,7 @@ export const comboboxDriver: WidgetDriver = {
         { reason: 'budget', attempted: renumber(records) },
       );
     }
-    return toOutcome(port, live, requested, lastSelection, {
-      actions,
-      records,
-      editee,
-      reformatted,
-      container: lastSelection.container,
-    });
+    return run.outcome.ok ? run.outcome.value : run.outcome.failure;
   },
 };
 

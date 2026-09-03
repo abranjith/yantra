@@ -5,11 +5,19 @@ import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import {
+  actionMetadataSink,
   browserController,
   browserWidgetPort,
+  deltaAfterAction,
+  deltaDetails,
+  drainFillMetadata,
+  followSiteOpenedTab,
   isDomainFailure,
   mapFillFailure,
+  modelActionMetadata,
+  modelDelta,
   modelObservation,
+  recordActionProvenance,
   resolveFillField,
   resolveFillTarget,
   type ResolvedFillField,
@@ -55,7 +63,7 @@ export function browserFillFormSpec(
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
     description:
-      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed, attempted, and any offered choices), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Partial success is progress to build on, not a reason to re-send the fields that worked. Do not use this tool to submit the form.',
+      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed, attempted recovery verdicts, and any offered choices), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form.',
     parameters: BrowserFillFormParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -71,6 +79,15 @@ interface FailedField {
   readonly observed?: unknown;
   readonly offered?: unknown;
   readonly attempted?: unknown;
+  /**
+   * What covered the field, when something did.
+   *
+   * Failure `details` are not model-visible — the middleware sends only the
+   * code, message and retryable flag — so a batch that reports per-field
+   * failures has to lift the obstruction into the model-visible entry itself.
+   */
+  readonly kind?: unknown;
+  readonly obstruction?: unknown;
 }
 
 /** A field the batch did not attempt, and what is blocking it. */
@@ -107,6 +124,9 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
   const controller = browserController(services);
   if (isDomainFailure(controller)) return controller;
   const plan = await fuseDatePair(params.fields, services);
+  // One collector for the whole batch, so a popup one field opened is
+  // attributed to this call once — not once per field, and not to the next tool.
+  const sink = actionMetadataSink();
   const applied: AppliedBrowserFill[] = [];
   const failed: FailedField[] = [];
   const skipped: SkippedField[] = [];
@@ -133,7 +153,7 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       }
     }
 
-    const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved);
+    const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved, sink);
     if (isDomainFailure(outcome)) {
       const details = asDetails(outcome.details);
       failed.push({
@@ -143,6 +163,8 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
         ...(details.observed === undefined ? {} : { observed: details.observed }),
         ...(details.offered === undefined ? {} : { offered: details.offered }),
         ...(details.attempted === undefined ? {} : { attempted: details.attempted }),
+        ...(details.kind === undefined ? {} : { kind: details.kind }),
+        ...(details.obstruction === undefined ? {} : { obstruction: details.obstruction }),
       });
       const group = outcome.target?.group ?? null;
       if (group !== null) blocked = { group, field: spec.field };
@@ -154,7 +176,18 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
     applied.push(spec.covers.length > 1 ? { ...outcome, covers: spec.covers } : outcome);
   }
 
+  const metadata = drainFillMetadata(controller, sink);
+  recordActionProvenance(services, metadata);
+  // Followed before the final read, so an adopted tab is the page the batch's
+  // observation and delta describe.
+  const followed = await followSiteOpenedTab(services, controller, metadata);
   const observation = await controller.observe();
+  // One delta for the whole batch, from this single final observation. The
+  // baseline is the frame the model last saw — pinned when the tool call
+  // opened — so the many internal `trackDigest: false` reads a batch takes
+  // while resolving fields cannot narrow it to the difference from a page the
+  // model was never shown.
+  const delta = deltaAfterAction(controller);
   // Counts ride in `details` so the audit projection can see them. The
   // middleware records `status: "ok"` for any successful result, and report.md
   // renders one line per call from that projection — a partial batch that
@@ -184,13 +217,19 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       applied,
       ...(failed.length > 0 ? { failed } : {}),
       ...(skipped.length > 0 ? { skipped } : {}),
+      ...modelActionMetadata(followed),
       observation: modelObservation(observation),
+      ...(delta ? { delta: modelDelta(delta) } : {}),
       note:
         failed.length > 0
           ? 'Nothing was submitted, and some fields did not take. The applied fields are set — do not re-send them.'
           : 'Nothing was submitted. Activate the submit/search control with browser_click.',
     },
-    details: { fields: applied.length, ...counts },
+    details: {
+      fields: applied.length,
+      ...counts,
+      ...deltaDetails(observation, delta ?? undefined),
+    },
   };
 }
 

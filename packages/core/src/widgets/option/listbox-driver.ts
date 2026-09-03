@@ -1,8 +1,10 @@
+import type { AttemptRecord } from '../../interaction/types.js';
 import { openIfClosed, resolveContainer } from '../open-state.js';
 import { widgetFailure, type WidgetDriver, type WidgetOutcome } from '../types.js';
 import { matchesCommitment, matchesIntent, readCommitted } from '../verify.js';
 
 import { clickCandidate, collectCandidates, rankCandidate } from './candidates.js';
+import { scanVirtualOptions } from './virtual-list.js';
 
 /** Driver for listbox, menu, and homogeneous clickable-choice popups. */
 export const listboxDriver: WidgetDriver = {
@@ -80,30 +82,81 @@ export const listboxDriver: WidgetDriver = {
         { offered: ranked.offered },
       );
     }
-    if (ranked.kind === 'none') {
+
+    // The structural entry condition. A list that already offers the value has
+    // nothing to reveal, so it pays for no scroll at all — diagnostic work is
+    // taken only on the path that needs it, and the zero here is asserted by
+    // counting the operation rather than by inspection.
+    let chosen = ranked.kind === 'match' ? ranked.candidate : null;
+    let offeredEvidence = ranked.kind === 'none' ? ranked.offered : [];
+    let scannedOffered: readonly string[] | null = null;
+    let scrollRecord: AttemptRecord | null = null;
+    if (!chosen) {
+      const startedAt = port.now();
+      const scan = await scanVirtualOptions(port, opened.container, intent.value, budget, {
+        actions,
+        firstWindow: candidates,
+      });
+      actions += scan.cursor.scrolls;
+      if (scan.cursor.scrolls > 0) {
+        // Bounded count and a structural stop token only — no page text and no
+        // host discriminator can reach the ledger through this record.
+        scrollRecord = {
+          attempt: 1,
+          // The rung varies *what the widget has been given a chance to offer*.
+          // It changes neither the target node nor the typing mechanics.
+          strategy: 'scroll-container',
+          axis: 'what',
+          errorCode: scan.kind === 'match' ? null : 'WIDGET_TARGET_UNREACHABLE',
+          elapsedMs: port.now() - startedAt,
+          detail: `scrolled ${scan.cursor.scrolls}, stopped ${scan.cursor.stoppedBecause}`,
+        };
+      }
+      if (scan.kind === 'ambiguous') {
+        return widgetFailure(
+          'WIDGET_AMBIGUOUS_CHOICE',
+          'several-matched-equally',
+          `Several offered choices match "${intent.value}" at the same rank.`,
+          { offered: scan.offered },
+        );
+      }
+      if (scan.cursor.scrolls > 0) scannedOffered = scan.cursor.offered;
+      if (scan.kind === 'match') chosen = scan.candidate;
+      else offeredEvidence = scan.cursor.offered;
+    }
+
+    if (!chosen) {
+      // Unchanged code and cause: a list that genuinely does not hold the value
+      // fails exactly as it always did, now carrying evidence deduplicated
+      // across every window that was mounted.
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
         'value-not-offered',
         `The widget does not offer a choice matching "${intent.value}".`,
-        { offered: ranked.offered },
+        { offered: offeredEvidence },
       );
     }
-    const offered = candidates
-      .filter((candidate) => !candidate.disabled)
-      .slice(0, 10)
-      .map((candidate) => candidate.name);
-    await clickCandidate(port, ranked.candidate);
+    // What the widget offered, across every window that was actually mounted.
+    // Reporting only the first window would describe a list the caller never
+    // chose from once the driver had to scroll to find the row.
+    const offered =
+      scannedOffered ??
+      candidates
+        .filter((candidate) => !candidate.disabled)
+        .slice(0, 10)
+        .map((candidate) => candidate.name);
+    await clickCandidate(port, chosen);
     actions += 1;
     const committed = await readCommitted(port, target);
     // Verified against the option that was clicked, not against the text used
     // to find it: a list asked for a code and offering a name has answered the
     // request, and checking the typed text instead calls that a failure.
-    if (!matchesCommitment(committed, ranked.candidate.name) && !matchesIntent(committed, intent)) {
+    if (!matchesCommitment(committed, chosen.name) && !matchesIntent(committed, intent)) {
       return widgetFailure(
         'WIDGET_NOT_COMMITTED',
         'control-refused-value',
-        `The choice "${ranked.candidate.name}" was clicked, but "${target.name}" did not commit it.`,
-        { committed, observed: committed, offered, chosen: ranked.candidate.name },
+        `The choice "${chosen.name}" was clicked, but "${target.name}" did not commit it.`,
+        { committed, observed: committed, offered, chosen: chosen.name },
       );
     }
     return {
@@ -112,8 +165,9 @@ export const listboxDriver: WidgetDriver = {
       committed,
       actions,
       container: opened.container,
-      chosen: ranked.candidate.name,
+      chosen: chosen.name,
       offered,
+      ...(scrollRecord ? { attempted: [scrollRecord] } : {}),
     };
   },
 };

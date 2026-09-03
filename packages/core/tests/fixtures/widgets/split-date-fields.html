@@ -1,0 +1,30 @@
+<!--
+  Shape: one logical date range is spread across two inputs and commits only
+  when both ends are present.
+
+  Provenance: a single endpoint can appear accepted while the shared widget is
+  open and then be discarded when the widget releases.
+-->
+<input id="from" aria-label="Check-in" placeholder="YYYY-MM-DD" aria-controls="range" />
+<input id="to" aria-label="Check-out" placeholder="YYYY-MM-DD" aria-controls="range" />
+<div id="range" role="dialog"><button aria-label="Done">Done</button></div>
+<script>
+  (function () {
+    var from = document.getElementById('from');
+    var to = document.getElementById('to');
+    var dialog = document.getElementById('range');
+
+    function release() {
+      if (!from.value || !to.value) {
+        from.value = '';
+        to.value = '';
+      }
+      dialog.style.display = 'none';
+    }
+
+    document.querySelector('#range button').addEventListener('click', release);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') release();
+    });
+  })();
+</script>

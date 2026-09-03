@@ -7,12 +7,14 @@ import {
 } from '../../src/discovery/interactable-scan.js';
 import {
   MAX_PAGE_DIGEST_LEN,
+  buildAgentPageSnapshot,
   buildObservation,
   mapRunOutcomeToStepOutcome,
   orderAgentInteractables,
 } from '../../src/discovery/observe.js';
 import type { Extractor } from '../../src/extraction/readability.js';
 import type { ExtractedArticle, FetchedDoc } from '../../src/extraction/types.js';
+import { FINGERPRINT_MAX_ENTRIES } from '../../src/interaction/page-delta.js';
 
 interface FakePageOpts {
   readonly url?: string;
@@ -37,7 +39,10 @@ class FakePage implements Pick<Page, 'evaluate' | 'url'> {
       if (this.opts.rawInteractables === 'throw') {
         return Promise.reject(new Error('scan failed'));
       }
-      return Promise.resolve((this.opts.rawInteractables ?? []) as unknown as T);
+      return Promise.resolve({
+        records: this.opts.rawInteractables ?? [],
+        elements: [],
+      } as unknown as T);
     }
     if (this.opts.pageData === 'throw') {
       return Promise.reject(new Error('evaluate failed'));
@@ -332,3 +337,133 @@ describe('@no-llm mapRunOutcomeToStepOutcome', () => {
     expect(mapped.reason).not.toBeNull();
   });
 });
+
+describe('@no-llm agent snapshot fingerprint', () => {
+  const options = { maxDigestBytes: 2000, maxInteractables: 2 };
+
+  it('accounts for every visible candidate the model cap hid', async () => {
+    // The whole reason the fingerprint is derived before the slice: a delta
+    // computed from the capped list would report eight stationary elements as
+    // vanished the moment the cap moved past them.
+    const many = Array.from({ length: 10 }, (_, index) =>
+      raw({ top: index, name: `item-${index}` }),
+    );
+    const page = makePage({ rawInteractables: many });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.interactables).toHaveLength(2);
+    expect(snapshot.fingerprint.entryCount).toBe(10);
+    expect(total(snapshot.fingerprint.entries)).toBe(10);
+    expect(snapshot.fingerprint.truncated).toBe(false);
+  });
+
+  it('counts same-named controls as a multiset rather than collapsing them', async () => {
+    const page = makePage({
+      rawInteractables: [raw({ name: 'Search' }), raw({ name: 'Search', top: 5 })],
+    });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.fingerprint.entries.size).toBe(1);
+    expect(total(snapshot.fingerprint.entries)).toBe(2);
+  });
+
+  it('marks the fingerprint degraded when the scan could not run', async () => {
+    // Distinct from "the page has no controls": without this flag the next
+    // delta would claim every control on the page vanished.
+    const page = makePage({ rawInteractables: 'throw' });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.fingerprint.degraded).toBe(true);
+    expect(snapshot.fingerprint.entryCount).toBe(0);
+  });
+
+  it('is not degraded when the page genuinely has no controls', async () => {
+    const page = makePage({ rawInteractables: [] });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.fingerprint.degraded).toBe(false);
+  });
+
+  it('excludes invisible candidates, matching what ordering already does', async () => {
+    const page = makePage({
+      rawInteractables: [raw({ name: 'Shown' }), raw({ name: 'Hidden', visible: false })],
+    });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.fingerprint.entryCount).toBe(1);
+  });
+
+  it('carries container identities and the focused element, and no ref anywhere', async () => {
+    const page = makePage({
+      rawInteractables: [
+        raw({
+          name: 'Dallas',
+          role: 'option',
+          scope: 'dialog',
+          focused: true,
+          container: { role: 'dialog', name: 'Search flights' },
+        }),
+      ],
+    });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect([...snapshot.fingerprint.containers.values()]).toEqual([
+      { role: 'dialog', name: 'Search flights' },
+    ]);
+    expect(snapshot.fingerprint.focus).not.toBeNull();
+    expect(JSON.stringify([...snapshot.fingerprint.entries.keys()])).not.toContain('ref');
+  });
+
+  it('truncates past FINGERPRINT_MAX_ENTRIES and says so', async () => {
+    const many = Array.from({ length: FINGERPRINT_MAX_ENTRIES + 5 }, (_, index) =>
+      raw({ top: index, name: `item-${index}` }),
+    );
+    const page = makePage({ rawInteractables: many });
+
+    const snapshot = await buildAgentPageSnapshot(
+      page,
+      { extractor: new FakeExtractor() },
+      options,
+    );
+
+    expect(snapshot.fingerprint.truncated).toBe(true);
+    expect(snapshot.fingerprint.entryCount).toBe(FINGERPRINT_MAX_ENTRIES + 5);
+    expect(total(snapshot.fingerprint.entries)).toBe(FINGERPRINT_MAX_ENTRIES);
+  });
+});
+
+function total(entries: ReadonlyMap<string, number>): number {
+  let sum = 0;
+  for (const count of entries.values()) sum += count;
+  return sum;
+}

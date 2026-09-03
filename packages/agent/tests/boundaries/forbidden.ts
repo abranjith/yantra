@@ -23,6 +23,10 @@ export const forbiddenPaths = [
   'packages/agent/src/prompts/reprompt.ts',
   'packages/agent/src/audit/wrap.ts',
   'packages/agent/src/sanitizer-guard.ts',
+  // FEAT-033: the unused Node-side hit-target interceptor. Pointer reachability
+  // now lives on the agent controller path that lacked it; reviving this would
+  // be a second, executor-only obstruction mechanism.
+  'packages/core/src/locator/hit-target.ts',
   'packages/protocol/src/emit/tool-catalog.ts',
   'packages/protocol/generated/tool-catalog.json',
   'packages/protocol/generated/tool-catalog.ts',

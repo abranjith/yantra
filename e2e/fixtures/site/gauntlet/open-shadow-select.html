@@ -1,0 +1,60 @@
+<!--
+  Shape: a form control the page encapsulates inside a component's own shadow
+  tree, so it is absent from every flat-tree query of the document while
+  remaining a fully ordinary control once the composed tree is walked.
+
+  The second host carries a *closed* root holding a structurally identical
+  control. That one must stay invisible: the platform withholds a closed root,
+  and no piercing library or DOM tagging is used to get around it. Its absence
+  is the correct outcome, not a gap to be worked around, and it is asserted.
+
+  Provenance: design-system components routinely encapsulate native form
+  controls this way, and every path that minted an addressable element used a
+  flat-tree query, so the control could not be named, filled, or clicked.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Open shadow root select</title>
+  </head>
+  <body>
+    <h1>Delivery options</h1>
+    <div id="open-host"></div>
+    <div id="closed-host"></div>
+    <p id="status">none</p>
+    <script>
+      (function () {
+        function mount(hostId, mode, label, statusPrefix) {
+          var host = document.getElementById(hostId);
+          var root = host.attachShadow({ mode: mode });
+
+          var field = document.createElement('label');
+          field.setAttribute('for', hostId + '-select');
+          field.textContent = label;
+          root.appendChild(field);
+
+          var select = document.createElement('select');
+          select.id = hostId + '-select';
+          select.setAttribute('aria-label', label);
+          ['Standard', 'Express', 'Overnight'].forEach(function (name) {
+            var option = document.createElement('option');
+            option.value = name.toLowerCase();
+            option.textContent = name;
+            select.appendChild(option);
+          });
+          select.addEventListener('change', function () {
+            document.getElementById('status').textContent =
+              statusPrefix + ':' + select.options[select.selectedIndex].textContent;
+          });
+          root.appendChild(select);
+          return select;
+        }
+
+        mount('open-host', 'open', 'Delivery speed', 'open');
+        // Structurally identical, and unreachable by design.
+        window.__closedSelect = mount('closed-host', 'closed', 'Billing cycle', 'closed');
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,36 @@
+<!--
+  Shape: a search form replaces its input node during entry, invalidating every
+  reference minted before the replacement.
+
+  Provenance: reactive forms commonly remount controlled inputs while applying
+  state, so the engine must reacquire by generic observed identity.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Remounting search form</title>
+  </head>
+  <body>
+    <form role="search" aria-label="Catalog search">
+      <label for="query">Search catalog</label>
+      <input id="query" aria-label="Search catalog" />
+    </form>
+    <script>
+      (function () {
+        var replaced = false;
+        function attach(input) {
+          input.addEventListener('input', function () {
+            if (replaced) return;
+            replaced = true;
+            var replacement = input.cloneNode(false);
+            replacement.value = '';
+            input.replaceWith(replacement);
+            attach(replacement);
+          });
+        }
+        attach(document.getElementById('query'));
+      })();
+    </script>
+  </body>
+</html>

@@ -100,7 +100,325 @@ share one validation vocabulary.
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
 
 Core depends on protocol but never on `@yantra/agent`. That boundary is enforced by lint/static
-checks and agent boundary tests.
+checks and agent boundary tests. The protected-action lexicon lives in core for that reason: the
+obstruction protocol's auto-clearance veto runs there, so `PROTECTED_ACTION_RE` is defined in
+`packages/core/src/interaction/protected-actions.ts` and re-exported unchanged by the agent tool
+layer rather than injected into core by a caller who could omit it.
+
+#### Composed-tree observation and ref minting
+
+Observation walks the **composed** tree, so a control inside an open shadow root is nameable and
+addressable. `scanInteractablesInPage({ withElements, max, selector })` in
+`packages/core/src/discovery/interactable-scan.ts` runs one in-page pass with an explicit stack —
+not recursion, so a pathological tree is bounded by `max` rather than by the JS call stack — and
+descends into `element.shadowRoot` wherever it is non-null, to a shadow depth of 16. **Open** roots
+only: the platform returns `null` for a closed root, so a closed-shadow control is unreachable
+rather than filtered. There is no closed-root branch to get wrong, and no piercing library or DOM
+tagging is used to manufacture one. The scan sets no attribute, injects no marker, and adds no
+node.
+
+Membership is the same candidate set the flat query used, applied per element with `matches()`
+instead of as one `querySelectorAll`, because only a per-element test can be carried across a
+shadow boundary. Three name and ancestry computations are root-scoped rather than
+document-scoped as a consequence: `aria-labelledby` id lookup and `label[for=…]` resolve against
+`element.getRootNode()` — ids are scoped per shadow root, so a same-valued document id cannot leak
+in — while group and scope walk the composed ancestor chain (`parentElement`, else
+`getRootNode().host`), which a `parentElement` walk would terminate at the boundary, reporting a
+shadow-hosted control inside a labelled dialog as ungrouped and page-scoped.
+
+The pass returns `{ records, elements }`. `elements` is a **superset** of `records`: an element can
+match the candidate selector and still carry a role the record projection has no kind for (`tab`,
+`menuitem`, or a caller-supplied selector's own additions), and it stays addressable regardless.
+`RawInteractable.elementIndex` indexes into that array. The record also carries `composedScope`
+(`document` or `open-shadow`), `rootNodeDepth`, `focused`, and `container`, which are internal
+diagnostics: they are never projected into `AgentInteractable` and never reach the model, because
+observation forwards interactables to the model wholesale and a field that reached the projection
+would become a payload contract change.
+
+`focused` and `container` exist for the page delta below, and both are answered by work the pass was
+already doing. `focused` compares the element against its **own** root's `activeElement`, because
+`document.activeElement` reports the shadow _host_ for a control inside an open shadow root, and a
+host is not the control the page is typing into. `container` names the dialog, overlay, listbox,
+menu, or grid the element sits in as the same `{ role, name }` pair the obstruction protocol uses,
+and it falls out of the ancestry walk `computeScope` performs per candidate. That walk now continues
+to the **outermost** matching visible ancestor instead of stopping at the first, matching
+`overlay-dismiss.ts` and the obstruction classifier's outermost-container selection: a control inside
+a suggestion listbox inside a modal belongs to the modal, which is both the thing a person would say
+opened and the thing FEAT-033 would name as the obstruction. `scope` is unaffected — a match at any
+depth still means `'dialog'` — and a per-scan memo names each container once however many controls it
+holds, so a modal with two hundred controls does not recompute one accessible name two hundred times.
+There is no second query, no second traversal, and no DOM mutation.
+
+`collectComposedInteractables(page, { max, selector? })` in
+`packages/core/src/discovery/composed-handles.ts` is the single handle-collection implementation.
+`AgentBrowserController.observe()` takes one `evaluateHandle` scan and claims handles by
+`elementIndex`; it holds no interactable selector of its own. The rationale is worth stating as a
+contrast, because it is why the shape is what it is: the arrangement this replaced paired a record
+list from one traversal with a handle list from an independent `page.$$` query, held in step only
+by a doc comment demanding two selector constants stay byte-identical. Drift there never failed
+loudly — it silently bound every ref to the wrong element. Same pass, same array, so the
+correspondence is structural. A source-boundary rule in
+`packages/core/tests/boundary-rules.spec.ts` ("mints interactable handles from exactly one composed
+traversal") pins it, including that exactly one module in `packages/*/src` walks `element.shadowRoot`.
+
+Deterministic replay shares the walk and nothing else. The replay `WidgetPort.observe()` in
+`packages/core/src/executor/step-handlers/fill-element.ts` passes its own `INTERACTABLE_SELECTOR`
+as the `selector` option rather than driving a separate query, and keeps its own `describe()`
+projection and cap. That selector is deliberately wider — it includes `[role="gridcell"]`, which the
+agent observation has no kind for — because the two paths are separate actionability and
+observation contracts and are not unified. Sharing the walk is what keeps a promoted workflow from
+silently losing the controls the agent could see.
+
+#### Pointer reachability and the obstruction protocol
+
+The agent controller and the deterministic executor hold two separate actionability contracts, and
+they deliberately want different answers to the same signal. `assertActionable` checks only the
+facts that do not depend on scroll position — connected, laid out, not disabled — and is unchanged.
+Pointer reachability is a distinct stage that runs **after** the existing hover/scroll settle:
+`preparePointerTarget` obtains `ElementHandle.clickablePoint()`, hit-tests that exact viewport
+coordinate through the composed tree, and `dispatchAt` then dispatches the pointer event at the same
+value object. This is a second, differently shaped composed-tree mechanism, not the observation walk
+above: it is a **point** descent, re-running `elementFromPoint` inside each open shadow root the hit
+lands on and then walking composed ancestors back toward the target, rather than a traversal of the
+whole tree.
+Testing before the scroll is forbidden by a live below-fold regression, and a centre-point test
+cannot satisfy clipped or off-centre quads.
+
+When the point belongs to something else, the interception is classified structurally — never by
+host, brand, or URL — into one of four kinds, in fixed precedence: `busy-indicator`,
+`modal-dialog`, `fixed-overlay`, `plain-overlay`. Busy wins first on purpose: reading a spinner as
+a modal turns a transient into a terminal and loses a retry the page would have satisfied. The
+outermost overlay container in the intercepting node's bounded ancestry supplies the reported
+identity, so a listbox nested inside a modal reports the modal.
+
+Diagnostic work is paid for only on the obstructed path. Once interception is detected, one bounded
+obstruction-scoped read describes the controls inside the obstruction's **own subtree** and mints
+the dismiss-shaped ones as real refs on the live ref map — additively, so the caller's ref is never
+invalidated and no existing id is renumbered. Every offered ref resolves through `resolveRef`, which
+is what makes naming it in a hint legal at all.
+
+At most one clearance press happens per **top-level tool call** — the middleware opens that boundary
+with `beginToolCall()`, so a `browser_fill_form` spanning many fields and many typing rungs shares a
+single allowance. Three independent gates decide whether anything may be pressed: a strict
+close/dismiss/decline allowlist, the `PROTECTED_ACTION_RE` veto, and subtree containment. The
+allowance is spent before the press so a throw cannot buy a second, there is no recursion, and the
+original coordinate is re-tested afterwards. Anything the engine will not press is handed to the
+agent as a ref instead, where `browser_click`'s existing confirmation gate applies as usual.
+
+A blocked action reports the stable code `ELEMENT_OBSTRUCTED` — never `ELEMENT_HIDDEN`, because a
+covered element is visible and conflating the two sends the agent to re-observe when the fix is to
+dismiss. `details.kind` is required and total over the message catalog, and it drives the internal
+retry disposition (`busy-indicator` transient, everything else terminal after the one clearance).
+That is a different question from the model-visible `retryable` flag, which stays true for every
+kind because a corrected retry after dismissing an offered ref genuinely can succeed. The overlay's
+accessible name is page-derived and passes the run sanitizer at the agent seam **before** the
+message is rendered, so the model-visible sentence and the recorded `details` cannot disagree;
+`kind`, `point`, and the clearance fields are fixed enums, numbers, and booleans carrying no page
+text and are logged verbatim. The clearance rides the attempt ledger as a `clear-obstruction`
+record on the `where` axis.
+
+#### Container scrolling and virtualized option lists
+
+`WidgetPort` exposes `scrollContainer(container, step?)`, returning a `ScrollFrame` of `scrollTop`,
+`scrollHeight`, `clientHeight`, `moved`, and `atEnd`, or `null` when the container owns no
+scrollable region — a normal named outcome rather than a failure. `WidgetBudget.maxScrollSteps`
+bounds it, defaulting to 8 in `defaultWidgetBudget`, declared on the budget for the same reason
+`maxPagingSteps` is: a caller can lower it and a test can pin it.
+
+One in-page implementation, `scrollContainerInPage` in `packages/core/src/widgets/scroll.ts`, backs
+every port — the `AgentBrowserController`, the deterministic replay port, and the JSDOM
+`WidgetTestPort` — and reaches the agent through `browserWidgetPort`. It resolves the nearest region
+whose computed **`overflowY`** is `auto` or `scroll`, searched from the container's own subtree
+outward to the container itself; the longhand is read deliberately, because the `overflow` shorthand
+computes to `''` on a page that set only `overflow-y`, which is exactly the case this exists for.
+`window`, `document.scrollingElement`, `document.body`, and `document.documentElement` are excluded
+by construction, so advancing a list can never move the whole page. It is a mutation, classified as
+one in the gauntlet's `PORT_ACTION_KIND` table, and reachable only from a driver's `drive()` — never
+from `detect()` or `detectOpen()`, because detection must not mutate page state.
+
+`scanVirtualOptions` in `packages/core/src/widgets/option/virtual-list.ts` walks a virtualized list
+window by window on top of that primitive. `optionIdentity()` is content-derived —
+`normalizeText(name)`, a `\u0000` separator, then the role — and that is a requirement rather than a
+style choice: a virtual list recycles its DOM nodes, so a node- or path-derived identity would
+report the same recycled row as new forever and no-progress could never be detected. Sharing
+`normalizeText` with ranking and commit verification keeps dedup and matching from drifting into two
+ideas of sameness. Every exit is named by the closed `VirtualListStop` set — `matched`,
+`not-scrollable`, `reached-end`, `no-new-options`, `scroll-position-unchanged`, `step-cap`,
+`budget` — because an unnamed exit is an unbounded loop waiting to happen. Termination is
+**identity-first**: `atEnd` and the layout metrics are recorded as corroborating evidence only,
+since an environment without a layout engine reports them as `0`, which would make `atEnd`
+vacuously true and end the scan before it began.
+
+The scan is wired into `listboxDriver.drive` behind a structural entry condition — it runs only when
+ranking the already-collected first window returns `kind: 'none'` — and the caller passes that first
+window in rather than having it re-read. A list whose target is already mounted therefore charges
+zero scrolls and zero extra reads, and the gauntlet asserts that zero by counting the operation.
+Bounds are `MAX_TRACKED_OPTION_IDENTITIES` at 500 tracked identities, `maxScrollSteps` at 8, and
+offered labels at the existing `MAX_RANKED_OFFERED` of 10; scrolls are charged against
+`WidgetBudget.maxActions` like any other action.
+
+No new stable error code was added. A list that genuinely lacks the value still fails as
+`WIDGET_TARGET_UNREACHABLE` with cause `value-not-offered`, now carrying evidence deduplicated
+across every window that was mounted rather than the first window alone, plus one `AttemptRecord`
+with `strategy: 'scroll-container'` on the `what` axis — the rung varies what the widget has been
+given a chance to offer, not the target node or the typing mechanics. Its `detail` carries only the
+bounded scroll count and the stop token, so no page text and no host can reach the ledger through it.
+
+#### Declarative interaction recovery
+
+Interaction recovery is an ordered data model executed by one production loop,
+`runEscalationPlan` in `packages/core/src/interaction/escalation.ts`. An `EscalationPlan` names one
+of six families (`text`, `combobox`, `date`, `option`, `field`, or `click`) and contains typed
+`Rung`s. Each rung declares its stable id, `where` / `what` / `how` axis, pure evidence-based entry
+condition, maximum action/time cost, evidence keys it can produce, action body, and optional
+cleanup or terminal codes. Array order is the escalation order: the runner contains no parallel
+strategy table, and a test proves that reordering the array alone reorders execution.
+
+Core declares the typing plan and the text, combobox, date, and option fill plans. The agent adapter
+declares the outer field re-resolution and click plans in
+`packages/agent/src/adapters/pi/tools/interaction-plans.ts`; their rung bodies close over injected
+core/controller operations. This placement preserves the downward dependency: agent imports the
+core runner and types, while core neither imports the adapter nor needs to know the agent tool
+catalog.
+
+```mermaid
+flowchart TD
+  FillEngine[Core fill engine and widget drivers] --> CorePlans[Core family plan builders]
+  AgentTools[Agent browser fill and click tools] --> AgentPlans[Agent field and click plan builders]
+  AgentPlans --> CoreOps[Injected core and controller operations]
+  CorePlans --> Runner[Core runEscalationPlan]
+  AgentPlans --> Runner
+  Runner --> Port[Runner-wrapped WidgetPort]
+  Runner --> Verdicts[EscalationLedger verdicts]
+  Verdicts --> Wire[Sanitized details.attempted]
+  Legacy[Legacy AttemptRecord artifacts] --> Normalize[normalizeAttemptArtifact]
+  Wire --> Normalize
+  Normalize --> Reports[Audit and report readers]
+```
+
+For every rung, the runner first evaluates eligibility and verifies that the declared cap fits the
+remaining allowance. A rung that is ineligible or cannot fit is recorded as `skipped` without
+spending work. An entered rung runs through a wrapped `WidgetPort` that counts actual click, fill,
+clear, type, key, and container-scroll mutations; non-port agent actions use the same state's
+explicit `charge()` hook. Deadline, action count, ordinal sequence, read count, and stale-ref
+reacquisition count live in one mutable run state. Any rung that invokes another plan through
+`runSubplan` passes that state through, so nested work consumes the same budget and appends verdicts
+in execution order instead of merging separately numbered ledgers afterward. Cleanup runs in a
+`finally` only for an entered rung, which also represents bounded drive-or-dismiss stages such as
+an open probe.
+
+The resulting `EscalationLedger` is a projection of what the plan did, including what it declined
+to do. A succeeded verdict carries entry evidence, elapsed time, charged and remaining actions,
+and produced evidence; a failed verdict additionally carries the stable error code; a skipped
+verdict carries only its structural `unmet` reason. At the tool boundary this becomes snake-case
+`details.attempted`: `error_code` is present only for `failed`, never as `null` on success or skip.
+`normalizeAttemptArtifact` accepts both that verdict shape and legacy nullable `AttemptRecord`
+arrays on read, and the report builder normalizes audit entries without rewriting any existing run
+directory. The one-rung secret plan remains blind: it performs no verification read and emits no
+secret-derived evidence.
+
+#### Page-delta observation
+
+After a successful browser action the agent used to receive a fresh fifty-element observation and
+nothing else, left to work out by re-reading the list what the action had done. A bounded `delta`
+block now rides beside that observation and says it directly: the URL changed, a dialog named
+`Cookie consent` opened, twelve elements appeared and three vanished, focus moved from one control to
+another.
+
+**One differ API, two identity policies.** `diffKeyed(before, after, { key, changed?, sampleCap? })`
+in `packages/core/src/interaction/differ.ts` is the whole comparison surface, and it compares
+multisets: three controls sharing a key against five sharing it is two appearances, not zero, which is
+the most common way a set-based page diff under-reports. What it deliberately does not decide is
+identity. `locateEditee` keys by `entry.ref` — it holds a live ref for the control it just typed into
+and every consumer of the answer drives by ref, so ref identity is exactly right there and its
+behavior is unchanged. `diffFingerprints` keys by a semantic identity instead, because refs are minted
+by `(role, name, ordinal)` and same-named controls that reorder between observations trade ref
+identities. The unique-key case falls out as the count-1 case with no special branch. The API is
+generalized; the identity rule is not.
+
+**The fingerprint is uncapped and private.** `packages/core/src/interaction/page-delta.ts` defines
+`ObservationFingerprint`: the document epoch, the semantic multiset of visible interactables, the
+visible container identities, the focused element's identity, url and title, and the `truncated` and
+`degraded` flags. Identity is `(role, name, group, scope)` joined by a `\u001F` unit separator with
+each part clamped — deliberately not the ref, and deliberately carrying no position or ordinal, since
+an element that moved is the same element. That, with multiset counts in place of ordinals, is what
+stops reordered same-named controls from trading identities and stops the fifty-element model cap from
+turning a stationary element into a vanishing. The separator is written as an escape in source rather
+than as a raw byte, because a literal separator byte makes a file read as binary to `grep` and `file`.
+The fingerprint is never model-visible, never persisted, and never logged.
+
+**It never over-claims.** `diffFingerprints` is pure and total: a bound it cannot see past becomes a
+completeness marker rather than a manufactured number. `complete: false` is emitted with, and only
+with, an `incomplete` list drawn from a closed three-value set carrying no page text —
+`document-replaced` (the epochs differ, so the two frames' controls are not comparable and element
+counts and focus are omitted), `fingerprint-truncated`, and `scan-degraded`. Which bounds applied is
+decided in one function, so the rule "no definite count past a bound that invalidates it" is enforced
+at a single site instead of drifting field by field, and the marker's absence is what makes the block
+definite. One standing bound is documented on the type rather than repeated per call: a container is
+nameable only when it holds at least one scanned candidate, so a delta lists the dialogs it observed
+opening or closing and never asserts that none is open. Every cap is a named constant —
+`FINGERPRINT_MAX_ENTRIES`, `DELTA_DIALOG_CAP`, `DELTA_SAMPLE_CAP`, `IDENTITY_PART_MAX_CHARS`, and
+`DELTA_MAX_BYTES`, the last enforced where the block is built by trimming element samples first, then
+dialog names, and never the counts or the completeness reasons.
+
+**It costs no page read.** `buildAgentPageSnapshot` in `packages/core/src/discovery/observe.ts` orders
+the scan once, derives the fingerprint from the whole visible list, and only then applies
+`.slice(0, maxInteractables)`; the fingerprint rides back on `AgentPageSnapshot`. In the controller,
+`stampDocument()` became a read-or-mint on the single `evaluate` it already made, so the marker is a
+stable per-document **epoch** rather than a fresh value per observation — `isSameDocument()`'s
+present-and-equal semantics and the evaluate count per `observe()` are both unchanged.
+`lastScanFingerprint` updates on every scan because it is the _after_ side of any delta;
+`deltaBaseline` updates only when `trackDigest !== false`, reusing the flag that already means "the
+model saw this frame" so internal resolution reads — field resolution, click re-acquisition, identity
+healing — cannot steal the baseline and make a delta report a frame the model was never shown.
+`beginToolCall()`, already the middleware's per-call boundary for the obstruction clearance, pins the
+call baseline, which is what makes one delta per top-level tool call a property of the call rather
+than of whichever action happened to run last. `deltaSinceBaseline()` and `takeActionMetadata()` both
+take zero page reads.
+
+**Additive at the tool seam, by decision.** `modelDelta()` in `browser-common.ts` is an explicit
+allow-list projection rather than a pass-through — the fingerprint behind the block holds an identity
+key for every control on the page — and a boundary test asserts that no fingerprint field and no
+identity map reaches a payload. `observeAfterAction` returns `{ observation, delta }` and keeps its
+best-effort contract: a failed read degrades to neither, because a diagnostic may never turn an action
+that already succeeded into a tool error. `browser_click`, `browser_navigate`,
+`browser_fill_element`, and `browser_fill_form` emit `delta` **alongside** the existing `observation`,
+and `browser_observe` is deliberately unchanged. Where there is no baseline to diff against — the
+ordinary state of a run's first navigation — the block is omitted entirely and
+`details.delta_omitted: 'no-baseline'` records why, so an absent block never reads as "nothing
+changed". Removing the embedded observation is a later, measured decision, and this wave claims no
+token saving. The fill tools additionally gained the URL provenance and tab-following
+`browser_click` already had: `browserWidgetPort(controller, now, sink?)` accepts a plain
+`ActionMetadataSink` — a collector with no retry, budget, or ordering semantics of its own — and
+`drainFillMetadata` merges it with the controller's read-free drain, so a popup, dialog, or landing URL
+a fill caused is attributed to that fill rather than leaking onto whatever tool runs next.
+
+**The evidence for the deferred decision.** `summarizeDeltaCost(entries)` in
+`packages/core/src/audit/delta-cost.ts` reads `tool-calls.jsonl` `end`-phase entries in `seq` order
+and reports total and maximum delta bytes, the observation bytes shipped beside them, and the rate at
+which the model's next call was `browser_observe` anyway. It is a reader only: it adds no field to the
+strict `ToolAuditEntry` schema, changes no behavior, and claims nothing. A block a tenth the size of
+the observation is not a saving until the follow-up rate shows the model does not simply re-observe.
+
+```mermaid
+flowchart TD
+  Scan[One composed-tree scan] --> Ordered[Uncapped ordered visible list]
+  Ordered --> Fingerprint[fingerprintFromScan]
+  Ordered --> Slice[maxInteractables slice]
+  Slice --> Observation[Model-visible observation]
+  Epoch[stampDocument read-or-mint epoch] --> Fingerprint
+  Fingerprint --> LastScan[Controller lastScanFingerprint]
+  Fingerprint --> Baseline[Controller deltaBaseline when trackDigest]
+  Baseline --> CallBaseline[beginToolCall pins the call baseline]
+  CallBaseline --> Diff[diffFingerprints]
+  LastScan --> Diff
+  Diff --> ModelDelta[modelDelta allow-list projection]
+  ModelDelta --> Payload[Action tool result beside the observation]
+  Observation --> Payload
+  Diff --> Details[details delta_bytes and observation_bytes]
+  Details --> Audit[tool-calls.jsonl]
+  Audit --> Cost[summarizeDeltaCost]
+```
 
 ### `packages/agent`
 
@@ -155,6 +473,74 @@ The principal execution surfaces are:
 the production workspaces to exercise CLI flows, deterministic research, scheduling, real-Chrome
 browser actions, agent orchestration, workflow promotion/replay, golden Briefs, and compatibility
 boundaries. Vitest remains the common test runner across every workspace.
+
+#### Interaction quality gate
+
+The browser interaction layer has three complementary, `@no-llm` contract tiers. The protocol
+gauntlet in `packages/core/tests/interaction/widget-regressions.spec.ts` runs 13 generic widget
+fixtures through the production `fillField` seam using a JSDOM-backed `WidgetPort`. Its
+`PROTOCOL_GAUNTLET` registry is the source for independently named cases, expected semantic
+outcomes, and exact operation budgets. The registry permits either a commit or an engineered
+refusal whose cataloged hint is proven by a follow-up fill that commits; an unsupported behavior
+cannot be recorded as an acceptable terminal outcome.
+
+`countingPort()` classifies every `WidgetPort` method at compile time: clicks, fills, clears,
+typing, key presses, and container scrolls are mutations; observations and evaluations are reads;
+the clock is neutral. Counting a scroll as a read would let a driver reveal an unbounded number of
+options for free, so the classification is exhaustive over the port by type. Each fixture pins mutations and reads separately and reports a per-method breakdown, so
+an extra recovery action or diagnostic page read is visible even when the final value is correct.
+The suite also keeps the registry and fixture directory in census, requires unique generic
+pattern names, confines any site provenance to a leading fixture comment, and decodes fixture
+text with a fatal UTF-8 decoder.
+
+The real-browser tier in `e2e/widget-gauntlet.spec.ts` serves its 4 fixtures over loopback, launches
+system Chrome, wraps a real `AgentBrowserController` with mutation/read counters, and invokes the
+same wrapped `browser_fill_element` tool and middleware used by agent runs. Its re-mounting search
+form case pins one top-level model tool call, controller operation counts, the parsed
+model-visible result, fresh-ref validity, and stale-ref rejection. Its open-shadow case fills a
+control inside an open shadow root by accessible name, confirms from the page that the commit landed
+inside the shadow tree, and asserts that the sibling control in a closed root is simply absent from
+observation — not a third expected-outcome arm, because a closed root is not a gauntlet pass. The
+same case asserts on key names that `composedScope`, `elementIndex`, and `rootNodeDepth` never
+appear in any model-visible payload. Registry-to-directory census prevents an agent-tier fixture
+from silently falling outside the suite. This tier deliberately does not reconstruct
+`tool-calls.jsonl`; run-recorder tests own that durable projection.
+
+Across both tiers the gallery is 17 fixtures, and that total is asserted as a literal number so
+growing it is a deliberate edit rather than a side effect. It is the gate FEAT-034 waits on.
+
+```mermaid
+flowchart LR
+  Fixtures[Generic widget fixtures] --> ProtocolRegistry[Protocol gauntlet registry]
+  ProtocolRegistry --> CountingPort[Counting WidgetPort]
+  CountingPort --> FillEngine[Core fillField and widget drivers]
+  FillEngine --> ProtocolAssertions[Outcome, mutation, read, and follow-up assertions]
+
+  ChromeFixture[Loopback agent-tier fixtures] --> RealChrome[System Chrome]
+  RealChrome --> CountingController[Counting AgentBrowserController]
+  CountingController --> WrappedTool[Wrapped browser_fill_element and middleware]
+  WrappedTool --> AgentAssertions[Model payload, tool-call, ref, mutation, and read assertions]
+
+  CoreCatalog[Core message catalog] --> CatalogContracts[Catalog contract tests]
+  AgentCatalog[Agent message catalog] --> CatalogContracts
+  CatalogContracts --> Capabilities[Core exports and active wrapped-tool catalog]
+```
+
+Model-visible interaction copy is split along the production dependency boundary. Core owns the
+shared `MessageTemplate` contract and the fill, actionability, and fill-success registries in
+`packages/core/src/interaction/messages.ts`; agent owns tool and middleware entries in
+`packages/agent/src/runtime/messages.ts` while importing only that core contract. Renderers fail
+on a missing template or required detail instead of falling back to generic advice. Contract
+tests require unique `(surface, code, cause)` keys, globally distinct rendered text, stable core
+error codes, UTF-8 round trips, and resolution of imperative hints to either a public core
+function or the active wrapped-tool catalog. The agent test additionally scans interaction tool,
+middleware, and budget sources so a newly emitted literal error code cannot bypass its catalog.
+The recovery gate also asserts that production contains exactly one escalation runner and one
+declared builder for every interaction family, with none of the former nested recovery-loop
+implementations restored. Runner tests pin rung ordering, cap admission, shared sub-plan accounting,
+cleanup, fast failure on an injected clock, and the discriminated wire keys. The old nullable
+success-code shape remains only a reader-compatibility input and is normalized without rewriting
+the source artifact.
 
 ## Data Flow
 
@@ -254,6 +640,17 @@ Yantra has no remote database and no single relational domain model. Durable sta
 ownership: user-editable definitions and canonical execution records are files, secret material
 lives in the OS keychain, and SQLite supplies local indexes and operational tables.
 
+Interaction recovery adds no relational state. Its durable form is the bounded verdict array under
+a sanitized tool result's `details.attempted` in `tool-calls.jsonl`; plan objects, evidence, shared
+budget state, and ledgers are in-memory execution concepts. Audit/report readers accept both this
+shape and legacy attempt arrays, normalizing on read only.
+
+Page-delta observation adds no relational state either, and no new artifact. `ObservationFingerprint`
+is in-memory controller state that is never persisted; the bounded `delta` block rides the existing
+tool result, and its cost — `delta_bytes`, `observation_bytes`, or `delta_omitted` — rides the
+existing sanitized `details` payload into `tool-calls.jsonl`, so the strict `ToolAuditEntry` schema
+gains no field. `summarizeDeltaCost` reads that projection back and writes nothing.
+
 ```mermaid
 flowchart TD
   Config[config.yaml and profile.yaml] --> Runtime[Runtime configuration]
@@ -309,6 +706,38 @@ ephemeral browser profiles are cleaned up on close or crash.
   in an explanatory _comment_ stays legal, and that distinction is deliberate: naming the site
   that demonstrated a general defect is useful evidence, while branching on one is a bug whose
   correct fix is always a more general pattern.
+- **One traversal mints observation, and open shadow roots are the reachability boundary.** Records
+  and the element handles they describe come from the same composed-tree pass and are related by
+  `elementIndex`, so their correspondence is structural rather than conventional; a second query
+  paired with an index minted elsewhere is rejected as a source rule, because that drift binds refs
+  to the wrong elements without failing loudly. Reach stops at the platform's own line: an open
+  shadow root is walked, a closed one returns `null` and its controls are simply unreachable. The
+  alternative — a piercing library or DOM tagging — would mutate or work around the page to reach
+  controls the page chose to encapsulate, and observation must not mutate page state.
+- **Interaction behavior is contract-gated at both product seams.** Fast protocol fixtures
+  protect widget-driver semantics and action/read cost, while the real-browser fixture protects
+  controller refs, wrapped-tool behavior, and the model-visible payload. The message catalogs
+  make actionable advice part of the same contract: a hint that names a move must resolve to an
+  exported engine function or active tool. Splitting the catalogs between core and agent retains
+  the downward package dependency instead of making core depend on the agent tool inventory.
+- **Recovery policy is declarative and accounting has one owner.** Interaction families express
+  escalation as ordered rungs with structural entry evidence and declared caps; the shared runner
+  decides admission, records skips, and charges real mutations. This makes a fallback a plan-data
+  change and makes budget use attributable by axis, at the cost of requiring every rung to state
+  its evidence and worst-case work before it can execute. Field and click plans stay in agent and
+  inject their operations into the core runner, preserving the core-to-agent prohibition.
+- **A page delta must be true, free, and modest about it.** Telling the agent what changed is only
+  useful if it is not routinely wrong, so the delta is computed over an uncapped semantic fingerprint
+  — `(role, name, group, scope)` as a multiset — rather than over the refs and the fifty-element list
+  the model sees, both of which report changes that never happened when same-named controls reorder
+  or fall past the cap. The differ's API is generalized and its identity rule is not: value-flow
+  evidence still keys by ref. The fingerprint is derived inside the observation each action tool
+  already takes, so the block costs no page read and the count is pinned by test. Where a bound —
+  replaced document, truncated fingerprint, degraded scan — prevents a definite statement, the block
+  carries a closed-set completeness reason instead of a manufactured number, and it says what changed
+  in the action window rather than what the action caused. The block ships **beside** the existing
+  observation rather than replacing it, and claims no token saving; `summarizeDeltaCost` exists to
+  supply the evidence that replacement decision needs, deliberately deferred rather than assumed.
 - **Deterministic selection before provider construction.** No-LLM `ask`/`research`, nested
   workflow calls, and scheduled runs do not silently open model sessions. Saved replay has a fixed
   plan before any optional post-run synthesis.
@@ -350,6 +779,8 @@ GitHub Actions runs lint, type-check, build, and tests on Ubuntu, macOS, and Win
 `LLM_PROVIDER=anthropic` and `LLM_PROVIDER=none`, with an additional Ubuntu/Ollama cell. Separate
 jobs run the static security/import-graph checks, a deterministic/browser release gate
 (`build`, `test:no-llm`, static checks, and protocol verification), and an opt-in live Anthropic
-smoke when the repository secret is configured. Boundary tests and the static checker enforce Pi
+smoke when the repository secret is configured. Because the two gauntlets and both catalog suites
+are ordinary Vitest cases tagged `@no-llm`, Turborepo includes them in the full matrix and in the
+deterministic/browser release gate. Boundary tests and the static checker enforce Pi
 SDK confinement, the core-to-agent prohibition, sanitized model sends, a dependency-light JSON
 render path, and exclusion of local index stores from prompt-assembly import graphs.

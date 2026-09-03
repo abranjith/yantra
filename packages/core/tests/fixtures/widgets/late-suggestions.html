@@ -17,19 +17,24 @@
     var input = document.getElementById('q');
     var popup = document.getElementById('opts');
     var started = false;
+    var revealed = false;
+    function reveal() {
+      if (!started || revealed) return;
+      revealed = true;
+      popup.innerHTML = '<button role="option">Reykjavik, Iceland</button>';
+      popup.querySelector('button').addEventListener('click', function () {
+        input.value = 'Reykjavik, Iceland';
+        popup.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+      });
+    }
     input.addEventListener('input', function () {
       popup.style.display = 'block';
       input.setAttribute('aria-expanded', 'true');
-      if (started) return;
       started = true;
-      setTimeout(function () {
-        popup.innerHTML = '<button role="option">Reykjavik, Iceland</button>';
-        popup.querySelector('button').addEventListener('click', function () {
-          input.value = 'Reykjavik, Iceland';
-          popup.style.display = 'none';
-          input.setAttribute('aria-expanded', 'false');
-        });
-      }, 2500);
+    });
+    document.addEventListener('yantra-test-read', function (event) {
+      if (event.detail >= 20) reveal();
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') popup.style.display = 'none';

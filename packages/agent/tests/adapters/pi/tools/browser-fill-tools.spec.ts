@@ -6,9 +6,14 @@ import {
   type AgentBrowserController,
   type AgentBrowserObservation,
   type AgentInteractable,
+  type BrowserActionResult,
+  diffFingerprints,
   fillFailure,
+  fingerprintFromScan,
   type FillOutcome,
+  type ObservationFingerprint,
   type OpaqueRefResolver,
+  type PageDelta,
   UserInputVault,
   type WidgetPort,
   type WidgetTarget,
@@ -17,12 +22,14 @@ import type { ConfirmationGateway } from '@yantra/core';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
+import { browserClickSpec } from '../../../../src/adapters/pi/tools/browser-click.js';
 import { mapFillFailure } from '../../../../src/adapters/pi/tools/browser-common.js';
 import {
   browserFillElementSpec,
   driveWithRetry,
 } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserFillFormSpec } from '../../../../src/adapters/pi/tools/browser-fill-form.js';
+import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
@@ -696,6 +703,236 @@ describe('@no-llm browser_fill_element contract', () => {
   });
 });
 
+describe('@no-llm fill tools page delta', () => {
+  it('emits exactly one delta for a whole batch, not one per field', async () => {
+    const controller = new FormController(
+      '<input id="a" aria-label="First">' +
+        '<input id="b" aria-label="Second">' +
+        '<input id="c" aria-label="Third">' +
+        '<input id="d" aria-label="Fourth">',
+    );
+    // The model has seen the empty form; the batch is what changes it.
+    await controller.observe();
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'First', value: 'one' },
+        { field: 'Second', value: 'two' },
+        { field: 'Third', value: 'three' },
+        { field: 'Fourth', value: 'four' },
+      ],
+    });
+
+    expect(result.status).toBe('ok');
+    // Counted in the serialized payload rather than read once: four deltas
+    // would still let a single-read assertion pass.
+    expect(occurrences(result.modelText ?? '', '"delta"')).toBe(1);
+    // The cost evidence the replacement decision will need, recorded once for
+    // the whole call. Recorded, not claimed.
+    const details = result.details as { delta_bytes?: number; observation_bytes?: number };
+    expect(details.delta_bytes).toBeGreaterThan(0);
+    expect(details.observation_bytes).toBeGreaterThan(0);
+    // Four fields each drive a real settle; the batch is slower than the
+    // suite default, not slow.
+  }, 30_000);
+
+  it('reports the delta against the frame the model last saw, not an internal read', async () => {
+    // A fill resolves its field through `observe({ trackDigest: false })`, and
+    // here the page has already changed before that read runs. If the internal
+    // read stole the baseline the delta would report nothing at all.
+    const controller = new FormController(
+      '<input id="search" aria-label="Search"><div id="extra"></div>',
+    );
+    await controller.observe();
+    // The page mounts a control after the model's last look and before the
+    // tool's own resolution read.
+    controller.document.querySelector('#extra')!.innerHTML =
+      '<button aria-label="Suggestions">Suggestions</button>';
+
+    const { result } = await runElement(controller, { field: 'Search', value: 'hello' });
+
+    expect(result.status).toBe('ok');
+    const model = JSON.parse(result.modelText ?? '{}') as { delta?: PageDelta };
+    expect(model.delta?.elements_appeared?.count).toBe(1);
+    expect(model.delta?.elements_appeared?.sample).toEqual([
+      { role: 'button', name: 'Suggestions' },
+    ]);
+  });
+
+  it('ships the delta beside the observation on a single fill', async () => {
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    await controller.observe();
+
+    const { result } = await runElement(controller, { field: 'Search', value: 'hello' });
+
+    const model = JSON.parse(result.modelText ?? '{}') as {
+      delta?: PageDelta;
+      observation?: unknown;
+    };
+    expect(model.observation).toBeDefined();
+    expect(model.delta).toBeDefined();
+    const details = result.details as { delta_bytes?: number; observation_bytes?: number };
+    expect(details.delta_bytes).toBeGreaterThan(0);
+    expect(details.observation_bytes).toBeGreaterThan(0);
+  });
+});
+
+describe('@no-llm fill action attribution', () => {
+  const POPUP = 'https://example.test/results';
+  const OFFSITE = 'https://elsewhere.test/results';
+
+  it('reports a popup the fill opened, and leaves none for the next tool', async () => {
+    // The leak, asserted in both directions: `WidgetPort.click` returned
+    // `Promise<unknown>` and every caller discarded the action result, so a
+    // popup a fill opened either vanished or surfaced on whatever ran next.
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    controller.pendingActionResults.push({ popup_intercepted: POPUP });
+
+    const { result, services } = await runElement(controller, {
+      field: 'Search',
+      value: 'hello',
+    });
+
+    const model = JSON.parse(result.modelText ?? '{}') as Record<string, unknown>;
+    expect(model.popup_intercepted).toBe(POPUP);
+    // Nothing is left in the queues for the next action to claim.
+    expect(controller.takeActionMetadata().popup_intercepted).toBeUndefined();
+
+    const next = await wrapTool(browserClickSpec(services), services).execute(
+      { ref: 'e1' },
+      undefined,
+    );
+    expect(next.modelText).not.toContain('popup_intercepted');
+  });
+
+  it('reports a JS dialog raised during a fill on the fill result', async () => {
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    controller.pendingActionResults.push({ dialog_intercepted: 'confirm: Leave this page?' });
+
+    const { result } = await runElement(controller, { field: 'Search', value: 'hello' });
+
+    const model = JSON.parse(result.modelText ?? '{}') as Record<string, unknown>;
+    expect(model.dialog_intercepted).toBe('confirm: Leave this page?');
+  });
+
+  it('attests where a fill navigated, so navigating back there is not a guess', async () => {
+    // `recordActionProvenance` never ran for a fill, so a URL the *page* had
+    // produced was later refused as a URL the model had invented.
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    controller.pendingActionResults.push({ url: POPUP });
+
+    const { result, services } = await runElement(controller, {
+      field: 'Search',
+      value: 'hello',
+    });
+    expect(result.status).toBe('ok');
+
+    const navigation = await wrapTool(browserNavigateSpec(services), services).execute(
+      { url: POPUP },
+      undefined,
+    );
+    expect(navigation.error_code).not.toBe('URL_NOT_FROM_EVIDENCE');
+  });
+
+  it('adopts a same-site tab the fill opened and reports the switch', async () => {
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    // The model has seen the opener page; the adopted tab is what changes it.
+    await controller.observe();
+    controller.pendingActionResults.push({
+      popup_intercepted: POPUP,
+      popup_followable: POPUP,
+    });
+    controller.adoptPopup.mockImplementation(() => {
+      // The controller stands on the adopted page from here on, so the
+      // post-action observation and the delta describe the page the fill
+      // actually produced.
+      controller.pageUrl = POPUP;
+      return Promise.resolve({ url: POPUP, title: 'Results', switched_to_new_tab: POPUP });
+    });
+
+    const { result } = await runElement(controller, { field: 'Search', value: 'hello' });
+
+    const model = JSON.parse(result.modelText ?? '{}') as {
+      switched_to_new_tab?: string;
+      observation?: { url?: string };
+      delta?: PageDelta;
+    };
+    expect(model.switched_to_new_tab).toBe(POPUP);
+    expect(model.observation?.url).toBe(POPUP);
+    expect(model.delta?.url_changed).toEqual({ from: 'https://example.test/', to: POPUP });
+    // The internal handshake never reaches the model.
+    expect(result.modelText).not.toContain('popup_followable');
+  });
+
+  it('does not adopt a cross-site tab, and still reports it as intercepted', async () => {
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    // A cross-site popup is never offered as followable by the controller.
+    controller.pendingActionResults.push({ popup_intercepted: OFFSITE });
+
+    const { result } = await runElement(controller, { field: 'Search', value: 'hello' });
+
+    const model = JSON.parse(result.modelText ?? '{}') as Record<string, unknown>;
+    expect(model.popup_intercepted).toBe(OFFSITE);
+    expect(model.switched_to_new_tab).toBeUndefined();
+    expect(controller.adoptPopup).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ethics-refused tab unadopted and the rest of the result unchanged', async () => {
+    const controller = new FormController('<input id="search" aria-label="Search">');
+    controller.pendingActionResults.push({
+      popup_intercepted: POPUP,
+      popup_followable: POPUP,
+    });
+
+    const { result } = await runElement(
+      controller,
+      { field: 'Search', value: 'hello' },
+      new AgentTrace(),
+      { ethics: { check: () => Promise.reject(new Error('refused')) } },
+    );
+
+    const model = JSON.parse(result.modelText ?? '{}') as Record<string, unknown>;
+    expect(result.status).toBe('ok');
+    expect(model.switched_to_new_tab).toBeUndefined();
+    expect(model.popup_intercepted).toBe(POPUP);
+    expect(model.observation).toBeDefined();
+    expect(controller.adoptPopup).not.toHaveBeenCalled();
+  });
+
+  it('attributes each batch metadata item to the call once, with no duplication', async () => {
+    const controller = new FormController(
+      '<input id="a" aria-label="First"><input id="b" aria-label="Second">',
+    );
+    controller.pendingActionResults.push(
+      { popup_intercepted: POPUP },
+      { dialog_intercepted: 'alert: Saved', overlays_dismissed: 1 },
+    );
+    controller.trailingActionResult = { overlays_dismissed: 1 };
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'First', value: 'one' },
+        { field: 'Second', value: 'two' },
+      ],
+    });
+
+    const text = result.modelText ?? '';
+    expect(occurrences(text, '"popup_intercepted"')).toBe(1);
+    expect(occurrences(text, '"dialog_intercepted"')).toBe(1);
+    const model = JSON.parse(text) as Record<string, unknown>;
+    expect(model.popup_intercepted).toBe(POPUP);
+    expect(model.dialog_intercepted).toBe('alert: Saved');
+    // Each dismissal is a separate thing the engine did on the user's behalf,
+    // so they add up rather than overwrite.
+    expect(model.overlays_dismissed).toBe(2);
+  }, 30_000);
+});
+
+/** Count non-overlapping occurrences of `needle` in `haystack`. */
+function occurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
 /** The caller fields each reported fill accounts for, in order. */
 function appliedFields(modelText: string | undefined): readonly (readonly string[])[] {
   const model = JSON.parse(modelText ?? '{}') as {
@@ -796,6 +1033,10 @@ async function runElement(
   return {
     result: await wrapTool(browserFillElementSpec(services), services).execute(params, undefined),
     trace,
+    // Returned so a follow-up tool call runs in the *same* run: URL provenance
+    // and popup queues are run-scoped, and the leak these tests pin is about
+    // what the next call inherits.
+    services,
   };
 }
 
@@ -869,6 +1110,11 @@ class FormController {
   /** Day cells clicked, in order, for tests that care how a range was driven. */
   public readonly dateClicks: string[] = [];
   public observationCount = 0;
+  /** Top-level tool calls the middleware opened against this controller. */
+  public toolCalls = 0;
+  private lastScanFingerprint: ObservationFingerprint | null = null;
+  private deltaBaseline: ObservationFingerprint | null = null;
+  private deltaCallBaseline: ObservationFingerprint | null = null;
   private readonly refsByElement = new Map<HTMLElement, string>();
   private readonly elementsByRef = new Map<string, HTMLElement>();
   private nextRef = 1;
@@ -882,7 +1128,9 @@ class FormController {
     this.refreshRefs();
   }
 
-  public async observe(): Promise<AgentBrowserObservation> {
+  public async observe(
+    options: { readonly cap?: number; readonly trackDigest?: boolean } = {},
+  ): Promise<AgentBrowserObservation> {
     this.observationCount += 1;
     this.refreshRefs();
     const interactables: AgentInteractable[] = [...this.elementsByRef].map(([ref, element]) => ({
@@ -896,13 +1144,54 @@ class FormController {
         ? { group: element.closest('table')!.querySelector('caption')!.textContent!.trim() }
         : {}),
     }));
+    // The real baseline rules, mirrored: every scan replaces the last one, and
+    // only a model-visible scan replaces the delta baseline.
+    const fingerprint: ObservationFingerprint = {
+      epoch: 'y1',
+      ...fingerprintFromScan(
+        this.pageUrl,
+        'Form',
+        interactables.map(
+          (entry) =>
+            ({
+              role: entry.role,
+              name: entry.name,
+              kind: 'button',
+              disabled: false,
+              top: 0,
+              left: 0,
+              group: entry.group ?? null,
+              scope: 'page',
+              value: entry.value ?? null,
+              valuePresent: false,
+              checked: null,
+              expanded: null,
+              selected: null,
+              visible: true,
+              elementIndex: 0,
+              composedScope: 'document',
+              rootNodeDepth: 0,
+              focused: false,
+              container: null,
+            }) as never,
+        ),
+        false,
+      ),
+    };
+    this.lastScanFingerprint = fingerprint;
+    if (options.trackDigest !== false) this.deltaBaseline = fingerprint;
     return {
-      url: 'https://example.test/',
+      url: this.pageUrl,
       title: 'Form',
       digest: 'form',
       digestUnchanged: false,
       interactables,
     };
+  }
+
+  public deltaSinceBaseline(): PageDelta | null {
+    if (!this.deltaCallBaseline || !this.lastScanFingerprint) return null;
+    return diffFingerprints(this.deltaCallBaseline, this.lastScanFingerprint);
   }
 
   public describeRef(ref: string): AgentInteractable | undefined {
@@ -922,25 +1211,61 @@ class FormController {
     return Promise.resolve([]);
   }
 
+  /** The middleware opens every top-level tool call; the real controller
+   * resets its one obstruction clearance here and pins the delta baseline. */
+  public beginToolCall(): void {
+    this.toolCalls += 1;
+    this.deltaCallBaseline = this.deltaBaseline;
+  }
+
   public host(): string {
     return 'example.test';
   }
 
-  public async click(ref: string): Promise<Record<string, never>> {
+  public async click(ref: string): Promise<BrowserActionResult> {
     const element = this.element(ref);
     this.clickLog.push(element.getAttribute('aria-label') ?? element.textContent?.trim() ?? '');
     element.click();
-    return {};
+    return this.actionResult();
   }
 
-  public async fill(ref: string, value: string): Promise<Record<string, never>> {
+  public async fill(ref: string, value: string): Promise<BrowserActionResult> {
     const element = this.element(ref);
     if (!(element instanceof this.window.HTMLInputElement)) throw new Error('not an input');
     element.value = value;
     element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
     element.dispatchEvent(new this.window.Event('change', { bubbles: true }));
-    return {};
+    return this.actionResult();
   }
+
+  /**
+   * The action result the real controller builds around every port action.
+   *
+   * Queued rather than fixed, so a test can say *which* action raised the
+   * popup — which is the whole question when the bug being fixed is a popup
+   * arriving on the wrong tool's result.
+   */
+  public readonly pendingActionResults: Partial<BrowserActionResult>[] = [];
+  /** Anything the page raised after the last port action; drained once. */
+  public trailingActionResult: Partial<BrowserActionResult> | null = null;
+  public readonly adoptPopup = vi.fn().mockResolvedValue(null);
+
+  public takeActionMetadata(): BrowserActionResult {
+    const trailing = this.trailingActionResult ?? {};
+    this.trailingActionResult = null;
+    return { url: this.pageUrl, title: 'Form', ...trailing };
+  }
+
+  private actionResult(): BrowserActionResult {
+    const queued = this.pendingActionResults.shift() ?? {};
+    // The real controller reports the page's *live* URL on every action, so a
+    // queued landing URL becomes the page the fixture is standing on — not a
+    // one-off value the next action silently reverts.
+    if (queued.url) this.pageUrl = queued.url;
+    return { url: this.pageUrl, title: 'Form', ...queued };
+  }
+
+  public pageUrl = 'https://example.test/';
 
   public evaluateOn<T, Args extends readonly unknown[]>(
     ref: string,

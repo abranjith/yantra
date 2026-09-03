@@ -1,0 +1,396 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-02T04:24:37.506Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-02T04:34:59.666Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-02T04:36:30.494Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-02T04:41:58.808Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-02T04:49:01.189Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-02T09:48:58.140Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-02T12:50:18.725Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-02T13:10:40.849Z",
+      "head": "a55ee1fab113a855623b685467dd0640033b85de"
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/copilot-instructions.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": ".spec-lite.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "AGENTS.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/fixtures/site/gauntlet/open-shadow-select.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/gauntlet/registry.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/discovery/composed-handles.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/discovery/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/interactable-scan.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/observe.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/option/listbox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/option/virtual-list.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/scroll.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/observation-shape.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/discovery/composed-scan.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/interactable-scan.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/observe.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/sanitizer-totality.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/executor/replay-page-settling.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/virtualized-listbox.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/support/gauntlet.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/support/widget-test-port.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/widgets/scroll-container.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/widgets/virtual-list.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-037-shadow_virtualized_widgets/changeset.json",
+    ".spec-lite/features/FEAT-037-shadow_virtualized_widgets/spec.md",
+    ".spec-lite/features/FEAT-FP-001-evidence_first_synthesis/spec.md",
+    ".spec-lite/features/FEAT-FP-001-llm_assisted_replay/spec.md",
+    ".spec-lite/features/FEAT-FP-002-coherent_synthesis/spec.md",
+    ".spec-lite/features/FEAT-FP-003-brief_quality/spec.md",
+    ".spec-lite/features/FEAT-FP-004-report_templates/spec.md",
+    ".spec-lite/features/FEAT-FP-005-template_guidance/spec.md",
+    ".spec-lite/features/FEAT-FP-006-agentic_options_consistency/spec.md",
+    ".spec-lite/features/FEAT-FP-007-agent_grounding/spec.md",
+    ".spec-lite/features/FEAT-FP-008-user_input_masking/spec.md",
+    ".spec-lite/features/FEAT-FP-009-browser_widget_observability/spec.md",
+    ".spec-lite/features/FEAT-FP-010-browser_widget_drivers/spec.md",
+    ".spec-lite/features/FEAT-FP-011-browser_fill_engine/spec.md",
+    ".spec-lite/plan_interaction_wave2.md"
+  ],
+  "baseline": {
+    "sha": "a55ee1fab113a855623b685467dd0640033b85de",
+    "capturedAt": "2026-09-02T04:18:37.456Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/feature-summary.md",
+      ".spec-lite/memory.md",
+      "README.md",
+      "docs/architecture.md",
+      "docs/features/agentic-tasks.md",
+      "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "packages/agent/src/adapters/pi/tools/browser-extract.ts",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "packages/agent/src/adapters/pi/tools/browser-navigate.ts",
+      "packages/agent/src/runtime/index.ts",
+      "packages/agent/src/runtime/middleware.ts",
+      "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "packages/agent/tests/boundaries/forbidden.ts",
+      "packages/agent/tests/runtime/middleware.spec.ts",
+      "packages/core/src/browser/agent-controller.ts",
+      "packages/core/src/browser/index.ts",
+      "packages/core/src/fill/engine.ts",
+      "packages/core/src/fill/types.ts",
+      "packages/core/src/interaction/attempt.ts",
+      "packages/core/src/interaction/index.ts",
+      "packages/core/src/locator/errors.ts",
+      "packages/core/src/locator/hit-target.ts",
+      "packages/core/src/locator/index.ts",
+      "packages/core/tests/browser/agent-controller.spec.ts",
+      "packages/core/tests/fixtures/widgets/late-suggestions.html",
+      "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "packages/core/tests/support/widget-test-port.ts",
+      ".spec-lite/features/FEAT-032-widget_gauntlet_harness/spec.md",
+      ".spec-lite/features/FEAT-033-obstruction_protocol/changeset.json",
+      ".spec-lite/features/FEAT-033-obstruction_protocol/spec.md",
+      ".spec-lite/features/FEAT-034-recovery_as_data/spec.md",
+      ".spec-lite/features/FEAT-035-page_delta_observation/spec.md",
+      ".spec-lite/features/FEAT-036-vision_assist/spec.md",
+      ".spec-lite/features/FEAT-037-shadow_virtualized_widgets/spec.md",
+      ".spec-lite/plan_interaction_wave2.md",
+      "docs/features/widget-gauntlet-harness.md",
+      "e2e/fixtures/site/gauntlet/consent-modal-obstruction.html",
+      "e2e/fixtures/site/gauntlet/remounting-search-form.html",
+      "e2e/fixtures/site/gauntlet/sticky-header-interception.html",
+      "e2e/gauntlet/registry.ts",
+      "e2e/widget-gauntlet.spec.ts",
+      "packages/agent/src/runtime/messages.ts",
+      "packages/agent/tests/adapters/pi/tools/browser-obstruction.spec.ts",
+      "packages/agent/tests/runtime/message-catalog.spec.ts",
+      "packages/core/src/browser/actionability-errors.ts",
+      "packages/core/src/browser/obstruction.ts",
+      "packages/core/src/browser/pointer-preflight.ts",
+      "packages/core/src/interaction/messages.ts",
+      "packages/core/src/interaction/protected-actions.ts",
+      "packages/core/tests/browser/obstruction.spec.ts",
+      "packages/core/tests/browser/pointer-preflight.spec.ts",
+      "packages/core/tests/fixtures/widgets/masked-input.html",
+      "packages/core/tests/fixtures/widgets/shared-calendar-range.html",
+      "packages/core/tests/fixtures/widgets/split-date-fields.html",
+      "packages/core/tests/interaction/message-catalog.spec.ts",
+      "packages/core/tests/support/gauntlet.ts"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/feature-summary.md": "2e0fdf251db1c74aaa91a6370b1ced7fd14cc865",
+      ".spec-lite/memory.md": "353122b035aad25ddfcd5e6dfe1f4dbdd783a695",
+      "README.md": "bcefe389c2b20ab0dc067237a90d241f842af002",
+      "docs/architecture.md": "418375c0e54a4b072064d688d804091ee7f18c96",
+      "docs/features/agentic-tasks.md": "9a299f3cc2e4cc5a159f851f007dee7522481cd6",
+      "packages/agent/src/adapters/pi/tools/browser-click.ts": "d8551c08957279567c9bdb1081d0f94678cf986d",
+      "packages/agent/src/adapters/pi/tools/browser-common.ts": "88b442b41813118cbcf602a85a8e99db9f8e4c74",
+      "packages/agent/src/adapters/pi/tools/browser-extract.ts": "ce046343e6f7674295876e8fd5ef5076075060a7",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts": "9659f39fe009f56d9733500520e97262e7bef451",
+      "packages/agent/src/adapters/pi/tools/browser-fill-form.ts": "45df41cc70e7d5f39e3bdf5c667701561ba37e69",
+      "packages/agent/src/adapters/pi/tools/browser-navigate.ts": "70192ba78a3cc71a9a4e0c0ebbb4c150f188ffd6",
+      "packages/agent/src/runtime/index.ts": "adc59094b0589f9c1619ad39c993ca6d8cd7be0d",
+      "packages/agent/src/runtime/middleware.ts": "89968e1750b4d9a004b0004d86375641b6392927",
+      "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts": "d39a852f54556891511d9c191fb84895e807d07e",
+      "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts": "d843661cb08a9f18f2b96dcac1cb9ac65f094505",
+      "packages/agent/tests/boundaries/forbidden.ts": "4fc41d6b84c1199fa1c35ba2166d3f1a232fffbf",
+      "packages/agent/tests/runtime/middleware.spec.ts": "2cd0fc02c7944c35427571bb9b2a2d58517a7e3d",
+      "packages/core/src/browser/agent-controller.ts": "e70a46c7f4b9aac85ba14646b97d5f0cc09e01e1",
+      "packages/core/src/browser/index.ts": "f00d24d4f36f9e331fd5483823b7c8ef0f6e7f6e",
+      "packages/core/src/fill/engine.ts": "4f55167ba79d049df13df8e554ab22462b6a8ee6",
+      "packages/core/src/fill/types.ts": "7845de04d3c95c48c006451d00a4d8aab0277678",
+      "packages/core/src/interaction/attempt.ts": "d4d7b2edaedb8fdb5551d430334bb9aa7e7b38f7",
+      "packages/core/src/interaction/index.ts": "c02a4f05a927cda8c70f327847e3984994cd7c54",
+      "packages/core/src/locator/errors.ts": "46d052ff146dc9bbc53a7aa897d870cd7deeb448",
+      "packages/core/src/locator/hit-target.ts": null,
+      "packages/core/src/locator/index.ts": "684aa83c14ebeb988f13060224b623c91c1ba7a8",
+      "packages/core/tests/browser/agent-controller.spec.ts": "25c5148ef49694deb665e86e8785f47c5aba9e09",
+      "packages/core/tests/fixtures/widgets/late-suggestions.html": "fa0e64d194e7cd209d8d7cc32b5c44015a511c62",
+      "packages/core/tests/interaction/widget-regressions.spec.ts": "62f7a7d73c47afc52a1f1a80be8636774736bb27",
+      "packages/core/tests/support/widget-test-port.ts": "6c64308f48858712e3d361fd7313854bdb188548",
+      ".spec-lite/features/FEAT-032-widget_gauntlet_harness/spec.md": "1f1569ac97681617f49ce1e388924730bcc5f3d0",
+      ".spec-lite/features/FEAT-033-obstruction_protocol/changeset.json": "db9f4652a5814b1a1fca113b6cf7d03764ca73d6",
+      ".spec-lite/features/FEAT-033-obstruction_protocol/spec.md": "aad1e7ec445aa95ffec86c375cf8e51da1727cba",
+      ".spec-lite/features/FEAT-034-recovery_as_data/spec.md": "5c4562befb4674a6adc5144d7acd730cf9aa9f45",
+      ".spec-lite/features/FEAT-035-page_delta_observation/spec.md": "a120d05b922145c8bf7e686393a38c40ddb13a0e",
+      ".spec-lite/features/FEAT-036-vision_assist/spec.md": "ab8651e2dce8550a989e7b41ad5326aba01b2645",
+      ".spec-lite/features/FEAT-037-shadow_virtualized_widgets/spec.md": "1a3b34ffcafbcaeb54bccea32129bc00a6f06f49",
+      ".spec-lite/plan_interaction_wave2.md": "565731506643e52f70c1c2ca7fa35340a334094b",
+      "docs/features/widget-gauntlet-harness.md": "9fa06acd849198ee96e6d8253de6b92cc1398948",
+      "e2e/fixtures/site/gauntlet/consent-modal-obstruction.html": "b85975556aec9d7cb0bbe7b93af27037c0be2a3e",
+      "e2e/fixtures/site/gauntlet/remounting-search-form.html": "3fcd92915011f9ffc71356288095100cd993b710",
+      "e2e/fixtures/site/gauntlet/sticky-header-interception.html": "653eb7ad2cd61673f428571610362ab84f188ef8",
+      "e2e/gauntlet/registry.ts": "a737c8aeed791dabcad7eecfd5f511662b38f097",
+      "e2e/widget-gauntlet.spec.ts": "dbf5a1f5954be686a6765f22a81b93b584b4a13c",
+      "packages/agent/src/runtime/messages.ts": "fe73ed77e0dc445ff5c78cbea02a30a1691795e5",
+      "packages/agent/tests/adapters/pi/tools/browser-obstruction.spec.ts": "f3927cd167b35f2dc98d01fc2e7f0b0780aefe45",
+      "packages/agent/tests/runtime/message-catalog.spec.ts": "10db9913896ced06e79ff01d158beb3707673b7d",
+      "packages/core/src/browser/actionability-errors.ts": "29ad5464ffe7c3cd0ee41d70ca65d30937131565",
+      "packages/core/src/browser/obstruction.ts": "74bf44a73da2ff7b272606e81df9a88ae16bac09",
+      "packages/core/src/browser/pointer-preflight.ts": "97eb3b2ae853fe23e39193df6cf4b4a50019ad81",
+      "packages/core/src/interaction/messages.ts": "799c99846ba6191b1d81a238d1feb6947982286a",
+      "packages/core/src/interaction/protected-actions.ts": "6c21c188d47cd4c70e7f9d2539e96dd9a7d777a7",
+      "packages/core/tests/browser/obstruction.spec.ts": "bcb6f1a3972425c92ce93956022ca1c4f7037650",
+      "packages/core/tests/browser/pointer-preflight.spec.ts": "329dc9e8b9d67299196d42ba8be5e81250d4b956",
+      "packages/core/tests/fixtures/widgets/masked-input.html": "7545fb53f4a7a2c0fd75c3308bdfdc7b0ea0d285",
+      "packages/core/tests/fixtures/widgets/shared-calendar-range.html": "d7e68e93d3e3b5778f547786c1c78dacd02d706e",
+      "packages/core/tests/fixtures/widgets/split-date-fields.html": "2f24ef4ba985a0f197730450196085dfed6e8377",
+      "packages/core/tests/interaction/message-catalog.spec.ts": "523d28a7f6706bbe54be29bcc675d5298303a1c3",
+      "packages/core/tests/support/gauntlet.ts": "13ce28ab4b8f55caeaa7167c48855a832b546c90"
+    }
+  },
+  "featureId": "FEAT-037"
+}

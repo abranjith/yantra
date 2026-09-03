@@ -30,6 +30,7 @@ import pino from 'pino';
 import type { Static, TSchema } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 
+import { renderAgentMessage } from './messages.js';
 import type { RunServices } from './run-services.js';
 
 const logger = pino({ name: 'yantra-tool-middleware', level: process.env.LOG_LEVEL ?? 'info' });
@@ -214,11 +215,14 @@ async function runPipeline<TParams extends TSchema>(
         | undefined;
       const pointer = first?.instancePath ?? first?.path;
       const where = pointer !== undefined && pointer.length > 0 ? ` at "${pointer}"` : '';
+      const invalidMessage = `Invalid tool input${where}: ${first?.message ?? 'schema validation failed'}.`;
       return failure(
         spec,
         services,
         'INVALID_INPUT',
-        `Invalid tool input${where}: ${first?.message ?? 'schema validation failed'}.`,
+        renderAgentMessage('middleware', 'INVALID_INPUT', 'schema-validation', {
+          message: invalidMessage,
+        }),
         true,
       );
     }
@@ -262,7 +266,9 @@ async function runPipeline<TParams extends TSchema>(
         spec,
         services,
         reserved.error.code,
-        `${reserved.error.message}${remedy}`,
+        renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
+          message: `${reserved.error.message}${remedy}`,
+        }),
         false,
         // The orchestrator needs the specific limit to decide whether the RUN
         // is over or only this tool is; the prose message is not a contract.
@@ -277,7 +283,7 @@ async function runPipeline<TParams extends TSchema>(
         spec,
         services,
         'ACTION_PHASE_CLOSED',
-        'The result has already been published; mutating tools are no longer available.',
+        renderAgentMessage('middleware', 'ACTION_PHASE_CLOSED', 'published'),
         false,
       );
     }
@@ -288,8 +294,7 @@ async function runPipeline<TParams extends TSchema>(
         spec,
         services,
         'EVIDENCE_FROZEN',
-        'Evidence gathering is closed for this run. Call result_publish now with your title ' +
-          'and overview — the sources you already fetched are attached automatically.',
+        renderAgentMessage('middleware', 'EVIDENCE_FROZEN', 'evidence-closed'),
         false,
       );
     }
@@ -322,6 +327,11 @@ async function runPipeline<TParams extends TSchema>(
     }
 
     // 5. Domain operation with AbortSignal threaded + per-tool timeout.
+    // This is the one structurally correct "top-level tool call" boundary, and
+    // the only place that knows it. The browser controller's single obstruction
+    // clearance is scoped to it, so `browser_fill_form` — one call spanning many
+    // fields and many typing rungs — shares one allowance across all of them.
+    services.domain.browser?.controller.beginToolCall();
     const guarded = await runGuarded(
       (signal) => spec.run(params, { services, signal, confirmationId }),
       services,
@@ -336,7 +346,10 @@ async function runPipeline<TParams extends TSchema>(
         modelText: jsonText({
           status: 'error',
           error_code: 'TOOL_TIMEOUT',
-          message: `Tool "${spec.name}" exceeded its ${services.budgets.perToolTimeoutMs}ms execution budget.`,
+          message: renderAgentMessage('middleware', 'TOOL_TIMEOUT', 'execution-timeout', {
+            tool: spec.name,
+            timeoutMs: services.budgets.perToolTimeoutMs,
+          }),
           retryable: true,
         }),
         details: null,
@@ -359,7 +372,9 @@ async function runPipeline<TParams extends TSchema>(
         modelText: jsonText({
           status: 'error',
           error_code: account.error.code,
-          message: account.error.message,
+          message: renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
+            message: account.error.message,
+          }),
           retryable: false,
         }),
         details: { ...asDetailsRecord(domain.details), budget_limit: account.error.limit },
@@ -385,7 +400,9 @@ async function runPipeline<TParams extends TSchema>(
       spec,
       services,
       'TOOL_EXECUTION_FAILED',
-      `The "${spec.name}" tool failed unexpectedly.`,
+      renderAgentMessage('middleware', 'TOOL_EXECUTION_FAILED', 'unexpected', {
+        tool: spec.name,
+      }),
       true,
     );
   }
@@ -416,7 +433,7 @@ function failure<TParams extends TSchema>(
 }
 
 /** Spread-safe view of a domain `details` payload (non-objects become empty). */
-function asDetailsRecord(value: unknown): Record<string, unknown> {
+export function asDetailsRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
@@ -458,7 +475,7 @@ function abortedResult<TParams extends TSchema>(
     modelText: jsonText({
       status: 'aborted',
       error_code: 'AGENT_ABORTED',
-      message: 'The run was aborted.',
+      message: renderAgentMessage('middleware', 'AGENT_ABORTED', 'run-aborted'),
     }),
     details: null,
     error_code: 'AGENT_ABORTED',
@@ -496,7 +513,7 @@ async function runConfirmation<TParams extends TSchema>(
     return {
       kind: 'denied',
       errorCode: 'CONFIRMATION_UNAVAILABLE',
-      message: 'This action requires confirmation, but no consent surface is available.',
+      message: renderAgentMessage('middleware', 'CONFIRMATION_UNAVAILABLE', 'gateway-missing'),
       confirmationId: null,
     };
   }
@@ -525,8 +542,7 @@ async function runConfirmation<TParams extends TSchema>(
     return {
       kind: 'denied',
       errorCode: 'CONFIRMATION_TIMEOUT',
-      message:
-        'Confirmation could not be obtained (non-interactive run); the action was not taken.',
+      message: renderAgentMessage('middleware', 'CONFIRMATION_TIMEOUT', 'non-interactive'),
       confirmationId,
     };
   }
@@ -540,8 +556,8 @@ async function runConfirmation<TParams extends TSchema>(
     errorCode: outcome.decision === 'timed_out' ? 'CONFIRMATION_TIMEOUT' : 'CONFIRMATION_DENIED',
     message:
       outcome.decision === 'timed_out'
-        ? 'Confirmation timed out; the action was not taken.'
-        : 'Confirmation was denied; the action was not taken.',
+        ? renderAgentMessage('middleware', 'CONFIRMATION_TIMEOUT', 'timed-out')
+        : renderAgentMessage('middleware', 'CONFIRMATION_DENIED', 'denied'),
     confirmationId,
   };
 }

@@ -42,8 +42,10 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     abortSignal: overrides.abortSignal ?? new AbortController().signal,
     now: () => Date.now(),
     nowIso: () => new Date().toISOString(),
-    // Domain deps are unused by these synthetic-spec tests.
-    domain: undefined as unknown as RunServices['domain'],
+    // Domain deps are unused by these synthetic-spec tests, but the wrapper does
+    // open each top-level tool call against the browser controller, so the
+    // container itself has to exist with nothing in it.
+    domain: { browser: null } as unknown as RunServices['domain'],
   };
 }
 

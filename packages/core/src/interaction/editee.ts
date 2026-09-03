@@ -32,6 +32,7 @@
 import type { AgentBrowserObservation, AgentInteractable } from '../browser/agent-controller.js';
 import type { WidgetTarget } from '../widgets/types.js';
 
+import { diffKeyed } from './differ.js';
 import { normalizeText } from './types.js';
 
 /**
@@ -102,18 +103,34 @@ export function locateEditee(
     signals.targetRetainedFocus === false ? 'focus-moved' : 'none';
   if (wanted.length === 0) return { kind: 'inert', evidence: focusEvidence };
 
-  const priorValues = new Map(before.interactables.map((entry) => [entry.ref, entry.value ?? '']));
   const self = after.interactables.find((entry) => entry.ref === target.ref);
   if (self && holds(self.value, wanted)) return { kind: 'same' };
 
+  // The **ref** identity policy, deliberately: the caller just typed into a
+  // control it holds a live ref for, every consumer of the answer drives by
+  // ref, and a re-targeted drive must address a ref the port can actually
+  // drive. `diffFingerprints` asks a different question and supplies a
+  // different `key` — see `differ.ts`.
+  //
+  // `sampleCap` is infinite here and must stay that way: a capped sample would
+  // silently drop the carrier and turn a resolvable delegation into `inert`.
+  const diff = diffKeyed(before.interactables, after.interactables, {
+    key: (entry) => entry.ref,
+    changed: (left, right) => (left.value ?? '') !== (right.value ?? ''),
+    sampleCap: Number.POSITIVE_INFINITY,
+  });
   // An interactable absent from `before` is eligible: the overlay's own input
   // is frequently mounted by the very click that opened it, so requiring it to
-  // have existed beforehand would exclude the exact shape this rung is for.
-  const changed = after.interactables.filter(
-    (entry) =>
-      entry.ref !== target.ref && (entry.value ?? '') !== (priorValues.get(entry.ref) ?? ''),
+  // have existed beforehand would exclude the exact shape this rung is for. It
+  // arrives as `appeared`, and a non-empty value on it still counts as a
+  // carrier.
+  const changed = [
+    ...diff.changed.map((pair) => pair.after),
+    ...diff.appeared.filter((entry) => (entry.value ?? '') !== ''),
+  ];
+  const carriers = changed.filter(
+    (entry) => entry.ref !== target.ref && holds(entry.value, wanted),
   );
-  const carriers = changed.filter((entry) => holds(entry.value, wanted));
 
   // Exactly one, or nothing. Two controls that both took the text is a page
   // this function cannot read, and picking one of them would re-target a fill

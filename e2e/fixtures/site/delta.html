@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Delta fixture</title>
+    <style>
+      #consent {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #fff;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Delta fixture</h1>
+    <!-- Generic structures only: a labelled modal, a remounting result set, and
+       a list of same-named controls that reorders. Nothing here keys off a
+       site; role, accessible name and visibility are the whole signal. -->
+    <button id="open">Open preferences</button>
+    <button id="refresh">Refresh results</button>
+    <div id="results">
+      <button>Result one</button>
+      <button>Result two</button>
+      <button>Result three</button>
+    </div>
+    <div id="consent" role="dialog" aria-modal="true" aria-label="Cookie consent">
+      <p>We use cookies.</p>
+      <button id="close">Close</button>
+    </div>
+    <script>
+      const consent = document.getElementById('consent');
+      document.getElementById('open').addEventListener('click', () => {
+        consent.style.display = 'block';
+      });
+      document.getElementById('close').addEventListener('click', () => {
+        consent.style.display = 'none';
+      });
+      document.getElementById('refresh').addEventListener('click', () => {
+        const results = document.getElementById('results');
+        results.innerHTML = results.innerHTML;
+      });
+    </script>
+  </body>
+</html>

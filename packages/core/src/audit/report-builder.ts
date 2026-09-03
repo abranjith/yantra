@@ -3,8 +3,9 @@ import { join } from 'node:path';
 
 import type { TaskEvent, ToolAuditEntryType, UsageLedger } from '@yantra/protocol';
 
-import type { AgentJsonlEntry, SecretsJsonlEntry } from './log-writer.js';
+import { normalizeAttemptArtifact } from '../interaction/escalation.js';
 
+import type { AgentJsonlEntry, SecretsJsonlEntry } from './log-writer.js';
 export interface FailureContext {
   readonly failureClass: string;
   readonly message: string;
@@ -39,7 +40,9 @@ export class MarkdownReportBuilder implements ReportBuilder {
           runId,
           manifest,
           events,
-          toolCalls: await readJsonLines<ToolAuditEntryType>(join(runDir, 'tool-calls.jsonl')),
+          toolCalls: normalizeToolCallAttempts(
+            await readJsonLines<ToolAuditEntryType>(join(runDir, 'tool-calls.jsonl')),
+          ),
           secretEntries,
           usage,
           outcome,
@@ -59,6 +62,28 @@ export class MarkdownReportBuilder implements ReportBuilder {
     await writeFile(join(runDir, 'report.md'), report, 'utf8');
     return report;
   }
+}
+
+/** Read legacy and verdict-shaped attempt arrays without rewriting the run. */
+function normalizeToolCallAttempts(entries: ToolAuditEntryType[]): ToolAuditEntryType[] {
+  return entries.map((entry) => {
+    const output = entry.output_sanitized;
+    if (output === null || typeof output !== 'object' || Array.isArray(output)) return entry;
+    const details = (output as Record<string, unknown>).details;
+    if (details === null || typeof details !== 'object' || Array.isArray(details)) return entry;
+    const attempted = (details as Record<string, unknown>).attempted;
+    if (attempted === undefined) return entry;
+    return {
+      ...entry,
+      output_sanitized: {
+        ...(output as Record<string, unknown>),
+        details: {
+          ...(details as Record<string, unknown>),
+          attempted: normalizeAttemptArtifact(attempted),
+        },
+      },
+    };
+  });
 }
 
 function isAgenticManifest(

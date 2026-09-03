@@ -3,13 +3,35 @@ import { createHash } from 'node:crypto';
 import type { LocatorCandidate } from '@yantra/protocol';
 import type { ElementHandle, KeyInput, Page as PuppeteerPage, Target } from 'puppeteer-core';
 
+import { collectComposedInteractables } from '../discovery/composed-handles.js';
 import type { RawInteractable } from '../discovery/interactable-scan.js';
-import { buildAgentPageSnapshot } from '../discovery/observe.js';
+import { buildAgentPageSnapshot, ensureLocatorRuntime } from '../discovery/observe.js';
 import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
+import { renderInteractionMessage } from '../interaction/messages.js';
+import {
+  diffFingerprints,
+  type ObservationFingerprint,
+  type PageDelta,
+} from '../interaction/page-delta.js';
+import type { AttemptRecord } from '../interaction/types.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
 import type { ElementDescription } from '../locator/types.js';
-import type { WidgetPort } from '../widgets/types.js';
+import { scrollContainerInPage } from '../widgets/scroll.js';
+import type { ScrollFrame, WidgetContainer, WidgetPort } from '../widgets/types.js';
 
+import {
+  BrowserActionabilityError,
+  hiddenError,
+  StaleElementRefError,
+} from './actionability-errors.js';
+import {
+  CANDIDATE_SCAN_CAP,
+  CANDIDATE_SELECTOR,
+  describeCandidatesInPage,
+  OBSTRUCTION_CANDIDATE_CAP,
+  selectObstructionCandidates,
+  type ObstructionCandidate,
+} from './obstruction.js';
 import { dismissSiteOverlays, type OverlayDismissal } from './overlay-dismiss.js';
 import {
   CLICK_NAV_DETECT_MS,
@@ -19,6 +41,14 @@ import {
   REDIRECT_CHAIN_DETECT_MS,
   type NavigationWatch,
 } from './page-settle.js';
+import {
+  dispatchAt,
+  obstructionRootAtPoint,
+  POINTER_SETTLE_MS,
+  preparePointerTarget,
+  type MintedCandidates,
+  type PointerPoint,
+} from './pointer-preflight.js';
 import { wrapPuppeteerPage } from './session.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 
@@ -27,18 +57,6 @@ import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 // workflow replay waits exactly the way the agent does. They are deliberately
 // NOT re-exported here — two `export *` barrels exposing the same name make it
 // ambiguous, and ESM then silently omits it from the package entry point.
-
-/**
- * Handle-resolution selector. **Must stay byte-identical in membership and
- * order to the one in `discovery/interactable-scan.ts`**: the scanner reports a
- * `selectorIndex` into its own candidate list, and `observe()` indexes this
- * `page.$$()` result with it. A selector that drifts from the scanner's does not
- * fail loudly — it silently binds every ref to the wrong element.
- */
-const INTERACTABLE_SELECTOR =
-  'button, a[href], input, select, textarea, [role="button"], [role="link"], ' +
-  '[role="checkbox"], [role="radio"], [role="combobox"], [role="tab"], [role="menuitem"], ' +
-  '[role="option"], [data-yantra-widget-target]';
 
 const DEFAULT_DIGEST_BYTES = 16 * 1024;
 const DEFAULT_INTERACTABLE_CAP = 50;
@@ -58,9 +76,6 @@ const TITLE_READ_ATTEMPTS = 5;
 /** Pause between mousedown and mouseup: real sites are written against a held
  * press, and some handlers (and bot heuristics) mis-fire on a 0ms one. */
 const CLICK_HOLD_MS = 40;
-/** Brief hover dwell before a pointer action, allowing real hover states and
- * menus to react before the trusted click/focus events arrive. */
-const POINTER_SETTLE_MS = 75;
 const STABILITY_POLL_MS = 25;
 
 /** Human-scale per-key delay so debounced validators keep up; dropped for
@@ -164,10 +179,34 @@ export interface BrowserActionResult {
    * to read is not the page a person would have landed on.
    */
   readonly overlays_dismissed?: number;
+  /**
+   * Recovery the controller itself performed, omitted when it performed none.
+   *
+   * Today the only entry is the obstruction protocol's single
+   * `clear-obstruction` press, recorded so a clearance the user did not ask for
+   * is on the ledger like every other recovery step rather than invisible in a
+   * result that merely says the click landed.
+   */
+  readonly attempted?: readonly AttemptRecord[];
 }
 
 interface InteractableRecord extends AgentInteractable {
   readonly handle: ElementHandle<Element>;
+  /**
+   * Where the element's root node is — internal diagnostics only.
+   *
+   * Deliberately kept off `AgentInteractable`: `browser-common.ts` forwards
+   * `observation.interactables` to the model wholesale, so a field there is a
+   * model-visible payload contract change that costs every observation bytes.
+   * `describeRef` strips it for the same reason.
+   *
+   * Absent for a ref minted by a scan that does not report it — the
+   * obstruction-scoped candidate mint uses a subtree-scoped flat query with its
+   * own contract. Recording a scope it never measured would be a fabricated
+   * diagnostic, and this field exists to answer a question honestly or not at
+   * all.
+   */
+  readonly composedScope?: 'document' | 'open-shadow';
 }
 
 interface ElementIdentity {
@@ -183,37 +222,14 @@ interface RetainedPopup {
   readonly openerUrl: string;
 }
 
-/** Expected stale-ref failure that directs the agent back to observation. */
-export class StaleElementRefError extends Error {
-  public readonly code = 'STALE_ELEMENT_REF' as const;
-  public constructor(ref: string, reason?: string) {
-    super(
-      reason
-        ? `Element ref "${ref}" is stale: ${reason}.`
-        : `Element ref "${ref}" is stale or unknown. Use the fresh observation returned by the ` +
-            'latest action, or call browser_observe for a new read before acting.',
-    );
-    this.name = 'StaleElementRefError';
-  }
-}
-
-/** Expected hidden/disabled/unmatched-option actionability failure. */
-export class BrowserActionabilityError extends Error {
-  public constructor(
-    public readonly code: 'ELEMENT_HIDDEN' | 'ELEMENT_DISABLED' | 'OPTION_NOT_FOUND',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'BrowserActionabilityError';
-  }
-}
-
-function hiddenError(): BrowserActionabilityError {
-  return new BrowserActionabilityError(
-    'ELEMENT_HIDDEN',
-    'The observed element is no longer visible. Re-observe the page.',
-  );
-}
+// The actionability error classes moved to `actionability-errors.ts` so the
+// obstruction protocol can throw them without importing the controller that
+// calls it. Re-exported here so every existing import site is unchanged.
+export {
+  BrowserActionabilityError,
+  StaleElementRefError,
+  type BrowserActionabilityCode,
+} from './actionability-errors.js';
 
 export interface AgentBrowserControllerOptions {
   readonly runId: string;
@@ -288,6 +304,39 @@ export class AgentBrowserController implements WidgetPort {
    * distinguishes the two without guessing from the event.
    */
   private documentMarker: string | null = null;
+  /**
+   * The fingerprint of the most recent scan, model-visible or not.
+   *
+   * Every `observe()` replaces it, because it is the *after* side of a delta
+   * and a tool asking for one wants the page as it stands now.
+   */
+  private lastScanFingerprint: ObservationFingerprint | null = null;
+  /**
+   * The fingerprint of the frame the **model** last saw.
+   *
+   * Gated on the existing `trackDigest` flag, which already means "this is a
+   * model-visible observation". Internal resolution reads — field resolution,
+   * click re-acquisition, identity healing — must not silently replace it, or a
+   * batch's delta would report the difference from a frame the model was never
+   * shown. Reusing that flag rather than inventing a second one is deliberate:
+   * a second flag is one every future internal caller would have to remember.
+   */
+  private deltaBaseline: ObservationFingerprint | null = null;
+  /**
+   * The baseline as it stood when this top-level tool call opened.
+   *
+   * Captured in {@link AgentBrowserController.beginToolCall} so a call that
+   * observes many times — a `browser_fill_form` batch — still yields exactly
+   * one delta, spanning the whole call.
+   */
+  private deltaCallBaseline: ObservationFingerprint | null = null;
+  /**
+   * Whether this top-level tool call has spent its one obstruction clearance.
+   *
+   * Reset by {@link AgentBrowserController.beginToolCall}; set **before** the
+   * press so a throw inside the press cannot buy a second attempt.
+   */
+  private clearanceSpent = false;
 
   public constructor(options: AgentBrowserControllerOptions) {
     this.runId = options.runId;
@@ -368,23 +417,43 @@ export class AgentBrowserController implements WidgetPort {
   ): Promise<AgentBrowserObservation> {
     this.assertLaunched();
     await this.awaitReadable();
+    const trackDigest = options.trackDigest ?? true;
     const cap = Math.max(
       1,
       Math.min(Math.floor(options.cap ?? this.maxInteractables), MAX_RESOLUTION_INTERACTABLES),
     );
+    // One composed-tree pass produces the records *and* the elements they
+    // describe. The pair this replaced — a record-only scan plus an independent
+    // `page.$$` handle query — could only be held in step by convention, and a
+    // drift bound every ref to the wrong element without failing loudly.
+    // Injection first, because the scan's accessible-name step prefers the
+    // locator runtime and falls back to its smaller offline computation.
+    await ensureLocatorRuntime(this.pageFacade!);
+    const { records, elements: scanned } = await collectComposedInteractables(this.page!, {
+      max: MAX_RESOLUTION_INTERACTABLES,
+    });
     const snapshot = await buildAgentPageSnapshot(
       this.pageFacade!,
       { extractor: this.extractor },
       {
         maxDigestBytes: this.maxDigestBytes,
         maxInteractables: cap,
+        records,
       },
     );
     // Stamp the document these identities are being read from, so a later heal
     // can tell an in-page route change (marker survives) from a real navigation
     // (new window, marker gone) without trusting the commit event alone.
     this.documentMarker = await this.stampDocument();
-    const handles = await this.page!.$$(INTERACTABLE_SELECTOR);
+    // The epoch is the controller's to supply — it is the only component that
+    // stamps and reads the marker — so the builder's fingerprint is completed
+    // here rather than being handed a page facade of its own.
+    const fingerprint: ObservationFingerprint = {
+      ...snapshot.fingerprint,
+      epoch: this.documentMarker,
+    };
+    this.lastScanFingerprint = fingerprint;
+    if (trackDigest) this.deltaBaseline = fingerprint;
     const superseded = this.refs;
     this.refs = new Map();
     const interactables: AgentInteractable[] = [];
@@ -395,7 +464,7 @@ export class AgentBrowserController implements WidgetPort {
     const ordinals = new Map<string, number>();
     const claimed = new Set<ElementHandle<Element>>();
     for (const raw of snapshot.interactables) {
-      const handle = handles[raw.selectorIndex ?? -1];
+      const handle = scanned[raw.elementIndex];
       if (!handle || claimed.has(handle)) continue;
       const role = raw.role;
       const name = raw.name ?? '';
@@ -410,7 +479,7 @@ export class AgentBrowserController implements WidgetPort {
       }
       claimed.add(handle);
       const projected = projectAgentInteractable(ref, raw);
-      this.refs.set(ref, { ...projected, handle });
+      this.refs.set(ref, { ...projected, handle, composedScope: raw.composedScope });
       this.identityByRef.set(ref, {
         role: projected.role,
         name: projected.name,
@@ -419,11 +488,20 @@ export class AgentBrowserController implements WidgetPort {
       interactables.push(projected);
     }
     for (const record of superseded.values()) disposeHandle(record.handle);
-    for (const handle of handles) {
-      if (!claimed.has(handle)) disposeHandle(handle);
+    for (const handle of scanned) {
+      if (handle && !claimed.has(handle)) disposeHandle(handle);
     }
+    // Structural scope only, and by construction: the token is a literal and
+    // the value is a count, so no host, brand, or page text can reach the log.
+    this.logger?.debug?.(
+      {
+        runId: this.runId,
+        interactables: interactables.length,
+        openShadow: records.filter((record) => record.composedScope === 'open-shadow').length,
+      },
+      'observed interactables',
+    );
     const digestHash = createHash('sha256').update(snapshot.digest).digest('hex').slice(0, 16);
-    const trackDigest = options.trackDigest ?? true;
     const digestUnchanged = trackDigest && digestHash === this.lastDigestHash;
     if (trackDigest && !digestUnchanged) this.lastDigestHash = digestHash;
     return {
@@ -432,6 +510,20 @@ export class AgentBrowserController implements WidgetPort {
       digestUnchanged,
       interactables,
     };
+  }
+
+  /**
+   * Advance a widget container's own scrollable region by one step.
+   *
+   * A mutating action, counted like any other. Reachable only from a driver's
+   * `drive()`; detection must never move the page.
+   */
+  public async scrollContainer(
+    container: WidgetContainer,
+    step?: number,
+  ): Promise<ScrollFrame | null> {
+    this.assertLaunched();
+    return this.evaluate(scrollContainerInPage, container.path, step ?? null);
   }
 
   /** Resolve a live opaque ref minted on the current document. */
@@ -445,7 +537,7 @@ export class AgentBrowserController implements WidgetPort {
   public describeRef(ref: string): AgentInteractable | undefined {
     const record = this.refs.get(ref);
     if (!record) return undefined;
-    const { handle: _handle, ...described } = record;
+    const { handle: _handle, composedScope: _composedScope, ...described } = record;
     return described;
   }
 
@@ -505,6 +597,182 @@ export class AgentBrowserController implements WidgetPort {
     }
   }
 
+  /**
+   * Open a new top-level tool call, resetting the one obstruction clearance.
+   *
+   * The allowance is per **tool call**, not per action: `browser_fill_form` is
+   * one call spanning many fields and many typing rungs, and all of them share
+   * a single automatic dismissal. The middleware calls this immediately before
+   * a tool's domain operation because that is the only place in the system that
+   * knows where a top-level call starts — putting the reset in each tool would
+   * make the bound depend on every future tool remembering to declare it.
+   */
+  public beginToolCall(): void {
+    this.clearanceSpent = false;
+    // One delta per top-level call, not one per action: a batch that fills four
+    // fields compares the page the model last saw with the page the batch left
+    // behind. Pinning the baseline here is what makes that a property of the
+    // call rather than of whichever action happened to run last.
+    this.deltaCallBaseline = this.deltaBaseline;
+  }
+
+  /**
+   * What changed between the frame the model last saw and the current one.
+   *
+   * Takes **no page read**: both fingerprints were derived inside observations
+   * the caller had already taken. Returns `null` when there was no baseline to
+   * diff against — the ordinary state of the first navigation in a run — so the
+   * caller can record why the block is absent rather than emitting an empty
+   * one that reads as "nothing changed".
+   *
+   * The result describes what changed in the action window, not proof that the
+   * action caused it. See {@link PageDelta}.
+   */
+  public deltaSinceBaseline(): PageDelta | null {
+    const before = this.deltaCallBaseline;
+    const after = this.lastScanFingerprint;
+    if (!before || !after) return null;
+    return diffFingerprints(before, after);
+  }
+
+  /**
+   * Drain whatever the page raised since the last action result was built.
+   *
+   * **Synchronous, and takes no page read.** It exists so a popup, a JS dialog,
+   * or a landing URL produced *by a fill* is attributed to the fill rather than
+   * leaking forward onto whatever tool runs next — the leak recorded in
+   * `TODO.md`'s popup follow-ups. It is a plain drain with no retry, budget, or
+   * ordering semantics of its own.
+   */
+  public takeActionMetadata(): BrowserActionResult {
+    const popup = this.popupUrls.shift();
+    const dialog = this.dialogMessages.shift();
+    const followable = this.followablePopupUrl();
+    return {
+      url: this.page?.url() ?? '',
+      title: this.lastScanFingerprint?.title ?? '',
+      ...(popup ? { popup_intercepted: popup } : {}),
+      ...(followable ? { popup_followable: followable } : {}),
+      ...(dialog ? { dialog_intercepted: dialog } : {}),
+    };
+  }
+
+  /**
+   * Scroll, settle, prove the click point is ours, and clear one overlay at most.
+   *
+   * Everything genuinely diagnostic — the candidate scan, the classification
+   * describe, the clearance — happens only after interception is detected. The
+   * hit test itself is not a diagnostic: it is the check that authorizes a
+   * pointer action, and it costs one round trip on every pointer dispatch.
+   */
+  private preparePointer(
+    handle: ElementHandle<Element>,
+    ref: string,
+  ): Promise<{ readonly point: PointerPoint; readonly attempted: readonly AttemptRecord[] }> {
+    const page = this.page!;
+    return preparePointerTarget({
+      page,
+      handle,
+      mintCandidates: (point, rootLevels) => this.mintObstructionCandidates(point, rootLevels),
+      clearanceSpent: () => this.clearanceSpent,
+      spendClearance: () => {
+        this.clearanceSpent = true;
+      },
+      pressCandidate: async (candidateRef) => {
+        const candidate = this.resolveRef(candidateRef);
+        // No recursion: the candidate gets the same hover/settle/point sequence,
+        // but if it is itself covered the clearance simply fails. A chain of
+        // clearances is the loop the one-per-call bound exists to prevent.
+        await candidate.hover();
+        await sleep(POINTER_SETTLE_MS);
+        const point = await candidate.clickablePoint();
+        await dispatchAt(page, { x: point.x, y: point.y }, { delay: CLICK_HOLD_MS });
+      },
+      settle: () => this.awaitReadable(),
+      now: () => Date.now(),
+    }).catch((error: unknown) => {
+      if (isNavigationRaceError(error)) throw new StaleElementRefError(ref);
+      if (isNoLayoutBoxError(error)) throw hiddenError();
+      throw error;
+    });
+  }
+
+  /**
+   * Mint the obstructing subtree's own dismiss controls as real refs.
+   *
+   * Two properties make the offer honest, and both are structural rather than
+   * conventional. **Containment**: the scan starts at the obstruction root and
+   * never queries the page, so a "Close" button elsewhere is not this overlay's
+   * dismiss control. **Resolvability**: each survivor is registered in the live
+   * ref map, so an offered ref is a ref `browser_click` can act on — which is
+   * what makes naming it in a hint legal at all.
+   *
+   * Registration is deliberately **additive**. It does not write
+   * `refIdByIdentity`, because a subtree-scoped ordinal is not comparable with
+   * the page-scoped one `observe()` assigns and reusing the index could alias an
+   * existing ref onto a different element; and it does not replace the ref map,
+   * because that would invalidate the very ref the caller is acting on.
+   */
+  private async mintObstructionCandidates(
+    point: PointerPoint,
+    rootLevels: number,
+  ): Promise<MintedCandidates> {
+    const empty: MintedCandidates = { candidates: [], truncated: false };
+    const page = this.page!;
+    const rootHandle = (
+      await page.evaluateHandle(obstructionRootAtPoint, point.x, point.y, rootLevels)
+    ).asElement() as ElementHandle<Element> | null;
+    if (!rootHandle) return empty;
+    try {
+      const scanned = (await rootHandle.$$(CANDIDATE_SELECTOR)).slice(0, CANDIDATE_SCAN_CAP);
+      if (scanned.length === 0) return empty;
+      // One evaluate over the handles the caller already holds: metadata and
+      // handles come from the same traversal, so no index can drift between them.
+      const describe = this.evaluate.bind(this) as unknown as (
+        fn: (...elements: readonly Element[]) => readonly { role: string; name: string }[],
+        ...handles: readonly ElementHandle<Element>[]
+      ) => Promise<readonly { readonly role: string; readonly name: string }[]>;
+      const described = await describe(describeCandidatesInPage, ...scanned);
+      const selection = selectObstructionCandidates(
+        described.map((entry, index) => ({ role: entry.role, name: entry.name, index })),
+      );
+      const candidates: ObstructionCandidate[] = [];
+      const claimed = new Set<number>();
+      for (const entry of selection.selected) {
+        const handle = scanned[entry.index];
+        if (!handle) continue;
+        const ref = `e${this.nextRef++}`;
+        const projected: AgentInteractable = { ref, role: entry.role, name: entry.name };
+        this.refs.set(ref, { ...projected, handle });
+        this.identityByRef.set(ref, { role: entry.role, name: entry.name, group: null });
+        claimed.add(entry.index);
+        candidates.push({
+          ref,
+          role: entry.role,
+          name: entry.name,
+          protectedAction: entry.protectedAction,
+          autoClearable: entry.autoClearable,
+        });
+        if (candidates.length >= OBSTRUCTION_CANDIDATE_CAP) break;
+      }
+      for (const [index, handle] of scanned.entries()) {
+        if (!claimed.has(index)) disposeHandle(handle);
+      }
+      return { candidates, truncated: selection.truncated };
+    } catch (error) {
+      // A subtree that cannot be read still produces a report; it simply
+      // produces one with no candidates rather than turning a typed
+      // actionability failure into an unexpected crash.
+      this.logger?.debug?.(
+        { err: error instanceof Error ? error.message : String(error) },
+        'obstruction candidate minting skipped',
+      );
+      return empty;
+    } finally {
+      disposeHandle(rootHandle);
+    }
+  }
+
   /** Click a current ref after deterministic visibility/hit-target checks. */
   public async click(ref: string, options: BrowserClickOptions = {}): Promise<BrowserActionResult> {
     if (options.healStale === false) return this.clickOnce(ref);
@@ -514,6 +782,8 @@ export class AgentBrowserController implements WidgetPort {
   private async clickOnce(ref: string): Promise<BrowserActionResult> {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
+    /** The `clear-obstruction` record, when the pre-flight had to clear one. */
+    let attempted: readonly AttemptRecord[] = [];
     // Whatever the previous action opened and nobody adopted is stale now.
     await this.discardPendingPopup();
     const page = this.page!;
@@ -539,10 +809,11 @@ export class AgentBrowserController implements WidgetPort {
     try {
       try {
         // Hover first so the pointer scrolls into view and any hover state has
-        // time to settle, then dispatch a held press (down, pause, up).
-        await handle.hover();
-        await sleep(POINTER_SETTLE_MS);
-        await handle.click({ delay: CLICK_HOLD_MS });
+        // time to settle, then prove the resulting click point belongs to this
+        // element, then dispatch a held press (down, pause, up) at THAT point.
+        const prepared = await this.preparePointer(handle, ref);
+        attempted = prepared.attempted;
+        await dispatchAt(page, prepared.point, { delay: CLICK_HOLD_MS });
       } catch (error) {
         // The element lost its layout box between the pre-flight and the click.
         if (isNoLayoutBoxError(error)) throw hiddenError();
@@ -566,7 +837,7 @@ export class AgentBrowserController implements WidgetPort {
     }
     const target = await popupTarget;
     if (target) await this.capturePopupTarget(target);
-    return this.currentActionResult();
+    return this.currentActionResult(null, attempted);
   }
 
   /** Fill a current ref without returning or logging the supplied value. */
@@ -578,16 +849,21 @@ export class AgentBrowserController implements WidgetPort {
     const handle = this.resolveRef(ref);
     await assertActionable(handle, ref);
     await this.discardPendingPopup();
+    const page = this.page!;
+    let attempted: readonly AttemptRecord[] = [];
     const watch = this.watchNavigation();
     try {
       try {
-        await handle.hover();
-        await sleep(POINTER_SETTLE_MS);
+        // A native <select> is filled by value, not by pointer, so it never
+        // reaches the pre-flight: pointer reachability is a guarantee about
+        // pointer dispatch, and `fillSelect` dispatches none.
         if (!(await this.fillSelect(handle, ref, value))) {
+          const prepared = await this.preparePointer(handle, ref);
+          attempted = prepared.attempted;
           await handle.focus();
           // Select-all via triple-click, then overtype: replaces any existing
           // value with real mouse/key events, which framework listeners require.
-          await handle.click({ clickCount: 3, delay: CLICK_HOLD_MS });
+          await dispatchAt(page, prepared.point, { count: 3, delay: CLICK_HOLD_MS });
           await handle.type(value, { delay: typeDelayFor(value) });
         }
       } catch (error) {
@@ -601,7 +877,7 @@ export class AgentBrowserController implements WidgetPort {
     } finally {
       watch.dispose();
     }
-    return this.currentActionResult();
+    return this.currentActionResult(null, attempted);
   }
 
   /** Empty a text control with real selection + delete key events. */
@@ -745,7 +1021,8 @@ export class AgentBrowserController implements WidgetPort {
     if (outcome === 'no_match')
       throw new BrowserActionabilityError(
         'OPTION_NOT_FOUND',
-        'No option in the observed dropdown matches the supplied value. Use an option label or value exactly as observed.',
+        renderInteractionMessage('actionability', 'OPTION_NOT_FOUND', 'option-not-found', {})
+          .message,
       );
     return outcome === 'selected';
   }
@@ -999,14 +1276,30 @@ export class AgentBrowserController implements WidgetPort {
    * Returns false once the document has been replaced, which is the only case
    * where a recorded identity may name a different element than it did.
    */
-  /** Write a fresh marker onto the live document, or null if the page refuses. */
+  /**
+   * Read the live document's marker, minting one if it has none.
+   *
+   * Read-or-mint rather than always-write, so the marker is a stable **epoch**:
+   * two observations of the same document report the same value, and only a
+   * replaced document (which destroys `window` and the marker with it) reports
+   * a different one. That is exactly the signal a delta needs to know whether
+   * the two frames' controls are comparable at all.
+   *
+   * `isSameDocument()`'s semantics are unchanged — present-and-equal means the
+   * same document — and so is the number of `evaluate` calls per `observe()`:
+   * the read and the mint are the same round trip.
+   *
+   * @returns The document's epoch, or `null` when the page refuses the stamp.
+   */
   private async stampDocument(): Promise<string | null> {
-    const marker = `y${Math.random().toString(36).slice(2)}`;
+    const minted = `y${Math.random().toString(36).slice(2)}`;
     try {
-      await this.evaluate((value: string) => {
-        (globalThis as { __yantraDocument?: string }).__yantraDocument = value;
-      }, marker);
-      return marker;
+      return await this.evaluate((value: string) => {
+        const globals = globalThis as { __yantraDocument?: string };
+        if (typeof globals.__yantraDocument === 'string') return globals.__yantraDocument;
+        globals.__yantraDocument = value;
+        return value;
+      }, minted);
     } catch {
       return null;
     }
@@ -1075,6 +1368,7 @@ export class AgentBrowserController implements WidgetPort {
 
   private async currentActionResult(
     overlays: OverlayDismissal | null = null,
+    attempted: readonly AttemptRecord[] = [],
   ): Promise<BrowserActionResult> {
     await settle();
     await Promise.allSettled([...this.popupCaptureTasks]);
@@ -1088,6 +1382,7 @@ export class AgentBrowserController implements WidgetPort {
     if (dialog) result = { ...result, dialog_intercepted: dialog };
     if (overlays && overlays.dismissed > 0)
       result = { ...result, overlays_dismissed: overlays.dismissed };
+    if (attempted.length > 0) result = { ...result, attempted: [...attempted] };
     return result;
   }
 
@@ -1242,7 +1537,7 @@ async function assertActionable(handle: ElementHandle<Element>, ref: string): Pr
   if (state.disabled)
     throw new BrowserActionabilityError(
       'ELEMENT_DISABLED',
-      'The observed element is disabled. Disabled elements are marked disabled: true in the observation; choose a different element.',
+      renderInteractionMessage('actionability', 'ELEMENT_DISABLED', 'disabled', {}).message,
     );
 }
 

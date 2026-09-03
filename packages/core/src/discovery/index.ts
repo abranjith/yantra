@@ -11,7 +11,12 @@ export {
   type CycleExecutionSummary,
 } from './observe.js';
 export { MAX_INTERACTABLES, rankInteractables } from './interactables.js';
-export { scanInteractablesInPage, type RawInteractable } from './interactable-scan.js';
+export { collectComposedInteractables, type ComposedInteractables } from './composed-handles.js';
+export {
+  scanInteractablesInPage,
+  type InteractableScan,
+  type RawInteractable,
+} from './interactable-scan.js';
 export {
   InteractiveConfirmationGateway,
   type ConsentRenderSink,

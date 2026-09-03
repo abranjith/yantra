@@ -1,18 +1,17 @@
 import {
   assertHostBinding,
-  classifyFailure,
   defaultWidgetBudget,
   dismissWidget,
   fillField,
   fillSecretField,
   parseFillValue,
-  withAttempts,
+  runEscalationPlan,
+  toLegacyLedger,
+  toWireAttemptArtifact,
   withSecret,
   type AgentBrowserController,
   type AgentBrowserObservation,
-  type AttemptRecord,
   type FillIntent,
-  type FillFailure,
   type FillOutcome,
   type FillResolution,
   type WidgetPort,
@@ -20,22 +19,33 @@ import {
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainFailure, DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 import { toCandidateChain, type TraceFillValue } from '../../../runtime/trace.js';
 
 import {
+  actionMetadataSink,
   browserController,
   browserFailure,
   browserWidgetPort,
+  deltaAfterAction,
+  deltaDetails,
+  drainFillMetadata,
+  followSiteOpenedTab,
   isDomainFailure,
   mapFillFailure,
+  modelActionMetadata,
+  modelDelta,
   modelObservation,
+  recordActionProvenance,
   resolveFillField,
   resolveFillTarget,
   safeLocatorFor,
+  type ActionMetadataSink,
   type ResolvedFillField,
 } from './browser-common.js';
+import { buildFieldFillPlan, type FieldFillOperations } from './interaction-plans.js';
 
 export const FillValueSchema = Type.Union(
   [
@@ -98,7 +108,7 @@ export interface AppliedBrowserFill {
   /** One sentence, present only when `committed` differs from `requested`. */
   readonly note?: string;
   /** The recovery the engine performed, when it needed more than one attempt. */
-  readonly attempted?: readonly AttemptRecord[];
+  readonly attempted?: readonly Record<string, unknown>[];
   /**
    * The control the engine actually edited, when the page routed the edit away.
    *
@@ -120,7 +130,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Failure reports observed, attempted (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
+      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed, attempted verdicts (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -136,11 +146,26 @@ export function browserFillElementSpec(
 }
 
 async function runFillElement(params: Params, services: RunServices): Promise<DomainResult> {
-  const applied = await applyBrowserFill(params.field, params.value, services);
-  if (isDomainFailure(applied)) return applied;
   const controller = browserController(services);
   if (isDomainFailure(controller)) return controller;
+  // One collector per top-level call. Everything the page raised while this
+  // fill drove it is attributed to this fill, rather than surfacing on whatever
+  // tool runs next.
+  const sink = actionMetadataSink();
+  const applied = await applyBrowserFill(params.field, params.value, services, undefined, sink);
+  // Drained even on failure: a popup a failed fill opened must not leak forward
+  // either, and the URLs the page produced are still evidence the run reached
+  // organically.
+  const metadata = drainFillMetadata(controller, sink);
+  recordActionProvenance(services, metadata);
+  if (isDomainFailure(applied)) return applied;
+  // Followed *before* the post-action read, so when a tab is adopted the
+  // observation and the delta describe the page the fill actually produced.
+  const followed = await followSiteOpenedTab(services, controller, metadata);
   const observation = await controller.observe();
+  // Taken from the observation the tool already owns: the delta costs no page
+  // read of its own, and one fill call yields exactly one delta.
+  const delta = deltaAfterAction(controller);
   return {
     ok: true,
     model: {
@@ -153,11 +178,14 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
       ...(applied.editee === undefined ? {} : { editee: applied.editee }),
       driver: applied.driver,
       dismissed: applied.dismissed,
+      ...modelActionMetadata(followed),
       observation: modelObservation(observation),
+      ...(delta ? { delta: modelDelta(delta) } : {}),
     },
     details: {
       actions: applied.actions,
       ...(isSecretRef(params.value) ? { secret_key: params.value.key } : {}),
+      ...deltaDetails(observation, delta ?? undefined),
     },
   };
 }
@@ -180,6 +208,7 @@ export async function applyBrowserFill(
   value: BrowserFillValue,
   services: RunServices,
   preresolved?: ResolvedFillField,
+  sink?: ActionMetadataSink,
 ): Promise<AppliedBrowserFill | FailedBrowserFill> {
   const deps = services.domain.browser;
   const controller = browserController(services);
@@ -189,14 +218,16 @@ export async function applyBrowserFill(
       : {
           ok: false,
           errorCode: 'BROWSER_UNAVAILABLE',
-          message: 'Browser services are not configured.',
+          message: renderAgentMessage('tool', 'BROWSER_UNAVAILABLE', 'services-missing'),
           retryable: false,
         };
   }
   const located = preresolved ?? (await resolveFillField(field, controller));
   if (isDomainFailure(located)) return located;
   const target = located.target;
-  const port = browserWidgetPort(controller, services.now);
+  // Threaded through both the literal path below and the secret path further
+  // down, so a credential fill that opens a popup is attributed like any other.
+  const port = browserWidgetPort(controller, services.now, sink);
 
   if (!isSecretRef(value)) {
     const literal = literalText(value);
@@ -208,7 +239,7 @@ export async function applyBrowserFill(
         observation: located.observation,
       });
     } catch (error) {
-      return browserFailure(error);
+      return browserFailure(error, services);
     }
     if (!outcome.ok) {
       await bestEffortDismiss(port, target);
@@ -231,7 +262,9 @@ export async function applyBrowserFill(
       ...(outcome.resolution === undefined ? {} : { resolution: outcome.resolution }),
       ...(outcome.offered === undefined ? {} : { offered: outcome.offered }),
       ...(outcome.note === undefined ? {} : { note: outcome.note }),
-      ...(outcome.attempted === undefined ? {} : { attempted: outcome.attempted }),
+      ...(outcome.attempted === undefined
+        ? {}
+        : { attempted: toWireAttemptArtifact(outcome.attempted) }),
       ...(outcome.editee === undefined ? {} : { editee: outcome.editee }),
     };
   }
@@ -240,7 +273,7 @@ export async function applyBrowserFill(
     return {
       ok: false,
       errorCode: 'SECRET_RESOLVER_UNAVAILABLE',
-      message: 'Website secret resolution is unavailable.',
+      message: renderAgentMessage('tool', 'SECRET_RESOLVER_UNAVAILABLE', 'resolver-missing'),
       retryable: false,
     };
   }
@@ -252,7 +285,9 @@ export async function applyBrowserFill(
       return {
         ok: false,
         errorCode: 'SECRET_HOST_MISMATCH',
-        message: error.message,
+        message: renderAgentMessage('tool', 'SECRET_HOST_MISMATCH', 'host-binding', {
+          message: error.message,
+        }),
         retryable: false,
       };
     }
@@ -282,7 +317,7 @@ export async function applyBrowserFill(
       actions: outcome.actions,
     };
   } catch (error) {
-    return browserFailure(error);
+    return browserFailure(error, services);
   } finally {
     resolved.dispose();
   }
@@ -338,10 +373,7 @@ async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promis
  * describes a page that answered, where a second identical attempt would answer
  * the same way.
  */
-interface DriveWithRetryDependencies {
-  readonly drive: typeof fillField;
-  readonly resolve: typeof resolveFillTarget;
-}
+type DriveWithRetryDependencies = FieldFillOperations;
 
 const DEFAULT_FILL_RETRY_DEPENDENCIES: DriveWithRetryDependencies = {
   drive: fillField,
@@ -371,87 +403,45 @@ export async function driveWithRetry(
   dependencies: DriveWithRetryDependencies = DEFAULT_FILL_RETRY_DEPENDENCIES,
 ): Promise<FillOutcome> {
   const budget = defaultWidgetBudget(port);
-  let activeTarget = target;
-  let replacementFailure: FillFailure | null = null;
-  let resolutionFailure: DomainFailure | null = null;
-  const nestedAttempts = new Map<number, readonly AttemptRecord[]>();
-
-  const run = await withAttempts<Extract<FillOutcome, { readonly ok: true }>, FillFailure>(
-    async (attempt) => {
-      if (attempt > 1) {
-        const fresh = await dependencies.resolve(field, controller, target);
-        if (isDomainFailure(fresh)) {
-          resolutionFailure = fresh;
-          return { ok: false, failure: replacementFailure! };
+  const built = buildFieldFillPlan({
+    ...dependencies,
+    port,
+    controller,
+    field,
+    target,
+    intent,
+    budget,
+    ...(context.observation ? { observation: context.observation } : {}),
+  });
+  const run = await runEscalationPlan(built.plan);
+  const attempted = toLegacyLedger(run.ledger).records.map((record) =>
+    record.strategy === 're-resolve-field-and-retry' && built.resolutionFailure()
+      ? {
+          ...record,
+          detail: `field re-resolution failed with ${built.resolutionFailure()!.errorCode}`,
         }
-        activeTarget = fresh;
-        if (port.now() >= budget.deadlineMs) {
-          return {
-            ok: false,
-            failure: {
-              ...replacementFailure!,
-              message: 'The field was re-resolved, but the original fill deadline expired.',
-              retryable: false,
-              details: { ...replacementFailure!.details, reason: 'budget' },
-            },
-          };
-        }
-      }
-
-      const outcome = await dependencies.drive(
-        port,
-        {
-          field,
-          target: activeTarget,
-          ...(attempt === 1 && context.observation ? { observation: context.observation } : {}),
-        },
-        intent,
-        budget,
-      );
-      nestedAttempts.set(attempt, attemptsFrom(outcome));
-      if (outcome.ok) return { ok: true, value: outcome };
-      replacementFailure = outcome;
-      return { ok: false, failure: outcome };
-    },
-    {
-      maxAttempts: 2,
-      deadlineMs: budget.deadlineMs,
-      backoffMs: [0],
-      classify: (failure) =>
-        failure.errorCode === 'WIDGET_ELEMENT_REPLACED'
-          ? classifyFailure(failure.errorCode, failure.details)
-          : 'terminal',
-      describe: (failure) => ({
-        errorCode: failure.errorCode,
-        detail: resolutionFailure
-          ? `field re-resolution failed with ${resolutionFailure.errorCode}`
-          : failure.message,
-      }),
-      now: () => port.now(),
-      label: (attempt) => (attempt === 1 ? 'fill' : 're-resolve-field-and-retry'),
-    },
+      : record,
   );
-
-  const attempted = mergedAttempts(run.ledger.records, nestedAttempts);
-  if (run.outcome.ok) {
-    return run.ledger.records.length > 1 ? { ...run.outcome.value, attempted } : run.outcome.value;
+  if (run.outcome?.ok) {
+    return run.ledger.verdicts.filter((verdict) => verdict.kind !== 'skipped').length > 1
+      ? { ...run.outcome.value, attempted }
+      : run.outcome.value;
   }
+  if (!run.outcome) {
+    throw new Error('Field fill plan produced no outcome.');
+  }
+  const failure = run.outcome.failure;
+  const expired = run.ledger.verdicts.some(
+    (verdict) => verdict.kind === 'skipped' && verdict.unmet === 'deadline-expired',
+  );
   return {
-    ...run.outcome.failure,
-    details: { ...run.outcome.failure.details, attempted },
+    ...failure,
+    ...(expired
+      ? {
+          message: 'The field was re-resolved, but the original fill deadline expired.',
+          retryable: false,
+        }
+      : {}),
+    details: { ...failure.details, ...(expired ? { reason: 'budget' } : {}), attempted },
   };
-}
-
-function attemptsFrom(outcome: FillOutcome): readonly AttemptRecord[] {
-  if (outcome.ok) return outcome.attempted ?? [];
-  const attempted = outcome.details.attempted;
-  return Array.isArray(attempted) ? (attempted as readonly AttemptRecord[]) : [];
-}
-
-function mergedAttempts(
-  outer: readonly AttemptRecord[],
-  nested: ReadonlyMap<number, readonly AttemptRecord[]>,
-): readonly AttemptRecord[] {
-  const records = outer.flatMap((record) => [record, ...(nested.get(record.attempt) ?? [])]);
-  return records.map((record, index) => ({ ...record, attempt: index + 1 }));
 }

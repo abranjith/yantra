@@ -5,14 +5,12 @@
 
 export { LocatorResolverImpl } from './resolver.js';
 export { resolveActionable } from './auto-wait.js';
-export { HitTargetInterceptorImpl } from './hit-target.js';
 export { PuppeteerInjectedScriptHost } from './injected-host.js';
 // rankCandidates is browser-side (requires DOM). Import from ./ranking.js directly in browser/test contexts.
 export { encodeIntent, decodeIntent } from './intent-codec.js';
 export {
   LocatorNotFoundError,
   LocatorAmbiguousError,
-  HitTargetInterceptedError,
   LocatorNotActionableError,
   FrameDetachedError,
   LocatorInvalidSelectorError,

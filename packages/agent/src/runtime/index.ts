@@ -109,6 +109,7 @@ export {
   type AgentTraceFile,
   type TraceFillValue,
 } from './trace.js';
+export { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from './messages.js';
 export {
   ActionPhase,
   EvidenceLedger,

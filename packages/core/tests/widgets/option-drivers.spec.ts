@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   listboxDriver,
   nativeSelectDriver,
-  watchAndSelect,
+  watchAndSelectOffered,
   type AgentBrowserObservation,
   type WidgetBudget,
   type WidgetPort,
@@ -20,20 +20,22 @@ const BUDGET: WidgetBudget = {
 describe('@no-llm option widget drivers', () => {
   afterEach(() => vi.useRealTimers());
 
-  // There is now exactly one typeahead implementation — `watchAndSelect`, the
-  // fill engine's post-typing step. The dedicated `typeaheadDriver` that used
-  // to sit beside it in the widget registry was never reachable from
-  // production code and had already drifted from this one, so it is gone.
+  // There is exactly one offered-selection implementation. The fill engine
+  // maps these facts into its public failure vocabulary at its decision point.
   it.each([['button'] as const, ['option'] as const])(
     'commits a %s-shaped suggestion, without requiring role=option',
     async (role) => {
       const port = typeaheadFixture(role);
 
-      const outcome = await watchAndSelect(port, target('Where to?'), 'Frisco, Texas', BUDGET);
+      const outcome = await watchAndSelectOffered(
+        port,
+        target('Where to?'),
+        'Frisco, Texas',
+        BUDGET,
+      );
 
       expect(outcome).toMatchObject({
-        ok: true,
-        selected: true,
+        kind: 'selected',
         committed: 'Frisco Texas, United States',
         chosen: 'Frisco Texas, United States',
       });
@@ -47,9 +49,9 @@ describe('@no-llm option widget drivers', () => {
         '<div id="suggestions" role="listbox"><button>Frisco Texas</button><button>Plano Texas</button></div>',
     );
 
-    const outcome = await watchAndSelect(port, target('Where to?'), 'Frisco Texas', BUDGET);
+    const outcome = await watchAndSelectOffered(port, target('Where to?'), 'Frisco Texas', BUDGET);
 
-    expect(outcome).toMatchObject({ ok: false, errorCode: 'WIDGET_NOT_COMMITTED' });
+    expect(outcome).toMatchObject({ kind: 'not-committed' });
   });
 
   it('leaves the typed text standing when an open popup offers nothing', async () => {
@@ -59,12 +61,12 @@ describe('@no-llm option widget drivers', () => {
     );
     port.setInputValue('Nowhere');
 
-    const outcome = await watchAndSelect(port, target('Where to?'), 'Nowhere', {
+    const outcome = await watchAndSelectOffered(port, target('Where to?'), 'Nowhere', {
       ...BUDGET,
       deadlineMs: Date.now() + 600,
     });
 
-    expect(outcome).toMatchObject({ ok: true, selected: false, committed: 'Nowhere' });
+    expect(outcome).toMatchObject({ kind: 'no-suggestions', committed: 'Nowhere' });
   });
 
   it('selects a native option by visible label and by value', async () => {

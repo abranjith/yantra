@@ -122,6 +122,8 @@ export type FillCause = InteractionFailureCause;
 
 /** One entry in the failure table: the advice, and what makes it honest. */
 export interface FailureTemplate {
+  /** Catalog surface owning this message. */
+  readonly surface: 'fill';
   /** The one next step, composed from the details this entry declares. */
   readonly hint: (details: Readonly<Record<string, unknown>>) => string;
   /**
@@ -144,11 +146,18 @@ export interface FailureTemplate {
    * capability is a real export.
    */
   readonly capability: string | null;
+  /** Resolver used for the declared capability. */
+  readonly capabilityKind: 'engine' | null;
 }
 
+type FailureTemplateDefinition = Omit<FailureTemplate, 'surface' | 'capabilityKind'>;
+
 /** The nested table: each code declares only the causes it can produce. */
-type FailureTemplateTable = Readonly<
+export type FailureTemplateTable = Readonly<
   Record<FillErrorCode, Partial<Record<FillCause, FailureTemplate>>>
+>;
+type FailureTemplateDefinitionTable = Readonly<
+  Record<FillErrorCode, Partial<Record<FillCause, FailureTemplateDefinition>>>
 >;
 
 /** Render one detail value as quoted text, flattening a list of labels. */
@@ -185,7 +194,7 @@ function quoted(details: Readonly<Record<string, unknown>>, key: string): string
  * renaming it would make budget failures retryable and loop them to the attempt
  * bound, which is precisely what the attempt runner exists to prevent.
  */
-export const FAILURE_TEMPLATES = {
+const FAILURE_TEMPLATE_DEFINITIONS = {
   WIDGET_DID_NOT_OPEN: {
     'picker-did-not-open': {
       hint: () =>
@@ -318,7 +327,49 @@ export const FAILURE_TEMPLATES = {
       capability: null,
     },
   },
-} as const satisfies FailureTemplateTable;
+} as const satisfies FailureTemplateDefinitionTable;
+
+/** Fill templates enriched with their catalog surface and capability resolver. */
+export const FAILURE_TEMPLATES = attachFailureMetadata(FAILURE_TEMPLATE_DEFINITIONS);
+
+function attachFailureMetadata<const Table extends FailureTemplateDefinitionTable>(
+  definitions: Table,
+): {
+  readonly [Code in keyof Table]: {
+    readonly [Cause in keyof Table[Code]]: Table[Code][Cause] & {
+      readonly surface: 'fill';
+      readonly capabilityKind: Table[Code][Cause] extends { readonly capability: string }
+        ? 'engine'
+        : null;
+    };
+  };
+} {
+  const enriched = Object.fromEntries(
+    Object.entries(definitions).map(([code, causes]) => [
+      code,
+      Object.fromEntries(
+        Object.entries(causes).map(([cause, template]) => [
+          cause,
+          {
+            ...template,
+            surface: 'fill',
+            capabilityKind: template.capability === null ? null : 'engine',
+          },
+        ]),
+      ),
+    ]),
+  );
+  return enriched as unknown as {
+    readonly [Code in keyof Table]: {
+      readonly [Cause in keyof Table[Code]]: Table[Code][Cause] & {
+        readonly surface: 'fill';
+        readonly capabilityKind: Table[Code][Cause] extends { readonly capability: string }
+          ? 'engine'
+          : null;
+      };
+    };
+  };
+}
 
 /** The causes one error code can actually produce. */
 export type CauseFor<Code extends FillErrorCode> = keyof (typeof FAILURE_TEMPLATES)[Code] &

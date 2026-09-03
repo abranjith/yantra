@@ -1,0 +1,67 @@
+<!--
+  Shape: two range triggers share one calendar which chooses both endpoints
+  without reopening between them.
+
+  Provenance: reopening a shared picker for the far endpoint discards the
+  first selection and adds an avoidable action.
+-->
+<input id="from" aria-label="Check-in" />
+<input id="to" aria-label="Check-out" />
+<div id="calendar" role="dialog" style="display: none">
+  <button id="next" aria-label="Next month">Next</button>
+  <table>
+    <caption>
+      September 2026
+    </caption>
+    <tbody>
+      <tr></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  (function () {
+    var from = document.getElementById('from');
+    var to = document.getElementById('to');
+    var dialog = document.getElementById('calendar');
+    var caption = document.querySelector('#calendar caption');
+    var row = document.querySelector('#calendar tbody tr');
+    var month = 9;
+    var start = null;
+
+    function render() {
+      var isSeptember = month === 9;
+      caption.textContent = (isSeptember ? 'September' : 'October') + ' 2026';
+      var date = isSeptember ? '2026-09-06' : '2026-10-02';
+      var day = isSeptember ? '6' : '2';
+      row.innerHTML = '<td><button data-date="' + date + '">' + day + '</button></td>';
+      row.querySelector('button').addEventListener('click', function () {
+        if (!start) {
+          start = date;
+          from.value = 'Sep 6, 2026';
+          return;
+        }
+        to.value = 'Oct 2, 2026';
+        dialog.style.display = 'none';
+        from.setAttribute('aria-expanded', 'false');
+        to.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    function open() {
+      dialog.style.display = 'block';
+      from.setAttribute('aria-expanded', 'true');
+      to.setAttribute('aria-expanded', 'true');
+      render();
+    }
+
+    from.addEventListener('click', open);
+    to.addEventListener('click', open);
+    document.getElementById('next').addEventListener('click', function () {
+      month = 10;
+      render();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') dialog.style.display = 'none';
+    });
+  })();
+</script>

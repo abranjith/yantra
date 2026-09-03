@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 
+import type { Page as PuppeteerPage } from 'puppeteer-core';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,6 +15,7 @@ import { isNavigationRaceError, isUnsettleableRequestUrl } from '../../src/brows
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from '../../src/browser/types.js';
+import { classifyFailure } from '../../src/interaction/attempt.js';
 
 const logger: Logger = {
   info: () => undefined,
@@ -148,6 +150,129 @@ describe('@no-llm AgentBrowserController', () => {
           <button onclick="window.open('/popup-target'); location.href='${partner}'">Search</button>`);
         return;
       }
+      if (path === '/obstructed') {
+        // Generic pattern: a page-blocking modal over the control the caller
+        // asked for, offering an unambiguous dismissal beside an acceptance the
+        // engine must never press.
+        response.end(`<!doctype html><title>Obstructed</title>
+          <style>
+            #scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9}
+            #consent{position:fixed;left:0;top:0;right:0;bottom:0;z-index:10;background:#fff}
+            #sticky{position:sticky;top:0;height:120px;background:#eee}
+            .busy{position:fixed;inset:0;z-index:11;background:#fff}
+          </style>
+          <button id="under" onclick="document.title='Under pressed'">Under the modal</button>
+          <div id="scrim"><div id="consent" role="dialog" aria-modal="true" aria-label="Cookie choices">
+            <p>We use cookies</p>
+            <button id="accept">Accept all</button>
+            <button id="close" onclick="document.querySelector('#scrim').remove()">Close</button>
+            <a href="/next">Close and read our policy</a>
+          </div></div>`);
+        return;
+      }
+      if (path === '/obstructed-accept-only') {
+        response.end(`<!doctype html><title>Accept only</title>
+          <style>#c{position:fixed;inset:0;z-index:10;background:#fff}</style>
+          <button id="under" onclick="document.title='Under pressed'">Under the modal</button>
+          <div id="c" role="dialog" aria-modal="true" aria-label="Consent required">
+            <button id="accept">Accept all</button>
+            <button id="guarded">Confirm and close</button>
+          </div>`);
+        return;
+      }
+      if (path === '/obstructed-busy') {
+        response.end(`<!doctype html><title>Busy</title>
+          <style>#b{position:fixed;inset:0;z-index:10;background:#fff}</style>
+          <button id="under">Under the spinner</button>
+          <div id="b" aria-busy="true" role="progressbar" aria-label="Loading results">Loading</div>`);
+        return;
+      }
+      if (path === '/obstructed-rerender') {
+        // The modal re-raises itself when dismissed: the bound must hold and the
+        // second report must be terminal rather than buying another press.
+        response.end(`<!doctype html><title>Rerender</title>
+          <style>.c{position:fixed;inset:0;z-index:10;background:#fff}</style>
+          <button id="under" onclick="document.title='Under pressed'">Under the modal</button>
+          <div id="wrap"><div class="c" role="dialog" aria-modal="true" aria-label="Stay a while">
+            <button onclick="raise()">Close</button></div></div>
+          <script>
+            function raise() {
+              const wrap = document.querySelector('#wrap');
+              wrap.innerHTML = '<div class="c" role="dialog" aria-modal="true" aria-label="Stay a while"><button onclick="raise()">Close</button></div>';
+            }
+          </script>`);
+        return;
+      }
+      if (path === '/obstructed-sticky') {
+        // Generic pattern: a control whose clickable point falls under a
+        // viewport-pinned band once the page scrolls it into view.
+        response.end(`<!doctype html><title>Sticky</title>
+          <style>
+            body{margin:0}
+            #band{position:fixed;left:0;top:0;right:0;height:100vh;background:#ddd;z-index:5}
+          </style>
+          <div id="band">Site header</div>
+          <div style="height:2400px"></div>
+          <button id="under" onclick="document.title='Under pressed'">Under the band</button>`);
+        return;
+      }
+      if (path === '/obstructed-field') {
+        response.end(`<!doctype html><title>Obstructed field</title>
+          <style>#c{position:fixed;inset:0;z-index:10;background:#fff}</style>
+          <input id="text" aria-label="Covered field">
+          <select id="pick" aria-label="Covered select"><option>Alpha</option><option>Beta</option></select>
+          <div id="c" role="dialog" aria-modal="true" aria-label="Interstitial"><p>Blocking</p></div>`);
+        return;
+      }
+      if (path === '/obstructed-two-fields') {
+        response.end(`<!doctype html><title>Two fields</title>
+          <style>.c{position:fixed;inset:0;z-index:10;background:#fff}</style>
+          <input id="a" aria-label="First field">
+          <input id="b" aria-label="Second field">
+          <div id="wrap"><div class="c" role="dialog" aria-modal="true" aria-label="Interstitial">
+            <button onclick="raise()">Close</button></div></div>
+          <script>
+            function raise() {
+              document.querySelector('#wrap').innerHTML =
+                '<div class="c" role="dialog" aria-modal="true" aria-label="Interstitial">' +
+                '<button onclick="raise()">Close</button></div>';
+            }
+          </script>`);
+        return;
+      }
+      if (path === '/clipped') {
+        // A first content quad whose centre lies outside the viewport, and an
+        // element taller than the viewport: the cases a centre-point test
+        // cannot satisfy but `clickablePoint()` can.
+        response.end(`<!doctype html><title>Clipped</title>
+          <style>body{margin:0}</style>
+          <button id="tall" style="height:2400px;width:200px"
+            onclick="document.title='Tall pressed'">Very tall control</button>
+          <div style="height:1200px"></div>
+          <button id="wide" style="width:6000px"
+            onclick="document.title='Wide pressed'">Very wide control</button>`);
+        return;
+      }
+      if (path === '/late-overlay') {
+        // Layout changes between pre-flight and dispatch: a mousemove listener
+        // raises the overlay after hover, so the existing stale/hidden recovery
+        // owns the race rather than a new mechanism.
+        response.end(`<!doctype html><title>Late overlay</title>
+          <button id="under" onclick="document.title='Under pressed'">Target</button>
+          <script>
+            document.addEventListener('mousemove', () => {
+              if (document.querySelector('#late')) return;
+              const late = document.createElement('div');
+              late.id = 'late';
+              late.setAttribute('role', 'dialog');
+              late.setAttribute('aria-modal', 'true');
+              late.setAttribute('aria-label', 'Arrived late');
+              late.style.cssText = 'position:fixed;inset:0;z-index:10;background:#fff';
+              document.body.append(late);
+            }, { once: true });
+          </script>`);
+        return;
+      }
       if (path === '/tall') {
         response.end(`<!doctype html><title>Tall</title>
           <div style="height:3000px"></div>
@@ -157,6 +282,34 @@ describe('@no-llm AgentBrowserController', () => {
       }
       if (path === '/next') {
         response.end('<title>Next</title><button>Arrived</button>');
+        return;
+      }
+      if (path === '/composed-shadow') {
+        // Generic pattern: a page that encapsulates controls inside components'
+        // own shadow trees, interleaved with ordinary light-DOM controls. The
+        // interleaving is what makes this a regression test rather than a smoke
+        // test — a flat-tree handle query cannot see the shadow-hosted
+        // elements, so every index after the first host names a different
+        // element than the record it was paired with.
+        response.end(`<!doctype html><title>Composed</title>
+          <button>Light one</button>
+          <div id="open-host"></div>
+          <button>Light two</button>
+          <div id="closed-host"></div>
+          <button>Light three</button>
+          <div id="detachable-host"></div>
+          <script>
+            const mount = (id, mode, label) => {
+              const root = document.getElementById(id).attachShadow({ mode });
+              const button = document.createElement('button');
+              button.textContent = label;
+              root.appendChild(button);
+              return root;
+            };
+            mount('open-host', 'open', 'Shadow open');
+            mount('closed-host', 'closed', 'Shadow closed');
+            window.__detachable = mount('detachable-host', 'open', 'Shadow detachable');
+          </script>`);
         return;
       }
       if (path === '/many') {
@@ -316,6 +469,100 @@ describe('@no-llm AgentBrowserController', () => {
       if (path === '/never-responds') {
         // Headers never sent, so no response/failure/finish event ever fires.
         hangingResponses.push(response);
+        return;
+      }
+      if (path === '/refuses-stamp') {
+        // A page that will not accept the document marker. The epoch must
+        // degrade to null without throwing, and a delta across two unstamped
+        // frames must claim no replacement either way.
+        response.end(`<!doctype html><title>Refuses stamp</title>
+          <button>Ready</button>
+          <script>Object.defineProperty(window, '__yantraDocument', {
+            configurable: false,
+            get() { throw new Error('refused'); },
+            set() { throw new Error('refused'); },
+          });</script>`);
+        return;
+      }
+      if (path === '/delta-dialog') {
+        // Generic consent shape: a labelled modal opens on click and closes on
+        // its own control. Nothing here keys off a site — role, accessible
+        // name, and visibility are the whole signal.
+        response.end(`<!doctype html><title>Delta dialog</title>
+          <style>#panel{position:fixed;inset:0;z-index:10;background:#fff;display:none}</style>
+          <button id="open">Open preferences</button>
+          <div id="panel" role="dialog" aria-modal="true" aria-label="Cookie consent">
+            <button id="close">Close</button>
+          </div>
+          <script>
+            const panel = document.getElementById('panel');
+            document.getElementById('open').addEventListener('click', () => {
+              panel.style.display = 'block';
+            });
+            document.getElementById('close').addEventListener('click', () => {
+              panel.style.display = 'none';
+            });
+          </script>`);
+        return;
+      }
+      if (path === '/delta-remount') {
+        // A results panel that replaces its entire control set with an
+        // identical one. Every ref trades hands; semantically nothing changed.
+        response.end(`<!doctype html><title>Delta remount</title>
+          <button id="refresh">Refresh results</button>
+          <div id="results">
+            <button>Result one</button><button>Result two</button><button>Result three</button>
+          </div>
+          <script>
+            document.getElementById('refresh').addEventListener('click', () => {
+              const results = document.getElementById('results');
+              results.innerHTML = results.innerHTML;
+            });
+          </script>`);
+        return;
+      }
+      if (path === '/delta-reorder') {
+        // Same-named controls that swap document order on click. Refs are
+        // minted by (role, name, ordinal), so these demonstrably trade
+        // identities — and the delta must still report nothing.
+        response.end(`<!doctype html><title>Delta reorder</title>
+          <button id="shuffle">Shuffle</button>
+          <div id="rows">
+            <div><span>Row A</span><button>Select</button></div>
+            <div><span>Row B</span><button>Select</button></div>
+            <div><span>Row C</span><button>Select</button></div>
+          </div>
+          <script>
+            document.getElementById('shuffle').addEventListener('click', () => {
+              const rows = document.getElementById('rows');
+              rows.prepend(rows.lastElementChild);
+            });
+          </script>`);
+        return;
+      }
+      if (path === '/delta-over-cap') {
+        // More visible interactables than the model-visible cap, with the
+        // acted-on control beyond it: the fingerprint sees the whole page, so
+        // nothing the observation had to drop may be reported as vanished.
+        const filler = Array.from(
+          { length: 80 },
+          (_, index) => `<button>Filler ${String(index).padStart(2, '0')}</button>`,
+        ).join('');
+        response.end(`<!doctype html><title>Delta over cap</title>
+          ${filler}
+          <button id="last" onclick="document.title='Last pressed'">Beyond the cap</button>`);
+        return;
+      }
+      if (path === '/delta-focus') {
+        response.end(`<!doctype html><title>Delta focus</title>
+          <input id="origin" aria-label="Origin">
+          <button id="take">Take focus</button>
+          <script>
+            document.getElementById('origin').focus();
+            document.getElementById('take').addEventListener('click', function () {
+              this.focus();
+            });
+          </script>`);
         return;
       }
       if (path === '/select-form') {
@@ -1301,24 +1548,647 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
-  // A covered element is clicked through to whatever covers it, exactly as a
-  // real user's click would be. The agent sees that outcome by re-observing;
-  // it is not a tool error, so the action must not fail.
-  it('clicks a covered element through to the overlay without erroring', async () => {
-    const tracked = trackingProvider();
-    const controller = new AgentBrowserController({
-      runId: 'covered-run',
-      browserProvider: tracked.provider,
-      logger,
-    });
-    await controller.navigate(`${baseUrl}/`);
+  // INVERTED by FEAT-033. This case used to assert that a covered element was
+  // clicked through to the overlay "without erroring" — a silent false success
+  // on the agent's most-used tool. The click point is now tested before it is
+  // dispatched, and a covered control says so.
+  it('refuses a covered element as obstructed rather than clicking the overlay', async () => {
+    const controller = await open('covered-run', '/');
     const observation = await controller.observe();
     const covered = observation.interactables.find((entry) => entry.name === 'Covered action')!;
-    await expect(controller.click(covered.ref)).resolves.toMatchObject({
-      title: 'Controller fixture',
+    const error = await controller.click(covered.ref).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(Error);
+    const actionability = error as BrowserActionabilityError;
+    expect(actionability.code).toBe('ELEMENT_OBSTRUCTED');
+    // A covered element is visible; conflating the two would send the agent to
+    // re-observe when the fix is to dismiss.
+    expect(actionability.code).not.toBe('ELEMENT_HIDDEN');
+    expect(actionability.details?.kind).toBe('fixed-overlay');
+    await controller.teardown();
+  }, 45_000);
+
+  it('acts on quads whose centre lies outside the viewport', async () => {
+    // The two shapes `receivesPointerEvents` cannot satisfy: an element taller
+    // than the viewport, and one whose first content quad is clipped.
+    const controller = await open('clipped-run', '/clipped');
+    const observation = await controller.observe();
+    const tall = observation.interactables.find((entry) => entry.name === 'Very tall control')!;
+    const wide = observation.interactables.find((entry) => entry.name === 'Very wide control')!;
+    await expect(controller.click(tall.ref)).resolves.toMatchObject({ title: 'Tall pressed' });
+    await expect(controller.click(wide.ref)).resolves.toMatchObject({ title: 'Wide pressed' });
+    await controller.teardown();
+  }, 45_000);
+
+  it('dispatches at exactly the coordinate the hit test was given', async () => {
+    const controller = await open('coordinate-run', '/');
+    const observation = await controller.observe();
+    const mutate = observation.interactables.find((entry) => entry.name === 'Mutate')!;
+    const handle = controller.resolveRef(mutate.ref);
+    const expected = await handle.clickablePoint();
+    const page = (controller as unknown as { readonly page: PuppeteerPage }).page;
+    const dispatched: { x: number; y: number }[] = [];
+    const realClick = page.mouse.click.bind(page.mouse);
+    const spy = vi
+      .spyOn(page.mouse, 'click')
+      .mockImplementation(async (x: number, y: number, options) => {
+        dispatched.push({ x, y });
+        await realClick(x, y, options);
+      });
+    try {
+      await controller.click(mutate.ref);
+    } finally {
+      spy.mockRestore();
+    }
+    // The assertion that fails the moment `dispatchAt` is replaced by
+    // `handle.click()`, which recomputes its own point.
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.x).toBeCloseTo(expected.x, 5);
+    expect(dispatched[0]!.y).toBeCloseTo(expected.y, 5);
+    await controller.teardown();
+  }, 45_000);
+
+  it('classifies a sticky band, a busy overlay and a modal by structure alone', async () => {
+    const sticky = await open('sticky-run', '/obstructed-sticky');
+    const stickyObservation = await sticky.observe();
+    const band = stickyObservation.interactables.find((entry) => entry.name === 'Under the band')!;
+    const stickyError = (await sticky
+      .click(band.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(stickyError.code).toBe('ELEMENT_OBSTRUCTED');
+    expect(stickyError.details?.kind).toBe('fixed-overlay');
+    // A pinned band has no dismiss control inside it — that is the pattern.
+    expect(stickyError.details?.candidates).toEqual([]);
+    expect(stickyError.details?.clearance_skipped).toBe('no-eligible-candidate');
+    await sticky.teardown();
+
+    const busy = await open('busy-run', '/obstructed-busy');
+    const busyObservation = await busy.observe();
+    const spinner = busyObservation.interactables.find(
+      (entry) => entry.name === 'Under the spinner',
+    )!;
+    const busyError = (await busy
+      .click(spinner.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(busyError.code).toBe('ELEMENT_OBSTRUCTED');
+    expect(busyError.details?.kind).toBe('busy-indicator');
+    expect(busyError.details?.clearance_attempted).toBe(false);
+    expect(busyError.details?.clearance_skipped).toBe('never-dismissed-kind');
+    // A busy indicator is the one kind the shared retry may spend an attempt on.
+    expect(classifyFailure('ELEMENT_OBSTRUCTED', busyError.details!)).toBe('transient');
+    expect(classifyFailure('ELEMENT_OBSTRUCTED', stickyError.details!)).toBe('terminal');
+    expect(classifyFailure('ELEMENT_OBSTRUCTED')).toBe('terminal');
+    await busy.teardown();
+  }, 60_000);
+
+  it('clears one unambiguous modal per call and lands the underlying click', async () => {
+    const controller = await open('clearance-run', '/obstructed');
+    const observation = await controller.observe();
+    const under = observation.interactables.find((entry) => entry.name === 'Under the modal')!;
+    controller.beginToolCall();
+    const result = await controller.click(under.ref);
+    expect(result.title).toBe('Under pressed');
+    // The clearance is on the ledger like every other recovery step, so a click
+    // that only landed because an overlay was dismissed says so.
+    expect(result.attempted).toEqual([
+      expect.objectContaining({ strategy: 'clear-obstruction', axis: 'where', errorCode: null }),
+    ]);
+    await controller.teardown();
+  }, 45_000);
+
+  it('offers refs from the obstructing subtree only, and never presses a guarded one', async () => {
+    const controller = await open('candidates-run', '/obstructed-accept-only');
+    const observation = await controller.observe();
+    const under = observation.interactables.find((entry) => entry.name === 'Under the modal')!;
+    const existing = observation.interactables.map((entry) => entry.ref);
+    controller.beginToolCall();
+    const error = (await controller
+      .click(under.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(error.code).toBe('ELEMENT_OBSTRUCTED');
+    expect(error.details?.kind).toBe('modal-dialog');
+    expect(error.details?.obstruction).toEqual({ role: 'dialog', name: 'Consent required' });
+    expect(error.details?.clearance_attempted).toBe(false);
+    expect(error.details?.clearance_skipped).toBe('no-eligible-candidate');
+
+    const candidates = error.details?.candidates as readonly {
+      readonly ref: string;
+      readonly name: string;
+      readonly protected: boolean;
+      readonly auto_clearable: boolean;
+    }[];
+    // "Accept all" is not dismissal-shaped at all; "Confirm and close" is, but
+    // the protected-action veto keeps it un-pressable.
+    expect(candidates.map((entry) => entry.name)).toEqual(['Confirm and close']);
+    expect(candidates[0]).toMatchObject({ protected: true, auto_clearable: false });
+    // Minting is additive: it never invalidates the caller's own ref and never
+    // renumbers one that already existed.
+    for (const ref of existing) expect(() => controller.resolveRef(ref)).not.toThrow();
+    expect(existing).not.toContain(candidates[0]!.ref);
+    // An offered ref is a ref the controller resolves and a click can act on —
+    // which is what makes naming it in a hint legal at all.
+    expect(controller.describeRef(candidates[0]!.ref)).toMatchObject({
+      role: 'button',
+      name: 'Confirm and close',
+    });
+    await expect(controller.click(candidates[0]!.ref)).resolves.toMatchObject({
+      title: 'Accept only',
     });
     await controller.teardown();
   }, 45_000);
+
+  it('spends one clearance per tool call and refuses a modal that re-raises itself', async () => {
+    const controller = await open('rerender-run', '/obstructed-rerender');
+    const observation = await controller.observe();
+    const under = observation.interactables.find((entry) => entry.name === 'Under the modal')!;
+    controller.beginToolCall();
+    const first = (await controller
+      .click(under.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(first.code).toBe('ELEMENT_OBSTRUCTED');
+    expect(first.details?.clearance_attempted).toBe(true);
+    expect(first.details?.clearance_result).toBe('still-obstructed');
+    // Same call, second action: the allowance is already spent.
+    const second = (await controller
+      .click(under.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(second.details?.clearance_attempted).toBe(false);
+    expect(second.details?.clearance_skipped).toBe('already-spent-this-call');
+    // A new top-level tool call gets its own allowance.
+    controller.beginToolCall();
+    const third = (await controller
+      .click(under.ref)
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(third.details?.clearance_attempted).toBe(true);
+    await controller.teardown();
+  }, 60_000);
+
+  it('applies the guarantee to a pointer fill and leaves the value-based one alone', async () => {
+    const controller = await open('obstructed-fill-run', '/obstructed-field');
+    const observation = await controller.observe();
+    const text = observation.interactables.find((entry) => entry.name === 'Covered field')!;
+    const select = observation.interactables.find((entry) => entry.name === 'Covered select')!;
+    controller.beginToolCall();
+    const error = (await controller
+      .fill(text.ref, 'typed')
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    expect(error.code).toBe('ELEMENT_OBSTRUCTED');
+    // The misdiagnosis this replaces: a covered field used to degrade into a
+    // widget that "did not commit".
+    expect(error.code).not.toBe('WIDGET_NOT_COMMITTED');
+    // A native <select> is filled by value, not by pointer, so the pointer
+    // guarantee does not — and must not — reach it.
+    await expect(controller.fill(select.ref, 'Beta')).resolves.toMatchObject({
+      title: 'Obstructed field',
+    });
+    await controller.teardown();
+  }, 45_000);
+
+  it('lets the existing recovery own an overlay that arrives mid-dispatch', async () => {
+    // The overlay is inserted by a mousemove listener, so it arrives between the
+    // hover that scrolls and the point that is tested. No new mechanism handles
+    // this: it resolves through the report the pre-flight already produces.
+    const controller = await open('late-overlay-run', '/late-overlay');
+    const observation = await controller.observe();
+    const target = observation.interactables.find((entry) => entry.name === 'Target')!;
+    controller.beginToolCall();
+    const outcome: unknown = await controller.click(target.ref).catch((thrown: unknown) => thrown);
+    if (outcome instanceof Error) {
+      expect((outcome as BrowserActionabilityError).code).toBe('ELEMENT_OBSTRUCTED');
+    } else {
+      expect(outcome).toMatchObject({ title: 'Under pressed' });
+    }
+    await controller.teardown();
+  }, 45_000);
+
+  it('pays for the obstruction-scoped read only on the path that needs it', async () => {
+    // Memory requires diagnostic work to be paid for only on the path that
+    // needs it, and to be asserted by counting: a silent extra page read is
+    // invisible in every other signal.
+    const clear = await open('read-accounting-clear-run', '/');
+    const clearObservation = await clear.observe();
+    const mutate = clearObservation.interactables.find((entry) => entry.name === 'Mutate')!;
+    const clearReads = vi.spyOn(clear, 'evaluate');
+    clear.beginToolCall();
+    await clear.click(mutate.ref);
+    expect(clearReads).not.toHaveBeenCalled();
+    await clear.teardown();
+
+    const blocked = await open('read-accounting-blocked-run', '/obstructed-accept-only');
+    const blockedObservation = await blocked.observe();
+    const under = blockedObservation.interactables.find(
+      (entry) => entry.name === 'Under the modal',
+    )!;
+    const blockedReads = vi.spyOn(blocked, 'evaluate');
+    blocked.beginToolCall();
+    await blocked.click(under.ref).catch(() => undefined);
+    expect(blockedReads).toHaveBeenCalledTimes(1);
+    await blocked.teardown();
+  }, 60_000);
+
+  it('shares one clearance across every field of a multi-field tool call', async () => {
+    // `browser_fill_form` is one top-level tool call spanning many fields and
+    // many typing rungs. The allowance is scoped to the call, not the action, so
+    // a batch cannot press its way through a page one field at a time.
+    const controller = await open('two-field-run', '/obstructed-two-fields');
+    const observation = await controller.observe();
+    const first = observation.interactables.find((entry) => entry.name === 'First field')!;
+    const second = observation.interactables.find((entry) => entry.name === 'Second field')!;
+    controller.beginToolCall();
+    const firstError = (await controller
+      .fill(first.ref, 'alpha')
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+    const secondError = (await controller
+      .fill(second.ref, 'beta')
+      .catch((thrown: unknown) => thrown)) as BrowserActionabilityError;
+
+    expect(firstError.details?.clearance_attempted).toBe(true);
+    expect(secondError.details?.clearance_attempted).toBe(false);
+    expect(secondError.details?.clearance_skipped).toBe('already-spent-this-call');
+    const presses = [firstError, secondError].filter(
+      (error) => error.details?.clearance_attempted === true,
+    ).length;
+    expect(presses).toBe(1);
+    await controller.teardown();
+  }, 60_000);
+
+  it('binds every ref to the element it was described from, across shadow boundaries', async () => {
+    const controller = await open('composed-align-run', '/composed-shadow');
+    try {
+      const observation = await controller.observe();
+
+      // The alignment invariant, read back off the live handles. On a flat-tree
+      // handle query this page necessarily misaligns: `page.$$` cannot see the
+      // shadow-hosted button, so every index past the first host names a
+      // different element than the record it was paired with.
+      for (const interactable of observation.interactables) {
+        const live = await controller.evaluateOn(interactable.ref, (element) => ({
+          role: element.tagName.toLowerCase(),
+          name: (element.textContent ?? '').trim(),
+        }));
+        expect(live.name).toBe(interactable.name);
+        expect(live.role).toBe('button');
+      }
+
+      const names = observation.interactables.map((entry) => entry.name);
+      expect(names).toContain('Shadow open');
+      expect(names).toContain('Light one');
+      expect(names).toContain('Light two');
+      // A closed root is not filtered — the platform withholds it, so the
+      // control is absent from observation. That is the correct outcome, and
+      // deliberately not a capability gap to be worked around.
+      expect(names).not.toContain('Shadow closed');
+    } finally {
+      await controller.teardown();
+    }
+  }, 45_000);
+
+  it('resolves a shadow-hosted ref to a handle rooted in its shadow tree', async () => {
+    const controller = await open('composed-root-run', '/composed-shadow');
+    try {
+      const observation = await controller.observe();
+      const shadow = observation.interactables.find((entry) => entry.name === 'Shadow open')!;
+      const light = observation.interactables.find((entry) => entry.name === 'Light one')!;
+
+      expect(
+        await controller.evaluateOn(
+          shadow.ref,
+          (element) => element.getRootNode() !== element.ownerDocument,
+        ),
+      ).toBe(true);
+      expect(
+        await controller.evaluateOn(
+          light.ref,
+          (element) => element.getRootNode() === element.ownerDocument,
+        ),
+      ).toBe(true);
+    } finally {
+      await controller.teardown();
+    }
+  }, 45_000);
+
+  it('keeps a shadow-hosted ref identity stable across observations of one document', async () => {
+    const controller = await open('composed-identity-run', '/composed-shadow');
+    try {
+      const first = await controller.observe();
+      const second = await controller.observe();
+      const refFor = (observation: { interactables: readonly { ref: string; name: string }[] }) =>
+        observation.interactables.find((entry) => entry.name === 'Shadow open')?.ref;
+
+      expect(refFor(first)).toBeDefined();
+      expect(refFor(second)).toBe(refFor(first));
+    } finally {
+      await controller.teardown();
+    }
+  }, 45_000);
+
+  it('acts on an attached shadow-hosted element and stales it once its root drops it', async () => {
+    const controller = await open('composed-stale-run', '/composed-shadow');
+    try {
+      const observation = await controller.observe();
+      const ref = observation.interactables.find(
+        (entry) => entry.name === 'Shadow detachable',
+      )!.ref;
+
+      // Attached inside a shadow tree: `isConnected` is true, so the existing
+      // actionability contract needs no shadow-specific branch.
+      await expect(controller.click(ref)).resolves.toBeDefined();
+
+      await controller.evaluate(() => {
+        const root = (window as unknown as { __detachable: ShadowRoot }).__detachable;
+        root.firstElementChild?.remove();
+      });
+      await expect(controller.click(ref)).rejects.toThrow(StaleElementRefError);
+    } finally {
+      await controller.teardown();
+    }
+  }, 45_000);
+
+  it('exposes no internal traversal field to the model, and leaks no handle per observation', async () => {
+    const controller = await open('composed-payload-run', '/composed-shadow');
+    try {
+      const observation = await controller.observe();
+      const serialized = JSON.stringify(observation.interactables);
+      for (const internal of ['composedScope', 'elementIndex', 'rootNodeDepth', 'selectorIndex']) {
+        expect(serialized).not.toContain(internal);
+      }
+      expect(
+        JSON.stringify(controller.describeRef(observation.interactables[0]!.ref)),
+      ).not.toContain('composedScope');
+
+      // Handle accounting: repeated observations of one document must not grow
+      // the live handle set. A silently retained handle per observation is
+      // invisible in every other signal.
+      const countHandles = async (): Promise<number> =>
+        (await controller.evaluate(() => document.querySelectorAll('button').length)) as number;
+      const before = await countHandles();
+      for (let index = 0; index < 4; index += 1) await controller.observe();
+      const after = await controller.observe();
+      expect(await countHandles()).toBe(before);
+      expect(after.interactables.length).toBe(observation.interactables.length);
+    } finally {
+      await controller.teardown();
+    }
+  }, 60_000);
+
+  /** Launch a controller on one fixture route. */
+  describe('page-delta observation', () => {
+    it('adds no page read at all, on the observation or on a whole click', async () => {
+      // Memory's hard rule: diagnostic work is paid for only on the path that
+      // needs it, and it is asserted by *counting*, because a silent extra page
+      // read is invisible in every other signal. The counts below are the
+      // frozen baseline for one `observe()`: locator injection, the title/HTML
+      // read, and the document stamp are the three `evaluate` calls, and the
+      // composed scan is the one `evaluateHandle`. The fingerprint adds none of
+      // them — it is derived in-process from the scan the observation was
+      // already taking, and the document epoch is a read-or-mint on the
+      // `evaluate` that already ran. Anyone who later adds a fingerprint-only
+      // read has to change this number to land it.
+      const tracked = trackingProvider();
+      const controller = new AgentBrowserController({
+        runId: 'delta-read-accounting-run',
+        browserProvider: tracked.provider,
+        logger,
+      });
+      await controller.navigate(`${baseUrl}/`);
+      const puppeteerPage = tracked.page!.puppeteerPage!;
+      // The puppeteer page is the single point every route passes through: the
+      // facade's `evaluate`, the controller's own `evaluate`, and the composed
+      // scan's `evaluateHandle` all bottom out here.
+      const evaluate = vi.spyOn(puppeteerPage, 'evaluate');
+      const evaluateHandle = vi.spyOn(puppeteerPage, 'evaluateHandle');
+      const query = vi.spyOn(puppeteerPage, '$$');
+
+      await controller.observe();
+
+      expect(evaluate).toHaveBeenCalledTimes(3);
+      expect(evaluateHandle).toHaveBeenCalledTimes(1);
+      expect(query).not.toHaveBeenCalled();
+
+      // And a whole action, the way a wrapped tool performs one: the action
+      // plus exactly one post-action observation.
+      const observation = await controller.observe();
+      const mutate = observation.interactables.find((entry) => entry.name === 'Mutate')!;
+      const observations = vi.spyOn(controller, 'observe');
+      controller.beginToolCall();
+      await controller.click(mutate.ref);
+      await controller.observe();
+      // `vi.spyOn(instance, ...)` rather than an outer proxy: a proxy around the
+      // controller cannot see the reads the controller takes on its own behalf.
+      expect(observations).toHaveBeenCalledTimes(1);
+      expect(controller.deltaSinceBaseline()).not.toBeNull();
+
+      await controller.teardown();
+    }, 60_000);
+
+    it('keeps one epoch per document and mints a new one only on a real navigation', async () => {
+      const controller = await open('delta-epoch-run', '/');
+      const first = await controller.observe();
+      const second = await controller.observe();
+      // Two observations of one document are comparable, so no replacement is
+      // claimed however many times the page is read.
+      expect(controller.deltaSinceBaseline()?.incomplete).toBeUndefined();
+      expect(first.url).toBe(second.url);
+
+      controller.beginToolCall();
+      await controller.navigate(`${baseUrl}/next`);
+      await controller.observe();
+      const delta = controller.deltaSinceBaseline()!;
+
+      expect(delta.incomplete).toEqual(['document-replaced']);
+      expect(delta.complete).toBe(false);
+      expect(delta.url_changed).toEqual({
+        from: `${baseUrl}/`,
+        to: `${baseUrl}/next`,
+      });
+      expect(delta.elements_appeared).toBeUndefined();
+      expect(delta.elements_vanished).toBeUndefined();
+      await controller.teardown();
+    }, 60_000);
+
+    it('reports a null epoch without throwing when the page refuses the stamp', async () => {
+      const controller = await open('delta-refused-stamp-run', '/refuses-stamp');
+      controller.beginToolCall();
+      await expect(controller.observe()).resolves.toBeDefined();
+      await controller.observe();
+
+      // No stamp means no evidence of replacement — which is not the same as
+      // evidence of replacement.
+      expect(controller.deltaSinceBaseline()?.incomplete).toBeUndefined();
+      await controller.teardown();
+    }, 60_000);
+
+    it('leaves the delta baseline to model-visible observations alone', async () => {
+      const controller = await open('delta-baseline-run', '/delta-dialog');
+      await controller.observe();
+      const opener = (await controller.observe()).interactables.find(
+        (entry) => entry.name === 'Open preferences',
+      )!;
+      controller.beginToolCall();
+      await controller.click(opener.ref);
+      // An internal resolution read, taken *after* the page changed. It must
+      // not become the baseline, or the delta would report the difference from
+      // a frame the model was never shown — which is nothing at all.
+      await controller.observe({ cap: 400, trackDigest: false });
+      await controller.observe();
+
+      const delta = controller.deltaSinceBaseline()!;
+      expect(delta.dialogs_opened).toEqual([{ role: 'dialog', name: 'Cookie consent' }]);
+      await controller.teardown();
+    }, 60_000);
+
+    it('omits the delta entirely when there is no baseline to diff against', async () => {
+      const tracked = trackingProvider();
+      const controller = new AgentBrowserController({
+        runId: 'delta-no-baseline-run',
+        browserProvider: tracked.provider,
+        logger,
+      });
+      controller.beginToolCall();
+      await controller.navigate(`${baseUrl}/`);
+      await controller.observe();
+
+      // The ordinary state of the first navigation in a run: the model has seen
+      // no frame, so there is nothing to diff, and an empty block would read as
+      // "nothing changed".
+      expect(controller.deltaSinceBaseline()).toBeNull();
+      await controller.teardown();
+    }, 60_000);
+
+    it('reports a dialog opening and closing against real layout', async () => {
+      const controller = await open('delta-dialog-run', '/delta-dialog');
+      const consent = { role: 'dialog', name: 'Cookie consent' };
+      await controller.observe();
+      const opener = (await controller.observe()).interactables.find(
+        (entry) => entry.name === 'Open preferences',
+      )!;
+      controller.beginToolCall();
+      await controller.click(opener.ref);
+      const opened = await controller.observe();
+      expect(controller.deltaSinceBaseline()?.dialogs_opened).toEqual([consent]);
+
+      const close = opened.interactables.find((entry) => entry.name === 'Close')!;
+      controller.beginToolCall();
+      await controller.click(close.ref);
+      await controller.observe();
+      const closedDelta = controller.deltaSinceBaseline()!;
+
+      expect(closedDelta.dialogs_closed).toEqual([consent]);
+      expect(closedDelta.dialogs_opened).toBeUndefined();
+      await controller.teardown();
+      // Two full click-and-observe cycles against real Chrome, where every
+      // other case here does one. The suite's 60s allowance is enough in
+      // isolation and not under full-suite CPU load.
+    }, 120_000);
+
+    it('reports nothing when same-named controls reorder and demonstrably trade refs', async () => {
+      // The single most valuable assertion in this feature: this is exactly the
+      // failure a ref-based delta would ship silently.
+      const controller = await open('delta-reorder-run', '/delta-reorder');
+      await controller.observe();
+      const before = await controller.observe();
+      const shuffle = before.interactables.find((entry) => entry.name === 'Shuffle')!;
+      const beforeSelects = before.interactables.filter((entry) => entry.name === 'Select');
+
+      controller.beginToolCall();
+      await controller.click(shuffle.ref);
+      const after = await controller.observe();
+      const delta = controller.deltaSinceBaseline()!;
+
+      // The refs really did change hands — otherwise this route proves nothing.
+      const afterSelects = after.interactables.filter((entry) => entry.name === 'Select');
+      expect(afterSelects).toHaveLength(beforeSelects.length);
+      expect(afterSelects.map((entry) => entry.ref)).not.toEqual(
+        beforeSelects
+          .map((entry) => entry.ref)
+          .slice()
+          .reverse(),
+      );
+      expect(delta.elements_appeared).toBeUndefined();
+      expect(delta.elements_vanished).toBeUndefined();
+      expect(delta.incomplete).toBeUndefined();
+      await controller.teardown();
+    }, 60_000);
+
+    it('reports nothing when a control set is remounted identically', async () => {
+      const controller = await open('delta-remount-run', '/delta-remount');
+      await controller.observe();
+      const refresh = (await controller.observe()).interactables.find(
+        (entry) => entry.name === 'Refresh results',
+      )!;
+
+      controller.beginToolCall();
+      await controller.click(refresh.ref);
+      await controller.observe();
+      const delta = controller.deltaSinceBaseline()!;
+
+      expect(delta.elements_appeared).toBeUndefined();
+      expect(delta.elements_vanished).toBeUndefined();
+      await controller.teardown();
+    }, 60_000);
+
+    it('reports nothing vanished for elements the model-visible cap had to drop', async () => {
+      const controller = await open('delta-over-cap-run', '/delta-over-cap');
+      await controller.observe();
+      const capped = await controller.observe();
+      // The page really does exceed the cap; otherwise this proves nothing.
+      expect(capped.interactables.length).toBeLessThan(81);
+
+      controller.beginToolCall();
+      const filler = capped.interactables.find((entry) => entry.name === 'Filler 00')!;
+      await controller.click(filler.ref);
+      await controller.observe();
+      const delta = controller.deltaSinceBaseline()!;
+
+      expect(delta.elements_vanished).toBeUndefined();
+      expect(delta.elements_appeared).toBeUndefined();
+      await controller.teardown();
+    }, 60_000);
+
+    it('reports focus moving between two real controls', async () => {
+      const controller = await open('delta-focus-run', '/delta-focus');
+      await controller.observe();
+      const take = (await controller.observe()).interactables.find(
+        (entry) => entry.name === 'Take focus',
+      )!;
+
+      controller.beginToolCall();
+      await controller.click(take.ref);
+      await controller.observe();
+      const delta = controller.deltaSinceBaseline()!;
+
+      expect(delta.focus_moved).toEqual({
+        from: { role: 'textbox', name: 'Origin' },
+        to: { role: 'button', name: 'Take focus' },
+      });
+      await controller.teardown();
+    }, 60_000);
+
+    it('drains action metadata without taking a page read', async () => {
+      const controller = await open('delta-metadata-run', '/dynamic-popup');
+      const observation = await controller.observe();
+      const opener = observation.interactables.find((entry) => entry.name === 'Open dynamic')!;
+      controller.beginToolCall();
+      await controller.click(opener.ref);
+
+      const evaluate = vi.spyOn(controller, 'evaluate');
+      const metadata = controller.takeActionMetadata();
+
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(metadata.url).toBe(`${baseUrl}/dynamic-popup`);
+      await controller.teardown();
+    }, 60_000);
+  });
+
+  async function open(runId: string, path: string): Promise<AgentBrowserController> {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId,
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}${path}`);
+    return controller;
+  }
 });
 
 function trackingProvider(): {

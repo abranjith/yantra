@@ -93,6 +93,28 @@ describe('@no-llm deterministic replay against a live page', () => {
         );
         return;
       }
+      if (path === '/shadow-form') {
+        // Generic pattern: form controls a page encapsulates inside components'
+        // own shadow trees. Absent from every flat-tree query of the document,
+        // and fully ordinary controls once the composed tree is walked.
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end(`<!doctype html><title>Shadow form</title>
+          <input id="light" aria-label="Light field">
+          <div id="open-host"></div>
+          <div id="closed-host"></div>
+          <script>
+            const mount = (id, mode, label) => {
+              const root = document.getElementById(id).attachShadow({ mode });
+              const input = document.createElement('input');
+              input.setAttribute('aria-label', label);
+              root.appendChild(input);
+              window['read_' + mode] = () => input.value;
+            };
+            mount('open-host', 'open', 'Shadow field');
+            mount('closed-host', 'closed', 'Hidden field');
+          </script>`);
+        return;
+      }
       if (path === '/app-shell') {
         // No prose for Readability to find — the shape of a real tracking
         // result, an order summary, or any app-like page. Readability returns
@@ -294,5 +316,81 @@ describe('@no-llm deterministic replay against a live page', () => {
       status?: { rows?: string[] };
     };
     expect(outputs.status?.rows?.[0]).toContain('Enter a tracking number');
+  }, 90_000);
+  it('replays a fill into a control inside an open shadow root', async () => {
+    // The capability gap this closes: every path that minted an addressable
+    // element used a flat-tree query, so this control was structurally absent
+    // at replay time and the step failed to resolve its field.
+    const { status } = await runPlan([
+      step({
+        id: 's1',
+        type: 'navigate',
+        url: { kind: 'literal', value: `${baseUrl}shadow-form` },
+      }),
+      step({
+        id: 's2',
+        type: 'fill_element',
+        field_name: 'Shadow field',
+        value: { kind: 'literal', value: 'composed' },
+      } as Partial<Step> & { id: string; type: 'fill_element' }),
+    ]);
+
+    expect(status).toBe('completed');
+    expect(
+      await page.puppeteerPage!.evaluate(() =>
+        (window as unknown as { read_open: () => string }).read_open(),
+      ),
+    ).toBe('composed');
+  }, 90_000);
+
+  it('leaves a closed-shadow control unresolvable at replay, exactly as at agent time', async () => {
+    // The same boundary on both paths. Agent-time and replay-time capability
+    // diverging is how a promoted workflow silently stops working, so the
+    // closed root has to be equally out of reach here.
+    const { status } = await runPlan([
+      step({
+        id: 's1',
+        type: 'navigate',
+        url: { kind: 'literal', value: `${baseUrl}shadow-form` },
+      }),
+      step({
+        id: 's2',
+        type: 'fill_element',
+        field_name: 'Hidden field',
+        value: { kind: 'literal', value: 'composed' },
+      } as Partial<Step> & { id: string; type: 'fill_element' }),
+    ]);
+
+    expect(status).not.toBe('completed');
+    expect(
+      await page.puppeteerPage!.evaluate(() =>
+        (window as unknown as { read_closed: () => string }).read_closed(),
+      ),
+    ).toBe('');
+  }, 90_000);
+
+  it('keeps the replay port projection unchanged for a pure light-DOM page', async () => {
+    // Characterization: this task shares the traversal and nothing else, so a
+    // workflow that replayed before must replay identically now.
+    const { status } = await runPlan([
+      step({
+        id: 's1',
+        type: 'navigate',
+        url: { kind: 'literal', value: `${baseUrl}shadow-form` },
+      }),
+      step({
+        id: 's2',
+        type: 'fill_element',
+        field_name: 'Light field',
+        value: { kind: 'literal', value: 'ordinary' },
+      } as Partial<Step> & { id: string; type: 'fill_element' }),
+    ]);
+
+    expect(status).toBe('completed');
+    expect(
+      await page.puppeteerPage!.evaluate(
+        () => document.querySelector<HTMLInputElement>('#light')!.value,
+      ),
+    ).toBe('ordinary');
   }, 90_000);
 });

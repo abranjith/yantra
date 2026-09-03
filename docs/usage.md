@@ -359,6 +359,27 @@ review the directory before sharing it. Browser profiles are ephemeral by
 default. Saved workflows may explicitly use persistent workflow-scoped browser
 profiles.
 
+### Reading browser recovery verdicts
+
+Failed fill and click results can include `details.attempted`, and the same data
+is preserved in `tool-calls.jsonl`. Each entry names its `strategy`, recovery
+`axis` (`where`, `what`, or `how`), and `verdict`:
+
+- `succeeded` records the evidence and actual actions used by a rung;
+- `failed` additionally carries a stable `error_code`; and
+- `skipped` carries an `unmet` reason and spent no page work.
+
+Do not expect `error_code: null` on successful or skipped verdicts: that key is
+present only for failures. `charged_actions`, `remaining_actions`, and
+`elapsed_ms` show how the shared operation budget was consumed. Old run
+directories using the previous attempt-record format remain readable and are
+normalized when reports are built; Yantra does not rewrite them.
+
+Treat this ledger as completed work. Do not repeat a strategy named in
+`attempted`; use the result's specific next step, re-issue an offered value
+verbatim when directed, and preserve fields already listed as applied by a
+batch fill. Secret fills produce no value-derived recovery evidence.
+
 ## Exit codes
 
 |  Exit | Meaning                                                                                   |
@@ -394,4 +415,5 @@ feature references are [Ask](features/ask.md), [Research](features/research.md),
 [Local Site Ranking](features/site-ranking.md),
 [Scheduling](features/scheduling.md),
 [Diagnostics and Audit](features/diagnostics-and-audit.md), and
+[Recovery as Declarative Data](features/recovery-as-declarative-data.md),
 [Safety and Privacy](features/safety-and-privacy.md).

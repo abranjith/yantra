@@ -47,7 +47,7 @@ function makePage(url: string): Page {
       // scanInteractablesInPage isn't under test here; return an empty list
       // for it, and canned title/html for the other evaluate() call.
       if (fn.name === 'scanInteractablesInPage') {
-        return [] as unknown as T;
+        return { records: [], elements: [] } as unknown as T;
       }
       return { title: 'Page', html: '<p>content</p>' } as unknown as T;
     },

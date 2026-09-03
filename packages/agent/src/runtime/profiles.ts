@@ -109,7 +109,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'a different control and the value did land there; the field you named staying empty is ' +
       'not a failure and is not something to fix. A failure carries "observed" (what the control ' +
       'holds right ' +
-      'now, which is often not empty), "attempted" (recovery the tool already performed, such as ' +
+      'now, which is often not empty), "attempted" (ordered recovery verdicts the tool already performed, such as ' +
       'several ways of entering the text or several widget drivers), and sometimes "offered" ' +
       '(what the widget will actually accept). Never repeat anything named in "attempted" — it ' +
       'has already failed. When "offered" is present, re-issue the same call with one of those ' +

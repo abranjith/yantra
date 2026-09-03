@@ -42,7 +42,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results).toEqual([
       {
         role: 'button',
@@ -59,7 +59,11 @@ describe('@no-llm scanInteractablesInPage', () => {
         expanded: null,
         selected: null,
         visible: true,
-        selectorIndex: 0,
+        elementIndex: 0,
+        composedScope: 'document',
+        rootNodeDepth: 0,
+        focused: false,
+        container: null,
       },
     ]);
   });
@@ -71,7 +75,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(a);
     stubVisible(a);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results).toEqual([
       expect.objectContaining({ role: 'link', name: 'Home', kind: 'link' }),
     ]);
@@ -84,7 +88,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(day);
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.name).toBe('6');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('6');
   });
 
   // The offline naming path must agree with the injected runtime. A day cell
@@ -98,7 +102,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(day);
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.name).toBe('Sunday, September 6, 2026');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Sunday, September 6, 2026');
   });
 
   it('keeps aria-label ahead of role=link text content', () => {
@@ -110,7 +114,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(link);
     stubVisible(link);
 
-    expect(scanInteractablesInPage()[0]?.name).toBe('Home');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Home');
   });
 
   it('prefers the injected accessible-name engine when available', () => {
@@ -122,7 +126,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       describeAccessible: () => ({ role: 'button', name: 'Engine Name' }),
     };
 
-    expect(scanInteractablesInPage()[0]?.name).toBe('Engine Name');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Engine Name');
   });
 
   it('falls back when the injected accessible-name engine throws or returns empty', () => {
@@ -136,10 +140,10 @@ describe('@no-llm scanInteractablesInPage', () => {
         throw new Error('detached');
       },
     };
-    expect(scanInteractablesInPage()[0]?.name).toBe('Heuristic Name');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Heuristic Name');
 
     host.__yantra = { describeAccessible: () => ({ role: 'button', name: '' }) };
-    expect(scanInteractablesInPage()[0]?.name).toBe('Heuristic Name');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Heuristic Name');
   });
 
   it('keeps the scanner role map when the injected engine reports different roles', () => {
@@ -159,7 +163,10 @@ describe('@no-llm scanInteractablesInPage', () => {
       }),
     };
 
-    expect(scanInteractablesInPage().map(({ role }) => role)).toEqual(['combobox', 'textbox']);
+    expect(scanInteractablesInPage().records.map(({ role }) => role)).toEqual([
+      'combobox',
+      'textbox',
+    ]);
   });
 
   it('ignores an <a> with no href (not a real interactable)', () => {
@@ -168,7 +175,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(a);
     stubVisible(a);
 
-    expect(scanInteractablesInPage()).toEqual([]);
+    expect(scanInteractablesInPage().records).toEqual([]);
   });
 
   it('derives textbox role for a plain text input and its placeholder as name', () => {
@@ -178,7 +185,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results).toEqual([
       expect.objectContaining({ role: 'textbox', name: 'Search products', kind: 'input' }),
     ]);
@@ -197,7 +204,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(radio);
     stubVisible(radio, 60);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results.find((r) => r.role === 'checkbox')?.name).toBe('Accept terms');
     expect(results.find((r) => r.role === 'radio')?.name).toBe('Option A');
   });
@@ -209,7 +216,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(select);
     stubVisible(select);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results).toEqual([
       expect.objectContaining({
         role: 'combobox',
@@ -230,7 +237,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results[0]?.name).toBe('Submit order');
   });
 
@@ -244,7 +251,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results[0]?.name).toBe('Email address');
   });
 
@@ -257,7 +264,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(label);
     stubVisible(input);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results[0]?.name).toBe('Remember me');
   });
 
@@ -267,7 +274,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage()[0]?.name).toBeNull();
+    expect(scanInteractablesInPage().records[0]?.name).toBeNull();
   });
 
   it('marks an element with zero-size bounding rect as not visible', () => {
@@ -286,7 +293,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       toJSON: () => ({}),
     } as DOMRect);
 
-    expect(scanInteractablesInPage()[0]?.visible).toBe(false);
+    expect(scanInteractablesInPage().records[0]?.visible).toBe(false);
   });
 
   it('marks an element hidden via visibility:hidden as not visible', () => {
@@ -299,7 +306,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       display: 'block',
     } as CSSStyleDeclaration);
 
-    expect(scanInteractablesInPage()[0]?.visible).toBe(false);
+    expect(scanInteractablesInPage().records[0]?.visible).toBe(false);
   });
 
   it('marks a native disabled input as disabled', () => {
@@ -308,7 +315,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage()[0]?.disabled).toBe(true);
+    expect(scanInteractablesInPage().records[0]?.disabled).toBe(true);
   });
 
   it('marks aria-disabled="true" as disabled even without the native attribute', () => {
@@ -318,7 +325,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    expect(scanInteractablesInPage()[0]?.disabled).toBe(true);
+    expect(scanInteractablesInPage().records[0]?.disabled).toBe(true);
   });
 
   it('truncates an over-long accessible name to 200 chars', () => {
@@ -327,7 +334,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    expect(scanInteractablesInPage()[0]?.name).toHaveLength(200);
+    expect(scanInteractablesInPage().records[0]?.name).toHaveLength(200);
   });
 
   it('ignores an element with a matched-but-unmapped role (e.g. tab, no coarse kind)', () => {
@@ -339,7 +346,7 @@ describe('@no-llm scanInteractablesInPage', () => {
 
     // Selected by the querySelectorAll (role="tab" is in the candidate list)
     // but has no entry in KIND_BY_ROLE, so it must be filtered out entirely.
-    expect(scanInteractablesInPage()).toEqual([]);
+    expect(scanInteractablesInPage().records).toEqual([]);
   });
 
   it('ignores a div with an unselected role entirely (not in the candidate query)', () => {
@@ -348,11 +355,11 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(div);
     stubVisible(div);
 
-    expect(scanInteractablesInPage()).toEqual([]);
+    expect(scanInteractablesInPage().records).toEqual([]);
   });
 
   it('returns an empty array on a page with no candidates', () => {
-    expect(scanInteractablesInPage()).toEqual([]);
+    expect(scanInteractablesInPage().records).toEqual([]);
   });
 
   it('scans an autocomplete option and names it from its text content', () => {
@@ -365,7 +372,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option);
 
-    expect(scanInteractablesInPage()).toEqual([
+    expect(scanInteractablesInPage().records).toEqual([
       expect.objectContaining({
         role: 'option',
         kind: 'select',
@@ -382,7 +389,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option);
 
-    expect(scanInteractablesInPage()[0]?.name).toBe('Chicago O’Hare');
+    expect(scanInteractablesInPage().records[0]?.name).toBe('Chicago O’Hare');
   });
 
   it('keeps ranking options by viewport top alongside other interactables', () => {
@@ -397,7 +404,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option, 50);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results.map((r) => r.top)).toEqual([200, 50]);
     expect(results.map((r) => r.role)).toEqual(['button', 'option']);
   });
@@ -410,7 +417,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     const serialized = JSON.stringify(results);
     expect(serialized).not.toContain('hunter2');
     expect(results[0]).toEqual(
@@ -433,12 +440,12 @@ describe('@no-llm scanInteractablesInPage', () => {
     stubVisible(grid, 20);
     stubVisible(day, 50);
 
-    expect(scanInteractablesInPage()[0]).toEqual(
+    expect(scanInteractablesInPage().records[0]).toEqual(
       expect.objectContaining({ group: 'August 2026', scope: 'dialog' }),
     );
 
     grid.setAttribute('aria-label', 'Departure calendar');
-    expect(scanInteractablesInPage()[0]?.group).toBe('Departure calendar');
+    expect(scanInteractablesInPage().records[0]?.group).toBe('Departure calendar');
   });
 
   it('continues past an unlabelled inner table to the labelled calendar panel', () => {
@@ -447,7 +454,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     const day = document.querySelector('button')!;
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.group).toBe('August 2026');
+    expect(scanInteractablesInPage().records[0]?.group).toBe('August 2026');
   });
 
   it('uses a container preceding-sibling heading as its group label', () => {
@@ -458,7 +465,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     stubVisible(grid);
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.group).toBe('September 2026');
+    expect(scanInteractablesInPage().records[0]?.group).toBe('September 2026');
   });
 
   it('returns null when no labelled ancestor is found within twelve levels', () => {
@@ -476,7 +483,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(labelled);
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.group).toBeNull();
+    expect(scanInteractablesInPage().records[0]?.group).toBeNull();
   });
 
   it('prefers the nearest labelled ancestor over a farther label', () => {
@@ -485,7 +492,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     const day = document.querySelector('button')!;
     stubVisible(day);
 
-    expect(scanInteractablesInPage()[0]?.group).toBe('Near');
+    expect(scanInteractablesInPage().records[0]?.group).toBe('Near');
   });
 
   it('does not promote children of a hidden dialog to dialog scope', () => {
@@ -505,7 +512,7 @@ describe('@no-llm scanInteractablesInPage', () => {
         }) as CSSStyleDeclaration,
     );
 
-    expect(scanInteractablesInPage()[0]?.scope).toBe('page');
+    expect(scanInteractablesInPage().records[0]?.scope).toBe('page');
   });
 
   it('exposes ordinary values and state while withholding credential fields', () => {
@@ -531,7 +538,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(otp);
     stubVisible(otp, 130);
 
-    const results = scanInteractablesInPage();
+    const results = scanInteractablesInPage().records;
     expect(results[0]?.value).toBe('Frisco, Texas');
     expect(results[1]?.checked).toBe(true);
     expect(results[2]?.expanded).toBe(false);
@@ -545,6 +552,87 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage()[0]?.value).toHaveLength(120);
+    expect(scanInteractablesInPage().records[0]?.value).toHaveLength(120);
+  });
+
+  describe('focus and container, derived inside the existing walk', () => {
+    it('reports focus on the element that actually holds it', () => {
+      const focused = document.createElement('input');
+      const other = document.createElement('input');
+      document.body.append(focused, other);
+      stubVisible(focused, 10);
+      stubVisible(other, 60);
+      focused.focus();
+
+      const records = scanInteractablesInPage().records;
+
+      expect(records.find((entry) => entry.top === 10)?.focused).toBe(true);
+      expect(records.find((entry) => entry.top === 60)?.focused).toBe(false);
+    });
+
+    it('reports no focus at all when the page has none', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      stubVisible(input);
+      input.blur();
+
+      expect(scanInteractablesInPage().records.every((entry) => !entry.focused)).toBe(true);
+    });
+
+    it('names the outermost container, not the innermost one', () => {
+      // A suggestion listbox inside a modal: the thing a person would say
+      // opened is the modal, and the obstruction protocol names it the same way.
+      document.body.innerHTML = `
+        <div role="dialog" aria-label="Search flights">
+          <div role="listbox" aria-label="Destination suggestions">
+            <div role="option">Dallas</div>
+          </div>
+        </div>`;
+      for (const element of Array.from(document.querySelectorAll('*'))) stubVisible(element);
+
+      const option = scanInteractablesInPage().records.find((entry) => entry.role === 'option');
+
+      expect(option?.scope).toBe('dialog');
+      expect(option?.container).toEqual({ role: 'dialog', name: 'Search flights' });
+    });
+
+    it('reports no container for a control in page scope', () => {
+      const button = document.createElement('button');
+      button.textContent = 'Search';
+      document.body.appendChild(button);
+      stubVisible(button);
+
+      const record = scanInteractablesInPage().records[0];
+      expect(record?.scope).toBe('page');
+      expect(record?.container).toBeNull();
+    });
+
+    it('does not report a hidden container', () => {
+      document.body.innerHTML = `
+        <div role="dialog" aria-label="Hidden panel" id="panel">
+          <button>Inside</button>
+        </div>`;
+      const button = document.querySelector('button')!;
+      stubVisible(button);
+      // The dialog itself keeps jsdom's zero-size rect, so it fails the
+      // existing visible-container test the scope walk already applies.
+
+      const record = scanInteractablesInPage().records[0];
+      expect(record?.scope).toBe('page');
+      expect(record?.container).toBeNull();
+    });
+
+    it('names a native dialog and a bare aria-modal wrapper as dialogs', () => {
+      document.body.innerHTML = `
+        <div aria-modal="true" aria-label="Consent">
+          <button>Accept</button>
+        </div>`;
+      for (const element of Array.from(document.querySelectorAll('*'))) stubVisible(element);
+
+      expect(scanInteractablesInPage().records[0]?.container).toEqual({
+        role: 'dialog',
+        name: 'Consent',
+      });
+    });
   });
 });

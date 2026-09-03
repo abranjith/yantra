@@ -1,0 +1,18 @@
+<!--
+  Shape: a control rewrites the supplied digits into its own display format.
+
+  Provenance: repeated interaction runs showed that comparing the displayed
+  value byte-for-byte with the request misclassified an accepted fill.
+-->
+<input id="phone" aria-label="Phone number" />
+<script>
+  (function () {
+    var input = document.getElementById('phone');
+    input.addEventListener('input', function () {
+      var digits = input.value.replace(/\D/g, '').slice(0, 10);
+      if (digits.length === 10) {
+        input.value = '(' + digits.slice(0, 3) + ') ' + digits.slice(3, 6) + '-' + digits.slice(6);
+      }
+    });
+  })();
+</script>

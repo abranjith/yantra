@@ -975,5 +975,8 @@ function fakeController() {
     // via the locator engine's ranker. Default to the degraded (empty) result
     // so tests exercise the observed-role fallback unless they opt in.
     locatorFor: vi.fn().mockResolvedValue([]),
+    // The middleware opens every top-level tool call; the real controller
+    // resets its one obstruction clearance here.
+    beginToolCall: vi.fn(),
   };
 }

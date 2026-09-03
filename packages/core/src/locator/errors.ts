@@ -36,24 +36,6 @@ export class LocatorAmbiguousError extends Error {
   }
 }
 
-/** elementFromPoint returned a different element — overlay/modal covers the target. */
-export class HitTargetInterceptedError extends Error {
-  override readonly name = 'HitTargetInterceptedError';
-
-  constructor(
-    readonly context: {
-      readonly chainName: string;
-      readonly interceptor: { readonly tagName: string; readonly accessibleName?: string };
-      readonly coords: { readonly x: number; readonly y: number };
-    },
-  ) {
-    super(
-      `Locator chain "${context.chainName}" hit-target intercepted by ` +
-        `<${context.interceptor.tagName}> at (${context.coords.x}, ${context.coords.y}).`,
-    );
-  }
-}
-
 /** Element resolved but never became actionable within the deadline. */
 export class LocatorNotActionableError extends Error {
   override readonly name = 'LocatorNotActionableError';

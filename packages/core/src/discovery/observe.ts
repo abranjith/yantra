@@ -24,6 +24,7 @@ import { DiscoveryObservation as DiscoveryObservationSchema } from '@yantra/prot
 import type { Page } from '../browser/types.js';
 import { extractLivePageText } from '../extraction/live-page.js';
 import type { Extractor } from '../extraction/readability.js';
+import { fingerprintFromScan, type ScanFingerprint } from '../interaction/page-delta.js';
 import { brandSanitized, type Sanitized } from '../sanitizer/brand.js';
 import { sanitize } from '../sanitizer/index.js';
 
@@ -51,6 +52,17 @@ export interface AgentPageSnapshot {
   readonly digest: string;
   /** Ranked raw records retain only an internal scanner index for handle lookup. */
   readonly interactables: readonly RawInteractable[];
+  /**
+   * Private change-detection state for this frame, derived from the **uncapped**
+   * visible list before `maxInteractables` was applied.
+   *
+   * Never model-visible. It is here rather than behind its own page read
+   * because a delta computed from the capped list would report a stationary
+   * element as vanished the moment the cap moved past it — and because a second
+   * scan for a diagnostic is exactly the silent extra page read this codebase
+   * counts in tests to prevent.
+   */
+  readonly fingerprint: ScanFingerprint;
 }
 
 /**
@@ -65,7 +77,19 @@ export interface AgentPageSnapshot {
 export async function buildAgentPageSnapshot(
   page: Page,
   deps: BuildObservationDeps,
-  options: { readonly maxDigestBytes: number; readonly maxInteractables: number },
+  options: {
+    readonly maxDigestBytes: number;
+    readonly maxInteractables: number;
+    /**
+     * Records from a scan the caller already performed.
+     *
+     * The controller mints handles from a single composed-tree pass and feeds
+     * its records here, so ordering, capping, and digest behavior stay in one
+     * place without provoking a second traversal of the page. Omitted by the
+     * record-only callers, which scan here.
+     */
+    readonly records?: readonly RawInteractable[];
+  },
 ): Promise<AgentPageSnapshot> {
   await ensureLocatorRuntime(page);
   const url = page.url();
@@ -76,13 +100,29 @@ export async function buildAgentPageSnapshot(
   const digestText = await buildDigest(url, pageData?.html ?? '', deps.extractor);
   const sanitized = sanitize(digestText, 'public', safeHost(url) ?? undefined).text;
   const digest = truncateUtf8(sanitized, options.maxDigestBytes);
-  const raw = (await safeEvaluate(page, scanInteractablesInPage)) ?? [];
-  const interactables = orderAgentInteractables(raw).slice(0, options.maxInteractables);
+  // A scan that could not run at all reports `degraded`, so the fingerprint's
+  // emptiness is never read as "the page has no controls" — which would
+  // otherwise make the next delta claim every control on the page vanished.
+  let degraded = false;
+  let raw: readonly RawInteractable[];
+  if (options.records !== undefined) {
+    raw = options.records;
+  } else {
+    const scan = await safeEvaluate(page, scanInteractablesInPage);
+    degraded = scan === null;
+    raw = scan?.records ?? [];
+  }
+  const title = clampChars(pageData?.title ?? '', 300);
+  // Ordered once. The fingerprint reads the **whole** visible list; the model
+  // sees the slice. Deriving it here is what makes the delta free.
+  const ordered = orderAgentInteractables(raw);
+  const interactables = ordered.slice(0, options.maxInteractables);
   return {
     url,
-    title: clampChars(pageData?.title ?? '', 300),
+    title,
     digest,
     interactables,
+    fingerprint: fingerprintFromScan(url, title, ordered, degraded),
   };
 }
 
@@ -117,7 +157,7 @@ export async function buildObservation(
   const sanitizedDigest = sanitize(digestText, 'public', host ?? undefined);
   const pageDigest = clampChars(sanitizedDigest.text, MAX_PAGE_DIGEST_LEN);
 
-  const rawInteractables = (await safeEvaluate(page, scanInteractablesInPage)) ?? [];
+  const rawInteractables = (await safeEvaluate(page, scanInteractablesInPage))?.records ?? [];
   const interactables = rankInteractables(rawInteractables);
 
   const observation: DiscoveryObservation = {
@@ -189,7 +229,7 @@ async function safeEvaluate<T>(page: Page, fn: () => T): Promise<T | null> {
 }
 
 /** Best-effort locator injection; observation must still work without it. */
-async function ensureLocatorRuntime(page: Page): Promise<void> {
+export async function ensureLocatorRuntime(page: Page): Promise<void> {
   try {
     await page.locatorHost?.ensureInjected('main');
   } catch {

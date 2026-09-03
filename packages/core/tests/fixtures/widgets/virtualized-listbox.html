@@ -1,0 +1,53 @@
+<!--
+  Shape: a listbox that mounts only the rows currently inside its scroll
+  viewport, so an option the caller asks for does not exist in the DOM until the
+  container is scrolled to it.
+
+  The behaviour is the pattern, not the markup: the full row model lives in
+  script, and the mounted window is re-rendered from the region's scrollTop on
+  every scroll event. A fixture that simply hid rows with CSS would exercise
+  nothing, because they would already be in the tree.
+
+  Provenance: long option lists on booking and directory sites commonly render
+  this way, and the engine had no scroll operation of any kind — a value the
+  widget genuinely held came back as value-not-offered.
+-->
+<button id="trigger" aria-controls="regions" aria-expanded="true">Region</button>
+<div id="regions" role="listbox" style="overflow-y: auto; height: 96px">
+  <ul id="rows"></ul>
+</div>
+<script>
+  (function () {
+    var WINDOW_SIZE = 4;
+    var rows = [];
+    for (var index = 0; index < 24; index += 1) rows.push('Region ' + index);
+
+    var region = document.getElementById('regions');
+    var list = document.getElementById('rows');
+
+    function mount() {
+      // Derived from scrollTop, so the window a caller sees is a function of
+      // where the container actually is rather than of how many events fired.
+      var start = Math.min(Math.max(0, region.scrollTop), rows.length - 1);
+      list.textContent = '';
+      rows.slice(start, start + WINDOW_SIZE).forEach(function (label) {
+        var row = document.createElement('li');
+        row.setAttribute('role', 'option');
+        row.textContent = label;
+        row.addEventListener('click', function () {
+          // Choosing closes the list, the way a real one does. A fixture that
+          // stayed open would exercise the engine's release path instead of
+          // the pattern it is here to encode.
+          var trigger = document.getElementById('trigger');
+          trigger.textContent = label;
+          trigger.setAttribute('aria-expanded', 'false');
+          region.style.display = 'none';
+        });
+        list.appendChild(row);
+      });
+    }
+
+    region.addEventListener('scroll', mount);
+    mount();
+  })();
+</script>
