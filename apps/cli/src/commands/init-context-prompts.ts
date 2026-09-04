@@ -42,7 +42,7 @@ const CITY_QUESTION = 'City or area (e.g. Naperville, IL) — leave blank to set
 
 /** The behavior-preserving answers used when prompting is skipped or cancelled. */
 export function defaultContextGrantAnswers(): ContextGrantAnswers {
-  return { grants: { location: true }, city: null };
+  return { grants: { location: true, screenshots: false }, city: null };
 }
 
 /**
@@ -65,12 +65,15 @@ export async function collectContextGrants(
     return defaultContextGrantAnswers();
   }
   if (!shareLocation) {
-    return { grants: { location: false }, city: null };
+    return { grants: { location: false, screenshots: false }, city: null };
   }
 
   const city = await text(CITY_QUESTION);
   const trimmed = city === null ? '' : city.trim();
-  return { grants: { location: true }, city: trimmed.length > 0 ? trimmed : null };
+  return {
+    grants: { location: true, screenshots: false },
+    city: trimmed.length > 0 ? trimmed : null,
+  };
 }
 
 async function promptConfirm(message: string): Promise<boolean | null> {

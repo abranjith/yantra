@@ -46,6 +46,23 @@ describe('@no-llm resolveAmbientGrants', () => {
   it('ignores a non-boolean stored value and falls back to granted', () => {
     expect(resolveAmbientGrants(prefs({ 'context.location': ['nope', true] })).location).toBe(true);
   });
+
+  it.each([
+    ['absent', undefined],
+    ['unapproved true', [true, false]],
+    ['approved false', [false, true]],
+    ['approved true', [true, true]],
+    ['malformed string', ['yes', true]],
+    ['malformed number', [1, true]],
+    ['malformed null', [null, true]],
+  ] as const)('resolves screenshots fail-closed for %s', (_label, entry) => {
+    const effective =
+      entry === undefined ? prefs({}) : prefs({ 'context.screenshots': [...entry] });
+    expect(resolveAmbientGrants(effective)).toEqual({
+      location: true,
+      screenshots: entry?.[0] === true && entry[1] === true,
+    });
+  });
 });
 
 describe('@no-llm resolveUserLocation', () => {

@@ -152,6 +152,21 @@ export class TerminalRenderer implements OutputRenderer {
         );
       }
     }
+    if (report.captures.length > 0) {
+      opts.stream.write('\nThe model saw these images:\n');
+      for (const capture of report.captures) {
+        opts.stream.write(
+          `  ${capture.path} — ${capture.width}x${capture.height}, ${capture.bytes} bytes, ` +
+            `sha256=${capture.sha256}, call=#${capture.toolCall.seq} ${capture.toolCall.tool}, ` +
+            `budget=1 capture/${capture.budgetConsumed.pixels} pixels/${capture.budgetConsumed.bytes} bytes\n`,
+        );
+      }
+      if (report.rawSessionLogCaptureBearing && report.agent !== null) {
+        opts.stream.write(
+          `Raw provider session log ${report.agent.sessionFile} contains the image data itself.\n`,
+        );
+      }
+    }
   }
 
   renderReport(markdown: string, opts: ConnectorRenderOpts): void {

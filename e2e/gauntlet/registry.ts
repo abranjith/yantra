@@ -19,6 +19,8 @@ interface AgentFixtureBase {
   readonly expectedMutations: number;
   readonly expectedReads: number;
   readonly expectedToolCalls: number;
+  /** The interaction gate must remain solvable without image input. */
+  readonly requiresVision: false;
   /**
    * Engine-initiated obstruction clearances, counted from the returned ledger.
    *
@@ -91,6 +93,7 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     expectedMutations: 3,
     expectedReads: 13,
     expectedToolCalls: 1,
+    requiresVision: false,
     expectedClearances: 0,
     remountSelector: '#query',
   },
@@ -110,6 +113,7 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     expectedMutations: 1,
     expectedReads: 7,
     expectedToolCalls: 1,
+    requiresVision: false,
     expectedClearances: 0,
   },
   {
@@ -127,6 +131,7 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     // `packages/core/tests/browser/agent-controller.spec.ts`.
     expectedReads: 1,
     expectedToolCalls: 1,
+    requiresVision: false,
     expectedClearances: 1,
   },
   {
@@ -151,6 +156,7 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     // dismiss-shaped control inside it is never described.
     expectedReads: 0,
     expectedToolCalls: 1,
+    requiresVision: false,
     expectedClearances: 0,
   },
 ] as const satisfies readonly AgentGauntletFixture[];

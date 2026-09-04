@@ -11,6 +11,7 @@ import {
   UrlPolicy,
   UrlProvenance,
   buildYantraWrappedTools,
+  resolveVisionAvailability,
   type RunServices,
   type WrappedTool,
 } from '@yantra/agent';
@@ -66,6 +67,13 @@ describe('@no-llm real Chrome browser tools', () => {
       template: null,
       runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       runDir,
+      vision: resolveVisionAvailability({
+        grantEnabled: false,
+        hasBrowserTools: true,
+        modelImageInput: false,
+        suppressedByFlag: false,
+        zeroLlm: true,
+      }),
       budgets,
       sanitizer,
       urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
@@ -98,6 +106,7 @@ describe('@no-llm real Chrome browser tools', () => {
         browser: {
           controller,
           ethics,
+          sensitiveScreenLatch: controller.sensitiveScreenLatch,
           secretResolver: resolver,
           secretHosts: () => Promise.resolve(['127.0.0.1']),
           captureThresholdBytes: 1,

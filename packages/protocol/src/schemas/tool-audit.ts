@@ -43,6 +43,21 @@ export const ToolAuditEntry = z
       .min(1)
       .nullable()
       .describe('Linked confirmation identifier when present, otherwise null.'),
+    captures: z
+      .array(
+        z
+          .object({
+            path: z.string().min(1),
+            sha256: z.string().regex(/^[a-f0-9]{64}$/u),
+            mime_type: z.literal('image/png'),
+            width: z.number().int().positive(),
+            height: z.number().int().positive(),
+            bytes: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .optional()
+      .describe('Private capture artifact metadata; never image bytes or a data URI.'),
   })
   .strict()
   .describe('Stable append-only tool lifecycle entry stored in tool-calls.jsonl.');

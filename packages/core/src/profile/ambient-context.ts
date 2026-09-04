@@ -45,6 +45,8 @@ export interface AmbientGrants {
    * `locale.city` / `locale.region`) to the model.
    */
   readonly location: boolean;
+  /** Whether raw, unmasked browser screenshots may be exposed to the model. */
+  readonly screenshots: boolean;
 }
 
 /**
@@ -54,10 +56,19 @@ export interface AmbientGrants {
  * behavior-preserving default the profile schema carries. Denial is an explicit
  * act, so only an explicit, approved `false` withholds the fact.
  *
+ * The screenshot grant is deliberately asymmetric: it uses `=== true` because
+ * screenshots expose new raw, unmasked pixels, while location uses `!== false`
+ * to preserve rendering of a fact the user already configured.
+ *
  * @param prefs - The merged effective preferences (from `PreferenceStore`).
  */
 export function resolveAmbientGrants(prefs: EffectivePreferences): AmbientGrants {
-  return { location: approvedBoolean(prefs, 'context.location') !== false };
+  return {
+    // Location is an already-rendered fact, so absence preserves the existing behavior.
+    location: approvedBoolean(prefs, 'context.location') !== false,
+    // Screenshots expose raw, unmasked pixels, so only explicit approved true grants access.
+    screenshots: approvedBoolean(prefs, 'context.screenshots') === true,
+  };
 }
 
 /**

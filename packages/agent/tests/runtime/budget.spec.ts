@@ -19,7 +19,96 @@ const TIGHT_LIMITS: BudgetLimits = {
   maxBytesPerRun: 250,
   maxNavigations: 2,
   maxHosts: 2,
+  maxCaptures: 3,
+  maxCapturePixels: 1600 * 1200,
+  maxCaptureBytes: 5 * 1024 * 1024,
 };
+
+describe('@no-llm BudgetTracker capture budgets', () => {
+  it('reserves captures one through three and denies the fourth by name', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    for (let count = 1; count <= 3; count += 1) {
+      expect(budgets.reserveCapture().isOk).toBe(true);
+      expect(budgets.snapshot().captureCount).toBe(count);
+    }
+    const denied = budgets.reserveCapture();
+    expect(denied.isOk).toBe(false);
+    if (!denied.isOk) expect(denied.error.limit).toBe('capture-count');
+  });
+
+  it.each([
+    [1600, 1200, true],
+    [1601, 1200, false],
+    [1600, 1201, false],
+  ])('checks the %sx%s pixel boundary', (width, height, allowed) => {
+    const result = new BudgetTracker(TIGHT_LIMITS).accountCaptureBytes({
+      mimeType: 'image/png',
+      width,
+      height,
+      bytes: 1,
+    });
+    expect(result.isOk).toBe(allowed);
+    if (!result.isOk) expect(result.error.limit).toBe('capture-pixels');
+  });
+
+  it.each([
+    [5 * 1024 * 1024, true],
+    [5 * 1024 * 1024 + 1, false],
+  ])('checks encoded byte boundary %s', (bytes, allowed) => {
+    const result = new BudgetTracker(TIGHT_LIMITS).accountCaptureBytes({
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+      bytes,
+    });
+    expect(result.isOk).toBe(allowed);
+    if (!result.isOk) expect(result.error.limit).toBe('capture-bytes');
+  });
+
+  it('rejects non-PNG encodings', () => {
+    const result = new BudgetTracker(TIGHT_LIMITS).accountCaptureBytes({
+      mimeType: 'image/jpeg',
+      width: 1,
+      height: 1,
+      bytes: 1,
+    });
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) expect(result.error.limit).toBe('capture-mime');
+  });
+
+  it.each([
+    ['width NaN', Number.NaN, 1, 1],
+    ['width undefined', undefined, 1, 1],
+    ['width negative', -1, 1, 1],
+    ['height NaN', 1, Number.NaN, 1],
+    ['height undefined', 1, undefined, 1],
+    ['height negative', 1, -1, 1],
+    ['bytes NaN', 1, 1, Number.NaN],
+    ['bytes undefined', 1, 1, undefined],
+    ['bytes negative', 1, 1, -1],
+  ] as const)('fails closed for %s', (_label, width, height, bytes) => {
+    const result = new BudgetTracker(TIGHT_LIMITS).accountCaptureBytes({
+      mimeType: 'image/png',
+      width,
+      height,
+      bytes,
+    });
+    expect(result.isOk).toBe(false);
+  });
+
+  it('keeps accepted image bytes separate from cumulative text bytes', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    budgets.accountResultBytes(10);
+    budgets.reserveCapture();
+    budgets.accountCaptureBytes({ mimeType: 'image/png', width: 10, height: 10, bytes: 200 });
+    expect(budgets.snapshot()).toMatchObject({
+      cumulativeBytes: 10,
+      captureCount: 1,
+      capturePixels: 100,
+      captureBytes: 200,
+    });
+  });
+});
 
 describe('@no-llm BudgetTracker call reservation', () => {
   it('records arbitrarily many calls without enforcing total or per-tool call caps', () => {

@@ -24,6 +24,12 @@ Yantra treats website content and model output as untrusted. Robots policy, bloc
 limits, URL provenance, budgets, consent, secret resolution, sanitization, validation, and audit
 persistence remain application-owned controls rather than prompt instructions.
 
+Browser screenshots are the deliberate exception to the normal model-payload sanitizer: pixels
+cannot be inspected or masked before transmission. Vision assist is therefore disabled by default,
+is exposed only through a conditionally registered agent tool after explicit stored consent, and
+persists every transmitted PNG in the owning run directory. Stable logs retain only capture
+metadata; the capture file and raw provider session remain private, capture-bearing artifacts.
+
 ```mermaid
 flowchart LR
   User[User or local script] --> CLI[yantra CLI]
@@ -434,7 +440,9 @@ sessions, events, and tool definitions to Yantra-owned types. Pi built-in filesy
 editing tools are disabled; each session receives exactly its command-profile Yantra tool
 allowlist.
 
-All registered tools pass through one provider-neutral middleware pipeline:
+All registered tools pass through one provider-neutral middleware pipeline. Ordinary results take
+the text-only path. The screenshot tool additionally takes the single image path, where middleware
+re-opens and verifies the private artifact before the Pi adapter can construct an image block:
 
 ```mermaid
 flowchart LR
@@ -443,10 +451,45 @@ flowchart LR
   Budget --> Policy[Host, ethics, scope, and action-phase policy]
   Policy --> Consent[Confirmation when required]
   Consent --> Domain[Core domain operation]
-  Domain --> Sanitize[Sanitize and bound output]
-  Sanitize --> Result[Stable tool result]
-  Result --> Audit[Events, tool audit, usage, and artifacts]
+  Domain --> Sanitize[Sanitize and bound text]
+  Domain --> ImageGate[Verify authorized PNG artifact]
+  Sanitize --> Result[Stable text or text-plus-image result]
+  ImageGate --> Result
+  Result --> Provider[Pi result blocks]
+  Provider --> AuditProjection[Remove image bytes from stable projection]
+  AuditProjection --> Audit[Events, tool audit, usage, and artifact metadata]
 ```
+
+### Vision-assist boundary
+
+Vision availability is an immutable run decision made before tool-catalog construction. The
+`browser_screenshot` tool exists only when all five inputs agree: the effective, approved
+`context.screenshots` preference is exactly `true`; the command profile has browser tools; the Pi
+model registry declares image input for the selected provider/model; `--no-screenshots` is absent;
+and the context is not zero-LLM. A missing or malformed preference, registry miss, text-only model,
+non-browser profile, suppression flag, scheduled/daemon execution, or nested workflow execution
+therefore removes the capability from both the provider-visible catalog and its catalog hash rather
+than returning a runtime denial. The CLI prints the raw-pixel/provider/local-retention warning before
+writing an enabled grant; Ollama changes the destination wording but does not remove the warning.
+
+Responsibilities stay on the existing dependency seams:
+
+- `packages/core` owns the browser-facing primitives: viewport or `eNN`-scoped CDP PNG capture,
+  top-level document epochs, the `SensitiveScreenLatch`, and the temporary set-of-marks overlay.
+  The overlay contains only Yantra refs, is epoch-guarded around capture, and is removed and checked
+  in mandatory cleanup.
+- `packages/agent` owns the provider-neutral five-condition availability value, conditional tool
+  registration, dedicated capture accounting, private artifact creation, image-result validation,
+  and stable audit projection. Only the Pi adapter translates the validated image into the provider
+  SDK's image block.
+- `apps/cli` resolves the effective grant and one-run suppression, emits consent/revocation
+  messaging, and renders capture metadata from `tool-calls.jsonl` as the images the model saw.
+
+The controller's latch is shared by the fill and screenshot tools through the run service graph. A
+host-bound secret fill sets it immediately before the resolved value can be dispatched to the page.
+Capture then fails closed until a readable top-level document epoch differs from the latched epoch;
+clicks, DOM updates, dialogs, timers, and same-document SPA routing do not clear it. Browser teardown
+is the only other clearing path.
 
 ### `apps/cli`
 
@@ -620,6 +663,51 @@ sequenceDiagram
   CLI-->>User: progress and terminal outcome
 ```
 
+### Vision-assisted screenshot capture
+
+Screenshots are agent-requested fallback evidence, not an automatic observation path. A request can
+capture the current viewport or the rectangle for an existing opaque `eNN` ref. The browser
+controller clips capture dimensions to 1600 by 1200 pixels, overlays the current Yantra refs, uses
+CDP `Page.captureScreenshot` in PNG mode, verifies the document epoch, and removes the overlay. The
+tool checks the PNG signature and encoded size, hashes the exact bytes, and atomically writes
+`screenshots/<sequence>-<sha256-prefix>.png` beneath the run directory with restrictive permissions.
+
+The middleware then independently verifies that the artifact stays beneath the run directory and
+that its bytes, SHA-256 digest, MIME type, base64 payload, and recorded dimensions agree. Dedicated
+budgets allow at most three reserved captures per run, at most 1,600 x 1,200 pixels and 5 MiB per
+capture; image pixels and bytes do not consume the ordinary text-result byte counters. Only after
+these checks does the image cross the Pi provider seam.
+
+```mermaid
+sequenceDiagram
+  participant Model as Model provider
+  participant Pi as Pi adapter and session
+  participant Tool as browser_screenshot
+  participant Guard as Latch and capture budget
+  participant Core as Browser controller
+  participant Page as Web page and Chrome CDP
+  participant Run as Run directory
+  participant Middleware as Tool middleware
+  participant Recorder as Run recorder
+
+  Model->>Pi: request viewport or eNN capture
+  Pi->>Tool: invoke wrapped tool
+  Tool->>Guard: require unlatched epoch and reserve capture
+  Tool->>Core: capturePng(optional ref)
+  Core->>Page: inject Yantra ref marks
+  Core->>Page: capture bounded PNG through CDP
+  Core->>Page: remove and verify overlay
+  Core-->>Tool: PNG bytes and dimensions
+  Tool->>Run: atomically persist private PNG
+  Tool->>Middleware: metadata plus image payload
+  Middleware->>Run: re-read and verify path, hash, bytes, and limits
+  Middleware-->>Pi: sanitized metadata text plus PNG image block
+  Pi-->>Model: provider tool result
+  Pi->>Recorder: normalized tool-finished event
+  Recorder->>Run: metadata-only tool-calls.jsonl entry
+  Note over Pi,Run: Raw provider session and PNG contain pixels; stable audit/report logs do not
+```
+
 ### Saved workflow replay and scheduling
 
 `RunOrchestrator` loads a user-owned workflow YAML, resolves parameters, translates the workflow
@@ -651,6 +739,13 @@ tool result, and its cost — `delta_bytes`, `observation_bytes`, or `delta_omit
 existing sanitized `details` payload into `tool-calls.jsonl`, so the strict `ToolAuditEntry` schema
 gains no field. `summarizeDeltaCost` reads that projection back and writes nothing.
 
+Vision assist likewise adds no table or migration. `context.screenshots` is one boolean in the
+existing `profile.yaml` context block and keyed JSON `preferences` namespace; the effective view is
+granted only for an approved literal `true`. `VisionAvailability`, its dedicated budget counters,
+and `SensitiveScreenLatch` are run-local memory. Accepted PNGs are filesystem artifacts under
+`runs/<run-id>/screenshots/`; the strict `ToolAuditEntry` schema has an optional, backward-compatible
+`captures` array containing only relative path, SHA-256, MIME type, dimensions, and byte length.
+
 ```mermaid
 flowchart TD
   Config[config.yaml and profile.yaml] --> Runtime[Runtime configuration]
@@ -669,16 +764,16 @@ flowchart TD
   Deterministic --> RunDir
 ```
 
-| Store                 | Verified contents and role                                                                                                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Config directory      | `config.yaml` for runtime/search/ethics configuration and `profile.yaml` for human-editable preferences and context grants.                                                                                                                            |
-| Data `workflows/`     | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                           |
-| Data `templates/`     | Saved Markdown report templates.                                                                                                                                                                                                                       |
-| Data `runs/<run-id>/` | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, captures, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable.                                                     |
-| Data `index.db`       | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables. |
-| Cache `ask/`          | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                               |
-| Browser profiles      | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected.                                                                                                    |
-| OS keychain           | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                      |
+| Store                 | Verified contents and role                                                                                                                                                                                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Config directory      | `config.yaml` for runtime/search/ethics configuration and `profile.yaml` for human-editable preferences and context grants.                                                                                                                                                                                                        |
+| Data `workflows/`     | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                       |
+| Data `templates/`     | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                   |
+| Data `runs/<run-id>/` | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data. |
+| Data `index.db`       | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                             |
+| Cache `ask/`          | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                           |
+| Browser profiles      | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected.                                                                                                                                                                                |
+| OS keychain           | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                  |
 
 Path helpers honor the platform's local data, cache, and configuration conventions. Run
 directories are created with restrictive permissions where the platform supports them, and
@@ -738,6 +833,13 @@ ephemeral browser profiles are cleaned up on close or crash.
   in the action window rather than what the action caused. The block ships **beside** the existing
   observation rather than replacing it, and claims no token saving; `summarizeDeltaCost` exists to
   supply the evidence that replacement decision needs, deliberately deferred rather than assumed.
+- **Screenshot access is structural, explicit, and fail-closed.** Raw pixels bypass content
+  sanitization, so an approved opt-in is necessary but not sufficient: browser availability,
+  provider-declared image support, the per-run suppression flag, and the zero-LLM boundary also
+  decide whether the tool exists. Per-capture latch, format, artifact-integrity, and dedicated budget
+  checks defend the remaining runtime path. This makes vision useful as optional fallback evidence
+  without making deterministic replay, scheduled work, or the browser interaction gauntlet depend on
+  it, at the cost of retaining sensitive PNGs and a capture-bearing raw provider session for audit.
 - **Deterministic selection before provider construction.** No-LLM `ask`/`research`, nested
   workflow calls, and scheduled runs do not silently open model sessions. Saved replay has a fixed
   plan before any optional post-run synthesis.

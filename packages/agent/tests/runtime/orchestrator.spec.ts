@@ -198,6 +198,45 @@ function evidenceEntry(url: string, title: string): EvidenceEntry {
 }
 
 describe('@no-llm runAgenticTask lifecycle', () => {
+  it('resolves image capability before constructing tools and the provider', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-vision-order-'));
+    tempDirs.push(root);
+    const order: string[] = [];
+    const connector = new RecordingConnector();
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    await runAgenticTask(
+      {
+        goal: 'Complete the fixture task',
+        model: { provider: 'fixture', id: 'vision-model' },
+        auth: { mode: 'managed' },
+        connector,
+        ambient: {
+          grants: { location: true, screenshots: true },
+          userLocation: null,
+        },
+      },
+      {
+        runStore: new LocalRunStore(root),
+        createEnvironment: () => Promise.resolve(buildEnvironment(vi.fn(() => Promise.resolve()))),
+        resolveModelImageInput: () => {
+          order.push('capability');
+          return true;
+        },
+        createProvider: (services) => {
+          order.push('provider');
+          expect(services.vision.capability).toEqual({
+            imageInput: true,
+            resolvedAt: 'pre-catalog',
+          });
+          return provider;
+        },
+      },
+    );
+
+    expect(order).toEqual(['capability', 'provider']);
+  });
+
   it('rejects malformed markers before creating any run state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'yantra-marker-ingress-'));
     tempDirs.push(root);

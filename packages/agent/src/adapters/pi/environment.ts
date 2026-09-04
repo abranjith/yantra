@@ -117,6 +117,34 @@ export interface PiCredentialProbe {
   readonly authSource: PiAuthSource;
 }
 
+/** Minimal registry seam used by the pre-catalog image-capability probe. */
+export interface ModelLookup {
+  find(provider: string, modelId: string): unknown;
+}
+
+/**
+ * Resolves whether the selected Pi model explicitly declares image input.
+ * Registry misses and malformed declarations fail closed.
+ */
+export function modelSupportsImageInput(
+  provider: string,
+  modelId: string,
+  lookup?: ModelLookup,
+): boolean {
+  try {
+    const registry =
+      lookup ??
+      ModelRegistry.create(
+        AuthStorage.create(join(yantraDataDir(), 'pi', 'auth.json')),
+        join(yantraDataDir(), 'pi', 'models.json'),
+      );
+    const model = registry.find(provider, modelId) as { input?: unknown } | undefined;
+    return Array.isArray(model?.input) && model.input.includes('image');
+  } catch {
+    return false;
+  }
+}
+
 /** Inputs for {@link probePiCredential}. */
 export interface PiCredentialProbeOptions {
   readonly provider: string;

@@ -49,7 +49,13 @@ import {
   type MintedCandidates,
   type PointerPoint,
 } from './pointer-preflight.js';
+import { SensitiveScreenLatch } from './sensitive-screen-latch.js';
 import { wrapPuppeteerPage } from './session.js';
+import {
+  puppeteerSetOfMarksPort,
+  withSetOfMarksCapture,
+  type SetOfMarksMark,
+} from './set-of-marks.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 
 // Note: page settling (navigation watching, redirect chains, network quiet)
@@ -159,6 +165,16 @@ export interface AgentBrowserObservation {
   readonly interactables: readonly AgentInteractable[];
 }
 
+/** Raw private PNG captured by the controller before run-artifact persistence. */
+export interface AgentScreenshotCapture {
+  readonly png: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+  readonly scope: 'viewport' | 'element';
+  readonly ref?: string;
+  readonly marks: number;
+}
+
 export interface BrowserActionResult {
   readonly url: string;
   readonly title: string;
@@ -263,6 +279,8 @@ export interface AgentBrowserControllerOptions {
  */
 export class AgentBrowserController implements WidgetPort {
   public readonly runId: string;
+  /** Shared run-local latch consulted by secret fills and screenshot capture. */
+  public readonly sensitiveScreenLatch = new SensitiveScreenLatch();
 
   private readonly provider: BrowserProvider;
   private readonly extractor: Extractor;
@@ -531,6 +549,58 @@ export class AgentBrowserController implements WidgetPort {
     const record = this.refs.get(ref);
     if (!record) throw new StaleElementRefError(ref);
     return record.handle;
+  }
+
+  /** Capture an epoch-guarded PNG with Yantra's current eNN marks overlaid. */
+  public async capturePng(ref?: string): Promise<AgentScreenshotCapture> {
+    this.assertLaunched();
+    const page = this.page!;
+    const target = ref === undefined ? null : this.resolveRef(ref);
+    const marks: SetOfMarksMark[] = [];
+    for (const [markRef, record] of this.refs) {
+      const box = await record.handle.boundingBox();
+      if (box !== null) {
+        marks.push({ ref: markRef, left: box.x, top: box.y, width: box.width, height: box.height });
+      }
+    }
+    const targetBox = target === null ? null : await target.boundingBox();
+    if (target !== null && targetBox === null) throw new StaleElementRefError(ref!);
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    const rawClip = targetBox ?? { x: 0, y: 0, width: viewport.width, height: viewport.height };
+    const clip = {
+      x: Math.max(0, rawClip.x),
+      y: Math.max(0, rawClip.y),
+      width: Math.max(1, Math.min(1600, rawClip.width)),
+      height: Math.max(1, Math.min(1200, rawClip.height)),
+      scale: 1,
+    };
+    const png = await withSetOfMarksCapture({
+      port: puppeteerSetOfMarksPort(page),
+      marks,
+      readTopLevelEpoch: () => this.topLevelDocumentEpoch(),
+      capture: async () => {
+        const session = await page.createCDPSession();
+        try {
+          const result = await session.send('Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: target !== null,
+            clip,
+          });
+          return Buffer.from(result.data, 'base64');
+        } finally {
+          await session.detach().catch(() => undefined);
+        }
+      },
+    });
+    const dimensions = pngDimensions(png);
+    return {
+      png,
+      ...dimensions,
+      scope: target === null ? 'viewport' : 'element',
+      ...(ref === undefined ? {} : { ref }),
+      marks: marks.length,
+    };
   }
 
   /** Return model-safe ref metadata for policy classification. */
@@ -1065,8 +1135,14 @@ export class AgentBrowserController implements WidgetPort {
     }
   }
 
+  /** Current top-level committed-document epoch, or null before/unreadable launch. */
+  public topLevelDocumentEpoch(): number | null {
+    return this.settler?.epoch ?? null;
+  }
+
   /** Close Chrome and remove the ephemeral profile. Idempotent. */
   public teardown(): Promise<void> {
+    this.sensitiveScreenLatch.clearOnTeardown();
     this.teardownPromise ??= this.performTeardown();
     return this.teardownPromise;
   }
@@ -1557,4 +1633,16 @@ async function sleep(ms: number): Promise<void> {
 
 async function settle(): Promise<void> {
   await sleep(30);
+}
+
+function pngDimensions(bytes: Uint8Array): { readonly width: number; readonly height: number } {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 24 || signature.some((byte, index) => bytes[index] !== byte)) {
+    throw new Error('Chrome returned an invalid PNG screenshot.');
+  }
+  const view = Buffer.from(bytes);
+  const width = view.readUInt32BE(16);
+  const height = view.readUInt32BE(20);
+  if (width <= 0 || height <= 0) throw new Error('Chrome returned invalid PNG dimensions.');
+  return { width, height };
 }

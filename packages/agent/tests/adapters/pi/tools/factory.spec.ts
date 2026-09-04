@@ -37,6 +37,25 @@ describe('@no-llm createYantraTools factory', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it('keeps an available screenshot tool name-sorted and duplicate-free', () => {
+    const names = createYantraTools(
+      buildServices({
+        vision: {
+          grantEnabled: true,
+          hasBrowserTools: true,
+          modelImageInput: true,
+          suppressedByFlag: false,
+          zeroLlm: false,
+          available: true,
+          capability: { imageInput: true, resolvedAt: 'pre-catalog' },
+        },
+      }),
+    ).map((tool) => tool.name);
+    expect(names).toEqual([...names].sort());
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toContain('browser_screenshot');
+  });
+
   it('never exposes any Pi built-in tool (bash/read/write/edit/grep/find/ls)', () => {
     const builtins = new Set(['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls']);
     const names = createYantraTools(buildServices()).map((tool) => tool.name);

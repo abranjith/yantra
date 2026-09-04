@@ -21,6 +21,7 @@ import type {
   SearchProviderName,
   SearchResult,
   AgentBrowserController,
+  SensitiveScreenLatch,
   OpaqueRefResolver,
   RankSignalSink,
   ModelSuppliedValues,
@@ -34,6 +35,7 @@ import type { WorkflowToolMode } from './profiles.js';
 import type { AgentTrace } from './trace.js';
 import type { UrlPolicy } from './url-policy.js';
 import type { UrlProvenance } from './url-provenance.js';
+import type { VisionAvailability } from './vision.js';
 
 /** Confirmation dependencies (gateway + optional persistence). */
 export interface ConfirmationServices {
@@ -211,6 +213,8 @@ export interface BrowserToolDeps {
   readonly controller: AgentBrowserController;
   readonly ethics: EthicsGate;
   readonly secretResolver: OpaqueRefResolver | null;
+  /** Shared fail-closed latch guarding screenshots after secret dispatch. */
+  readonly sensitiveScreenLatch?: SensitiveScreenLatch;
   /** Trusted metadata lookup; bindings never come from model input. */
   readonly secretHosts: (key: string) => Promise<readonly string[]>;
   readonly captureThresholdBytes: number;
@@ -364,6 +368,8 @@ export interface RunServices {
   readonly runDir: string;
   /** Active report-template manifest, or null for the default Brief path. */
   readonly template: TemplateManifest | null;
+  /** Immutable screenshot registration decision resolved before catalog construction. */
+  readonly vision: VisionAvailability;
   /** Run budget accountant (wall-clock, calls, bytes, hosts). */
   readonly budgets: BudgetTracker;
   /** The single LLM-bound sanitizer chokepoint. */

@@ -75,6 +75,15 @@ describe('@no-llm core interaction message catalog', () => {
     }
   });
 
+  it('never makes optional vision a required recovery step', () => {
+    for (const template of INTERACTION_MESSAGES) {
+      const details = detailsFor(template.requiredDetails);
+      expect(`${template.message(details)} ${template.hint(details)}`).not.toContain(
+        'browser_screenshot',
+      );
+    }
+  });
+
   it('keeps the stable error-code set frozen', () => {
     const codes = [
       ...new Set(

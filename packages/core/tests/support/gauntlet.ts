@@ -131,6 +131,8 @@ export interface GauntletFixture {
   readonly expectedMutations: number;
   readonly expectedReads: number;
   readonly expectedToolCalls: null;
+  /** The interaction gate must remain solvable without image input. */
+  readonly requiresVision: false;
   readonly timeoutMs?: number;
 }
 
@@ -444,6 +446,7 @@ function fixture(
     expectedMutations,
     expectedReads,
     expectedToolCalls: null,
+    requiresVision: false,
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
   };
 }

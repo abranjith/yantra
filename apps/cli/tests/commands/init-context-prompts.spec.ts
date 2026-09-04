@@ -18,13 +18,16 @@ describe('@no-llm collectContextGrants', () => {
       confirm: async () => true,
       text: async () => 'Naperville, IL',
     });
-    expect(answers).toEqual({ grants: { location: true }, city: 'Naperville, IL' });
+    expect(answers).toEqual({
+      grants: { location: true, screenshots: false },
+      city: 'Naperville, IL',
+    });
   });
 
   it('maps a no onto the grant and skips the city question entirely', async () => {
     const text = vi.fn(async () => 'Naperville, IL');
     const answers = await collectContextGrants({ confirm: async () => false, text });
-    expect(answers).toEqual({ grants: { location: false }, city: null });
+    expect(answers).toEqual({ grants: { location: false, screenshots: false }, city: null });
     expect(text).not.toHaveBeenCalled();
   });
 
@@ -33,7 +36,7 @@ describe('@no-llm collectContextGrants', () => {
       confirm: async () => true,
       text: async () => '   ',
     });
-    expect(answers).toEqual({ grants: { location: true }, city: null });
+    expect(answers).toEqual({ grants: { location: true, screenshots: false }, city: null });
   });
 
   it('trims a city answer', async () => {
@@ -54,7 +57,7 @@ describe('@no-llm collectContextGrants', () => {
       confirm: async () => true,
       text: async () => null,
     });
-    expect(answers).toEqual({ grants: { location: true }, city: null });
+    expect(answers).toEqual({ grants: { location: true, screenshots: false }, city: null });
   });
 
   it('asks exactly one question when the grant is declined', async () => {

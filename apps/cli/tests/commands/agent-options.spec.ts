@@ -66,6 +66,7 @@ describe('@no-llm shared agent options', () => {
       '--tool-retries',
       '--confirm-timeout',
       '--no-llm',
+      '--no-screenshots',
     ]);
     expect(command.options.every((option) => option.defaultValue === undefined)).toBe(true);
   });
@@ -90,6 +91,7 @@ describe('@no-llm shared agent options', () => {
         '--tool-retries',
         '--confirm-timeout',
         '--no-llm',
+        '--no-screenshots',
       ];
 
       const command = parent.commands.find((candidate) => candidate.name() === name);
@@ -226,6 +228,38 @@ describe('@no-llm shared agent options', () => {
 
     expect(result).toEqual({ mode: 'no-llm', reason: 'flag' });
     expect(probeCredential).not.toHaveBeenCalled();
+  });
+
+  it.each(['do', 'ask', 'research'])(
+    'exposes only the downward screenshot override on %s',
+    (name) => {
+      const parent = new Command();
+      registerAskCommand(parent);
+      registerResearchCommand(parent);
+      registerDoCommand(parent);
+      const command = parent.commands.find((candidate) => candidate.name() === name);
+      const option = command?.options.find((candidate) => candidate.long === '--no-screenshots');
+      expect(option).toMatchObject({
+        long: '--no-screenshots',
+        description: 'suppress vision assist for this run',
+      });
+      expect(command?.options.some((candidate) => candidate.long === '--screenshots')).toBe(false);
+    },
+  );
+
+  it('stores --no-screenshots using Commander negation semantics and leaves absence unset', () => {
+    const absent = addAgentOptions(new Command('probe').exitOverride());
+    absent.parse([], { from: 'user' });
+    expect(absent.opts()).toMatchObject({ screenshots: true });
+
+    const suppressed = addAgentOptions(new Command('probe').exitOverride());
+    suppressed.parse(['--no-screenshots'], { from: 'user' });
+    expect(suppressed.opts()).toMatchObject({ screenshots: false });
+
+    const positive = addAgentOptions(new Command('probe').exitOverride());
+    expect(() => positive.parse(['--screenshots'], { from: 'user' })).toThrowError(
+      expect.objectContaining({ code: 'commander.unknownOption' }),
+    );
   });
 
   it('short-circuits LLM_PROVIDER=none with the env reason', async () => {

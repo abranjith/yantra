@@ -31,6 +31,18 @@ export const AGENT_INTERACTION_MESSAGES = [
     'resolver-missing',
     () => 'Website secret resolution is unavailable.',
   ),
+  tool(
+    'SENSITIVE_SCREEN_LATCH_UNAVAILABLE',
+    'guard-missing',
+    () => 'Secret fill was denied because the sensitive-screen guard is unavailable.',
+  ),
+  tool(
+    'SCREENSHOT_SENSITIVE_SCREEN',
+    'secret-latched',
+    () =>
+      'Screenshot capture was denied because a resolved secret may still be visible. Capture resumes only after the top-level page navigates to a new document.',
+  ),
+  tool('SCREENSHOT_UNAVAILABLE', 'capture-failed', passThrough, ['message']),
   tool('SECRET_HOST_MISMATCH', 'host-binding', passThrough, ['message']),
   tool(
     'EXTRACTION_SCHEMA_INVALID',

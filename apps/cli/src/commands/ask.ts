@@ -432,6 +432,7 @@ async function runAgenticAsk(
     ...(query.personalization ? { profileContext: query.personalization } : {}),
     ...(template === undefined ? {} : { template }),
     ambient,
+    screenshotsSuppressed: options.screenshots === false,
     connector,
   });
   await renderAgenticOutcome(outcome, runtime, format, detail, options);

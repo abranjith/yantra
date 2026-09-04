@@ -23,6 +23,7 @@ export {
   browserFillFormSpec,
   browserNavigateSpec,
   browserObserveSpec,
+  browserScreenshotSpec,
   createBriefPublisher,
   createTemplatedReportPublisher,
   createYantraTools,

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { FileUsageWriter, ToolCallWriter, type ToolAuditEntryInput } from '@yantra/core';
 import { readManifest, writeManifest, type RunManifest } from '@yantra/core/workflow/replay';
 import { AgentManifestSection, type AgentManifestSectionType } from '@yantra/protocol';
+import pino from 'pino';
 
 import type {
   AgentEvent,
@@ -27,7 +28,18 @@ export interface RunRecorderOptions {
   readonly tools: readonly HashableToolDefinition[];
   /** Test/embedding override; production resolves the installed SDK package. */
   readonly sdkVersion?: string;
+  /** Test/embedding override for capture-metadata logging. */
+  readonly logger?: RunRecorderLogger;
 }
+
+export interface RunRecorderLogger {
+  info(bindings: Readonly<Record<string, unknown>>, message: string): void;
+}
+
+const defaultLogger: RunRecorderLogger = pino({
+  name: 'yantra-run-recorder',
+  level: process.env.LOG_LEVEL ?? 'info',
+});
 
 /**
  * Projects an open provider session into stable Yantra run artifacts.
@@ -145,6 +157,8 @@ export class RunRecorder {
         const startedAt = this.startedCalls.get(event.callId);
         this.startedCalls.delete(event.callId);
         const metadata = readToolResultMetadata(event.output);
+        const captures = readCaptures(event.output);
+        const output = projectOutputForAudit(event.output, captures);
         const endAt = Date.parse(event.at);
         const duration =
           startedAt === undefined || Number.isNaN(startedAt) || Number.isNaN(endAt)
@@ -154,13 +168,25 @@ export class RunRecorder {
           this.makeToolEntry(event, {
             phase: 'end',
             input_sanitized: null,
-            output_sanitized: event.output,
+            output_sanitized: output,
             status: metadata.status ?? (event.isError ? 'error' : 'ok'),
             duration_ms: duration,
             error_code: metadata.errorCode,
             confirmation_id: metadata.confirmationId,
+            ...(captures.length > 0 ? { captures } : {}),
           }),
         );
+        if (captures.length > 0) {
+          (this.options.logger ?? defaultLogger).info(
+            {
+              run_id: this.options.runId,
+              call_id: event.callId,
+              tool: event.tool,
+              captures,
+            },
+            'capture artifacts recorded',
+          );
+        }
         return;
       }
       case 'turn_finished':
@@ -189,6 +215,62 @@ export class RunRecorder {
       ...phaseFields,
     };
   }
+}
+
+interface AuditCapture {
+  readonly path: string;
+  readonly sha256: string;
+  readonly mime_type: 'image/png';
+  readonly width: number;
+  readonly height: number;
+  readonly bytes: number;
+}
+
+function readCaptures(output: unknown): AuditCapture[] {
+  if (output === null || typeof output !== 'object' || Array.isArray(output)) return [];
+  const record = output as Readonly<Record<string, unknown>>;
+  const details =
+    record.details !== null && typeof record.details === 'object' && !Array.isArray(record.details)
+      ? (record.details as Readonly<Record<string, unknown>>)
+      : null;
+  const value = record.captures ?? details?.captures;
+  if (!Array.isArray(value)) return [];
+  return value.filter(isAuditCapture);
+}
+
+function isAuditCapture(value: unknown): value is AuditCapture {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const capture = value as Readonly<Record<string, unknown>>;
+  return (
+    typeof capture.path === 'string' &&
+    /^[a-f0-9]{64}$/u.test(String(capture.sha256)) &&
+    capture.mime_type === 'image/png' &&
+    Number.isSafeInteger(capture.width) &&
+    Number(capture.width) > 0 &&
+    Number.isSafeInteger(capture.height) &&
+    Number(capture.height) > 0 &&
+    Number.isSafeInteger(capture.bytes) &&
+    Number(capture.bytes) >= 0
+  );
+}
+
+/** Replaces provider image blocks with metadata before stable audit persistence. */
+function projectOutputForAudit(output: unknown, captures: readonly AuditCapture[]): unknown {
+  if (output === null || typeof output !== 'object' || Array.isArray(output)) return output;
+  const record = output as Readonly<Record<string, unknown>>;
+  if (!Array.isArray(record.content)) return output;
+  const content: readonly unknown[] = record.content;
+  let imageIndex = 0;
+  return {
+    ...record,
+    content: content.map((part): unknown => {
+      if (part === null || typeof part !== 'object' || Array.isArray(part)) return part;
+      const block = part as Readonly<Record<string, unknown>>;
+      if (block.type !== 'image') return block;
+      const artifact = captures[imageIndex++] ?? null;
+      return { type: 'image', artifact };
+    }),
+  };
 }
 
 /** Resolves the installed Pi SDK version from its package metadata at runtime. */

@@ -39,6 +39,8 @@ export interface AgentOptions {
   readonly confirmTimeout?: string;
   /** Commander stores `--no-llm` as `llm: false`. */
   readonly llm?: boolean;
+  /** Commander stores `--no-screenshots` as `screenshots: false`. */
+  readonly screenshots?: boolean;
 }
 
 /** Closed result of resolving the complete agentic invocation surface. */
@@ -104,7 +106,8 @@ export function addAgentOptions(command: Command): Command {
     .addOption(new Option('--tool-timeout <duration>', 'timeout for one tool call'))
     .addOption(new Option('--tool-retries <n>', 'retries after an identical tool failure'))
     .addOption(new Option('--confirm-timeout <duration>', 'maximum live consent wait'))
-    .addOption(new Option('--no-llm', 'force the deterministic no-model path'));
+    .addOption(new Option('--no-llm', 'force the deterministic no-model path'))
+    .addOption(new Option('--no-screenshots', 'suppress vision assist for this run'));
 }
 
 /**

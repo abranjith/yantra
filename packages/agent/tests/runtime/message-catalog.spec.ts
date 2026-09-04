@@ -23,6 +23,7 @@ import {
 } from '../../src/runtime/run-services.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../src/runtime/url-provenance.js';
+import { resolveVisionAvailability } from '../../src/runtime/vision.js';
 
 describe('@no-llm agent interaction message catalog', () => {
   it('renders every template, requires declared details, and is globally distinct', () => {
@@ -175,6 +176,13 @@ function buildServices(): RunServices {
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir: '.',
+    vision: resolveVisionAvailability({
+      grantEnabled: false,
+      hasBrowserTools: true,
+      modelImageInput: false,
+      suppressedByFlag: false,
+      zeroLlm: true,
+    }),
     budgets,
     sanitizer,
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),

@@ -77,6 +77,15 @@ and persisted artifacts inside Yantra, but they do not hide process arguments or
 shell history. Protected clicks and stored-secret fills ask for consent on an
 interactive TTY and fail closed under `--json` or non-interactive execution.
 
+Vision assist is disabled by default. When explicitly enabled, the agent may
+request a PNG screenshot only as fallback evidence when text observation is
+insufficient or contradictory. The screenshot tool is absent unless the run
+has browser tools, uses an image-capable model, has an approved
+`context.screenshots: true` grant, is not zero-LLM, and was not started with
+`--no-screenshots`. It is also unavailable while a resolved secret could still
+be visible; navigation to a new top-level document or browser teardown is
+required to clear that protection.
+
 `discover` is an alias for `do`. See
 [Agentic Tasks](features/agentic-tasks.md) and
 [Safety and Privacy](features/safety-and-privacy.md) before using browser
@@ -158,12 +167,25 @@ yantra prefs get defaults.detail
 yantra prefs set defaults.detail full
 yantra prefs set locale.city "Naperville, IL"
 yantra prefs set context.location false
+yantra prefs set context.screenshots true
+yantra prefs set context.screenshots false
 yantra prefs --forget defaults.detail
 ```
 
 `profile` includes `profile.yaml`, built-in defaults, and stored overrides.
 `prefs get` and `prefs list` show only SQLite rows. `--forget` deletes the
 SQLite override and can reveal a still-present YAML value underneath it.
+
+Setting `context.screenshots` to `true` prints a warning before the grant is
+written. Captures are raw, unmasked pixels that the sanitizer cannot inspect;
+they can expose logged-in content, names, balances, message bodies, and anything
+else visible on screen. The images are sent to the configured model provider
+and retained in both the run directory and raw provider session log. With
+Ollama, the destination wording identifies the configured local model runtime,
+but the pixel and retention warnings remain. Set the preference to `false` to
+deny future captures; this does not delete images from past run directories.
+Use `--no-screenshots` on one run when you want suppression without changing the
+stored preference.
 
 There is no separate `history` command. Use the run index and artifacts:
 
@@ -237,8 +259,14 @@ yantra report <run-id> --open
 Ordinary `doctor` is offline. `doctor --agent-smoke` opens a live, potentially
 billable provider session and requires credentials; it has no deterministic
 fallback. `audit` reconstructs a trust narrative from stable Yantra-owned
-projections and does not parse the raw provider session. `report` prints the
-existing `report.md`; `--open` cannot be combined with `--json`. See
+projections and does not parse the raw provider session. For a run with vision
+captures, terminal output includes a **The model saw these images** section with
+each path, dimensions, byte count, SHA-256 digest, owning tool call, and capture
+budget cost. JSON output exposes the same metadata under `captures` and sets
+`rawSessionLogCaptureBearing` to `true`. The stable `tool-calls.jsonl` and audit
+projection never embed image bytes, but `agent/*.jsonl` contains the image data
+sent to the provider. `report` prints the existing `report.md`; `--open` cannot
+be combined with `--json`. See
 [Diagnostics and Audit](features/diagnostics-and-audit.md).
 
 `init` creates local configuration or reports that it already exists:
@@ -269,6 +297,7 @@ surface:
 | `--tool-retries <n>`           | Retries after an identical failure           | `3`                |
 | `--confirm-timeout <duration>` | Live consent wait                            | `3m`               |
 | `--no-llm`                     | Force a deterministic path where one exists  | model enabled      |
+| `--no-screenshots`             | Suppress vision assist for this run          | grant unchanged    |
 
 Durations are positive integers with optional `ms`, `s`, `m`, or `h`; a bare
 integer is milliseconds. Resolution is command flag, then environment, then
@@ -349,6 +378,7 @@ agent/*.jsonl
 tool-calls.jsonl
 usage.json
 captures/
+screenshots/
 trace.json
 schedule.json
 ```
@@ -358,6 +388,12 @@ captures, outputs, reports, and visited URLs can still contain sensitive data;
 review the directory before sharing it. Browser profiles are ephemeral by
 default. Saved workflows may explicitly use persistent workflow-scoped browser
 profiles.
+
+Accepted vision captures are PNG files in `screenshots/`. A run can accept at
+most three; each is limited to 1600×1200 pixels and 5 MiB of encoded bytes.
+`tool-calls.jsonl` references each image only by path, SHA-256 digest, MIME type,
+dimensions, and byte count. The corresponding raw `agent/*.jsonl` session is
+capture-bearing because it contains the inline image block the model received.
 
 ### Reading browser recovery verdicts
 

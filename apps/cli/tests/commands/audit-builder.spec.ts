@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -141,6 +141,78 @@ describe('@no-llm cli/audit-builder', () => {
     expect(result.report.llmCallCount).toBe(0);
     expect(result.report.secretLookups).toHaveLength(0);
     expect(result.report.stepCount).toBe(0);
+    expect(result.report.captures).toEqual([]);
+    expect(result.report.rawSessionLogCaptureBearing).toBe(false);
+  });
+
+  it('projects capture metadata, ownership, and budget cost without mutating run artifacts', async () => {
+    const hash = 'c'.repeat(64);
+    const manifestText = JSON.stringify({
+      runId: 'capture-run',
+      workflowName: 'do',
+      status: 'completed',
+      startedAt: '2026-09-03T12:00:00.000Z',
+      agent: {
+        adapter: 'pi-coding-agent',
+        sdk_version: '0.80.6',
+        provider: 'anthropic',
+        model: 'vision-model',
+        thinking: 'off',
+        auth_source: 'managed',
+        session_id: 'capture-session',
+        session_file: 'agent/capture-session.jsonl',
+        prompt_version: 'agent-v8',
+        prompt_hash: hash,
+        tool_catalog_hash: hash,
+      },
+    });
+    const entry = {
+      ts: '2026-09-03T12:00:01.000Z',
+      seq: 7,
+      run_id: 'capture-run',
+      session_id: 'capture-session',
+      call_id: 'capture-call',
+      tool: 'browser_screenshot',
+      phase: 'end',
+      input_sanitized: null,
+      output_sanitized: { status: 'ok' },
+      status: 'ok',
+      duration_ms: 25,
+      error_code: null,
+      confirmation_id: null,
+      captures: [
+        {
+          path: 'screenshots/1-capture.png',
+          sha256: 'd'.repeat(64),
+          mime_type: 'image/png',
+          width: 640,
+          height: 480,
+          bytes: 8192,
+        },
+      ],
+    };
+    const toolText = `${JSON.stringify(entry)}\n`;
+    await writeFile(join(runDir, 'manifest.json'), manifestText, 'utf8');
+    await writeFile(join(runDir, 'tool-calls.jsonl'), toolText, 'utf8');
+
+    const result = await buildAuditReport('capture-run', runDir);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.report.captures).toEqual([
+      {
+        path: 'screenshots/1-capture.png',
+        sha256: 'd'.repeat(64),
+        mimeType: 'image/png',
+        width: 640,
+        height: 480,
+        bytes: 8192,
+        toolCall: { seq: 7, callId: 'capture-call', tool: 'browser_screenshot' },
+        budgetConsumed: { captures: 1, pixels: 307_200, bytes: 8192 },
+      },
+    ]);
+    expect(result.report.rawSessionLogCaptureBearing).toBe(true);
+    await expect(readFile(join(runDir, 'manifest.json'), 'utf8')).resolves.toBe(manifestText);
+    await expect(readFile(join(runDir, 'tool-calls.jsonl'), 'utf8')).resolves.toBe(toolText);
   });
 
   it('skips corrupt JSONL lines rather than throwing', async () => {
@@ -313,6 +385,8 @@ describe('@no-llm cli/audit-builder', () => {
       outputTokens: 8,
       costUsd: 0.04,
     });
+    expect(result.report.captures).toEqual([]);
+    expect(result.report.rawSessionLogCaptureBearing).toBe(false);
   });
 
   it('renders typed startup failures from the manifest', async () => {

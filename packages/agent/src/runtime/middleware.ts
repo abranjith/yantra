@@ -24,14 +24,20 @@
  * definitions.
  */
 
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
+
 import { isParked, type SanitizationProfile, type UserInputVault } from '@yantra/core';
 import { generateUlid, type ConfirmationRequest } from '@yantra/protocol';
 import pino from 'pino';
 import type { Static, TSchema } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 
+import type { BudgetDecision, BudgetLimit } from './budget.js';
 import { renderAgentMessage } from './messages.js';
 import type { RunServices } from './run-services.js';
+import type { CaptureMetadata } from './vision.js';
 
 const logger = pino({ name: 'yantra-tool-middleware', level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -48,6 +54,8 @@ export interface YantraToolResult {
   readonly status: ToolStatus;
   /** Bounded, sanitized text the model sees. */
   readonly modelText: string;
+  /** Optional rich content; only the screenshot exception may carry an image. */
+  readonly content?: readonly YantraToolContent[];
   /** Artifacts for audit/UI — never automatically exposed to the model. */
   readonly details: unknown;
   /** Stable machine error code, present on non-`ok` results. */
@@ -60,11 +68,22 @@ export interface YantraToolResult {
   readonly terminate?: boolean;
 }
 
+export type YantraToolContent =
+  | { readonly kind: 'text'; readonly text: string }
+  | {
+      readonly kind: 'image';
+      readonly mimeType: 'image/png';
+      readonly base64: string;
+      readonly artifact: CaptureMetadata;
+    };
+
 /** Successful domain-operation output before sanitization/bounding. */
 export interface DomainSuccess {
   readonly ok: true;
   /** Model-visible payload (object or string); the middleware sanitizes/bounds it. */
   readonly model: unknown;
+  /** Pre-authorized rich content; middleware permits images only for browser_screenshot. */
+  readonly content?: readonly Exclude<YantraToolContent, { readonly kind: 'text' }>[];
   /** Optional artifacts recorded in `details` (not model-visible). */
   readonly details?: unknown;
   /** Terminal tools set this to close the run after the batch. */
@@ -383,9 +402,18 @@ async function runPipeline<TParams extends TSchema>(
         ...(confirmationId ? { confirmation_id: confirmationId } : {}),
       };
     }
+    const rich = await validateScreenshotContent(spec.name, domain.content, services);
+    if (!rich.isOk) {
+      return failure(spec, services, rich.error.code, rich.error.message, false, {
+        budget_limit: rich.error.limit,
+      });
+    }
     return {
       status: 'ok',
       modelText: bounded.text,
+      ...(rich.value.length > 0
+        ? { content: [{ kind: 'text' as const, text: bounded.text }, ...rich.value] }
+        : {}),
       details: maskUserInputDeep(domain.details ?? null, services.userInput),
       ...(domain.terminate ? { terminate: true } : {}),
       ...(confirmationId ? { confirmation_id: confirmationId } : {}),
@@ -393,7 +421,7 @@ async function runPipeline<TParams extends TSchema>(
   } catch (error) {
     // 8. Unexpected exception: audited, genericized. No secret/raw-content leak.
     logger.error(
-      { tool: spec.name, err: error instanceof Error ? error.message : String(error) },
+      { tool: spec.name, error_type: error instanceof Error ? error.name : 'UnknownError' },
       'unexpected tool error',
     );
     return failure(
@@ -406,6 +434,72 @@ async function runPipeline<TParams extends TSchema>(
       true,
     );
   }
+}
+
+async function validateScreenshotContent(
+  toolName: string,
+  content: DomainSuccess['content'],
+  services: RunServices,
+): Promise<
+  | {
+      readonly isOk: true;
+      readonly value: readonly Extract<YantraToolContent, { kind: 'image' }>[];
+    }
+  | { readonly isOk: false; readonly error: BudgetDecision }
+> {
+  if (content === undefined || content.length === 0) return { isOk: true, value: [] };
+  const denied = (limit: BudgetLimit, message: string) => ({
+    isOk: false as const,
+    error: {
+      code: 'BUDGET_EXHAUSTED' as const,
+      limit,
+      message,
+      carriesPublishRemedy: false,
+    },
+  });
+  if (toolName !== 'browser_screenshot' || !services.vision.available || content.length !== 1) {
+    return denied(
+      'capture-mime',
+      'Image content is permitted only for an available browser_screenshot call.',
+    );
+  }
+  const image = content[0];
+  if (image?.kind !== 'image') {
+    return denied('capture-mime', 'Screenshot content must contain exactly one PNG image.');
+  }
+  const artifact = image.artifact;
+  const absolute = resolve(services.runDir, artifact.path);
+  const escaped = relative(services.runDir, absolute);
+  if (isAbsolute(artifact.path) || escaped.startsWith('..') || isAbsolute(escaped)) {
+    return denied('capture-bytes', 'Screenshot artifact path escapes the run directory.');
+  }
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(absolute);
+  } catch {
+    return denied('capture-bytes', 'Screenshot artifact is missing.');
+  }
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  if (digest !== artifact.sha256 || bytes.byteLength !== artifact.bytes) {
+    return denied(
+      'capture-bytes',
+      'Screenshot artifact bytes do not match their recorded metadata.',
+    );
+  }
+  if (image.mimeType !== 'image/png' || artifact.mime_type !== 'image/png') {
+    return denied('capture-mime', 'Screenshot artifact must be PNG.');
+  }
+  if (Buffer.from(image.base64, 'base64').compare(bytes) !== 0) {
+    return denied('capture-bytes', 'Screenshot image payload does not match its private artifact.');
+  }
+  const account = services.budgets.accountCaptureBytes({
+    mimeType: artifact.mime_type,
+    width: artifact.width,
+    height: artifact.height,
+    bytes: artifact.bytes,
+  });
+  if (!account.isOk) return { isOk: false, error: account.error };
+  return { isOk: true, value: [image] };
 }
 
 /** Standard structured-failure result builder (secret-free by construction). */

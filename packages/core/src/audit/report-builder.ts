@@ -158,6 +158,22 @@ function renderAgenticReport(input: {
   }
   lines.push('');
 
+  lines.push('## Captures');
+  const captures = input.toolCalls.flatMap((entry) =>
+    (entry.captures ?? []).map((capture) => ({ entry, capture })),
+  );
+  if (captures.length === 0) {
+    lines.push('- none');
+  } else {
+    for (const { entry, capture } of captures) {
+      lines.push(
+        `- [${entry.seq}] ${capture.path} - ${capture.width}x${capture.height}, ` +
+          `${capture.bytes} bytes, image/png, sha256=${capture.sha256}`,
+      );
+    }
+  }
+  lines.push('');
+
   lines.push('## Agent Usage');
   if (input.usage?.agent === undefined) {
     lines.push('- none');

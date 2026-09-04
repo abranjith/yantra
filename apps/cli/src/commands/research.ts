@@ -401,6 +401,7 @@ async function runAgenticResearch(
     budgets: agent.budgets,
     ...(template === undefined ? {} : { template }),
     ambient,
+    screenshotsSuppressed: options.screenshots === false,
     connector,
   });
   if (outcome.kind !== 'published') {

@@ -21,6 +21,7 @@ import {
   UrlPolicy,
   UrlProvenance,
   buildYantraWrappedTools,
+  resolveVisionAvailability,
   type RunServices,
   type WrappedTool,
 } from '@yantra/agent';
@@ -34,8 +35,6 @@ import {
 } from '@yantra/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { PROTOCOL_GAUNTLET } from '../packages/core/tests/support/gauntlet.js';
-
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 import {
   AGENT_GAUNTLET,
@@ -46,6 +45,7 @@ import {
 } from './gauntlet/registry.js';
 
 describe('@no-llm agent real-browser widget gauntlet', () => {
+  const protocolFixtureCount = 13;
   let fixture: FixtureServer;
   let runDir: string;
   let baseController: AgentBrowserController;
@@ -276,7 +276,9 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
     // The gate FEAT-034 waits on, stated as a number so growing the gallery is
     // a deliberate edit rather than a side effect.
     expect(AGENT_GAUNTLET).toHaveLength(4);
-    expect(PROTOCOL_GAUNTLET.length + AGENT_GAUNTLET.length).toBe(17);
+    expect(protocolFixtureCount + AGENT_GAUNTLET.length).toBe(17);
+    expect(AGENT_GAUNTLET.filter((entry) => entry.requiresVision)).toEqual([]);
+    expect(tools.map((tool) => tool.name)).not.toContain('browser_screenshot');
   });
 
   it('encodes a distinct generic pattern per fixture', () => {
@@ -319,6 +321,13 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
+    vision: resolveVisionAvailability({
+      grantEnabled: false,
+      hasBrowserTools: true,
+      modelImageInput: false,
+      suppressedByFlag: false,
+      zeroLlm: true,
+    }),
     budgets,
     sanitizer,
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),

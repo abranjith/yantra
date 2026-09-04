@@ -109,12 +109,70 @@ describe('@no-llm cli/connector-io', () => {
       trustNarrative: 'Run completed in 5.0s. No LLM calls and no secrets.',
       agent: null,
       toolCalls: [],
+      captures: [],
+      rawSessionLogCaptureBearing: false,
       usage: null,
       terminalError: null,
     };
     connector.renderResult({ kind: 'audit', report }, makeOpts(stdout.stream, false));
     expect(stdout.value()).toContain('Audit — run run-1');
     expect(stdout.value()).toContain('Run completed in 5.0s');
+  });
+
+  it('renders capture disclosures in terminal and structured JSON output', () => {
+    const captureReport: AuditRenderReport = {
+      runId: 'capture-run',
+      workflowName: 'do',
+      status: 'completed',
+      startedAt: '2026-09-03T12:00:00Z',
+      endedAt: null,
+      durationMs: null,
+      llmCallCount: 1,
+      secretLookups: [],
+      stepCount: 0,
+      scopeMix: { publicCount: 0, readOnlyDataCount: 0, authenticatedCount: 0 },
+      trustNarrative: 'Run completed.',
+      agent: {
+        adapter: 'pi-coding-agent',
+        sdkVersion: '0.80.6',
+        provider: 'anthropic',
+        model: 'vision-model',
+        thinking: 'off',
+        authSource: 'managed',
+        sessionId: 'capture-session',
+        sessionFile: 'agent/capture-session.jsonl',
+        promptVersion: 'agent-v8',
+      },
+      toolCalls: [],
+      captures: [
+        {
+          path: 'screenshots/1-capture.png',
+          sha256: 'e'.repeat(64),
+          mimeType: 'image/png',
+          width: 640,
+          height: 480,
+          bytes: 8192,
+          toolCall: { seq: 1, callId: 'capture-call', tool: 'browser_screenshot' },
+          budgetConsumed: { captures: 1, pixels: 307_200, bytes: 8192 },
+        },
+      ],
+      rawSessionLogCaptureBearing: true,
+      usage: null,
+      terminalError: null,
+    };
+    const terminal = capture();
+    new TerminalRenderer().renderAudit(captureReport, makeOpts(terminal.stream, false));
+    expect(terminal.value()).toContain('The model saw these images');
+    expect(terminal.value()).toContain('screenshots/1-capture.png');
+    expect(terminal.value()).toContain('contains the image data itself');
+
+    const json = capture();
+    new JSONRenderer().renderAudit(captureReport, makeOpts(json.stream, true));
+    expect(JSON.parse(json.value())).toMatchObject({
+      kind: 'audit',
+      rawSessionLogCaptureBearing: true,
+      captures: [{ path: 'screenshots/1-capture.png', bytes: 8192 }],
+    });
   });
 
   it('dispatches report payloads to the renderer', () => {

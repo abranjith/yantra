@@ -42,7 +42,11 @@ export type BudgetLimit =
   | 'wall-clock-soft'
   | 'cumulative-bytes'
   | 'navigations'
-  | 'hosts';
+  | 'hosts'
+  | 'capture-count'
+  | 'capture-pixels'
+  | 'capture-bytes'
+  | 'capture-mime';
 
 /**
  * A typed exhaustion decision. Carries the stable machine code shared by every
@@ -86,6 +90,12 @@ export interface BudgetLimits {
   readonly maxNavigations: number;
   /** Maximum distinct outbound hosts for the run. */
   readonly maxHosts: number;
+  /** Maximum screenshots accepted during one run. */
+  readonly maxCaptures: number;
+  /** Maximum pixels in one screenshot. */
+  readonly maxCapturePixels: number;
+  /** Maximum encoded bytes in one screenshot. */
+  readonly maxCaptureBytes: number;
 }
 
 /**
@@ -101,6 +111,9 @@ export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
   maxBytesPerRun: 512 * 1024,
   maxNavigations: 30,
   maxHosts: 20,
+  maxCaptures: 3,
+  maxCapturePixels: 1600 * 1200,
+  maxCaptureBytes: 5 * 1024 * 1024,
 };
 
 /** Per-call accounting options shared by reservation and byte accounting. */
@@ -122,6 +135,17 @@ export interface BudgetSnapshot {
   readonly cumulativeBytes: number;
   readonly navigations: number;
   readonly hosts: number;
+  readonly captureCount: number;
+  readonly capturePixels: number;
+  readonly captureBytes: number;
+}
+
+/** Measurements checked before image data may cross the provider seam. */
+export interface CaptureMeasurement {
+  readonly mimeType: unknown;
+  readonly width: unknown;
+  readonly height: unknown;
+  readonly bytes: unknown;
 }
 
 /**
@@ -141,6 +165,9 @@ export class BudgetTracker {
   private totalCalls = 0;
   private cumulativeBytes = 0;
   private navigations = 0;
+  private captureCount = 0;
+  private capturePixels = 0;
+  private captureBytes = 0;
 
   /**
    * @param limits Hard caps for this run.
@@ -162,6 +189,76 @@ export class BudgetTracker {
   /** Maximum agent-visible bytes allowed in a single result. */
   public get maxBytesPerResult(): number {
     return this.limits.maxBytesPerResult;
+  }
+
+  public get maxCapturePixels(): number {
+    return this.limits.maxCapturePixels;
+  }
+
+  public get maxCaptureBytes(): number {
+    return this.limits.maxCaptureBytes;
+  }
+
+  public remainingCaptures(): number {
+    return Math.max(0, this.limits.maxCaptures - this.captureCount);
+  }
+
+  /** Atomically reserves one capture ordinal against its dedicated counter. */
+  public reserveCapture(): Result<void, BudgetDecision> {
+    if (this.captureCount >= this.limits.maxCaptures) {
+      return err(
+        this.decide(
+          'capture-count',
+          `Capture count budget of ${this.limits.maxCaptures} screenshots is exhausted.`,
+        ),
+      );
+    }
+    this.captureCount += 1;
+    return ok(undefined);
+  }
+
+  /** Validates and accounts encoded image measurements without touching text counters. */
+  public accountCaptureBytes(measurement: CaptureMeasurement): Result<void, BudgetDecision> {
+    if (measurement.mimeType !== 'image/png') {
+      return err(this.decide('capture-mime', 'Capture encoding must be image/png.'));
+    }
+    if (
+      !validNonnegativeInteger(measurement.width) ||
+      !validNonnegativeInteger(measurement.height)
+    ) {
+      return err(this.decide('capture-pixels', 'Capture dimensions are missing or invalid.'));
+    }
+    if (measurement.width === 0 || measurement.height === 0) {
+      return err(this.decide('capture-pixels', 'Capture dimensions must be positive.'));
+    }
+    const pixels = measurement.width * measurement.height;
+    if (
+      measurement.width > 1600 ||
+      measurement.height > 1200 ||
+      !Number.isSafeInteger(pixels) ||
+      pixels > this.limits.maxCapturePixels
+    ) {
+      return err(
+        this.decide(
+          'capture-pixels',
+          `Capture pixel budget of ${this.limits.maxCapturePixels} pixels was exceeded.`,
+        ),
+      );
+    }
+    if (!validNonnegativeInteger(measurement.bytes)) {
+      return err(this.decide('capture-bytes', 'Capture byte count is missing or invalid.'));
+    }
+    if (measurement.bytes > this.limits.maxCaptureBytes) {
+      return err(
+        this.decide(
+          'capture-bytes',
+          `Capture byte budget of ${this.limits.maxCaptureBytes} bytes was exceeded.`,
+        ),
+      );
+    }
+    this.capturePixels += pixels;
+    this.captureBytes += measurement.bytes;
+    return ok(undefined);
   }
 
   /**
@@ -297,6 +394,9 @@ export class BudgetTracker {
       cumulativeBytes: this.cumulativeBytes,
       navigations: this.navigations,
       hosts: this.seenHosts.size,
+      captureCount: this.captureCount,
+      capturePixels: this.capturePixels,
+      captureBytes: this.captureBytes,
     };
   }
 
@@ -308,4 +408,8 @@ export class BudgetTracker {
       carriesPublishRemedy: PUBLISH_REMEDY_RE.test(message),
     };
   }
+}
+
+function validNonnegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }

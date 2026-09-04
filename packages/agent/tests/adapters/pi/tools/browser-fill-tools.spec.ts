@@ -14,6 +14,7 @@ import {
   type ObservationFingerprint,
   type OpaqueRefResolver,
   type PageDelta,
+  SensitiveScreenLatch,
   UserInputVault,
   type WidgetPort,
   type WidgetTarget,
@@ -410,6 +411,42 @@ describe('@no-llm browser_fill_element contract', () => {
         requires_confirmation: true,
       }),
     ]);
+  });
+
+  it('latches before the first secret-bearing page event', async () => {
+    const controller = new FormController(
+      '<input id="password" type="password" aria-label="Password">',
+    );
+    const latch = new SensitiveScreenLatch();
+    const observations: boolean[] = [];
+    controller.document.querySelector('#password')?.addEventListener('input', () => {
+      observations.push(latch.isLatched(null));
+    });
+    const resolver: OpaqueRefResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        value: 'CANARY-super-secret',
+        isSecret: true,
+        source: 'secret',
+        sourceKey: 'site.password',
+        dispose: vi.fn(),
+      }),
+    };
+
+    const { result } = await runElement(
+      controller,
+      { field: 'Password', value: { kind: 'secret_ref', key: 'site.password' } },
+      new AgentTrace(),
+      {
+        secretResolver: resolver,
+        secretHosts: () => Promise.resolve(['example.test']),
+        sensitiveScreenLatch: latch,
+      },
+      true,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(observations.length).toBeGreaterThan(0);
+    expect(observations.every(Boolean)).toBe(true);
   });
 
   it('resolves user placeholders at the boundary and masks the result and trace', async () => {
@@ -990,6 +1027,7 @@ async function run(controller: FormController, params: unknown, trace = new Agen
     controller: controller as unknown as AgentBrowserController,
     ethics: allowingEthics(),
     secretResolver: null,
+    sensitiveScreenLatch: new SensitiveScreenLatch(),
     secretHosts: () => Promise.resolve([]),
     captureThresholdBytes: 16_384,
   };
@@ -1009,6 +1047,7 @@ async function runElement(
     controller: controller as unknown as AgentBrowserController,
     ethics: allowingEthics(),
     secretResolver: null,
+    sensitiveScreenLatch: new SensitiveScreenLatch(),
     secretHosts: () => Promise.resolve([]),
     captureThresholdBytes: 16_384,
     ...overrides,

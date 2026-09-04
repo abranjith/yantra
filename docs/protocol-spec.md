@@ -1693,21 +1693,22 @@ Example:
 
 Stable append-only tool lifecycle entry stored in tool-calls.jsonl.
 
-| Field            | Description                                                  |
-| ---------------- | ------------------------------------------------------------ |
-| ts               | ISO-8601 UTC timestamp for this lifecycle phase.             |
-| seq              | Monotonic sequence number within the run.                    |
-| run_id           | Owning Yantra run identifier.                                |
-| session_id       | Owning provider session identifier.                          |
-| call_id          | Provider tool-call identifier pairing start and end.         |
-| tool             | Stable registered tool name.                                 |
-| phase            | Tool-call lifecycle phase.                                   |
-| input_sanitized  | Sanitized tool input, or null on end entries.                |
-| output_sanitized | Sanitized tool output, or null on start entries.             |
-| status           | Terminal tool status, or null on start entries.              |
-| duration_ms      | Elapsed tool time in milliseconds, or null on start entries. |
-| error_code       | Stable error code when present, otherwise null.              |
-| confirmation_id  | Linked confirmation identifier when present, otherwise null. |
+| Field            | Description                                                         |
+| ---------------- | ------------------------------------------------------------------- |
+| ts               | ISO-8601 UTC timestamp for this lifecycle phase.                    |
+| seq              | Monotonic sequence number within the run.                           |
+| run_id           | Owning Yantra run identifier.                                       |
+| session_id       | Owning provider session identifier.                                 |
+| call_id          | Provider tool-call identifier pairing start and end.                |
+| tool             | Stable registered tool name.                                        |
+| phase            | Tool-call lifecycle phase.                                          |
+| input_sanitized  | Sanitized tool input, or null on end entries.                       |
+| output_sanitized | Sanitized tool output, or null on start entries.                    |
+| status           | Terminal tool status, or null on start entries.                     |
+| duration_ms      | Elapsed tool time in milliseconds, or null on start entries.        |
+| error_code       | Stable error code when present, otherwise null.                     |
+| confirmation_id  | Linked confirmation identifier when present, otherwise null.        |
+| captures         | Private capture artifact metadata; never image bytes or a data URI. |
 
 Example:
 
@@ -1725,7 +1726,8 @@ Example:
   "status": "<status>",
   "duration_ms": "<duration_ms>",
   "error_code": "<error_code>",
-  "confirmation_id": "<confirmation_id>"
+  "confirmation_id": "<confirmation_id>",
+  "captures": "<captures>"
 }
 ```
 

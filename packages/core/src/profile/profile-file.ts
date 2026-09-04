@@ -8,13 +8,10 @@
  * `preferences` table; {@link SqlitePreferenceStore} merges the two layers.
  *
  * The `context` block is the user's control surface over which *sensitive*
- * ambient facts the engine may state to a model. Today it holds one grant,
- * `location`, gating the value composed from `locale.city` / `locale.region`.
- * Every grant defaults to `true`, which is behavior-preserving: with no city
- * configured the ambient block still renders `not available`, so an untouched
- * install behaves exactly as it did before the block existed. Date, timezone,
- * and locale are host-environment facts, not personal data, and are
- * deliberately not grants.
+ * facts and capture capabilities the engine may expose to a model. Location
+ * defaults to allowed for compatibility; screenshots default to denied because
+ * they expose raw, unmasked pixels. Date, timezone, and locale are
+ * host-environment facts, not personal data, and are deliberately not grants.
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -66,6 +63,7 @@ export const profileSchema = z
     context: z
       .object({
         location: z.boolean().default(true),
+        screenshots: z.boolean().default(false),
       })
       .default({}),
     personalization: z
@@ -107,6 +105,7 @@ export const KNOWN_PREFERENCE_KEYS = [
   'locale.region',
   'locale.units',
   'context.location',
+  'context.screenshots',
   'personalization.enabled',
   'personalization.interests',
   'personalization.favorite_retailers',
@@ -188,6 +187,7 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['locale.region', profile.locale.region],
     ['locale.units', profile.locale.units],
     ['context.location', profile.context.location],
+    ['context.screenshots', profile.context.screenshots],
     ['personalization.enabled', profile.personalization.enabled],
     ['personalization.interests', profile.personalization.interests],
     ['personalization.favorite_retailers', profile.personalization.favorite_retailers],
@@ -211,6 +211,7 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'locale.region': z.string().nullable(),
   'locale.units': unitsSchema,
   'context.location': z.boolean(),
+  'context.screenshots': z.boolean(),
   'personalization.enabled': z.boolean(),
   'personalization.interests': z.array(z.string()),
   'personalization.favorite_retailers': z.array(z.string()),
@@ -252,7 +253,11 @@ function isKnownKey(key: string): key is PreferenceKey {
 
 /** Coerces the CLI string into the shape the key's schema expects. */
 function coerceRawValue(key: PreferenceKey, rawValue: string): unknown {
-  if (key === 'personalization.enabled' || key === 'context.location') {
+  if (
+    key === 'personalization.enabled' ||
+    key === 'context.location' ||
+    key === 'context.screenshots'
+  ) {
     if (rawValue === 'true') return true;
     if (rawValue === 'false') return false;
     return rawValue; // let the schema reject anything else

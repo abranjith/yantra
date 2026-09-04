@@ -20,6 +20,7 @@ describe('@no-llm recovery characterization gate', () => {
   it('pins the complete protocol half of the 17-fixture gate', () => {
     expect(PROTOCOL_GAUNTLET).toHaveLength(13);
     expect(new Set(PROTOCOL_GAUNTLET.map((entry) => entry.pattern))).toHaveLength(13);
+    expect(PROTOCOL_GAUNTLET.filter((entry) => entry.requiresVision)).toEqual([]);
   });
 
   it('pins transient, terminal, budget, and disabled classification', () => {

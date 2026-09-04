@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { DefaultSanitizer, ModelSuppliedValues, UserInputVault } from '@yantra/core';
 import type { ConfirmationGateway, ConfirmationOutcome, ConfirmationRequest } from '@yantra/core';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
+import { toAgentToolResult } from '../../src/adapters/pi/tools/index.js';
 import {
   BudgetTracker,
   DEFAULT_BUDGET_LIMITS,
@@ -22,6 +28,8 @@ interface ServicesOverrides {
   readonly actionPhase?: ActionPhase;
   readonly userInput?: UserInputVault;
   readonly modelValues?: ModelSuppliedValues;
+  readonly runDir?: string;
+  readonly visionAvailable?: boolean;
 }
 
 function makeServices(overrides: ServicesOverrides = {}): RunServices {
@@ -29,7 +37,20 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
   const sanitizer = new DefaultSanitizer();
   return {
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-    runDir: '/tmp/run',
+    runDir: overrides.runDir ?? '/tmp/run',
+    template: null,
+    vision: {
+      grantEnabled: overrides.visionAvailable === true,
+      hasBrowserTools: overrides.visionAvailable === true,
+      modelImageInput: overrides.visionAvailable === true,
+      suppressedByFlag: false,
+      zeroLlm: false,
+      available: overrides.visionAvailable === true,
+      capability: {
+        imageInput: overrides.visionAvailable === true,
+        resolvedAt: 'pre-catalog',
+      },
+    },
     budgets,
     sanitizer,
     ...(overrides.userInput ? { userInput: overrides.userInput } : {}),
@@ -38,6 +59,8 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     urlProvenance: new UrlProvenance(),
     confirmation: overrides.gateway ? { gateway: overrides.gateway, store: null } : null,
     actionPhase: overrides.actionPhase ?? new ActionPhase(),
+    evidence: { isEmpty: () => true, entries: () => [], add: () => undefined } as never,
+    evidencePhase: { isFrozen: () => false, freeze: () => undefined } as never,
     trace: null,
     abortSignal: overrides.abortSignal ?? new AbortController().signal,
     now: () => Date.now(),
@@ -50,6 +73,126 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
 }
 
 const OK: DomainResult = { ok: true, model: { answer: 42 } };
+
+describe('@no-llm middleware screenshot content exception', () => {
+  async function fixture() {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-middleware-image-'));
+    await mkdir(join(runDir, 'screenshots'));
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    const path = 'screenshots/1-fixture.png';
+    await writeFile(join(runDir, path), bytes);
+    const artifact = {
+      path,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      mime_type: 'image/png' as const,
+      width: 2,
+      height: 2,
+      bytes: bytes.byteLength,
+      scope: 'viewport' as const,
+      marks: 0,
+      seq: 1,
+    };
+    return { runDir, bytes, artifact };
+  }
+
+  it('keeps ordinary tools text-only', async () => {
+    const result = await wrapTool(
+      spec(async () => OK),
+      makeServices(),
+    ).execute({ q: 'a' }, undefined);
+    expect(result.content).toBeUndefined();
+    expect(toAgentToolResult(result).content).toEqual([{ type: 'text', text: result.modelText }]);
+  });
+
+  it('sanitizes text while passing one validated screenshot image unchanged', async () => {
+    const { runDir, bytes, artifact } = await fixture();
+    try {
+      const services = makeServices({ runDir, visionAvailable: true });
+      services.budgets.reserveCapture();
+      const tool = wrapTool(
+        spec(
+          async () => ({
+            ok: true,
+            model: { token: CANARY },
+            content: [
+              { kind: 'image', mimeType: 'image/png', base64: bytes.toString('base64'), artifact },
+            ],
+          }),
+          { name: 'browser_screenshot' },
+        ),
+        services,
+      );
+      const result = await tool.execute({ q: 'a' }, undefined);
+      expect(result.status).toBe('ok');
+      expect(result.modelText).not.toContain(CANARY);
+      expect(result.content?.[1]).toMatchObject({
+        kind: 'image',
+        base64: bytes.toString('base64'),
+      });
+      expect(toAgentToolResult(result).content.map((part) => part.type)).toEqual(['text', 'image']);
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an image claimed by a non-screenshot tool', async () => {
+    const { runDir, bytes, artifact } = await fixture();
+    try {
+      const result = await wrapTool(
+        spec(async () => ({
+          ok: true,
+          model: 'no',
+          content: [
+            { kind: 'image', mimeType: 'image/png', base64: bytes.toString('base64'), artifact },
+          ],
+        })),
+        makeServices({ runDir, visionAvailable: true }),
+      ).execute({ q: 'a' }, undefined);
+      expect(result.status).toBe('error');
+      expect(result.content).toBeUndefined();
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['missing', 'sha', 'mime', 'oversize'] as const)(
+    'fails closed and drops image content for %s artifact validation',
+    async (failure) => {
+      const { runDir, bytes, artifact } = await fixture();
+      try {
+        const bad = {
+          ...artifact,
+          ...(failure === 'missing' ? { path: 'screenshots/missing.png' } : {}),
+          ...(failure === 'sha' ? { sha256: '0'.repeat(64) } : {}),
+          ...(failure === 'mime' ? { mime_type: 'image/jpeg' as 'image/png' } : {}),
+          ...(failure === 'oversize' ? { bytes: 5 * 1024 * 1024 + 1 } : {}),
+        };
+        const result = await wrapTool(
+          spec(
+            async () => ({
+              ok: true,
+              model: 'metadata',
+              content: [
+                {
+                  kind: 'image',
+                  mimeType: 'image/png',
+                  base64: bytes.toString('base64'),
+                  artifact: bad,
+                },
+              ],
+            }),
+            { name: 'browser_screenshot' },
+          ),
+          makeServices({ runDir, visionAvailable: true }),
+        ).execute({ q: 'a' }, undefined);
+        expect(result.status).toBe('error');
+        expect(result.content).toBeUndefined();
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    },
+  );
+});
 
 /** A minimal spec with a stubbable domain op. */
 function spec(

@@ -15,7 +15,8 @@ export type YantraToolName =
   | 'browser_click'
   | 'browser_fill_element'
   | 'browser_fill_form'
-  | 'browser_extract';
+  | 'browser_extract'
+  | 'browser_screenshot';
 
 /** The portion of `workflow_run` permitted by a command profile. */
 export type WorkflowToolMode = 'none' | 'list' | 'run';

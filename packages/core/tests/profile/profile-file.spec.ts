@@ -21,7 +21,7 @@ describe('@no-llm profile-file schema', () => {
       length: 'medium',
     });
     expect(profile.locale).toEqual({ city: null, region: null, units: 'metric' });
-    expect(profile.context).toEqual({ location: true });
+    expect(profile.context).toEqual({ location: true, screenshots: false });
     expect(profile.personalization).toEqual({
       enabled: true,
       interests: [],
@@ -45,6 +45,7 @@ describe('@no-llm profile-file schema', () => {
     expect(flat.get('locale.units')).toBe('metric');
     expect(flat.get('locale.city')).toBeNull();
     expect(flat.get('context.location')).toBe(true);
+    expect(flat.get('context.screenshots')).toBe(false);
     expect(flat.get('personalization.enabled')).toBe(true);
     expect(flat.get('personalization.favorite_retailers')).toEqual([]);
     expect(Object.fromEntries(flat)).toMatchObject({
@@ -190,7 +191,7 @@ describe('@no-llm profile-file load/save', () => {
     const result = await loadProfile(path);
     expect(result.isOk).toBe(true);
     if (result.isOk) {
-      expect(result.value.context).toEqual({ location: true });
+      expect(result.value.context).toEqual({ location: true, screenshots: false });
       expect(result.value.locale.city).toBeNull();
     }
   });
@@ -202,7 +203,7 @@ describe('@no-llm profile-file load/save', () => {
       {
         ...profile,
         locale: { ...profile.locale, city: 'Naperville, IL' },
-        context: { location: false },
+        context: { location: false, screenshots: true },
       },
       path,
     );
@@ -211,6 +212,7 @@ describe('@no-llm profile-file load/save', () => {
     if (reloaded.isOk) {
       expect(reloaded.value.locale.city).toBe('Naperville, IL');
       expect(reloaded.value.context.location).toBe(false);
+      expect(reloaded.value.context.screenshots).toBe(true);
     }
   });
 
@@ -265,6 +267,19 @@ describe('@no-llm validatePreference', () => {
     expect(on.isOk).toBe(true);
     if (on.isOk) expect(on.value).toBe(true);
     expect(validatePreference('context.location', 'maybe').isOk).toBe(false);
+  });
+
+  it('accepts only true or false for the context.screenshots grant', () => {
+    for (const raw of ['true', 'false']) {
+      const result = validatePreference('context.screenshots', raw);
+      expect(result.isOk).toBe(true);
+      if (result.isOk) expect(result.value).toBe(raw === 'true');
+    }
+    for (const raw of ['yes', '1', '']) {
+      const result = validatePreference('context.screenshots', raw);
+      expect(result.isOk).toBe(false);
+      if (!result.isOk) expect(result.error).toContain('context.screenshots');
+    }
   });
 
   it('accepts locale.city, trimming it, and rejects a blank value', () => {

@@ -1,0 +1,480 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-03T12:47:47.923Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-03T12:50:25.696Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-03T12:52:10.847Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-03T12:56:29.475Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-03T12:57:52.059Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-03T13:01:05.123Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-03T13:01:58.243Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-008",
+      "at": "2026-09-03T13:06:48.264Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-009",
+      "at": "2026-09-03T13:08:30.295Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-010",
+      "at": "2026-09-03T13:12:22.086Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.post",
+      "task": "TASK-011",
+      "at": "2026-09-03T13:17:14.114Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.post",
+      "task": "TASK-012",
+      "at": "2026-09-03T13:20:44.815Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.post",
+      "task": "TASK-013",
+      "at": "2026-09-03T14:09:11.647Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-03T23:11:47.677Z",
+      "head": "fdb0d5a9e1b033bce9cb326c856effec96baa528"
+    }
+  ],
+  "files": [
+    {
+      "path": "apps/cli/src/agent-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/commands/audit-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/commands/init-context-prompts.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/prefs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/render/terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/render/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/agent-options.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/commands/audit-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-context-prompts.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/commands/prefs-screenshots.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/connector-io.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/vision-assist.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/gauntlet/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/environment.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-screenshot.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/budget.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-recorder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/vision.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/environment.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-screenshot.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/boundaries/imports.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/agent/tests/runtime/budget.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/runtime/vision-audit.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/agent/tests/runtime/vision-registration.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/browser/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/browser/sensitive-screen-latch.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/browser/set-of-marks.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/profile/ambient-context.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/sensitive-screen-latch.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/browser/set-of-marks.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/interaction/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/interaction/recovery-characterization.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/profile/ambient-context.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/profile/profile-file.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/support/gauntlet.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/protocol/src/schemas/tool-audit.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-036-vision_assist/changeset.json",
+    ".spec-lite/features/FEAT-036-vision_assist/spec.md",
+    ".spec-lite/plan_interaction_wave2.md"
+  ],
+  "baseline": {
+    "sha": "fdb0d5a9e1b033bce9cb326c856effec96baa528",
+    "capturedAt": "2026-09-03T12:45:59.792Z",
+    "dirtyAtBaseline": [".spec-lite/plan_interaction_wave2.md"],
+    "dirtyBlobHashes": {
+      ".spec-lite/plan_interaction_wave2.md": "d546fb85744b777c1c73ef6e1774aa5822c7da45"
+    }
+  },
+  "featureId": "FEAT-036"
+}

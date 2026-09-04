@@ -24,6 +24,7 @@ import { browserFillElementSpec } from './browser-fill-element.js';
 import { browserFillFormSpec } from './browser-fill-form.js';
 import { browserNavigateSpec } from './browser-navigate.js';
 import { browserObserveSpec } from './browser-observe.js';
+import { browserScreenshotSpec } from './browser-screenshot.js';
 import { resultPublishSpec } from './result-publish.js';
 import { scriptRunSpec } from './script-run.js';
 import { webFetchSpec } from './web-fetch.js';
@@ -49,6 +50,7 @@ export { browserFillElementSpec } from './browser-fill-element.js';
 export { browserFillFormSpec } from './browser-fill-form.js';
 export { browserNavigateSpec } from './browser-navigate.js';
 export { browserObserveSpec } from './browser-observe.js';
+export { browserScreenshotSpec } from './browser-screenshot.js';
 export { workflowRunSpec } from './workflow-run.js';
 
 /**
@@ -86,6 +88,9 @@ export function buildYantraWrappedTools(
   const wrapped = allowed
     ? allWrapped.filter((tool) => allowed.has(tool.name as YantraToolName))
     : allWrapped;
+  if (services.vision.available) {
+    wrapped.push(wrapTool(browserScreenshotSpec(toolServices), toolServices));
+  }
   const seen = new Set<string>();
   for (const tool of wrapped) {
     if (seen.has(tool.name)) {
@@ -147,14 +152,23 @@ function toPiTool(tool: WrappedTool): ToolDefinition {
  * the audit metadata (status/error_code/confirmation_id) as top-level fields so
  * the run recorder can project it into `tool-calls.jsonl` without parsing text.
  */
-function toAgentToolResult(result: YantraToolResult): AgentToolResult<unknown> {
+export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unknown> {
+  const captures =
+    result.details !== null && typeof result.details === 'object' && !Array.isArray(result.details)
+      ? (result.details as { readonly captures?: unknown }).captures
+      : undefined;
   const out = {
-    content: [{ type: 'text' as const, text: result.modelText }],
+    content: result.content?.map((part) =>
+      part.kind === 'text'
+        ? { type: 'text' as const, text: part.text }
+        : { type: 'image' as const, data: part.base64, mimeType: part.mimeType },
+    ) ?? [{ type: 'text' as const, text: result.modelText }],
     details: result.details ?? null,
     status: result.status,
     ...(result.error_code !== undefined ? { error_code: result.error_code } : {}),
     ...(result.confirmation_id !== undefined ? { confirmation_id: result.confirmation_id } : {}),
     ...(result.terminate === true ? { terminate: true } : {}),
+    ...(Array.isArray(captures) && captures.length > 0 ? { captures } : {}),
   };
   // The extra audit fields are intentional (read by the FEAT-023 recorder); Pi
   // ignores unknown fields on the result object.

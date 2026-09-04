@@ -66,6 +66,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Local Site Ranking](docs/features/site-ranking.md) — local domain outcome scores and curation.
 - [Scheduling](docs/features/scheduling.md) — recurring workflow runs and the local daemon.
 - [Diagnostics and Audit](docs/features/diagnostics-and-audit.md) — environment checks and run inspection.
+- [Opt-In Vision Assist](docs/features/vision-assist.md) — consent-gated, budgeted, audited screenshots for agentic browser fallback.
 - [Recovery as Declarative Data](docs/features/recovery-as-declarative-data.md) — bounded fill and click recovery plans, shared accounting, and verdict diagnostics.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, and audit boundaries.

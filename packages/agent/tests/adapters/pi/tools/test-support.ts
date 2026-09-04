@@ -37,6 +37,7 @@ import {
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { UrlPolicy } from '../../../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
+import type { VisionAvailability } from '../../../../src/runtime/vision.js';
 
 export interface BuildServicesOptions {
   readonly runDir?: string;
@@ -49,6 +50,7 @@ export interface BuildServicesOptions {
   readonly trace?: AgentTrace;
   readonly userInput?: UserInputVault;
   readonly template?: TemplateManifest | null;
+  readonly vision?: Partial<VisionAvailability>;
   /**
    * Run-scoped URL provenance. Defaults to an empty one, so a test that expects
    * `browser_navigate` to succeed must record the target first — exactly as a
@@ -93,6 +95,16 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
     template: options.template ?? null,
+    vision: {
+      grantEnabled: false,
+      hasBrowserTools: false,
+      modelImageInput: false,
+      suppressedByFlag: false,
+      zeroLlm: false,
+      available: false,
+      capability: { imageInput: false, resolvedAt: 'pre-catalog' },
+      ...options.vision,
+    },
     budgets,
     sanitizer,
     ...(options.userInput ? { userInput: options.userInput } : {}),

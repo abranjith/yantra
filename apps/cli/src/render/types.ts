@@ -143,6 +143,27 @@ export interface AuditRenderReport {
     readonly confirmationDecision: string | null;
     readonly incomplete: boolean;
   }[];
+  /** Capture artifacts the model received, projected without image bytes. */
+  readonly captures: readonly {
+    readonly path: string;
+    readonly sha256: string;
+    readonly mimeType: 'image/png';
+    readonly width: number;
+    readonly height: number;
+    readonly bytes: number;
+    readonly toolCall: {
+      readonly seq: number;
+      readonly callId: string;
+      readonly tool: string;
+    };
+    readonly budgetConsumed: {
+      readonly captures: 1;
+      readonly pixels: number;
+      readonly bytes: number;
+    };
+  }[];
+  /** True only when the raw provider session artifact contains capture data. */
+  readonly rawSessionLogCaptureBearing: boolean;
   readonly usage: {
     readonly turns: number;
     readonly inputTokens: number | null;

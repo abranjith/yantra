@@ -277,6 +277,14 @@ export async function applyBrowserFill(
       retryable: false,
     };
   }
+  if (!deps.sensitiveScreenLatch) {
+    return {
+      ok: false,
+      errorCode: 'SENSITIVE_SCREEN_LATCH_UNAVAILABLE',
+      message: renderAgentMessage('tool', 'SENSITIVE_SCREEN_LATCH_UNAVAILABLE', 'guard-missing'),
+      retryable: false,
+    };
+  }
   const hosts = await deps.secretHosts(value.key);
   try {
     assertHostBinding({ kind: 'secret', key: value.key, hosts: [...hosts] }, controller.host());
@@ -304,6 +312,9 @@ export async function applyBrowserFill(
     },
   );
   try {
+    // Set before `withSecret` can dispatch the resolved value. A thrown fill
+    // deliberately leaves the latch set until navigation or teardown.
+    deps.sensitiveScreenLatch.latch(controller.topLevelDocumentEpoch?.() ?? null);
     const outcome = await withSecret(resolved.value, (secret) =>
       fillSecretField(port, { field, target }, secret, defaultWidgetBudget(port)),
     );

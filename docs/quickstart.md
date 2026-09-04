@@ -45,6 +45,8 @@ node apps/cli/dist/bin.js init --provider none --yes
 This creates `config.yaml` and, if absent, `profile.yaml`. On an interactive
 terminal, omitting `--yes` asks whether agentic runs may receive your configured
 location. `--json`, `--yes`, and non-interactive use skip the question.
+Screenshot assistance is not enabled by `init`: `context.screenshots` defaults
+to `false` until you explicitly grant it with `yantra prefs set`.
 
 The default locations are:
 

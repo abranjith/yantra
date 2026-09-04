@@ -117,6 +117,7 @@ export async function buildAuditReport(
   });
   const confirmations = await readJsonl(join(runDir, 'confirmations.jsonl'));
   const toolCalls = summarizeToolCalls(toolEntries, confirmations);
+  const captures = summarizeCaptures(toolEntries);
   const terminalError = readTerminalError(manifestObj.agentError);
   const status = readString(manifestObj.status) ?? 'unknown';
   const workflowName = readString(manifestObj.workflowName) ?? '<unknown>';
@@ -151,11 +152,42 @@ export async function buildAuditReport(
     trustNarrative,
     agent,
     toolCalls,
+    captures,
+    rawSessionLogCaptureBearing: captures.length > 0,
     usage,
     terminalError,
   };
 
   return { kind: 'ok', report };
+}
+
+function summarizeCaptures(
+  entries: readonly ReturnType<typeof ToolAuditEntry.parse>[],
+): AuditRenderReport['captures'] {
+  return [...entries]
+    .sort((left, right) => left.seq - right.seq)
+    .flatMap((entry) =>
+      entry.phase !== 'end' || entry.captures === undefined
+        ? []
+        : entry.captures.map((capture) => ({
+            path: capture.path,
+            sha256: capture.sha256,
+            mimeType: capture.mime_type,
+            width: capture.width,
+            height: capture.height,
+            bytes: capture.bytes,
+            toolCall: {
+              seq: entry.seq,
+              callId: entry.call_id,
+              tool: entry.tool,
+            },
+            budgetConsumed: {
+              captures: 1 as const,
+              pixels: capture.width * capture.height,
+              bytes: capture.bytes,
+            },
+          })),
+    );
 }
 
 function summarizeToolCalls(

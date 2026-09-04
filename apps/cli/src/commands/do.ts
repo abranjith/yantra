@@ -153,6 +153,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
       // command, not just `ask` — `do` sending none is what let a run infer a
       // city from its timezone.
       ambient: resolveAmbientContext(effective),
+      screenshotsSuppressed: options.screenshots === false,
       ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
       ...(template === undefined ? {} : { template }),
       connector,

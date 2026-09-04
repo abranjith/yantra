@@ -52,6 +52,7 @@ import {
   type TemplateManifest,
 } from '@yantra/protocol';
 
+import { modelSupportsImageInput } from '../adapters/pi/environment.js';
 import { PiAgentProvider } from '../adapters/pi/provider.js';
 import {
   createBriefPublisher,
@@ -93,6 +94,7 @@ import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
 import { UrlProvenance } from './url-provenance.js';
+import { resolveVisionAvailability } from './vision.js';
 
 /** Maximum consulted sources recapped inline in the completion nudge. */
 const NUDGE_EVIDENCE_CAP = 10;
@@ -248,6 +250,8 @@ export interface AgenticTaskRequest {
     readonly grants: AmbientGrants;
     readonly userLocation: Sanitized<string> | null;
   };
+  /** Downward-only per-run override supplied by `--no-screenshots`. */
+  readonly screenshotsSuppressed?: boolean;
   /**
    * True when a user is present for this run (interactive TTY): the per-run
    * prompt then states a user can approve protected actions but not answer
@@ -321,6 +325,11 @@ export interface AgenticTaskDependencies {
   readonly urlPolicyConfig?: UrlPolicyConfig;
   /** CLI-composed local domain ranking sink; null/absent disables observation. */
   readonly rankSink?: RankSignalSink | null;
+  /** Pre-catalog model image-capability resolver; injectable for hermetic tests. */
+  readonly resolveModelImageInput?: (
+    provider: string,
+    modelId: string,
+  ) => boolean | Promise<boolean>;
 }
 
 /**
@@ -459,10 +468,23 @@ export async function runAgenticTask(
               now,
             }),
           };
+    const modelImageInput = await (dependencies.resolveModelImageInput ?? modelSupportsImageInput)(
+      request.model.provider,
+      request.model.id,
+    );
+    const vision = resolveVisionAvailability({
+      grantEnabled: request.ambient?.grants.screenshots === true,
+      hasBrowserTools:
+        domain.browser !== null && profile.toolNames.some((name) => name.startsWith('browser_')),
+      modelImageInput,
+      suppressedByFlag: request.screenshotsSuppressed === true,
+      zeroLlm: false,
+    });
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
       template: request.template?.manifest ?? null,
+      vision,
       budgets: budgetTracker,
       sanitizer,
       userInput,
@@ -508,7 +530,7 @@ export async function runAgenticTask(
         // reading, and never a guessed value.
         ambient: {
           now: now(),
-          grants: request.ambient?.grants ?? { location: true },
+          grants: request.ambient?.grants ?? { location: true, screenshots: false },
           userLocation: request.ambient?.userLocation ?? null,
         },
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
@@ -1315,6 +1337,7 @@ async function createDefaultEnvironment(context: {
         controller: browserController,
         ethics,
         secretResolver,
+        sensitiveScreenLatch: browserController.sensitiveScreenLatch,
         // Host bindings are trusted metadata and are intentionally not inferred
         // from model input. A future config store can inject them here.
         secretHosts: () => Promise.resolve([]),

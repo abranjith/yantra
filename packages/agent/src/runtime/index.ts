@@ -15,6 +15,12 @@ export {
 } from './prompt.js';
 export { UrlProvenance } from './url-provenance.js';
 export {
+  resolveVisionAvailability,
+  type ModelVisionCapability,
+  type VisionAvailability,
+  type VisionAvailabilityInput,
+} from './vision.js';
+export {
   locationHandoffFor,
   requiresUserLocation,
   type AmbientContextView,
@@ -100,6 +106,7 @@ export {
   type ToolWrapperSpec,
   type WrappedTool,
   type YantraToolResult,
+  type YantraToolContent,
 } from './middleware.js';
 export {
   AgentTrace,

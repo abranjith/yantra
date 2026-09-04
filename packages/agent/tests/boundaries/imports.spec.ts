@@ -1,7 +1,7 @@
 /**
  * Architectural boundary tests for FEAT-022 (plan_agentic.md §3):
  *
- *   1. `@earendil-works/pi-coding-agent` may be imported only under
+ *   1. `@earendil-works/pi-coding-agent`, including its image types, may be imported only under
  *      `packages/agent/src/adapters/pi/` (mirrored tests under
  *      `packages/agent/tests/adapters/pi/` may import it for stubbing).
  *   2. `packages/core` must never import `@yantra/agent` — the dependency
@@ -92,6 +92,21 @@ describe('@no-llm FEAT-022 boundary rules', () => {
       .map(normalize);
 
     // A non-empty list means core imported agent (forbidden direction).
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps FEAT-036 production sources generic and free of site-specific branches', () => {
+    const featureSources = [
+      'packages/agent/src/runtime/vision.ts',
+      'packages/agent/src/adapters/pi/tools/browser-screenshot.ts',
+      'packages/core/src/browser/sensitive-screen-latch.ts',
+      'packages/core/src/browser/set-of-marks.ts',
+    ];
+    const siteSpecific =
+      /https?:\/\/|www\.|\.(?:com|net|org)\b|\b(?:google|kayak|expedia|amazon|fedex)\b/iu;
+    const offenders = featureSources.filter((file) =>
+      siteSpecific.test(readFileSync(resolve(repoRoot, file), 'utf8')),
+    );
     expect(offenders).toEqual([]);
   });
 });
