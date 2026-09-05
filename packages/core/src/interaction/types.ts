@@ -36,6 +36,8 @@ export type InteractionFailureCause =
   | 'control-refused-value'
   /** A list was offered, nothing matched, and the text did not stand. */
   | 'no-suggestion-matched'
+  /** The opened container exposes controls but no declared selectable options. */
+  | 'no-options-offered'
   /** Several offers ranked equally; the choice belongs to the caller. */
   | 'several-matched-equally'
   /** Every entry mechanism ran against the confirmed editee. */

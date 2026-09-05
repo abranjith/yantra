@@ -13,8 +13,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import * as core from '../../src/index.js';
 import {
+  assertReceivable,
   classifyFailure,
   fillFailure,
   hintFor,
@@ -22,6 +22,7 @@ import {
   templateFor,
   DanglingHintError,
   FAILURE_TEMPLATES,
+  IndistinguishableOfferedError,
   type FailureTemplate,
   type FillCause,
   type FillErrorCode,
@@ -75,15 +76,14 @@ describe('@no-llm failure template invariants', () => {
     }
   });
 
-  it('names only capabilities that resolve to real engine exports', () => {
-    // (a) The whole point. Advice is legal only because a path exists for it.
-    const exported = core as unknown as Record<string, unknown>;
+  it('declares every engine capability for each family that emits it', () => {
+    // (a) Advice is legal only when the emitting family has a receiver.
     for (const { code, cause, template } of PAIRS) {
       if (template.capability === null) continue;
-      expect({ pair: `${code}/${cause}`, kind: typeof exported[template.capability] }).toEqual({
-        pair: `${code}/${cause}`,
-        kind: 'function',
-      });
+      expect(template.emittedBy?.length).toBeGreaterThan(0);
+      for (const family of template.emittedBy ?? []) {
+        expect(() => assertReceivable('fill', code, cause, family)).not.toThrow();
+      }
     }
   });
 
@@ -94,6 +94,55 @@ describe('@no-llm failure template invariants', () => {
       expect(missingHintDetails(code, cause, details)).toEqual([]);
       expect(hintFor(code, cause, details).length).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps every required offered list distinct and quotes only its members', () => {
+    for (const { template } of PAIRS) {
+      if (!template.requiredDetails.includes('offered')) continue;
+      const details = detailsFor(template);
+      const offered = details.offered as string[];
+      const normalized = offered.map((entry) => entry.trim().toLocaleLowerCase());
+      expect(new Set(normalized).size).toBe(offered.length);
+      const quotedRuns = [...template.hint(details).matchAll(/"([^"]*)"/g)].map(
+        (match) => match[1]!,
+      );
+      expect(quotedRuns.every((quoted) => offered.includes(quoted))).toBe(true);
+    }
+  });
+
+  it('refuses duplicate normalized offered labels and names the duplicate', () => {
+    expect(() =>
+      hintFor('WIDGET_AMBIGUOUS_CHOICE', 'several-matched-equally', {
+        offered: ['Dallas, TX', '  dallas tx  '],
+      }),
+    ).toThrow(IndistinguishableOfferedError);
+    try {
+      hintFor('WIDGET_AMBIGUOUS_CHOICE', 'several-matched-equally', {
+        offered: ['Dallas, TX', '  dallas tx  '],
+      });
+    } catch (error) {
+      expect(error).toMatchObject({ duplicatedLabel: '  dallas tx  ' });
+    }
+  });
+
+  it('accepts distinct offers and ignores offered-like details for templates that do not declare them', () => {
+    expect(() =>
+      hintFor('WIDGET_AMBIGUOUS_CHOICE', 'several-matched-equally', {
+        offered: ['Dallas', 'Denver'],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      hintFor('WIDGET_TARGET_UNREACHABLE', 'date-not-reachable', {
+        displayedMonths: ['2026-09'],
+        offered: ['same', 'same'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('detects a hint that quotes a choice absent from its offered payload', () => {
+    const offered = ['Dallas', 'Denver'];
+    const quotedRuns = [...'Choose "Chicago".'.matchAll(/"([^"]*)"/g)].map((match) => match[1]!);
+    expect(quotedRuns.every((quoted) => offered.includes(quoted))).toBe(false);
   });
 
   it('refuses to emit dangling advice when a referenced key is missing', () => {

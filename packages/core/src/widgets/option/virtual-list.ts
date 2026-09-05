@@ -1,9 +1,14 @@
-import { MAX_RANKED_OFFERED, normalizeText } from '../../interaction/index.js';
+import {
+  MAX_RANKED_OFFERED,
+  normalizeText,
+  rankAgainstRequested,
+  type ChoiceSubstitution,
+} from '../../interaction/index.js';
 import { readWhenStable } from '../../interaction/settle.js';
 import type { WidgetContainer } from '../open-state.js';
 import type { WidgetBudget, WidgetPort } from '../types.js';
 
-import { collectCandidates, rankCandidate, type WidgetCandidate } from './candidates.js';
+import { collectChoices, type WidgetCandidate } from './candidates.js';
 
 /**
  * Distinct option identities one scan will remember.
@@ -54,6 +59,7 @@ export type VirtualListScan =
   | {
       readonly kind: 'match';
       readonly candidate: WidgetCandidate;
+      readonly substitution?: ChoiceSubstitution;
       readonly cursor: VirtualListCursor;
     }
   | {
@@ -130,14 +136,19 @@ export async function scanVirtualOptions(
   // Every window is read exactly once: the first comes from the caller when it
   // has one, and every later one is the settled result of the scroll that
   // revealed it.
-  let window = spent.firstWindow ?? (await collectCandidates(port, container));
+  let window = spent.firstWindow ?? (await collectChoices(port, container)).choices;
 
   for (;;) {
     windows += 1;
 
-    const ranked = rankCandidate(window, requested);
+    const ranked = rankAgainstRequested(window, requested, container.path);
     if (ranked.kind === 'match') {
-      return { kind: 'match', candidate: ranked.candidate, cursor: cursor('matched') };
+      return {
+        kind: 'match',
+        candidate: ranked.candidate,
+        cursor: cursor('matched'),
+        ...(ranked.substitution ? { substitution: ranked.substitution } : {}),
+      };
     }
     if (ranked.kind === 'ambiguous') {
       // An ambiguity is an answer, not an absence: scrolling on would collect
@@ -178,7 +189,7 @@ export async function scanVirtualOptions(
     // synchronously both settle here, and neither is charged for the other.
     window = (
       await readWhenStable(
-        () => collectCandidates(port, container),
+        () => collectChoices(port, container).then((choiceSet) => choiceSet.choices),
         (candidates) => candidates.map((candidate) => candidate.name).join('\u0000'),
         {
           quietPolls: WINDOW_SETTLE_QUIET_POLLS,

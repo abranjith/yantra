@@ -110,17 +110,24 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'a different control and the value did land there; the field you named staying empty is ' +
       'not a failure and is not something to fix. A failure carries "observed" (what the control ' +
       'holds right ' +
-      'now, which is often not empty), "attempted" (ordered recovery verdicts the tool already performed, such as ' +
+      'now, which is often not empty), "attempted" (an ordered list of recovery verdicts, such as ' +
       'several ways of entering the text or several widget drivers), and sometimes "offered" ' +
-      '(what the widget will actually accept). Never repeat anything named in "attempted" — it ' +
-      'has already failed. When "offered" is present, re-issue the same call with one of those ' +
+      '(what the widget will actually accept). Each entry in "attempted" carries a "verdict": ' +
+      '"succeeded" and "failed" name steps the tool already performed, so never repeat one of ' +
+      'those — it has already been done. A "skipped" entry names a step the tool did NOT take ' +
+      'and says why in "unmet"; it is information, not a prohibition. ' +
+      'When "offered" is present, re-issue the same call with one of those ' +
       'strings exactly as written; that is the fastest path through an ambiguous suggestion ' +
       'list. ' +
       // How to read a batch. Each clause replaces a wrong inference the model
       // would otherwise draw from a result that is neither a clean success nor
       // a clean failure.
       'A browser_fill_form result reports three sets: "applied" (fields that landed), "failed" ' +
-      '(fields attempted that did not take), and "skipped" (fields not attempted). A batch with ' +
+      '(fields attempted that did not take), and "skipped" (fields not attempted). Every field is ' +
+      'accounted for exactly once. An entry can account for more than the field it ' +
+      'names: "covers" lists all fields that entry stands for in any of the three sets. A field ' +
+      'named in another entry\'s "covers" is already accounted for, so do not re-send it as if it ' +
+      'were missing. When a covering entry fails, resolve all of its fields together. A batch with ' +
       'both applied and failed fields is progress, not a retry trigger — the applied fields are ' +
       'set, so re-sending them undoes work and wastes a turn. Send only the failed fields again, ' +
       'and only after reading why each one failed. A "skipped" field names the field blocking it ' +

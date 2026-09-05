@@ -3,6 +3,7 @@ import {
   normalizeText,
   rankAgainstRequested,
 } from '../../interaction/index.js';
+import { PROTECTED_ACTION_RE } from '../../interaction/protected-actions.js';
 import type { WidgetContainer } from '../open-state.js';
 import { withTag } from '../tagging.js';
 import type { WidgetPort } from '../types.js';
@@ -14,6 +15,15 @@ export interface WidgetCandidate {
   readonly disabled: boolean;
   readonly path: readonly number[];
   readonly group?: string | null;
+  readonly selected?: boolean;
+}
+
+/** Safe choices and structural evidence discovered inside one widget container. */
+export interface WidgetChoiceSet {
+  readonly choices: readonly WidgetCandidate[];
+  readonly semantics: 'declared' | 'none';
+  readonly scopedOut: number;
+  readonly vetoed: number;
 }
 
 /** Result of deterministic candidate ranking. */
@@ -27,76 +37,136 @@ export function collectCandidates(
   port: WidgetPort,
   container: WidgetContainer,
 ): Promise<readonly WidgetCandidate[]> {
-  return port.evaluate((containerPath) => {
-    const fromPath = (path: readonly number[]): Element | null => {
-      let current: Element | null = document.documentElement;
-      for (const index of path) current = current?.children.item(index) ?? null;
-      return current;
-    };
-    const toPath = (candidate: Element): number[] => {
-      const result: number[] = [];
-      let current: Element | null = candidate;
-      while (current && current !== document.documentElement) {
-        const parent: Element | null = current.parentElement;
-        if (!parent) return [];
-        result.unshift(Array.prototype.indexOf.call(parent.children, current));
-        current = parent;
+  return collectCandidateSet(port, container, null).then((result) => result.choices);
+}
+
+/** Collect only candidates that are safe to offer as choices. */
+export function collectChoices(
+  port: WidgetPort,
+  container: WidgetContainer,
+): Promise<WidgetChoiceSet> {
+  return collectCandidateSet(port, container, {
+    source: PROTECTED_ACTION_RE.source,
+    flags: PROTECTED_ACTION_RE.flags,
+  });
+}
+
+function collectCandidateSet(
+  port: WidgetPort,
+  container: WidgetContainer,
+  protectedPattern: { readonly source: string; readonly flags: string } | null,
+): Promise<WidgetChoiceSet> {
+  return port.evaluate(
+    (containerPath, protectedAction) => {
+      const fromPath = (path: readonly number[]): Element | null => {
+        let current: Element | null = document.documentElement;
+        for (const index of path) current = current?.children.item(index) ?? null;
+        return current;
+      };
+      const toPath = (candidate: Element): number[] => {
+        const result: number[] = [];
+        let current: Element | null = candidate;
+        while (current && current !== document.documentElement) {
+          const parent: Element | null = current.parentElement;
+          if (!parent) return [];
+          result.unshift(Array.prototype.indexOf.call(parent.children, current));
+          current = parent;
+        }
+        return result;
+      };
+      const nameOf = (candidate: Element): string => {
+        const aria = candidate.getAttribute('aria-label')?.trim();
+        if (aria) return aria.replace(/\s+/g, ' ');
+        const labelledBy = candidate.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const label = labelledBy
+            .split(/\s+/)
+            .map((id) => document.getElementById(id)?.textContent?.trim() ?? '')
+            .filter(Boolean)
+            .join(' ');
+          if (label) return label.replace(/\s+/g, ' ');
+        }
+        return (candidate.textContent ?? '').replace(/\s+/g, ' ').trim();
+      };
+      const roleOf = (candidate: Element): string => {
+        const explicit = candidate.getAttribute('role');
+        if (explicit) return explicit;
+        const tag = candidate.tagName.toLowerCase();
+        if (tag === 'button') return 'button';
+        if (tag === 'a') return 'link';
+        return 'option';
+      };
+      const visible = (candidate: Element): boolean => {
+        if (!(candidate instanceof HTMLElement) || candidate.hidden) return false;
+        const style = window.getComputedStyle(candidate);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      };
+      const root = fromPath(containerPath);
+      if (!(root instanceof HTMLElement)) {
+        return { choices: [], semantics: 'none' as const, scopedOut: 0, vetoed: 0 };
       }
-      return result;
-    };
-    const nameOf = (candidate: Element): string => {
-      const aria = candidate.getAttribute('aria-label')?.trim();
-      if (aria) return aria.replace(/\s+/g, ' ');
-      const labelledBy = candidate.getAttribute('aria-labelledby');
-      if (labelledBy) {
-        const label = labelledBy
-          .split(/\s+/)
-          .map((id) => document.getElementById(id)?.textContent?.trim() ?? '')
-          .filter(Boolean)
-          .join(' ');
-        if (label) return label.replace(/\s+/g, ' ');
-      }
-      return (candidate.textContent ?? '').replace(/\s+/g, ' ').trim();
-    };
-    const roleOf = (candidate: Element): string => {
-      const explicit = candidate.getAttribute('role');
-      if (explicit) return explicit;
-      const tag = candidate.tagName.toLowerCase();
-      if (tag === 'button') return 'button';
-      if (tag === 'a') return 'link';
-      return 'option';
-    };
-    const visible = (candidate: Element): boolean => {
-      if (!(candidate instanceof HTMLElement) || candidate.hidden) return false;
-      const style = window.getComputedStyle(candidate);
-      return style.display !== 'none' && style.visibility !== 'hidden';
-    };
-    const root = fromPath(containerPath);
-    if (!(root instanceof HTMLElement)) return [];
-    const primarySelector =
-      '[role="option"],button,a[href],[role="menuitem"],li[onclick],li[tabindex]';
-    const primary = Array.from(root.querySelectorAll(primarySelector)).filter(visible);
-    const namedChildren = Array.from(root.children).filter(
-      (candidate) => visible(candidate) && nameOf(candidate).length > 0,
-    );
-    const source = primary.length > 0 ? primary : namedChildren.length >= 2 ? namedChildren : [];
-    const unique = [...new Set(source)].filter((candidate) => {
-      return !source.some(
-        (other) =>
-          other !== candidate && candidate.contains(other) && nameOf(other) === nameOf(candidate),
+      const primarySelector =
+        '[role="option"],button,a[href],[role="menuitem"],li[onclick],li[tabindex]';
+      const primary = Array.from(root.querySelectorAll(primarySelector)).filter(visible);
+      const namedChildren = Array.from(root.children).filter(
+        (candidate) => visible(candidate) && nameOf(candidate).length > 0,
       );
-    });
-    return unique
-      .map((candidate) => ({
-        name: nameOf(candidate),
-        role: roleOf(candidate),
-        disabled:
-          candidate.getAttribute('aria-disabled') === 'true' ||
-          ('disabled' in candidate && Boolean((candidate as HTMLButtonElement).disabled)),
-        path: toPath(candidate),
-      }))
-      .filter((candidate) => candidate.name.length > 0 && candidate.path.length > 0);
-  }, container.path);
+      const fallback =
+        primary.length > 0 ? primary : namedChildren.length >= 2 ? namedChildren : [];
+      const explicitOptions = Array.from(
+        root.querySelectorAll('[role="option"],[role="menuitem"],[role="treeitem"]'),
+      ).filter(visible);
+      const source =
+        protectedAction !== null && explicitOptions.length > 0 ? explicitOptions : fallback;
+      const unique = [...new Set(source)].filter((candidate) => {
+        return !source.some(
+          (other) =>
+            other !== candidate && candidate.contains(other) && nameOf(other) === nameOf(candidate),
+        );
+      });
+      const mapped = unique
+        .map((candidate) => ({
+          name: nameOf(candidate),
+          role: roleOf(candidate),
+          disabled:
+            candidate.getAttribute('aria-disabled') === 'true' ||
+            ('disabled' in candidate && Boolean((candidate as HTMLButtonElement).disabled)),
+          selected:
+            candidate.getAttribute('aria-selected') === 'true' ||
+            candidate.getAttribute('aria-checked') === 'true',
+          path: toPath(candidate),
+        }))
+        .filter((candidate) => candidate.name.length > 0 && candidate.path.length > 0);
+      const protectedRe =
+        protectedAction === null ? null : new RegExp(protectedAction.source, protectedAction.flags);
+      const choices =
+        protectedRe === null
+          ? mapped
+          : mapped.filter((candidate) => !protectedRe.test(candidate.name));
+      const rootRole = root.getAttribute('role')?.toLowerCase() ?? '';
+      const semantics =
+        explicitOptions.length > 0 || ['listbox', 'menu', 'menubar', 'tree'].includes(rootRole)
+          ? ('declared' as const)
+          : ('none' as const);
+      const fallbackUnique = [...new Set(fallback)].filter((candidate) => {
+        return !fallback.some(
+          (other) =>
+            other !== candidate && candidate.contains(other) && nameOf(other) === nameOf(candidate),
+        );
+      });
+      return {
+        choices,
+        semantics,
+        scopedOut:
+          protectedAction !== null && explicitOptions.length > 0
+            ? fallbackUnique.filter((candidate) => !explicitOptions.includes(candidate)).length
+            : 0,
+        vetoed: protectedRe === null ? 0 : mapped.length - choices.length,
+      };
+    },
+    container.path,
+    protectedPattern,
+  );
 }
 
 /**

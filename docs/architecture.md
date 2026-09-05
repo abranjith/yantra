@@ -265,10 +265,79 @@ offered labels at the existing `MAX_RANKED_OFFERED` of 10; scrolls are charged a
 
 No new stable error code was added. A list that genuinely lacks the value still fails as
 `WIDGET_TARGET_UNREACHABLE` with cause `value-not-offered`, now carrying evidence deduplicated
-across every window that was mounted rather than the first window alone, plus one `AttemptRecord`
-with `strategy: 'scroll-container'` on the `what` axis — the rung varies what the widget has been
-given a chance to offer, not the target node or the typing mechanics. Its `detail` carries only the
-bounded scroll count and the stop token, so no page text and no host can reach the ledger through it.
+across every window that was mounted rather than the first window alone. The scan discloses its work
+as driver evidence — the bounded `scroll_steps` count and the `scroll_stop` token, and nothing else —
+which the runner records on the rung that ran the driver, on the `what` axis: that rung varies what
+the widget has been given a chance to offer, not the target node or the typing mechanics. Both keys
+are allowlisted in `SERIALIZED_EVIDENCE_KEYS`, so no page text and no host can reach the ledger
+through them.
+
+#### Choice integrity and offered-label receivers
+
+An `offered` array is an actionable menu, not a dump of everything clickable in a popup. Choice
+selection therefore has one provider-independent structural resolver,
+`resolveIndistinguishableChoice` in `packages/core/src/interaction/choice.ts`. Callers supply the
+exact label they would expose and the already-resolved container path; the resolver then narrows by
+container membership, enabled/visible state, and the page's selected state. Each filter is applied
+only when it leaves at least one candidate and actually narrows the pool. If the surviving normalized
+labels differ, the result remains `ambiguous` and belongs to the caller. If the labels are identical,
+the model cannot make a meaningful choice, so the resolver takes the path-lexicographic first element
+in document order and returns a `ChoiceSubstitution` with the indistinguishable count, one-based
+position, applied tie-break rungs, and model-visible label.
+
+Calendar, option-list, virtual-list, combobox, and plain-text ranking paths use that resolver rather
+than maintaining family-specific tie-breaks. A substitution is visible in the successful tool result,
+and `substitutionEvidence` projects its count, one-based position, and applied tie-break rungs into
+the driver's `evidence` as `substituted`, `substitution_position`, and `tie_break`, which the runner
+records on the rung verdict that produced them. The page-derived label is deliberately omitted from
+that verdict evidence; it remains subject to the normal model-result sanitizer. A genuine `WIDGET_AMBIGUOUS_CHOICE` consequently contains
+pairwise-distinct labels the model can name, while byte-identical offers are resolved and disclosed.
+
+`collectChoices` separates choice discovery from the broader `collectCandidates` helper used for
+widget dismissal. When a resolved container has explicit `option`, `menuitem`, or `treeitem`
+descendants, only those descendants can be ranked, offered, or clicked; buttons, links, and other
+container chrome are counted as scoped out. Containers without such descendants retain the existing
+homogeneous clickable-child fallback for compatibility. In both tiers, any label matching the shared
+`PROTECTED_ACTION_RE` is vetoed before ranking and cannot be offered or selected. The returned
+`WidgetChoiceSet` records whether option semantics were declared and carries only `scopedOut` and
+`vetoed` counts, never the filtered page text. On the two failures that otherwise tell the caller to
+name an offer (`no-suggestion-matched` and `value-not-offered`), a container with no declared option
+semantics withholds `offered` entirely and uses `no-options-offered`, whose hint asks for observation
+rather than naming a nonexistent retry capability.
+
+The date family also owns a real receiver for its month-prefixed offered labels. Values matching the
+stable `YYYY-MM: <cell-name>` shape are parsed as opaque text rather than as ISO dates or ranges. The
+fill engine detects a calendar-grid driver for the target and routes the token to
+`selectByOfferedCalendarLabel`, which reopens or reuses the resolved calendar, projects each live cell
+with the same month/name format, matches the token without parsing its human-readable tail, applies
+the shared choice resolver, clicks the selected cell, and verifies the committed value. This makes a
+calendar's instruction to re-issue one of its exact labels an executable round trip rather than a
+fall-through to typeahead behavior.
+
+```mermaid
+flowchart TD
+  Container[Resolved widget container] --> Collect[collectChoices]
+  Collect --> Scope[Option-role scoping]
+  Scope --> Veto[Protected-action veto]
+  Veto --> Rank[Rank against requested value]
+  Rank --> Resolve[resolveIndistinguishableChoice]
+  Resolve -->|distinct labels| Ambiguous[Return actionable ambiguity]
+  Resolve -->|identical labels| Substitute[Choose document order and disclose substitution]
+  DateLabel[Opaque YYYY-MM offered label] --> DateDetect[Detect date-family calendar driver]
+  DateDetect --> DateReceiver[selectByOfferedCalendarLabel]
+  DateReceiver --> Resolve
+  Catalog[Interaction message and emittedBy families] --> ReceiverMap[CAPABILITY_RECEIVERS by surface and family]
+  ReceiverMap --> Guard[assertReceivable at the emitting boundary]
+```
+
+Advice receiver validation is family-specific. Capability-bearing message templates declare their
+`emittedBy` interaction families, and `CAPABILITY_RECEIVERS` maps each `(surface, family,
+capability)` tuple to the concrete engine function or controller method that can perform the advised
+move. `assertReceivable` runs where widget and typing failures cross into fill results, and throws
+`UnreceivableAdviceError` when the emitting family is absent from the template or has no mapped
+receiver. Catalog and gauntlet tests enumerate the mapping, including the date receiver; this replaces
+the weaker package-export check that could prove only that some unrelated family exported a function
+with the requested name.
 
 #### Declarative interaction recovery
 
@@ -294,8 +363,11 @@ flowchart TD
   AgentPlans --> CoreOps[Injected core and controller operations]
   CorePlans --> Runner[Core runEscalationPlan]
   AgentPlans --> Runner
-  Runner --> Port[Runner-wrapped WidgetPort]
-  Runner --> Verdicts[EscalationLedger verdicts]
+  Runner --> RunState[One MutableRunState per top-level operation]
+  Runner --> Subplan[Nested sub-plan via runSubplan or budget run]
+  Subplan --> RunState
+  RunState --> Port[runStatePort-wrapped WidgetPort]
+  RunState --> Verdicts[One EscalationLedger sequence]
   Verdicts --> Wire[Sanitized details.attempted]
   Legacy[Legacy AttemptRecord artifacts] --> Normalize[normalizeAttemptArtifact]
   Wire --> Normalize
@@ -304,20 +376,48 @@ flowchart TD
 
 For every rung, the runner first evaluates eligibility and verifies that the declared cap fits the
 remaining allowance. A rung that is ineligible or cannot fit is recorded as `skipped` without
-spending work. An entered rung runs through a wrapped `WidgetPort` that counts actual click, fill,
-clear, type, key, and container-scroll mutations; non-port agent actions use the same state's
-explicit `charge()` hook. Deadline, action count, ordinal sequence, read count, and stale-ref
-reacquisition count live in one mutable run state. Any rung that invokes another plan through
-`runSubplan` passes that state through, so nested work consumes the same budget and appends verdicts
-in execution order instead of merging separately numbered ledgers afterward. Cleanup runs in a
-`finally` only for an entered rung, which also represents bounded drive-or-dismiss stages such as
-an open probe.
+spending work. An entered rung runs through a `WidgetPort` wrapped by `runStatePort`, the single port
+wrapper: it counts actual click, fill, clear, type, key, and container-scroll mutations, counts reads,
+and heals a stale ref through the run's own `reacquire` policy under the shared `maxReacquisitions`
+cap. Non-port agent actions use the same state's explicit `charge()` hook. The wrapper is idempotent
+for a given run — it tags itself with a non-enumerable symbol — so a rung body that hands its own
+`context.port` to a nested plan is charged exactly once however deep the nesting goes.
+
+Exactly one `MutableRunState` exists per top-level operation. `createRunState(budget, now)` is its
+only constructor, and `runEscalationPlan(plan, parentState?)` resolves the run as the parent state,
+else the run carried on `PlanBudget.run`, else a root it creates itself. `deadlineMs`, `maxActions`,
+and `maxReacquisitions` are fixed by whoever created the state and are read-only thereafter, so a
+nested plan can neither widen nor narrow the ceiling. The run rides on the budget — `WidgetBudget.run`,
+forwarded by `asPlanBudget` into `PlanBudget.run` — because the budget already flows unchanged from
+`fillField` through `WidgetDriver.drive` and `commitText` into every plan builder, so joining a run
+changes no driver signature. `fillField` creates the run when its caller supplies none and adopts it
+when one is present, and builds the field port from `runStatePort` before its first read, so work
+outside any rung — range resolution, widget dismissal, the settled commit — charges into the same
+counter that `FillSuccess.actions` reports.
+
+Nesting therefore yields one sequence rather than several merged afterwards. Ordinals are assigned on
+completion, so a nested rung's verdict precedes its enclosing rung's, and a rung's own
+`chargedActions` excludes whatever nested verdicts already claimed: summing the ledger partitions the
+run total exactly, and `remainingActions` is non-increasing down the sequence. Nothing splices or
+renumbers driver-local ledgers. Cleanup runs in a `finally` only for an entered rung.
+
+Drivers own no ledger. A `WidgetSuccess` discloses how it resolved through an optional
+`evidence: VerdictEvidence` of scalars only, which the runner records on the rung that ran it, and
+`SERIALIZED_EVIDENCE_KEYS` in `escalation.ts` allowlists what may reach the wire — `substituted`,
+`substitution_position`, `tie_break`, `scroll_steps`, `scroll_stop`, `revealed_driver`, and
+`reacquisitions` — so working values such as a committed string, an offered list, or a container path
+are dropped rather than serialized. The engine-owned open probe splits the same way: `probeOpen` owns
+the open, the container wait, and the mandatory drive-or-dismiss, while driving what it revealed is an
+injected callback that the engine implements as an ordinary family sub-plan on the shared run, so each
+revealed driver arrives as its own `driver:<kind>` verdict in that single sequence.
 
 The resulting `EscalationLedger` is a projection of what the plan did, including what it declined
 to do. A succeeded verdict carries entry evidence, elapsed time, charged and remaining actions,
 and produced evidence; a failed verdict additionally carries the stable error code; a skipped
-verdict carries only its structural `unmet` reason. At the tool boundary this becomes snake-case
-`details.attempted`: `error_code` is present only for `failed`, never as `null` on success or skip.
+verdict carries only its structural `unmet` reason. `escalationLedgerOf(state, descriptor)` projects
+the whole run, and `toWireLedger` serializes it — bounded by `MAX_SERIALIZED_VERDICTS` — into
+snake-case `details.attempted`: `error_code` is present only for `failed`, never as `null` on success
+or skip, and no production path narrows a verdict to the older nullable record shape on the way out.
 `normalizeAttemptArtifact` accepts both that verdict shape and legacy nullable `AttemptRecord`
 arrays on read, and the report builder normalizes audit entries without rewriting any existing run
 directory. The one-rung secret plan remains blind: it performs no verification read and emits no
@@ -817,10 +917,14 @@ ephemeral browser profiles are cleaned up on close or crash.
   the downward package dependency instead of making core depend on the agent tool inventory.
 - **Recovery policy is declarative and accounting has one owner.** Interaction families express
   escalation as ordered rungs with structural entry evidence and declared caps; the shared runner
-  decides admission, records skips, and charges real mutations. This makes a fallback a plan-data
-  change and makes budget use attributable by axis, at the cost of requiring every rung to state
-  its evidence and worst-case work before it can execute. Field and click plans stay in agent and
-  inject their operations into the core runner, preserving the core-to-agent prohibition.
+  decides admission, records skips, and charges real mutations. One run state per top-level
+  operation, carried on the budget and joined by every nested plan, is what makes the ceiling and the
+  verdict sequence single rather than per-plan; drivers and the open probe report evidence and let
+  the runner do the accounting. This makes a fallback a plan-data change and makes budget use
+  attributable by axis, at the cost of requiring every rung to state its evidence and worst-case work
+  before it can execute, and of an allowlist deciding which evidence keys may be serialized. Field
+  and click plans stay in agent and inject their operations into the core runner, preserving the
+  core-to-agent prohibition.
 - **A page delta must be true, free, and modest about it.** Telling the agent what changed is only
   useful if it is not routinely wrong, so the delta is computed over an uncapped semantic fingerprint
   — `(role, name, group, scope)` as a multiset — rather than over the refs and the fifty-element list

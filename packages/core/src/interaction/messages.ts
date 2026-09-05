@@ -6,6 +6,8 @@ import {
   type FailureTemplateTable,
 } from '../fill/types.js';
 
+import type { InteractionFamily } from './escalation.js';
+
 export type InteractionMessageSurface =
   | 'fill'
   | 'actionability'
@@ -24,6 +26,7 @@ export interface MessageTemplate {
   readonly requiredDetails: readonly string[];
   readonly capability: string | null;
   readonly capabilityKind: MessageCapabilityKind;
+  readonly emittedBy?: readonly InteractionFamily[];
 }
 
 export class DanglingInteractionMessageError extends Error {
@@ -49,6 +52,7 @@ const fillMessages: readonly MessageTemplate[] = Object.entries(failureTemplates
       requiredDetails: template.requiredDetails,
       capability: template.capability,
       capabilityKind: template.capabilityKind,
+      ...(template.emittedBy === undefined ? {} : { emittedBy: template.emittedBy }),
     })),
 );
 
@@ -113,6 +117,7 @@ const actionabilityMessages = [
     requiredDetails: [],
     capability: 'selectByOfferedLabel',
     capabilityKind: 'engine',
+    emittedBy: ['option'],
   },
   obstructed('obstructed-by-modal', 'A modal dialog'),
   obstructed('obstructed-by-fixed-overlay', 'A viewport-pinned fixed or sticky overlay'),
@@ -137,6 +142,12 @@ const actionabilityMessages = [
 ] as const satisfies readonly MessageTemplate[];
 
 const successMessages = [
+  success(
+    'structural_tie_break',
+    (details) =>
+      `${quoted(details, 'field')} exposed ${Number(details.count)} indistinguishable choices named ${quoted(details, 'label')}; Yantra chose the first in document order and disclosed that substitution.`,
+    ['field', 'count', 'label'],
+  ),
   success(
     'single_offered_match',
     (details) =>

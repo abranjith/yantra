@@ -63,7 +63,7 @@ export function browserFillFormSpec(
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
     description:
-      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed, attempted recovery verdicts, and any offered choices), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form.',
+      'Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed and attempted recovery verdicts, plus offered labels when genuine choices are available), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Every field sent appears in exactly one of those three sets. An entry may account for more than the field it names: a date range the page commits as one unit is one entry whose covers lists every field it stands for, in applied, failed, and skipped alike. Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form.',
     parameters: BrowserFillFormParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -74,6 +74,10 @@ export function browserFillFormSpec(
 /** A field the batch attempted and could not fill. */
 interface FailedField {
   readonly field: string;
+  /** Every caller field this entry accounts for, when it accounts for more than its own. */
+  readonly covers?: readonly string[];
+  /** The composite value this covering entry drove, so a failure can be read against the range. */
+  readonly requested?: string;
   readonly error_code: string;
   readonly message: string;
   readonly observed?: unknown;
@@ -93,6 +97,8 @@ interface FailedField {
 /** A field the batch did not attempt, and what is blocking it. */
 interface SkippedField {
   readonly field: string;
+  /** Every caller field this entry accounts for, when it accounts for more than its own. */
+  readonly covers?: readonly string[];
   readonly reason: 'same-widget-group-as-failed';
   readonly blocked_by: string;
 }
@@ -142,11 +148,16 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       const resolved = await resolveFillField(spec.field, controller);
       if (!isDomainFailure(resolved)) {
         if (resolved.target.group !== null && resolved.target.group === blocked.group) {
-          skipped.push({
-            field: spec.field,
-            reason: 'same-widget-group-as-failed',
-            blocked_by: blocked.field,
-          });
+          skipped.push(
+            withCovers(
+              {
+                field: spec.field,
+                reason: 'same-widget-group-as-failed',
+                blocked_by: blocked.field,
+              },
+              spec.covers,
+            ),
+          );
           continue;
         }
         preresolved = resolved;
@@ -156,16 +167,25 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
     const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved, sink);
     if (isDomainFailure(outcome)) {
       const details = asDetails(outcome.details);
-      failed.push({
-        field: spec.field,
-        error_code: outcome.errorCode,
-        message: outcome.message,
-        ...(details.observed === undefined ? {} : { observed: details.observed }),
-        ...(details.offered === undefined ? {} : { offered: details.offered }),
-        ...(details.attempted === undefined ? {} : { attempted: details.attempted }),
-        ...(details.kind === undefined ? {} : { kind: details.kind }),
-        ...(details.obstruction === undefined ? {} : { obstruction: details.obstruction }),
-      });
+      // Only the date driver knows which range leg failed, and its failure
+      // contract carries no leg marker. Per-leg attribution belongs there and
+      // is tracked in TODO.md; do not infer it here from prose or optional data.
+      failed.push(
+        withCovers(
+          {
+            field: spec.field,
+            ...(spec.covers.length > 1 ? { requested: spec.value } : {}),
+            error_code: outcome.errorCode,
+            message: outcome.message,
+            ...(details.observed === undefined ? {} : { observed: details.observed }),
+            ...(details.offered === undefined ? {} : { offered: details.offered }),
+            ...(details.attempted === undefined ? {} : { attempted: details.attempted }),
+            ...(details.kind === undefined ? {} : { kind: details.kind }),
+            ...(details.obstruction === undefined ? {} : { obstruction: details.obstruction }),
+          },
+          spec.covers,
+        ),
+      );
       const group = outcome.target?.group ?? null;
       if (group !== null) blocked = { group, field: spec.field };
       continue;
@@ -173,7 +193,7 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
     // A fused range is reported as the one fill it was, listing both field
     // names it accounts for. Emitting a second entry would have to invent a ref
     // for a control that was never driven.
-    applied.push(spec.covers.length > 1 ? { ...outcome, covers: spec.covers } : outcome);
+    applied.push(withCovers(outcome, spec.covers));
   }
 
   const metadata = drainFillMetadata(controller, sink);
@@ -238,6 +258,14 @@ interface PlannedFill {
   readonly field: string;
   readonly value: string;
   readonly covers: readonly string[];
+}
+
+/** Attach the fields an entry accounts for, when it accounts for more than its own. */
+function withCovers<T extends { readonly field: string }>(
+  entry: T,
+  covers: readonly string[],
+): T | (T & { readonly covers: readonly string[] }) {
+  return covers.length > 1 ? { ...entry, covers } : entry;
 }
 
 /**

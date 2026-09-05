@@ -1,3 +1,5 @@
+import { isOfferedCalendarLabel } from '../widgets/date/calendar-driver.js';
+
 import { fillFailure, type FillFailure, type FillIntent } from './types.js';
 
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -16,6 +18,12 @@ export function parseFillValue(raw: string, controlKind: string): FillIntent | F
       'Credential-shaped text must be supplied as a secret_ref, not a literal fill value.',
       { expected: 'a non-secret literal or secret_ref' },
     );
+  }
+
+  // Offered calendar labels are opaque receiver tokens. In particular, their
+  // human-readable tail may contain ".."; date syntax must not reinterpret it.
+  if (isOfferedCalendarLabel(raw)) {
+    return { kind: 'text', text: raw };
   }
 
   const trimmed = raw.trim();

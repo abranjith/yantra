@@ -1,5 +1,6 @@
 /** Pure escalation-plan builders for core interaction families. */
 
+import { asPlanBudget } from '../interaction/escalation.js';
 import type { EscalationPlan, Rung, RungContext, RungOutcome } from '../interaction/escalation.js';
 import type { QueryForm } from '../interaction/query-plan.js';
 import type { DetectedWidgetDriver } from '../widgets/registry.js';
@@ -66,7 +67,6 @@ export interface BuildDriverPlanInput {
   readonly runProbe?: (
     context: RungContext<WidgetPort>,
   ) => Promise<RungOutcome<WidgetSuccess, WidgetFailure>>;
-  readonly onDriverOutcome?: (rungId: string, outcome: WidgetSuccess | WidgetFailure) => void;
 }
 
 /** Build confidence-ordered driver rungs followed by the engine-owned probe. */
@@ -94,7 +94,6 @@ export function buildDriverPlan(
           input.intent,
           input.budget,
         );
-        input.onDriverOutcome?.(`driver:${candidate.driver.kind}`, outcome);
         if (outcome.ok) {
           return {
             ok: true,
@@ -105,6 +104,9 @@ export function buildDriverPlan(
               offered: outcome.offered ?? [],
               ...(outcome.chosen === undefined ? {} : { chosen: outcome.chosen }),
               ...(outcome.container === undefined ? {} : { container: outcome.container }),
+              // Whatever the driver disclosed about how it resolved. Only the
+              // allowlisted, scalar keys of it are ever serialized.
+              ...(outcome.evidence ?? {}),
             },
           };
         }
@@ -200,19 +202,4 @@ export function buildTextPlan<TValue, TFailure>(
   };
 }
 
-/** Convert the established widget allowance into the runner-owned shape. */
-export function asPlanBudget(budget: WidgetBudget): {
-  readonly deadlineMs: number;
-  readonly maxActions: number;
-  readonly maxPagingSteps: number;
-  readonly maxReacquisitions: number;
-  readonly maxScrollSteps: number;
-} {
-  return {
-    deadlineMs: budget.deadlineMs,
-    maxActions: budget.maxActions,
-    maxPagingSteps: budget.maxPagingSteps ?? 12,
-    maxReacquisitions: 4,
-    maxScrollSteps: budget.maxScrollSteps ?? 8,
-  };
-}
+export { asPlanBudget, DEFAULT_MAX_REACQUISITIONS } from '../interaction/escalation.js';

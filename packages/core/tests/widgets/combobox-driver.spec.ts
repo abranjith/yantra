@@ -16,6 +16,11 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../../src/index.js';
+import {
+  createRunState,
+  escalationLedgerOf,
+  toWireLedger,
+} from '../../src/interaction/escalation.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 const budget = (port: WidgetTestPort) => ({
@@ -130,9 +135,13 @@ describe('@no-llm combobox driver', () => {
       committed: 'San Jose Mineta International Airport (SJC)',
       editee: { name: 'Search airports' },
     });
+    // The re-target is disclosed by `editee` above and by the WHERE rung that
+    // found it. There is no hand-built `retarget-editee` record any more: both
+    // typing passes run on the one shared sequence, in order, by construction.
     const strategies = attemptsOf(outcome).map((record) => [record.strategy, record.axis]);
     expect(strategies).toContainEqual(['locate-editee', 'where']);
-    expect(strategies).toContainEqual(['retarget-editee', 'where']);
+    expect(strategies).not.toContainEqual(['retarget-editee', 'where']);
+    expect(strategies.filter(([strategy]) => strategy === 'overtype').length).toBeGreaterThan(1);
     expect(base.document.querySelector<HTMLInputElement>('#trigger')!.value).toBe(
       'San Jose Mineta International Airport (SJC)',
     );
@@ -250,4 +259,105 @@ function portFacade(port: WidgetTestPort): WidgetPort {
     press: (key) => port.press(key),
     now: () => port.now(),
   };
+}
+
+describe('@no-llm the query form travels as the rung\u2019s entry evidence', () => {
+  const runFor = (port: WidgetTestPort) =>
+    createRunState(
+      { deadlineMs: port.now() + 20_000, maxActions: 32, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+  const wireOf = (run: ReturnType<typeof createRunState>) =>
+    toWireLedger(escalationLedgerOf(run, { operation: 'fill-combobox', family: 'combobox' }));
+
+  it('names each query form it asked, and why it was allowed to ask it', async () => {
+    // FEAT-034 TASK-004's contract, finally true at runtime: the form is the
+    // rung's entry evidence rather than a hand-built record whose `detail`
+    // carried the typed text into the ledger.
+    const base = WidgetTestPort.fromFixture('prefix-only-matcher.html');
+    const field = target(base, '#q', 'combobox', 'Where to?');
+    const run = runFor(base);
+
+    const outcome = await fillField(
+      base,
+      { field: 'Where to?', target: field },
+      { kind: 'text', text: 'San Jose Mineta International Airport (SJC)' },
+      { deadlineMs: base.now() + 20_000, maxActions: 32, maxPagingSteps: 12, run },
+    );
+
+    expect(outcome).toMatchObject({ ok: true });
+    const forms = wireOf(run).filter(
+      (record) => typeof record.strategy === 'string' && record.strategy.startsWith('query:'),
+    );
+    expect(forms.map((record) => [record.strategy, record.axis])).toEqual([
+      ['query:as-given', 'what'],
+      ['query:code-token', 'what'],
+      ['query:prefix-retreat', 'what'],
+    ]);
+    expect(forms[0]!.entry_evidence).toEqual(['query:as-given']);
+    expect(forms[1]!.entry_evidence).toEqual(['query:code-token', 'previous-form-no-suggestions']);
+    expect(forms[2]!.entry_evidence).toEqual([
+      'query:prefix-retreat',
+      'previous-form-no-suggestions',
+    ]);
+    // The typed query text itself never rides the ledger. The form kind is the
+    // structural token that replaced `detail: 'asked \"...\"'`.
+    expect(JSON.stringify(forms)).not.toContain('asked "');
+  }, 30_000);
+
+  it('skips the later forms when the first one already offered candidates', async () => {
+    const port = alwaysOffers('Dallas Fort Worth International Airport (DFW)');
+    const field = target(port, '#q', 'combobox', 'Where from?');
+    const run = runFor(port);
+
+    const outcome = await fillField(
+      port,
+      { field: 'Where from?', target: field },
+      { kind: 'text', text: 'Dallas Fort Worth International Airport (DFW)' },
+      { deadlineMs: port.now() + 20_000, maxActions: 32, maxPagingSteps: 12, run },
+    );
+
+    expect(outcome).toMatchObject({ ok: true });
+    const forms = wireOf(run).filter(
+      (record) => typeof record.strategy === 'string' && record.strategy.startsWith('query:'),
+    );
+    expect(forms.map((record) => [record.strategy, record.verdict])).toEqual([
+      ['query:as-given', 'succeeded'],
+      ['query:code-token', 'skipped'],
+      ['query:prefix-retreat', 'skipped'],
+    ]);
+    for (const skipped of forms.slice(1)) {
+      expect(skipped.unmet).toBe('previous-form-offered-candidates');
+      expect(skipped).not.toHaveProperty('charged_actions');
+    }
+  }, 30_000);
+});
+
+/** A combobox that answers any keystroke with the same single suggestion. */
+function alwaysOffers(label: string): WidgetTestPort {
+  const port = new WidgetTestPort(
+    '<input id="q" role="combobox" aria-label="Where from?" aria-autocomplete="list" ' +
+      'aria-controls="opts" aria-expanded="false">' +
+      '<div id="opts" role="listbox" style="display:none">' +
+      `<button role="option">${label}</button></div>`,
+  );
+  const input = port.document.querySelector('#q') as HTMLInputElement;
+  const popup = port.document.querySelector('#opts') as HTMLElement;
+  input.addEventListener('input', () => {
+    popup.style.display = 'block';
+    input.setAttribute('aria-expanded', 'true');
+  });
+  popup.querySelector('button')!.addEventListener('click', () => {
+    input.value = label;
+    popup.style.display = 'none';
+    input.setAttribute('aria-expanded', 'false');
+  });
+  port.document.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Escape') {
+      popup.style.display = 'none';
+      input.setAttribute('aria-expanded', 'false');
+    }
+  });
+  return port;
 }

@@ -96,6 +96,37 @@ describe('@no-llm rankAgainstRequested', () => {
     });
   });
 
+  it('resolves byte-identical offers by structural document order and discloses it', () => {
+    const candidates = [
+      { name: 'Frisco', path: [4] },
+      { name: 'Frisco', path: [2] },
+    ];
+
+    expect(rankAgainstRequested(candidates, 'Frisco')).toEqual({
+      kind: 'match',
+      candidate: candidates[1],
+      substitution: {
+        indistinguishable: 2,
+        position: 1,
+        tieBreak: ['document-order'],
+        label: 'Frisco',
+      },
+    });
+  });
+
+  it('uses enabled and page-selected structural rungs before document order', () => {
+    const enabled = { name: 'Frisco', path: [3] };
+    expect(
+      rankAgainstRequested([{ name: 'Frisco', path: [1], disabled: true }, enabled], 'Frisco'),
+    ).toEqual({ kind: 'match', candidate: enabled });
+
+    const selected = { name: 'Frisco', path: [3], selected: true };
+    expect(rankAgainstRequested([{ name: 'Frisco', path: [1] }, selected], 'Frisco')).toEqual({
+      kind: 'match',
+      candidate: selected,
+    });
+  });
+
   it('is stable: the same inputs rank the same way every time', () => {
     const candidates = [option('Dallas Fort Worth International Airport (DFW)'), option('Dallas')];
     const once = rankAgainstRequested(candidates, 'Dallas');

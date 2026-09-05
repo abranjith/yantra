@@ -6,8 +6,9 @@ import {
   fillSecretField,
   parseFillValue,
   runEscalationPlan,
-  toLegacyLedger,
-  toWireAttemptArtifact,
+  asPlanBudget,
+  createRunState,
+  toWireLedger,
   withSecret,
   type AgentBrowserController,
   type AgentBrowserObservation,
@@ -130,7 +131,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed, attempted verdicts (recovery already performed — never repeat it), and offered (re-issue with one of those strings verbatim). Do not use browser_click to operate a field widget or submit the form.',
+      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form.',
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -262,9 +263,10 @@ export async function applyBrowserFill(
       ...(outcome.resolution === undefined ? {} : { resolution: outcome.resolution }),
       ...(outcome.offered === undefined ? {} : { offered: outcome.offered }),
       ...(outcome.note === undefined ? {} : { note: outcome.note }),
-      ...(outcome.attempted === undefined
-        ? {}
-        : { attempted: toWireAttemptArtifact(outcome.attempted) }),
+      // Already the wire projection. Round-tripping it here is what used to
+      // re-inflate `entry_evidence`, `charged_actions` and `remaining_actions`
+      // as `[]`, `0` and `0` on every record of every failing call.
+      ...(outcome.attempted === undefined ? {} : { attempted: outcome.attempted }),
       ...(outcome.editee === undefined ? {} : { editee: outcome.editee }),
     };
   }
@@ -413,7 +415,16 @@ export async function driveWithRetry(
   context: DriveContext = {},
   dependencies: DriveWithRetryDependencies = DEFAULT_FILL_RETRY_DEPENDENCIES,
 ): Promise<FillOutcome> {
-  const budget = defaultWidgetBudget(port);
+  // The field entry point owns the run. Both the plan and every `fillField` it
+  // drives receive it on the budget, so one ceiling, one deadline, one
+  // re-acquisition cap and one verdict sequence cover the whole tool call —
+  // including a retry after an expensive first fill, which would otherwise get
+  // a fresh allowance of its own.
+  const declared = defaultWidgetBudget(port);
+  const budget = {
+    ...declared,
+    run: createRunState({ ...asPlanBudget(declared) }, port.now()),
+  };
   const built = buildFieldFillPlan({
     ...dependencies,
     port,
@@ -425,7 +436,7 @@ export async function driveWithRetry(
     ...(context.observation ? { observation: context.observation } : {}),
   });
   const run = await runEscalationPlan(built.plan);
-  const attempted = toLegacyLedger(run.ledger).records.map((record) =>
+  const attempted = toWireLedger(run.ledger).map((record) =>
     record.strategy === 're-resolve-field-and-retry' && built.resolutionFailure()
       ? {
           ...record,

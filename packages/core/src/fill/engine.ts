@@ -1,25 +1,33 @@
 import type { AgentInteractable } from '../browser/agent-controller.js';
 import {
+  assertReceivable,
   commitText,
   classifyFailure,
-  createRunnerOwnedPort,
+  createRunState,
   editeeProbe,
   enterText,
-  EMPTY_LEDGER,
+  escalationLedgerOf,
   isFormattingEquivalent,
-  ledgerOf,
   resolveInteractable,
   renderInteractionMessage,
   runEscalationPlan,
-  toLegacyLedger,
-  type AttemptLedger,
-  type AttemptRecord,
+  runStatePort,
+  substitutionEvidence,
+  toWireLedger,
+  type ChoiceSubstitution,
+  type InteractionFamily,
+  type MutableRunState,
+  type SerializedVerdict,
   type TypingFailure,
 } from '../interaction/index.js';
 import {
   watchAndSelectOffered,
   type OfferedSelection,
 } from '../widgets/combobox/combobox-driver.js';
+import {
+  isOfferedCalendarLabel,
+  selectByOfferedCalendarLabel,
+} from '../widgets/date/calendar-driver.js';
 import { pendingRangePartner, resolveDatePair } from '../widgets/date/date-pair.js';
 import { createDefaultWidgetRegistry } from '../widgets/default-registry.js';
 import { probeOpen, type ProbeOutcome } from '../widgets/open-probe.js';
@@ -40,7 +48,7 @@ import {
 import { matchesCommitment, matchesIntent, readCommitted } from '../widgets/verify.js';
 
 import { dismissWidget } from './dismiss.js';
-import { buildDriverPlan, buildTextPlan } from './plans.js';
+import { asPlanBudget, buildDriverPlan, buildTextPlan } from './plans.js';
 import {
   fillFailure,
   type FieldIdentity,
@@ -61,16 +69,34 @@ export async function fillField(
   port: WidgetPort,
   identity: FieldIdentity,
   intent: FillIntent,
-  budget: FillBudget = defaultWidgetBudget(port),
+  requestedBudget: FillBudget = defaultWidgetBudget(port),
 ): Promise<FillOutcome> {
-  const entry = await rangeEntryPoint(port, identity, intent);
-  const healed = runnerPortForField(port, entry);
+  // One run per top-level fill: created here when nothing above owns one,
+  // adopted when a caller already does. Every plan, driver and nested call
+  // below receives it on the budget, so the action ceiling, the deadline, the
+  // re-acquisition cap and the verdict sequence are one thing for this call.
+  const runState = requestedBudget.run ?? createRunState(asPlanBudget(requestedBudget), port.now());
+  const budget: FillBudget = { ...requestedBudget, run: runState };
+  // Wrapped before the first read, so range resolution — work this call does
+  // outside any rung — is charged like everything else it spends.
+  const counted = runStatePort(port, runState);
+  const entry = await rangeEntryPoint(counted, identity, intent);
+  const healed = runnerPortForField(counted, entry, runState);
   const target = healed.target;
   let driver: string;
   let committed: string;
   let reactionDismissed = false;
   let driven: WidgetContainer | null = null;
-  let typingLedger: AttemptLedger = EMPTY_LEDGER;
+  /**
+   * Every verdict this call has produced, in the one wire projection.
+   *
+   * Read from the run rather than concatenated from driver-local and typing
+   * ledgers: those were four sequences pretending to be one, and merging them
+   * put two records describing the same nine seconds at two nesting levels
+   * next to each other as though they had happened in turn.
+   */
+  const attemptedSoFar = (): readonly SerializedVerdict[] =>
+    toWireLedger(escalationLedgerOf(runState, { operation: 'fill-field', family: 'field' }));
   /** The option label the widget was actually made to choose, when it chose. */
   let chosen: string | null = null;
   /** What the widget was showing at that moment. */
@@ -79,10 +105,10 @@ export async function fillField(
   let reformatted = false;
   /** What the control itself held after accepting the typed text, if anything. */
   let acceptedText: string | null = null;
-  /** Which widget drivers were tried, when more than one was. */
-  let driverLedger: AttemptLedger = EMPTY_LEDGER;
   /** The control the drive re-targeted to, when the page routed the edit away. */
   let editee: WidgetTarget | null = null;
+  /** A choice made only because every model-visible survivor was identical. */
+  let substitution: ChoiceSubstitution | null = null;
 
   try {
     const shape = await healed.port.evaluateOn(target.ref, (element) => {
@@ -114,7 +140,30 @@ export async function fillField(
         ? null
         : await resolveContainer(healed.port, target, { allowUnlinked: true });
 
-    if (intent.kind === 'secret') {
+    const offeredCalendarLabel =
+      intent.kind === 'text' ? intent.text : intent.kind === 'option' ? intent.value : null;
+    const calendarLabelDrivers =
+      offeredCalendarLabel !== null && isOfferedCalendarLabel(offeredCalendarLabel)
+        ? await WIDGET_REGISTRY.detectDrivers(healed.port, target, 'date')
+        : [];
+    const receivesOfferedCalendarLabel = calendarLabelDrivers.some(
+      ({ driver: candidate }) => candidate.kind === 'calendar-grid',
+    );
+
+    if (offeredCalendarLabel !== null && receivesOfferedCalendarLabel) {
+      const outcome = await selectByOfferedCalendarLabel(
+        healed.port,
+        target,
+        offeredCalendarLabel,
+        budget,
+      );
+      if (!outcome.ok) return fromWidgetFailure(outcome, attemptedSoFar(), 'date');
+      ({ driver, committed } = outcome);
+      driven = outcome.container ?? null;
+      chosen = outcome.chosen ?? null;
+      offered = outcome.offered ?? [];
+      substitution = outcome.substitution ?? null;
+    } else if (intent.kind === 'secret') {
       return fillFailure(
         'FILL_VALUE_INVALID',
         'value-malformed',
@@ -122,9 +171,7 @@ export async function fillField(
         { key: intent.key },
         false,
       );
-    }
-
-    if (intent.kind === 'toggle') {
+    } else if (intent.kind === 'toggle') {
       const current = await readChecked(healed.port, target);
       if (current !== intent.checked) {
         await healed.port.click(target.ref);
@@ -147,29 +194,29 @@ export async function fillField(
       const attempt = await driveFamilyPlan(healed.port, target, optionIntent, budget, 'option', [
         { driver: nativeSelectDriver, confidence },
       ]);
-      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
+      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'option');
       ({ driver, committed } = attempt.outcome);
       chosen = attempt.outcome.chosen ?? null;
       offered = attempt.outcome.offered ?? [];
-      driverLedger = attempt.ledger;
+      substitution = attempt.outcome.substitution ?? null;
     } else if (intent.kind === 'date' || intent.kind === 'date_range') {
       // Ordered by each driver's own confidence, and tried in turn. A trigger
       // that will not accept typed text falls through to the calendar that
       // opens from it — which is the difference between reaching a month four
       // pages away and reporting the date as uncommittable.
       const attempt = await driveFamilyPlan(healed.port, target, intent, budget, 'date');
-      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
+      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'date');
       ({ driver, committed } = attempt.outcome);
       driven = attempt.outcome.container ?? null;
-      driverLedger = attempt.ledger;
+      substitution = attempt.outcome.substitution ?? null;
     } else if (!shape.textLike && intent.kind === 'option') {
       const attempt = await driveFamilyPlan(healed.port, target, intent, budget, 'option');
-      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attempt.ledger);
+      if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'option');
       ({ driver, committed } = attempt.outcome);
       driven = attempt.outcome.container ?? null;
       chosen = attempt.outcome.chosen ?? null;
       offered = attempt.outcome.offered ?? [];
-      driverLedger = attempt.ledger;
+      substitution = attempt.outcome.substitution ?? null;
     } else if ((intent.kind === 'text' || intent.kind === 'option') && shape.textLike) {
       const text = intent.kind === 'text' ? intent.text : intent.value;
       // The combobox family first. A control that declares itself a suggestion
@@ -183,12 +230,12 @@ export async function fillField(
         ? await driveFamilyPlan(healed.port, target, optionIntent, budget, 'combobox')
         : null;
       if (combobox?.tried) {
-        if (!combobox.ok) return fromWidgetFailure(combobox.failure, combobox.ledger);
+        if (!combobox.ok) return fromWidgetFailure(combobox.failure, attemptedSoFar(), 'combobox');
         ({ driver, committed } = combobox.outcome);
         driven = combobox.outcome.container ?? null;
         chosen = combobox.outcome.chosen ?? null;
         offered = combobox.outcome.offered ?? [];
-        driverLedger = combobox.ledger;
+        substitution = combobox.outcome.substitution ?? null;
         editee = combobox.outcome.editee ?? null;
         reformatted = combobox.outcome.reformatted ?? false;
         reactionDismissed = combobox.outcome.released ?? false;
@@ -220,14 +267,24 @@ export async function fillField(
               ? editeeProbe(healed.port)
               : undefined;
         let live = target;
+        /**
+         * The verdicts the typing ladder itself produced, and only those.
+         *
+         * More than one entry mechanism means the control changed underneath
+         * the original baseline, so its old unlinked container stops being
+         * evidence that a newly observed popup should be ignored. Counting the
+         * whole run here instead would make every ordinary fill look like a
+         * multi-mechanism one.
+         */
+        let typingVerdicts: readonly SerializedVerdict[] = [];
         const textPlan = buildTextPlan<PlainTextReaction, FillFailure>({
           port: healed.port,
           budget,
           runEnter: async ({ port: planPort }) => {
             const entered = await enterText(planPort, target, text, budget, probe);
-            typingLedger = entered.ledger;
+            typingVerdicts = entered.attempted;
             if (!entered.typed.ok) {
-              return { ok: false, failure: fromTypingFailure(entered.typed, entered.ledger) };
+              return { ok: false, failure: fromTypingFailure(entered.typed, attemptedSoFar()) };
             }
             editee = entered.editee;
             live = entered.target;
@@ -255,9 +312,9 @@ export async function fillField(
               // the original baseline. Its old unlinked container is no
               // longer reliable evidence that a newly observed popup should
               // be ignored.
-              ignoredContainer: typingLedger.records.length > 1 ? null : ignoredContainer,
+              ignoredContainer: performed(typingVerdicts) > 1 ? null : ignoredContainer,
             });
-            const reacted = resolveOfferedSelection(live, text, selection);
+            const reacted = resolveOfferedSelection(live, text, selection, 'text');
             return reacted.ok
               ? {
                   ok: true,
@@ -266,6 +323,9 @@ export async function fillField(
                     committed: reacted.committed,
                     offered: reacted.offered ?? [],
                     ...(reacted.chosen === undefined ? {} : { chosen: reacted.chosen }),
+                    // A choice made only because every survivor looked
+                    // identical is disclosed as counts and rung names.
+                    ...(reacted.substitution ? substitutionEvidence(reacted.substitution) : {}),
                   },
                 }
               : { ok: false, failure: reacted };
@@ -288,6 +348,7 @@ export async function fillField(
         driver = reacted.selected ? 'typeahead' : 'plain-text';
         chosen = reacted.chosen ?? null;
         offered = reacted.offered ?? [];
+        substitution = reacted.substitution ?? null;
       }
     } else {
       return incompatible(target, intent);
@@ -355,15 +416,13 @@ export async function fillField(
             observed: dismissed.committed,
             ...(offered.length > 0 ? { offered } : {}),
             ...(chosen === null ? {} : { chosen }),
-            ...(typingLedger.records.length > 0 || driverLedger.records.length > 0
-              ? { attempted: [...driverLedger.records, ...typingLedger.records] }
-              : {}),
+            ...(performed(attemptedSoFar()) > 0 ? { attempted: attemptedSoFar() } : {}),
           },
         )
       );
     }
     const requested = describeIntent(intent);
-    const allAttempts = [...driverLedger.records, ...typingLedger.records];
+    const allAttempts = attemptedSoFar();
     const resolution = resolutionFor({
       requested,
       committed: settled,
@@ -383,10 +442,12 @@ export async function fillField(
         ? {}
         : { editee: { ref: editee.ref, name: editee.name, role: editee.role } }),
       ...(offered.length > 0 ? { offered } : {}),
-      ...(noteFor(target.name, requested, settled, resolution, offered) ?? {}),
+      ...(substitution === null ? {} : { substitution }),
+      ...(noteFor(target.name, requested, settled, resolution, offered, substitution) ?? {}),
       // Only when it says something. One driver, one successful attempt is the
-      // ordinary case and reporting it as recovery is noise.
-      ...(allAttempts.length > 1 ? { attempted: allAttempts } : {}),
+      // ordinary case and reporting it as recovery is noise. Skipped rungs are
+      // carried once there is something to report, never on their own.
+      ...(performed(allAttempts) > 1 || substitution !== null ? { attempted: allAttempts } : {}),
     };
   } catch (error) {
     if (isStaleRefError(error)) {
@@ -441,9 +502,9 @@ export async function fillSecretField(
   port: WidgetPort,
   identity: FieldIdentity,
   secretValue: string,
-  budget: FillBudget = defaultWidgetBudget(port),
+  requestedBudget: FillBudget = defaultWidgetBudget(port),
 ): Promise<FillOutcome> {
-  if (port.now() > budget.deadlineMs || budget.maxActions < 1) {
+  if (port.now() > requestedBudget.deadlineMs || requestedBudget.maxActions < 1) {
     return fillFailure(
       'WIDGET_TARGET_UNREACHABLE',
       'budget',
@@ -451,7 +512,9 @@ export async function fillSecretField(
       { reason: 'budget' },
     );
   }
-  const healed = runnerPortForField(port, identity);
+  const runState = requestedBudget.run ?? createRunState(asPlanBudget(requestedBudget), port.now());
+  const budget: FillBudget = { ...requestedBudget, run: runState };
+  const healed = runnerPortForField(port, identity, runState);
   try {
     // `allowEscalation: false` is load-bearing, not defensive: it keeps the
     // single-rung path AND suppresses the readback, so a resolved credential is
@@ -466,7 +529,7 @@ export async function fillSecretField(
       committed: '',
       actions: 1,
       dismissed: false,
-      attempted: typed.ledger.records,
+      attempted: typed.attempted,
     };
   } catch (error) {
     if (isStaleRefError(error)) {
@@ -617,13 +680,11 @@ type DriverAttempt =
   | {
       readonly ok: true;
       readonly outcome: WidgetSuccess;
-      readonly ledger: AttemptLedger;
       readonly tried: true;
     }
   | {
       readonly ok: false;
       readonly failure: WidgetFailure;
-      readonly ledger: AttemptLedger;
       /**
        * Whether any driver in the family was confident enough to act.
        *
@@ -647,7 +708,6 @@ async function driveFamilyPlan(
     declaredCandidates ?? (await WIDGET_REGISTRY.detectDrivers(port, target, family));
   const probeEligible = candidates.length === 0 && family !== 'combobox';
   const probeState: { value: ProbeOutcome | null } = { value: null };
-  const nested = new Map<string, readonly AttemptRecord[]>();
   const plan = buildDriverPlan({
     family,
     port,
@@ -657,9 +717,6 @@ async function driveFamilyPlan(
     candidates,
     isWrongDriver,
     probeEligible,
-    onDriverOutcome: (rungId, outcome) => {
-      if (outcome.ok && outcome.attempted) nested.set(rungId, outcome.attempted);
-    },
     ...(family === 'combobox'
       ? {}
       : {
@@ -670,14 +727,29 @@ async function driveFamilyPlan(
                 WIDGET_REGISTRY.detectDrivers(probePort, probeTarget, probeFamily),
               detectOpen: (probePort, probeTarget, container, probeFamily) =>
                 WIDGET_REGISTRY.detectOpenDrivers(probePort, probeTarget, container, probeFamily),
+              // The revealed candidates run as an ordinary family sub-plan on
+              // the shared run, so their `driver:<kind>` verdicts arrive in the
+              // one sequence — no map of driver-local ledgers to splice back in.
+              drive: async (revealed, probePort) => {
+                const nested = await driveFamilyPlan(
+                  probePort,
+                  target,
+                  intent,
+                  budget,
+                  family,
+                  revealed,
+                );
+                return nested.ok ? nested.outcome : nested.failure;
+              },
             });
             probeState.value = probed;
             if (probed.kind === 'driven') {
-              if (probed.outcome.ok) {
-                nested.set('open-probe', probed.ledger.records.slice(1));
-                return { ok: true as const, value: probed.outcome };
-              }
-              return { ok: false as const, failure: probed.outcome };
+              // The registry kind, never page text: what opening turned out to
+              // reveal is the whole answer to "why did this fill click first".
+              const evidence = { revealed_driver: probed.revealedDriver };
+              return probed.outcome.ok
+                ? { ok: true as const, value: probed.outcome, evidence }
+                : { ok: false as const, failure: probed.outcome, evidence };
             }
             if (probed.kind === 'unrecognized') {
               return { ok: false as const, failure: probed.failure };
@@ -694,19 +766,11 @@ async function driveFamilyPlan(
           },
         }),
   });
-  // Driver-local ledgers are preserved during migration while the runner owns
-  // the cross-driver order. They are inserted immediately after their owning
-  // rung, which is the same order in which they executed.
+  // Ordering is the runner's single sequence. A nested rung's verdict precedes
+  // its enclosing rung's because ordinals are assigned on completion, so there
+  // is nothing left to merge and nothing left to renumber.
   const run = await runEscalationPlan(plan);
-  let records: readonly AttemptRecord[] = toLegacyLedger(run.ledger).records.flatMap((record) => [
-    record,
-    ...(nested.get(record.strategy) ?? []),
-  ]);
   const probed = probeState.value;
-  if (probed?.kind === 'driven' || probed?.kind === 'unrecognized') {
-    records = probed.ledger.records;
-  }
-  const ledger = ledgerOf(records.map((record, index) => ({ ...record, attempt: index + 1 })));
   if (run.outcome === null) {
     return {
       ok: false,
@@ -716,21 +780,23 @@ async function driveFamilyPlan(
         `No ${family} widget driver recognized "${target.name}" with sufficient confidence.`,
         { family },
       ),
-      ledger,
       tried: false,
     };
   }
   if (run.outcome.ok) {
-    return { ok: true, outcome: run.outcome.value, ledger, tried: true };
+    return { ok: true, outcome: run.outcome.value, tried: true };
   }
+  // Wave 1's deliberate exception to "report the ledger only when it says
+  // something": that the control opened and nothing recognised what it revealed
+  // is the whole answer, even on its own.
   const failure =
     probed?.kind === 'unrecognized'
       ? {
           ...run.outcome.failure,
-          details: { ...run.outcome.failure.details, attempted: ledger.records },
+          details: { ...run.outcome.failure.details, attempted: toWireLedger(run.ledger) },
         }
       : run.outcome.failure;
-  return { ok: false, failure, ledger, tried: candidates.length > 0 || probed !== null };
+  return { ok: false, failure, tried: candidates.length > 0 || probed !== null };
 }
 
 /** Render a semantic intent as the caller expressed it, for `requested`. */
@@ -792,7 +858,17 @@ function noteFor(
   committed: string,
   resolution: FillResolution,
   offered: readonly string[],
+  substitution: ChoiceSubstitution | null,
 ): { readonly note: string } | null {
+  if (substitution !== null) {
+    return {
+      note: renderInteractionMessage('success-note', 'FILL_SUCCESS_NOTE', 'structural_tie_break', {
+        field,
+        count: substitution.indistinguishable,
+        label: substitution.label,
+      }).message,
+    };
+  }
   if (resolution === 'exact') return null;
   if (resolution === 'single_offered_match') {
     return {
@@ -839,6 +915,7 @@ interface PlainTextReaction {
   readonly actions: number;
   readonly chosen?: string;
   readonly offered?: readonly string[];
+  readonly substitution?: ChoiceSubstitution;
 }
 
 /** Map selection facts into the fill vocabulary at the engine decision point. */
@@ -846,6 +923,7 @@ function resolveOfferedSelection(
   target: WidgetTarget,
   requested: string,
   selection: OfferedSelection,
+  emitter: InteractionFamily,
 ): PlainTextReaction | FillFailure {
   switch (selection.kind) {
     case 'selected':
@@ -857,6 +935,7 @@ function resolveOfferedSelection(
         actions: selection.actions,
         chosen: selection.chosen,
         offered: selection.offered,
+        ...(selection.substitution ? { substitution: selection.substitution } : {}),
       };
     case 'no-suggestions':
       return {
@@ -876,6 +955,7 @@ function resolveOfferedSelection(
         ...(selection.offered.length > 0 ? { offered: selection.offered } : {}),
       };
     case 'ambiguous':
+      assertReceivable('fill', 'WIDGET_AMBIGUOUS_CHOICE', 'several-matched-equally', emitter);
       return fillFailure(
         'WIDGET_AMBIGUOUS_CHOICE',
         'several-matched-equally',
@@ -883,11 +963,20 @@ function resolveOfferedSelection(
         { offered: selection.offered, observed: selection.observed },
       );
     case 'text-discarded':
+      assertReceivable(
+        'fill',
+        'WIDGET_TARGET_UNREACHABLE',
+        selection.semantics === 'declared' ? 'no-suggestion-matched' : 'no-options-offered',
+        emitter,
+      );
       return fillFailure(
         'WIDGET_TARGET_UNREACHABLE',
-        'no-suggestion-matched',
+        selection.semantics === 'declared' ? 'no-suggestion-matched' : 'no-options-offered',
         `"${target.name}" offers no suggestion matching "${requested}" and discarded the typed text on release, so it will not accept a free-text value.`,
-        { offered: selection.offered, observed: selection.observed },
+        {
+          ...(selection.semantics === 'declared' ? { offered: selection.offered } : {}),
+          observed: selection.observed,
+        },
       );
     case 'not-committed':
       return fillFailure(
@@ -918,26 +1007,27 @@ function resolveOfferedSelection(
  * mechanisms must not read like one nobody tried, or the caller repeats work
  * the tool already exhausted.
  */
-function fromTypingFailure(failure: TypingFailure, ledger?: AttemptLedger): FillFailure {
+function fromTypingFailure(
+  failure: TypingFailure,
+  attempted: readonly SerializedVerdict[] = failure.attempted,
+): FillFailure {
   const details = {
     observed: failure.observed,
-    attempted: (ledger ?? failure.ledger).records,
+    attempted,
     ...(failure.editee === undefined ? {} : { editee: failure.editee.name }),
     ...(failure.reason === undefined ? {} : { reason: failure.reason }),
   };
   // The two arms are the whole point of the cause discriminator: both carry
   // WIDGET_NOT_COMMITTED, and before this they read identically.
   if (failure.errorCode === 'WIDGET_NOT_COMMITTED') {
-    return fillFailure(
-      'WIDGET_NOT_COMMITTED',
+    const cause =
       failure.editee !== undefined
         ? 'keystrokes-landed-elsewhere'
         : failure.reason === 'budget'
           ? 'budget'
-          : 'typing-exhausted',
-      failure.message,
-      details,
-    );
+          : 'typing-exhausted';
+    assertReceivable('fill', 'WIDGET_NOT_COMMITTED', cause, 'text');
+    return fillFailure('WIDGET_NOT_COMMITTED', cause, failure.message, details);
   }
   return fillFailure('WIDGET_TARGET_UNREACHABLE', 'budget', failure.message, details);
 }
@@ -966,29 +1056,36 @@ function incompatible(target: WidgetTarget, intent: FillIntent): FillFailure {
  * helpers below map any incoming cause into the set its destination code can
  * carry; they are total functions into a legal set, never a generic sentence.
  */
-function fromWidgetFailure(failure: WidgetFailure, ledger?: AttemptLedger): FillFailure {
-  const details =
-    ledger && ledger.records.length > 1
-      ? { ...failure.details, attempted: ledger.records }
-      : failure.details;
+function fromWidgetFailure(
+  failure: WidgetFailure,
+  attempted: readonly SerializedVerdict[],
+  emitter: WidgetFamily,
+): FillFailure {
+  const details = performed(attempted) > 1 ? { ...failure.details, attempted } : failure.details;
   switch (failure.errorCode) {
     case 'WIDGET_NOT_RECOGNIZED':
-    case 'WIDGET_TARGET_UNREACHABLE':
+    case 'WIDGET_TARGET_UNREACHABLE': {
+      const cause = unreachableCause(failure.cause, details);
+      assertReceivable('fill', 'WIDGET_TARGET_UNREACHABLE', cause, emitter);
       return fillFailure(
         'WIDGET_TARGET_UNREACHABLE',
-        unreachableCause(failure.cause, details),
+        cause,
         failure.message,
         details,
         failure.retryable,
       );
-    case 'WIDGET_NOT_COMMITTED':
+    }
+    case 'WIDGET_NOT_COMMITTED': {
+      const cause = notCommittedCause(failure.cause);
+      assertReceivable('fill', 'WIDGET_NOT_COMMITTED', cause, emitter);
       return fillFailure(
         'WIDGET_NOT_COMMITTED',
-        notCommittedCause(failure.cause),
+        cause,
         failure.message,
         details,
         failure.retryable,
       );
+    }
     case 'WIDGET_DID_NOT_OPEN':
       return fillFailure(
         'WIDGET_DID_NOT_OPEN',
@@ -998,6 +1095,7 @@ function fromWidgetFailure(failure: WidgetFailure, ledger?: AttemptLedger): Fill
         failure.retryable,
       );
     case 'WIDGET_AMBIGUOUS_CHOICE':
+      assertReceivable('fill', 'WIDGET_AMBIGUOUS_CHOICE', 'several-matched-equally', emitter);
       return fillFailure(
         'WIDGET_AMBIGUOUS_CHOICE',
         'several-matched-equally',
@@ -1033,6 +1131,7 @@ function unreachableCause(
     case 'value-not-offered':
     case 'date-not-reachable':
     case 'no-suggestion-matched':
+    case 'no-options-offered':
     case 'picker-did-not-open':
     case 'intent-incompatible':
     case 'budget':
@@ -1067,30 +1166,50 @@ async function readChecked(port: WidgetPort, target: WidgetTarget): Promise<bool
   });
 }
 
+/**
+ * How many of these verdicts describe work that was actually performed.
+ *
+ * A skipped rung was not run, so it never makes a ledger worth reporting on its
+ * own — but it is carried once something else does.
+ */
+function performed(attempted: readonly SerializedVerdict[]): number {
+  return attempted.filter((record) => record.verdict !== 'skipped').length;
+}
+
 /** How long a released widget is given to finish writing a paired range. */
 const COMMIT_SETTLE_MS = 1_000;
 /** Polling cadence while waiting for that write. */
 const COMMIT_SETTLE_POLL_MS = 100;
 
+/**
+ * The one port every rung of one fill charges through.
+ *
+ * Built from the shared run-charging wrapper rather than a second
+ * implementation with its own private counter and its own private
+ * re-acquisition cap: a fill that spends actions inside a driver, inside the
+ * typing ladder and outside any rung at all must answer "how much did this
+ * call spend" once, not four times.
+ */
 function runnerPortForField(
   port: WidgetPort,
   identity: FieldIdentity,
+  state: MutableRunState,
 ): { readonly port: WidgetPort; readonly target: WidgetTarget; readonly actions: () => number } {
-  let actions = 0;
-  const adapted = createRunnerOwnedPort(port, {
-    ownedRef: identity.target.ref,
-    maxReacquisitions: 4,
-    reacquire: async (currentRef) => {
-      const next = await reacquireTarget(port, identity, { ...identity.target, ref: currentRef });
-      return next?.ref ?? null;
-    },
-    onAction: (count) => {
-      actions = count;
-    },
-  });
+  // Ownership, expressed by declining rather than by a second ref map: an
+  // unrelated candidate ref inside a popup is not this field, and healing it to
+  // the field would drive the wrong node.
+  let owned = identity.target.ref;
+  state.reacquire = async (currentRef) => {
+    if (currentRef !== owned && currentRef !== identity.target.ref) return null;
+    const next = await reacquireTarget(port, identity, { ...identity.target, ref: currentRef });
+    if (!next) return null;
+    owned = next.ref;
+    return next.ref;
+  };
+  const adapted = runStatePort(port, state);
   // Drivers keep the original target object. The adapted port maps that ref to
   // the current one after the single stronger field-string re-acquisition.
-  return { port: adapted, target: identity.target, actions: () => actions };
+  return { port: adapted, target: identity.target, actions: () => state.chargedActions };
 }
 
 /**

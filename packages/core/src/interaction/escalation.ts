@@ -1,13 +1,8 @@
 /** Declarative recovery plans and their single execution/accounting owner. */
 
-import type { WidgetPort } from '../widgets/types.js';
+import type { WidgetBudget, WidgetPort } from '../widgets/types.js';
 
-import type {
-  AttemptDisposition,
-  AttemptLedger,
-  InteractionAxis,
-  InteractionFailureCause,
-} from './types.js';
+import type { AttemptDisposition, InteractionAxis, InteractionFailureCause } from './types.js';
 
 const TRANSIENT_CODES: ReadonlySet<string> = new Set([
   'WIDGET_ELEMENT_REPLACED',
@@ -63,6 +58,18 @@ export interface PlanBudget {
   readonly maxPagingSteps: number;
   readonly maxReacquisitions: number;
   readonly maxScrollSteps?: number;
+  /**
+   * The run this plan joins, when it is not the root of one.
+   *
+   * Absent means "create the state and own it". It rides on the budget rather
+   * than on every driver signature because the budget already flows unchanged
+   * from `fillField` through `WidgetDriver.drive` and `commitText` into every
+   * plan builder — so threading the run changes no public signature and stays
+   * explicit data rather than an ambient lookup. A joined plan's own
+   * `maxActions`, `deadlineMs` and `maxReacquisitions` never widen or narrow
+   * the ceiling the root set.
+   */
+  readonly run?: MutableRunState;
 }
 
 /** The maximum work a rung declares before it may be entered. */
@@ -148,6 +155,55 @@ export interface EscalationPlan<TValue, TFailure, TPort = WidgetPort> {
   readonly enforceBudgetCaps?: boolean;
 }
 
+/**
+ * What a rung discloses about **how** it resolved, as counts and structural
+ * tokens.
+ *
+ * Scalars only, by type: a container path or a raw candidate list must not be
+ * able to reach the wire through this, and a value that is an object or an
+ * array is refused rather than serialized.
+ */
+export type VerdictEvidence = Readonly<Record<string, string | number | boolean>>;
+
+/**
+ * The evidence keys that may be serialized into `details.attempted[]`.
+ *
+ * An allowlist, in the spirit of `MAX_OFFERED` and `MAX_RANKED_OFFERED`: rung
+ * evidence also carries working values — `committed`, `offered`, `chosen`,
+ * `editee`, a `container` path — and spreading it blindly would put unbounded
+ * page-derived data in a field that carries counts and structural tokens only.
+ */
+export const SERIALIZED_EVIDENCE_KEYS: readonly string[] = [
+  /** How many candidates were indistinguishable to the model. */
+  'substituted',
+  /** 1-based document-order position taken among them. */
+  'substitution_position',
+  /** Comma-joined rung names that narrowed the pool. */
+  'tie_break',
+  /** Bounded container-scroll count. */
+  'scroll_steps',
+  /** Fixed stop-reason token. */
+  'scroll_stop',
+  /** Registry driver **kind** revealed by opening. Never page text. */
+  'revealed_driver',
+  /** Stale-ref healings charged to this rung. */
+  'reacquisitions',
+];
+
+const SERIALIZED_EVIDENCE: ReadonlySet<string> = new Set(SERIALIZED_EVIDENCE_KEYS);
+
+/** Project rung evidence down to the allowlisted scalars, dropping the rest. */
+function serializedEvidence(evidence: Readonly<Record<string, unknown>>): VerdictEvidence {
+  const projected: Record<string, string | number | boolean> = {};
+  for (const key of Object.keys(evidence)) {
+    if (!SERIALIZED_EVIDENCE.has(key)) continue;
+    const value = evidence[key];
+    if (typeof value === 'string' || typeof value === 'boolean') projected[key] = value;
+    else if (typeof value === 'number' && Number.isFinite(value)) projected[key] = value;
+  }
+  return projected;
+}
+
 interface VerdictBase {
   readonly ordinal: number;
   readonly rungId: string;
@@ -170,6 +226,7 @@ export type RungVerdict =
       readonly chargedActions: number;
       readonly remainingActions: number;
       readonly elapsedMs: number;
+      readonly evidence: Readonly<Record<string, unknown>>;
       readonly errorCode: string;
       readonly cause?: InteractionFailureCause;
       readonly detail?: string;
@@ -178,6 +235,42 @@ export type RungVerdict =
       readonly kind: 'skipped';
       readonly unmet: string;
     });
+
+/**
+ * A verdict read back from an artifact, which may predate the measured fields.
+ *
+ * Identical to {@link RungVerdict} except that the measured fields are
+ * optional: a legacy `AttemptRecord` never carried them, and inventing `[]`,
+ * `0` and `0` for them is exactly the noise this projection exists to remove.
+ * `RungVerdict` is assignable to this; nothing else is.
+ */
+export type RungVerdictProjection =
+  | (VerdictBase & {
+      readonly kind: 'succeeded';
+      readonly entryEvidence?: readonly string[];
+      readonly chargedActions?: number;
+      readonly remainingActions?: number;
+      readonly elapsedMs?: number;
+      readonly evidence: Readonly<Record<string, unknown>>;
+    })
+  | (VerdictBase & {
+      readonly kind: 'failed';
+      readonly entryEvidence?: readonly string[];
+      readonly chargedActions?: number;
+      readonly remainingActions?: number;
+      readonly elapsedMs?: number;
+      readonly evidence: Readonly<Record<string, unknown>>;
+      readonly errorCode: string;
+      readonly cause?: InteractionFailureCause;
+      readonly detail?: string;
+    })
+  | (VerdictBase & {
+      readonly kind: 'skipped';
+      readonly unmet: string;
+    });
+
+/** One record as it is written to `details.attempted[]` and read back. */
+export type SerializedVerdict = Readonly<Record<string, unknown>>;
 
 /** The ledger is a projection of the one sequence the runner executed. */
 export interface EscalationLedger {
@@ -195,18 +288,101 @@ export interface EscalationRun<TValue, TFailure> {
   readonly ledger: EscalationLedger;
 }
 
+/**
+ * Everything one top-level call has spent, and the one sequence it produced.
+ *
+ * Exactly one instance exists per top-level operation. `deadlineMs`,
+ * `maxActions` and `maxReacquisitions` are set once by whoever created it and
+ * are read-only thereafter, which is what makes the ceiling real across nesting
+ * instead of restarting at every sub-plan.
+ */
 export interface MutableRunState {
   readonly startedAt: number;
   readonly deadlineMs: number;
   readonly maxActions: number;
+  readonly maxReacquisitions: number;
   readonly verdicts: RungVerdict[];
   readonly values: Record<string, unknown>;
   chargedActions: number;
   chargedReads: number;
   reacquisitions: number;
+  /**
+   * How this run finds an owned node the page replaced, or `null`.
+   *
+   * Installed by whoever owns the run — the fill engine for its field, or the
+   * first plan that declares `reacquire` — and read at call time, so a port
+   * wrapped before the policy existed still heals through it. Returning `null`
+   * both ends healing for an unrecoverable node and is how a caller declines a
+   * ref it does not own.
+   */
+  reacquire: ((currentRef: string) => Promise<string | null>) | null;
   lastOutcome: unknown;
   lastFailure: unknown;
   lastNow: number;
+}
+
+/**
+ * Start one run. The single constructor of a root {@link MutableRunState}.
+ *
+ * Callers that own a whole operation — the fill engine, the runner when a plan
+ * arrives without a run — create the state here so "how much has this call
+ * spent" has exactly one answer.
+ */
+export function createRunState(
+  budget: Pick<PlanBudget, 'deadlineMs' | 'maxActions' | 'maxReacquisitions'>,
+  now: number,
+): MutableRunState {
+  return {
+    startedAt: now,
+    deadlineMs: budget.deadlineMs,
+    maxActions: Math.max(0, Math.floor(budget.maxActions)),
+    maxReacquisitions: Math.max(0, Math.floor(budget.maxReacquisitions)),
+    verdicts: [],
+    values: {},
+    chargedActions: 0,
+    chargedReads: 0,
+    reacquisitions: 0,
+    reacquire: null,
+    lastOutcome: null,
+    lastFailure: null,
+    lastNow: now,
+  };
+}
+
+/** Stale-ref healings one whole call may charge. Shared, never per wrapper. */
+export const DEFAULT_MAX_REACQUISITIONS = 4;
+
+/**
+ * Convert the established widget allowance into the runner-owned shape.
+ *
+ * The run rides through unchanged: a plan built from a budget that already
+ * carries one joins that run instead of opening a fresh ceiling, a fresh
+ * re-acquisition cap and a fresh ledger.
+ */
+export function asPlanBudget(budget: WidgetBudget): PlanBudget {
+  return {
+    deadlineMs: budget.deadlineMs,
+    maxActions: budget.maxActions,
+    maxPagingSteps: budget.maxPagingSteps ?? 12,
+    maxReacquisitions: DEFAULT_MAX_REACQUISITIONS,
+    maxScrollSteps: budget.maxScrollSteps ?? 8,
+    ...(budget.run === undefined ? {} : { run: budget.run }),
+  };
+}
+
+/** Project the complete sequence a run has executed so far. */
+export function escalationLedgerOf(
+  state: MutableRunState,
+  descriptor: { readonly operation: string; readonly family: InteractionFamily },
+): EscalationLedger {
+  return {
+    operation: descriptor.operation,
+    family: descriptor.family,
+    verdicts: [...state.verdicts],
+    chargedActions: state.chargedActions,
+    elapsedMs: state.lastNow - state.startedAt,
+    remainingActions: Math.max(0, state.maxActions - state.chargedActions),
+  };
 }
 
 /**
@@ -220,21 +396,15 @@ export async function runEscalationPlan<TValue, TFailure, TPort>(
   parentState?: MutableRunState,
 ): Promise<EscalationRun<TValue, TFailure>> {
   assertPlanShape(plan);
-  const root = parentState === undefined;
-  const initialNow = parentState?.lastNow ?? plan.now();
-  const state: MutableRunState = parentState ?? {
-    startedAt: initialNow,
-    deadlineMs: plan.budget.deadlineMs,
-    maxActions: Math.max(0, Math.floor(plan.budget.maxActions)),
-    verdicts: [],
-    values: {},
-    chargedActions: 0,
-    chargedReads: 0,
-    reacquisitions: 0,
-    lastOutcome: null,
-    lastFailure: null,
-    lastNow: initialNow,
-  };
+  // A parent state passed directly, a run carried on the budget, or none —
+  // in which case this plan is the root and owns the state it creates.
+  const adopted = parentState ?? plan.budget.run;
+  const initialNow = adopted?.lastNow ?? plan.now();
+  const state: MutableRunState = adopted ?? createRunState(plan.budget, initialNow);
+  // Where this plan's own slice of the shared sequence begins. A joined plan
+  // returns only the verdicts it appended, while its budget figures continue to
+  // describe the whole run.
+  const verdictsAtEntry = state.verdicts.length;
   let outcome: RungOutcome<TValue, TFailure> | null = null;
 
   for (const rung of plan.rungs) {
@@ -273,6 +443,7 @@ export async function runEscalationPlan<TValue, TFailure, TPort>(
     const startedAt = checkedAt;
     const actionsBefore = state.chargedActions;
     const readsBefore = state.chargedReads;
+    const nestedVerdictsBefore = state.verdicts.length;
     const port = wrapPort(plan.port, plan, state);
     const context: RungContext<TPort> = {
       port,
@@ -286,7 +457,11 @@ export async function runEscalationPlan<TValue, TFailure, TPort>(
     try {
       outcome = await rung.run(context);
       state.lastOutcome = outcome;
-      const chargedActions = state.chargedActions - actionsBefore;
+      // Exclusive of nested work: whatever a sub-plan's rungs already claimed
+      // belongs to them, so summing the ledger partitions the run total exactly
+      // instead of counting the children again inside the parent.
+      const chargedActions =
+        state.chargedActions - actionsBefore - chargesSince(state, nestedVerdictsBefore);
       const endedAt = plan.now();
       state.lastNow = endedAt;
       const elapsedMs = endedAt - startedAt;
@@ -318,6 +493,7 @@ export async function runEscalationPlan<TValue, TFailure, TPort>(
         chargedActions,
         remainingActions: Math.max(0, state.maxActions - state.chargedActions),
         elapsedMs,
+        evidence: outcome.evidence ?? {},
         errorCode: described.errorCode,
         ...(described.cause === undefined ? {} : { cause: described.cause }),
         ...(described.detail === undefined ? {} : { detail: described.detail }),
@@ -334,43 +510,51 @@ export async function runEscalationPlan<TValue, TFailure, TPort>(
       if (rung.cleanup) await rung.cleanup(context);
     }
   }
-  return result(plan, state, outcome, root);
+  return result(plan, state, outcome, verdictsAtEntry);
 }
 
-/** Phase-two compatibility projection retained until every producer migrates. */
-export function toLegacyLedger(ledger: EscalationLedger): AttemptLedger {
-  let attempt = 0;
-  return {
-    records: ledger.verdicts.flatMap((verdict) => {
-      if (verdict.kind === 'skipped') return [];
-      attempt += 1;
-      return [
-        {
-          attempt,
-          strategy: verdict.rungId,
-          axis: verdict.axis,
-          errorCode: verdict.kind === 'failed' ? verdict.errorCode : null,
-          elapsedMs: verdict.elapsedMs,
-          ...(verdict.kind === 'failed' && verdict.detail !== undefined
-            ? { detail: verdict.detail }
-            : {}),
-        },
-      ];
-    }),
-  };
+/** Total already claimed by verdicts appended since `from`. */
+function chargesSince(state: MutableRunState, from: number): number {
+  let total = 0;
+  for (let index = from; index < state.verdicts.length; index += 1) {
+    const verdict = state.verdicts[index]!;
+    if (verdict.kind !== 'skipped') total += verdict.chargedActions;
+  }
+  return total;
 }
+
+/**
+ * How many verdicts of one call reach the model.
+ *
+ * The serialized ledger is bounded like every other model-visible list. When a
+ * run produces more, the first record and the last `N - 1` are kept — the
+ * opening move and the outcome are the two ends a caller needs — and the gap is
+ * visible from the retained ordinals rather than silent.
+ */
+export const MAX_SERIALIZED_VERDICTS = 24;
 
 /** Durable snake-case projection written to `details.attempted`. */
-export function toWireLedger(ledger: EscalationLedger): readonly Record<string, unknown>[] {
-  return verdictsToWire(ledger.verdicts);
+export function toWireLedger(ledger: EscalationLedger): readonly SerializedVerdict[] {
+  return verdictsToWire(bounded(ledger.verdicts));
 }
 
-/** Convert either legacy attempts or verdicts at a serialization boundary. */
-export function toWireAttemptArtifact(value: unknown): readonly Record<string, unknown>[] {
+/** Keep the opening move and the outcome when a run outgrows the bound. */
+function bounded<T>(verdicts: readonly T[]): readonly T[] {
+  if (verdicts.length <= MAX_SERIALIZED_VERDICTS) return verdicts;
+  return [verdicts[0]!, ...verdicts.slice(verdicts.length - (MAX_SERIALIZED_VERDICTS - 1))];
+}
+
+/**
+ * Convert either legacy attempts or verdicts at a serialization boundary.
+ *
+ * Idempotent over its own output, allowlisted evidence keys included, which is
+ * what makes it safe to leave in place wherever a legacy producer still exists.
+ */
+export function toWireAttemptArtifact(value: unknown): readonly SerializedVerdict[] {
   return verdictsToWire(normalizeAttemptArtifact(value));
 }
 
-function verdictsToWire(verdicts: readonly RungVerdict[]): readonly Record<string, unknown>[] {
+function verdictsToWire(verdicts: readonly RungVerdictProjection[]): readonly SerializedVerdict[] {
   return verdicts.map((verdict) => {
     const base = {
       ordinal: verdict.ordinal,
@@ -379,24 +563,42 @@ function verdictsToWire(verdicts: readonly RungVerdict[]): readonly Record<strin
       verdict: verdict.kind,
     };
     if (verdict.kind === 'skipped') return { ...base, unmet: verdict.unmet };
+    // Omitted, never emitted empty. A key whose value is `[]`, `0` or `null` on
+    // every record was 1.5 KB of model-visible noise per failing call and made
+    // "which axis spent the budget?" unanswerable rather than answerable.
+    //
+    // Zero is omitted alongside unknown deliberately: "this rung charged
+    // nothing", "it took no measurable time" and "it did not say" read
+    // identically to a caller, so emitting the key buys nothing and costs the
+    // reader a field to skip on every record.
     const measured = {
       ...base,
-      entry_evidence: verdict.entryEvidence,
-      charged_actions: verdict.chargedActions,
-      remaining_actions: verdict.remainingActions,
-      elapsed_ms: verdict.elapsedMs,
+      ...(present(verdict.entryEvidence) ? { entry_evidence: verdict.entryEvidence } : {}),
+      ...(present(verdict.chargedActions) ? { charged_actions: verdict.chargedActions } : {}),
+      ...(present(verdict.remainingActions) ? { remaining_actions: verdict.remainingActions } : {}),
+      ...(present(verdict.elapsedMs) ? { elapsed_ms: verdict.elapsedMs } : {}),
     };
-    if (verdict.kind === 'succeeded') return { ...measured, ...verdict.evidence };
+    // Allowlisted, scalar-only. Everything else a rung produced is internal
+    // plan evidence and stays there.
+    const disclosed = serializedEvidence(verdict.evidence);
+    if (verdict.kind === 'succeeded') return { ...measured, ...disclosed };
     return {
       ...measured,
+      ...disclosed,
       error_code: verdict.errorCode,
       ...(verdict.detail === undefined ? {} : { detail: verdict.detail }),
     };
   });
 }
 
+/** True when a measured field says something a reader can act on. */
+function present(value: number | readonly string[] | undefined): boolean {
+  if (value === undefined) return false;
+  return typeof value === 'number' ? value !== 0 : value.length > 0;
+}
+
 /** Normalize both legacy and verdict-shaped artifacts without rewriting them. */
-export function normalizeAttemptArtifact(value: unknown): readonly RungVerdict[] {
+export function normalizeAttemptArtifact(value: unknown): readonly RungVerdictProjection[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry, index) => normalizeRecord(entry, index + 1));
 }
@@ -452,84 +654,94 @@ export function assertPlanShape<TValue, TFailure, TPort>(
   }
 }
 
-/** Options for the stateful port every rung of one field operation shares. */
-export interface RunnerOwnedPortOptions {
-  readonly ownedRef: string;
-  readonly maxReacquisitions: number;
-  readonly reacquire: (currentRef: string) => Promise<string | null>;
-  readonly onReacquire?: (count: number, ref: string) => void;
-  readonly onAction?: (count: number) => void;
-}
+/**
+ * Identity of the run a port already charges into.
+ *
+ * Non-enumerable and keyed by symbol so a wrapped port stays structurally a
+ * `WidgetPort` — every consumer, every spy and every `satisfies` table sees the
+ * same shape.
+ */
+const RUN_STATE_TAG = Symbol.for('yantra.interaction.runState');
 
 /**
- * Create the runner-owned stale-ref view used across every rung in a fill.
- * Unrelated refs pass through and are never candidates for healing.
+ * The one port wrapper that counts a run's work and heals its stale refs.
+ *
+ * **Idempotent for the same run.** A rung body that hands its own
+ * `context.port` to a nested plan gets that same wrapper back, so each mutation
+ * and each read is charged exactly once however deep the nesting goes. Wrapping
+ * for a *different* run charges both, because those are two calls.
+ *
+ * Healing is read from `state.reacquire` at call time rather than captured
+ * here, so a port wrapped before the run's owner installed its policy still
+ * heals through it — and a single shared cap bounds every wrapper.
  */
-export function createRunnerOwnedPort(
-  port: WidgetPort,
-  options: RunnerOwnedPortOptions,
-): WidgetPort {
-  let currentRef = options.ownedRef;
-  let reacquisitions = 0;
-  let actions = 0;
+export function runStatePort(port: WidgetPort, state: MutableRunState): WidgetPort {
+  if (runStateOf(port) === state) return port;
   const mutation = <T>(run: () => Promise<T>): Promise<T> => {
-    actions += 1;
-    options.onAction?.(actions);
+    state.chargedActions += 1;
     return run();
   };
-  const owns = (ref: string): boolean => ref === options.ownedRef || ref === currentRef;
+  const read = <T>(run: () => Promise<T>): Promise<T> => {
+    state.chargedReads += 1;
+    return run();
+  };
+  const owned = new Map<string, string>();
   const onRef = async <T>(ref: string, run: (liveRef: string) => Promise<T>): Promise<T> => {
-    const effective = owns(ref) ? currentRef : ref;
+    const current = owned.get(ref) ?? ref;
     try {
-      return await run(effective);
+      return await run(current);
     } catch (error) {
-      if (
-        !isStaleRefError(error) ||
-        !owns(ref) ||
-        reacquisitions >= Math.max(0, options.maxReacquisitions)
-      ) {
-        throw error;
-      }
-      const next = await options.reacquire(currentRef);
+      if (!isStaleRefError(error) || !state.reacquire) throw error;
+      if (state.reacquisitions >= state.maxReacquisitions) throw error;
+      const next = await state.reacquire(current);
       if (next === null) throw error;
-      currentRef = next;
-      reacquisitions += 1;
-      options.onReacquire?.(reacquisitions, next);
-      return run(currentRef);
+      state.reacquisitions += 1;
+      owned.set(ref, next);
+      return run(next);
     }
   };
-  return {
-    observe: (value) => port.observe(value),
+  const wrapped: WidgetPort = {
+    observe: (value) => read(() => port.observe(value)),
     click: (ref) => mutation(() => onRef(ref, (liveRef) => port.click(liveRef))),
     fill: (ref, value) => mutation(() => onRef(ref, (liveRef) => port.fill(liveRef, value))),
     clear: (ref) => mutation(() => onRef(ref, (liveRef) => port.clear(liveRef))),
     type: (ref, text, value) =>
       mutation(() => onRef(ref, (liveRef) => port.type(liveRef, text, value))),
     evaluateOn: (ref, fn, ...args) =>
-      onRef(ref, (liveRef) => port.evaluateOn(liveRef, fn, ...args)),
-    evaluate: (fn, ...args) => port.evaluate(fn, ...args),
+      read(() => onRef(ref, (liveRef) => port.evaluateOn(liveRef, fn, ...args))),
+    evaluate: (fn, ...args) => read(() => port.evaluate(fn, ...args)),
     press: (key) => mutation(() => port.press(key)),
     scrollContainer: (container, step) => mutation(() => port.scrollContainer(container, step)),
     now: () => port.now(),
   };
+  Object.defineProperty(wrapped, RUN_STATE_TAG, {
+    value: state,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return wrapped;
+}
+
+/** The run a port already charges into, when it is one of ours. */
+function runStateOf(port: unknown): MutableRunState | undefined {
+  if (typeof port !== 'object' || port === null) return undefined;
+  return (port as Record<symbol, MutableRunState | undefined>)[RUN_STATE_TAG];
 }
 
 function result<TValue, TFailure, TPort>(
   plan: EscalationPlan<TValue, TFailure, TPort>,
   state: MutableRunState,
   outcome: RungOutcome<TValue, TFailure> | null,
-  root: boolean,
+  verdictsAtEntry: number,
 ): EscalationRun<TValue, TFailure> {
-  const verdicts = root ? state.verdicts : state.verdicts;
   return {
     outcome,
     ledger: {
-      operation: plan.operation,
-      family: plan.family,
-      verdicts: [...verdicts],
-      chargedActions: state.chargedActions,
-      elapsedMs: state.lastNow - state.startedAt,
-      remainingActions: Math.max(0, state.maxActions - state.chargedActions),
+      ...escalationLedgerOf(state, plan),
+      // Scoped to this plan. The caller that owns the run projects the whole
+      // sequence through `escalationLedgerOf`; a sub-plan reports what it did.
+      verdicts: state.verdicts.slice(verdictsAtEntry),
     },
   };
 }
@@ -570,44 +782,10 @@ function wrapPort<TValue, TFailure, TPort>(
   state: MutableRunState,
 ): TPort {
   if (!isWidgetPort(port)) return port;
-  const mutation = <T>(run: () => Promise<T>): Promise<T> => {
-    state.chargedActions += 1;
-    return run();
-  };
-  const read = <T>(run: () => Promise<T>): Promise<T> => {
-    state.chargedReads += 1;
-    return run();
-  };
-  const owned = new Map<string, string>();
-  const onRef = async <T>(ref: string, run: (liveRef: string) => Promise<T>): Promise<T> => {
-    const current = owned.get(ref) ?? ref;
-    try {
-      return await run(current);
-    } catch (error) {
-      if (!isStaleRefError(error) || !plan.reacquire) throw error;
-      if (state.reacquisitions >= plan.budget.maxReacquisitions) throw error;
-      const next = await plan.reacquire(current);
-      if (next === null) throw error;
-      state.reacquisitions += 1;
-      owned.set(ref, next);
-      return run(next);
-    }
-  };
-  const wrapped: WidgetPort = {
-    observe: (options) => read(() => port.observe(options)),
-    click: (ref) => mutation(() => onRef(ref, (liveRef) => port.click(liveRef))),
-    fill: (ref, value) => mutation(() => onRef(ref, (liveRef) => port.fill(liveRef, value))),
-    clear: (ref) => mutation(() => onRef(ref, (liveRef) => port.clear(liveRef))),
-    type: (ref, text, options) =>
-      mutation(() => onRef(ref, (liveRef) => port.type(liveRef, text, options))),
-    evaluateOn: (ref, fn, ...args) =>
-      read(() => onRef(ref, (liveRef) => port.evaluateOn(liveRef, fn, ...args))),
-    evaluate: (fn, ...args) => read(() => port.evaluate(fn, ...args)),
-    press: (key) => mutation(() => port.press(key)),
-    scrollContainer: (container, step) => mutation(() => port.scrollContainer(container, step)),
-    now: () => port.now(),
-  };
-  return wrapped as TPort;
+  // A plan that declares how to find its node again installs that policy on the
+  // run once. The run — not the wrapper, and not the plan — owns the cap.
+  if (plan.reacquire && state.reacquire === null) state.reacquire = plan.reacquire;
+  return runStatePort(port, state) as TPort;
 }
 
 function isWidgetPort(value: unknown): value is WidgetPort {
@@ -661,7 +839,7 @@ function describeFailure(value: unknown): {
   };
 }
 
-function normalizeRecord(value: unknown, ordinal: number): RungVerdict {
+function normalizeRecord(value: unknown, ordinal: number): RungVerdictProjection {
   const record = isRecord(value) ? value : {};
   const axis = isAxis(record.axis) ? record.axis : 'how';
   const rungId = stringValue(record.strategy) ?? stringValue(record.rungId) ?? `attempt-${ordinal}`;
@@ -677,17 +855,26 @@ function normalizeRecord(value: unknown, ordinal: number): RungVerdict {
     };
   }
   const errorCode = stringValue(record.error_code) ?? stringValue(record.errorCode);
+  const entryEvidence = record.entry_evidence ?? record.entryEvidence;
+  const chargedActions = numberValue(record.charged_actions ?? record.chargedActions);
+  const remainingActions = numberValue(record.remaining_actions ?? record.remainingActions);
+  const elapsedMs = numberValue(record.elapsed_ms ?? record.elapsedMs);
+  // Absent, not zero. A legacy record never measured these, and reading it as
+  // "spent nothing, has nothing left" is a claim the artifact never made.
   const measured = {
     ordinal: actualOrdinal,
     rungId,
     axis,
-    entryEvidence: stringArray(record.entry_evidence ?? record.entryEvidence),
-    chargedActions: numberValue(record.charged_actions ?? record.chargedActions) ?? 0,
-    remainingActions: numberValue(record.remaining_actions ?? record.remainingActions) ?? 0,
-    elapsedMs: numberValue(record.elapsed_ms ?? record.elapsedMs) ?? 0,
+    ...(Array.isArray(entryEvidence) ? { entryEvidence: stringArray(entryEvidence) } : {}),
+    ...(chargedActions === undefined ? {} : { chargedActions }),
+    ...(remainingActions === undefined ? {} : { remainingActions }),
+    ...(elapsedMs === undefined ? {} : { elapsedMs }),
+    // Allowlisted evidence survives the round trip, which is what makes this
+    // projection idempotent over its own output.
+    evidence: serializedEvidence(record),
   };
   if ((kind === 'succeeded' || kind === undefined) && errorCode === undefined) {
-    return { kind: 'succeeded', ...measured, evidence: {} };
+    return { kind: 'succeeded', ...measured };
   }
   return {
     kind: 'failed',

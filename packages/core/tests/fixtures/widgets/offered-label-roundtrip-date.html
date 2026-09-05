@@ -1,0 +1,37 @@
+<!--
+  Shape: one calendar exposes two visibly distinct labels for the same date.
+  The first request must refuse; re-issuing one offered label selects that cell.
+
+  Observed in run 20260904T001045Z-do-caa285ca: ambiguity advice named
+  calendar choices that the ordinary text path could not route back to the picker.
+-->
+<button
+  id="trigger"
+  aria-controls="calendar"
+  aria-haspopup="grid"
+  aria-expanded="true"
+  aria-label="Travel date"
+></button>
+<div id="calendar" role="dialog">
+  <table>
+    <tbody>
+      <tr>
+        <td><button data-date="2026-09-06" aria-label="Morning departure">6</button></td>
+        <td><button data-date="2026-09-06" aria-label="Evening departure">6</button></td>
+        <td><button data-date="2026-09-07" aria-label="Next day">7</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var calendar = document.getElementById('calendar');
+    var evening = calendar.querySelector('[aria-label="Evening departure"]');
+    evening.addEventListener('click', function () {
+      trigger.setAttribute('aria-label', 'Sep 6, 2026');
+      trigger.setAttribute('aria-expanded', 'false');
+      calendar.style.display = 'none';
+    });
+  })();
+</script>

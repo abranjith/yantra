@@ -12,8 +12,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import * as core from '../../src/index.js';
 import {
+  assertReceivable,
   DanglingInteractionMessageError,
   INTERACTION_MESSAGES,
   fillFailure,
@@ -68,10 +68,15 @@ describe('@no-llm core interaction message catalog', () => {
     );
   });
 
-  it('resolves every engine capability to a public function', () => {
+  it('resolves every engine capability for every declared emitter', () => {
     for (const template of INTERACTION_MESSAGES) {
       if (template.capabilityKind !== 'engine' || template.capability === null) continue;
-      expect(typeof core[template.capability as keyof typeof core]).toBe('function');
+      expect(template.emittedBy?.length).toBeGreaterThan(0);
+      for (const family of template.emittedBy ?? []) {
+        expect(() =>
+          assertReceivable(template.surface, template.code, template.cause, family),
+        ).not.toThrow();
+      }
     }
   });
 

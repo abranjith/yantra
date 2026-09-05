@@ -22,8 +22,8 @@ import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js';
 
 import type { EditeeEvidence } from './editee.js';
-import { runEscalationPlan, toLegacyLedger } from './escalation.js';
-import { ledgerOf, normalizeText, type AttemptLedger, type AttemptRecord } from './types.js';
+import { runEscalationPlan, toWireLedger, type SerializedVerdict } from './escalation.js';
+import { normalizeText } from './types.js';
 import { buildTypingPlan } from './typing-plan.js';
 
 /** How the text was ultimately entered. */
@@ -47,7 +47,8 @@ export interface TypedText {
   readonly committed: string;
   /** True when the control rewrote the value rather than truncating it. */
   readonly reformatted: boolean;
-  readonly ledger: AttemptLedger;
+  /** The verdicts this commit contributed, already in the wire projection. */
+  readonly attempted: readonly SerializedVerdict[];
 }
 
 /** The control would not hold the text, or there was no room to try. */
@@ -70,7 +71,8 @@ export interface TypingFailure {
   readonly editee?: WidgetTarget;
   /** Which structural signal identified — or failed to identify — the editee. */
   readonly editeeEvidence?: EditeeEvidence;
-  readonly ledger: AttemptLedger;
+  /** The verdicts this commit contributed, already in the wire projection. */
+  readonly attempted: readonly SerializedVerdict[];
 }
 
 /** The outcome of trying to place text in a control. */
@@ -139,7 +141,7 @@ export async function commitText(
       message: 'The fill action budget was exhausted before the value could be typed.',
       observed: '',
       reason: 'budget',
-      ledger: { records: [] },
+      attempted: [],
     };
   }
 
@@ -166,7 +168,9 @@ export async function commitText(
     },
   });
   const run = await runEscalationPlan(plan);
-  const ledger = toLegacyLedger(run.ledger);
+  // The verdicts this plan appended, in the one wire shape. No legacy record is
+  // built here and none is built downstream of here.
+  const attempted = toWireLedger(run.ledger);
   if (run.outcome === null) {
     return {
       ok: false,
@@ -174,10 +178,12 @@ export async function commitText(
       message: 'The fill action budget was exhausted before the value could be typed.',
       observed: '',
       reason: 'budget',
-      ledger,
+      attempted,
     };
   }
-  return run.outcome.ok ? { ...run.outcome.value, ledger } : { ...run.outcome.failure, ledger };
+  return run.outcome.ok
+    ? { ...run.outcome.value, attempted }
+    : { ...run.outcome.failure, attempted };
 }
 
 /**
@@ -349,7 +355,8 @@ export interface EnteredText {
   readonly target: WidgetTarget;
   /** Set only when the drive re-targeted. */
   readonly editee: WidgetTarget | null;
-  readonly ledger: AttemptLedger;
+  /** Every verdict both passes contributed, in order, in the wire projection. */
+  readonly attempted: readonly SerializedVerdict[];
 }
 
 /**
@@ -374,22 +381,19 @@ export async function enterText(
 ): Promise<EnteredText> {
   const first = await commitText(port, target, text, budget, probe ? { editee: probe } : {});
   if (first.ok || first.editee === undefined) {
-    return { typed: first, target, editee: null, ledger: first.ledger };
+    return { typed: first, target, editee: null, attempted: first.attempted };
   }
 
   const editee = first.editee;
-  const startedAt = port.now();
   const second = await commitText(port, editee, text, budget);
-  const retarget: AttemptRecord = {
-    attempt: 0,
-    strategy: 'retarget-editee',
-    axis: 'where',
-    errorCode: second.ok ? null : second.errorCode,
-    elapsedMs: port.now() - startedAt,
-    detail: `re-targeted to "${editee.name}"`,
+  // No hand-built re-target record and no renumbering splice: both passes run
+  // on the one run, so they already land in order, and the re-target fact is
+  // carried by the `locate-editee` verdict and by the `editee` disclosure the
+  // caller actually reads.
+  return {
+    typed: second,
+    target: editee,
+    editee,
+    attempted: [...first.attempted, ...second.attempted],
   };
-  const records = [...first.ledger.records, retarget, ...second.ledger.records].map(
-    (record, index) => ({ ...record, attempt: index + 1 }),
-  );
-  return { typed: second, target: editee, editee, ledger: ledgerOf(records) };
 }

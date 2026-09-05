@@ -111,6 +111,7 @@ export type ExpectedOutcome =
       readonly driver?: string;
       readonly editee?: { readonly name: string; readonly role: string };
       readonly noteContains?: string;
+      readonly forbiddenOffered?: readonly string[];
     }
   | {
       readonly kind: 'engineered-refusal';
@@ -353,6 +354,61 @@ export const PROTOCOL_GAUNTLET = [
     // enough that one extra scroll or one extra window read fails the case —
     // the count is the regression signal, not a bound.
     4,
+    18,
+  ),
+  fixture(
+    'indistinguishable-choices.html',
+    'a calendar with model-identical choices that remain structurally ordered',
+    '#trigger',
+    'button',
+    'Travel date',
+    { kind: 'date', date: '2026-09-06' },
+    {
+      kind: 'commit',
+      committed: 'Sep 6, 2026',
+      driver: 'calendar-grid',
+      noteContains: 'document order',
+    },
+    RUN_A,
+    1,
+    16,
+  ),
+  fixture(
+    'chrome-in-overlay.html',
+    'an option container that mixes genuine choices with paging and mode chrome',
+    '#trigger',
+    'button',
+    'Fare class',
+    { kind: 'option', value: 'Economy' },
+    {
+      kind: 'commit',
+      committed: 'Economy',
+      driver: 'listbox',
+      forbiddenOffered: ['Previous', 'Next', 'One way', 'Submit order'],
+    },
+    RUN_A,
+    1,
+    12,
+  ),
+  fixture(
+    'offered-label-roundtrip-date.html',
+    'a calendar ambiguity whose offered label routes back to its originating cell',
+    '#trigger',
+    'button',
+    'Travel date',
+    { kind: 'date', date: '2026-09-06' },
+    {
+      kind: 'engineered-refusal',
+      errorCode: 'WIDGET_AMBIGUOUS_CHOICE',
+      cause: 'several-matched-equally',
+      detailKeys: ['offered', 'hint'],
+      followUp: {
+        intent: { kind: 'text', text: '2026-09: Evening departure' },
+        committed: 'Sep 6, 2026',
+      },
+    },
+    RUN_A,
+    1,
     18,
   ),
 ] as const satisfies readonly GauntletFixture[];

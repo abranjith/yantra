@@ -7,7 +7,6 @@ import {
   renderInteractionMessage,
   StaleElementRefError,
   deltaBytes,
-  toWireAttemptArtifact,
   type AgentBrowserController,
   type AgentBrowserObservation,
   type AgentInteractable,
@@ -120,6 +119,11 @@ export function browserFailure(error: unknown, services?: RunServices): DomainFa
  * `observed`, `offered`, and `attempted` ride along in `details` and are the
  * three facts a caller needs to avoid repeating work: what the control holds
  * now, what the widget will actually accept, and what recovery already ran.
+ *
+ * `attempted` arrives already serialized from the fill engine and is passed
+ * through unchanged. The legacy-tolerant boundary stays where a legacy producer
+ * still exists — the click path's controller-owned obstruction records — and
+ * nowhere else.
  */
 export function mapFillFailure(failure: FillFailure): DomainFailure {
   const hint = typeof failure.details.hint === 'string' ? failure.details.hint : null;
@@ -128,13 +132,7 @@ export function mapFillFailure(failure: FillFailure): DomainFailure {
     errorCode: failure.errorCode,
     message: hint ? `${failure.message} ${hint}` : failure.message,
     retryable: failure.retryable,
-    details:
-      failure.details.attempted === undefined
-        ? failure.details
-        : {
-            ...failure.details,
-            attempted: toWireAttemptArtifact(failure.details.attempted),
-          },
+    details: failure.details,
   };
 }
 

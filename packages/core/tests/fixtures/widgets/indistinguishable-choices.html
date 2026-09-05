@@ -1,0 +1,42 @@
+<!--
+  Shape: one calendar exposes two enabled, visible cells for the same date with
+  byte-identical accessible names. The model cannot distinguish the cells, but
+  their DOM paths establish a stable document order.
+
+  Observed in run 20260904T001045Z-do-caa285ca: duplicate date cells were
+  returned as identical offered strings and could not be selected by re-issue.
+-->
+<button
+  id="trigger"
+  aria-controls="calendar"
+  aria-expanded="true"
+  aria-label="Travel date"
+></button>
+<div id="calendar" role="dialog">
+  <table>
+    <caption>
+      September 2026
+    </caption>
+    <tbody>
+      <tr>
+        <td><button data-date="2026-09-06" aria-label="Sunday, September 6, 2026">6</button></td>
+        <td><button data-date="2026-09-06" aria-label="Sunday, September 6, 2026">6</button></td>
+        <td><button data-date="2026-09-07" aria-label="Monday, September 7, 2026">7</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var calendar = document.getElementById('calendar');
+    var cells = calendar.querySelectorAll('[data-date="2026-09-06"]');
+    cells.forEach(function (cell) {
+      cell.addEventListener('click', function () {
+        trigger.setAttribute('aria-label', 'Sep 6, 2026');
+        trigger.setAttribute('aria-expanded', 'false');
+        calendar.style.display = 'none';
+      });
+    });
+  })();
+</script>

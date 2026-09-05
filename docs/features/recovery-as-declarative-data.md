@@ -14,25 +14,58 @@ error code.
 Browser recovery is defined for six interaction families: plain text, comboboxes, dates, options,
 top-level field filling, and clicks. Each family declares an ordered plan whose rungs identify the
 recovery axis (`where`, `what`, or `how`), the evidence needed to enter, and its maximum cost. One
-runner executes those plans, so array order is the ordering authority and all nested work shares the
-same deadline, action allowance, and verdict sequence.
+runner executes those plans, so array order is the ordering authority.
+
+### One run owns the whole call
+
+A top-level fill owns exactly one run. The fill engine creates it, or adopts the run a caller
+already owns and handed down on the widget budget, so joining costs no change to any driver
+signature. Every plan the call reaches joins that run rather than opening its own: the
+confidence-ordered driver plan, the combobox query plan, the typing ladder inside it, and the
+sub-plan that drives whatever the engine-owned open probe reveals. The consequences are what makes
+the ledger readable:
+
+- **One ceiling.** The action allowance, the deadline, and the stale-ref reacquisition cap are set
+  once by whoever starts the run and are read-only afterwards. A nested plan that declares its own
+  allowance can neither raise nor lower them, so no sub-plan restarts the budget.
+- **One counter.** A single wrapper charges the run: pointer, keyboard, and container-scroll
+  operations count as actions, observations and evaluations count as reads, and a stale ref is
+  healed only for the target the run owns and only within the shared cap. The wrapper is idempotent
+  for a run it already wraps, so handing a live port into a nested plan charges each operation once
+  rather than once per nesting level.
+- **One sequence.** Verdicts are appended to a single list and numbered on completion, so a nested
+  rung's verdict precedes the rung that ran it. Nothing is merged or renumbered afterwards.
+- **Costs that add up.** A rung's charged actions exclude the nested work its children already
+  claimed, so per-rung costs partition the run total, and the remaining allowance never increases as
+  the ledger is read downward.
+
+The agent's field-level plan — fill once, then re-resolve a replaced field and retry — runs against
+the same absolute deadline and is charged for everything the fill beneath it spends, so its retry is
+admitted against what the first pass actually cost rather than against a fresh allowance.
+
+### Entry, cost, and cleanup
 
 The runner checks eligibility and remaining capacity before it starts a rung. Ineligible work is
-recorded as skipped without touching the page; entered work is charged by the pointer, keyboard,
-and container-scroll actions it actually performs. Cleanup runs for every entered rung, including
-failures and exceptions, but never for a skipped rung. Stale refs may be reacquired only for the
-target the plan owns and only within the shared reacquisition cap.
+recorded as skipped without touching the page, and a rung whose declared cost cap exceeds the shared
+remainder is skipped as `insufficient-remaining-budget` — a decision nested rungs are subject to
+like any other. Cleanup runs for every entered rung, including failures and exceptions, but never
+for a skipped one.
 
-The plans preserve the existing structural recovery behavior:
+The plans preserve the structural recovery behavior:
 
 - typing can overtype, locate the control the page really edits, clear and type slowly, or use the
   native setter;
-- comboboxes can reshape a query while always ranking candidates against the full requested value;
+- comboboxes can reshape a query while always ranking candidates against the full requested value,
+  and the form that was asked — as given, code token, or prefix retreat — travels as that rung's
+  entry evidence rather than as typed text;
 - date and option fills try detected drivers in confidence order and can perform one bounded open
-  probe when field semantics support it;
+  probe when field semantics support it, with the revealed driver's kind recorded as rung evidence;
 - plain text can accept a literal or select an offered candidate;
 - a replaced field can be resolved once against a fresh observation; and
 - a replaced click target can be reacquired only by the same accessible name and role.
+
+Drivers disclose evidence rather than keeping ledgers of their own; the runner is the only producer
+of records.
 
 The engine still fails closed on ambiguity or a terminal condition. Unknown failure codes remain
 terminal, and a failure whose reason is `budget` or `disabled` is terminal even if its stable code
@@ -49,16 +82,18 @@ yantra do "fill the departure airport, travel dates, and cabin, then show me the
 ```
 
 Read the returned `requested`, `committed`, `resolution`, `offered`, and `editee` fields as before.
-When a failure includes `details.attempted`, do not repeat a strategy already represented there;
-follow the failure's specific next step instead. For a batch fill, do not resend fields listed in
-`applied`, and first resolve the field named by `blocked_by` before retrying a `skipped` field.
+When a result includes `details.attempted`, read each entry's `verdict` before acting on it: a
+`succeeded` or `failed` entry names a step that was performed, so repeating it wastes a turn, while
+a `skipped` entry names a step that was **not** taken and says why in `unmet` — information, not a
+prohibition. For a batch fill, do not resend fields listed in `applied`, and first resolve the field
+named by `blocked_by` before retrying a `skipped` field.
 
-Maintainers can run the focused recovery and real-browser gates from the repository root:
+Maintainers can run the recovery and real-browser gates per package:
 
 ```console
-pnpm --filter @yantra/core test -- escalation recovery-characterization
-pnpm --filter @yantra/agent test -- recovery-characterization
-pnpm --filter @yantra/e2e test -- widget-gauntlet
+cd packages/core && npx vitest run tests/interaction/escalation.spec.ts tests/interaction/recovery-characterization.spec.ts
+cd packages/agent && npx vitest run tests/adapters/pi/tools/recovery-characterization.spec.ts
+cd e2e && npx vitest run widget-gauntlet.spec.ts
 ```
 
 ## Inputs and Outputs
@@ -66,19 +101,42 @@ pnpm --filter @yantra/e2e test -- widget-gauntlet
 Tool inputs are unchanged. Recovery operates on the field name or live element ref, the requested
 value or click intent, the current observation, and the existing widget deadline and action limits.
 
-`details.attempted` is now a verdict array. Every item contains:
+`details.attempted` is an ordered verdict array. A key is omitted rather than emitted empty, so no
+record carries `[]`, `0`, or `null` as a stand-in for "nothing to say":
 
-- `ordinal`, `strategy`, `axis`, and `verdict`;
-- `entry_evidence`, `charged_actions`, `remaining_actions`, and `elapsed_ms` when a rung entered;
-- `error_code` only when `verdict` is `failed`; or
-- `unmet` only when `verdict` is `skipped`.
+| Key                 | Present on                    | Meaning                                            |
+| ------------------- | ----------------------------- | -------------------------------------------------- |
+| `ordinal`           | every record                  | 1-based across the whole run, sub-plans included   |
+| `strategy`          | every record                  | the rung's id                                      |
+| `axis`              | every record                  | `where`, `what`, or `how`                          |
+| `verdict`           | every record                  | `succeeded`, `failed`, or `skipped`                |
+| `entry_evidence`    | entered rungs, when non-empty | the structural tokens that admitted the rung       |
+| `charged_actions`   | entered rungs, when non-zero  | this rung's own cost, excluding nested work        |
+| `remaining_actions` | entered rungs, when non-zero  | the shared remainder when the verdict was recorded |
+| `elapsed_ms`        | entered rungs, when non-zero  | wall time inside the rung                          |
+| `error_code`        | `failed` only                 | stable code; absent, never `null`, elsewhere       |
+| `detail`            | `failed`, when observed       | one short clause about what the page showed        |
+| `unmet`             | `skipped` only                | fixed structural vocabulary, never page text       |
 
-A successful or skipped verdict never contains `error_code: null`; the key is absent. Page-derived
-entry evidence is sanitized before it reaches the tool result or audit record. The one-rung secret
-fill remains blind: it performs no verification read and contributes no secret-derived evidence.
+An entered rung may also disclose allowlisted evidence as scalars: `substituted`,
+`substitution_position`, `tie_break`, `scroll_steps`, `scroll_stop`, `revealed_driver`, and
+`reacquisitions`. Nothing else a rung produced reaches the wire — page-derived values such as the
+committed text, the offered labels, and the re-targeted `editee` stay on the result's own fields.
+The serialized ledger is bounded at 24 records; a longer run keeps the first record and the last 23,
+and the gap is visible from the retained ordinals.
 
-Run reports accept both the verdict format and the previous nullable attempt-record format. Legacy
-records are normalized when read, and existing run directories are never rewritten.
+`attempted` is reported when it says something: on success when more than one rung actually ran or a
+structural substitution was made, and on failure when more than one rung ran. Skipped rungs ride
+along with those records rather than being reported on their own.
+
+The one-rung secret fill remains blind: it performs no verification read and contributes no
+secret-derived evidence to any verdict.
+
+Run reports accept both the verdict format and the previous nullable attempt-record format. A legacy
+record is normalized on read into a verdict whose measured fields are simply absent — it is never
+read as having spent nothing — and existing run directories are never rewritten. The serialization
+boundary is idempotent over its own output, which is what lets it stay in place on the click path,
+where the controller's obstruction-clearing record is the one remaining legacy producer.
 
 ## Configuration and Permissions
 
@@ -88,11 +146,19 @@ confirmation.
 
 ## Limitations
 
-- The shared widget ceiling remains 25 seconds and 32 actions; the click plan retains its separate
-  15-second top-level deadline. Fast failure comes from skipping ineligible rungs, not from reducing
-  those established ceilings.
+- The shared fill ceiling remains 25 seconds, 32 actions, and four stale-ref reacquisitions for the
+  whole call. The click plan keeps its own smaller allowance: a 15-second top-level deadline, three
+  actions, and two reacquisitions. Fast failure comes from skipping ineligible rungs, not from
+  reducing those established ceilings.
+- At most 24 verdicts per call reach the model, so a very long run is reported by its opening move
+  and its final 23 records.
+- Ledger evidence carries counts and structural tokens only. Anything a caller needs in page text is
+  on the result's own fields, not in `attempted`.
+- A legacy attempt record read back from an older run directory has no cost or timing fields, so
+  ledger arithmetic over historical artifacts is incomplete by construction.
 - Finite widget choreography such as calendar paging and popup settling remains inside a rung. The
   verdict ledger describes escalation decisions, not every internal poll.
 - Closed shadow roots remain unreachable, and ambiguity is reported rather than resolved by guess.
-- Exact mutation and read counts are part of the 17-fixture gauntlet contract, so a legitimate
-  recovery-cost change requires an explicit reviewed expectation update.
+- Exact mutation and read counts are pinned by the gauntlet — 16 protocol fixtures plus four
+  real-browser fixtures — so a legitimate recovery-cost change requires an explicit reviewed
+  expectation update.

@@ -3,12 +3,29 @@ import { describe, expect, it } from 'vitest';
 
 import {
   commitText,
+  createRunState,
+  enterText,
   isTruncationOf,
+  toWireLedger,
+  escalationLedgerOf,
   type AgentBrowserObservation,
   type WidgetBudget,
   type WidgetPort,
   type WidgetTarget,
 } from '../../src/index.js';
+
+/**
+ * The rungs that actually ran, in order.
+ *
+ * `attempted` is the wire projection now, and it carries `skipped` verdicts —
+ * a rung that was never entered. Every assertion below is about what the ladder
+ * *did*, so the skipped ones are filtered out rather than counted.
+ */
+function performedIn(
+  attempted: readonly Record<string, unknown>[],
+): readonly Record<string, unknown>[] {
+  return attempted.filter((record) => record.verdict !== 'skipped');
+}
 
 const BUDGET: WidgetBudget = {
   deadlineMs: Number.MAX_SAFE_INTEGER,
@@ -238,7 +255,7 @@ describe('@no-llm commitText escalation ladder', () => {
     const outcome = await commitText(port, target(), 'DFW', BUDGET);
 
     expect(outcome).toMatchObject({ ok: true, strategy: 'overtype', committed: 'DFW' });
-    expect(outcome.ok && outcome.ledger.records).toHaveLength(1);
+    expect(outcome.ok && performedIn(outcome.attempted)).toHaveLength(1);
   });
 
   it('escalates to clear-then-type when the control drops the leading keystroke', async () => {
@@ -250,11 +267,11 @@ describe('@no-llm commitText escalation ladder', () => {
     expect(outcome.ok).toBe(true);
     expect(outcome.ok && outcome.committed).toBe('DFW');
     expect(outcome.ok && outcome.strategy).toBe('clear-then-type');
-    expect(outcome.ok && outcome.ledger.records.map((record) => record.strategy)).toEqual([
+    expect(outcome.ok && performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
       'clear-then-type',
     ]);
-    expect(outcome.ok && outcome.ledger.records[0]?.detail).toBe('observed "FW"');
+    expect(outcome.ok && performedIn(outcome.attempted)[0]?.detail).toBe('observed "FW"');
   });
 
   it('reaches the native-setter rung for a framework-controlled input', async () => {
@@ -295,7 +312,7 @@ describe('@no-llm commitText escalation ladder', () => {
     });
     if (outcome.ok) return;
     expect(outcome.message).toContain('unrelated text "xyz"');
-    expect(outcome.ledger.records.map((record) => record.strategy)).toEqual([
+    expect(performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
       'clear-then-type',
       'native-setter',
@@ -317,7 +334,7 @@ describe('@no-llm commitText escalation ladder', () => {
     if (outcome.ok) return;
     expect(outcome.errorCode).toBe('WIDGET_NOT_COMMITTED');
     expect(outcome.observed).toBe('');
-    expect(outcome.ledger.records.map((record) => record.strategy)).toEqual([
+    expect(performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
       'clear-then-type',
       'native-setter',
@@ -334,8 +351,8 @@ describe('@no-llm commitText escalation ladder', () => {
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    expect(outcome.ledger.records.length).toBeLessThan(3);
-    expect(outcome.ledger.records.length).toBeGreaterThan(0);
+    expect(performedIn(outcome.attempted).length).toBeLessThan(3);
+    expect(performedIn(outcome.attempted).length).toBeGreaterThan(0);
   });
 
   it('refuses before typing when the budget is already spent', async () => {
@@ -399,11 +416,12 @@ describe('@no-llm commitText WHERE rung', () => {
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    expect(outcome.ledger.records.map((record) => [record.strategy, record.axis])).toEqual([
+    expect(performedIn(outcome.attempted).map((record) => [record.strategy, record.axis])).toEqual([
       ['overtype', 'how'],
       ['locate-editee', 'where'],
     ]);
-    expect(outcome.ledger.records.map((record) => record.attempt)).toEqual([1, 2]);
+    // Ordinals are assigned by the runner on completion, never renumbered after.
+    expect(performedIn(outcome.attempted).map((record) => record.ordinal)).toEqual([1, 2]);
   });
 
   it('classifies the delegated exit as terminal so the ladder cannot retry it', async () => {
@@ -429,7 +447,7 @@ describe('@no-llm commitText WHERE rung', () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.editee).toBeUndefined();
-    expect(outcome.ledger.records.map((record) => record.strategy)).toEqual([
+    expect(performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
       'locate-editee',
       'clear-then-type',
@@ -470,5 +488,63 @@ describe('@no-llm commitText WHERE rung', () => {
     await commitText(port, target(), 'DFW', BUDGET);
 
     expect(port.observationCount).toBe(0);
+  });
+});
+
+describe('@no-llm typing runs on the run its caller owns', () => {
+  const runBudget = (run: ReturnType<typeof createRunState>): WidgetBudget => ({
+    ...BUDGET,
+    deadlineMs: 10_000,
+    run,
+  });
+
+  it('lands both re-targeted passes in one ordered sequence, with no renumbering helper', async () => {
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+    const run = createRunState({ deadlineMs: 10_000, maxActions: 32, maxReacquisitions: 4 }, 0);
+
+    const entered = await enterText(port, target(), 'DFW', runBudget(run), {
+      observe: () => port.observe(),
+    });
+
+    const wire = toWireLedger(
+      escalationLedgerOf(run, { operation: 'commit-text', family: 'text' }),
+    );
+    const performed = wire.filter((record) => record.verdict !== 'skipped');
+    expect(entered.editee).toMatchObject({ name: 'Origin' });
+    // Two passes, one sequence, ordinals continuous and assigned by the runner.
+    expect(performed.map((record) => record.strategy)).toContain('locate-editee');
+    expect(wire.map((record) => record.ordinal)).toEqual(wire.map((_record, index) => index + 1));
+    expect(performed.filter((record) => record.strategy === 'overtype')).toHaveLength(2);
+  });
+
+  it('never lets remaining actions increase across the two passes', async () => {
+    const port = new TypingPort().delegatesTo('e7', 'Origin');
+    const run = createRunState({ deadlineMs: 10_000, maxActions: 32, maxReacquisitions: 4 }, 0);
+
+    await enterText(port, target(), 'DFW', runBudget(run), { observe: () => port.observe() });
+
+    const remaining = run.verdicts.flatMap((verdict) =>
+      verdict.kind === 'skipped' ? [] : [verdict.remainingActions],
+    );
+    expect(remaining).toEqual([...remaining].sort((left, right) => right - left));
+  });
+
+  it('leaves the secret path one verdict carrying no evidence at all', async () => {
+    // `allowEscalation: false` is the security property: one rung, no readback,
+    // and therefore nothing secret-derived on any verdict, in any ledger, ever.
+    const port = new TypingPort();
+    const run = createRunState({ deadlineMs: 10_000, maxActions: 32, maxReacquisitions: 4 }, 0);
+
+    const outcome = await commitText(port, target(), 'hunter2', runBudget(run), {
+      allowEscalation: false,
+    });
+
+    expect(outcome.ok).toBe(true);
+    expect(run.verdicts).toHaveLength(1);
+    const only = run.verdicts[0]!;
+    expect(only).toMatchObject({ kind: 'succeeded', rungId: 'overtype' });
+    expect(only.kind === 'succeeded' && only.evidence).toEqual({});
+    expect(JSON.stringify(run.verdicts)).not.toContain('hunter2');
+    expect(run.values).toEqual({});
   });
 });

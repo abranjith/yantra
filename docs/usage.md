@@ -397,24 +397,63 @@ capture-bearing because it contains the inline image block the model received.
 
 ### Reading browser recovery verdicts
 
-Failed fill and click results can include `details.attempted`, and the same data
-is preserved in `tool-calls.jsonl`. Each entry names its `strategy`, recovery
-`axis` (`where`, `what`, or `how`), and `verdict`:
+Fill and click results can include the recovery ledger, and the same data is
+preserved in `tool-calls.jsonl`. A failure carries it as `details.attempted`; a
+success that only landed because recovery ran carries it as `attempted` beside
+the result. Every record names its `ordinal`, `strategy`, recovery `axis`
+(`where`, `what`, or `how`), and `verdict`:
 
-- `succeeded` records the evidence and actual actions used by a rung;
-- `failed` additionally carries a stable `error_code`; and
-- `skipped` carries an `unmet` reason and spent no page work.
+- `succeeded` — the rung did its work and the run moved on;
+- `failed` — the rung ran and gave up, and carries a stable `error_code` plus an
+  optional `detail`; and
+- `skipped` — the rung was **not** performed, and `unmet` names the structural
+  condition that was not met.
 
-Do not expect `error_code: null` on successful or skipped verdicts: that key is
-present only for failures. `charged_actions`, `remaining_actions`, and
-`elapsed_ms` show how the shared operation budget was consumed. Old run
-directories using the previous attempt-record format remain readable and are
-normalized when reports are built; Yantra does not rewrite them.
+Those three keys are exclusive to their verdicts: `error_code` is present only
+on `failed` records and is never written as `null` anywhere, and `unmet` appears
+only on `skipped` ones.
 
-Treat this ledger as completed work. Do not repeat a strategy named in
-`attempted`; use the result's specific next step, re-issue an offered value
-verbatim when directed, and preserve fields already listed as applied by a
-batch fill. Secret fills produce no value-derived recovery evidence.
+`entry_evidence`, `charged_actions`, `remaining_actions`, and `elapsed_ms`
+report what the rung was entered on and how it spent the operation budget. They
+are omitted whenever they would say nothing — a key is never written as `[]` or
+`0` — so a record that simply lacks `charged_actions` is ordinary, not a gap in
+the data. `succeeded` and `failed` records may also disclose a small allowlisted
+set of scalar rung evidence: `substituted`, `substitution_position`,
+`tie_break`, `scroll_steps`, `scroll_stop`, `revealed_driver`, and
+`reacquisitions`. Old run directories using the previous attempt-record format
+remain readable and are normalized when reports are built; Yantra does not
+rewrite them.
+
+Read the list in order. Records are appended in completion order, so a nested
+step's record comes before the step that ran it. `charged_actions` is exclusive
+of that nested work, which means the records sum to the call's total, and
+`remaining_actions` never increases as you read down. The list is bounded at 24
+records; when a call produces more, the first record and the last 23 are kept
+and the gap is visible from the ordinals. One `browser_fill_element` call is one
+run against one 32-action ceiling, one 25-second deadline, and a cap of four
+stale-reference reacquisitions; `browser_fill_form` drives each field as its own
+run with its own allowance.
+
+Treat `succeeded` and `failed` records as completed work: do not repeat a
+strategy either one names, use the result's specific next step, and preserve
+fields already listed as applied by a batch fill. A `skipped` record is not
+completed work — it names a step that never ran. Secret fills produce no
+value-derived recovery evidence.
+
+An `offered` list, when present, contains pairwise-distinct labels for genuine
+widget choices. It excludes protected actions and surrounding controls such as
+paging, navigation, reset, or mode switches. When an opened container exposes
+no selectable options, a failed fill omits `offered` and directs you to
+re-observe instead.
+
+When a failure directs you to choose from `offered`, re-issue one label
+verbatim as the value for the same field. Calendar labels follow that same
+round trip: Yantra routes them back to the date picker instead of treating them
+as ordinary text. If multiple surviving choices have the same model-visible
+label, Yantra resolves them structurally rather than asking for an impossible
+choice; the successful result discloses this in `note`, while `attempted`
+records the indistinguishable count, selected position, and structural
+tie-break.
 
 ## Exit codes
 

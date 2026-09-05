@@ -27,13 +27,17 @@ import {
   readWhenStable,
   shapeQuery,
   type AttemptLedger,
-  type AttemptRecord,
+  type ChoiceSubstitution,
   type InteractionFailureCause,
-  type QueryForm,
   type TypingFailure,
 } from '../../interaction/index.js';
 import { isOpen, resolveContainer, type WidgetContainer } from '../open-state.js';
-import { clickCandidate, collectCandidates, type WidgetCandidate } from '../option/candidates.js';
+import {
+  clickCandidate,
+  collectChoices,
+  type WidgetCandidate,
+  type WidgetChoiceSet,
+} from '../option/candidates.js';
 import {
   widgetFailure,
   type WidgetDriver,
@@ -170,8 +174,6 @@ export const comboboxDriver: WidgetDriver = {
       ? null
       : await resolveContainer(port, target, { allowUnlinked: true });
     const queryForms = shapeQuery(requested);
-    const records: AttemptRecord[] = [];
-    let actions = 0;
     let live = target;
     let editee: WidgetTarget | null = null;
     let reformatted = false;
@@ -181,7 +183,6 @@ export const comboboxDriver: WidgetDriver = {
       budget,
       forms: queryForms,
       runForm: async (context, form, index) => {
-        const startedAt = context.port.now();
         // One baseline per drive, on the first form only. By the second form the
         // editee question is settled, so taking another observation pair would
         // pay twice to hear the same answer.
@@ -192,15 +193,12 @@ export const comboboxDriver: WidgetDriver = {
           budget,
           index === 0 ? editeeProbe(context.port) : undefined,
         );
-        records.push(...entered.ledger.records);
-        actions += entered.ledger.records.length;
         if (entered.editee) {
           editee = entered.editee;
           live = entered.target;
         }
         reformatted = entered.typed.ok && entered.typed.reformatted;
         if (!entered.typed.ok) {
-          records.push(queryRecord(form, startedAt, context.port.now(), entered.typed.errorCode));
           return {
             ok: false,
             failure: widgetFailure(
@@ -209,7 +207,6 @@ export const comboboxDriver: WidgetDriver = {
               entered.typed.message,
               {
                 observed: entered.typed.observed,
-                attempted: renumber(records),
                 ...(entered.editee ? { editee: entered.editee.name } : {}),
                 ...(entered.typed.reason === undefined ? {} : { reason: entered.typed.reason }),
               },
@@ -221,8 +218,6 @@ export const comboboxDriver: WidgetDriver = {
         const selection = await watchAndSelectOffered(context.port, live, requested, budget, {
           ignoredContainer: sameTarget(live, target) ? ignoredContainer : null,
         });
-        actions += selection.actions;
-        records.push(queryRecord(form, startedAt, context.port.now(), errorCodeOf(selection)));
 
         if (selection.kind === 'no-suggestions' && index < queryForms.length - 1) {
           return {
@@ -237,8 +232,7 @@ export const comboboxDriver: WidgetDriver = {
           };
         }
         const outcome = toOutcome(context.port, live, requested, selection, {
-          actions,
-          records,
+          actions: chargedSoFar(budget, selection),
           editee,
           reformatted,
           container: selection.container,
@@ -261,7 +255,7 @@ export const comboboxDriver: WidgetDriver = {
         'WIDGET_TARGET_UNREACHABLE',
         'budget',
         `No query form could be entered into "${target.name}" within the fill budget.`,
-        { reason: 'budget', attempted: renumber(records) },
+        { reason: 'budget' },
       );
     }
     return run.outcome.ok ? run.outcome.value : run.outcome.failure;
@@ -294,7 +288,6 @@ export async function selectByOfferedLabel(
       entered.typed.message,
       {
         observed: entered.typed.observed,
-        attempted: entered.ledger.records,
         ...(entered.editee ? { editee: entered.editee.name } : {}),
       },
     );
@@ -302,8 +295,7 @@ export async function selectByOfferedLabel(
   const live = entered.target;
   const selection = await watchAndSelectOffered(port, live, label, budget, {});
   return toOutcome(port, live, label, selection, {
-    actions: selection.actions + entered.ledger.records.length,
-    records: [...entered.ledger.records],
+    actions: chargedSoFar(budget, selection),
     editee: entered.editee,
     reformatted: entered.typed.ok && entered.typed.reformatted,
     container: selection.container,
@@ -316,6 +308,7 @@ interface Reaction {
   readonly ignored: boolean;
   readonly open: boolean;
   readonly candidates: readonly WidgetCandidate[];
+  readonly semantics: WidgetChoiceSet['semantics'];
 }
 
 /**
@@ -334,6 +327,7 @@ export type OfferedSelection =
       readonly stillOpen: boolean;
       readonly actions: number;
       readonly container: WidgetContainer | null;
+      readonly substitution?: ChoiceSubstitution;
     }
   /** A click landed but the control holds nothing. */
   | {
@@ -367,6 +361,7 @@ export type OfferedSelection =
       readonly observed: string;
       readonly actions: number;
       readonly container: WidgetContainer | null;
+      readonly semantics: WidgetChoiceSet['semantics'];
     }
   /** Nothing was offered at all; whatever the control holds is what it holds. */
   | {
@@ -446,7 +441,7 @@ export async function watchAndSelectOffered(
     };
   }
 
-  const ranked = rankAgainstRequested(reaction.candidates, requested);
+  const ranked = rankAgainstRequested(reaction.candidates, requested, container.path);
   const offered = reaction.candidates.slice(0, MAX_OFFERED).map((candidate) => candidate.name);
 
   if (ranked.kind === 'ambiguous') {
@@ -468,7 +463,14 @@ export async function watchAndSelectOffered(
     // or clearing it on release.
     return observed.trim().length > 0
       ? { kind: 'unmatched-text-stands', offered, committed: observed, actions: 0, container }
-      : { kind: 'text-discarded', offered, observed, actions: 0, container };
+      : {
+          kind: 'text-discarded',
+          offered,
+          observed,
+          actions: 0,
+          container,
+          semantics: reaction.semantics,
+        };
   }
 
   if (budget.maxActions < 2 || port.now() > budget.deadlineMs) {
@@ -495,6 +497,7 @@ export async function watchAndSelectOffered(
     stillOpen: await isOpen(port, target, container),
     actions: 1,
     container,
+    ...(ranked.substitution ? { substitution: ranked.substitution } : {}),
   };
 }
 
@@ -506,15 +509,14 @@ function toOutcome(
   selection: OfferedSelection,
   context: {
     readonly actions: number;
-    readonly records: readonly AttemptRecord[];
     readonly editee: WidgetTarget | null;
     readonly reformatted: boolean;
     readonly container: WidgetContainer | null;
   },
 ): WidgetOutcome {
-  const attempted = renumber(context.records);
-  const ledgerDetail = attempted.length > 0 ? { attempted } : {};
-  const successLedger = attempted.length > 0 ? { attempted } : {};
+  // No driver-local ledger. The runner owns records: each query form is a rung
+  // whose `entryEvidence` names the form that was asked, and the typing ladder
+  // inside it appends its own verdicts to the same sequence, in order.
   const editeeDetail = context.editee ? { editee: context.editee.name } : {};
   const container = context.container ?? undefined;
 
@@ -530,8 +532,8 @@ function toOutcome(
         actions: context.actions,
         chosen: selection.chosen,
         offered: selection.offered,
+        ...(selection.substitution ? { substitution: selection.substitution } : {}),
         released: !selection.stillOpen,
-        ...successLedger,
         ...(context.editee ? { editee: context.editee } : {}),
         ...(container ? { container } : {}),
       };
@@ -547,7 +549,6 @@ function toOutcome(
         // Nothing matched, so the list was released with Escape before the
         // field was re-read; that release is this driver's doing.
         released: true,
-        ...successLedger,
         ...(context.editee ? { editee: context.editee } : {}),
         ...(context.reformatted ? { reformatted: true } : {}),
         ...(container ? { container } : {}),
@@ -558,7 +559,6 @@ function toOutcome(
         driver: 'plain-text',
         committed: selection.committed,
         actions: context.actions,
-        ...successLedger,
         ...(context.editee ? { editee: context.editee } : {}),
         ...(context.reformatted ? { reformatted: true } : {}),
         ...(container ? { container } : {}),
@@ -571,19 +571,17 @@ function toOutcome(
         {
           offered: selection.offered,
           observed: selection.observed,
-          ...ledgerDetail,
           ...editeeDetail,
         },
       );
     case 'text-discarded':
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
-        'no-suggestion-matched',
+        selection.semantics === 'declared' ? 'no-suggestion-matched' : 'no-options-offered',
         `"${target.name}" offers no suggestion matching "${requested}" and discarded the typed text on release, so it will not accept a free-text value.`,
         {
-          offered: selection.offered,
+          ...(selection.semantics === 'declared' ? { offered: selection.offered } : {}),
           observed: selection.observed,
-          ...ledgerDetail,
           ...editeeDetail,
         },
       );
@@ -597,7 +595,6 @@ function toOutcome(
           observed: selection.committed,
           offered: selection.offered,
           chosen: selection.chosen,
-          ...ledgerDetail,
           ...editeeDetail,
         },
       );
@@ -606,7 +603,7 @@ function toOutcome(
         'WIDGET_TARGET_UNREACHABLE',
         'budget',
         'The fill action budget was exhausted before the suggestion could be selected.',
-        { reason: 'budget', offered: selection.offered, ...ledgerDetail, ...editeeDetail },
+        { reason: 'budget', offered: selection.offered, ...editeeDetail },
       );
   }
   // `port` is part of the signature for symmetry with the other stages and to
@@ -621,35 +618,22 @@ async function readReaction(
   ignoredContainer: WidgetContainer | null | undefined,
 ): Promise<Reaction> {
   const container = await resolveContainer(port, target, { allowUnlinked: true });
-  if (!container) return { container: null, ignored: false, open: false, candidates: [] };
+  if (!container) {
+    return { container: null, ignored: false, open: false, candidates: [], semantics: 'none' };
+  }
   if (sameContainer(container, ignoredContainer)) {
-    return { container, ignored: true, open: false, candidates: [] };
+    return { container, ignored: true, open: false, candidates: [], semantics: 'none' };
   }
   if (!(await isOpen(port, target, container))) {
-    return { container, ignored: false, open: false, candidates: [] };
+    return { container, ignored: false, open: false, candidates: [], semantics: 'none' };
   }
+  const choiceSet = await collectChoices(port, container);
   return {
     container,
     ignored: false,
     open: true,
-    candidates: await collectCandidates(port, container),
-  };
-}
-
-/** The ledger entry naming which query form was asked. */
-function queryRecord(
-  form: QueryForm,
-  startedAt: number,
-  endedAt: number,
-  errorCode: string | null,
-): AttemptRecord {
-  return {
-    attempt: 0,
-    strategy: `query:${form.kind}`,
-    axis: 'what',
-    errorCode,
-    elapsedMs: endedAt - startedAt,
-    detail: `asked "${form.text}"`,
+    candidates: choiceSet.choices,
+    semantics: choiceSet.semantics,
   };
 }
 
@@ -666,24 +650,18 @@ function typingCause(failure: TypingFailure): InteractionFailureCause {
   return 'typing-exhausted';
 }
 
-function errorCodeOf(selection: OfferedSelection): string | null {
-  switch (selection.kind) {
-    case 'selected':
-    case 'unmatched-text-stands':
-    case 'no-suggestions':
-      return null;
-    case 'ambiguous':
-      return 'WIDGET_AMBIGUOUS_CHOICE';
-    case 'text-discarded':
-    case 'budget':
-      return 'WIDGET_TARGET_UNREACHABLE';
-    case 'not-committed':
-      return 'WIDGET_NOT_COMMITTED';
-  }
-}
-
-function renumber(records: readonly AttemptRecord[]): readonly AttemptRecord[] {
-  return records.map((record, index) => ({ ...record, attempt: index + 1 }));
+/**
+ * What this drive has cost, taken from the one counter that knows.
+ *
+ * The runner charges every mutation through the shared run, so a driver-local
+ * accumulator would be a second answer to the same question, drifting from the
+ * first the moment a rung spends anything the driver did not perform itself.
+ */
+function chargedSoFar(
+  budget: Parameters<WidgetDriver['drive']>[3],
+  selection: OfferedSelection,
+): number {
+  return budget.run?.chargedActions ?? selection.actions;
 }
 
 /** Close whatever the typing opened, so the page is left in a clean state. */

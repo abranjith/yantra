@@ -3,6 +3,8 @@
 import { globSync, readFileSync } from 'node:fs';
 
 import {
+  MAX_SERIALIZED_VERDICTS,
+  toWireLedger,
   type AgentBrowserController,
   type AgentBrowserObservation,
   type AgentInteractable,
@@ -58,6 +60,8 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     };
 
     expect(result.status).toBe('ok');
+    expectCompleteAccounting(model as FillSets, ['Search', 'Where to?', 'Dates']);
+    expectNoCovers(model as FillSets);
     expect(model.applied).toEqual([
       expect.objectContaining({
         field: 'Search',
@@ -117,7 +121,10 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     expect(model.failed).toEqual([
       expect.objectContaining({ field: 'Toggle', error_code: 'WIDGET_TARGET_UNREACHABLE' }),
     ]);
+    expect(model.failed[0]).not.toHaveProperty('requested');
     expect(model.skipped).toBeUndefined();
+    expectCompleteAccounting(model as FillSets, ['First', 'Toggle', 'Third', 'Last']);
+    expectNoCovers(model as FillSets);
     expect(controller.document.querySelector<HTMLInputElement>('#last')!.value).toBe('four');
     expect(result.details).toMatchObject({
       partial: true,
@@ -150,6 +157,8 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     expect(model.skipped).toEqual([
       { field: 'Check-out', reason: 'same-widget-group-as-failed', blocked_by: 'Check-in' },
     ]);
+    expectCompleteAccounting(model as FillSets, ['Search', 'Check-in', 'Check-out']);
+    expectNoCovers(model as FillSets);
     // Not merely reported as skipped — never attempted.
     expect(controller.document.querySelector<HTMLInputElement>('#checkout')!.value).toBe('');
   }, 30_000);
@@ -174,6 +183,8 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     expect(details.skipped).toEqual([
       { field: 'Check-out', reason: 'same-widget-group-as-failed', blocked_by: 'Check-in' },
     ]);
+    expectCompleteAccounting(details as FillSets, ['Check-in', 'Check-out']);
+    expectNoCovers(details as FillSets);
   });
 
   it('reports every field failing as a failure, with all three sets', async () => {
@@ -199,6 +210,11 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     });
     expect(details.applied).toEqual([]);
     expect(Array.isArray(details.failed)).toBe(true);
+    for (const entry of details.failed as readonly Record<string, unknown>[]) {
+      expect(entry).not.toHaveProperty('requested');
+    }
+    expectCompleteAccounting(details as FillSets, ['Alpha', 'Beta']);
+    expectNoCovers(details as FillSets);
   });
 
   it('promises no stop-at-first-failure in the tool description', () => {
@@ -209,6 +225,8 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     expect(description).toMatch(/applied/);
     expect(description).toMatch(/failed/);
     expect(description).toMatch(/skipped/);
+    expect(description).toMatch(/exactly one of those three sets/i);
+    expect(description).toMatch(/covers/);
   });
 
   it('does not toggle an already-open calendar shut', async () => {
@@ -632,6 +650,97 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(controller.document.querySelector<HTMLInputElement>('#ci')!.value).toBe('Sep 6');
   });
 
+  it('re-enters the retry rung after an expensive first fill, proving the re-declared cap', async () => {
+    // Activation changes what this rung is allowed to spend. It declared
+    // `min(16, maxActions)` against a private allowance of 32; under one shared
+    // budget any first fill costing more than 16 would make the rung it exists
+    // for structurally unreachable — the opposite of its purpose.
+    const target: WidgetTarget = {
+      ref: 'e1',
+      role: 'textbox',
+      name: 'Destination',
+      group: null,
+      value: null,
+    };
+    const replacement = {
+      ok: false,
+      errorCode: 'WIDGET_ELEMENT_REPLACED',
+      message: 'The field was replaced.',
+      retryable: true,
+      details: {},
+    } as const;
+    const landed = {
+      ok: true,
+      driver: 'plain-text',
+      committed: 'DFW',
+      actions: 1,
+      dismissed: true,
+    } as const;
+    let pass = 0;
+    const runs: unknown[] = [];
+    const charged: number[] = [];
+    // A complete port: the runner only wraps and charges something that
+    // implements the whole seam.
+    const port: WidgetPort = {
+      observe: async () => ({
+        url: '',
+        title: '',
+        digest: '',
+        digestUnchanged: false,
+        interactables: [],
+      }),
+      click: async () => undefined,
+      fill: async () => undefined,
+      clear: async () => undefined,
+      type: async () => undefined,
+      evaluateOn: async <T>() => undefined as T,
+      evaluate: async <T>() => undefined as T,
+      press: async () => undefined,
+      scrollContainer: async () => null,
+      now: () => 0,
+    };
+
+    const outcome = await driveWithRetry(
+      port,
+      {} as AgentBrowserController,
+      'Destination',
+      target,
+      { kind: 'text', text: 'DFW' },
+      {},
+      {
+        drive: async (livePort, _identity, _intent, budget): Promise<FillOutcome> => {
+          const run = budget?.run as { readonly chargedActions: number } | undefined;
+          runs.push(run);
+          charged.push(run?.chargedActions ?? -1);
+          pass += 1;
+          if (pass === 1) {
+            // Seventeen mutations on the shared counter: more than the sixteen
+            // the retry rung used to reserve out of a ceiling of thirty-two.
+            for (let index = 0; index < 17; index += 1) await livePort.press('a');
+            return replacement;
+          }
+          return landed;
+        },
+        resolve: () => Promise.resolve({ ...target, ref: 'e2' }),
+      },
+    );
+
+    expect(pass).toBe(2);
+    // (i) One ceiling across the tool call: the retried fill joins the run the
+    // first one spent from, rather than opening a fresh allowance of 32.
+    expect(runs[0]).toBeDefined();
+    expect(runs[1]).toBe(runs[0]);
+    expect(charged).toEqual([0, 17]);
+    expect(outcome).toMatchObject({ ok: true, committed: 'DFW' });
+    const attempted = (outcome.ok ? (outcome.attempted ?? []) : []) as readonly Record<
+      string,
+      unknown
+    >[];
+    expect(
+      attempted.filter((record) => record.verdict !== 'skipped').map((record) => record.strategy),
+    ).toEqual(['fill', 're-resolve-field-and-retry']);
+  });
+
   it('shares one absolute deadline across re-resolution and both fill passes', async () => {
     let clock = 0;
     const deadlines: number[] = [];
@@ -717,8 +826,71 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(controller.document.querySelector<HTMLInputElement>('#ci')!.value).toBe('Sep 6');
     expect(controller.document.querySelector<HTMLInputElement>('#co')!.value).toBe('Sep 12');
     // One fill, reported as accounting for both fields the caller named.
-    expect(appliedFields(result.modelText)).toEqual([['Check-in', 'Check-out']]);
+    const sets = fillSetsFromModel(result.modelText);
+    expect(sets.applied).toEqual([
+      expect.objectContaining({
+        field: 'Check-in',
+        covers: ['Check-in', 'Check-out'],
+        requested: '2026-09-06..2026-09-12',
+      }),
+    ]);
+    expectCompleteAccounting(sets, ['Check-in', 'Check-out']);
   });
+
+  it('accounts for both ends when a fused date range fails', async () => {
+    const controller = rangePickerController();
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Check-in', value: '2026-09-06' },
+        { field: 'Check-out', value: '2026-09-20' },
+      ],
+    });
+    const sets = result.details as FillSets;
+
+    expect(result.status).toBe('error');
+    expect(sets.failed).toEqual([
+      expect.objectContaining({
+        field: 'Check-in',
+        covers: ['Check-in', 'Check-out'],
+        requested: '2026-09-06..2026-09-20',
+        error_code: 'WIDGET_TARGET_UNREACHABLE',
+      }),
+    ]);
+    const failed = sets.failed![0]!;
+    const requestedDates = String(failed.requested).split('..');
+    expect(failed.covers?.[0]).toBe(failed.field);
+    expect(requestedDates).toHaveLength(2);
+    expect(requestedDates).toEqual(['2026-09-06', '2026-09-20']);
+    expectCompleteAccounting(sets, ['Check-in', 'Check-out']);
+  });
+
+  it('discloses both fused fields when their shared widget is skipped', async () => {
+    const controller = rangePickerController({ blockingField: true });
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Unavailable', value: 'blocked' },
+        { field: 'Check-in', value: '2026-09-06' },
+        { field: 'Check-out', value: '2026-09-12' },
+      ],
+    });
+    const sets = result.details as FillSets;
+
+    expect(result.status).toBe('error');
+    expect(sets.failed).toEqual([
+      expect.objectContaining({ field: 'Unavailable', error_code: 'WIDGET_TARGET_UNREACHABLE' }),
+    ]);
+    expect(sets.skipped).toEqual([
+      {
+        field: 'Check-in',
+        covers: ['Check-in', 'Check-out'],
+        reason: 'same-widget-group-as-failed',
+        blocked_by: 'Unavailable',
+      },
+    ]);
+    expectCompleteAccounting(sets, ['Unavailable', 'Check-in', 'Check-out']);
+  }, 30_000);
 
   it('leaves two unrelated dates as separate fills', async () => {
     const controller = new FormController(
@@ -736,7 +908,13 @@ describe('@no-llm browser_fill_element contract', () => {
     // Fusion is for the two ends of one range. Two dates the page does not
     // label as a pair are two dates.
     expect(result.error_code).toBeUndefined();
-    expect(appliedFields(result.modelText)).toEqual([['Born on'], ['Hired on']]);
+    const sets = fillSetsFromModel(result.modelText);
+    expect(sets.applied?.map((entry) => entry.covers ?? [entry.field])).toEqual([
+      ['Born on'],
+      ['Hired on'],
+    ]);
+    expectCompleteAccounting(sets, ['Born on', 'Hired on']);
+    expectNoCovers(sets);
   });
 });
 
@@ -970,22 +1148,62 @@ function occurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-/** The caller fields each reported fill accounts for, in order. */
-function appliedFields(modelText: string | undefined): readonly (readonly string[])[] {
-  const model = JSON.parse(modelText ?? '{}') as {
-    readonly applied?: readonly { readonly field: string; readonly covers?: readonly string[] }[];
-  };
-  return (model.applied ?? []).map((entry) => entry.covers ?? [entry.field]);
+interface FillSetEntry {
+  readonly field: string;
+  readonly covers?: readonly string[];
+  readonly [key: string]: unknown;
+}
+
+interface FillSets {
+  readonly applied?: readonly FillSetEntry[];
+  readonly failed?: readonly FillSetEntry[];
+  readonly skipped?: readonly FillSetEntry[];
+}
+
+/** Parse the three model-visible batch sets from a successful result. */
+function fillSetsFromModel(modelText: string | undefined): FillSets {
+  return JSON.parse(modelText ?? '{}') as FillSets;
+}
+
+/** The caller fields accounted for across all three result sets, as a multiset. */
+function accountedFields(sets: FillSets): readonly string[] {
+  return allFillEntries(sets).flatMap((entry) => entry.covers ?? [entry.field]);
+}
+
+/** Assert total accounting and every structural rule of an emitted covers list. */
+function expectCompleteAccounting(sets: FillSets, requested: readonly string[]): void {
+  expect([...accountedFields(sets)].sort()).toEqual([...requested].sort());
+  for (const entry of allFillEntries(sets)) {
+    if (!entry.covers) continue;
+    expect(entry.covers.length).toBeGreaterThan(1);
+    expect(entry.covers[0]).toBe(entry.field);
+    expect(new Set(entry.covers).size).toBe(entry.covers.length);
+  }
+}
+
+/** Assert the byte-compatible unfused shape: no redundant covers key exists. */
+function expectNoCovers(sets: FillSets): void {
+  for (const entry of allFillEntries(sets)) expect(entry).not.toHaveProperty('covers');
+}
+
+function allFillEntries(sets: FillSets): readonly FillSetEntry[] {
+  return [...(sets.applied ?? []), ...(sets.failed ?? []), ...(sets.skipped ?? [])];
 }
 
 /**
  * A check-in/check-out picker that only ever commits a complete range, the
  * shape measured on the page behind the run this fixes.
  */
-function rangePickerController(): FormController {
-  const controller = new FormController(
+function rangePickerController(options: { readonly blockingField?: boolean } = {}): FormController {
+  const rangeFields =
     '<input id="ci" aria-label="Check-in" aria-controls="cal" value="Aug 10">' +
-      '<input id="co" aria-label="Check-out" value="Aug 11">' +
+    '<input id="co" aria-label="Check-out" value="Aug 11">';
+  const controller = new FormController(
+    (options.blockingField
+      ? '<table><caption>Trip dates</caption><tbody><tr>' +
+        '<td><button id="unavailable" aria-label="Unavailable">Unavailable</button></td>' +
+        `<td>${rangeFields}</td></tr></tbody></table>`
+      : rangeFields) +
       '<div id="cal" role="dialog" style="display:none">' +
       '<table><caption>September 2026</caption><tbody><tr>' +
       '<td><button data-date="2026-09-06">6</button></td>' +
@@ -1020,6 +1238,118 @@ function rangePickerController(): FormController {
     pending = [];
   });
   return controller;
+}
+
+describe('@no-llm the ledger the model actually receives', () => {
+  it('serializes no key whose value is empty, on any record of a real failing fill', async () => {
+    // Plan §9's contract, asserted per key across every record rather than on a
+    // sample. Before this, every record of every failing fill carried
+    // `entry_evidence: []`, `charged_actions: 0` and `remaining_actions: 0` —
+    // roughly 1.5 KB of model-visible noise per call, and "which axis spent the
+    // budget?" unanswerable.
+    const controller = formController();
+    // Close the picker the fixture starts with open. The trigger carries no
+    // handler that reopens it, so this is a genuine terminal failure driven end
+    // to end through the tool seam rather than a hand-built record.
+    await controller.press('Escape');
+
+    const result = await run(controller, {
+      fields: [
+        { field: 'Search', value: 'stadium hotels' },
+        { field: 'Dates', value: '2026-09-06..2026-09-08' },
+      ],
+    });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly LedgerEntry[];
+      readonly failed: readonly LedgerEntry[];
+    };
+
+    const records = [...model.applied, ...model.failed].flatMap((entry) => entry.attempted ?? []);
+    expect(records.length).toBeGreaterThan(0);
+    expectNothingEmpty(records);
+  }, 30_000);
+
+  it('serializes no empty key through the click path either, legacy records included', async () => {
+    // The click path re-inflated the controller's own `clear-obstruction`
+    // record with the same three empty fields. It is the one legacy producer
+    // left, so it is the one that has to prove the boundary is honest.
+    const controller = formController();
+    const ref = controller.refForSelector('#dates');
+    // Exactly what `pointer-preflight.ts` builds: a legacy `AttemptRecord`
+    // carrying `errorCode: null` and nothing measured but elapsed time.
+    controller.pendingActionResults.push({
+      attempted: [
+        {
+          attempt: 1,
+          strategy: 'clear-obstruction',
+          axis: 'where',
+          errorCode: null,
+          elapsedMs: 12,
+        },
+      ],
+    } as Partial<BrowserActionResult>);
+    const trace = new AgentTrace();
+    const browser: BrowserToolDeps = {
+      controller: controller as unknown as AgentBrowserController,
+      ethics: allowingEthics(),
+      secretResolver: null,
+      sensitiveScreenLatch: new SensitiveScreenLatch(),
+      secretHosts: () => Promise.resolve([]),
+      captureThresholdBytes: 16_384,
+    };
+    const services = buildServices({ trace, domain: { browser } });
+
+    const result = await wrapTool(browserClickSpec(services), services).execute({ ref }, undefined);
+    const model = JSON.parse(result.modelText) as {
+      readonly attempted?: readonly Record<string, unknown>[];
+    };
+
+    expect(model.attempted?.length).toBeGreaterThan(0);
+    expect(model.attempted?.[0]).toMatchObject({ strategy: 'clear-obstruction' });
+    expectNothingEmpty(model.attempted ?? []);
+  });
+
+  it('bounds the ledger, keeping the opening move and the outcome', () => {
+    const verdicts = Array.from({ length: MAX_SERIALIZED_VERDICTS + 6 }, (_entry, index) => ({
+      kind: 'skipped' as const,
+      ordinal: index + 1,
+      rungId: `rung-${index + 1}`,
+      axis: 'how' as const,
+      unmet: 'no-signal',
+    }));
+
+    const wire = toWireLedger({
+      operation: 'fill-field',
+      family: 'field',
+      verdicts,
+      chargedActions: 0,
+      elapsedMs: 0,
+      remainingActions: 0,
+    });
+
+    expect(wire).toHaveLength(MAX_SERIALIZED_VERDICTS);
+    expect(wire[0]).toMatchObject({ strategy: 'rung-1' });
+    expect(wire.at(-1)).toMatchObject({ strategy: `rung-${verdicts.length}` });
+    // The gap is visible from the retained ordinals; nothing is silently lost.
+    expect(wire[1]?.ordinal).not.toBe(2);
+  });
+});
+
+/** One `browser_fill_form` set entry, as far as the ledger contract cares. */
+interface LedgerEntry {
+  readonly attempted?: readonly Record<string, unknown>[];
+}
+
+/** No record carries a key whose value says nothing: `[]`, `0`, or `null`. */
+function expectNothingEmpty(records: readonly Record<string, unknown>[]): void {
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      expect({ key, value }).not.toMatchObject({ value: null });
+      expect({ key, value }).not.toMatchObject({ value: 0 });
+      if (Array.isArray(value))
+        expect({ key, length: value.length }).not.toMatchObject({ length: 0 });
+    }
+  }
 }
 
 async function run(controller: FormController, params: unknown, trace = new AgentTrace()) {
@@ -1327,6 +1657,13 @@ class FormController {
 
   public now(): number {
     return Date.now();
+  }
+
+  /** The ref this controller would mint for a selector, minting it if needed. */
+  public refForSelector(selector: string): string {
+    this.refreshRefs();
+    const element = this.document.querySelector<HTMLElement>(selector)!;
+    return this.refsByElement.get(element)!;
   }
 
   private refreshRefs(): void {

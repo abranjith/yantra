@@ -45,7 +45,7 @@ import {
 } from './gauntlet/registry.js';
 
 describe('@no-llm agent real-browser widget gauntlet', () => {
-  const protocolFixtureCount = 13;
+  const protocolFixtureCount = 16;
   let fixture: FixtureServer;
   let runDir: string;
   let baseController: AgentBrowserController;
@@ -272,11 +272,11 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
     }
   }, 30_000);
 
-  it('completes the seventeen-fixture gallery across both tiers', () => {
+  it('completes the twenty-fixture gallery across both tiers', () => {
     // The gate FEAT-034 waits on, stated as a number so growing the gallery is
     // a deliberate edit rather than a side effect.
     expect(AGENT_GAUNTLET).toHaveLength(4);
-    expect(protocolFixtureCount + AGENT_GAUNTLET.length).toBe(17);
+    expect(protocolFixtureCount + AGENT_GAUNTLET.length).toBe(20);
     expect(AGENT_GAUNTLET.filter((entry) => entry.requiresVision)).toEqual([]);
     expect(tools.map((tool) => tool.name)).not.toContain('browser_screenshot');
   });

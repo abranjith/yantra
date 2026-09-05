@@ -1,0 +1,30 @@
+<!--
+  Shape: one revealed choice container mixes explicit option roles with paging
+  controls, a mode switch that would change the request, and a protected
+  action. Only the container's genuine options belong in offered results.
+
+  Observed in run 20260904T001045Z-do-caa285ca: calendar overlay chrome was
+  returned as offered values for a different field operation.
+-->
+<button id="trigger" aria-controls="choices" aria-expanded="true" aria-label="Fare class"></button>
+<div id="choices" role="dialog">
+  <button>Previous</button>
+  <div role="option">Economy</div>
+  <div role="option">Business</div>
+  <button>Next</button>
+  <button>One way</button>
+  <button>Submit order</button>
+</div>
+<script>
+  (function () {
+    var trigger = document.getElementById('trigger');
+    var choices = document.getElementById('choices');
+    choices.querySelectorAll('[role="option"]').forEach(function (option) {
+      option.addEventListener('click', function () {
+        trigger.setAttribute('aria-label', option.textContent.trim());
+        trigger.setAttribute('aria-expanded', 'false');
+        choices.style.display = 'none';
+      });
+    });
+  })();
+</script>

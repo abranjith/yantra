@@ -12,6 +12,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { INTERACTION_MESSAGES, receiverFor } from '../../src/index.js';
 import {
   PROTOCOL_GAUNTLET,
   countingPort,
@@ -74,6 +75,9 @@ describe('@no-llm protocol widget gauntlet', () => {
         if (descriptor.expected.noteContains) {
           expect(run.outcome.ok && run.outcome.note).toContain(descriptor.expected.noteContains);
         }
+        for (const forbidden of descriptor.expected.forbiddenOffered ?? []) {
+          expect(JSON.stringify(run.outcome)).not.toContain(forbidden);
+        }
       } else {
         expect(run.outcome).toMatchObject({
           ok: false,
@@ -94,17 +98,77 @@ describe('@no-llm protocol widget gauntlet', () => {
       }
 
       expect(run.testPort.document.querySelector(descriptor.field.selector)).not.toBeNull();
+      for (const offered of offeredArrays([run.outcome, run.followUp])) {
+        expect(new Set(offered.map(normalizedChoice)).size).toBe(offered.length);
+      }
+      for (const outcome of [run.outcome, run.followUp]) {
+        if (outcome?.ok !== true || outcome.substitution === undefined) continue;
+        expect(outcome.note).toBeTruthy();
+        expect(outcome.substitution.tieBreak).toContain('document-order');
+      }
       if (descriptor.file === 'shared-calendar-range.html') {
         expect(run.testPort.clickLog.filter((entry) => entry.name === 'Check-in')).toHaveLength(1);
-        const attempts = run.outcome.ok ? (run.outcome.attempted ?? []) : [];
+        // Completion order, which is the runner's only ordering authority: the
+        // nested drive finishes before the probe rung that started it, so its
+        // verdict precedes the probe's. The merge that used to insert a
+        // driver-local ledger *after* its owning rung is gone.
+        const attempts = (run.outcome.ok ? (run.outcome.attempted ?? []) : []).filter(
+          (record) => record.verdict !== 'skipped',
+        );
         expect(attempts.map((record) => record.strategy)).toEqual([
-          'open-probe',
           'driver:calendar-grid',
+          'open-probe',
         ]);
+      }
+      if (descriptor.file === 'indistinguishable-choices.html') {
+        expect(run.outcome.ok && run.outcome.substitution).toMatchObject({
+          indistinguishable: 2,
+          position: 1,
+        });
+        expect(run.outcome.ok && run.outcome.note).toContain('Sunday, September 6, 2026');
+        // The ledger carries the count, the position and the rungs that
+        // narrowed the pool — never the shared label, which is page text and
+        // could not have distinguished them anyway.
+        const ledger = run.outcome.ok ? (run.outcome.attempted ?? []) : [];
+        expect(JSON.stringify(ledger)).not.toContain('Sunday, September 6, 2026');
+      }
+      if (descriptor.file === 'offered-label-roundtrip-date.html') {
+        expect(run.outcome.ok ? [] : run.outcome.details.offered).toEqual([
+          '2026-09: Morning departure',
+          '2026-09: Evening departure',
+        ]);
+        expect(run.result.byAction.type ?? 0).toBe(0);
+        expect(run.result.byAction.press ?? 0).toBe(0);
       }
     },
     35_000,
   );
+
+  it('answers every engineered refusal within four seconds of the injected clock', async () => {
+    // FEAT-034 TASK-012 (c), end to end. Measured on the mocked system clock —
+    // the sum of the waits the engine actually chose to take — never on wall
+    // time, so it is deterministic on the macOS, Windows and Ubuntu matrix.
+    const refusals = PROTOCOL_GAUNTLET.filter(
+      (entry) => entry.expected.kind === 'engineered-refusal',
+    );
+    expect(refusals.length).toBeGreaterThan(0);
+
+    const elapsed: Record<string, number> = {};
+    for (const descriptor of refusals) {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+      const startedAt = Date.now();
+      const pending = runFixture(descriptor);
+      await vi.runAllTimersAsync();
+      await pending;
+      elapsed[descriptor.file] = Date.now() - startedAt;
+      vi.useRealTimers();
+    }
+
+    expect(
+      Object.fromEntries(Object.entries(elapsed).map(([file, ms]) => [file, ms <= 4_000])),
+    ).toEqual(Object.fromEntries(Object.keys(elapsed).map((file) => [file, true])));
+  }, 60_000);
 
   it('reports a second mask-equivalent spelling as reformatted', async () => {
     const masked = PROTOCOL_GAUNTLET.find((entry) => entry.file === 'masked-input.html')!;
@@ -133,8 +197,8 @@ describe('@no-llm protocol widget gauntlet', () => {
     const registered = PROTOCOL_GAUNTLET.map((entry) => entry.file).sort();
     expect(census(files, registered)).toEqual({ unregistered: [], missing: [] });
     // The protocol half of the gallery, stated as a number so growing it is a
-    // deliberate edit. With the agent tier's four, this is the 17-fixture gate.
-    expect(files).toHaveLength(13);
+    // deliberate edit. With the agent tier's four, this is the 20-fixture gate.
+    expect(files).toHaveLength(16);
   });
 
   it('rejects orphan files and entries independently', () => {
@@ -151,6 +215,15 @@ describe('@no-llm protocol widget gauntlet', () => {
   it('uses unique generic pattern names', () => {
     const patterns = PROTOCOL_GAUNTLET.map((entry) => entry.pattern);
     expect(new Set(patterns).size).toBe(patterns.length);
+  });
+
+  it('resolves a receiver for every capability-bearing template emitter', () => {
+    for (const template of INTERACTION_MESSAGES) {
+      if (template.capabilityKind !== 'engine' || template.capability === null) continue;
+      for (const family of template.emittedBy ?? []) {
+        expect(receiverFor(template.surface, family, template.capability)).not.toBeNull();
+      }
+    }
   });
 
   it('contains provenance site tokens only in leading fixture comments and never production source', () => {
@@ -182,6 +255,29 @@ function census(
     unregistered: files.filter((file) => !registeredSet.has(file)).sort(),
     missing: registered.filter((file) => !fileSet.has(file)).sort(),
   };
+}
+
+function offeredArrays(value: unknown): readonly (readonly string[])[] {
+  if (Array.isArray(value)) {
+    const nested = value.flatMap(offeredArrays);
+    return value.every((entry) => typeof entry === 'string')
+      ? [value as string[], ...nested]
+      : nested;
+  }
+  if (typeof value !== 'object' || value === null) return [];
+  return Object.entries(value).flatMap(([key, entry]) =>
+    key === 'offered' && Array.isArray(entry) && entry.every((member) => typeof member === 'string')
+      ? [entry as string[]]
+      : offeredArrays(entry),
+  );
+}
+
+function normalizedChoice(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function assertProvenanceContainment(descriptor: GauntletFixture): void {

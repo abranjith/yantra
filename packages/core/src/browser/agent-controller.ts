@@ -7,6 +7,7 @@ import { collectComposedInteractables } from '../discovery/composed-handles.js';
 import type { RawInteractable } from '../discovery/interactable-scan.js';
 import { buildAgentPageSnapshot, ensureLocatorRuntime } from '../discovery/observe.js';
 import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
+import { assertReceivable } from '../interaction/capabilities.js';
 import { renderInteractionMessage } from '../interaction/messages.js';
 import {
   diffFingerprints,
@@ -927,7 +928,7 @@ export class AgentBrowserController implements WidgetPort {
         // A native <select> is filled by value, not by pointer, so it never
         // reaches the pre-flight: pointer reachability is a guarantee about
         // pointer dispatch, and `fillSelect` dispatches none.
-        if (!(await this.fillSelect(handle, ref, value))) {
+        if (!(await this.selectOption(handle, ref, value))) {
           const prepared = await this.preparePointer(handle, ref);
           attempted = prepared.attempted;
           await handle.focus();
@@ -1066,7 +1067,7 @@ export class AgentBrowserController implements WidgetPort {
    * whose value or visible label matches instead, with the input/change
    * events a framework expects. Returns false when the ref is not a select.
    */
-  private async fillSelect(
+  public async selectOption(
     handle: ElementHandle<Element>,
     ref: string,
     value: string,
@@ -1088,12 +1089,14 @@ export class AgentBrowserController implements WidgetPort {
       },
       value,
     );
-    if (outcome === 'no_match')
+    if (outcome === 'no_match') {
+      assertReceivable('actionability', 'OPTION_NOT_FOUND', 'option-not-found', 'option');
       throw new BrowserActionabilityError(
         'OPTION_NOT_FOUND',
         renderInteractionMessage('actionability', 'OPTION_NOT_FOUND', 'option-not-found', {})
           .message,
       );
+    }
     return outcome === 'selected';
   }
 

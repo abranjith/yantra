@@ -1,0 +1,318 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-04T04:10:52.646Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-04T04:16:35.291Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-04T04:24:12.585Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-04T08:28:46.582Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-04T11:15:56.245Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-04T11:21:38.420Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-04T11:24:07.740Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-008",
+      "at": "2026-09-04T11:38:10.189Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-04T14:05:13.767Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/widget-gauntlet-harness.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/fill/intent.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/capabilities.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/interaction/choice.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/interaction/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/query-plan.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/interaction/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/widgets/combobox/combobox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/date/calendar-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/widgets/option/candidates.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/option/listbox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/option/virtual-list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fill/failure-causes.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/fill/fill-engine.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/chrome-in-overlay.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/indistinguishable-choices.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/offered-label-roundtrip-date.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/interaction/capability-receivers.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/interaction/choice.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/interaction/query-plan.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/recovery-characterization.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/support/gauntlet.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/calendar-driver.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/option-drivers.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/widgets/virtual-list.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-038-choice_integrity/changeset.json",
+    ".spec-lite/features/FEAT-038-choice_integrity/spec.md",
+    ".spec-lite/plan_interaction_wave2_gaps.md"
+  ],
+  "baseline": {
+    "sha": "d98c985174ee8eb144088e3a3c4e056a9255493e",
+    "capturedAt": "2026-09-04T04:00:12.217Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/features/FEAT-038-choice_integrity/spec.md",
+      ".spec-lite/features/FEAT-039-fused_field_disclosure/spec.md",
+      ".spec-lite/features/FEAT-040-accounting_activation/spec.md",
+      ".spec-lite/plan_interaction_wave2_gaps.md"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/features/FEAT-038-choice_integrity/spec.md": "6db7873e6c1d426490bf3fcc43c4e35e5a689c30",
+      ".spec-lite/features/FEAT-039-fused_field_disclosure/spec.md": "d93970311a1d0d818ac0654cb982a6bf42f738c4",
+      ".spec-lite/features/FEAT-040-accounting_activation/spec.md": "91898589fd4a908122794229c4f7619a3fce4ec7",
+      ".spec-lite/plan_interaction_wave2_gaps.md": "172e3390ae8a2ef99c87921476cf403d5f70266c"
+    }
+  },
+  "featureId": "FEAT-038"
+}

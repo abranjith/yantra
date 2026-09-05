@@ -4,6 +4,7 @@ import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js';
 
 import { locateEditee } from './editee.js';
+import { asPlanBudget } from './escalation.js';
 import type { EscalationPlan, Rung, RungOutcome } from './escalation.js';
 import type { EditeeProbeOptions, TypedText, TypingFailure, TypingStrategy } from './typing.js';
 
@@ -121,7 +122,7 @@ export function buildTypingPlan(
             observed: '',
             editee: located.target,
             editeeEvidence: located.evidence,
-            ledger: { records: [] },
+            attempted: [],
           },
           evidence: {
             'editee-located': true,
@@ -177,13 +178,10 @@ function plan(
     family: 'text',
     operation: 'commit-text',
     rungs,
-    budget: {
-      deadlineMs: input.budget.deadlineMs,
-      maxActions: input.budget.maxActions,
-      maxPagingSteps: input.budget.maxPagingSteps,
-      maxReacquisitions: 4,
-      maxScrollSteps: input.budget.maxScrollSteps,
-    },
+    // The run rides through: a typing ladder invoked inside a fill spends that
+    // fill's allowance and appends to its one sequence, rather than opening a
+    // fresh ceiling of its own at every nesting level.
+    budget: asPlanBudget(input.budget),
     port: input.port,
     now: () => input.port.now(),
     // Typing failures are eligibility evidence. Later rungs decide whether a
@@ -193,7 +191,7 @@ function plan(
 }
 
 function successful(strategy: TypingStrategy, committed: string, reformatted: boolean): TypedText {
-  return { ok: true, strategy, committed, reformatted, ledger: { records: [] } };
+  return { ok: true, strategy, committed, reformatted, attempted: [] };
 }
 
 function failed(target: WidgetTarget, committed: string, requested: string): TypingFailure {
@@ -207,7 +205,7 @@ function failed(target: WidgetTarget, committed: string, requested: string): Typ
           ? `The "${target.name}" control kept only "${committed}" of the value that was typed.`
           : `The "${target.name}" control changed the typed value to unrelated text "${committed}".`,
     observed: committed,
-    ledger: { records: [] },
+    attempted: [],
   };
 }
 

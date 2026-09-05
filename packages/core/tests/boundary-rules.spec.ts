@@ -113,6 +113,38 @@ describe('@no-llm lint boundary rules', () => {
     expect(source).not.toContain('MATCH_TIERS');
   });
 
+  it('keeps indistinguishable-choice resolution to exactly one implementation', () => {
+    const files = globSync('packages/*/src/**/*.ts', { cwd: repoRoot });
+    const definitions = files.flatMap((filePath) => {
+      const source = readFileSync(resolve(repoRoot, filePath), 'utf8');
+      return source.match(/export function resolveIndistinguishableChoice\b/g) ?? [];
+    });
+    const candidates = readFileSync(
+      resolve(repoRoot, 'packages/core/src/widgets/option/candidates.ts'),
+      'utf8',
+    );
+
+    expect(definitions).toHaveLength(1);
+    expect(candidates).toContain('return rankAgainstRequested(candidates, requested);');
+  });
+
+  it('resolves every test fixture path from import.meta.url, never the working directory', () => {
+    // `cd packages/core && vitest run <path>` and `vitest run --root
+    // packages/core <path>` disagree about the working directory, so a
+    // cwd-derived fixture path fails from the repository root with an ENOENT
+    // that reads like a real regression. Every other fixture reader in the tree
+    // already derives from `import.meta.url`; this keeps the next one honest.
+    // The needle is composed rather than written out so this rule does not
+    // report itself.
+    const needle = `process.${'cwd'}()`;
+    const testFiles = globSync('packages/*/tests/**/*.ts', { cwd: repoRoot });
+    const offenders = testFiles.filter((filePath) =>
+      readFileSync(resolve(repoRoot, filePath), 'utf8').includes(needle),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it('mints interactable handles from exactly one composed traversal', () => {
     // The arrangement this replaced paired a record list from one traversal
     // with a handle list from an independent `page.$$`, held in step only by a
@@ -182,6 +214,13 @@ describe('@no-llm lint boundary rules', () => {
       /function mergeLedger\b/,
       /function mergedAttempts\b/,
       /function watchAndSelect\b/,
+      // The remaining legacy path on the fill side. The gate could not see any
+      // of these three, which is why the migration could stop short of its own
+      // contracts and stay green.
+      /function queryRecord\b/,
+      /function renumber\b/,
+      /function toLegacyLedger\b/,
+      /function createRunnerOwnedPort\b/,
     ]) {
       expect(all).not.toMatch(deleted);
     }
@@ -198,6 +237,45 @@ describe('@no-llm lint boundary rules', () => {
     for (const builder of new Set(Object.values(builders))) {
       expect(all.match(new RegExp(`export function ${builder}\\b`, 'g')) ?? []).toHaveLength(1);
     }
+  });
+
+  it('leaves no driver owning a ledger of its own', () => {
+    // `WidgetSuccess.attempted` is gone: a driver discloses evidence and the
+    // runner owns records. Stated structurally, because the type alone would
+    // not stop a driver rebuilding the key inside a details bag.
+    const widgetFiles = globSync('packages/core/src/widgets/**/*.ts', { cwd: repoRoot });
+    const producers = widgetFiles.filter((filePath) =>
+      readFileSync(resolve(repoRoot, filePath), 'utf8').includes('attempted'),
+    );
+
+    expect(widgetFiles.length).toBeGreaterThan(0);
+    expect(producers).toEqual([]);
+  });
+
+  it('counts a run\u2019s work in exactly one wrapper, created at one entry point', () => {
+    // Two implementations of "count this port's actions" is how a fill came to
+    // report a private counter's number while the gauntlet counted another, and
+    // how a nested plan could open an allowance of its own.
+    const files = globSync('packages/*/src/**/*.ts', { cwd: repoRoot });
+    const sources = files.map((filePath) => ({
+      filePath: filePath.split(sep).join('/'),
+      source: readFileSync(resolve(repoRoot, filePath), 'utf8'),
+    }));
+    const all = sources.map((entry) => entry.source).join('\n');
+
+    expect(all.match(/export function runStatePort\b/g) ?? []).toHaveLength(1);
+    expect(all.match(/export function createRunState\b/g) ?? []).toHaveLength(1);
+    // Root run state is minted at the entry points that own a whole call, and
+    // nowhere else: the fill engine for a direct fill, the agent's field tool
+    // for a tool call, and the runner for a plan handed no run of its own.
+    const roots = sources
+      .filter((entry) => /\bcreateRunState\(/.test(entry.source))
+      .map((entry) => entry.filePath);
+    expect([...roots].sort()).toEqual([
+      'packages/agent/src/adapters/pi/tools/browser-fill-element.ts',
+      'packages/core/src/fill/engine.ts',
+      'packages/core/src/interaction/escalation.ts',
+    ]);
   });
 
   it('keeps deterministic fill replay on the core engine and free of model calls', () => {

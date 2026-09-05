@@ -18,6 +18,11 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../../src/index.js';
+import {
+  createRunState,
+  escalationLedgerOf,
+  toWireLedger,
+} from '../../src/interaction/escalation.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 const budget = (port: WidgetTestPort) => ({
@@ -133,7 +138,9 @@ describe('@no-llm open-probe stage', () => {
     expect(probed.kind).toBe('unrecognized');
     if (probed.kind !== 'unrecognized') return;
     expect(probed.failure.details).toMatchObject({ containerResolved: false, cellsSeen: 0 });
-    expect(probed.ledger.records[0]).toMatchObject({ strategy: 'open-probe', axis: 'how' });
+    // The probe returns no ledger of its own any more; the `open-probe` rung
+    // that ran it is the record, on the caller's one sequence.
+    expect(probed).not.toHaveProperty('ledger');
   }, 30_000);
 
   it('does not run when a driver already detected the control', async () => {
@@ -208,5 +215,124 @@ describe('@no-llm open-probe stage', () => {
       1,
     );
     expect(counted.clicks()).toBe(1);
+  }, 30_000);
+});
+
+describe('@no-llm the probe drives what it revealed as a sub-plan', () => {
+  it('leaves one continuous sequence with the drive and the probe as separate verdicts', async () => {
+    // The defect this replaced: `driveFamilyPlan` spliced a driver-local ledger
+    // in after its owning rung and renumbered, producing two records describing
+    // the same window at two nesting levels, presented as a sequence.
+    const port = WidgetTestPort.fromFixture('click-to-reveal-calendar.html');
+    const field = target(port, '#trigger', 'textbox', 'Departure');
+    const run = createRunState(
+      { deadlineMs: port.now() + 20_000, maxActions: 32, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+    const outcome = await fillField(
+      port,
+      { field: 'Departure', target: field },
+      { kind: 'date', date: '2026-12-02' },
+      { deadlineMs: port.now() + 20_000, maxActions: 32, maxPagingSteps: 12, run },
+    );
+
+    expect(outcome).toMatchObject({ ok: true, driver: 'calendar-grid' });
+    const wire = toWireLedger(escalationLedgerOf(run, { operation: 'fill-date', family: 'date' }));
+    const performed = wire.filter((record) => record.verdict !== 'skipped');
+    // Completion order. The nested drive finishes inside the probe rung, so it
+    // lands first; the probe rung's own verdict closes over it.
+    expect(performed.map((record) => record.strategy)).toEqual([
+      'driver:calendar-grid',
+      'open-probe',
+    ]);
+    // Continuous, runner-assigned, never renumbered afterwards.
+    expect(wire.map((record) => record.ordinal)).toEqual(wire.map((_r, index) => index + 1));
+    // The registry kind, not page text.
+    expect(performed.find((record) => record.strategy === 'open-probe')?.revealed_driver).toBe(
+      'calendar-grid',
+    );
+    // Paging is choreography, not escalation: it contributes no verdict.
+    expect(performed.map((record) => record.strategy)).not.toContain('page-month');
+  }, 30_000);
+
+  it('dismisses exactly once when nothing recognised the container, and never when skipped', async () => {
+    const opens = new WidgetTestPort(
+      '<input id="trigger" aria-label="Departure">' +
+        '<div id="panel" role="dialog" style="display:none"><p>nothing here</p></div>',
+    );
+    const trigger = opens.document.querySelector('#trigger')!;
+    const panel = opens.document.querySelector('#panel') as HTMLElement;
+    trigger.addEventListener('click', () => {
+      panel.style.display = 'block';
+    });
+    let escapes = 0;
+    opens.document.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        escapes += 1;
+        panel.style.display = 'none';
+      }
+    });
+    const field = target(opens, '#trigger', 'textbox', 'Departure');
+
+    const unrecognized = await probeOpen(opens, field, 'date', budget(opens), {
+      intent: { kind: 'date', date: '2026-12-02' },
+      detect,
+      detectOpen: async () => [],
+      drive: async () => {
+        throw new Error('nothing should have been driven');
+      },
+    });
+
+    expect(unrecognized.kind).toBe('unrecognized');
+    expect(escapes).toBe(1);
+
+    const search = new WidgetTestPort('<input id="q" aria-label="Search">');
+    const skipped = await probeOpen(
+      search,
+      target(search, '#q', 'textbox', 'Search'),
+      'option',
+      budget(search),
+      {
+        intent: { kind: 'option', value: 'Economy' },
+        detect,
+        detectOpen: async () => [],
+        drive: async () => {
+          throw new Error('nothing should have been driven');
+        },
+      },
+    );
+
+    expect(skipped).toEqual({ kind: 'skipped', reason: 'semantics-disagree' });
+    expect(escapes).toBe(1);
+  }, 30_000);
+
+  it('surfaces the ledger unconditionally when it opened and nothing recognised it', async () => {
+    // Wave 1's deliberate exception to the "report the ledger only when it says
+    // something" rule: one probe and one failure is still worth reporting,
+    // because "it opened, and no driver understood it" is the whole answer.
+    const port = new WidgetTestPort(
+      '<input id="trigger" aria-label="Departure">' +
+        '<div id="panel" role="dialog" style="display:none"><p>nothing here</p></div>',
+    );
+    const trigger = port.document.querySelector('#trigger')!;
+    const panel = port.document.querySelector('#panel') as HTMLElement;
+    trigger.addEventListener('click', () => {
+      panel.style.display = 'block';
+    });
+    port.document.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Escape') panel.style.display = 'none';
+    });
+
+    const outcome = await fillField(
+      port,
+      { field: 'Departure', target: target(port, '#trigger', 'textbox', 'Departure') },
+      { kind: 'date', date: '2026-12-02' },
+      budget(port),
+    );
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(attemptsOf(outcome).map((record) => record.strategy)).toContain('open-probe');
   }, 30_000);
 });

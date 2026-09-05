@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   dismissWidget,
@@ -10,6 +10,9 @@ import {
   type CauseFor,
   type WidgetTarget,
 } from '../../src/index.js';
+import { createRunState } from '../../src/interaction/escalation.js';
+import type { WidgetPort } from '../../src/widgets/types.js';
+import { countingPort } from '../support/gauntlet.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 const budget = (port: WidgetTestPort) => ({
@@ -29,6 +32,15 @@ function fillFailureFor(cause: CauseFor<'WIDGET_NOT_COMMITTED'>, details: Record
 
 function target(port: WidgetTestPort, selector: string, role: string, name: string): WidgetTarget {
   return { ref: port.refFor(selector), role, name, group: null, value: null };
+}
+
+/** The verdicts on a result, and the subset of them that actually ran. */
+function verdicts(records: unknown): readonly Record<string, unknown>[] {
+  return (records ?? []) as readonly Record<string, unknown>[];
+}
+
+function performed(records: unknown): readonly Record<string, unknown>[] {
+  return verdicts(records).filter((record) => record.verdict !== 'skipped');
 }
 
 describe('@no-llm unified fill intent parsing', () => {
@@ -54,6 +66,21 @@ describe('@no-llm unified fill intent parsing', () => {
     expect(parseFillValue('Economy', 'combobox')).toEqual({ kind: 'option', value: 'Economy' });
   });
 
+  it('preserves engine-minted calendar labels as opaque text before date parsing', () => {
+    expect(parseFillValue('2026-09: Morning..window', 'textbox')).toEqual({
+      kind: 'text',
+      text: '2026-09: Morning..window',
+    });
+    expect(parseFillValue('2026-09: not a date at all', 'combobox')).toEqual({
+      kind: 'text',
+      text: '2026-09: not a date at all',
+    });
+    expect(parseFillValue('ordinary text', 'textbox')).toEqual({
+      kind: 'text',
+      text: 'ordinary text',
+    });
+  });
+
   it('rejects credential-shaped literals before they reach the DOM', () => {
     expect(parseFillValue(`sk-${'a'.repeat(20)}`, 'textbox')).toMatchObject({
       ok: false,
@@ -63,6 +90,59 @@ describe('@no-llm unified fill intent parsing', () => {
 });
 
 describe('@no-llm unified fill engine routing', () => {
+  it('routes an offered calendar label back to the date family without typing or pressing', async () => {
+    const port = new WidgetTestPort(
+      '<button id="date" aria-controls="calendar" aria-haspopup="grid" aria-expanded="true"></button>' +
+        '<div id="calendar" role="dialog"><table><tbody><tr>' +
+        '<td><button data-date="2026-09-06" aria-label="Morning">6</button></td>' +
+        '<td><button data-date="2026-09-06" aria-label="Evening">6</button></td>' +
+        '</tr></tbody></table></div>',
+    );
+    const trigger = port.document.querySelector<HTMLElement>('#date')!;
+    const popup = port.document.querySelector<HTMLElement>('#calendar')!;
+    port.document
+      .querySelector<HTMLButtonElement>('[aria-label="Evening"]')!
+      .addEventListener('click', () => {
+        trigger.setAttribute('aria-label', 'September 6, 2026');
+        trigger.setAttribute('aria-expanded', 'false');
+        popup.style.display = 'none';
+      });
+    const typeSpy = vi.spyOn(port, 'type');
+    const pressSpy = vi.spyOn(port, 'press');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Dates', target: target(port, '#date', 'button', 'Dates') },
+      { kind: 'text', text: '2026-09: Evening' },
+      budget(port),
+    );
+    expect(outcome).toMatchObject({
+      ok: true,
+      driver: 'calendar-grid',
+      committed: 'September 6, 2026',
+      offered: ['2026-09: Evening'],
+    });
+    expect(typeSpy).not.toHaveBeenCalled();
+    expect(pressSpy).not.toHaveBeenCalled();
+  });
+
+  it('falls through normally when a label-shaped value is not on a recognized date field', async () => {
+    const port = new WidgetTestPort('<input id="query" aria-label="Query">');
+
+    const outcome = await fillField(
+      port,
+      { field: 'Query', target: target(port, '#query', 'textbox', 'Query') },
+      { kind: 'text', text: '2026-09: ordinary text' },
+      budget(port),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      driver: 'plain-text',
+      committed: '2026-09: ordinary text',
+    });
+  });
+
   it.each([
     ['MM/DD/YYYY', '08/21/2026'],
     ['DD/MM/YYYY', '21/08/2026'],
@@ -174,6 +254,45 @@ describe('@no-llm unified fill engine routing', () => {
     );
 
     expect(outcome).toMatchObject({ ok: true, driver: 'listbox', committed: 'Cabin, Business' });
+  });
+
+  it('lets the option family receive one of its own offered labels', async () => {
+    const port = new WidgetTestPort(
+      '<button id="region" aria-label="Region" aria-controls="options" aria-expanded="true"></button>' +
+        '<div id="options" role="listbox">' +
+        '<button role="option">New York, NY</button>' +
+        '<button role="option">New York, USA</button></div>',
+    );
+    const trigger = port.document.querySelector<HTMLElement>('#region')!;
+    const popup = port.document.querySelector<HTMLElement>('#options')!;
+    popup.querySelectorAll('button').forEach((option) => {
+      option.addEventListener('click', () => {
+        trigger.setAttribute('aria-label', option.textContent ?? '');
+        trigger.setAttribute('aria-expanded', 'false');
+        popup.style.display = 'none';
+      });
+    });
+    const field = target(port, '#region', 'button', 'Region');
+
+    const ambiguous = await fillField(
+      port,
+      { field: 'Region', target: field },
+      { kind: 'option', value: 'New York' },
+      budget(port),
+    );
+    const received = await fillField(
+      port,
+      { field: 'Region', target: field },
+      { kind: 'option', value: 'New York, USA' },
+      budget(port),
+    );
+
+    expect(ambiguous).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_AMBIGUOUS_CHOICE',
+      details: { offered: ['New York, NY', 'New York, USA'] },
+    });
+    expect(received).toMatchObject({ ok: true, committed: 'New York, USA' });
   });
 });
 
@@ -300,9 +419,9 @@ describe('@no-llm widget driver selection and fallback', () => {
     );
 
     expect(outcome).toMatchObject({ ok: true, driver: 'calendar-grid' });
-    const attempted = (outcome.ok ? (outcome.attempted ?? []) : []) as {
-      readonly strategy: string;
-    }[];
+    // `strategy` keeps its key and its Wave 1 meaning; only the rungs that
+    // genuinely ran name a driver that was tried.
+    const attempted = performed(outcome.ok ? outcome.attempted : []);
     expect(attempted.map((record) => record.strategy)).toEqual([
       'driver:date-input',
       'driver:calendar-grid',
@@ -347,8 +466,14 @@ describe('@no-llm widget driver selection and fallback', () => {
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    const attempted = (outcome.details.attempted ?? []) as { readonly strategy: string }[];
-    expect(attempted.length).toBeLessThanOrEqual(1);
+    // One driver ran and answered definitively. Everything else in the ledger
+    // is a rung that was never entered, and each says why.
+    expect(performed(outcome.details.attempted).length).toBeLessThanOrEqual(1);
+    for (const skipped of verdicts(outcome.details.attempted).filter(
+      (record) => record.verdict === 'skipped',
+    )) {
+      expect(typeof skipped.unmet).toBe('string');
+    }
   });
 });
 
@@ -467,7 +592,12 @@ describe('@no-llm fill disclosure contract', () => {
       details: { observed: 'xyz' },
     });
     if (outcome.ok) return;
-    expect((outcome.details.attempted as unknown[]).length).toBe(3);
+    // The three typing mechanisms, named rather than merely counted.
+    expect(performed(outcome.details.attempted).map((record) => record.strategy)).toEqual([
+      'overtype',
+      'clear-then-type',
+      'native-setter',
+    ]);
   });
 
   it('carries observed state and the attempt ledger on a failure', async () => {
@@ -605,6 +735,50 @@ describe('@no-llm reactive suggestion handling', () => {
       committed: 'New York, USA',
       resolution: 'selected_from_offered',
     });
+  });
+
+  it('lets the plain-text family receive one of its own offered labels', async () => {
+    const port = new WidgetTestPort(
+      '<input id="airport" aria-label="Going to">' +
+        '<div id="suggestions" role="listbox" style="display:none">' +
+        '<button role="option">New York, NY</button>' +
+        '<button role="option">New York, USA</button></div>',
+    );
+    const input = port.document.querySelector<HTMLInputElement>('#airport')!;
+    const popup = port.document.querySelector<HTMLElement>('#suggestions')!;
+    input.addEventListener('input', () => {
+      popup.style.display = 'block';
+    });
+    popup.querySelectorAll('button').forEach((option) => {
+      option.addEventListener('click', () => {
+        input.value = option.textContent ?? '';
+        popup.style.display = 'none';
+      });
+    });
+    port.document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') popup.style.display = 'none';
+    });
+    const field = target(port, '#airport', 'textbox', 'Going to');
+
+    const ambiguous = await fillField(
+      port,
+      { field: 'Going to', target: field },
+      { kind: 'text', text: 'New York' },
+      budget(port),
+    );
+    const received = await fillField(
+      port,
+      { field: 'Going to', target: field },
+      { kind: 'text', text: 'New York, USA' },
+      budget(port),
+    );
+
+    expect(ambiguous).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_AMBIGUOUS_CHOICE',
+      details: { offered: ['New York, NY', 'New York, USA'] },
+    });
+    expect(received).toMatchObject({ ok: true, committed: 'New York, USA' });
   });
 
   it('keeps typed text that the page lets stand when nothing matches', async () => {
@@ -1027,6 +1201,210 @@ function suggestionPort(options: readonly string[], commitsAs?: string): WidgetT
   });
   return port;
 }
+
+describe('@no-llm one run state per fill call', () => {
+  it('charges the whole call — dismissal and settle included — into one counter', async () => {
+    // The seam assertion. The gauntlet's counting port is the authority on what
+    // actually reached the page; the run state is what the engine reports it
+    // spent. Five independent counters is how those two came apart.
+    const port = suggestionPort(['Dallas Fort Worth International Airport (DFW)'], 'Dallas');
+    const field = target(port, '#airport', 'textbox', 'Where from?');
+    const counted = countingPort(port);
+    const run = createRunState(
+      { deadlineMs: port.now() + 10_000, maxActions: 32, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+    const outcome = await fillField(
+      counted.port,
+      { field: 'Where from?', target: field },
+      { kind: 'text', text: 'DFW' },
+      {
+        deadlineMs: port.now() + 10_000,
+        maxActions: 32,
+        maxPagingSteps: 12,
+        maxScrollSteps: 8,
+        run,
+      },
+    );
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(run.chargedActions).toBe(counted.counts.mutations);
+    expect(run.chargedReads).toBe(counted.counts.reads);
+    expect(outcome.ok && outcome.actions).toBe(counted.counts.mutations);
+  });
+
+  it('takes its re-acquisition allowance from the run, not from a private counter', async () => {
+    // Four per call, not four per port wrapper. The engine held its own
+    // hardcoded allowance beside the runner's, so a fill could heal past the
+    // cap the call was actually given and still report itself inside it.
+    const replacedNode = (): { readonly port: WidgetPort; readonly field: WidgetTarget } => {
+      const source = new WidgetTestPort('<input id="a" aria-label="Where from?" />');
+      let replacedOnce = false;
+      const port = new Proxy(source, {
+        get(subject, key, receiver) {
+          const method = Reflect.get(subject, key, receiver) as unknown;
+          if (key !== 'fill') return method;
+          return async (ref: string, value: string) => {
+            if (!replacedOnce) {
+              replacedOnce = true;
+              throw Object.assign(new Error('replaced'), { code: 'STALE_ELEMENT_REF' });
+            }
+            return (method as (ref: string, value: string) => Promise<void>).call(
+              subject,
+              ref,
+              value,
+            );
+          };
+        },
+      }) as unknown as WidgetPort;
+      return { port, field: target(source, '#a', 'textbox', 'Where from?') };
+    };
+
+    const allowed = replacedNode();
+    const generous = createRunState(
+      { deadlineMs: allowed.port.now() + 10_000, maxActions: 32, maxReacquisitions: 4 },
+      allowed.port.now(),
+    );
+    const healedOutcome = await fillField(
+      allowed.port,
+      { field: 'Where from?', target: allowed.field },
+      { kind: 'text', text: 'DFW' },
+      {
+        deadlineMs: allowed.port.now() + 10_000,
+        maxActions: 32,
+        maxPagingSteps: 12,
+        maxScrollSteps: 8,
+        run: generous,
+      },
+    );
+
+    expect(healedOutcome).toMatchObject({ ok: true, committed: 'DFW' });
+    expect(generous.reacquisitions).toBe(1);
+
+    // The same page, the same replacement, a run with no allowance left: the
+    // stale ref escapes instead of being healed by a counter of the engine's
+    // own. A private `maxReacquisitions: 4` here would still have healed it.
+    const refused = replacedNode();
+    const exhausted = createRunState(
+      { deadlineMs: refused.port.now() + 10_000, maxActions: 32, maxReacquisitions: 0 },
+      refused.port.now(),
+    );
+    const rethrown = await fillField(
+      refused.port,
+      { field: 'Where from?', target: refused.field },
+      { kind: 'text', text: 'DFW' },
+      {
+        deadlineMs: refused.port.now() + 10_000,
+        maxActions: 32,
+        maxPagingSteps: 12,
+        maxScrollSteps: 8,
+        run: exhausted,
+      },
+    );
+
+    expect(rethrown).toMatchObject({ ok: false, errorCode: 'WIDGET_ELEMENT_REPLACED' });
+    expect(exhausted.reacquisitions).toBe(0);
+  });
+});
+
+describe('@no-llm every budget boundary activation moves', () => {
+  const runBudget = (port: WidgetTestPort, maxActions: number, run: unknown) => ({
+    deadlineMs: port.now() + 10_000,
+    maxActions,
+    maxPagingSteps: 12,
+    maxScrollSteps: 8,
+    run: run as ReturnType<typeof createRunState>,
+  });
+
+  it('(i) applies one action ceiling across the plan and every sub-plan', async () => {
+    // Before activation a combobox fill held up to `4 x 32` across its nesting
+    // levels: the field plan, the driver plan, the combobox plan and the typing
+    // plan each opened a fresh allowance of 32.
+    const port = suggestionPort(['Dallas Fort Worth International Airport (DFW)'], 'Dallas');
+    const field = target(port, '#airport', 'textbox', 'Where from?');
+    const run = createRunState(
+      { deadlineMs: port.now() + 10_000, maxActions: 32, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+    await fillField(
+      port,
+      { field: 'Where from?', target: field },
+      { kind: 'text', text: 'DFW' },
+      runBudget(port, 32, run),
+    );
+
+    expect(run.maxActions).toBe(32);
+    expect(run.chargedActions).toBeLessThanOrEqual(32);
+    // Every nesting level reports its remainder against the one ceiling, and
+    // that remainder only ever decreases.
+    const remaining = run.verdicts.flatMap((verdict) =>
+      verdict.kind === 'skipped' ? [] : [verdict.remainingActions],
+    );
+    expect(remaining.every((value) => value <= 32)).toBe(true);
+    expect(remaining).toEqual([...remaining].sort((left, right) => right - left));
+  });
+
+  it('(iii) skips a nested rung whose declared cost exceeds the shared remainder', async () => {
+    // A private allowance made this unreachable below the top level: every
+    // nested plan started full, so a nested rung was started and truncated
+    // rather than refused with the condition it could not meet. The typing
+    // ladder is two levels down — the field's text plan, then the typing plan.
+    const port = new WidgetTestPort('<input id="airport" aria-label="Airport">');
+    const input = port.document.querySelector<HTMLInputElement>('#airport')!;
+    input.addEventListener('input', () => {
+      input.value = 'xyz';
+    });
+    const field = target(port, '#airport', 'textbox', 'Airport');
+    // Three mutations: `overtype` takes one, `clear-then-type` takes two, and
+    // `native-setter` declares three it can no longer be given.
+    const run = createRunState(
+      { deadlineMs: port.now() + 10_000, maxActions: 3, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+    await fillField(
+      port,
+      { field: 'Airport', target: field },
+      { kind: 'text', text: 'DFW' },
+      runBudget(port, 3, run),
+    );
+
+    const refused = run.verdicts.filter(
+      (verdict) => verdict.kind === 'skipped' && verdict.unmet === 'insufficient-remaining-budget',
+    );
+    expect(refused.map((verdict) => verdict.rungId)).toContain('native-setter');
+    // The refusal names the condition it could not meet, not a generic budget
+    // sentence, and spends nothing saying so.
+    for (const verdict of refused) {
+      expect(verdict).toMatchObject({ kind: 'skipped', unmet: 'insufficient-remaining-budget' });
+      expect(verdict).not.toHaveProperty('errorCode');
+      expect(verdict).not.toHaveProperty('chargedActions');
+    }
+  });
+
+  it('(iv) reports the run\u2019s charged mutations as the fill\u2019s action count', async () => {
+    const port = suggestionPort(['Dallas Fort Worth International Airport (DFW)'], 'Dallas');
+    const field = target(port, '#airport', 'textbox', 'Where from?');
+    const counted = countingPort(port);
+    const run = createRunState(
+      { deadlineMs: port.now() + 10_000, maxActions: 32, maxReacquisitions: 4 },
+      port.now(),
+    );
+
+    const outcome = await fillField(
+      counted.port,
+      { field: 'Where from?', target: field },
+      { kind: 'text', text: 'DFW' },
+      runBudget(port, 32, run),
+    );
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(outcome.ok && outcome.actions).toBe(run.chargedActions);
+    expect(outcome.ok && outcome.actions).toBe(counted.counts.mutations);
+  });
+});
 
 describe('@no-llm secret fills are excluded from editee resolution', () => {
   it('takes no observation and reads nothing back when committing a secret', async () => {

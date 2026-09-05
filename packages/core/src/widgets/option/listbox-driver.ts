@@ -1,9 +1,14 @@
-import type { AttemptRecord } from '../../interaction/types.js';
+import {
+  rankAgainstRequested,
+  substitutionEvidence,
+  type ChoiceSubstitution,
+  type VerdictEvidence,
+} from '../../interaction/index.js';
 import { openIfClosed, resolveContainer } from '../open-state.js';
 import { widgetFailure, type WidgetDriver, type WidgetOutcome } from '../types.js';
 import { matchesCommitment, matchesIntent, readCommitted } from '../verify.js';
 
-import { clickCandidate, collectCandidates, rankCandidate } from './candidates.js';
+import { clickCandidate, collectChoices } from './candidates.js';
 import { scanVirtualOptions } from './virtual-list.js';
 
 /** Driver for listbox, menu, and homogeneous clickable-choice popups. */
@@ -72,8 +77,9 @@ export const listboxDriver: WidgetDriver = {
         { reason: 'budget' },
       );
     }
-    const candidates = await collectCandidates(port, opened.container);
-    const ranked = rankCandidate(candidates, intent.value);
+    const choiceSet = await collectChoices(port, opened.container);
+    const candidates = choiceSet.choices;
+    const ranked = rankAgainstRequested(candidates, intent.value, opened.container.path);
     if (ranked.kind === 'ambiguous') {
       return widgetFailure(
         'WIDGET_AMBIGUOUS_CHOICE',
@@ -88,11 +94,12 @@ export const listboxDriver: WidgetDriver = {
     // taken only on the path that needs it, and the zero here is asserted by
     // counting the operation rather than by inspection.
     let chosen = ranked.kind === 'match' ? ranked.candidate : null;
+    let substitution: ChoiceSubstitution | undefined =
+      ranked.kind === 'match' ? ranked.substitution : undefined;
     let offeredEvidence = ranked.kind === 'none' ? ranked.offered : [];
     let scannedOffered: readonly string[] | null = null;
-    let scrollRecord: AttemptRecord | null = null;
+    let scrollEvidence: VerdictEvidence | null = null;
     if (!chosen) {
-      const startedAt = port.now();
       const scan = await scanVirtualOptions(port, opened.container, intent.value, budget, {
         actions,
         firstWindow: candidates,
@@ -100,16 +107,10 @@ export const listboxDriver: WidgetDriver = {
       actions += scan.cursor.scrolls;
       if (scan.cursor.scrolls > 0) {
         // Bounded count and a structural stop token only — no page text and no
-        // host discriminator can reach the ledger through this record.
-        scrollRecord = {
-          attempt: 1,
-          // The rung varies *what the widget has been given a chance to offer*.
-          // It changes neither the target node nor the typing mechanics.
-          strategy: 'scroll-container',
-          axis: 'what',
-          errorCode: scan.kind === 'match' ? null : 'WIDGET_TARGET_UNREACHABLE',
-          elapsedMs: port.now() - startedAt,
-          detail: `scrolled ${scan.cursor.scrolls}, stopped ${scan.cursor.stoppedBecause}`,
+        // host discriminator can reach the ledger through this evidence.
+        scrollEvidence = {
+          scroll_steps: scan.cursor.scrolls,
+          scroll_stop: scan.cursor.stoppedBecause,
         };
       }
       if (scan.kind === 'ambiguous') {
@@ -121,8 +122,10 @@ export const listboxDriver: WidgetDriver = {
         );
       }
       if (scan.cursor.scrolls > 0) scannedOffered = scan.cursor.offered;
-      if (scan.kind === 'match') chosen = scan.candidate;
-      else offeredEvidence = scan.cursor.offered;
+      if (scan.kind === 'match') {
+        chosen = scan.candidate;
+        substitution = scan.substitution;
+      } else offeredEvidence = scan.cursor.offered;
     }
 
     if (!chosen) {
@@ -131,9 +134,9 @@ export const listboxDriver: WidgetDriver = {
       // across every window that was mounted.
       return widgetFailure(
         'WIDGET_TARGET_UNREACHABLE',
-        'value-not-offered',
+        choiceSet.semantics === 'declared' ? 'value-not-offered' : 'no-options-offered',
         `The widget does not offer a choice matching "${intent.value}".`,
-        { offered: offeredEvidence },
+        choiceSet.semantics === 'declared' ? { offered: offeredEvidence } : {},
       );
     }
     // What the widget offered, across every window that was actually mounted.
@@ -159,6 +162,10 @@ export const listboxDriver: WidgetDriver = {
         { committed, observed: committed, offered, chosen: chosen.name },
       );
     }
+    const evidence: VerdictEvidence = {
+      ...(scrollEvidence ?? {}),
+      ...(substitution ? substitutionEvidence(substitution) : {}),
+    };
     return {
       ok: true,
       driver: 'listbox',
@@ -167,7 +174,8 @@ export const listboxDriver: WidgetDriver = {
       container: opened.container,
       chosen: chosen.name,
       offered,
-      ...(scrollRecord ? { attempted: [scrollRecord] } : {}),
+      ...(substitution ? { substitution } : {}),
+      ...(Object.keys(evidence).length > 0 ? { evidence } : {}),
     };
   },
 };

@@ -1,10 +1,18 @@
-import type { InteractionFailureCause } from '../../interaction/index.js';
+import {
+  resolveIndistinguishableChoice,
+  substitutionEvidence,
+  normalizeText,
+  type ChoiceSubstitution,
+  type InteractionFailureCause,
+} from '../../interaction/index.js';
 import { isOpen, openIfClosed, resolveContainer, type WidgetContainer } from '../open-state.js';
 import { clickCandidate } from '../option/candidates.js';
 import {
   widgetFailure,
   type WidgetDriver,
   type WidgetFailure,
+  type WidgetBudget,
+  type WidgetOutcome,
   type WidgetPort,
   type WidgetTarget,
 } from '../types.js';
@@ -13,10 +21,127 @@ import { matchesIntent, readCommitted } from '../verify.js';
 import { readCalendarGrid, type CalendarGridRead } from './calendar-grid.js';
 import { resolveDatePair } from './date-pair.js';
 
+/** True only for the stable month-prefixed labels emitted by this driver. */
+export function isOfferedCalendarLabel(value: string): boolean {
+  return /^\d{4}-\d{2}:\s/.test(value);
+}
+
+/**
+ * Re-select a calendar cell from one of this driver's previously offered labels.
+ *
+ * The label is intentionally treated as an opaque receiver token. It is matched
+ * only against the live calendar's own month/name projection and is never
+ * parsed back into a date.
+ */
+export async function selectByOfferedCalendarLabel(
+  port: WidgetPort,
+  target: WidgetTarget,
+  label: string,
+  budget: WidgetBudget,
+): Promise<WidgetOutcome> {
+  const opened = await openIfClosed(port, target);
+  if (!opened.ok) return opened;
+  const actions = opened.wasOpen ? 0 : 1;
+  const container =
+    (await resolveContainer(port, target, { allowUnlinked: true })) ?? opened.container;
+  const grid = await readWithFallback(port, container);
+  const projected = (cell: CalendarGridRead['cells'][number]): string =>
+    `${cell.monthLabel}: ${cell.name}`;
+  const wanted = normalizeText(label);
+  const matches = grid.cells.filter((cell) => normalizeText(projected(cell)) === wanted);
+
+  if (matches.length === 0) {
+    return calendarFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      'date-not-reachable',
+      'The previously offered label is no longer on the calendar.',
+      grid,
+      { reason: 'offered_label_missing' },
+    );
+  }
+  if (port.now() > budget.deadlineMs || actions >= budget.maxActions) {
+    return calendarFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      'budget',
+      'The calendar action budget was exhausted.',
+      grid,
+      { reason: 'budget' },
+    );
+  }
+
+  const resolution = resolveIndistinguishableChoice(matches, {
+    label: projected,
+    containerPath: container.path,
+  });
+  if (resolution.kind === 'ambiguous') {
+    return calendarFailure(
+      'WIDGET_AMBIGUOUS_CHOICE',
+      'several-matched-equally',
+      `The calendar still exposes ${resolution.survivors.length} distinct choices for the offered label.`,
+      grid,
+      { offered: resolution.survivors.slice(0, 10).map(projected) },
+    );
+  }
+  if (resolution.kind === 'none') {
+    return calendarFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      'date-not-reachable',
+      'The previously offered label is no longer on the calendar.',
+      grid,
+      { reason: 'offered_label_missing' },
+    );
+  }
+
+  const choice = resolution.choice;
+  if (choice.disabled) {
+    return calendarFailure(
+      'WIDGET_TARGET_UNREACHABLE',
+      'date-not-reachable',
+      'The previously offered calendar choice is disabled.',
+      grid,
+      { reason: 'disabled', date: choice.derivedDate },
+    );
+  }
+  await clickCandidate(port, {
+    name: choice.name,
+    role: 'button',
+    disabled: choice.disabled,
+    path: choice.path,
+    group: choice.group,
+  });
+  const committed = await readCommitted(port, target);
+  if (!matchesIntent(committed, { kind: 'date', date: choice.derivedDate })) {
+    return calendarFailure(
+      'WIDGET_NOT_COMMITTED',
+      'value-rejected-on-release',
+      `The calendar choice landed, but "${target.name}" does not reflect the offered date.`,
+      grid,
+      { committed },
+    );
+  }
+
+  return {
+    ok: true,
+    driver: 'calendar-grid',
+    committed,
+    chosen: committed,
+    offered: [label],
+    actions: actions + 1,
+    container,
+    ...(resolution.kind === 'substituted'
+      ? {
+          substitution: resolution.substitution,
+          evidence: substitutionEvidence(resolution.substitution),
+        }
+      : {}),
+  };
+}
+
 interface ClickDateSuccess {
   readonly ok: true;
   readonly actions: number;
   readonly read: CalendarGridRead;
+  readonly substitution?: ChoiceSubstitution;
 }
 
 type ClickDateResult = ClickDateSuccess | (WidgetFailure & { readonly read: CalendarGridRead });
@@ -99,6 +224,7 @@ export const calendarDriver: WidgetDriver = {
     let lastRead = emptyRead();
     const displayed = new Set<string>();
     const dates = intent.kind === 'date' ? [intent.date] : [intent.from, intent.to];
+    let substitution: ChoiceSubstitution | undefined;
 
     let resetTried = false;
     for (const [index, date] of dates.entries()) {
@@ -141,11 +267,19 @@ export const calendarDriver: WidgetDriver = {
       lastRead = clicked.read;
       if (!clicked.ok) return clicked;
       actions = clicked.actions;
+      if (clicked.substitution) substitution = clicked.substitution;
     }
 
     const committed = await readCommitted(port, target);
     if (matchesIntent(committed, intent)) {
-      return { ok: true, driver: 'calendar-grid', committed, actions, container };
+      return {
+        ok: true,
+        driver: 'calendar-grid',
+        committed,
+        actions,
+        container,
+        ...(substitution ? { substitution, evidence: substitutionEvidence(substitution) } : {}),
+      };
     }
     // An open picker has not finished reporting. Some commit only when released,
     // and some spread a range over a check-in/check-out pair whose second copy
@@ -154,7 +288,14 @@ export const calendarDriver: WidgetDriver = {
     // engine, which releases the widget first and fails there if it never lands.
     const open = await resolveContainer(port, target, { allowUnlinked: true });
     if (open && (await isOpen(port, target, open))) {
-      return { ok: true, driver: 'calendar-grid', committed, actions, container: open };
+      return {
+        ok: true,
+        driver: 'calendar-grid',
+        committed,
+        actions,
+        container: open,
+        ...(substitution ? { substitution, evidence: substitutionEvidence(substitution) } : {}),
+      };
     }
     // A picker that spreads the range over two controls holds half of it in
     // each, so this control cannot show the range whatever it does — reading it
@@ -162,7 +303,14 @@ export const calendarDriver: WidgetDriver = {
     // engine reads both ends after release and is the only place that can
     // decide; the driver's job here is to not decide it wrongly first.
     if (intent.kind === 'date_range' && (await resolveDatePair(port, target))) {
-      return { ok: true, driver: 'calendar-grid', committed, actions, container };
+      return {
+        ok: true,
+        driver: 'calendar-grid',
+        committed,
+        actions,
+        container,
+        ...(substitution ? { substitution, evidence: substitutionEvidence(substitution) } : {}),
+      };
     }
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
@@ -242,21 +390,29 @@ async function findAndClickDate(
     }
 
     const matches = grid.cells.filter((cell) => cell.derivedDate === date);
-    if (matches.length > 1) {
+    const choiceResolution = resolveIndistinguishableChoice(matches, {
+      label: (cell) => `${cell.monthLabel}: ${cell.name}`,
+      containerPath: container.path,
+    });
+    if (choiceResolution.kind === 'ambiguous') {
       return withRead(
         calendarFailure(
           'WIDGET_AMBIGUOUS_CHOICE',
           'several-matched-equally',
           `The calendar exposes ${matches.length} cells for ${date}.`,
           grid,
-          { offered: matches.slice(0, 10).map((cell) => `${cell.monthLabel}: ${cell.name}`) },
+          {
+            offered: choiceResolution.survivors
+              .slice(0, 10)
+              .map((cell) => `${cell.monthLabel}: ${cell.name}`),
+          },
           displayed,
         ),
         grid,
       );
     }
-    if (matches.length === 1) {
-      const match = matches[0]!;
+    if (choiceResolution.kind === 'unique' || choiceResolution.kind === 'substituted') {
+      const match = choiceResolution.choice;
       if (match.disabled) {
         return withRead(
           calendarFailure(
@@ -277,7 +433,15 @@ async function findAndClickDate(
         path: match.path,
         group: match.group,
       });
-      return { ok: true, actions: actions + 1, read: grid };
+      if (choiceResolution.kind === 'unique') {
+        return { ok: true, actions: actions + 1, read: grid };
+      }
+      return {
+        ok: true,
+        actions: actions + 1,
+        read: grid,
+        substitution: choiceResolution.substitution,
+      };
     }
 
     if (pagingSteps >= budget.maxPagingSteps) {

@@ -11,3 +11,5 @@ export * from './typing-plan.js';
 export * from './resolution.js';
 export * from './messages.js';
 export * from './protected-actions.js';
+export * from './choice.js';
+export * from './capabilities.js';

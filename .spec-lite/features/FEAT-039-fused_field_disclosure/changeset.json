@@ -1,0 +1,165 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-04T14:19:07.992Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-04T14:22:00.877Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-04T17:38:57.710Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-04T17:43:23.618Z",
+      "head": "d98c985174ee8eb144088e3a3c4e056a9255493e"
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-039-fused_field_disclosure/changeset.json",
+    ".spec-lite/features/FEAT-039-fused_field_disclosure/spec.md"
+  ],
+  "baseline": {
+    "sha": "d98c985174ee8eb144088e3a3c4e056a9255493e",
+    "capturedAt": "2026-09-04T14:14:32.864Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/feature-summary.md",
+      "README.md",
+      "docs/architecture.md",
+      "docs/features/agentic-tasks.md",
+      "docs/features/widget-gauntlet-harness.md",
+      "docs/usage.md",
+      "e2e/widget-gauntlet.spec.ts",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "packages/core/src/browser/agent-controller.ts",
+      "packages/core/src/fill/engine.ts",
+      "packages/core/src/fill/intent.ts",
+      "packages/core/src/fill/types.ts",
+      "packages/core/src/interaction/index.ts",
+      "packages/core/src/interaction/messages.ts",
+      "packages/core/src/interaction/query-plan.ts",
+      "packages/core/src/interaction/types.ts",
+      "packages/core/src/widgets/combobox/combobox-driver.ts",
+      "packages/core/src/widgets/date/calendar-driver.ts",
+      "packages/core/src/widgets/option/candidates.ts",
+      "packages/core/src/widgets/option/listbox-driver.ts",
+      "packages/core/src/widgets/option/virtual-list.ts",
+      "packages/core/src/widgets/types.ts",
+      "packages/core/tests/boundary-rules.spec.ts",
+      "packages/core/tests/fill/failure-causes.spec.ts",
+      "packages/core/tests/fill/fill-engine.spec.ts",
+      "packages/core/tests/interaction/message-catalog.spec.ts",
+      "packages/core/tests/interaction/query-plan.spec.ts",
+      "packages/core/tests/interaction/recovery-characterization.spec.ts",
+      "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "packages/core/tests/support/gauntlet.ts",
+      "packages/core/tests/widgets/calendar-driver.spec.ts",
+      "packages/core/tests/widgets/option-drivers.spec.ts",
+      "packages/core/tests/widgets/virtual-list.spec.ts",
+      ".spec-lite/features/FEAT-038-choice_integrity/changeset.json",
+      ".spec-lite/features/FEAT-038-choice_integrity/spec.md",
+      ".spec-lite/features/FEAT-039-fused_field_disclosure/spec.md",
+      ".spec-lite/features/FEAT-040-accounting_activation/spec.md",
+      ".spec-lite/plan_interaction_wave2_gaps.md",
+      "packages/core/src/interaction/capabilities.ts",
+      "packages/core/src/interaction/choice.ts",
+      "packages/core/tests/fixtures/widgets/chrome-in-overlay.html",
+      "packages/core/tests/fixtures/widgets/indistinguishable-choices.html",
+      "packages/core/tests/fixtures/widgets/offered-label-roundtrip-date.html",
+      "packages/core/tests/interaction/capability-receivers.spec.ts",
+      "packages/core/tests/interaction/choice.spec.ts"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/feature-summary.md": "3bea1afdf538c629d6758ca4b760d17a16e5d832",
+      "README.md": "de935586307fb250e06cae1c465ff568fcd12cb5",
+      "docs/architecture.md": "a580fe400594113bb14850a3119a4df87417db2d",
+      "docs/features/agentic-tasks.md": "23f48995fa7cd5c7557dfe8e8dd4140e865f2908",
+      "docs/features/widget-gauntlet-harness.md": "4a04e0619bcb53b092f959facb605df01b14888e",
+      "docs/usage.md": "c7caa9e9defc437ecbbdbbc9093e1ecce5d6ff83",
+      "e2e/widget-gauntlet.spec.ts": "bacd2ca2de320e1477e8e037651127ceb8300cc8",
+      "packages/agent/src/adapters/pi/tools/browser-fill-element.ts": "6c83d82223be54cd6f91e443faaefdf0ebc912ef",
+      "packages/agent/src/adapters/pi/tools/browser-fill-form.ts": "d7619e253c404946ae4af423bbc972ce652e6426",
+      "packages/core/src/browser/agent-controller.ts": "04832363699dbd950820deba5adf92b2bd61ddbb",
+      "packages/core/src/fill/engine.ts": "5a0c178c70a11e2458d4e40361f61e7cf398886f",
+      "packages/core/src/fill/intent.ts": "381c841fb18c37fb378cba3d042c9af2212ae3ee",
+      "packages/core/src/fill/types.ts": "8265dc1943ea739343ca54d34e6cd805b1fe15cf",
+      "packages/core/src/interaction/index.ts": "d70e294e3cae5d90f156d911d47054ab99e48701",
+      "packages/core/src/interaction/messages.ts": "6eba91600074613f585180d4b3f7828875a2700d",
+      "packages/core/src/interaction/query-plan.ts": "18b12c303d2c54d47b005d1c43c638a388a48662",
+      "packages/core/src/interaction/types.ts": "ad9f49ee2c5f172e02d9572ce3b0f4997e15d56a",
+      "packages/core/src/widgets/combobox/combobox-driver.ts": "e5736d56425f941e9702ae89f8a3cbe15b5b9d3f",
+      "packages/core/src/widgets/date/calendar-driver.ts": "e15a2406f719dae75a365d84cf71dab94198f39e",
+      "packages/core/src/widgets/option/candidates.ts": "e6fd2e31f0dde78f65d347f1f738f6560e8c2abd",
+      "packages/core/src/widgets/option/listbox-driver.ts": "a9f1636216ea312046772047a538247d169c43fa",
+      "packages/core/src/widgets/option/virtual-list.ts": "edd999b9cfb907642fa0f52e70884b1c799c60f7",
+      "packages/core/src/widgets/types.ts": "59310af91adb37c8d8483e862fe19e7b8a41333d",
+      "packages/core/tests/boundary-rules.spec.ts": "df084cfc66dcb46b580caa9b0186cf34eb25d01e",
+      "packages/core/tests/fill/failure-causes.spec.ts": "b768808f66b0188e693f59c7640bcf07347f1ec5",
+      "packages/core/tests/fill/fill-engine.spec.ts": "08957a48b6de18e8afc026d775be2e18dca9d386",
+      "packages/core/tests/interaction/message-catalog.spec.ts": "3cea4e9c811668048103b8620eeab61139b69045",
+      "packages/core/tests/interaction/query-plan.spec.ts": "d007982770b2de870f34c3a59c073aa049c15b28",
+      "packages/core/tests/interaction/recovery-characterization.spec.ts": "a17771489c4c63fb022a041a17b026c34e239238",
+      "packages/core/tests/interaction/widget-regressions.spec.ts": "9065562d58a391dd0d483184c2332380bcac9c5a",
+      "packages/core/tests/support/gauntlet.ts": "c7cd4669eabc714f91a89d3963581e3b58396acd",
+      "packages/core/tests/widgets/calendar-driver.spec.ts": "d67bdea8308dac395fd9824f28e35c19af52817e",
+      "packages/core/tests/widgets/option-drivers.spec.ts": "a65a9a501fad6cc753285debf8f843e7cef6502f",
+      "packages/core/tests/widgets/virtual-list.spec.ts": "6c7375fbb4689dacaf81a1141813232973fa6395",
+      ".spec-lite/features/FEAT-038-choice_integrity/changeset.json": "8326a528d7d20e00e347c4292c29db9d54a1394a",
+      ".spec-lite/features/FEAT-038-choice_integrity/spec.md": "45cbb0aa794d9606a1e463ad8da6af20bc2ad022",
+      ".spec-lite/features/FEAT-039-fused_field_disclosure/spec.md": "d93970311a1d0d818ac0654cb982a6bf42f738c4",
+      ".spec-lite/features/FEAT-040-accounting_activation/spec.md": "91898589fd4a908122794229c4f7619a3fce4ec7",
+      ".spec-lite/plan_interaction_wave2_gaps.md": "1f8a7d7807f8fa62245109c753ca457eef7c7132",
+      "packages/core/src/interaction/capabilities.ts": "de361a0e638f1d7e3773c933e00c982631559572",
+      "packages/core/src/interaction/choice.ts": "1f8349204f9c6c92fd2ec51863bf6ed51838ac5d",
+      "packages/core/tests/fixtures/widgets/chrome-in-overlay.html": "a6da6a348c86721c062c721d9800b4df88364d2d",
+      "packages/core/tests/fixtures/widgets/indistinguishable-choices.html": "7a3881c2a010ae8a52942759d07a72d3b1fc1a0e",
+      "packages/core/tests/fixtures/widgets/offered-label-roundtrip-date.html": "bfd3c6ddc965569b4efc62627af3a1e819f3da01",
+      "packages/core/tests/interaction/capability-receivers.spec.ts": "0bdd53ca11e8be9f9e45638d306e963ec7ae9ab1",
+      "packages/core/tests/interaction/choice.spec.ts": "eb4b1dad23c28abdf4b5e64b200c7b35555e092a"
+    }
+  },
+  "featureId": "FEAT-039"
+}

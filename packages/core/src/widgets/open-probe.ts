@@ -15,11 +15,14 @@
  * and eleven model round-trips, doing what `calendarDriver` does in one call.
  *
  * So the click moves **out** of detection and into a separate stage the engine
- * owns explicitly, with its own entry condition, a single bounded attempt, a
- * mandatory drive-or-dismiss, and one ledger record. One probe per fill.
+ * owns explicitly, with its own entry condition, a single bounded attempt and a
+ * mandatory drive-or-dismiss. One probe per fill.
+ *
+ * It owns the open, the container wait and the dismiss; **driving** what it
+ * revealed belongs to the caller, which runs those candidates as a sub-plan on
+ * the shared run. That is what makes `driver:<kind>` arrive as a verdict in the
+ * one sequence instead of as a driver-local ledger spliced in afterwards.
  */
-
-import { ledgerOf, type AttemptLedger, type AttemptRecord } from '../interaction/index.js';
 
 import {
   isOpen,
@@ -44,18 +47,15 @@ import {
 export type ProbeOutcome =
   /** The entry condition did not hold; nothing was clicked. */
   | { readonly kind: 'skipped'; readonly reason: ProbeSkipReason }
-  /** A driver recognised the open state and drove it. */
+  /** A driver recognised the open state and the caller drove it. */
   | {
       readonly kind: 'driven';
       readonly outcome: WidgetOutcome;
-      readonly ledger: AttemptLedger;
+      /** The registry driver **kind** opening revealed. Never page text. */
+      readonly revealedDriver: string;
     }
   /** The probe opened something, or nothing, and no driver recognised it. */
-  | {
-      readonly kind: 'unrecognized';
-      readonly failure: WidgetFailure;
-      readonly ledger: AttemptLedger;
-    };
+  | { readonly kind: 'unrecognized'; readonly failure: WidgetFailure };
 
 /** Why a probe did not run. A fixed enum; it carries no page text. */
 export type ProbeSkipReason = 'budget' | 'semantics-disagree';
@@ -90,6 +90,18 @@ export interface OpenProbeOptions {
     container: WidgetContainer,
     family: WidgetFamily,
   ) => Promise<readonly DetectedWidgetDriver[]>;
+  /**
+   * Drive what opening revealed, as a sub-plan on the caller's run.
+   *
+   * The probe owns the open and the dismiss; it deliberately does not own the
+   * drive. Handing the revealed candidates back is what lets them run through
+   * the ordinary family plan, so each one appears as its own `driver:<kind>`
+   * verdict in the caller's single sequence.
+   */
+  readonly drive: (
+    candidates: readonly DetectedWidgetDriver[],
+    port: WidgetPort,
+  ) => Promise<WidgetOutcome>;
 }
 
 /**
@@ -179,7 +191,6 @@ export async function probeOpen(
     return { kind: 'skipped', reason: 'semantics-disagree' };
   }
 
-  const startedAt = port.now();
   await port.click(target.ref);
   const container = await waitForContainer(port, target, budget);
 
@@ -191,28 +202,14 @@ export async function probeOpen(
           ...(await options.detect(port, target, family)),
         ];
   if (candidates.length > 0) {
-    const chosen = candidates[0]!.driver;
-    const openedAt = port.now();
-    const driven = await chosen.drive(port, target, options.intent, budget);
-    // Two records, not one. The probe and the drive are separate facts, and a
-    // caller reading the ledger needs to see that the control had to be opened
-    // before anything could recognise it — that is the whole answer to "why did
-    // this fill take an extra action".
+    // The probe and the drive stay two separate facts, but they are now two
+    // verdicts on one sequence rather than two hand-built records: this rung
+    // discloses which driver opening revealed, and the drive runs as a sub-plan
+    // that appends its own.
     return {
       kind: 'driven',
-      outcome: driven,
-      ledger: ledgerOf([
-        record(startedAt, openedAt, null, { detail: `opened, revealing ${chosen.kind}` }),
-        {
-          attempt: 2,
-          strategy: `driver:${chosen.kind}`,
-          axis: 'how',
-          errorCode: driven.ok ? null : driven.errorCode,
-          elapsedMs: port.now() - openedAt,
-          ...(driven.ok ? {} : { detail: driven.message }),
-        },
-        ...(driven.ok ? (driven.attempted ?? []) : []),
-      ]),
+      outcome: await options.drive(candidates, port),
+      revealedDriver: candidates[0]!.driver.kind,
     };
   }
 
@@ -236,30 +233,6 @@ export async function probeOpen(
       },
       false,
     ),
-    ledger: ledgerOf([
-      record(startedAt, port.now(), 'WIDGET_TARGET_UNREACHABLE', {
-        detail: container === null ? 'nothing opened' : 'opened, nothing recognised it',
-      }),
-    ]),
-  };
-}
-
-/** The single ledger entry every probe leaves behind. */
-function record(
-  startedAt: number,
-  endedAt: number,
-  errorCode: string | null,
-  extra: { readonly detail: string },
-): AttemptRecord {
-  return {
-    attempt: 1,
-    strategy: 'open-probe',
-    // Opening a control to see what it is varies the mechanism, not the target
-    // and not the query.
-    axis: 'how',
-    errorCode,
-    elapsedMs: endedAt - startedAt,
-    detail: extra.detail,
   };
 }
 

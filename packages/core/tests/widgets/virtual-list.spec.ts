@@ -104,6 +104,17 @@ describe('@no-llm virtualized option scanning', () => {
     expect(scan.cursor.stoppedBecause).toBe('matched');
   });
 
+  it('resolves duplicate mounted rows once without scrolling or double-counting', async () => {
+    const port = virtualList({ rows: ['Region 1', 'Region 1', 'Region 2'] });
+    const scan = await scanVirtualOptions(port, container(port), 'Region 1', budget(port));
+
+    expect(scan).toMatchObject({
+      kind: 'match',
+      substitution: { indistinguishable: 2, position: 1, label: 'Region 1' },
+      cursor: { scrolls: 0, windows: 1, stoppedBecause: 'matched' },
+    });
+  });
+
   it('reaches a row several windows down and reports the exact scroll count', async () => {
     const port = virtualList({ rows: ROWS });
     const counted = countingPort(port);
@@ -217,10 +228,10 @@ describe('@no-llm virtualized option scanning', () => {
       expect(outcome.ok).toBe(true);
       if (!outcome.ok) return;
       expect(outcome.chosen).toBe('Region 6');
-      const record = outcome.attempted?.[0];
-      expect(record).toMatchObject({ strategy: 'scroll-container', axis: 'what', errorCode: null });
-      // Bounded count and a structural token only: no page text, no host.
-      expect(record?.detail).toBe('scrolled 3, stopped matched');
+      // Bounded count and a structural token only: no page text, no host. The
+      // driver discloses evidence; the runner owns the record it lands on.
+      expect(outcome.evidence).toEqual({ scroll_steps: 3, scroll_stop: 'matched' });
+      // The representation moved. The work did not.
       expect(counted.counts.byAction.scrollContainer).toBe(3);
     });
 

@@ -1,5 +1,7 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
-import type { AttemptRecord, InteractionFailureCause } from '../interaction/types.js';
+import type { ChoiceSubstitution } from '../interaction/choice.js';
+import type { InteractionFamily, SerializedVerdict } from '../interaction/escalation.js';
+import { normalizeText, type InteractionFailureCause } from '../interaction/types.js';
 import type { WidgetBudget, WidgetTarget } from '../widgets/types.js';
 
 /** Semantic value requested by a fill caller. */
@@ -72,6 +74,8 @@ export interface FillSuccess {
   readonly resolution?: FillResolution;
   /** What the widget was showing when it chose, capped at ten labels. */
   readonly offered?: readonly string[];
+  /** A structurally indistinguishable choice made on the caller's behalf. */
+  readonly substitution?: ChoiceSubstitution;
   /**
    * The control the drive re-targeted to, when the page routed the edit away.
    *
@@ -100,7 +104,7 @@ export interface FillSuccess {
    * three entry mechanisms or two drivers — and, on the failure side, avoid
    * repeating work that has already been exhausted.
    */
-  readonly attempted?: readonly AttemptRecord[];
+  readonly attempted?: readonly SerializedVerdict[];
 }
 
 /** Typed fill failure with model-actionable observed state. */
@@ -148,6 +152,8 @@ export interface FailureTemplate {
   readonly capability: string | null;
   /** Resolver used for the declared capability. */
   readonly capabilityKind: 'engine' | null;
+  /** Interaction families verified to emit this capability-bearing template. */
+  readonly emittedBy?: readonly InteractionFamily[];
 }
 
 type FailureTemplateDefinition = Omit<FailureTemplate, 'surface' | 'capabilityKind'>;
@@ -209,24 +215,34 @@ const FAILURE_TEMPLATE_DEFINITIONS = {
         'This control was opened and what appeared is not a widget any driver can operate. Re-observe and address the control that carries the value, or report the gap.',
       requiredDetails: [],
       capability: 'probeOpen',
+      emittedBy: ['date', 'option'],
     },
     'picker-did-not-open': {
       hint: () =>
         'Clicking this control revealed no container at all, so there is nothing to operate. Re-observe and address whichever control carries the value.',
       requiredDetails: ['containerResolved'],
       capability: 'probeOpen',
+      emittedBy: ['date', 'option'],
     },
     'value-not-offered': {
       hint: (details) =>
         `This widget accepts only what it offers: ${quoted(details, 'offered')}. Re-issue this call with one of those strings exactly as written.`,
       requiredDetails: ['offered'],
       capability: 'selectByOfferedLabel',
+      emittedBy: ['option'],
     },
     'no-suggestion-matched': {
       hint: (details) =>
         `Nothing offered matched, and the control discarded the typed text when the list closed, so it will not hold a free-text value. Re-issue with one of ${quoted(details, 'offered')} exactly as written.`,
       requiredDetails: ['offered'],
       capability: 'selectByOfferedLabel',
+      emittedBy: ['combobox', 'text'],
+    },
+    'no-options-offered': {
+      hint: () =>
+        'The container that opened exposes no selectable options, so there is nothing here to name back. Re-observe and address the control that carries the value, or report the gap.',
+      requiredDetails: [],
+      capability: null,
     },
     'date-not-reachable': {
       hint: (details) =>
@@ -253,6 +269,7 @@ const FAILURE_TEMPLATE_DEFINITIONS = {
         `Two or more offered choices match equally well, and choosing between them is yours to do: ${quoted(details, 'offered')}. Re-issue this call with one of those strings exactly as written.`,
       requiredDetails: ['offered'],
       capability: 'selectByOfferedLabel',
+      emittedBy: ['combobox', 'date', 'option', 'text'],
     },
   },
   WIDGET_MAPPING_UNSAFE: {
@@ -269,6 +286,7 @@ const FAILURE_TEMPLATE_DEFINITIONS = {
         `The page routed the typed value into ${quoted(details, 'editee')} instead, and it landed there. Address that control directly, or re-observe to see where the value now is.`,
       requiredDetails: ['editee'],
       capability: 'locateEditee',
+      emittedBy: ['text', 'combobox'],
     },
     'typing-exhausted': {
       hint: () =>
@@ -397,6 +415,22 @@ export class DanglingHintError extends Error {
   }
 }
 
+/** A choice list asked the model to distinguish labels that normalize identically. */
+export class IndistinguishableOfferedError extends Error {
+  public readonly code = 'FILL_OFFERED_INDISTINGUISHABLE';
+
+  public constructor(
+    public readonly errorCode: FillErrorCode,
+    public readonly failureCause: FillCause,
+    public readonly duplicatedLabel: string,
+  ) {
+    super(
+      `The ${errorCode}/${failureCause} failure offered the indistinguishable label "${duplicatedLabel}" more than once.`,
+    );
+    this.name = 'IndistinguishableOfferedError';
+  }
+}
+
 /** The template for one pair, or null when the code cannot produce that cause. */
 export function templateFor(errorCode: FillErrorCode, cause: FillCause): FailureTemplate | null {
   const forCode: Partial<Record<FillCause, FailureTemplate>> = FAILURE_TEMPLATES[errorCode];
@@ -432,6 +466,17 @@ export function hintFor(
   if (!template) throw new DanglingHintError(errorCode, cause, ['a template for this pair']);
   const missing = missingHintDetails(errorCode, cause, details);
   if (missing.length > 0) throw new DanglingHintError(errorCode, cause, missing);
+  if (template.requiredDetails.includes('offered') && Array.isArray(details.offered)) {
+    const seen = new Set<string>();
+    for (const member of details.offered) {
+      if (typeof member !== 'string') continue;
+      const normalized = normalizeText(member);
+      if (seen.has(normalized)) {
+        throw new IndistinguishableOfferedError(errorCode, cause, member);
+      }
+      seen.add(normalized);
+    }
+  }
   return template.hint(details);
 }
 

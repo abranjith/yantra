@@ -99,7 +99,13 @@ export function buildFieldFillPlan(input: FieldFillPlanInput): FieldFillPlanBuil
             failureCode(evidence.lastFailure) === 'WIDGET_ELEMENT_REPLACED'
               ? { enter: true, evidence: ['previous:WIDGET_ELEMENT_REPLACED'] }
               : { enter: false, unmet: 'field-was-not-replaced' },
-          costCap: { maxActions: Math.min(16, input.budget.maxActions) },
+          // Admission reserves one mutation, not sixteen. This rung exists to
+          // run *after* an expensive first fill, and both fills now spend one
+          // shared allowance — so declaring half the ceiling here would make the
+          // retry structurally unreachable in exactly the case it was built for.
+          // The real bound is the shared ceiling and the shared deadline, which
+          // the retried fill is admitted against rung by rung.
+          costCap: { maxActions: Math.min(1, input.budget.maxActions) },
           produces: ['re-resolved-field', 'fill-outcome'],
           run: async ({ port }) => {
             const fresh = await input.resolve(input.field, input.controller, input.target);

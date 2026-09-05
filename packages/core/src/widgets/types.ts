@@ -1,5 +1,7 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
-import type { AttemptRecord, InteractionFailureCause } from '../interaction/types.js';
+import type { ChoiceSubstitution } from '../interaction/choice.js';
+import type { MutableRunState, VerdictEvidence } from '../interaction/escalation.js';
+import type { InteractionFailureCause } from '../interaction/types.js';
 
 /**
  * Semantic family implemented by a widget driver.
@@ -167,6 +169,8 @@ export interface WidgetSuccess {
   readonly chosen?: string;
   /** What the widget showed at the moment of choosing, capped by the driver. */
   readonly offered?: readonly string[];
+  /** A structurally indistinguishable choice made and disclosed by the driver. */
+  readonly substitution?: ChoiceSubstitution;
   /**
    * The control the driver re-targeted to, when the page routed the edit away.
    *
@@ -177,14 +181,14 @@ export interface WidgetSuccess {
    */
   readonly editee?: WidgetTarget;
   /**
-   * The rungs this driver ran on its way to the result.
+   * What this driver discloses about **how** it resolved.
    *
-   * A driver that walks its own ladder — three query forms, a re-target to the
-   * real editee — has recovery to report, and a success that hides it leaves
-   * "which axis did this spend its time on" unanswerable from the run
-   * artifacts. The caller splices these in after its own record for the driver.
+   * A driver no longer owns a ledger. It reports counts and structural tokens —
+   * how many candidates were indistinguishable, how far a container was
+   * scrolled — and the runner records them on the rung that ran it, so there is
+   * one sequence and one place that decides what may be serialized.
    */
-  readonly attempted?: readonly AttemptRecord[];
+  readonly evidence?: VerdictEvidence;
   /**
    * True when the driver's own actions already released the widget's popup.
    *
@@ -249,6 +253,15 @@ export interface WidgetBudget {
    * here.
    */
   readonly maxScrollSteps: number;
+  /**
+   * The run this operation joins, when a caller already owns one.
+   *
+   * The budget is the only thing that already flows unchanged from `fillField`
+   * through `WidgetDriver.drive` and `commitText` into every plan builder, so
+   * the run rides here rather than widening a dozen signatures. Absent means
+   * "this call is the root and creates the state".
+   */
+  readonly run?: MutableRunState;
 }
 
 /** Pattern-based implementation of one stateful widget protocol. */

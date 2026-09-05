@@ -149,7 +149,15 @@ describe('@no-llm command task profiles', () => {
     expect(task).toMatch(/resolution/);
     expect(task).toMatch(/differs from what you sent is normal/i);
     expect(task).toMatch(/never re-fill a field to force your original wording/i);
-    expect(task).toMatch(/never repeat anything named in "attempted"/i);
+    // The three verdict kinds, and the distinction that makes the prohibition
+    // correct: a skipped rung was never run, so "do not repeat it" is wrong for
+    // it and right for the other two.
+    expect(task).toMatch(/"succeeded" and "failed" name steps the tool already performed/i);
+    expect(task).toMatch(/never repeat one of those/i);
+    expect(task).toMatch(/a "skipped" entry names a step the tool did NOT take/i);
+    expect(task).toMatch(/"unmet"/);
+    expect(task).toMatch(/information, not a prohibition/i);
+    // The offered re-issue instruction is unchanged, verbatim.
     expect(task).toMatch(/re-issue the same call with one of those strings exactly as written/i);
     expect(task).toMatch(/observed/);
   });
@@ -167,6 +175,10 @@ describe('@no-llm command task profiles', () => {
     expect(task).toMatch(/re-sending them undoes work/i);
     expect(task).toMatch(/blocked_by/);
     expect(task).toMatch(/resolve that field first/i);
+    expect(task).toMatch(/"covers"/);
+    expect(task).toMatch(/named in another entry's "covers" is already accounted for/i);
+    expect(task).toMatch(/do not re-send it as if it were missing/i);
+    expect(task).toMatch(/covering entry fails, resolve all of its fields together/i);
   });
 
   it('explains an editee as a landed value rather than an empty field', () => {

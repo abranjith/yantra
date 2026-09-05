@@ -6,7 +6,7 @@ Yantra is intentionally focused on browser and web tasks. It is not a general de
 
 ## Current status
 
-This repository is a private, unpublished `0.0.0` pnpm workspace. There is no verified npm, Homebrew, Scoop, or standalone-binary distribution, and the source checkout does not link a global `yantra` executable. Run the built CLI through `node apps/cli/dist/bin.js`.
+This repository is a private, unpublished `0.0.1` pnpm workspace. There is no verified npm, Homebrew, Scoop, or standalone-binary distribution, and the source checkout does not link a global `yantra` executable. Run the built CLI through `node apps/cli/dist/bin.js`.
 
 ## Repository workspaces
 

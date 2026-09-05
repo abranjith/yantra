@@ -12,27 +12,30 @@ change any stable interaction error code.
 
 ## What It Does
 
-### Runs a 13-fixture protocol gauntlet
+### Runs a 16-fixture protocol gauntlet
 
-The fast tier runs 13 generic HTML fixtures through the production `fillField`
+The fast tier runs 16 generic HTML fixtures through the production `fillField`
 engine with a JSDOM-backed `WidgetPort`. Each registry entry becomes its own
 named test case and declares its semantic result and exact operation counts.
 
-| Generic pattern                              | Verified result                                                                            | Mutations | Reads |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------ | --------: | ----: |
-| Input drops its initial keystroke            | Commits `DFW`                                                                              |         3 |    34 |
-| Typeahead maps a code to a display label     | Commits `Dallas` as a single offered match                                                 |         2 |    17 |
-| Picker mounts a duplicate trigger            | Commits `San Jose, CA, United States`                                                      |         2 |    17 |
-| Read-only date trigger opens a distant month | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    32 |
-| Suggestions arrive after typing settles      | Commits `Reykjavik, Iceland`                                                               |         2 |    31 |
-| Two suggestions match equally                | Refuses ambiguously, then the required follow-up commits                                   |         4 |    29 |
-| Trigger routes typing to a detached overlay  | Commits the airport label and reports the actual editee                                    |         3 |    22 |
-| Suggestions accept only a query prefix       | Commits the selected offered value                                                         |         4 |    75 |
-| Calendar appears only after an open probe    | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    40 |
-| Input rewrites text into a display mask      | Commits `(555) 123-4567` as reformatted                                                    |         1 |    33 |
-| One date range is split across two inputs    | Refuses the incomplete half without changing either input, then the follow-up commits both |         4 |    40 |
-| Two range triggers share one calendar        | Commits both dates after opening the range once                                            |         4 |    39 |
-| Listbox mounts only its in-viewport rows     | Commits `Region 6` through the listbox driver                                              |         4 |    18 |
+| Generic pattern                                                              | Verified result                                                                            | Mutations | Reads |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------: | ----: |
+| Input drops its initial keystroke                                            | Commits `DFW`                                                                              |         3 |    34 |
+| Typeahead maps a code to a display label                                     | Commits `Dallas` as a single offered match                                                 |         2 |    17 |
+| Picker mounts a duplicate trigger                                            | Commits `San Jose, CA, United States`                                                      |         2 |    17 |
+| Read-only date trigger opens a distant month                                 | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    32 |
+| Suggestions arrive after typing settles                                      | Commits `Reykjavik, Iceland`                                                               |         2 |    31 |
+| Two suggestions match equally                                                | Refuses ambiguously, then the required follow-up commits                                   |         4 |    29 |
+| Trigger routes typing to a detached overlay                                  | Commits the airport label and reports the actual editee                                    |         3 |    22 |
+| Suggestions accept only a query prefix                                       | Commits the selected offered value                                                         |         4 |    75 |
+| Calendar appears only after an open probe                                    | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    40 |
+| Input rewrites text into a display mask                                      | Commits `(555) 123-4567` as reformatted                                                    |         1 |    33 |
+| One date range is split across two inputs                                    | Refuses the incomplete half without changing either input, then the follow-up commits both |         4 |    40 |
+| Two range triggers share one calendar                                        | Commits both dates after opening the range once                                            |         4 |    39 |
+| Listbox mounts only its in-viewport rows                                     | Commits `Region 6` through the listbox driver                                              |         4 |    18 |
+| a calendar with model-identical choices that remain structurally ordered     | Commits `Sep 6, 2026` by stable document order and discloses the structural substitution   |         1 |    16 |
+| an option container that mixes genuine choices with paging and mode chrome   | Commits `Economy` while excluding paging, mode-switching, and protected-action controls    |         1 |    12 |
+| a calendar ambiguity whose offered label routes back to its originating cell | Refuses with distinct offered labels, then the required follow-up commits `Sep 6, 2026`    |         1 |    18 |
 
 For an engineered refusal, the totals include both the refusal and its mandatory
 follow-up. A refusal is accepted only when its `(code, cause)` has a catalog
@@ -54,6 +57,47 @@ Every call also appears in a per-method `byAction` breakdown. Adding a
 `WidgetPort` method without classifying it fails type checking, while an extra
 recovery action or diagnostic read changes a fixture's pinned total and fails
 its test.
+
+### Owns the accounting the engine reports
+
+The counting port is the single authority on what actually reached the page.
+The fill engine keeps its own tally on the run state it creates per call, and a
+seam assertion pins the two together: for a whole `fillField` call — dismissal
+and settle work included — the run state's `chargedActions` equals the counting
+port's `counts.mutations` and its `chargedReads` equals `counts.reads`. The
+committed outcome's reported `actions` total is checked against the same
+number. The assertion lives in
+`packages/core/tests/fill/fill-engine.spec.ts`, under `one run state per fill
+call`.
+
+Because the port is the authority, an attribution change inside the engine —
+which rung or sub-plan a charge is booked against, and how the ledger reports
+it — must leave every fixture's `expectedMutations` and `expectedReads`
+unchanged. The pinned per-fixture totals above are exactly that proof.
+
+### Answers every engineered refusal within four seconds
+
+Each engineered-refusal fixture is also run under a mocked system clock
+(`vi.useFakeTimers()` with `vi.runAllTimersAsync()`), and the elapsed injected
+time for every one of them must be at most four seconds. The measurement is the
+sum of the waits the engine actually chose to take, never wall time, so the
+gate is deterministic on the macOS, Windows, and Ubuntu no-LLM matrix instead
+of sensitive to machine load.
+
+### Resolves every fixture path from the module URL
+
+Fixture and artifact paths across the test tree are derived from
+`dirname(fileURLToPath(import.meta.url))`, never from the process working
+directory, and `packages/core/tests/boundary-rules.spec.ts` carries a rule that
+enforces it: any file under `packages/*/tests/**` that reintroduces a
+`process.cwd()`-derived path fails the boundary suite.
+
+The rule exists because the two ways of running a subset disagree about the
+working directory. `cd packages/core && npx vitest run <path>` leaves the
+package as the working directory, while `npx vitest run --root packages/core
+<path>` leaves it at the repository root. A cwd-derived fixture path therefore
+fails from the repository root with a misleading `ENOENT` that reads like a
+real regression rather than a path bug.
 
 ### Exercises the wrapped tool in real Chrome
 
@@ -86,15 +130,40 @@ the model payload. The fixture's second host holds a _closed_ root with a
 structurally identical control, and the same case asserts that control's name
 appears nowhere in the observation.
 
-This tier is `@no-llm` and is not skipped by an environment gate. Chrome
-discovery remains environment-dependent, as it is for Yantra's other
-real-browser tests.
+This tier is `@no-llm` and is not skipped by an environment gate. The combined
+20-fixture gate is vision-disabled: every descriptor declares that it does not
+require vision, the real-browser services run with vision unavailable, and the
+wrapped tool catalog must not contain `browser_screenshot`. Chrome discovery
+remains environment-dependent, as it is for Yantra's other real-browser tests.
+
+### Enforces choice integrity across the gate
+
+The gate makes the choice contract executable rather than relying on message
+wording alone:
+
+- every `offered` array has pairwise-distinct labels after normalization;
+- a fixture's declared paging, mode, or protected-action names may not appear
+  anywhere in its result;
+- every capability-bearing interaction template resolves a concrete receiver
+  for every family declared as an emitter; and
+- every structurally substituted outcome carries both a model-visible note and
+  an attempt-ledger detail. A substitution is permitted only for choices that
+  are indistinguishable to the model inside the resolved container; otherwise
+  the choice remains an ambiguity for the caller.
 
 ### Keeps fixture coverage structural and generic
 
 Both fixture directories are compared with their registries in both
 directions. An unregistered HTML file or a registry entry with no file fails
 the census, and generic pattern names must be unique.
+
+The protocol tier is additionally pinned at 16 as a literal number, in
+`widget-regressions.spec.ts` (against the fixture directory listing) and in
+`recovery-characterization.spec.ts` (against `PROTOCOL_GAUNTLET`, together with
+its distinct pattern names and its vision-free declaration). With the agent
+tier's four, pinned the same way in `widget-gauntlet.spec.ts`, that is the
+20-fixture gate. Growing the gallery is therefore a deliberate edit in more
+than one place.
 
 Fixtures describe structural widget shapes rather than websites. If a fixture
 records a site token as provenance, that token is permitted only inside the
@@ -155,17 +224,31 @@ at production tool seams: attempted entries are discriminated verdicts, and only
 a failed verdict contains `error_code`. Reader tests normalize the legacy fixture
 without modifying it or any existing run directory.
 
+The gauntlet's own ledger expectations read that same verdict projection. Each
+attempted record carries a `verdict` of `succeeded`, `failed`, or `skipped`, so
+an assertion about which drivers were tried filters the `skipped` entries out
+before comparing strategies, and a measured field a rung never recorded is
+omitted rather than emitted as a zero.
+
 ## How to Use It
 
-Run the focused tiers from the repository root:
+Run a focused tier from its own workspace directory. The working directory is
+part of the command, because fixture paths resolve from the test module and the
+runner is invoked directly:
 
 ```bash
-pnpm --filter @yantra/core test -- widget-regressions message-catalog
-pnpm --filter @yantra/agent test -- message-catalog
-pnpm --filter @yantra/e2e test -- widget-gauntlet
+cd packages/core && npx vitest run tests/interaction/widget-regressions.spec.ts tests/interaction/message-catalog.spec.ts
+cd packages/core && npx vitest run tests/interaction/recovery-characterization.spec.ts tests/fill/fill-engine.spec.ts tests/boundary-rules.spec.ts
+cd packages/agent && npx vitest run tests/runtime/message-catalog.spec.ts
+cd e2e && npx vitest run widget-gauntlet.spec.ts
 ```
 
-Run the complete model-free gate across workspaces with:
+`pnpm --filter <pkg> test -- <pattern>` is not a way to run a subset: the
+pattern is silently ignored and the whole package suite runs. Use the
+`cd <workspace> && npx vitest run <path>` form above instead.
+
+Run the complete model-free gate across workspaces from the repository root
+with:
 
 ```bash
 pnpm test:no-llm
@@ -174,7 +257,15 @@ pnpm test:no-llm
 When adding a protocol fixture, add its HTML file and one
 `PROTOCOL_GAUNTLET` descriptor. Give it a unique generic-pattern description,
 an exact outcome, and pinned mutation/read totals. An engineered refusal must
-also declare a cataloged failure and a follow-up that commits.
+also declare a cataloged failure and a follow-up that commits, and must still
+answer within four seconds of the injected clock. Because the tier size is
+pinned as a literal, also update the census numbers in
+`widget-regressions.spec.ts`, `recovery-characterization.spec.ts`, and the
+combined gate in `widget-gauntlet.spec.ts`.
+
+When a test needs to read a fixture or artifact from disk, resolve its path
+from `dirname(fileURLToPath(import.meta.url))`. A `process.cwd()`-derived path
+anywhere under a package's `tests/` fails the boundary suite.
 
 When adding a real-browser fixture, add its HTML file and one `AGENT_GAUNTLET`
 descriptor with exact mutation, read, and top-level tool-call totals. When
@@ -215,7 +306,7 @@ No fixture performs a secret fill, and all three tiers are tagged `@no-llm`.
 
 ## Limitations
 
-- The current gallery contains 17 fixtures: 13 protocol cases and four
+- The current gallery contains 20 fixtures: 16 protocol cases and four
   real-browser wrapped-tool cases (a re-mounting search form, an open
   shadow-root native select, a page-blocking consent modal, and a
   viewport-pinned band that owns a control's click point). Both halves are

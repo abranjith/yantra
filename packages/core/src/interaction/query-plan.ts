@@ -13,6 +13,11 @@
  * second implementation inside a driver.
  */
 
+import {
+  resolveIndistinguishableChoice,
+  type ChoiceSubstitution,
+  type StructuralChoice,
+} from './choice.js';
 import { MATCH_TIERS, type MatchTier } from './resolution.js';
 import { normalizeText } from './types.js';
 
@@ -174,11 +179,18 @@ function sharedPrefixLength(left: string, right: string): number {
 export interface RankableOption {
   readonly name: string;
   readonly disabled?: boolean;
+  readonly hidden?: boolean;
+  readonly selected?: boolean;
+  readonly path?: readonly number[];
 }
 
 /** Result of ranking what a widget offered against what was requested. */
 export type QueryRank<TOption> =
-  | { readonly kind: 'match'; readonly candidate: TOption }
+  | {
+      readonly kind: 'match';
+      readonly candidate: TOption;
+      readonly substitution?: ChoiceSubstitution;
+    }
   | { readonly kind: 'ambiguous'; readonly offered: readonly string[] }
   | { readonly kind: 'none'; readonly offered: readonly string[] };
 
@@ -204,9 +216,11 @@ export const MAX_RANKED_OFFERED = 10;
 export function rankAgainstRequested<TOption extends RankableOption>(
   candidates: readonly TOption[],
   requested: string,
+  containerPath?: readonly number[],
 ): QueryRank<TOption> {
-  const usable = candidates.filter(
-    (candidate) => candidate.disabled !== true && candidate.name.trim().length > 0,
+  const named = candidates.filter((candidate) => candidate.name.trim().length > 0);
+  const usable = named.filter(
+    (candidate) => candidate.disabled !== true && candidate.hidden !== true,
   );
   const wanted = normalizeText(requested);
   const wantedTokens = wanted.split(' ').filter(Boolean);
@@ -214,17 +228,39 @@ export function rankAgainstRequested<TOption extends RankableOption>(
   if (wanted.length === 0) return { kind: 'none', offered };
 
   for (const tier of MATCH_TIERS) {
-    const hits = usable.filter((candidate) =>
+    const hits = named.filter((candidate) =>
       matchesAtTier(candidate.name, wanted, wantedTokens, tier),
     );
     if (hits.length === 0) continue;
-    if (hits.length > 1) {
+    const structural: (StructuralChoice & { readonly candidate: TOption })[] = hits.map(
+      (candidate, index) => ({
+        candidate,
+        path: candidate.path ?? [index],
+        ...(candidate.disabled === undefined ? {} : { disabled: candidate.disabled }),
+        ...(candidate.hidden === undefined ? {} : { hidden: candidate.hidden }),
+        ...(candidate.selected === undefined ? {} : { selected: candidate.selected }),
+      }),
+    );
+    const resolved = resolveIndistinguishableChoice(structural, {
+      label: (choice) => choice.candidate.name,
+      ...(containerPath === undefined ? {} : { containerPath }),
+    });
+    if (resolved.kind === 'ambiguous') {
       return {
         kind: 'ambiguous',
-        offered: hits.slice(0, MAX_RANKED_OFFERED).map((candidate) => candidate.name),
+        offered: resolved.survivors
+          .slice(0, MAX_RANKED_OFFERED)
+          .map((choice) => choice.candidate.name),
       };
     }
-    return { kind: 'match', candidate: hits[0]! };
+    if (resolved.kind === 'unique' || resolved.kind === 'substituted') {
+      const candidate = resolved.choice.candidate;
+      if (candidate.disabled === true || candidate.hidden === true)
+        return { kind: 'none', offered };
+      return resolved.kind === 'substituted'
+        ? { kind: 'match', candidate, substitution: resolved.substitution }
+        : { kind: 'match', candidate };
+    }
   }
   return { kind: 'none', offered };
 }
