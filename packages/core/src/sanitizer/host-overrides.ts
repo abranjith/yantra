@@ -1,9 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
+
+import { configDir } from '../browser/paths.js';
 
 import { SanitizationProfileError } from './errors.js';
 import type { SanitizationProfile } from './profiles.js';
@@ -69,7 +70,9 @@ const hostOverrideConfigSchema = z.object({
   ),
 });
 
-const USER_OVERRIDE_PATH = join(homedir(), '.config', 'yantra', 'sanitizer-hosts.yaml');
+function userOverridePath(): string {
+  return join(configDir(), 'sanitizer-hosts.yaml');
+}
 const DEFAULT_OVERRIDE_FILE_URL = new URL('./default-host-overrides.yaml', import.meta.url);
 
 function frozenOverride(
@@ -179,7 +182,7 @@ export class FileHostOverrideStore implements HostOverrideStore {
   private cached: readonly HostOverride[] = DEFAULT_HOST_OVERRIDES;
   private compiled: readonly CompiledHostOverride[] = compileOverrides(DEFAULT_HOST_OVERRIDES);
 
-  public constructor(path = USER_OVERRIDE_PATH) {
+  public constructor(path = userOverridePath()) {
     this.activePath = path;
   }
 

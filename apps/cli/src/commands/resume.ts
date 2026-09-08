@@ -26,6 +26,7 @@ import {
 import { Command } from 'commander';
 
 import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import {
   buildOrchestratorRuntime,
@@ -38,6 +39,7 @@ interface ResumeOptions extends AgentOptions {
   readonly json?: boolean;
   readonly debug?: boolean;
   readonly force?: boolean;
+  readonly open?: boolean;
 }
 
 export function makeResumeCommand(): Command {
@@ -48,6 +50,7 @@ export function makeResumeCommand(): Command {
     .argument('<run-id>', 'Run ID to resume (from the run directory name)')
     .option('--json', 'Emit JSON summary to stdout', false)
     .option('--debug', 'Emit verbose debug logging to stderr', false)
+    .option('--open', 'open the generated brief.html in the default browser', false)
     .option(
       '--force',
       'Skip the user-consent check for scope-violation / ethics-refused failures',
@@ -104,6 +107,9 @@ export function makeResumeCommand(): Command {
         }
 
         const outcome = await orchestrator.resume(runId);
+        if (options.open === true && outcome.kind === 'success' && outcome.brief) {
+          openArtifact(outcome.brief.htmlPath);
+        }
 
         if (options.json === true) {
           process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);

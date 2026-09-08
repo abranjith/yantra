@@ -43,6 +43,8 @@ export interface ConnectorRenderOpts {
   readonly briefFormat?: BriefOutputFormat;
   /** Target terminal width for the Brief renderer; clamped to [60, 120]. */
   readonly width?: number;
+  /** Suppress the post-render `yantra open` hint when the command already opened it. */
+  readonly suppressOpenHint?: boolean;
 }
 
 export function renderOptsFromGlobals(flags: GlobalFlags): ConnectorRenderOpts {

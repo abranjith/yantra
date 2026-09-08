@@ -15,6 +15,26 @@ const VERSION_PATTERN = /(\d+\.\d+\.\d+\.\d+|\d+\.\d+\.\d+)/;
  */
 const STDIO_CAPTURE_STDOUT: readonly ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];
 
+/** Real Chrome user-data roots used by the profile safety guard. */
+export function chromeUserDataRoots(
+  home: string = homedir(),
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): readonly string[] {
+  const roots = [
+    join(home, 'Library', 'Application Support', 'Google', 'Chrome'),
+    join(home, 'Library', 'Application Support', 'Chromium'),
+    join(home, '.config', 'google-chrome'),
+    join(home, '.config', 'chromium'),
+  ];
+  const localAppData = env.LOCALAPPDATA;
+  if (localAppData || platform === 'win32') {
+    const base = localAppData ?? join(home, 'AppData', 'Local');
+    roots.push(join(base, 'Google', 'Chrome', 'User Data'), join(base, 'Chromium', 'User Data'));
+  }
+  return roots;
+}
+
 /** Minimum version sanity check for the override path — returns null on parse failure. */
 function tryParseVersion(stdout: string): {
   version: string;

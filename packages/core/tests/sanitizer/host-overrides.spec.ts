@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { SanitizationProfileError } from '../../src/sanitizer/errors.js';
 import {
@@ -11,6 +11,27 @@ import {
 } from '../../src/sanitizer/host-overrides.js';
 
 describe('@no-llm host override store', () => {
+  let defaultRoot: string | undefined;
+  const savedHome = process.env.YANTRA_HOME;
+
+  afterEach(async () => {
+    if (savedHome === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = savedHome;
+    if (defaultRoot) await rm(defaultRoot, { recursive: true, force: true });
+  });
+
+  it('loads the default user path from YANTRA_HOME/sanitizer-hosts.yaml', async () => {
+    defaultRoot = await mkdtemp(join(tmpdir(), 'yantra-host-overrides-home-'));
+    process.env.YANTRA_HOME = defaultRoot;
+    await writeFile(
+      join(defaultRoot, 'sanitizer-hosts.yaml'),
+      'version: 1\nhosts:\n  "*.home.example":\n    inherits: authenticated\n    extra_redactors: [case_number]\n',
+    );
+    const store = new FileHostOverrideStore();
+    await store.load();
+    expect(store.match('secure.home.example')?.extraRedactors).toEqual(['case_number']);
+  });
+
   it('falls back to packaged defaults when user file is absent', async () => {
     const impossiblePath = join(tmpdir(), `yantra-missing-${Date.now()}`, 'sanitizer-hosts.yaml');
     const store = new FileHostOverrideStore(impossiblePath);

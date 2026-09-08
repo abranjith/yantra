@@ -111,6 +111,60 @@ obstruction protocol's auto-clearance veto runs there, so `PROTECTED_ACTION_RE` 
 `packages/core/src/interaction/protected-actions.ts` and re-exported unchanged by the agent tool
 layer rather than injected into core by a caller who could omit it.
 
+#### Configuration and storage authority
+
+`packages/core/src/browser/paths.ts` is the single authority for the Yantra home and primary storage
+roots. It resolves `YANTRA_HOME` when set and otherwise uses `~/.yantra` on every platform; it does
+not split state between XDG, AppData, and home-directory conventions. Configuration, preferences,
+policy sidecars, and storage defaults all descend from that root. Only the data and cache roots are relocatable:
+`packages/core/src/config/resolved-paths.ts` applies environment override, then `config.yaml`, then
+`<home>/data` or `<home>/cache`. Its synchronous result is memoized because path consumers are
+synchronous; config-writing commands explicitly clear that memo. An unreadable or malformed early
+path configuration falls back to defaults with one warning so path discovery cannot fail before CLI
+error handling exists.
+
+```mermaid
+flowchart TD
+  Home[YANTRA_HOME or ~/.yantra]
+  Config[config.yaml]
+  Profile[profile.yaml]
+  Policy[blocklist.yaml and sanitizer-hosts.yaml]
+  DataResolver[Data path resolver]
+  CacheResolver[Cache path resolver]
+  Data[data root]
+  Cache[cache root]
+  Durable[runs, workflows, templates, profiles, index.db, pi]
+  Cached[ask cache, doctor cache, recorder state]
+
+  Home --> Config
+  Home --> Profile
+  Home --> Policy
+  Home --> DataResolver
+  Home --> CacheResolver
+  Config --> DataResolver
+  Config --> CacheResolver
+  DataResolver --> Data
+  CacheResolver --> Cache
+  Data --> Durable
+  Cache --> Cached
+```
+
+`config.yaml` is installation state: storage locations, registered models, credential references,
+search availability, ethics policy, retention, and the explicit Pi-auth path. A single strict Zod
+schema supplies defaults and rejects unknown or malformed keys; `loadConfig()` returns a typed
+`Result` instead of silently replacing a bad file. `profile.yaml` is user preference state: model
+selection, output defaults, locale, personalization, sensitive-context grants, and agent limits.
+The two exported dotted-key sets let the CLI redirect a key to `yantra config` or `yantra prefs`
+instead of writing it to the wrong file.
+
+Credential-bearing configuration stores only parsed `${env:NAME}` or `${secret:key}` references.
+Search providers resolve those references at the outbound request boundary, with the legacy named
+keychain entry as the fallback when no reference is configured. Renderers recursively project
+references back to their safe text form. Registered models similarly remain Yantra-owned data:
+the Pi adapter deterministically projects `config.yaml`'s model registry to
+`<data>/pi/models.json` immediately before constructing Pi's `ModelRegistry`; the projection may
+contain a reference but never resolved credential material.
+
 #### Composed-tree observation and ref minting
 
 Observation walks the **composed** tree, so a control inside an open shadow root is nameable and
@@ -600,6 +654,22 @@ constructing a provider, build runtime dependencies, render terminal or machine 
 best-effort history, and map outcomes to exit codes. The CLI does not implement a second agent
 reasoning loop.
 
+The installation-management commands compose the core boundaries rather than maintaining their own
+configuration dialect. `yantra config` exposes path provenance, validated reads and writes, editor
+validation, and guarded data-root relocation; its document-based YAML mutations preserve comments
+and replace files atomically with owner-only permissions. Relocation is explicitly user-invoked,
+checks the daemon/run lock, prefers rename, and uses copy-then-delete for a cross-volume move or an
+explicit merge into a non-empty target. `yantra secret` writes credentials through the keychain
+boundary without accepting values in argv, while `yantra model` manages the registry in
+`config.yaml` and writes the selected provider/model to `profile.yaml`. Interactive `yantra init`
+produces both schema-valid files through the same models, and non-interactive or JSON initialization
+accepts defaults without prompting.
+
+`yantra open` resolves a named run, or the newest filesystem run, through `LocalRunStore`; it opens
+the requested brief, report, audit, or run directory and can instead print the path or emit JSON.
+Run-producing commands share `--open`, while the normal terminal artifact footer points back to
+`yantra open <run-id>` for deferred inspection.
+
 The principal execution surfaces are:
 
 | Surface                         | Owning runtime                         | Behavior                                                                                                             |
@@ -808,6 +878,45 @@ sequenceDiagram
   Note over Pi,Run: Raw provider session and PNG contain pixels; stable audit/report logs do not
 ```
 
+### Configuration, model, and credential flow
+
+Path resolution happens before most command wiring, while full configuration validation happens at
+the command or service boundary. Data/cache accessors perform one memoized synchronous read so
+legacy synchronous consumers receive the same resolved roots; ordinary configuration consumers use
+the typed asynchronous loader. Mutating CLI commands validate before replacement and clear the path
+memo when a storage key may have changed.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant CLI
+  participant Paths as Core path resolver
+  participant Config as config.yaml
+  participant Profile as profile.yaml
+  participant Keychain as OS keychain
+  participant Adapter as Pi adapter
+  participant Boundary as Credential consumer
+  participant Provider as Search or model provider
+
+  User->>CLI: init, config, prefs, secret, or model command
+  CLI->>Paths: resolve home, data, and cache roots
+  Paths->>Config: read path overrides once
+  CLI->>Config: strict load or validated atomic mutation
+  CLI->>Profile: read or write personal preferences
+  CLI->>Keychain: store, list, or remove named secret
+  Adapter->>Config: load registered model definitions
+  Adapter->>Adapter: project data/pi/models.json
+  CLI->>Adapter: pass effective provider and model selection
+  Boundary->>Config: load parsed credential reference
+  Boundary->>Keychain: resolve secret reference at execution boundary
+  Boundary->>Provider: make outbound request with transient value
+```
+
+Environment references are resolved directly from the process environment rather than the
+keychain. The diagram's final two messages represent the secret-reference branch; neither branch
+puts resolved credential material back into `config.yaml`, `profile.yaml`, or the Pi model
+projection.
+
 ### Saved workflow replay and scheduling
 
 `RunOrchestrator` loads a user-owned workflow YAML, resolves parameters, translates the workflow
@@ -827,6 +936,14 @@ gateway can only park and notify; it never grants a protected action automatical
 Yantra has no remote database and no single relational domain model. Durable state is split by
 ownership: user-editable definitions and canonical execution records are files, secret material
 lives in the OS keychain, and SQLite supplies local indexes and operational tables.
+
+`YantraConfig` is the versioned, strict document model for installation state. It includes optional
+absolute data/cache overrides, a unique `(provider, id)` model registry, search-provider references,
+ethics and rate-limit policy, retention bounds, and the optional Pi-auth path. Its credential leaves
+are the closed `ConfigRef` union (`env` or `secret`), not plaintext. `ProfileFile` remains the
+separate validated model for personal preferences. Neither adds a SQLite migration; retention consumes
+the config to prune expired run directories and cap `index.db.corrupt.*` backups during index
+startup.
 
 Interaction recovery adds no relational state. Its durable form is the bounded verdict array under
 a sanitized tool result's `details.attempted` in `tool-calls.jsonl`; plan objects, evidence, shared
@@ -848,10 +965,16 @@ and `SensitiveScreenLatch` are run-local memory. Accepted PNGs are filesystem ar
 
 ```mermaid
 flowchart TD
-  Config[config.yaml and profile.yaml] --> Runtime[Runtime configuration]
+  Config[config.yaml installation state] --> Runtime[Runtime configuration]
+  Profile[profile.yaml preferences] --> Runtime
+  Config --> Paths[Data and cache path resolution]
+  Config --> Projection[data/pi/models.json projection]
+  Projection --> Runtime
   Workflow[workflows/*.yaml and locator sidecars] --> Replay[Workflow replay]
   Template[templates/*.md] --> Publication[Report publication]
   Keychain[OS keychain entries] --> Boundary[Secret resolution boundary]
+  Config --> Boundary
+  Boundary --> Runtime
   Replay --> RunDir[runs/run-id/ canonical artifacts]
   Publication --> RunDir
   Runtime --> RunDir
@@ -866,24 +989,39 @@ flowchart TD
 
 | Store                 | Verified contents and role                                                                                                                                                                                                                                                                                                         |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Config directory      | `config.yaml` for runtime/search/ethics configuration and `profile.yaml` for human-editable preferences and context grants.                                                                                                                                                                                                        |
+| Home `~/.yantra/`     | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                |
 | Data `workflows/`     | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                       |
 | Data `templates/`     | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                   |
 | Data `runs/<run-id>/` | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data. |
 | Data `index.db`       | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                             |
+| Data `pi/`            | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                      |
 | Cache `ask/`          | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                           |
 | Browser profiles      | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected.                                                                                                                                                                                |
 | OS keychain           | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                  |
 
-Path helpers honor the platform's local data, cache, and configuration conventions. Run
-directories are created with restrictive permissions where the platform supports them, and
-ephemeral browser profiles are cleaned up on close or crash.
+The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
+`YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
+platforms use the same rule. Run directories are created with restrictive permissions where the
+platform supports them, and ephemeral browser profiles are cleaned up on close or crash.
 
 ## Key Design Decisions
 
 - **Local-first execution and observability.** The CLI and optional daemon run on the user's
   machine. Run directories are the durable audit boundary, while external telemetry is absent
   from the implemented runtime.
+- **One platform-independent home with narrow relocation.** `YANTRA_HOME` or `~/.yantra` locates
+  configuration and the default durable state; only data and cache can resolve elsewhere, with
+  environment overrides above validated config paths. Ephemeral browser profiles remain in the OS
+  temporary directory. This trades platform-native XDG/AppData placement for one predictable layout
+  and fixes policy files that previously read from a directory no writer used on Windows.
+- **Installation state and user preference are separate authorities.** `config.yaml` answers what
+  is installed or available; `profile.yaml` answers what the user prefers. CLI key ownership and
+  cross-command redirects keep a setting in exactly one file, while the model registry contains no
+  default marker because effective model selection already belongs to the profile precedence chain.
+- **Secrets remain references and third-party config remains derived.** Config validation accepts
+  only environment or keychain references in credential fields, and resolution occurs at an
+  execution boundary. Pi's `models.json` is regenerated inside the adapter from Yantra's registry,
+  which keeps resolved credentials off disk and confines Pi's schema to the provider seam.
 - **Schema-first contracts.** Zod is the protocol source of truth, with TypeScript types,
   validators, JSON Schema, and protocol documentation derived from it. This adds generation and
   verification work but prevents hand-maintained contract drift.

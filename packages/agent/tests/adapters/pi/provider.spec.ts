@@ -8,11 +8,12 @@
  * session construction.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import { defaultConfig, type YantraConfig } from '@yantra/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PiAgentProvider, type PiSessionLike } from '../../../src/adapters/pi/provider.js';
@@ -104,6 +105,29 @@ function makeAssistantMessage(stopReason: string, errorMessage?: string) {
   };
 }
 
+/**
+ * The hermetic model registry these tests run against.
+ *
+ * `models.json` is a projection of `config.yaml`'s `models:` block, so the
+ * registry is declared here rather than hand-written to disk — injecting it
+ * also keeps the environment from projecting the developer's real config
+ * into the sandbox.
+ */
+function hermeticConfig(): YantraConfig {
+  return {
+    ...defaultConfig(),
+    models: [
+      {
+        id: 'test-model',
+        provider: 'testprov',
+        base_url: 'http://127.0.0.1:9/v1',
+        api_key: null,
+        input: ['text'],
+      },
+    ],
+  };
+}
+
 interface Harness {
   readonly provider: PiAgentProvider;
   readonly stub: StubPiSession;
@@ -119,28 +143,12 @@ async function makeHarness(): Promise<Harness> {
   const runDir = await makeTempDir('yantra-prov-run-');
   const cwd = await makeTempDir('yantra-prov-cwd-');
 
-  // Hermetic model definition in the pinned models.json.
-  const piDir = join(dataDir, 'pi');
-  await mkdir(piDir, { recursive: true });
-  await writeFile(
-    join(piDir, 'models.json'),
-    JSON.stringify({
-      providers: {
-        testprov: {
-          baseUrl: 'http://127.0.0.1:9/v1',
-          api: 'openai-completions',
-          models: [{ id: 'test-model', name: 'Test Model' }],
-        },
-      },
-    }),
-    'utf8',
-  );
-
   const stub = new StubPiSession();
   let captured: unknown;
   let calls = 0;
   const provider = new PiAgentProvider({
     dataDir,
+    config: hermeticConfig(),
     resolveSecret: () => Promise.resolve('sk-runtimeKEY0123456789abcdef'),
     createSession: (sessionOptions) => {
       calls += 1;
@@ -237,6 +245,7 @@ describe('@no-llm PiAgentProvider.open — startup validation', () => {
     // resolved runtime key back. The typed error's message must redact it.
     const leakyProvider = new PiAgentProvider({
       dataDir: harness.dataDir,
+      config: hermeticConfig(),
       resolveSecret: () => Promise.resolve(CREDENTIAL_CANARY),
       createSession: () => Promise.reject(new Error(`invalid key: ${CREDENTIAL_CANARY}`)),
     });

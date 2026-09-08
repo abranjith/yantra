@@ -4,6 +4,14 @@ Current-state reference for all implemented features. Updated by the Implement s
 
 ---
 
+## Configuration & Storage
+
+**FEAT-041 — Config and Storage Consolidation** _(updated: 2026-09-07 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-041-config_and_storage_consolidation/spec.md)
+Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`), identically on Windows, macOS, and Linux; XDG, `%APPDATA%`, and `%LOCALAPPDATA%` are ignored. Only `data/` and `cache/` relocate, via `paths.data_dir`/`paths.cache_dir` or `YANTRA_DATA_DIR`/`YANTRA_CACHE_DIR`, and `yantra config data-dir <path>` moves existing content with `--dry-run`, `--no-move`, and a daemon-lock check. `config.yaml` answers "what is installed" and `profile.yaml` "what do I prefer"; each key has exactly one owner, and `yantra config set` / `yantra prefs set` redirect by name rather than write the wrong file. One strict Zod schema replaced four ad-hoc parsers, so an unknown key is a validation error naming the key and its nearest valid sibling instead of a silent no-op — which also fixed ethics config, the blocklist, and sanitizer host overrides reading a path nothing wrote (they were silently ignored on Windows). Credentials never sit literally in YAML: sensitive leaves hold `${env:NAME}` or `${secret:key}` references resolved only at the execution boundary, and a literal value is rejected pointing at `yantra secret set`. New commands are `yantra config` (path/list/get/set/unset/edit/validate/data-dir), `yantra secret` (set/list/rm — value read from a prompt or stdin, never argv), `yantra model` (list/add/rm/default, with Pi's `models.json` generated as a projection of the `models:` block), and `yantra open [run-id]` with `--artifact`/`--print`/`--json`; `--open` now works on `run`, `do`, and `resume` as it already did on `ask` and `research`. `yantra init` walks an interactive provider/credential/model/storage wizard on a TTY and stays prompt-free under `--yes`, `--json`, or a non-TTY. `retention.runs_days` and `retention.corrupt_index_keep` finally have consumers, pruning old runs and capping `index.db.corrupt.*` backups at index open.
+
+---
+
 ## Agent Runtime
 
 **FEAT-040 — Single-Owner Accounting, Actually On** _(updated: 2026-09-04 by implement)_

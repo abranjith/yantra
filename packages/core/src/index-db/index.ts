@@ -1,5 +1,5 @@
 /**
- * Local SQLite index (`~/.local/share/yantra/index.db`) — a rebuildable cache
+ * Local SQLite index (`~/.yantra/data/index.db`) — a rebuildable cache
  * over the canonical run-dir files (plan §7). Houses the `HistoryStore`,
  * `PreferenceStore`, and `RateLimitStore` repository abstractions.
  */

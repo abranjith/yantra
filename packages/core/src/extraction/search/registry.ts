@@ -6,6 +6,7 @@ import { YANTRA_KEYCHAIN_SERVICE, type KeychainProvider } from '../../secrets/ke
 import type { SearchProviderName, SearchResult } from '../types.js';
 
 import { BraveSearchProvider } from './brave.js';
+import { resolveSearchCredential } from './credential.js';
 import { DuckDuckGoSearchProvider } from './duckduckgo.js';
 import {
   NoSearchProviderAvailableError,
@@ -277,6 +278,20 @@ export function parseProviderFromEnv(raw: string | undefined): SearchProviderSel
 }
 
 async function hasKey(deps: SearchProviderDeps, account: string): Promise<boolean> {
+  const provider = account.startsWith('tavily.')
+    ? 'tavily'
+    : account.startsWith('brave.')
+      ? 'brave'
+      : null;
+  if (provider) {
+    return (
+      (await resolveSearchCredential(
+        provider,
+        deps.keychain,
+        deps.keychainService ?? YANTRA_KEYCHAIN_SERVICE,
+      )) !== null
+    );
+  }
   const value = await deps.keychain.get(deps.keychainService ?? YANTRA_KEYCHAIN_SERVICE, account);
   return typeof value === 'string' && value.length > 0;
 }

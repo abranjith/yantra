@@ -29,32 +29,34 @@ const SYSTEM_PROMPT = 'agent-v1: use only registered Yantra tools.';
 const tempDirs: string[] = [];
 
 describe('@no-llm modelSupportsImageInput', () => {
-  it('returns true only for a declared image input', () => {
-    expect(
+  it('returns true only for a declared image input', async () => {
+    await expect(
       modelSupportsImageInput('provider', 'vision', {
         find: () => ({ input: ['text', 'image'] }),
       }),
-    ).toBe(true);
-    expect(modelSupportsImageInput('provider', 'text', { find: () => ({ input: ['text'] }) })).toBe(
-      false,
-    );
+    ).resolves.toBe(true);
+    await expect(
+      modelSupportsImageInput('provider', 'text', { find: () => ({ input: ['text'] }) }),
+    ).resolves.toBe(false);
   });
 
   it.each([undefined, {}, { input: undefined }, { input: 'image' }])(
     'fails closed for a missing or malformed model %#',
-    (model) => {
-      expect(modelSupportsImageInput('provider', 'unknown', { find: () => model })).toBe(false);
+    async (model) => {
+      await expect(
+        modelSupportsImageInput('provider', 'unknown', { find: () => model }),
+      ).resolves.toBe(false);
     },
   );
 
-  it('fails closed when lookup throws', () => {
-    expect(
+  it('fails closed when lookup throws', async () => {
+    await expect(
       modelSupportsImageInput('provider', 'broken', {
         find: () => {
           throw new Error('registry unavailable');
         },
       }),
-    ).toBe(false);
+    ).resolves.toBe(false);
   });
 });
 

@@ -20,6 +20,8 @@ export * from './ranking/index.js';
 export * from './interaction/index.js';
 export * from './widgets/index.js';
 export * from './fill/index.js';
+export * from './config/index.js';
+export * from './retention/index.js';
 
 export {
   DefaultSanitizer,

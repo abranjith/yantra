@@ -15,6 +15,7 @@ import {
   type CreateAgentSessionOptions,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import type { YantraConfig } from '@yantra/core';
 import pino from 'pino';
 
 import {
@@ -82,6 +83,8 @@ export type PiSessionFactory = (
 export interface PiAgentProviderOptions {
   /** Base data directory override (tests inject a temp dir). */
   readonly dataDir?: string;
+  /** Installation config the pinned `models.json` is projected from. */
+  readonly config?: YantraConfig;
   /** Documented opt-in: personal pi `auth.json` path for managed auth. */
   readonly personalPiAuthPath?: string;
   /** Resolves a Yantra `SecretRef` for `runtime-key` auth. */
@@ -136,6 +139,7 @@ export class PiAgentProvider implements AgentProvider {
       provider: options.model.provider,
       auth: options.auth,
       ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
+      ...(this.options.config !== undefined ? { config: this.options.config } : {}),
       ...(this.options.personalPiAuthPath !== undefined
         ? { personalPiAuthPath: this.options.personalPiAuthPath }
         : {}),

@@ -295,7 +295,7 @@ async function runAllChecks(): Promise<readonly DoctorCheck[]> {
 
 /**
  * Runs Yantra environment diagnostics. Never throws — always returns a DoctorReport.
- * Results are cached for 1 hour in ~/.cache/yantra/doctor.json.
+ * Results are cached for 1 hour in ~/.yantra/cache/doctor.json.
  *
  * @param opts.refresh - Force a fresh check, bypassing the cache.
  * @example

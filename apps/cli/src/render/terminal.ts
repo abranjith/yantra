@@ -11,6 +11,8 @@
  * `--no-color` / `NO_COLOR` / non-TTY conditions.
  */
 
+import { basename, dirname } from 'node:path';
+
 import { briefToHtml, briefToMarkdown, templatedReportToHtml } from '@yantra/core';
 import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
@@ -197,6 +199,9 @@ export class TerminalRenderer implements OutputRenderer {
 
     if (artifacts !== null) {
       opts.stream.write(`\nSaved: ${artifacts.mdPath} · ${artifacts.htmlPath}\n`);
+      if (opts.suppressOpenHint !== true) {
+        opts.stream.write(`Open: yantra open ${basename(dirname(artifacts.htmlPath))}\n`);
+      }
     }
   }
 

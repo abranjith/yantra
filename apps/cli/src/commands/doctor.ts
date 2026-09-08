@@ -20,7 +20,7 @@
  * the typed `AGENT_AUTH_UNAVAILABLE` error (exit 3) — never a null client.
  */
 
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -31,10 +31,14 @@ import {
   type AgentEvent,
 } from '@yantra/agent';
 import {
-  configPath,
+  cacheDir,
   createKeychainProvider,
+  dataDir,
   doctor as runCoreDoctor,
+  loadConfig,
+  resolveSearchCredential,
   runsRoot,
+  storageDirSources,
 } from '@yantra/core';
 import { PROTOCOL_VERSION } from '@yantra/protocol';
 import { Command, CommanderError } from 'commander';
@@ -84,6 +88,11 @@ const CHECK_TITLES: Record<string, string> = {
   'agent.model': 'Agent model selection',
   'agent.credentials': 'Agent credential availability',
   'agent.budgets': 'Agent runtime budgets',
+  'config.valid': 'Configuration schema valid',
+  'paths.resolved': 'Storage paths resolved',
+  'ethics.robots': 'Robots policy',
+  'search.tavily.api-key': 'Tavily API key',
+  'search.brave.api-key': 'Brave API key',
 };
 
 export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
@@ -129,11 +138,12 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
       );
 
       try {
-        const [report, agentChecks] = await Promise.all([
+        const [report, agentChecks, configChecks] = await Promise.all([
           resolved.coreDoctor({ refresh: options.refresh === true }),
           resolved.agentDiagnostics(resolved.env, preferences, options),
+          runConfigurationChecks(resolved.env),
         ]);
-        const checks = [...report.checks, ...agentChecks];
+        const checks = [...report.checks, ...agentChecks, ...configChecks];
 
         const result: DoctorRenderResult = {
           checks: checks.map((check) => ({
@@ -166,6 +176,98 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
     });
 
   return cmd;
+}
+
+interface ConfigurationDoctorCheck {
+  readonly id:
+    | 'config.valid'
+    | 'paths.resolved'
+    | 'ethics.robots'
+    | 'search.tavily.api-key'
+    | 'search.brave.api-key';
+  readonly status: 'ok' | 'warn' | 'error';
+  readonly message: string;
+  readonly details: Readonly<Record<string, unknown>>;
+  readonly fixHint: string | null;
+}
+
+async function runConfigurationChecks(
+  env: NodeJS.ProcessEnv,
+): Promise<readonly ConfigurationDoctorCheck[]> {
+  const loaded = await loadConfig();
+  if (!loaded.isOk) {
+    return [
+      {
+        id: 'config.valid',
+        status: 'error',
+        message: loaded.error.message,
+        details: { issues: loaded.error.issues.map((issue) => issue.keyPath) },
+        fixHint: 'Run `yantra config validate`, correct the named keys, and retry.',
+      },
+    ];
+  }
+
+  const sources = storageDirSources();
+  const checks: ConfigurationDoctorCheck[] = [
+    {
+      id: 'config.valid',
+      status: 'ok',
+      message: 'Configuration is schema-valid.',
+      details: {},
+      fixHint: null,
+    },
+    {
+      id: 'paths.resolved',
+      status: 'ok',
+      message: `Storage paths: data=${dataDir()} (${sources.dataSource}), cache=${cacheDir()} (${sources.cacheSource}).`,
+      details: {
+        dataDir: dataDir(),
+        dataSource: sources.dataSource,
+        cacheDir: cacheDir(),
+        cacheSource: sources.cacheSource,
+      },
+      fixHint: null,
+    },
+    {
+      id: 'ethics.robots',
+      status: 'ok',
+      message: `Robots policy is ${loaded.value.ethics.robots_enabled ? 'enabled' : 'disabled'}.`,
+      details: { enabled: loaded.value.ethics.robots_enabled },
+      fixHint: null,
+    },
+  ];
+
+  let keychain;
+  try {
+    keychain = await createKeychainProvider();
+  } catch {
+    keychain = null;
+  }
+  for (const provider of ['tavily', 'brave'] as const) {
+    let source: 'env' | 'keychain' | 'absent' = 'absent';
+    if (keychain) {
+      try {
+        const credential = await resolveSearchCredential(provider, keychain, undefined, env);
+        source = credential?.source ?? 'absent';
+      } catch {
+        source = 'absent';
+      }
+    }
+    checks.push({
+      id: `search.${provider}.api-key`,
+      status: source === 'absent' ? 'warn' : 'ok',
+      message:
+        source === 'absent'
+          ? `No ${provider} API key is available.`
+          : `${provider} API key is present (source: ${source}).`,
+      details: { source },
+      fixHint:
+        source === 'absent'
+          ? `Run \`yantra secret set ${provider}.api_key\` or configure an \${env:NAME} reference.`
+          : null,
+    });
+  }
+  return checks;
 }
 
 /**
@@ -313,13 +415,6 @@ function doctorRuntime(runtime?: Partial<DoctorRuntime>): DoctorRuntime {
  * the pinned auth store stays the default.
  */
 async function readPiAuthPathOptIn(): Promise<string | undefined> {
-  try {
-    const { parse } = await import('yaml');
-    const contents = await readFile(configPath(), 'utf8');
-    const raw = parse(contents) as { agent?: { pi_auth_path?: unknown } } | null;
-    const path = raw?.agent?.pi_auth_path;
-    return typeof path === 'string' && path.length > 0 ? path : undefined;
-  } catch {
-    return undefined;
-  }
+  const loaded = await loadConfig();
+  return loaded.isOk ? (loaded.value.agent.pi_auth_path ?? undefined) : undefined;
 }

@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cacheDir,
+  configPath,
   dataDir,
   doctorCachePath,
   ephemeralRoot,
   profilesRoot,
+  resetPathCache,
+  runsRoot,
+  templatesRoot,
+  workflowsRoot,
+  yantraHome,
 } from '../../src/browser/paths.js';
 
 vi.mock('node:os', () => ({
@@ -26,6 +32,8 @@ describe('@no-llm paths', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...savedEnv };
+    delete process.env.YANTRA_HOME;
+    resetPathCache();
     mockHomedir.mockReturnValue('/home/testuser');
     mockTmpdir.mockReturnValue('/tmp');
   });
@@ -33,95 +41,48 @@ describe('@no-llm paths', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
     process.env = savedEnv;
+    resetPathCache();
   });
 
   function setPlatform(platform: string): void {
     Object.defineProperty(process, 'platform', { value: platform, writable: true });
   }
 
-  describe('dataDir', () => {
-    it('uses XDG_DATA_HOME when set on Linux', () => {
-      setPlatform('linux');
-      process.env['XDG_DATA_HOME'] = '/custom/data';
-      expect(dataDir()).toBe(join('/custom/data', 'yantra'));
-    });
-
-    it('falls back to ~/.local/share/yantra on Linux', () => {
-      setPlatform('linux');
-      delete process.env['XDG_DATA_HOME'];
-      expect(dataDir()).toBe(join('/home/testuser', '.local', 'share', 'yantra'));
-    });
-
-    it('uses %LOCALAPPDATA%\\yantra on Windows', () => {
-      setPlatform('win32');
-      process.env['LOCALAPPDATA'] = 'C:\\Users\\test\\AppData\\Local';
-      expect(dataDir()).toBe(join('C:\\Users\\test\\AppData\\Local', 'yantra'));
-    });
-
-    it('falls back to AppData\\Local on Windows when LOCALAPPDATA unset', () => {
-      setPlatform('win32');
-      delete process.env['LOCALAPPDATA'];
-      mockHomedir.mockReturnValue('C:\\Users\\test');
-      expect(dataDir()).toBe(join('C:\\Users\\test', 'AppData', 'Local', 'yantra'));
-    });
-
-    it('uses XDG_DATA_HOME on macOS too', () => {
-      setPlatform('darwin');
-      process.env['XDG_DATA_HOME'] = '/mac/custom';
-      expect(dataDir()).toBe(join('/mac/custom', 'yantra'));
-    });
+  it.each(['win32', 'darwin', 'linux'])('uses the same layout on %s', (platform) => {
+    setPlatform(platform);
+    expect(yantraHome()).toBe(join('/home/testuser', '.yantra'));
+    expect(dataDir()).toBe(join('/home/testuser', '.yantra', 'data'));
+    expect(cacheDir()).toBe(join('/home/testuser', '.yantra', 'cache'));
   });
 
-  describe('cacheDir', () => {
-    it('uses XDG_CACHE_HOME when set on Linux', () => {
-      setPlatform('linux');
-      process.env['XDG_CACHE_HOME'] = '/custom/cache';
-      expect(cacheDir()).toBe(join('/custom/cache', 'yantra'));
-    });
-
-    it('falls back to ~/.cache/yantra on Linux', () => {
-      setPlatform('linux');
-      delete process.env['XDG_CACHE_HOME'];
-      expect(cacheDir()).toBe(join('/home/testuser', '.cache', 'yantra'));
-    });
-
-    it('uses %LOCALAPPDATA%\\yantra\\Cache on Windows', () => {
-      setPlatform('win32');
-      process.env['LOCALAPPDATA'] = 'C:\\Users\\test\\AppData\\Local';
-      expect(cacheDir()).toBe(join('C:\\Users\\test\\AppData\\Local', 'yantra', 'Cache'));
-    });
+  it('uses a trimmed YANTRA_HOME override', () => {
+    process.env.YANTRA_HOME = '  /custom/yantra  ';
+    expect(yantraHome()).toBe('/custom/yantra');
+    expect(configPath()).toBe(join('/custom/yantra', 'config.yaml'));
   });
 
-  describe('profilesRoot', () => {
-    it('is a profiles subdirectory of dataDir', () => {
-      setPlatform('linux');
-      delete process.env['XDG_DATA_HOME'];
-      expect(profilesRoot()).toBe(join('/home/testuser', '.local', 'share', 'yantra', 'profiles'));
-    });
+  it('ignores legacy platform directory variables', () => {
+    process.env.XDG_CONFIG_HOME = '/legacy/config';
+    process.env.XDG_DATA_HOME = '/legacy/data';
+    process.env.XDG_CACHE_HOME = '/legacy/cache';
+    process.env.LOCALAPPDATA = '/legacy/local';
+    process.env.APPDATA = '/legacy/roaming';
+    expect(yantraHome()).toBe(join('/home/testuser', '.yantra'));
   });
 
-  describe('ephemeralRoot', () => {
-    it('returns OS tmpdir', () => {
-      expect(ephemeralRoot()).toBe('/tmp');
-    });
+  it('places derived roots below home and data', () => {
+    const home = yantraHome();
+    const data = dataDir();
+    expect(configPath()).toBe(join(home, 'config.yaml'));
+    expect(profilesRoot()).toBe(join(data, 'profiles'));
+    expect(runsRoot()).toBe(join(data, 'runs'));
+    expect(workflowsRoot()).toBe(join(data, 'workflows'));
+    expect(templatesRoot()).toBe(join(data, 'templates'));
+    expect(doctorCachePath()).toBe(join(cacheDir(), 'doctor.json'));
   });
 
-  describe('doctorCachePath', () => {
-    it('is doctor.json inside cacheDir', () => {
-      setPlatform('linux');
-      delete process.env['XDG_CACHE_HOME'];
-      expect(doctorCachePath()).toBe(join('/home/testuser', '.cache', 'yantra', 'doctor.json'));
-    });
-
-    it('uses XDG_CACHE_HOME when set', () => {
-      setPlatform('linux');
-      process.env['XDG_CACHE_HOME'] = '/xdg/cache';
-      expect(doctorCachePath()).toBe(join('/xdg/cache', 'yantra', 'doctor.json'));
-    });
-  });
-
-  // Satisfy linting
-  it('tmpdir mock is used', () => {
-    expect(mockTmpdir()).toBe('/tmp');
+  it('keeps ephemeral profiles in the OS temp directory', () => {
+    expect(ephemeralRoot()).toBe('/tmp');
+    expect(mockTmpdir).toHaveBeenCalled();
   });
 });

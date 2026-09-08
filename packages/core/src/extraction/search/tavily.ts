@@ -3,6 +3,7 @@ import { request } from 'undici';
 import { YANTRA_KEYCHAIN_SERVICE, type KeychainProvider } from '../../secrets/keychain.js';
 import type { SearchResult } from '../types.js';
 
+import { resolveSearchCredential } from './credential.js';
 import { RateLimitError, SearchProviderError, TavilyAuthError } from './errors.js';
 import type { SearchProvider } from './registry.js';
 
@@ -46,8 +47,8 @@ export class TavilySearchProvider implements SearchProvider {
     query: string,
     opts: { limit: number; signal: AbortSignal },
   ): Promise<readonly SearchResult[]> {
-    const apiKey = await this.keychain.get(this.keychainService, 'tavily.api_key');
-    if (!apiKey) {
+    const credential = await resolveSearchCredential('tavily', this.keychain, this.keychainService);
+    if (!credential) {
       throw new TavilyAuthError('Tavily API key is missing from keychain.', {
         provider: this.name,
         code: 'missing-api-key',
@@ -61,7 +62,7 @@ export class TavilySearchProvider implements SearchProvider {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        api_key: apiKey,
+        api_key: credential.value,
         query,
         max_results: Math.max(1, opts.limit),
         search_depth: 'basic',

@@ -7,6 +7,7 @@ export * from './html-to-text.js';
 export * from './live-page.js';
 export * from './readability.js';
 export * from './search/config.js';
+export * from './search/credential.js';
 export * from './search/errors.js';
 export * from './search/registry.js';
 export * from './search/scrape-transport.js';

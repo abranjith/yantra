@@ -46,6 +46,7 @@ import {
 } from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
+import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
@@ -64,6 +65,7 @@ interface RunOptions extends AgentOptions {
   readonly llm?: boolean;
   /** Registered only to provide a pointed unsupported-surface error. */
   readonly template?: string;
+  readonly open?: boolean;
 }
 
 function parseParams(raw: readonly string[] | undefined): Record<string, string> {
@@ -93,6 +95,7 @@ export function makeRunCommand(): Command {
     .option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs')
     .option('--json', 'Emit JSON summary to stdout instead of a terminal card', false)
     .option('--debug', 'Emit verbose debug logging to stderr', false)
+    .option('--open', 'open the generated brief.html in the default browser', false)
     .option('--template <ref>', 'report templates are supported on ask, research, and do');
 
   addAgentOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
@@ -214,10 +217,13 @@ export function makeRunCommand(): Command {
           } else {
             // The Brief *is* the run's answer — render it the way `ask` does
             // rather than dumping the raw captures it was synthesized from.
-            renderBrief(brief, briefArtifacts ?? null);
+            renderBrief(brief, briefArtifacts ?? null, options.open === true);
           }
         }
       }
+
+      if (options.open === true && briefArtifacts !== undefined)
+        openArtifact(briefArtifacts.htmlPath);
 
       closeRuntime();
       process.exit(exitCodeFor(outcome));
@@ -314,7 +320,7 @@ async function readBrief(artifacts: BriefRunArtifacts): Promise<Brief | null> {
 }
 
 /** Renders a Brief through the same connector dispatch `ask` uses. */
-function renderBrief(brief: Brief, artifacts: BriefRunArtifacts | null): void {
+function renderBrief(brief: Brief, artifacts: BriefRunArtifacts | null, opened = false): void {
   const io = new CLIConnectorIO(new TerminalRenderer());
   const stdout = process.stdout;
   const opts: ConnectorRenderOpts = {
@@ -325,6 +331,7 @@ function renderBrief(brief: Brief, artifacts: BriefRunArtifacts | null): void {
     errStream: process.stderr,
     briefDetail: 'standard',
     briefFormat: 'terminal',
+    suppressOpenHint: opened,
     ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
   };
 

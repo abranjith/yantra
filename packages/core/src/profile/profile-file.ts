@@ -1,5 +1,5 @@
 /**
- * `~/.config/yantra/profile.yaml` — the human-editable personal defaults file.
+ * `~/.yantra/profile.yaml` — the human-editable personal defaults file.
  *
  * This is the `user` layer of the preference system: durable, inspectable, and
  * owned by the user (local-first, memory §General). It is Zod-validated on load

@@ -11,6 +11,7 @@
  */
 
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { YantraConfig } from '@yantra/core';
 import { Type } from 'typebox';
 
 import type {
@@ -50,6 +51,8 @@ export interface AgentSmokeOptions {
   readonly cwd?: string;
   /** Data-dir override (tests). */
   readonly dataDir?: string;
+  /** Installation config the pinned `models.json` is projected from (tests). */
+  readonly config?: YantraConfig;
   /** Personal pi auth.json opt-in (config key `agent.pi_auth_path`). */
   readonly personalPiAuthPath?: string;
   /** Secret resolver for `runtime-key` auth. */
@@ -127,6 +130,7 @@ export async function runAgentSmoke(options: AgentSmokeOptions): Promise<AgentSm
       provider: options.model.provider,
       auth,
       ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
+      ...(options.config !== undefined ? { config: options.config } : {}),
       ...(options.personalPiAuthPath !== undefined
         ? { personalPiAuthPath: options.personalPiAuthPath }
         : {}),
@@ -137,6 +141,7 @@ export async function runAgentSmoke(options: AgentSmokeOptions): Promise<AgentSm
   const provider = new PiAgentProvider({
     customTools: [createStatusTool()],
     ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
+    ...(options.config !== undefined ? { config: options.config } : {}),
     ...(options.personalPiAuthPath !== undefined
       ? { personalPiAuthPath: options.personalPiAuthPath }
       : {}),

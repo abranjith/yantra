@@ -33,7 +33,18 @@ The smallest useful no-model task uses keyless DuckDuckGo search and local synth
 node apps/cli/dist/bin.js ask "what is Yantra's current public release status?" --no-llm --search-provider duckduckgo
 ```
 
-See the [Quickstart](docs/quickstart.md) for prerequisites and platform paths, then the [Usage guide](docs/usage.md) for model credentials, local models, commands, artifacts, and configuration.
+Yantra keeps everything it owns under one home directory, `~/.yantra` (override with `YANTRA_HOME`), identically on Windows, macOS, and Linux. Installation state lives in `<home>/config.yaml` and personal preferences in `<home>/profile.yaml`; the command line owns both, so neither file needs hand-editing:
+
+```console
+node apps/cli/dist/bin.js config path
+node apps/cli/dist/bin.js model add claude-opus-4-7 --provider anthropic --api-key-ref '${env:ANTHROPIC_API_KEY}'
+node apps/cli/dist/bin.js secret set tavily.api_key
+node apps/cli/dist/bin.js open --print
+```
+
+Credentials are never written to YAML or passed as arguments: `config.yaml` holds only `${env:NAME}` or `${secret:key}` references, resolved at the execution boundary.
+
+See the [Quickstart](docs/quickstart.md) for prerequisites and platform paths, the [Configuration guide](docs/features/configuration.md) for the full key reference and environment-variable table, then the [Usage guide](docs/usage.md) for model credentials, local models, commands, artifacts, and configuration.
 
 ## What you can do
 
@@ -42,6 +53,7 @@ See the [Quickstart](docs/quickstart.md) for prerequisites and platform paths, t
 - Promote successful browser traces or author reviewable YAML workflows, then replay them with a fixed plan that a model cannot steer.
 - Schedule saved workflows through a local daemon. Scheduled runs are always zero-LLM and pause rather than auto-confirm protected actions.
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
+- Manage the installation from the command line with `config`, `model`, and `secret`, and reopen any finished run's artifacts with `open`.
 
 ## Safety and current boundaries
 
@@ -57,6 +69,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 
 ### Features
 
+- [Configuration, Models, Credentials, and Storage](docs/features/configuration.md) — the two-file model, `config.yaml` reference, storage layout, and environment variables.
 - [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
 - [Research](docs/features/research.md) — agentic and deterministic multi-hop research.
 - [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`.

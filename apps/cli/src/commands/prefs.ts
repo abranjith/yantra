@@ -25,6 +25,7 @@ import {
 } from '@yantra/core';
 import { Command } from 'commander';
 
+import { keyOwner } from '../key-ownership.js';
 import { openPreferences } from '../preferences.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 import { makeStderrLogger } from '../runtime.js';
@@ -126,7 +127,7 @@ async function runList(options: PrefsOptions, logger: Logger): Promise<void> {
       emit('prefs', { rows: result.value });
     } else if (result.value.length === 0) {
       process.stdout.write(
-        'No stored preferences. Edit ~/.config/yantra/profile.yaml or run `yantra prefs set`.\n',
+        'No stored preferences. Edit ~/.yantra/profile.yaml or run `yantra prefs set`.\n',
       );
     } else {
       for (const row of result.value) {
@@ -175,6 +176,9 @@ async function runSet(
 ): Promise<void> {
   if (key === undefined || value === undefined) {
     fail('`prefs set` requires a key and a value');
+  }
+  if (keyOwner(key) === 'config') {
+    fail(`that is an installation key - use: yantra config set ${key} ${value}`);
   }
   const validated = validatePreference(key, value);
   if (!validated.isOk) {

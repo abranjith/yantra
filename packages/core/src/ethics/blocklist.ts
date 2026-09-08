@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { configDir } from '../browser/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_BLOCKLIST_PATH = join(__dirname, 'blocklist.default.yaml');
@@ -24,7 +25,7 @@ export class BlocklistImpl {
   private userRulesPath: string;
 
   constructor(userRulesPath?: string) {
-    this.userRulesPath = userRulesPath ?? join(homedir(), '.config', 'yantra', 'blocklist.yaml');
+    this.userRulesPath = userRulesPath ?? join(configDir(), 'blocklist.yaml');
   }
 
   /** Returns the category label if the host is blocked, null otherwise. */

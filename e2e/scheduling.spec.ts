@@ -37,6 +37,7 @@ import {
   type ExecutionContext,
   type Notification,
   type Notifier,
+  resetPathCache,
 } from '@yantra/core';
 import type { NotifyTarget } from '@yantra/core';
 import type { Plan, Step, TaskEvent } from '@yantra/protocol';
@@ -247,21 +248,21 @@ describe('@no-llm scheduling e2e + chaos', () => {
 
   beforeEach(async () => {
     tmpHome = await mkdtemp(join(tmpdir(), 'yantra-sched-e2e-'));
-    for (const key of ['XDG_DATA_HOME', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'APPDATA']) {
-      saved[key] = process.env[key];
-      process.env[key] = tmpHome;
-    }
+    // One storage root on every platform: YANTRA_HOME is the only variable
+    // that isolates a run, and dataDir() memoizes its first resolution.
+    saved.YANTRA_HOME = process.env.YANTRA_HOME;
+    process.env.YANTRA_HOME = tmpHome;
+    resetPathCache();
     // Seed the demo workflow so registration validation passes.
-    const wfDir = join(tmpHome, 'yantra', 'workflows');
+    const wfDir = join(tmpHome, 'data', 'workflows');
     await mkdir(wfDir, { recursive: true });
     await writeFile(join(wfDir, 'demo.yaml'), DEMO_WORKFLOW, 'utf8');
   });
 
   afterEach(async () => {
-    for (const key of ['XDG_DATA_HOME', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'APPDATA']) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
+    if (saved.YANTRA_HOME === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = saved.YANTRA_HOME;
+    resetPathCache();
     await rm(tmpHome, { recursive: true, force: true });
   });
 
@@ -392,7 +393,7 @@ describe('@no-llm scheduling e2e + chaos', () => {
 
   it('yantra audit narrates a scheduled fire from the schedule.json sidecar', async () => {
     const runId = '20260705T080000Z-demo-abcd';
-    const runDir = join(tmpHome, 'yantra', 'runs', runId);
+    const runDir = join(tmpHome, 'data', 'runs', runId);
     await mkdir(runDir, { recursive: true });
     await writeFile(
       join(runDir, 'manifest.json'),

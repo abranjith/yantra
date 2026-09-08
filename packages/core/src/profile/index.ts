@@ -1,5 +1,5 @@
 /**
- * Personal profile + preferences (`~/.config/yantra/profile.yaml` + the merged
+ * Personal profile + preferences (`~/.yantra/profile.yaml` + the merged
  * effective view). The privacy-gated personalization builder lives here too.
  */
 

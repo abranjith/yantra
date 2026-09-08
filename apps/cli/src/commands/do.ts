@@ -22,6 +22,7 @@ import { CommanderError, Option, type Command } from 'commander';
 import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
+import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
@@ -40,6 +41,7 @@ interface DoOptions extends AgentOptions {
   readonly allowHost?: string[];
   /** Promote a successful run's browser trace into a saved workflow (FEAT-027). */
   readonly saveAs?: string;
+  readonly open?: boolean;
 }
 
 /** Injectable CLI boundaries for hermetic command tests. */
@@ -76,6 +78,9 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
       ),
     )
     .addOption(new Option('--json', 'emit progress and outcome as NDJSON').default(false))
+    .addOption(
+      new Option('--open', 'open the generated brief.html in the default browser').default(false),
+    )
     .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
     .addHelpText(
       'after',
@@ -121,6 +126,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     noColor: json || !runtime.isTty,
     stream: runtime.stdout,
     errStream: runtime.stderr,
+    suppressOpenHint: options.open === true,
   };
   const connector = new CLIConnectorIO(json ? new JSONRenderer() : new TerminalRenderer(), {
     renderOpts,
@@ -190,6 +196,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
         : `⚠ Could not save workflow "${outcome.promotion.workflowName}": ${outcome.promotion.error}\n`;
       runtime.stdout.write(line);
     }
+    if (options.open === true && outcome.kind === 'published') openArtifact(outcome.brief.htmlPath);
     const exitCode = exitCodeForDoOutcome(outcome);
     if (exitCode !== 0) {
       throw new CommanderError(exitCode, `yantra.do.${outcome.kind}`, outcome.kind);

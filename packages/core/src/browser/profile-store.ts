@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { access, chmod, mkdir, readdir, rm, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 
+import { chromeUserDataRoots } from './chrome-discovery.js';
 import { ProfilePathRefusedError } from './errors.js';
 import { dataDir, ephemeralRoot } from './paths.js';
 import type {
@@ -21,23 +21,7 @@ const WORKFLOW_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
  * Writing a Yantra profile here could corrupt the user's browser data.
  */
 function forbiddenProfileRoots(): readonly string[] {
-  const home = homedir();
-  const roots: string[] = [
-    // macOS
-    join(home, 'Library', 'Application Support', 'Google', 'Chrome'),
-    join(home, 'Library', 'Application Support', 'Chromium'),
-    // Linux
-    join(home, '.config', 'google-chrome'),
-    join(home, '.config', 'chromium'),
-  ];
-
-  const localAppData = process.env.LOCALAPPDATA;
-  if (localAppData || process.platform === 'win32') {
-    const base = localAppData ?? join(home, 'AppData', 'Local');
-    roots.push(join(base, 'Google', 'Chrome', 'User Data'), join(base, 'Chromium', 'User Data'));
-  }
-
-  return roots;
+  return chromeUserDataRoots();
 }
 
 /**

@@ -1,14 +1,38 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { BlocklistImpl } from '../../src/ethics/blocklist.js';
 
 describe('@no-llm BlocklistImpl', () => {
   let blocklist: BlocklistImpl;
+  let temporaryRoot: string | undefined;
+  const savedHome = process.env.YANTRA_HOME;
 
   beforeEach(async () => {
     // Load the bundled default blocklist
     blocklist = new BlocklistImpl();
     await blocklist.reload();
+  });
+
+  afterEach(async () => {
+    if (savedHome === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = savedHome;
+    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
+  });
+
+  it('loads the default user path from YANTRA_HOME/blocklist.yaml', async () => {
+    temporaryRoot = await mkdtemp(join(tmpdir(), 'yantra-blocklist-'));
+    process.env.YANTRA_HOME = temporaryRoot;
+    await writeFile(
+      join(temporaryRoot, 'blocklist.yaml'),
+      'version: 1\ncategories:\n  custom: [blocked.example]\nuser_rules: []\n',
+    );
+    const configured = new BlocklistImpl();
+    await configured.reload();
+    expect(configured.match('blocked.example')).toBe('custom');
   });
 
   describe('exact host matching', () => {

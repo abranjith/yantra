@@ -18,6 +18,18 @@ const lintMessagesFor = async (filePath: string) => {
 };
 
 describe('@no-llm lint boundary rules', () => {
+  it('builds Yantra paths from homedir only in browser/paths.ts', () => {
+    const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
+    const violations = sourceFiles.filter((filePath) => {
+      if (filePath.split(sep).join('/').endsWith('packages/core/src/browser/paths.ts')) {
+        return false;
+      }
+      const source = readFileSync(resolve(repoRoot, filePath), 'utf8');
+      return /join\s*\(\s*homedir\s*\(\s*\)/u.test(source);
+    });
+    expect(violations).toEqual([]);
+  });
+
   it('contains no literal NUL bytes in production TypeScript source', () => {
     const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
     const withNul = sourceFiles.filter((filePath) =>

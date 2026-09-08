@@ -1,32 +1,17 @@
-/**
- * `yantra init` — bootstraps the user's first config file.
- *
- * It writes a default `~/.config/yantra/config.yaml` (path resolved via
- * {@link configPath}) with the chosen LLM provider, and seeds the
- * human-editable `profile.yaml`.
- *
- * **Interactivity is opt-out, and scripted use is unaffected.** The only
- * interactive step is the sensitive-context questionnaire
- * ({@link collectContextGrants}), which asks what the agent may be told about
- * the user. It fires only on an interactive TTY, without `--json` or `--yes`,
- * and only when the profile is actually being written (absent, or `--reset`).
- * Every other path — CI, pipes, `--json`, re-runs over an existing profile —
- * writes the behavior-preserving defaults silently. Remaining provisioning
- * (Chrome selection, profile-mode warning, API-key seeding) is still deferred;
- * the user can edit the YAML directly or use `yantra config set`.
- *
- * @example
- *   yantra init --provider none      # `--no-llm`-only mode, no API keys
- *   yantra init --provider anthropic # writes the YAML; key seeded via env
- *   yantra init --reset              # back up + rewrite the YAML
- *   yantra init --yes                # accept defaults without prompting
- */
-
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, win32 } from 'node:path';
 
-import { configPath, defaultProfile, profilePath, saveProfile } from '@yantra/core';
+import {
+  configPath,
+  defaultConfig,
+  defaultProfile,
+  profilePath,
+  redactConfigRefs,
+  saveProfile,
+  type YantraConfig,
+} from '@yantra/core';
 import { Command } from 'commander';
+import { stringify } from 'yaml';
 
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
@@ -36,6 +21,7 @@ import {
   type ContextGrantAnswers,
   type ContextGrantDeps,
 } from './init-context-prompts.js';
+import { runInitWizard, type InitWizardAnswers, type InitWizardDeps } from './init-wizard.js';
 
 interface InitOptions {
   readonly provider?: string;
@@ -44,164 +30,158 @@ interface InitOptions {
   readonly yes?: boolean;
 }
 
-/** Injectable boundaries so the interactive path is testable without a terminal. */
 export interface InitDeps {
-  /** Whether stdin is an interactive terminal; defaults to the real check. */
   readonly isTty?: boolean;
-  /** The questionnaire; defaults to {@link collectContextGrants}. */
   readonly collect?: (deps?: ContextGrantDeps) => Promise<ContextGrantAnswers>;
+  readonly wizard?: (deps?: InitWizardDeps) => Promise<InitWizardAnswers>;
 }
 
 const ALLOWED_PROVIDERS = new Set(['anthropic', 'ollama', 'none']);
 
 export function makeInitCommand(deps: InitDeps = {}): Command {
-  const cmd = new Command('init');
-
-  cmd
-    .description('Create or update ~/.config/yantra/config.yaml')
-    .option('--provider <name>', "default LLM provider: 'anthropic' | 'ollama' | 'none'", 'none')
-    .option('--reset', 'back up the existing config (if any) and rewrite from defaults', false)
+  return new Command('init')
+    .description('Create or update ~/.yantra/config.yaml')
+    .option('--provider <name>', "default model provider: 'anthropic' | 'ollama' | 'none'")
+    .option('--reset', 'back up existing files and rewrite from defaults', false)
     .option('--json', 'emit a JSON status object after writing', false)
-    .option('--yes', 'accept defaults without prompting; implied for non-TTY and --json', false)
+    .option('--yes', 'accept defaults without prompting', false)
     .action(async (options: InitOptions) => {
       try {
         const target = configPath();
-        const provider = (options.provider ?? 'none').toLowerCase();
-        if (!ALLOWED_PROVIDERS.has(provider)) {
+        await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+        const alreadyExists = await fileExists(target);
+        if (alreadyExists && options.reset !== true) {
+          if (options.json)
+            process.stdout.write(
+              `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'already-initialized', configPath: target })}\n`,
+            );
+          else process.stdout.write(`Already initialized at ${target}. Pass --reset to rewrite.\n`);
+          process.exit(0);
+        }
+        if (alreadyExists) await rename(target, `${target}.bak.${Date.now()}`);
+
+        const interactive = shouldPrompt(options, deps);
+        const requestedProvider = (options.provider ?? 'none').toLowerCase();
+        if (!ALLOWED_PROVIDERS.has(requestedProvider)) {
           process.stderr.write(
-            `Unknown provider "${provider}" (expected: anthropic | ollama | none)\n`,
+            `Unknown provider "${requestedProvider}" (expected: anthropic | ollama | none)\n`,
           );
           process.exit(1);
         }
+        const answers =
+          interactive && options.provider === undefined
+            ? await (deps.wizard ?? runInitWizard)()
+            : defaultsFor(requestedProvider as InitWizardAnswers['provider']);
+        if (answers.dataDir && !(isAbsolute(answers.dataDir) || win32.isAbsolute(answers.dataDir)))
+          throw new Error('the data directory must be absolute');
+        if (answers.dataDir) await mkdir(answers.dataDir, { recursive: true, mode: 0o700 });
 
-        await mkdir(dirname(target), { recursive: true });
+        const config = buildConfig(answers);
+        await writeFile(target, stringify(serializable(config)), { encoding: 'utf8', mode: 0o600 });
 
-        const alreadyExists = await fileExists(target);
-        if (alreadyExists && options.reset !== true) {
-          if (options.json === true) {
-            process.stdout.write(
-              `${JSON.stringify({
-                schemaVersion: CLI_JSON_SCHEMA_VERSION,
-                kind: 'init',
-                status: 'already-initialized',
-                configPath: target,
-              })}\n`,
-            );
-          } else {
-            process.stdout.write(`Already initialized at ${target}. Pass --reset to rewrite.\n`);
-          }
-          process.exit(0);
-        }
-
-        if (alreadyExists) {
-          await rename(target, `${target}.bak.${Date.now()}`);
-        }
-
-        const content = buildConfig(provider);
-        await writeFile(target, content, { encoding: 'utf8', mode: 0o600 });
-
-        // Seed the human-editable personalization profile, recording the user's
-        // sensitive-context consent answers alongside the defaults. Only written
-        // when absent (or on --reset) so hand edits are never clobbered — which
-        // is also why the questionnaire is gated on the same condition: never
-        // ask a question whose answer would be discarded.
         const profileTarget = profilePath();
         const writingProfile = options.reset === true || !(await fileExists(profileTarget));
-        let answers = defaultContextGrantAnswers();
+        let grants = defaultContextGrantAnswers();
         if (writingProfile) {
-          if (shouldPrompt(options, deps)) {
-            answers = await (deps.collect ?? collectContextGrants)();
-          }
+          if (interactive) grants = await (deps.collect ?? collectContextGrants)();
           const profile = defaultProfile();
           await saveProfile(
             {
               ...profile,
-              locale: { ...profile.locale, city: answers.city },
-              context: { ...profile.context, location: answers.grants.location },
+              locale: { ...profile.locale, city: grants.city },
+              context: { ...profile.context, location: grants.grants.location },
+              agent: {
+                ...profile.agent,
+                provider: answers.provider === 'none' ? null : answers.provider,
+                model: answers.modelId,
+              },
             },
             profileTarget,
           );
         }
 
-        if (options.json === true) {
+        if (options.json)
           process.stdout.write(
-            `${JSON.stringify({
-              schemaVersion: CLI_JSON_SCHEMA_VERSION,
-              kind: 'init',
-              status: 'written',
-              configPath: target,
-              provider,
-            })}\n`,
+            `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'written', configPath: target, provider: answers.provider })}\n`,
           );
-        } else {
+        else {
           process.stdout.write(`Wrote ${target}\n`);
-          process.stdout.write(`Default LLM provider: ${provider}\n`);
           if (writingProfile) {
             process.stdout.write(`Wrote ${profileTarget}\n`);
             process.stdout.write(
-              answers.grants.location
+              grants.grants.location
                 ? 'Location sharing: on. Change it with `yantra prefs set context.location false`.\n'
                 : 'Location sharing: off. Change it with `yantra prefs set context.location true`.\n',
             );
           }
-          if (provider === 'anthropic') {
-            process.stdout.write(
-              'Next: set ANTHROPIC_API_KEY in your environment or seed it in the keychain.\n',
-            );
-          }
+          process.stdout.write('Next: yantra model list; yantra secret list; yantra config path\n');
         }
         process.exit(0);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`init failed: ${message}\n`);
+      } catch (error) {
+        process.stderr.write(
+          `init failed: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
         process.exit(1);
       }
     });
-
-  return cmd;
 }
 
-function buildConfig(provider: string): string {
-  return [
-    '# yantra config — managed by `yantra init` / `yantra config`',
-    `# generated: ${new Date().toISOString()}`,
-    '',
-    'provider:',
-    `  default: ${provider}`,
-    '  anthropic:',
-    '    model: claude-opus-4-7',
-    '  ollama:',
-    '    baseUrl: http://localhost:11434',
-    '    model: llama3.1:8b',
-    '',
-    'search:',
-    "  provider: auto # 'auto' | 'google' | 'duckduckgo' | 'brave' | 'tavily'",
-    '  # order `auto` walks, skipping providers whose API key is missing.',
-    '  # google is opt-in (highest anti-bot friction) — add it explicitly if wanted.',
-    '  fallback_chain:',
-    '    - tavily',
-    '    - brave',
-    '    - duckduckgo',
-    '  # API keys live in the OS keychain (tavily.api_key / brave.api_key), never here.',
-    '',
-    'ethics:',
-    '  robots_enabled: false # opt-in robots.txt enforcement',
-    '',
-    'retention:',
-    '  runsDays: 30',
-    '',
-  ].join('\n');
+function defaultsFor(provider: InitWizardAnswers['provider']): InitWizardAnswers {
+  if (provider === 'anthropic')
+    return {
+      provider,
+      modelId: 'claude-opus-4-7',
+      baseUrl: null,
+      apiKey: { kind: 'env', name: 'ANTHROPIC_API_KEY' },
+      dataDir: null,
+    };
+  if (provider === 'ollama')
+    return {
+      provider,
+      modelId: 'llama3.1:8b',
+      baseUrl: 'http://localhost:11434',
+      apiKey: null,
+      dataDir: null,
+    };
+  return { provider: 'none', modelId: null, baseUrl: null, apiKey: null, dataDir: null };
 }
 
-/**
- * Whether the grant questionnaire may run. All three conditions must hold:
- * an interactive terminal to ask in, no `--json` (machine-readable output has
- * no room for questions), and no `--yes`. Non-TTY implies `--yes`, which is
- * what keeps CI and scripted use unaffected.
- */
+function buildConfig(answers: InitWizardAnswers): YantraConfig {
+  const base = defaultConfig();
+  return {
+    ...base,
+    paths: { ...base.paths, data_dir: answers.dataDir },
+    models:
+      answers.provider === 'none' || !answers.modelId
+        ? []
+        : [
+            {
+              id: answers.modelId,
+              provider: answers.provider,
+              base_url: answers.baseUrl,
+              api_key: answers.apiKey,
+              input: ['text'],
+            },
+          ],
+  };
+}
+
+function serializable(config: YantraConfig): unknown {
+  const raw = redactConfigRefs(config) as Record<string, unknown>;
+  const models = (raw.models as Record<string, unknown>[]).map((model) =>
+    Object.fromEntries(
+      Object.entries(model).filter(
+        ([key, value]) => !((key === 'api_key' || key === 'base_url') && value === null),
+      ),
+    ),
+  );
+  return { ...raw, models };
+}
+
 function shouldPrompt(options: InitOptions, deps: InitDeps): boolean {
-  const isTty = deps.isTty ?? process.stdin.isTTY === true;
-  return isTty && options.json !== true && options.yes !== true;
+  return (
+    (deps.isTty ?? process.stdin.isTTY === true) && options.json !== true && options.yes !== true
+  );
 }
 
 async function fileExists(path: string): Promise<boolean> {

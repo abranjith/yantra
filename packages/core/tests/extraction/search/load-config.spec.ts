@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { resetPathCache } from '../../../src/config/resolved-paths.js';
 import { loadSearchConfig } from '../../../src/extraction/search/config.js';
 import { DEFAULT_SEARCH_CONFIG } from '../../../src/extraction/search/registry.js';
 
@@ -11,27 +12,27 @@ import { DEFAULT_SEARCH_CONFIG } from '../../../src/extraction/search/registry.j
  * End-to-end load path: `search.fetch_top` written to the real `config.yaml`
  * location must reach the loaded {@link SearchConfig}, and an out-of-range value
  * must fail loud at load time (the CLI maps this throw to a startup exit 1).
- * `configDir()` resolves via `APPDATA` (win32) or `XDG_CONFIG_HOME` (posix), so
- * we point both at a temp home to exercise the actual file read + validation.
+ * `configDir()` resolves to `YANTRA_HOME` on every platform, so we point it at
+ * a temp home to exercise the actual file read + validation.
  */
 
 const dirs: string[] = [];
-const savedEnv = { xdg: process.env.XDG_CONFIG_HOME, appdata: process.env.APPDATA };
+const savedHome = process.env.YANTRA_HOME;
 
 afterEach(async () => {
-  process.env.XDG_CONFIG_HOME = savedEnv.xdg;
-  process.env.APPDATA = savedEnv.appdata;
+  if (savedHome === undefined) delete process.env.YANTRA_HOME;
+  else process.env.YANTRA_HOME = savedHome;
+  resetPathCache();
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 async function writeConfig(body: string): Promise<void> {
   const base = await mkdtemp(join(tmpdir(), 'yantra-cfg-'));
   dirs.push(base);
-  process.env.XDG_CONFIG_HOME = base;
-  process.env.APPDATA = base;
-  const dir = join(base, 'yantra');
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'config.yaml'), body, 'utf8');
+  process.env.YANTRA_HOME = base;
+  resetPathCache();
+  await mkdir(base, { recursive: true });
+  await writeFile(join(base, 'config.yaml'), body, 'utf8');
 }
 
 describe('@no-llm loadSearchConfig fetch_top wiring', () => {

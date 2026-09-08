@@ -95,6 +95,11 @@ describe('doctor agent checks', () => {
       'agent.model',
       'agent.credentials',
       'agent.budgets',
+      'config.valid',
+      'paths.resolved',
+      'ethics.robots',
+      'search.tavily.api-key',
+      'search.brave.api-key',
     ]);
     expect(report.overall).toBe('warn');
     expect(stderr.read()).toBe('');

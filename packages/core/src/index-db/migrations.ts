@@ -1,6 +1,6 @@
 /**
  * Forward-only, table-driven schema migrations for the local SQLite index
- * (`~/.local/share/yantra/index.db`).
+ * (`~/.yantra/data/index.db`).
  *
  * The index is a **rebuildable cache, not the source of truth** — the run-dir
  * files stay canonical (plan §7). Migrations are therefore free to be simple

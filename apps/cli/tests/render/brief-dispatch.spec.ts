@@ -109,6 +109,44 @@ describe('@no-llm brief dispatch', () => {
     expect(out.value()).toContain('Saved: /runs/x/brief.md · /runs/x/brief.html');
   });
 
+  it('includes the open hint for a saved terminal brief', () => {
+    const out = captureStream();
+    const artifacts: BriefArtifactPaths = {
+      jsonPath: '/runs/x/brief.json',
+      mdPath: '/runs/x/brief.md',
+      htmlPath: '/runs/x/brief.html',
+    };
+
+    new TerminalRenderer().renderBrief(
+      canonicalBrief,
+      artifacts,
+      makeOpts({ stream: out.stream, briefFormat: 'terminal' }),
+    );
+
+    expect(out.value()).toContain('Open: yantra open x');
+  });
+
+  it('suppresses the open hint after a command already launched the artifact', () => {
+    const out = captureStream();
+    const artifacts: BriefArtifactPaths = {
+      jsonPath: '/runs/x/brief.json',
+      mdPath: '/runs/x/brief.md',
+      htmlPath: '/runs/x/brief.html',
+    };
+
+    new TerminalRenderer().renderBrief(
+      canonicalBrief,
+      artifacts,
+      makeOpts({
+        stream: out.stream,
+        briefFormat: 'terminal',
+        suppressOpenHint: true,
+      }),
+    );
+
+    expect(out.value()).not.toContain('Open: yantra open');
+  });
+
   it('honors the terminal detail level through dispatch', () => {
     const overview = captureStream();
     new TerminalRenderer().renderBrief(

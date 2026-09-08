@@ -5,6 +5,7 @@ import { Command, CommanderError } from 'commander';
 
 import { registerAskCommand, type AskRuntime } from './commands/ask.js';
 import { makeAuditCommand } from './commands/audit.js';
+import { makeConfigCommand } from './commands/config.js';
 import { makeConfirmCommand } from './commands/confirm.js';
 import { makeDaemonCommand } from './commands/daemon.js';
 import { registerDoCommand, type DoRuntime } from './commands/do.js';
@@ -12,6 +13,8 @@ import { makeDoctorCommand } from './commands/doctor.js';
 import { makeInitCommand } from './commands/init.js';
 import { makeLintCommand } from './commands/lint.js';
 import { makeListCommand } from './commands/list.js';
+import { makeModelCommand } from './commands/model.js';
+import { makeOpenCommand } from './commands/open.js';
 import { makePrefsCommand } from './commands/prefs.js';
 import { makeProfileCommand } from './commands/profile.js';
 import { makeReportCommand } from './commands/report.js';
@@ -23,6 +26,7 @@ import {
   makeSchedulesCommand,
   makeUnscheduleCommand,
 } from './commands/schedule.js';
+import { makeSecretCommand } from './commands/secret.js';
 import { makeShowCommand } from './commands/show.js';
 import { makeSitesCommand, type SitesRuntime } from './commands/sites.js';
 import { makeTemplateCommand, type TemplateCommandRuntime } from './commands/template.js';
@@ -72,6 +76,8 @@ export const run = async (
   registerDoCommand(program, options.doRuntime);
   program.addCommand(makeRunCommand());
   program.addCommand(makeConfirmCommand());
+  program.addCommand(makeConfigCommand());
+  program.addCommand(makeSecretCommand());
   program.addCommand(makeResumeCommand());
   program.addCommand(makeScheduleCommand());
   program.addCommand(makeSchedulesCommand());
@@ -79,6 +85,8 @@ export const run = async (
   program.addCommand(makeDaemonCommand());
   program.addCommand(makeLintCommand());
   program.addCommand(makeListCommand());
+  program.addCommand(makeModelCommand());
+  program.addCommand(makeOpenCommand());
   program.addCommand(makeShowCommand());
   program.addCommand(makeUsageCommand());
   program.addCommand(makeProfileCommand());

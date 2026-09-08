@@ -272,6 +272,7 @@ function renderBrief(
     errStream: runtime.stderr,
     briefDetail: view.detail,
     briefFormat: view.format,
+    suppressOpenHint: view.options.open === true,
     ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
   };
 
@@ -382,6 +383,7 @@ async function runAgenticResearch(
     errStream: runtime.stderr,
     briefDetail: detail,
     briefFormat: format,
+    suppressOpenHint: options.open === true,
     ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
   };
   const connector = new CLIConnectorIO(

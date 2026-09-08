@@ -1,0 +1,630 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-07T05:28:35.734Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-07T05:30:14.177Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-07T05:31:45.799Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-07T05:37:19.983Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-07T05:38:48.149Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-07T05:43:07.337Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-07T05:44:30.435Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-008",
+      "at": "2026-09-07T05:47:58.272Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-009",
+      "at": "2026-09-07T05:51:34.508Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-010",
+      "at": "2026-09-07T05:55:32.831Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-011",
+      "at": "2026-09-07T05:58:06.860Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-012",
+      "at": "2026-09-07T21:30:47.864Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-07T21:39:16.956Z",
+      "head": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8"
+    }
+  ],
+  "files": [
+    {
+      "path": "apps/cli/src/agent-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/config.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/init-wizard.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/init.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/model.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/commands/open.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/prefs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/profile.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/secret.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/key-ownership.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/render/terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/render/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/tests/commands/config.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/doctor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-context-prompts.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-wizard.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/commands/model.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/open.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/tests/commands/secret.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/key-ownership.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/render/brief-dispatch.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/cli-commands.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/config-storage.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/profile-history.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/scheduling.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/environment.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/model-projection.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/provider.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/smoke.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/environment.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/model-projection.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/provider.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/smoke.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/browser/chrome-discovery.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/browser/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/browser/paths.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/profile-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/config/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/config/load.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/config/refs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/config/resolved-paths.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/config/schema.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/config/write.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/ethics/blocklist.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/ethics/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/extraction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/extraction/search/brave.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/extraction/search/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/extraction/search/credential.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/extraction/search/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/extraction/search/tavily.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/index-db/db.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/index-db/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/index-db/migrations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/profile/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/src/retention/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/retention/prune.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/sanitizer/host-overrides.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/browser/paths.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/security.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/config/load.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/config/refs.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/config/resolved-paths-memo.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/tests/config/resolved-paths.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/config/schema.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/config/write.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/ethics/blocklist.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/tests/ethics/config.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/tests/extraction/search/load-config.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/core/tests/retention/prune.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/sanitizer/host-overrides.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-041-config_and_storage_consolidation/changeset.json",
+    ".spec-lite/features/FEAT-041-config_and_storage_consolidation/spec.md",
+    ".spec-lite/memory.md"
+  ],
+  "baseline": {
+    "sha": "e5e3a0fcf97c06a2e3414f4cce67c1f2c3c77fd8",
+    "capturedAt": "2026-09-07T05:25:34.235Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/memory.md",
+      ".spec-lite/features/FEAT-041-config_and_storage_consolidation/spec.md"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/memory.md": "57fa9b586df2d384713e3314414337f92abef710",
+      ".spec-lite/features/FEAT-041-config_and_storage_consolidation/spec.md": "6e81fd2f650d9145b59eee747b901cdacc1f3aa7"
+    }
+  },
+  "featureId": "FEAT-041"
+}

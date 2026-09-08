@@ -6,11 +6,12 @@
  * live provider path is exercised by `yantra doctor --agent-smoke`.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import { defaultConfig, type YantraConfig } from '@yantra/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { PiSessionLike } from '../../../src/adapters/pi/provider.js';
@@ -34,26 +35,39 @@ afterEach(async () => {
   );
 });
 
-async function makeSmokeFixture(): Promise<{ dataDir: string; runDir: string; cwd: string }> {
+/**
+ * The hermetic model registry these tests run against.
+ *
+ * `models.json` is a projection of `config.yaml`'s `models:` block, so the
+ * registry is declared here rather than hand-written to disk — injecting it
+ * also keeps the environment from projecting the developer's real config
+ * into the sandbox.
+ */
+function hermeticConfig(): YantraConfig {
+  return {
+    ...defaultConfig(),
+    models: [
+      {
+        id: 'test-model',
+        provider: 'testprov',
+        base_url: 'http://127.0.0.1:9/v1',
+        api_key: null,
+        input: ['text'],
+      },
+    ],
+  };
+}
+
+async function makeSmokeFixture(): Promise<{
+  dataDir: string;
+  runDir: string;
+  cwd: string;
+  config: YantraConfig;
+}> {
   const dataDir = await makeTempDir('yantra-smoke-data-');
   const runDir = await makeTempDir('yantra-smoke-run-');
   const cwd = await makeTempDir('yantra-smoke-cwd-');
-  const piDir = join(dataDir, 'pi');
-  await mkdir(piDir, { recursive: true });
-  await writeFile(
-    join(piDir, 'models.json'),
-    JSON.stringify({
-      providers: {
-        testprov: {
-          baseUrl: 'http://127.0.0.1:9/v1',
-          api: 'openai-completions',
-          models: [{ id: 'test-model', name: 'Test Model' }],
-        },
-      },
-    }),
-    'utf8',
-  );
-  return { dataDir, runDir, cwd };
+  return { dataDir, runDir, cwd, config: hermeticConfig() };
 }
 
 function statusToolEvents(): AgentSessionEvent[] {
@@ -108,6 +122,7 @@ describe('@no-llm runAgentSmoke', () => {
       runDir: fixture.runDir,
       cwd: fixture.cwd,
       dataDir: fixture.dataDir,
+      config: fixture.config,
       createSession: () => {
         factoryCalls += 1;
         throw new Error('unreachable');
@@ -130,6 +145,7 @@ describe('@no-llm runAgentSmoke', () => {
       runDir: fixture.runDir,
       cwd: fixture.cwd,
       dataDir: fixture.dataDir,
+      config: fixture.config,
     });
 
     await expect(attempt).rejects.toBeInstanceOf(AgentModelNotFoundError);
@@ -167,6 +183,7 @@ describe('@no-llm runAgentSmoke', () => {
       runDir: fixture.runDir,
       cwd: fixture.cwd,
       dataDir: fixture.dataDir,
+      config: fixture.config,
       onEvent: (event) => streamed.push(event),
       createSession: (sessionOptions) => {
         captured = sessionOptions as typeof captured;
@@ -225,6 +242,7 @@ describe('@no-llm runAgentSmoke', () => {
       runDir: fixture.runDir,
       cwd: fixture.cwd,
       dataDir: fixture.dataDir,
+      config: fixture.config,
       signal: controller.signal,
       createSession: () => Promise.resolve({ session: stub }),
     });

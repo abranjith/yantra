@@ -2,8 +2,10 @@
  * @no-llm
  *
  * Smoke coverage for the CLI surface added in FEAT-012. Exercises the
- * read-only commands against an isolated XDG data root so we don't touch
- * the user's real `~/.local/share/yantra/`.
+ * read-only commands against an isolated `YANTRA_HOME` so we don't touch the
+ * user's real `~/.yantra/`. Yantra resolves one storage root on every
+ * platform, so `YANTRA_HOME` is the only variable that isolates these runs —
+ * XDG and `%APPDATA%` are ignored by design.
  *
  * Bypasses `process.exit` by trapping it during each command invocation.
  * The CLI handlers call `process.exit(<code>)` directly today; future work
@@ -17,6 +19,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { run } from '@yantra/cli';
+import { resetPathCache } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { serveFixtureSite } from './fixtures/serve.js';
@@ -89,32 +92,21 @@ async function invoke(argv: readonly string[]): Promise<InvocationResult> {
 
 describe('@no-llm cli commands e2e', () => {
   let tmpHome: string;
-  let savedXdg: string | undefined;
-  let savedLocalAppData: string | undefined;
-  let savedConfigHome: string | undefined;
-  let savedAppData: string | undefined;
+  let savedYantraHome: string | undefined;
 
   beforeEach(async () => {
     tmpHome = await mkdtemp(join(tmpdir(), 'yantra-cli-cmd-'));
-    savedXdg = process.env.XDG_DATA_HOME;
-    savedLocalAppData = process.env.LOCALAPPDATA;
-    savedConfigHome = process.env.XDG_CONFIG_HOME;
-    savedAppData = process.env.APPDATA;
-    process.env.XDG_DATA_HOME = tmpHome;
-    process.env.LOCALAPPDATA = tmpHome;
-    process.env.XDG_CONFIG_HOME = tmpHome;
-    process.env.APPDATA = tmpHome;
+    savedYantraHome = process.env.YANTRA_HOME;
+    process.env.YANTRA_HOME = tmpHome;
+    // dataDir()/cacheDir() memoize their first resolution per process, so a
+    // new home per test is only honored after the memo is dropped.
+    resetPathCache();
   });
 
   afterEach(async () => {
-    if (savedXdg === undefined) delete process.env.XDG_DATA_HOME;
-    else process.env.XDG_DATA_HOME = savedXdg;
-    if (savedLocalAppData === undefined) delete process.env.LOCALAPPDATA;
-    else process.env.LOCALAPPDATA = savedLocalAppData;
-    if (savedConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
-    else process.env.XDG_CONFIG_HOME = savedConfigHome;
-    if (savedAppData === undefined) delete process.env.APPDATA;
-    else process.env.APPDATA = savedAppData;
+    if (savedYantraHome === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = savedYantraHome;
+    resetPathCache();
     await rm(tmpHome, {
       recursive: true,
       force: true,
@@ -159,7 +151,7 @@ describe('@no-llm cli commands e2e', () => {
   it('loads and replays a pre-agentic workflow while preserving audit access to an old run', async () => {
     const fixture = await serveFixtureSite();
     try {
-      const dataRoot = join(tmpHome, 'yantra');
+      const dataRoot = join(tmpHome, 'data');
       const workflowsDir = join(dataRoot, 'workflows');
       const runsDir = join(dataRoot, 'runs');
       const oldRunId = '20260516T120000Z-legacy-workflow-a7b3';

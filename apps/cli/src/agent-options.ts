@@ -8,8 +8,6 @@
  * resolved first and bypasses validation for session-only options.
  */
 
-import { readFile } from 'node:fs/promises';
-
 import {
   DEFAULT_AGENT_BUDGETS,
   DEFAULT_AGENT_MODEL,
@@ -19,7 +17,7 @@ import {
   type AgentBudgetConfig,
   type AgenticTaskRequest,
 } from '@yantra/agent';
-import { configPath, preferenceValue, type EffectivePreferences } from '@yantra/core';
+import { loadConfig, preferenceValue, type EffectivePreferences } from '@yantra/core';
 import { CommanderError, Option, type Command } from 'commander';
 
 import { noLlmReason } from './global-flags.js';
@@ -264,16 +262,8 @@ export async function resolveAgentInvocation(
 }
 
 async function readPiAuthPathOptIn(): Promise<string | undefined> {
-  try {
-    const { parse } = await import('yaml');
-    const raw = parse(await readFile(configPath(), 'utf8')) as {
-      agent?: { pi_auth_path?: unknown };
-    } | null;
-    const path = raw?.agent?.pi_auth_path;
-    return typeof path === 'string' && path.trim().length > 0 ? path.trim() : undefined;
-  } catch {
-    return undefined;
-  }
+  const loaded = await loadConfig();
+  return loaded.isOk ? (loaded.value.agent.pi_auth_path ?? undefined) : undefined;
 }
 
 function firstValue(

@@ -3,7 +3,7 @@
  * value came from (`profile.yaml` vs the machine `index.db` layer).
  *
  * This is the read-only "what does Yantra know about me, and why" surface. The
- * human-editable source of truth is `~/.config/yantra/profile.yaml`; use
+ * human-editable source of truth is `~/.yantra/profile.yaml`; use
  * `yantra prefs` to manage the machine layer and `--forget` to delete values.
  *
  * @example

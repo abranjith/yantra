@@ -1,113 +1,56 @@
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/**
- * Returns the Yantra data root directory.
- * Honors XDG_DATA_HOME on Linux/macOS; uses %LOCALAPPDATA%\yantra on Windows.
- *
- * @example dataDir() // → "/home/user/.local/share/yantra" on Linux
- */
-export function dataDir(): string {
-  if (process.platform === 'win32') {
-    const base = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
-    return join(base, 'yantra');
-  }
-  const xdg = process.env.XDG_DATA_HOME;
-  if (xdg) return join(xdg, 'yantra');
-  return join(homedir(), '.local', 'share', 'yantra');
+import { cacheDir, dataDir, resetPathCache, resolveStorageDirs } from '../config/resolved-paths.js';
+
+export { cacheDir, dataDir, resetPathCache, resolveStorageDirs };
+
+/** Returns the single platform-independent Yantra home directory. */
+export function yantraHome(): string {
+  const override = process.env.YANTRA_HOME?.trim();
+  if (override) return override;
+  return join(homedir(), '.yantra');
 }
 
-/**
- * Returns the Yantra cache root directory.
- * Honors XDG_CACHE_HOME on Linux/macOS; uses %LOCALAPPDATA%\yantra\Cache on Windows.
- *
- * @example cacheDir() // → "/home/user/.cache/yantra" on Linux
- */
-export function cacheDir(): string {
-  if (process.platform === 'win32') {
-    const base = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
-    return join(base, 'yantra', 'Cache');
-  }
-  const xdg = process.env.XDG_CACHE_HOME;
-  if (xdg) return join(xdg, 'yantra');
-  return join(homedir(), '.cache', 'yantra');
-}
+/** @example dataDir() // -> "/home/user/.yantra/data" */
+/** @example cacheDir() // -> "/home/user/.yantra/cache" */
 
-/**
- * Returns the root directory where per-workflow Chrome profiles are stored.
- *
- * @example profilesRoot() // → "/home/user/.local/share/yantra/profiles"
- */
+/** Returns the root directory where per-workflow Chrome profiles are stored. */
 export function profilesRoot(): string {
   return join(dataDir(), 'profiles');
 }
 
-/**
- * Returns the directory where ephemeral profile dirs are created.
- * Ephemeral profiles live in the OS temp directory.
- */
+/** Returns the OS temporary directory used for ephemeral profiles. */
 export function ephemeralRoot(): string {
   return tmpdir();
 }
 
-/**
- * Returns the root directory where per-run artifacts are stored.
- *
- * @example runsRoot() // → "/home/user/.local/share/yantra/runs"
- */
+/** Returns the root directory where per-run artifacts are stored. */
 export function runsRoot(): string {
   return join(dataDir(), 'runs');
 }
 
-/**
- * Returns the path to the doctor diagnostic cache file.
- *
- * @example doctorCachePath() // → "/home/user/.cache/yantra/doctor.json"
- */
+/** Returns the path to the doctor diagnostic cache file. */
 export function doctorCachePath(): string {
   return join(cacheDir(), 'doctor.json');
 }
 
-/**
- * Returns the root directory where workflow YAML files are stored.
- *
- * @example workflowsRoot() // → "/home/user/.local/share/yantra/workflows"
- */
+/** Returns the root directory where workflow YAML files are stored. */
 export function workflowsRoot(): string {
   return join(dataDir(), 'workflows');
 }
 
-/**
- * Returns the root directory for saved Markdown report templates.
- *
- * @example templatesRoot() // â†’ "/home/user/.local/share/yantra/templates"
- */
+/** Returns the root directory for saved Markdown report templates. */
 export function templatesRoot(): string {
   return join(dataDir(), 'templates');
 }
 
-/**
- * Returns the directory where Yantra configuration files live.
- *
- * Honors XDG_CONFIG_HOME on Linux/macOS; uses %APPDATA%/yantra on Windows.
- *
- * @example configDir() // → "/home/user/.config/yantra"
- */
+/** Returns the directory where Yantra configuration files live. */
 export function configDir(): string {
-  if (process.platform === 'win32') {
-    const base = process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
-    return join(base, 'yantra');
-  }
-  const xdg = process.env.XDG_CONFIG_HOME;
-  if (xdg) return join(xdg, 'yantra');
-  return join(homedir(), '.config', 'yantra');
+  return yantraHome();
 }
 
-/**
- * Returns the path to the primary Yantra config file.
- *
- * @example configPath() // → "/home/user/.config/yantra/config.yaml"
- */
+/** Returns the path to the primary Yantra config file. */
 export function configPath(): string {
-  return join(configDir(), 'config.yaml');
+  return join(yantraHome(), 'config.yaml');
 }

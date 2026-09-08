@@ -8,6 +8,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ChromeDiscovery from '../../src/browser/chrome-discovery.js';
 import { ProfilePathRefusedError } from '../../src/browser/errors.js';
 
 vi.mock('node:fs/promises', () => ({
@@ -35,7 +36,10 @@ vi.mock('../../src/browser/paths.js', () => ({
   ephemeralRoot: vi.fn(() => '/tmp'),
   doctorCachePath: vi.fn(() => '/home/testuser/.cache/yantra/doctor.json'),
 }));
-vi.mock('../../src/browser/chrome-discovery.js', () => ({
+// Only `detectChrome` is stubbed; `chromeUserDataRoots` — the source of the
+// refused-path guard's roots — must stay real for these tests to mean anything.
+vi.mock('../../src/browser/chrome-discovery.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChromeDiscovery>()),
   detectChrome: vi.fn().mockResolvedValue({
     path: '/usr/bin/google-chrome',
     version: '124.0.0.0',

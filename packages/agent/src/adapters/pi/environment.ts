@@ -25,14 +25,41 @@ import {
 import {
   createKeychainProvider,
   dataDir as yantraDataDir,
+  loadConfig,
   type KeychainProvider,
+  type YantraConfig,
 } from '@yantra/core';
 import pino from 'pino';
 
 import { AgentAuthUnavailableError } from '../../errors.js';
 import type { AgentAuthSelection } from '../../provider/types.js';
 
+import { projectModels } from './model-projection.js';
+
 const logger = pino({ name: 'pi-environment', level: process.env.LOG_LEVEL ?? 'info' });
+
+/**
+ * Projects the registered models onto the pinned `models.json`.
+ *
+ * `models.json` is derived state: `config.yaml`'s `models:` block is the only
+ * source of truth, so the projection replaces the file rather than merging.
+ * An unreadable config leaves the existing file untouched — a malformed
+ * `config.yaml` must not erase a working registry.
+ *
+ * @param config Explicit installation config, or `undefined` to load the ambient one.
+ * @param modelsPath Pinned models.json path (never the ambient `~/.pi` copy).
+ */
+async function projectRegisteredModels(
+  config: YantraConfig | undefined,
+  modelsPath: string,
+): Promise<void> {
+  if (config) {
+    await projectModels(config, modelsPath);
+    return;
+  }
+  const loaded = await loadConfig();
+  if (loaded.isOk) await projectModels(loaded.value, modelsPath);
+}
 
 /**
  * Where the credential that will authenticate the session came from.
@@ -60,6 +87,13 @@ export interface PiEnvironmentOptions {
    * inject a temp dir so every constructed path stays inside the sandbox.
    */
   readonly dataDir?: string;
+  /**
+   * Installation config the pinned `models.json` is projected from. Defaults
+   * to the ambient `config.yaml`; injected alongside `dataDir` so a sandboxed
+   * environment never projects the developer's real model registry into a
+   * temp dir.
+   */
+  readonly config?: YantraConfig;
   /**
    * Explicit opt-in (config key `agent.pi_auth_path`): absolute path to an
    * existing personal pi `auth.json` to use for `managed` auth. Affects the
@@ -126,17 +160,19 @@ export interface ModelLookup {
  * Resolves whether the selected Pi model explicitly declares image input.
  * Registry misses and malformed declarations fail closed.
  */
-export function modelSupportsImageInput(
+export async function modelSupportsImageInput(
   provider: string,
   modelId: string,
   lookup?: ModelLookup,
-): boolean {
+): Promise<boolean> {
   try {
+    const modelsPath = join(yantraDataDir(), 'pi', 'models.json');
+    if (!lookup) await projectRegisteredModels(undefined, modelsPath);
     const registry =
       lookup ??
       ModelRegistry.create(
         AuthStorage.create(join(yantraDataDir(), 'pi', 'auth.json')),
-        join(yantraDataDir(), 'pi', 'models.json'),
+        modelsPath,
       );
     const model = registry.find(provider, modelId) as { input?: unknown } | undefined;
     return Array.isArray(model?.input) && model.input.includes('image');
@@ -151,6 +187,8 @@ export interface PiCredentialProbeOptions {
   readonly auth: AgentAuthSelection;
   readonly env?: NodeJS.ProcessEnv;
   readonly dataDir?: string;
+  /** See {@link PiEnvironmentOptions.config}. */
+  readonly config?: YantraConfig;
   readonly personalPiAuthPath?: string;
   readonly keychain?: KeychainProvider;
 }
@@ -183,6 +221,7 @@ export async function probePiCredential(
     const agentDir = join(baseDataDir, 'pi');
     const authPath = options.personalPiAuthPath ?? join(agentDir, 'auth.json');
     const modelsPath = join(agentDir, 'models.json');
+    await projectRegisteredModels(options.config, modelsPath);
     const authStorage = AuthStorage.create(authPath);
     const registry = ModelRegistry.create(authStorage, modelsPath);
     const status = registry.getProviderAuthStatus(options.provider);
@@ -228,6 +267,7 @@ export async function createPiEnvironment(options: PiEnvironmentOptions): Promis
   const modelsPath = join(agentDir, 'models.json');
   const sessionStagingDir = join(agentDir, 'sessions');
 
+  await projectRegisteredModels(options.config, modelsPath);
   const authStorage = AuthStorage.create(authPath);
   const modelRegistry = ModelRegistry.create(authStorage, modelsPath);
 

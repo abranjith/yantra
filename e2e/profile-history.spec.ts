@@ -3,8 +3,8 @@
  *
  * End-to-end coverage for FEAT-018 (Persistent Personal Profiles & History).
  * Exercises the new `profile`, `prefs`, and `usage` commands plus the history
- * index against an isolated XDG data/config root so the user's real
- * `~/.local/share/yantra/` and `~/.config/yantra/` are never touched.
+ * index against an isolated `YANTRA_HOME` so the user's real `~/.yantra/` is
+ * never touched.
  *
  * Bypasses `process.exit` the same way `cli-commands.spec.ts` does.
  */
@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { run } from '@yantra/cli';
+import { resetPathCache } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 interface InvocationResult {
@@ -84,17 +85,17 @@ describe('@no-llm profiles & history e2e', () => {
 
   beforeEach(async () => {
     tmpHome = await mkdtemp(join(tmpdir(), 'yantra-profile-e2e-'));
-    for (const key of ['XDG_DATA_HOME', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'APPDATA']) {
-      saved[key] = process.env[key];
-      process.env[key] = tmpHome;
-    }
+    // One storage root on every platform: YANTRA_HOME is the only variable
+    // that isolates a run, and dataDir() memoizes its first resolution.
+    saved.YANTRA_HOME = process.env.YANTRA_HOME;
+    process.env.YANTRA_HOME = tmpHome;
+    resetPathCache();
   });
 
   afterEach(async () => {
-    for (const key of ['XDG_DATA_HOME', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'APPDATA']) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
+    if (saved.YANTRA_HOME === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = saved.YANTRA_HOME;
+    resetPathCache();
     await rm(tmpHome, { recursive: true, force: true });
   });
 

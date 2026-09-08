@@ -238,8 +238,8 @@ Expected failures are returned to the model as bounded, structured, retry-classi
 
 ## Configuration and Permissions
 
-- `~/.config/yantra/profile.yaml` stores user-editable preferences, grants, and operational defaults. It must not contain website or provider credential values.
-- Core includes a `~/.config/yantra/sanitizer-hosts.yaml` loader, but the current CLI runtime constructs its sanitizer from packaged defaults rather than that file. Editing it is not a supported way to change live CLI behavior today.
+- Yantra-owned configuration uses one platform-independent home: `YANTRA_HOME` when that environment variable is non-empty, otherwise `~/.yantra`. The root contains `config.yaml`, `profile.yaml`, `blocklist.yaml`, and `sanitizer-hosts.yaml`; only the data and cache roots are independently relocatable. `profile.yaml` stores user-editable preferences, grants, and operational defaults, and must not contain website or provider credential values.
+- The sanitizer host-override loader reads `<home>/sanitizer-hosts.yaml` by default, validates its versioned host mappings, and uses them for host matching. If the file is absent, it falls back to the packaged defaults; malformed YAML, invalid entries, and other read failures are reported instead of silently replacing the active rules. Reloading rereads the active file.
 - The OS keychain stores model/search credentials and workflow secret values. If keychain support is unavailable, Yantra uses a degraded provider: reads report missing values and write/delete operations fail.
 - Browser access is command-profiled: `ask` has web tools, `research` is web-only unless its explicit read-only browse environment switch is enabled, and only `do` receives browser mutation tools.
 - Date, timezone, and locale are always model-visible in model-backed runs. Location is visible only when granted and configured. A granted preference or marked value sent to a website is disclosed to that website when the requested tool action uses it.

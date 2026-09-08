@@ -3,6 +3,7 @@ import { request } from 'undici';
 import { YANTRA_KEYCHAIN_SERVICE, type KeychainProvider } from '../../secrets/keychain.js';
 import type { SearchResult } from '../types.js';
 
+import { resolveSearchCredential } from './credential.js';
 import { RateLimitError, SearchProviderError, TavilyAuthError } from './errors.js';
 import type { SearchProvider } from './registry.js';
 
@@ -48,8 +49,8 @@ export class BraveSearchProvider implements SearchProvider {
     query: string,
     opts: { limit: number; signal: AbortSignal },
   ): Promise<readonly SearchResult[]> {
-    const apiKey = await this.keychain.get(this.keychainService, 'brave.api_key');
-    if (!apiKey) {
+    const credential = await resolveSearchCredential('brave', this.keychain, this.keychainService);
+    if (!credential) {
       throw new TavilyAuthError('Brave API key is missing from keychain.', {
         provider: this.name,
         code: 'missing-api-key',
@@ -65,7 +66,7 @@ export class BraveSearchProvider implements SearchProvider {
       signal: opts.signal,
       headers: {
         accept: 'application/json',
-        'x-subscription-token': apiKey,
+        'x-subscription-token': credential.value,
       },
     });
 

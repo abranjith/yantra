@@ -75,7 +75,7 @@ export class FileSystemRecordingStore implements RecordingStore {
   private readonly partials = new Map<string, PartialState>();
 
   /**
-   * @param cacheRoot - Root directory for recording dirs, e.g. `~/.cache/yantra`
+   * @param cacheRoot - Root directory for recording dirs, e.g. `~/.yantra/cache`
    */
   constructor(cacheRoot: string) {
     this.cacheRoot = cacheRoot;

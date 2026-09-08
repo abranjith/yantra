@@ -16,6 +16,41 @@ node apps/cli/dist/bin.js ask --help
 node apps/cli/dist/bin.js daemon start --help
 ```
 
+## First-run setup
+
+Run `yantra init` on an interactive terminal to configure a provider, credential
+reference, model, data directory, and the profile's sensitive-context grants:
+
+```console
+yantra init
+yantra init --provider anthropic
+yantra init --provider ollama
+yantra init --provider none --yes
+yantra init --json
+```
+
+The full model/storage wizard runs only on a TTY when `--provider`, `--yes`, and
+`--json` are all absent. Anthropic defaults to `claude-opus-4-7` and
+`${env:ANTHROPIC_API_KEY}`; Ollama defaults to `llama3.1:8b` and
+`http://localhost:11434`; `none` registers no model. A non-TTY, `--yes`, or
+`--json` never prompts and defaults to provider `none` unless `--provider` is
+given. Supplying `--provider` also selects that provider's model/storage
+defaults instead of running the wizard. On a TTY, a new profile can still ask
+the sensitive-context questions unless `--yes` or `--json` is present.
+
+Initialization writes `<home>/config.yaml` and creates `<home>/profile.yaml`
+when needed. If config already exists, an ordinary run reports
+`already-initialized` and leaves it unchanged. `--reset` moves the existing
+config to a timestamped `.bak` file and rewrites both files:
+
+```console
+yantra init --reset
+yantra config validate
+yantra config path
+```
+
+Use `--reset` only when that replacement is intended.
+
 ## Choose an execution mode
 
 | Goal                            | Command                   | Model behavior                                                                                                 |
@@ -36,8 +71,9 @@ yantra ask "current battery recycling requirements" --json
 
 `--search-provider` selects `auto`, `google`, `duckduckgo`, `brave`, or
 `tavily`. `--provider` selects the unrelated language-model provider. `auto`
-walks the configured fallback chain and skips keyed providers whose key is
-missing. Explicit Brave or Tavily selection requires its OS-keychain key.
+walks the configured fallback chain and skips keyed providers whose configured
+environment or keychain reference cannot resolve. Explicit Brave or Tavily
+selection requires a resolvable credential.
 
 Deterministic controls include `--limit`, `--max-sources`, `--fetch-timeout`,
 `--pipeline-timeout`, `--no-cache`, `--detail`, `--length`, and
@@ -269,16 +305,39 @@ sent to the provider. `report` prints the existing `report.md`; `--open` cannot
 be combined with `--json`. See
 [Diagnostics and Audit](features/diagnostics-and-audit.md).
 
-`init` creates local configuration or reports that it already exists:
+Open a completed run's saved output independently of the command that created
+it:
 
 ```console
-yantra init --provider none --yes
-yantra init --reset
-yantra init --json
+yantra open
+yantra open <run-id>
+yantra open <run-id> --artifact report
+yantra open <run-id> --artifact audit --print
+yantra open <run-id> --artifact dir
+yantra open --json
 ```
 
-`--reset` backs up and rewrites `config.yaml` and rewrites the profile. Use it
-only when that replacement is intended.
+The default artifact is `brief`: `brief.html` when present, otherwise
+`brief.md`. `report` resolves `report.md`, `audit` resolves `audit.md` then
+`audit.json`, and `dir` selects the run directory. Without a run ID, Yantra
+chooses the newest canonical run, combining file-backed discovery with the
+rebuildable history index. `--print` writes the resolved path without launching
+an application; `--json` returns its run ID, artifact kind, and path and also
+does not launch.
+
+All run-producing commands use the same launch spelling:
+
+```console
+yantra ask "current battery recycling requirements" --open
+yantra research "grid-scale storage" --open
+yantra do "check the public status page" --open
+yantra run order-status --open
+yantra resume <run-id> --open
+```
+
+Each `--open` launches its generated `brief.html` only after successful
+completion. Terminal Brief output otherwise includes an `Open: yantra open
+<run-id>` reminder.
 
 ## Shared flags and output behavior
 
@@ -312,13 +371,39 @@ overview|standard|full`, and `--length short|medium|long`; `--json` is shorthand
 for JSON format. `--debug` writes diagnostics to stderr on commands that expose
 it.
 
-## Configuration basics
+## Configuration, storage, models, and credentials
 
-`config.yaml` controls shared runtime settings such as web-search selection.
-`profile.yaml` contains personal defaults, context grants, and agent defaults.
-Both are human-editable and live in the configuration directory shown in the
-[quickstart](quickstart.md#initialize-local-configuration). Never store
-credential values in either file.
+Yantra separates installation state from personal preferences:
+
+| File                  | Owns                                                                          | Commands                                                 |
+| --------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `<home>/config.yaml`  | Storage, model registry, credential references, search, ethics, and retention | `yantra config`, `yantra model`, `yantra secret`         |
+| `<home>/profile.yaml` | Selected model, output defaults, locale, context grants, and agent budgets    | `yantra profile`, `yantra prefs`, `yantra model default` |
+
+If a key belongs to the other file, `config set` and `prefs set` name the
+correct command instead of writing it to the wrong place. The complete schema,
+defaults, reference grammar, and environment inventory are in
+[Configuration, Models, Credentials, and Storage](features/configuration.md).
+
+### Inspect and update installation config
+
+```console
+yantra config path
+yantra config list
+yantra config get retention.runs_days
+yantra config set retention.runs_days 7
+yantra config unset retention.runs_days
+yantra config validate
+yantra config edit
+```
+
+`path` prints the effective home, config, profile, data, cache, run, workflow,
+template, and index locations with their source labels. `list` and `get` show a
+fully defaulted view without resolving credentials. Values passed to `set` are
+parsed as YAML and the whole candidate is validated; comments and key order are
+preserved. `unset` removes an explicit value so its schema default applies.
+`edit` launches `$EDITOR` and restores the original bytes if the editor fails or
+the result is invalid. Every action accepts `--json`.
 
 A verified search block is:
 
@@ -334,10 +419,109 @@ search:
 
 `fetch_top` must be an integer from 1 through 5 and controls how many top search
 hits agentic `web_search` fetches inline. It does not change deterministic
-`ask --limit` behavior. Use `yantra profile` to see effective profile values and
-their provenance, or `yantra prefs set` for a validated SQLite-backed override.
+`ask --limit` behavior.
 
-## Model and authentication basics
+### Use the unified storage layout
+
+`YANTRA_HOME`, when non-empty, replaces `~/.yantra` on every platform. XDG,
+`%APPDATA%`, and `%LOCALAPPDATA%` do not select Yantra-owned paths. Config and
+profile stay immediately under `<home>`; data defaults to `<home>/data`, and
+cache defaults to `<home>/cache`.
+
+Data and cache resolve independently with this precedence:
+
+```text
+non-empty absolute environment override
+  > non-null absolute config path
+  > default below YANTRA_HOME or ~/.yantra
+```
+
+The overrides are `YANTRA_DATA_DIR` / `paths.data_dir` and
+`YANTRA_CACHE_DIR` / `paths.cache_dir`. Only data and cache are independently
+relocatable; config, profile, blocklist, and sanitizer overrides move only with
+`YANTRA_HOME`. There is no automatic migration from the retired XDG/AppData
+locations.
+
+Use the relocation command when Yantra should move its current data tree:
+
+```console
+yantra config data-dir
+yantra config data-dir /absolute/path --dry-run
+yantra config data-dir /absolute/path
+yantra config data-dir /absolute/path --no-move
+yantra config data-dir /absolute/path --force
+```
+
+With no path, it reports the effective location and source. The normal form
+moves the tree and writes `paths.data_dir` only after the move succeeds;
+cross-volume moves use copy-then-delete. `--dry-run` changes nothing,
+`--no-move` records content you moved yourself, and `--force` permits merging
+into a non-empty target. Relocation is refused while a daemon or run holds the
+lock. It does not move cache data. `YANTRA_DATA_DIR` still outranks the persisted
+setting, so update or remove that environment variable after relocation.
+
+### Register and select models
+
+```console
+yantra model list
+yantra model add llama3.1:8b --provider ollama --base-url http://localhost:11434
+yantra model add vision-model --provider example --base-url https://models.example.test/v1 --api-key-ref '${secret:example.api_key}' --input text,image
+yantra model default llama3.1:8b
+yantra model rm llama3.1:8b
+```
+
+`add` requires `--provider`; custom and local providers also require
+`--base-url`. `--input` accepts a comma-separated `text,image` list. A duplicate
+provider/ID pair requires `--force` to replace it. `default` selects one
+unambiguous registered ID by updating `profile.yaml`. `rm` likewise requires an
+unambiguous ID and refuses the selected default unless `--force` is present.
+`list` marks the default and reports only `env`, `keychain`, or `absent` for a
+credential. Every model subcommand accepts `--json`.
+
+`config.yaml` is the registry source of truth. Yantra derives
+`<data>/pi/models.json` immediately before Pi needs it, so do not edit that
+file; the next projection replaces it. The local model server must already be
+running, and Yantra does not start it.
+
+### Reference or store credentials
+
+Credential-bearing config fields accept a complete reference, never a literal
+secret:
+
+```text
+${env:ENV_NAME}
+${secret:keychain.account}
+```
+
+Environment names match `[A-Z_][A-Z0-9_]*`. Keychain account names use lowercase
+letters or digits at both ends and may contain lowercase letters, digits,
+periods, underscores, and hyphens inside. Quote a reference in shells that
+expand `$`:
+
+```console
+yantra config set search.tavily.api_key '${env:TAVILY_API_KEY}'
+yantra model add hosted-model --provider anthropic --api-key-ref '${secret:anthropic.api_key}'
+```
+
+References resolve only where the credential is used. `config get` and
+`config list` print the reference text, while model and secret listings print
+status labels only.
+
+Manage keychain accounts without putting values in arguments:
+
+```console
+yantra secret set anthropic.api_key
+printf 'credential-from-stdin\n' | yantra secret set tavily.api_key
+yantra secret list
+yantra secret rm tavily.api_key
+```
+
+`secret set` reads from an echo-disabled TTY prompt or piped stdin and removes
+one trailing newline. A positional value is rejected because argv can be
+exposed through shell history and process listings. Empty values are rejected.
+`list` never prints values; `rm` reports `removed` or `absent`. If the platform
+keychain is unavailable, use an `${env:NAME}` reference instead. All secret
+subcommands accept `--json`.
 
 Agent option environment variables use the `YANTRA_AGENT_` prefix, including
 `YANTRA_AGENT_PROVIDER`, `YANTRA_AGENT_MODEL`,
@@ -345,17 +529,11 @@ Agent option environment variables use the `YANTRA_AGENT_` prefix, including
 `YANTRA_AGENT_MAX_TOKENS`, `YANTRA_AGENT_TOOL_TIMEOUT`,
 `YANTRA_AGENT_TOOL_RETRIES`, and `YANTRA_AGENT_CONFIRM_TIMEOUT`.
 
-Credentials can come from Yantra-managed Pi auth, a runtime OS-keychain
-reference, a supported provider environment variable such as
-`ANTHROPIC_API_KEY`, or pinned custom-model configuration. Credential values
-are not written to prompts or run artifacts. `ask`, `research`, and optional
+Credentials can also come from Yantra-managed Pi auth or a supported provider
+environment variable such as `ANTHROPIC_API_KEY`. Credential values are not
+written to prompts or ordinary run artifacts. `ask`, `research`, and optional
 replay synthesis can degrade deterministically when auth is absent; `do` and a
 live doctor smoke fail with exit 3.
-
-For Ollama, define the provider in `<data-dir>/pi/models.json`, select it with
-`--provider ollama --model <id>`, and declare a `contextWindow` matching the
-server. A 16k or larger context is recommended for web tasks. The local server
-must already be running; Yantra does not start it.
 
 ## Artifacts and local state
 
@@ -479,12 +657,13 @@ tie-break.
   supported there.
 - The local daemon does not start automatically at login or reboot.
 - No public package or binary distribution is declared in the current private
-  `0.0.0` manifests.
+  workspace manifests.
 
 For a component-level view, see [Architecture](architecture.md). The remaining
 feature references are [Ask](features/ask.md), [Research](features/research.md),
 [Agentic Tasks](features/agentic-tasks.md),
 [Saved Workflows](features/saved-workflows.md),
+[Configuration](features/configuration.md),
 [Report Templates](features/report-templates.md),
 [Profiles and History](features/profiles-and-history.md),
 [Local Site Ranking](features/site-ranking.md),

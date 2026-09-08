@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { loadProfile, profilePath } from '@yantra/core';
+import { configPath, loadConfig, loadProfile, profilePath } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,7 +10,16 @@ import {
   defaultContextGrantAnswers,
   type ContextGrantAnswers,
 } from '../../src/commands/init-context-prompts.js';
+import type { InitWizardAnswers } from '../../src/commands/init-wizard.js';
 import { makeInitCommand } from '../../src/commands/init.js';
+
+const DEFAULT_WIZARD: InitWizardAnswers = {
+  provider: 'none',
+  modelId: null,
+  baseUrl: null,
+  apiKey: null,
+  dataDir: null,
+};
 
 describe('@no-llm collectContextGrants', () => {
   it('maps a yes onto the grant and records the city', async () => {
@@ -88,10 +97,8 @@ describe('@no-llm yantra init context questionnaire', () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'yantra-init-'));
-    savedEnv = { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME, APPDATA: process.env.APPDATA };
-    // Cover both platform branches of `configDir()` so the suite is portable.
-    process.env.XDG_CONFIG_HOME = dir;
-    process.env.APPDATA = dir;
+    savedEnv = { YANTRA_HOME: process.env.YANTRA_HOME };
+    process.env.YANTRA_HOME = dir;
     exitCodes = [];
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       exitCodes.push(code ?? 0);
@@ -119,7 +126,11 @@ describe('@no-llm yantra init context questionnaire', () => {
   ): Promise<number> {
     exitCodes = [];
     try {
-      await makeInitCommand(deps).parseAsync([...argv], { from: 'user' });
+      await makeInitCommand({
+        wizard: async () => DEFAULT_WIZARD,
+        collect: async () => defaultContextGrantAnswers(),
+        ...deps,
+      }).parseAsync([...argv], { from: 'user' });
     } catch (error) {
       if (!(error instanceof ExitSignal)) throw error;
     }
@@ -232,6 +243,58 @@ describe('@no-llm yantra init context questionnaire', () => {
     const written = stdoutSpy.mock.calls.map((call) => String(call[0])).join('');
     expect(written).not.toContain('Location sharing');
     expect(written).toContain('"kind":"init"');
+  });
+
+  it('writes byte-identical prompt-free files for --json and --yes', async () => {
+    await runInit(['--json'], { isTty: true });
+    const jsonConfig = await readFile(configPath(), 'utf8');
+    const jsonProfile = await readFile(profilePath(), 'utf8');
+    await runInit(['--reset', '--yes'], { isTty: true });
+    expect(await readFile(configPath(), 'utf8')).toBe(jsonConfig);
+    expect(await readFile(profilePath(), 'utf8')).toBe(jsonProfile);
+  });
+
+  it('round-trips emitted config and omits a declined credential', async () => {
+    await runInit([], {
+      isTty: true,
+      wizard: async () => ({
+        provider: 'anthropic',
+        modelId: 'claude-test',
+        baseUrl: null,
+        apiKey: null,
+        dataDir: null,
+      }),
+    });
+    const loaded = await loadConfig();
+    expect(loaded.isOk && loaded.value.models[0]).toMatchObject({
+      provider: 'anthropic',
+      id: 'claude-test',
+      api_key: null,
+    });
+    const text = await readFile(configPath(), 'utf8');
+    expect(text.slice(0, text.indexOf('search:'))).not.toContain('api_key:');
+  });
+
+  it('writes and creates a custom absolute data directory', async () => {
+    const customData = join(dir, 'custom-data');
+    await runInit([], {
+      isTty: true,
+      wizard: async () => ({
+        ...DEFAULT_WIZARD,
+        dataDir: customData,
+      }),
+    });
+    const loaded = await loadConfig();
+    expect(loaded.isOk && loaded.value.paths.data_dir).toBe(customData);
+    expect((await stat(customData)).isDirectory()).toBe(true);
+  });
+
+  it('backs up an existing config on reset and never invokes the wizard off-TTY', async () => {
+    await runInit(['--yes'], { isTty: false });
+    const wizard = vi.fn(async () => DEFAULT_WIZARD);
+    await runInit(['--reset'], { isTty: false, wizard });
+    expect(wizard).not.toHaveBeenCalled();
+    expect((await readdir(dir)).some((name) => name.startsWith('config.yaml.bak.'))).toBe(true);
   });
 
   it('names the profile file and how to change the grant on the human path', async () => {

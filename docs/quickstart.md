@@ -2,7 +2,7 @@
 
 # Quickstart
 
-Yantra is currently a private, unpublished `0.0.0` workspace. There is no
+Yantra is currently a private, unpublished `0.0.1` workspace. There is no
 verified npm, Homebrew, Scoop, or standalone-binary installation route yet. Run
 it from a source checkout.
 
@@ -33,31 +33,91 @@ checkout. The shorter `yantra` spelling used elsewhere in the documentation
 means that same built entrypoint once a future distribution supplies the
 executable.
 
-## Initialize local configuration
+## Initialize Yantra
 
-Create the local files without selecting a remote provider and without a
-prompt:
+For an interactive first run, use:
+
+```console
+node apps/cli/dist/bin.js init
+```
+
+On a TTY, Yantra asks for an Anthropic, Ollama, or no-model setup; the credential
+source; model ID; data directory; and the existing sensitive-context grants.
+Anthropic defaults to `claude-opus-4-7` with an
+`${env:ANTHROPIC_API_KEY}` reference. Ollama defaults to `llama3.1:8b` at
+`http://localhost:11434` and does not store a credential.
+
+For a prompt-free local setup, initialize with no model:
 
 ```console
 node apps/cli/dist/bin.js init --provider none --yes
 ```
 
-This creates `config.yaml` and, if absent, `profile.yaml`. On an interactive
-terminal, omitting `--yes` asks whether agentic runs may receive your configured
-location. `--json`, `--yes`, and non-interactive use skip the question.
-Screenshot assistance is not enabled by `init`: `context.screenshots` defaults
-to `false` until you explicitly grant it with `yantra prefs set`.
+`--yes`, `--json`, and non-TTY input skip the model and storage wizard. Without
+`--provider`, those modes select `none`; with `--provider anthropic` or
+`--provider ollama`, they write that provider's defaults. Supplying `--provider`
+also skips the model/storage wizard on a TTY, though a newly written profile may
+still ask its sensitive-context questions unless `--yes` or `--json` is used.
 
-The default locations are:
+Initialization creates `<home>/config.yaml` and, when it is absent,
+`<home>/profile.yaml`. A normal rerun changes nothing. `init --reset` first moves
+the existing config to a timestamped `.bak` file, then rewrites the config and
+profile, so use it only when replacement is intended. Screenshot assistance is
+not enabled by `init`: `context.screenshots` remains `false` until explicitly
+granted through `yantra prefs set`.
 
-| State         | Windows                       | Linux and macOS                                    |
-| ------------- | ----------------------------- | -------------------------------------------------- |
-| Configuration | `%APPDATA%\yantra`            | `$XDG_CONFIG_HOME/yantra` or `~/.config/yantra`    |
-| Data and runs | `%LOCALAPPDATA%\yantra`       | `$XDG_DATA_HOME/yantra` or `~/.local/share/yantra` |
-| Cache         | `%LOCALAPPDATA%\yantra\Cache` | `$XDG_CACHE_HOME/yantra` or `~/.cache/yantra`      |
+## Know where Yantra stores data
 
-`init --provider none` seeds the configuration file, but deterministic command
-selection remains explicit: pass `--no-llm` or set `LLM_PROVIDER=none`.
+Yantra uses the same layout on Windows, macOS, and Linux:
+
+| State                                | Default               | Override                                   |
+| ------------------------------------ | --------------------- | ------------------------------------------ |
+| Yantra home                          | `~/.yantra`           | `YANTRA_HOME`                              |
+| Installation config                  | `<home>/config.yaml`  | With `YANTRA_HOME`                         |
+| Personal profile                     | `<home>/profile.yaml` | With `YANTRA_HOME`                         |
+| Data, runs, workflows, and templates | `<home>/data`         | `YANTRA_DATA_DIR`, then `paths.data_dir`   |
+| Cache                                | `<home>/cache`        | `YANTRA_CACHE_DIR`, then `paths.cache_dir` |
+
+XDG, `%APPDATA%`, and `%LOCALAPPDATA%` do not select Yantra-owned locations.
+There is no legacy-layout migration command. Inspect the effective paths and
+their source labels instead of guessing:
+
+```console
+node apps/cli/dist/bin.js config path
+node apps/cli/dist/bin.js config validate
+```
+
+## Add a model or credential later
+
+The registry is managed through `yantra model`; do not edit the generated
+`<data>/pi/models.json` file. For example, register and select an existing
+Ollama server:
+
+```console
+node apps/cli/dist/bin.js model add llama3.1:8b --provider ollama --base-url http://localhost:11434
+node apps/cli/dist/bin.js model default llama3.1:8b
+node apps/cli/dist/bin.js model list
+```
+
+For a hosted model, choose an environment reference:
+
+```console
+node apps/cli/dist/bin.js model add claude-opus-4-7 --provider anthropic --api-key-ref '${env:ANTHROPIC_API_KEY}'
+```
+
+Or store the value through an echo-disabled keychain prompt and reference that
+account. Never put the literal credential in the command:
+
+```console
+node apps/cli/dist/bin.js secret set anthropic.api_key
+node apps/cli/dist/bin.js model add claude-opus-4-7 --provider anthropic --api-key-ref '${secret:anthropic.api_key}'
+```
+
+Quote references so a shell does not expand `$`. See the
+[usage guide](usage.md#configuration-storage-models-and-credentials) for the
+full config, model, secret, and relocation workflows.
+
+## Run the smallest useful task
 
 Check the local environment without contacting a model provider:
 
@@ -67,8 +127,6 @@ node apps/cli/dist/bin.js doctor
 
 Warnings, including a missing model credential, do not make offline or
 deterministic use unavailable.
-
-## Run the smallest useful task
 
 The following command uses the keyless DuckDuckGo search path and local
 synthesis. It requires internet access, contacts public sites, and writes a run
@@ -86,8 +144,9 @@ Useful next checks are local and read-only:
 ```console
 node apps/cli/dist/bin.js list runs --limit 5
 node apps/cli/dist/bin.js profile
+node apps/cli/dist/bin.js open --print
 ```
 
-For model credentials, local-model setup, browser tasks, workflows, scheduling,
-artifacts, and the complete command surface, continue to the
-[usage guide](usage.md).
+`open --print` resolves the latest run's Brief path without launching an
+application. For browser tasks, workflows, scheduling, all artifact choices,
+and the complete command surface, continue to the [usage guide](usage.md).

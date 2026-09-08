@@ -20,6 +20,8 @@ import { dirname, join } from 'node:path';
 
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
+import { loadConfig } from '../config/load.js';
+import { pruneRetention } from '../retention/prune.js';
 
 import { runMigrations } from './migrations.js';
 import { DatabaseSync } from './sqlite.js';
@@ -30,7 +32,7 @@ export const IN_MEMORY_PATH = ':memory:';
 /**
  * Returns the canonical path to the local SQLite index.
  *
- * @example indexDbPath() // → "/home/user/.local/share/yantra/index.db"
+ * @example indexDbPath() // → "/home/user/.yantra/data/index.db"
  */
 export function indexDbPath(): string {
   return join(dataDir(), 'index.db');
@@ -102,9 +104,18 @@ function isHealthy(db: DatabaseSync): boolean {
 export async function openIndexDb(options: OpenIndexDbOptions = {}): Promise<OpenIndexDbResult> {
   const path = options.path ?? indexDbPath();
   const logger = options.logger;
+  let retentionConfig: Awaited<ReturnType<typeof loadConfig>> | undefined;
 
   if (!isMemory(path)) {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    retentionConfig = await loadConfig();
+    if (retentionConfig.isOk) {
+      await pruneRetention({
+        config: retentionConfig.value,
+        runsPath: join(dataDir(), 'runs'),
+        indexPath: path,
+      });
+    }
   }
 
   // --- First attempt: open the existing (or new) file and verify health.
@@ -142,6 +153,13 @@ export async function openIndexDb(options: OpenIndexDbOptions = {}): Promise<Ope
     try {
       await rename(path, asidePath);
       logger?.warn({ path, asidePath }, 'index.db was corrupt; moved aside and rebuilding');
+      if (retentionConfig?.isOk) {
+        await pruneRetention({
+          config: retentionConfig.value,
+          runsPath: join(dataDir(), 'runs'),
+          indexPath: path,
+        });
+      }
     } catch {
       // No file to move (e.g. the *directory* was the problem) — proceed to a
       // fresh create anyway.
