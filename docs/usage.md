@@ -286,15 +286,30 @@ poll. It never auto-confirms. See
 ```console
 yantra doctor
 yantra doctor --refresh --json
+yantra doctor --agent-smoke --json
 yantra audit <run-id>
 yantra audit <run-id> --json
 yantra report <run-id>
 yantra report <run-id> --open
 ```
 
-Ordinary `doctor` is offline. `doctor --agent-smoke` opens a live, potentially
-billable provider session and requires credentials; it has no deterministic
-fallback. `audit` reconstructs a trust narrative from stable Yantra-owned
+Ordinary `doctor` is offline. It reports the health of what is _configured_:
+the `agent.budgets` check validates the wall-clock, token, tool-timeout, retry,
+and confirmation-wait values stored in your environment and `profile.yaml`, and
+**fails** (exit `3`) on a value no agentic command could parse — a malformed
+`YANTRA_AGENT_*` variable is the usual cause, since `profile.yaml` is validated
+when written. `--refresh` re-probes the cached environment checks only; the
+agent and configuration checks always run fresh. Under `--no-llm` (or
+`LLM_PROVIDER=none`) the three `agent.*` checks report that the deterministic
+path was selected, naming which layer selected it, and no credential is probed.
+
+`doctor --agent-smoke` opens a live, potentially billable provider session and
+requires credentials; it has no deterministic fallback, and combining it with
+`--no-llm` or `LLM_PROVIDER=none` exits `1` naming the layer that selected the
+deterministic path. It replaces the offline checks rather than adding to them.
+Both modes honor `--json`: the smoke emits a single `doctor_smoke` envelope
+(outcome, session id, log path, usage, pinned environment) instead of the
+streamed events and human summary. `audit` reconstructs a trust narrative from stable Yantra-owned
 projections and does not parse the raw provider session. For a run with vision
 captures, terminal output includes a **The model saw these images** section with
 each path, dimensions, byte count, SHA-256 digest, owning tool call, and capture
@@ -358,8 +373,19 @@ surface:
 | `--no-llm`                     | Force a deterministic path where one exists  | model enabled      |
 | `--no-screenshots`             | Suppress vision assist for this run          | grant unchanged    |
 
+A flag reads the same on every command that offers it, and a command offers
+only the flags it can act on. The surface is registered as three groups —
+model selection (`--provider`, `--model`, `--thinking`, `--auth-secret`),
+per-run budgets (the five above), and `--no-llm` — so a command that selects a
+model without executing a run registers fewer of them. `doctor` is the one such
+command today: it takes the model-selection flags and `--no-llm`, and does not
+accept the budget flags or `--no-screenshots`, because it spends no budget and
+captures no images. It still validates the budgets stored in your environment
+and `profile.yaml`; see [Diagnostics and run inspection](#diagnostics-and-run-inspection).
+
 Durations are positive integers with optional `ms`, `s`, `m`, or `h`; a bare
-integer is milliseconds. Resolution is command flag, then environment, then
+integer is milliseconds. Counts are plain integers — exponent forms such as
+`1e6` are rejected. Resolution is command flag, then environment, then
 effective `profile.yaml`/preference value, then pinned default. `--no-llm` or
 `LLM_PROVIDER=none` is resolved before unused model settings.
 

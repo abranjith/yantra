@@ -433,6 +433,12 @@ the exception: its order is `--auth-secret`, then
 `YANTRA_AGENT_AUTH_SECRET`, then managed auth. `YANTRA_AGENT_RESEARCH_BROWSE`
 is a capability toggle rather than a value in that chain.
 
+Unlike `profile.yaml`, these variables are not schema-validated when they are
+set, so a typo in one of the five budget variables would otherwise only surface
+when an agentic command refused to start. `yantra doctor` validates them
+against the same grammar and fails the `agent.budgets` check, naming the
+variable to correct.
+
 ### Provider API-key convention
 
 Provider credentials are not part of the machine-readable `YANTRA_*` block.

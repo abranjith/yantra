@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_AGENT_MODEL,
   DEFAULT_AGENT_PROVIDER,
+  addAgentBudgetOptions,
+  addAgentModelOptions,
   addAgentOptions,
+  addNoLlmOption,
   parseDuration,
   resolveAgentInvocation,
 } from '../../src/agent-options.js';
@@ -53,6 +56,13 @@ describe('@no-llm shared agent options', () => {
     },
   );
 
+  it('distinguishes an unparseable duration from one too large to represent', () => {
+    expect(() => parseDuration('soon', '--max-duration')).toThrowError(
+      /must be a positive duration/u,
+    );
+    expect(() => parseDuration('99999999999999h', '--max-duration')).toThrowError(/too large/u);
+  });
+
   it('registers the complete surface without Commander defaults', () => {
     const command = addAgentOptions(new Command('probe'));
     expect(command.options.map((option) => option.long)).toEqual([
@@ -68,6 +78,50 @@ describe('@no-llm shared agent options', () => {
       '--no-llm',
       '--no-screenshots',
     ]);
+    expect(command.options.every((option) => option.defaultValue === undefined)).toBe(true);
+  });
+
+  it('composes the complete surface from the named groups, in the same order', () => {
+    const composed = addAgentOptions(new Command('composed'))
+      .options.map((option) => option.long)
+      .filter((long): long is string => long !== undefined);
+    const byGroup = [
+      ...addAgentModelOptions(new Command('model')).options,
+      ...addAgentBudgetOptions(new Command('budget')).options,
+      ...addNoLlmOption(new Command('no-llm')).options,
+    ]
+      .map((option) => option.long)
+      .filter((long): long is string => long !== undefined);
+
+    expect(composed).toEqual([...byGroup, '--no-screenshots']);
+  });
+
+  it('spells each group identically wherever it is registered', () => {
+    // The vocabulary rule is that a flag reads the same everywhere it appears,
+    // not that every command must offer every flag.
+    const description = (command: Command): readonly string[] =>
+      command.options.map((option) => `${String(option.long)} ${option.description}`);
+    const composed = description(addAgentOptions(new Command('composed')));
+
+    for (const group of [
+      addAgentModelOptions(new Command('model')),
+      addAgentBudgetOptions(new Command('budget')),
+      addNoLlmOption(new Command('no-llm')),
+    ]) {
+      for (const spelling of description(group)) {
+        expect(composed).toContain(spelling);
+      }
+    }
+  });
+
+  it.each([
+    ['model', addAgentModelOptions],
+    ['budget', addAgentBudgetOptions],
+    ['no-llm', addNoLlmOption],
+  ])('registers the %s group without Commander defaults', (name, register) => {
+    const command = register(new Command(name));
+
+    expect(command.options.length).toBeGreaterThan(0);
     expect(command.options.every((option) => option.defaultValue === undefined)).toBe(true);
   });
 

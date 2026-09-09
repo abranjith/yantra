@@ -17,13 +17,17 @@ Yantra keeps diagnostics and run evidence on the local machine so you can check 
 - Opening, migrating, and writing the local SQLite history index. If the index is corrupt, doctor moves it aside, rebuilds it from run directories, and reports a warning.
 - The effective agent provider, model, and thinking selection, including whether each value came from a flag, environment variable, profile preference, or pinned default.
 - Whether an agent credential source is available. Missing credentials are a warning because deterministic use is still valid.
-- The effective wall-clock, provider-token, tool-timeout, retry, and confirmation-wait budgets and their configuration sources.
+- The wall-clock, provider-token, tool-timeout, retry, and confirmation-wait budgets that agentic commands will use, their configuration sources, and whether each stored value is parseable. This check **fails** when it is not, so a malformed `YANTRA_AGENT_MAX_DURATION` surfaces here rather than at the start of your next agentic run. `profile.yaml` values are schema-validated when written, so a failure normally names an environment variable, and the remediation names the offending source directly.
 
-Core environment-probe results are cached for one hour; agent model, credential, and budget diagnostics are recalculated on each invocation. `--refresh` bypasses the core cache. Warnings do not fail the command; any failed check exits `3`.
+Doctor reports the health of stored state, so per-run budget flags are not part of its surface: it registers `--provider`, `--model`, `--thinking`, `--auth-secret`, and `--no-llm`, and rejects `--max-duration`, `--max-tokens`, `--tool-timeout`, `--tool-retries`, `--confirm-timeout`, and `--no-screenshots`. Model-selection flags belong because they choose which credential is probed and which model `--agent-smoke` targets.
+
+Under `--no-llm` or `LLM_PROVIDER=none` the three `agent.*` checks report that the deterministic path was selected and name the layer that selected it, no credential is probed, and budgets are not validated — none of them would be used.
+
+Core environment-probe results are cached for one hour; agent model, credential, and budget diagnostics and the configuration checks are recalculated on each invocation. `--refresh` bypasses the core cache only. Warnings do not fail the command; any failed check exits `3`.
 
 `yantra doctor --agent-smoke` is different: it is a live, billable provider check. It opens one fresh provider session in Yantra's pinned environment, exposes only a `status` tool, asks the model to call it once, streams normalized events, prints the effective pinned paths and zero ambient-resource counts, and closes the session. The raw provider session is saved below a timestamped `runs/agent-smoke-.../agent/` directory.
 
-The smoke passes only if the provider run completes and the `status` tool succeeds. It has no deterministic fallback: missing credentials, an unknown model, an unreachable provider, or a failed round trip exits `3`; Ctrl+C tears down the session and exits `130`. Smoke output is currently terminal text even if `--json` is also supplied, and its directory is not a normal auditable run because it has no `manifest.json`.
+The smoke passes only if the provider run completes and the `status` tool succeeds. It has no deterministic fallback: missing credentials, an unknown model, an unreachable provider, or a failed round trip exits `3`; Ctrl+C tears down the session and exits `130`. With `--json` the smoke suppresses the event stream and the human summary and emits one `doctor_smoke` envelope instead. Its directory is not a normal auditable run because it has no `manifest.json`.
 
 ### Run discovery and inspection
 
@@ -57,14 +61,15 @@ yantra doctor --json
 yantra doctor --refresh
 ```
 
-Run the live provider smoke with the same model and budget flags used by agentic commands:
+Run the live provider smoke with the same model-selection flags used by agentic commands:
 
 ```bash
 yantra doctor --agent-smoke --provider ollama --model llama3.1:8b
 yantra doctor --agent-smoke --provider anthropic --model claude-haiku-4-5
+yantra doctor --agent-smoke --json
 ```
 
-The smoke also accepts `--thinking`, `--auth-secret`, `--max-duration`, `--max-tokens`, `--tool-timeout`, `--tool-retries`, and `--confirm-timeout`. Deterministic selection through `--no-llm` or `LLM_PROVIDER=none` is incompatible with live smoke and exits `1`; unavailable credentials exit `3`.
+The smoke also accepts `--thinking` and `--auth-secret`. Deterministic selection through `--no-llm` or `LLM_PROVIDER=none` is incompatible with live smoke and exits `1`, naming whichever of the two selected it; unavailable credentials exit `3`.
 
 Find and inspect runs:
 
@@ -124,6 +129,39 @@ The doctor cache lives at `%LOCALAPPDATA%\\yantra\\Cache\\doctor.json` on Window
   "nodeVersion": "<node>"
 }
 ```
+
+`doctor --agent-smoke --json` emits its own kind, because the live smoke reports
+one session rather than a list of environment checks:
+
+```json
+{
+  "schemaVersion": "<current>",
+  "kind": "doctor_smoke",
+  "outcome": "passed",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5",
+  "runId": "agent-smoke-<timestamp>",
+  "runDir": "<yantra-data-dir>/runs/agent-smoke-<timestamp>",
+  "sessionId": "<provider session>",
+  "logPath": "<runDir>/agent/<session>.jsonl",
+  "stopReason": "stop",
+  "statusToolInvoked": true,
+  "usage": { "turns": 1 },
+  "environment": {
+    "agentDir": "<pinned>",
+    "authPath": "<pinned>",
+    "modelsPath": "<pinned>",
+    "settingsSource": "in-memory",
+    "extensions": 0,
+    "skills": 0,
+    "prompts": 0,
+    "themes": 0,
+    "contextFiles": 0
+  }
+}
+```
+
+`outcome` is `passed`, `failed`, or `aborted`, matching exit codes `0`, `3`, and `130`.
 
 ```json
 {

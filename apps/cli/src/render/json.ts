@@ -15,6 +15,7 @@ import type {
   BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
+  DoctorSmokeRenderResult,
   ListItem,
   OutputRenderer,
   ShowItem,
@@ -38,6 +39,12 @@ export class JSONRenderer implements OutputRenderer {
   renderDoctor(result: DoctorRenderResult, opts: ConnectorRenderOpts): void {
     opts.stream.write(
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'doctor', ...result })}\n`,
+    );
+  }
+
+  renderDoctorSmoke(result: DoctorSmokeRenderResult, opts: ConnectorRenderOpts): void {
+    opts.stream.write(
+      `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'doctor_smoke', ...result })}\n`,
     );
   }
 

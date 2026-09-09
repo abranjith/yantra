@@ -12,12 +12,22 @@
  * The probe is non-destructive; `--fix` is intentionally not implemented in
  * MVP to keep the doctor command boring and safe (memory.md §General).
  *
+ * Doctor reports the health of *stored* state. Its option surface is therefore
+ * narrow on purpose: the model-selection flags (`--provider`, `--model`,
+ * `--thinking`, `--auth-secret`) because they choose what the credential check
+ * probes and what `--agent-smoke` targets, plus `--no-llm`. Per-run budget
+ * flags and `--no-screenshots` are not registered — doctor spends no budget
+ * and captures no pixels, and a flag a command cannot honor is a dead control,
+ * not shared vocabulary. Budgets stored in the environment or `profile.yaml`
+ * are still validated by the `agent.budgets` check.
+ *
  * `--agent-smoke` (FEAT-022) runs a LIVE agent provider
  * smoke instead of the offline checks: it opens a real Pi session against
  * the pinned Yantra environment, invokes the registered `status` tool once,
  * streams the normalized events, persists the session under
  * `runs/<run-id>/agent/`, and closes cleanly. Missing credentials exit with
  * the typed `AGENT_AUTH_UNAVAILABLE` error (exit 3) — never a null client.
+ * Both modes honor `--json`.
  */
 
 import { mkdir } from 'node:fs/promises';
@@ -44,19 +54,33 @@ import { PROTOCOL_VERSION } from '@yantra/protocol';
 import { Command, CommanderError } from 'commander';
 
 import {
-  addAgentOptions,
+  addAgentModelOptions,
+  addNoLlmOption,
   resolveAgentInvocation,
   type AgentInvocation,
-  type AgentOptions,
+  type AgentModelOptions,
+  type NoLlmOption,
 } from '../agent-options.js';
 import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
-import { readGlobalFlags } from '../global-flags.js';
+import { noLlmReason, readGlobalFlags } from '../global-flags.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
-import type { DoctorRenderResult } from '../render/types.js';
+import type {
+  ConnectorRenderOpts,
+  DoctorRenderResult,
+  DoctorSmokeRenderResult,
+} from '../render/types.js';
 
-interface DoctorOptions extends AgentOptions {
+/**
+ * Doctor registers the model-selection vocabulary and the deterministic
+ * negation, and deliberately not the per-run budget flags or
+ * `--no-screenshots`: it never spends a budget and never captures a pixel, so
+ * offering to set either would be a control with nothing behind it. Stored
+ * budget settings are still *checked* — see `agent.budgets`.
+ */
+
+interface DoctorOptions extends AgentModelOptions, NoLlmOption {
   readonly json?: boolean;
   readonly refresh?: boolean;
   readonly agentSmoke?: boolean;
@@ -99,31 +123,20 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
   const resolved = doctorRuntime(runtime);
   const cmd = new Command('doctor');
 
-  addAgentOptions(cmd.description('Diagnose the local environment for Yantra'))
+  addNoLlmOption(addAgentModelOptions(cmd.description('Diagnose the local environment for Yantra')))
     .option('--json', 'emit JSON output', false)
-    .option('--refresh', 'bypass the diagnostic cache', false)
-    .option('--agent-smoke', 'run a live agent provider smoke test', false)
+    .option(
+      '--refresh',
+      're-probe the environment instead of reusing the cached probe (agent and configuration checks always run fresh)',
+      false,
+    )
+    .option(
+      '--agent-smoke',
+      'run a live agent provider smoke test instead of the offline checks',
+      false,
+    )
     .action(async (options: DoctorOptions) => {
       const preferences = await resolved.loadPreferences();
-      if (options.agentSmoke === true) {
-        const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
-        if (agent.mode === 'no-llm') {
-          if (agent.reason === 'unavailable') {
-            const error = new AgentAuthUnavailableError(
-              agent.model.provider,
-              'managed store, provider environment, runtime-key reference',
-              'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
-            );
-            resolved.stderr.write(`${error.code}: ${error.message}\n`);
-            throw new CommanderError(3, error.code, error.message);
-          }
-          const message = '`doctor --agent-smoke` requires an LLM; remove --no-llm.';
-          resolved.stderr.write(`${message}\n`);
-          throw new CommanderError(1, 'yantra.doctor.llm-required', message);
-        }
-        await runAgentSmokeCommand(agent, resolved);
-        return;
-      }
       const flags = readGlobalFlags({
         argv: process.argv,
         env: resolved.env,
@@ -137,10 +150,44 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
         { stdout: resolved.stdout, stderr: resolved.stderr },
       );
 
+      if (options.agentSmoke === true) {
+        const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
+        if (agent.mode === 'no-llm') {
+          if (agent.reason === 'unavailable') {
+            const error = new AgentAuthUnavailableError(
+              agent.model.provider,
+              'managed store, provider environment, runtime-key reference',
+              'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
+            );
+            resolved.stderr.write(`${error.code}: ${error.message}\n`);
+            throw new CommanderError(3, error.code, error.message);
+          }
+          // Name the layer that actually selected the deterministic path;
+          // telling someone to remove a flag they never typed sends them
+          // looking for the wrong thing.
+          const message =
+            agent.reason === 'flag'
+              ? '`doctor --agent-smoke` requires an LLM; remove --no-llm.'
+              : '`doctor --agent-smoke` requires an LLM; unset LLM_PROVIDER=none.';
+          resolved.stderr.write(`${message}\n`);
+          throw new CommanderError(1, 'yantra.doctor.llm-required', message);
+        }
+        await runAgentSmokeCommand(agent, resolved, connector, renderOpts);
+        return;
+      }
+
+      // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
+      // the agent checks report that selection rather than silently probing
+      // for a model and credential that this invocation would never use.
+      const deterministic = noLlmReason(options, resolved.env);
+
       try {
         const [report, agentChecks, configChecks] = await Promise.all([
           resolved.coreDoctor({ refresh: options.refresh === true }),
-          resolved.agentDiagnostics(resolved.env, preferences, options),
+          resolved.agentDiagnostics(resolved.env, preferences, {
+            ...options,
+            ...(deterministic === null ? {} : { noLlm: deterministic }),
+          }),
           runConfigurationChecks(resolved.env),
         ]);
         const checks = [...report.checks, ...agentChecks, ...configChecks];
@@ -271,16 +318,23 @@ async function runConfigurationChecks(
 }
 
 /**
- * Live agent provider smoke (FEAT-022). Prints normalized events as they
- * stream, then a summary. Exit codes: 0 = session opened, `status` tool
- * round-tripped, clean close; 3 = typed startup/environment failure;
- * 130 = aborted via Ctrl+C (clean teardown).
+ * Live agent provider smoke (FEAT-022). Exit codes: 0 = session opened,
+ * `status` tool round-tripped, clean close; 3 = typed startup/environment
+ * failure; 130 = aborted via Ctrl+C (clean teardown).
+ *
+ * Terminal mode streams normalized events as they arrive and then renders a
+ * summary. `--json` suppresses the stream and the progress lines and emits one
+ * `doctor_smoke` object, so the mode is machine-readable like every other
+ * `--json` surface rather than silently falling back to prose.
  */
 async function runAgentSmokeCommand(
   agent: LlmAgentInvocation,
   runtime: DoctorRuntime,
+  connector: CLIConnectorIO,
+  renderOpts: ConnectorRenderOpts,
 ): Promise<void> {
   const { provider, id: modelId } = agent.model;
+  const streaming = !renderOpts.json;
   const runId = `agent-smoke-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const runDir = join(runtime.runsRoot(), runId);
   await mkdir(runDir, { recursive: true, mode: 0o700 });
@@ -289,13 +343,15 @@ async function runAgentSmokeCommand(
 
   const controller = new AbortController();
   const onSigint = (): void => {
-    runtime.stdout.write('\nAborting agent smoke (Ctrl+C)...\n');
+    if (streaming) runtime.stdout.write('\nAborting agent smoke (Ctrl+C)...\n');
     controller.abort();
   };
   process.once('SIGINT', onSigint);
 
-  runtime.stdout.write(`Agent smoke: ${provider}/${modelId}\n`);
-  runtime.stdout.write(`Run directory: ${runDir}\n\n`);
+  if (streaming) {
+    runtime.stdout.write(`Agent smoke: ${provider}/${modelId}\n`);
+    runtime.stdout.write(`Run directory: ${runDir}\n\n`);
+  }
 
   try {
     const keychain = agent.auth.mode === 'runtime-key' ? await createKeychainProvider() : null;
@@ -315,44 +371,54 @@ async function runAgentSmokeCommand(
             },
           }),
       signal: controller.signal,
-      onEvent: (event) => renderSmokeEvent(event, runtime.stdout),
+      ...(streaming
+        ? { onEvent: (event: AgentEvent) => renderSmokeEvent(event, runtime.stdout) }
+        : {}),
     });
 
-    runtime.stdout.write('\n--- environment (pinned, zero ambient resources) ---\n');
-    runtime.stdout.write(`  agentDir:   ${report.enumeration.agentDir}\n`);
-    runtime.stdout.write(`  auth:       ${report.enumeration.authPath}\n`);
-    runtime.stdout.write(`  models:     ${report.enumeration.modelsPath}\n`);
-    runtime.stdout.write(`  settings:   ${report.enumeration.settingsSource}\n`);
-    runtime.stdout.write(
-      `  resources:  extensions=${report.enumeration.extensions.length} ` +
-        `skills=${report.enumeration.skills.length} prompts=${report.enumeration.prompts.length} ` +
-        `themes=${report.enumeration.themes.length} contextFiles=${report.enumeration.contextFiles.length}\n`,
-    );
-
-    runtime.stdout.write('\n--- result ---\n');
-    runtime.stdout.write(`  session:    ${report.sessionId}\n`);
-    runtime.stdout.write(`  log:        ${report.logPath}\n`);
-    runtime.stdout.write(`  outcome:    ${report.result.outcome} (${report.result.stopReason})\n`);
+    const passed = report.result.outcome === 'completed' && report.statusToolInvoked;
     const usage = report.result.usage;
-    runtime.stdout.write(
-      `  usage:      turns=${usage.turns}` +
-        (usage.inputTokens !== undefined ? ` in=${usage.inputTokens}` : '') +
-        (usage.outputTokens !== undefined ? ` out=${usage.outputTokens}` : '') +
-        (usage.costUsd !== undefined ? ` cost=$${usage.costUsd.toFixed(4)}` : '') +
-        '\n',
-    );
-    runtime.stdout.write(
-      `  status tool: ${report.statusToolInvoked ? 'invoked ✓' : 'NOT invoked'}\n`,
-    );
+    const result: DoctorSmokeRenderResult = {
+      outcome: report.result.outcome === 'aborted' ? 'aborted' : passed ? 'passed' : 'failed',
+      provider,
+      model: modelId,
+      runId,
+      runDir,
+      sessionId: report.sessionId,
+      logPath: report.logPath,
+      stopReason: report.result.stopReason,
+      statusToolInvoked: report.statusToolInvoked,
+      usage: {
+        turns: usage.turns,
+        ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
+        ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
+        ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }),
+      },
+      environment: {
+        agentDir: report.enumeration.agentDir,
+        authPath: report.enumeration.authPath,
+        modelsPath: report.enumeration.modelsPath,
+        settingsSource: report.enumeration.settingsSource,
+        extensions: report.enumeration.extensions.length,
+        skills: report.enumeration.skills.length,
+        prompts: report.enumeration.prompts.length,
+        themes: report.enumeration.themes.length,
+        contextFiles: report.enumeration.contextFiles.length,
+      },
+    };
+    connector.renderResult({ kind: 'doctor_smoke', result }, renderOpts);
 
     if (report.result.outcome === 'aborted') {
       throw new CommanderError(130, 'yantra.doctor.agent-smoke-aborted', 'Agent smoke aborted.');
     }
-    if (report.result.outcome !== 'completed' || !report.statusToolInvoked) {
-      runtime.stderr.write('\nAgent smoke FAILED: see events above.\n');
+    if (!passed) {
+      runtime.stderr.write(
+        streaming
+          ? '\nAgent smoke FAILED: see events above.\n'
+          : '\nAgent smoke FAILED: see the emitted result.\n',
+      );
       throw new CommanderError(3, 'yantra.doctor.agent-smoke-failed', 'Agent smoke failed.');
     }
-    runtime.stdout.write('\nAgent smoke PASSED.\n');
   } catch (err) {
     if (err instanceof CommanderError) throw err;
     if (err instanceof AgentStartupError) {

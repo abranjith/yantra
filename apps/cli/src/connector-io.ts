@@ -36,6 +36,7 @@ import type {
   BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
+  DoctorSmokeRenderResult,
   ListItem,
   OutputRenderer,
   ShowItem,
@@ -47,6 +48,7 @@ export type ConnectorResult =
   | { readonly kind: 'list'; readonly items: readonly ListItem[] }
   | { readonly kind: 'show'; readonly item: ShowItem }
   | { readonly kind: 'doctor'; readonly result: DoctorRenderResult }
+  | { readonly kind: 'doctor_smoke'; readonly result: DoctorSmokeRenderResult }
   | { readonly kind: 'audit'; readonly report: AuditRenderReport }
   | { readonly kind: 'report'; readonly markdown: string }
   // FEAT-015: the unified Brief output. `ask` (and later `research`/`do`) fold
@@ -140,6 +142,9 @@ export class CLIConnectorIO implements ConnectorIO {
         return;
       case 'doctor':
         this.renderer.renderDoctor(result.result, opts);
+        return;
+      case 'doctor_smoke':
+        this.renderer.renderDoctorSmoke(result.result, opts);
         return;
       case 'audit':
         this.renderer.renderAudit(result.report, opts);

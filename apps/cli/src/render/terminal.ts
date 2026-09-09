@@ -22,6 +22,7 @@ import type {
   BriefArtifactPaths,
   ConnectorRenderOpts,
   DoctorRenderResult,
+  DoctorSmokeRenderResult,
   ListItem,
   OutputRenderer,
   ShowItem,
@@ -93,6 +94,34 @@ export class TerminalRenderer implements OutputRenderer {
         opts.stream.write(`      → ${check.remediation}\n`);
       }
     }
+  }
+
+  renderDoctorSmoke(result: DoctorSmokeRenderResult, opts: ConnectorRenderOpts): void {
+    const environment = result.environment;
+    opts.stream.write('\n--- environment (pinned, zero ambient resources) ---\n');
+    opts.stream.write(`  agentDir:   ${environment.agentDir}\n`);
+    opts.stream.write(`  auth:       ${environment.authPath}\n`);
+    opts.stream.write(`  models:     ${environment.modelsPath}\n`);
+    opts.stream.write(`  settings:   ${environment.settingsSource}\n`);
+    opts.stream.write(
+      `  resources:  extensions=${environment.extensions} skills=${environment.skills} ` +
+        `prompts=${environment.prompts} themes=${environment.themes} ` +
+        `contextFiles=${environment.contextFiles}\n`,
+    );
+
+    opts.stream.write('\n--- result ---\n');
+    opts.stream.write(`  session:    ${result.sessionId}\n`);
+    opts.stream.write(`  log:        ${result.logPath}\n`);
+    opts.stream.write(`  outcome:    ${result.outcome} (${result.stopReason})\n`);
+    opts.stream.write(
+      `  usage:      turns=${result.usage.turns}` +
+        (result.usage.inputTokens !== undefined ? ` in=${result.usage.inputTokens}` : '') +
+        (result.usage.outputTokens !== undefined ? ` out=${result.usage.outputTokens}` : '') +
+        (result.usage.costUsd !== undefined ? ` cost=$${result.usage.costUsd.toFixed(4)}` : '') +
+        '\n',
+    );
+    opts.stream.write(`  status tool: ${result.statusToolInvoked ? 'invoked ✓' : 'NOT invoked'}\n`);
+    if (result.outcome === 'passed') opts.stream.write('\nAgent smoke PASSED.\n');
   }
 
   renderAudit(report: AuditRenderReport, opts: ConnectorRenderOpts): void {

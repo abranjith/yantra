@@ -104,6 +104,42 @@ export interface DoctorRenderResult {
   readonly nodeVersion: string;
 }
 
+/**
+ * Outcome of `yantra doctor --agent-smoke`. Distinct from
+ * {@link DoctorRenderResult} because the live smoke reports session identity
+ * and provider usage rather than a list of environment checks — the two share
+ * a command but not a payload.
+ */
+export interface DoctorSmokeRenderResult {
+  readonly outcome: 'passed' | 'failed' | 'aborted';
+  readonly provider: string;
+  readonly model: string;
+  readonly runId: string;
+  readonly runDir: string;
+  readonly sessionId: string;
+  readonly logPath: string;
+  readonly stopReason: string;
+  readonly statusToolInvoked: boolean;
+  readonly usage: {
+    readonly turns: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly costUsd?: number;
+  };
+  /** Effective pinned paths and ambient-resource counts (zero by design). */
+  readonly environment: {
+    readonly agentDir: string;
+    readonly authPath: string;
+    readonly modelsPath: string;
+    readonly settingsSource: string;
+    readonly extensions: number;
+    readonly skills: number;
+    readonly prompts: number;
+    readonly themes: number;
+    readonly contextFiles: number;
+  };
+}
+
 export interface AuditRenderReport {
   readonly runId: string;
   readonly workflowName: string;
@@ -179,6 +215,8 @@ export interface OutputRenderer {
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void;
   renderShow(item: ShowItem, opts: ConnectorRenderOpts): void;
   renderDoctor(result: DoctorRenderResult, opts: ConnectorRenderOpts): void;
+  /** Renders the terminal outcome of the live `--agent-smoke` provider check. */
+  renderDoctorSmoke(result: DoctorSmokeRenderResult, opts: ConnectorRenderOpts): void;
   renderAudit(report: AuditRenderReport, opts: ConnectorRenderOpts): void;
   renderReport(markdown: string, opts: ConnectorRenderOpts): void;
   /**

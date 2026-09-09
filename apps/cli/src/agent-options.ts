@@ -1,7 +1,13 @@
 /**
- * The all-or-nothing agentic option surface shared by every command that may
- * open a provider session. Registration and resolution live together so model,
- * credential, budget, and no-LLM vocabulary cannot drift between commands.
+ * The agentic option surface shared by every command that may open a provider
+ * session. Registration and resolution live together so model, credential,
+ * budget, and no-LLM vocabulary cannot drift between commands.
+ *
+ * The surface is composed from named groups rather than registered wholesale:
+ * every command spells a given flag identically, and registers only the groups
+ * it can actually honor. A command that offers `--max-duration` must hand that
+ * budget to the orchestrator; one that merely resolves a model registers
+ * {@link addAgentModelOptions} alone.
  *
  * Values resolve in one order: explicit flag > `YANTRA_AGENT_*` environment >
  * `profile.yaml`/preference value > pinned constant. Deterministic selection is
@@ -17,26 +23,46 @@ import {
   type AgentBudgetConfig,
   type AgenticTaskRequest,
 } from '@yantra/agent';
-import { loadConfig, preferenceValue, type EffectivePreferences } from '@yantra/core';
+import {
+  AGENT_DURATION_HINT,
+  AGENT_DURATION_PATTERN,
+  loadConfig,
+  parseAgentCount,
+  parseAgentDurationMs,
+  preferenceValue,
+  type EffectivePreferences,
+} from '@yantra/core';
 import { CommanderError, Option, type Command } from 'commander';
 
 import { noLlmReason } from './global-flags.js';
 
 export { DEFAULT_AGENT_MODEL, DEFAULT_AGENT_PROVIDER };
 
-/** Parsed values registered by {@link addAgentOptions}. */
-export interface AgentOptions {
+/** Parsed values registered by {@link addAgentModelOptions}. */
+export interface AgentModelOptions {
   readonly provider?: string;
   readonly model?: string;
   readonly thinking?: string;
   readonly authSecret?: string;
+}
+
+/** Parsed values registered by {@link addAgentBudgetOptions}. */
+export interface AgentBudgetOptions {
   readonly maxDuration?: string;
   readonly maxTokens?: string;
   readonly toolTimeout?: string;
   readonly toolRetries?: string;
   readonly confirmTimeout?: string;
+}
+
+/** Parsed values registered by {@link addNoLlmOption}. */
+export interface NoLlmOption {
   /** Commander stores `--no-llm` as `llm: false`. */
   readonly llm?: boolean;
+}
+
+/** Parsed values registered by {@link addAgentOptions}. */
+export interface AgentOptions extends AgentModelOptions, AgentBudgetOptions, NoLlmOption {
   /** Commander stores `--no-screenshots` as `screenshots: false`. */
   readonly screenshots?: boolean;
 }
@@ -66,46 +92,69 @@ export type AgentInvocation =
  * typed CLI validation failures.
  */
 export function parseDuration(raw: string, flag: string): number {
-  const match = /^([1-9]\d*)(ms|s|m|h)?$/u.exec(raw.trim());
-  if (match === null) {
-    throw new CommanderError(
-      1,
-      'yantra.agent.invalid-duration',
-      `${flag} must be a positive duration such as 15m, 900s, or 900000.`,
-    );
-  }
-  const amount = Number(match[1]);
-  const multiplier =
-    match[2] === 'h' ? 3_600_000 : match[2] === 'm' ? 60_000 : match[2] === 's' ? 1_000 : 1;
-  const milliseconds = amount * multiplier;
-  if (!Number.isSafeInteger(milliseconds)) {
-    throw new CommanderError(
-      1,
-      'yantra.agent.invalid-duration',
-      `${flag} is too large to represent safely in milliseconds.`,
-    );
-  }
-  return milliseconds;
+  const milliseconds = parseAgentDurationMs(raw);
+  if (milliseconds !== null) return milliseconds;
+  // The grammar and the safe-integer ceiling are distinct failures; a caller
+  // that typed `99999999999h` needs to hear a different thing than one who
+  // typed `soon`.
+  throw new CommanderError(
+    1,
+    'yantra.agent.invalid-duration',
+    AGENT_DURATION_PATTERN.test(raw.trim())
+      ? `${flag} is too large to represent safely in milliseconds.`
+      : `${flag} must be ${AGENT_DURATION_HINT}.`,
+  );
 }
 
 /**
- * Registers the complete shared agentic option surface. Callers must not
- * register a subset or add Commander defaults; resolution needs to distinguish
- * an absent flag from an explicitly supplied value.
+ * Registers the model-selection vocabulary: which model answers, and with
+ * which credential. Every command that resolves a model registers exactly
+ * these four, spelled exactly this way.
  */
-export function addAgentOptions(command: Command): Command {
+export function addAgentModelOptions(command: Command): Command {
   return command
     .addOption(new Option('--provider <name>', 'agent model provider'))
     .addOption(new Option('--model <id>', 'provider-scoped model id'))
     .addOption(new Option('--thinking <level>', 'provider reasoning level'))
-    .addOption(new Option('--auth-secret <ref>', 'runtime model-key secret reference'))
+    .addOption(new Option('--auth-secret <ref>', 'runtime model-key secret reference'));
+}
+
+/**
+ * Registers the per-run budget vocabulary. Only for commands that actually
+ * execute an agentic run and hand these to the orchestrator — a command that
+ * cannot spend a budget must not offer to set one.
+ */
+export function addAgentBudgetOptions(command: Command): Command {
+  return command
     .addOption(new Option('--max-duration <duration>', 'whole-run wall-clock duration'))
     .addOption(new Option('--max-tokens <n>', 'cumulative provider token ceiling'))
     .addOption(new Option('--tool-timeout <duration>', 'timeout for one tool call'))
     .addOption(new Option('--tool-retries <n>', 'retries after an identical tool failure'))
-    .addOption(new Option('--confirm-timeout <duration>', 'maximum live consent wait'))
-    .addOption(new Option('--no-llm', 'force the deterministic no-model path'))
-    .addOption(new Option('--no-screenshots', 'suppress vision assist for this run'));
+    .addOption(new Option('--confirm-timeout <duration>', 'maximum live consent wait'));
+}
+
+/**
+ * Registers the deterministic-path negation. Spelled in one place because
+ * every command that can involve a model accepts it (memory §General).
+ */
+export function addNoLlmOption(command: Command): Command {
+  return command.addOption(new Option('--no-llm', 'force the deterministic no-model path'));
+}
+
+/**
+ * Registers the complete agentic-run option surface for commands that open a
+ * provider session and spend a budget. Callers must not add Commander
+ * defaults; resolution needs to distinguish an absent flag from an explicitly
+ * supplied value.
+ *
+ * Commands that only *select* a model without running one compose the narrower
+ * registrars instead — see {@link addAgentModelOptions}. Registering a flag a
+ * command cannot honor is not consistency, it is a dead control.
+ */
+export function addAgentOptions(command: Command): Command {
+  return addNoLlmOption(addAgentBudgetOptions(addAgentModelOptions(command))).addOption(
+    new Option('--no-screenshots', 'suppress vision assist for this run'),
+  );
 }
 
 /**
@@ -296,8 +345,8 @@ function optionalString(value: unknown): string | null {
 }
 
 function positiveInteger(value: unknown, flag: string): number {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  const parsed = parseAgentCount(value, { allowZero: false });
+  if (parsed === null) {
     throw new CommanderError(
       1,
       'yantra.agent.invalid-budget',
@@ -308,8 +357,8 @@ function positiveInteger(value: unknown, flag: string): number {
 }
 
 function nonnegativeInteger(value: unknown, flag: string): number {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+  const parsed = parseAgentCount(value, { allowZero: true });
+  if (parsed === null) {
     throw new CommanderError(
       1,
       'yantra.agent.invalid-budget',

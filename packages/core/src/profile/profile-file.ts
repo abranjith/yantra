@@ -22,6 +22,8 @@ import { z } from 'zod';
 
 import { configDir } from '../browser/paths.js';
 
+import { AGENT_DURATION_HINT, AGENT_DURATION_PATTERN } from './agent-budgets.js';
+
 /** Returns the path to `profile.yaml`. */
 export function profilePath(): string {
   return join(configDir(), 'profile.yaml');
@@ -34,7 +36,7 @@ const unitsSchema = z.enum(['metric', 'imperial']);
 const nullableAgentStringSchema = z.string().trim().min(1).nullable();
 const agentDurationSchema = z
   .string()
-  .regex(/^[1-9]\d*(?:ms|s|m|h)?$/, 'expected a positive duration such as 15m, 900s, or 900000');
+  .regex(AGENT_DURATION_PATTERN, `expected ${AGENT_DURATION_HINT}`);
 
 /**
  * The profile.yaml schema. Every block and leaf has a default so a partial (or

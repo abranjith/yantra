@@ -4,6 +4,13 @@
  */
 
 export {
+  AGENT_DURATION_HINT,
+  AGENT_DURATION_PATTERN,
+  formatAgentDuration,
+  parseAgentCount,
+  parseAgentDurationMs,
+} from './agent-budgets.js';
+export {
   KNOWN_PREFERENCE_KEYS,
   defaultProfile,
   flattenProfile,
