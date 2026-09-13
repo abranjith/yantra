@@ -34,6 +34,10 @@ Saving is best-effort. An existing workflow name is not overwritten, an empty or
 
 The executor supports `navigate`, `click`, `fill`, `fill_element`, `extract`, `wait_for`, `assert`, `branch`, `loop`, and `llm_summarize`. It resolves named UI targets through each locator's ordered candidate chain, auto-waits for the actionability level the step needs, and settles the page after navigation and interactions and before reads. Scope rules are checked before ordinary execution, retries are bounded, total step executions are capped, and a checkpoint is written after every completed step.
 
+When `fill` or `fill_element` targets a nonempty text control, replay focuses that control and sends the platform select-all chord (`Meta+A` on macOS, `Control+A` elsewhere) before typing. This replaces the existing text without dispatching the former triple pointer click, which could toggle widget-bearing controls. Native `<select>` controls keep their value-based option handling, and fills still wait for navigation caused by typing or an optional Enter submission to settle before replay continues.
+
+Secret-backed fills use the same replacement behavior without reading the resulting value. Resolved plaintext is zeroed after the attempt and remains absent from completed and failed results and persisted artifacts. Existing workflow YAML and saved replay artifact formats remain compatible; the driver migration does not rewrite them.
+
 The YAML schema also accepts `call_workflow`, but its executor handler is currently a stub that fails the step. This is different from the supported agent-facing `workflow_run` tool described below.
 
 ### Confirmations and safety

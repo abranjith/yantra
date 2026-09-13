@@ -17,6 +17,12 @@ Deterministic local inspection commands do not require Chrome, network access,
 or a model credential. `yantra doctor` reports which optional capabilities are
 available.
 
+Installing the workspace dependencies does not download or manage the browser
+used by Yantra. Runtime browser tasks still discover the system Chrome
+installation. The repository's fixed Chrome for Testing fixture is provisioned
+only for the browser-migration test suites; it is not selected by normal
+commands and is not a user installation path.
+
 ## Install and build from source
 
 From the repository root:

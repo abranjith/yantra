@@ -18,7 +18,7 @@ This repository is a private, unpublished `0.0.1` pnpm workspace. There is no ve
 
 ## Install and start from source
 
-Prerequisites are Node.js 24.15.0 or newer and pnpm 11.1.0. System Chrome 120 or newer is required for browser tasks and saved-workflow replay.
+Prerequisites are Node.js 24.15.0 or newer and pnpm 11.1.0. Browser tasks and saved-workflow replay require an existing system Chrome 120 or newer installation. Installing the workspace dependencies does not install, select, or update a runtime browser; the fixed Chrome for Testing fixture used by migration tests is test-only.
 
 ```console
 pnpm install --frozen-lockfile
@@ -81,6 +81,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Diagnostics and Audit](docs/features/diagnostics-and-audit.md) — environment checks and run inspection.
 - [Opt-In Vision Assist](docs/features/vision-assist.md) — consent-gated, budgeted, audited screenshots for agentic browser fallback.
 - [Recovery as Declarative Data](docs/features/recovery-as-declarative-data.md) — bounded fill and click recovery plans, shared accounting, and verdict diagnostics.
+- [Puppeteer 25.10 API Migration](docs/features/puppeteer-api-migration.md) — preserved browser behavior, explicit resource ownership, and migration-test coverage.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, and audit boundaries.
 

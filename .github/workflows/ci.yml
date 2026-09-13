@@ -112,6 +112,76 @@ jobs:
           pnpm security:static-check
           pnpm --filter @yantra/protocol verify
 
+  browser-migration:
+    name: browser-migration / ${{ matrix.os }} / no-llm
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      LLM_PROVIDER: none
+      YANTRA_E2E_BROWSER: '1'
+      YANTRA_MIGRATION_SUITE_REQUIRED: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build browser migration bundles
+        run: |
+          pnpm --filter @yantra/core build
+          pnpm --filter @yantra/core build:recorder-overlay
+
+      - name: Provision fixed Chrome for Testing fixture
+        working-directory: packages/core
+        run: pnpm exec tsx tests/helpers/provision-test-browser.ts
+
+      - name: Report driver, browser, and platform identity
+        run: node -e "const fs=require('node:fs'); const core=require('./packages/core/package.json'); const browser=JSON.parse(fs.readFileSync(process.env.YANTRA_TEST_BROWSER_MANIFEST,'utf8')); console.log(JSON.stringify({puppeteer:core.dependencies['puppeteer-core'],...browser}))"
+
+      - name: Run migration browser suites (Linux headful via Xvfb)
+        if: runner.os == 'Linux'
+        working-directory: packages/core
+        run: >-
+          xvfb-run -a pnpm exec vitest run
+          tests/browser/migration-harness.spec.ts tests/browser/integration.spec.ts
+          tests/browser/agent-controller.spec.ts tests/browser/agent-popup-policy.spec.ts
+          tests/browser/set-of-marks.spec.ts tests/discovery/composed-handles.spec.ts
+          tests/locator/injected-host.spec.ts tests/locator/frame-tokens.spec.ts
+          tests/executor/input-characterization-browser.spec.ts
+          tests/executor/step-handlers/input-migration.spec.ts
+          tests/executor/replay-page-settling.spec.ts
+          tests/workflow/recorder/popup-handler.spec.ts
+          tests/workflow/recorder/recording-browser.spec.ts
+
+      - name: Run migration browser suites
+        if: runner.os != 'Linux'
+        working-directory: packages/core
+        run: >-
+          pnpm exec vitest run
+          tests/browser/migration-harness.spec.ts tests/browser/integration.spec.ts
+          tests/browser/agent-controller.spec.ts tests/browser/agent-popup-policy.spec.ts
+          tests/browser/set-of-marks.spec.ts tests/discovery/composed-handles.spec.ts
+          tests/locator/injected-host.spec.ts tests/locator/frame-tokens.spec.ts
+          tests/executor/input-characterization-browser.spec.ts
+          tests/executor/step-handlers/input-migration.spec.ts
+          tests/executor/replay-page-settling.spec.ts
+          tests/workflow/recorder/popup-handler.spec.ts
+          tests/workflow/recorder/recording-browser.spec.ts
+
   live-provider-smoke:
     name: release-gate / live provider smoke
     runs-on: ubuntu-latest

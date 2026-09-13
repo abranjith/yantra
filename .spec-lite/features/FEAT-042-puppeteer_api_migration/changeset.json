@@ -1,0 +1,275 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-12T18:55:04.977Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-12T18:58:59.579Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-12T19:05:18.282Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-12T22:02:22.796Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-12T22:12:51.086Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-12T22:15:05.918Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-12T22:18:03.244Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-12T22:41:56.298Z",
+      "head": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f"
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/discovery/composed-handles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/click.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/locator/injected-host.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/overlay/event-listeners.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/overlay/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/popup-handler.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/session.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-popup-policy.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/browser/integration.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/migration-harness.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/set-of-marks.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/discovery/composed-handles.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/executor/fill-element.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/executor/input-characterization-browser.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/executor/replay-page-settling.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/executor/step-handlers/input-migration.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/fixtures/puppeteer-migration-replay-baseline.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/helpers/migration-browser.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/helpers/provision-test-browser.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/locator/frame-tokens.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/locator/injected-host.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/workflow/recorder/popup-handler.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/workflow/recorder/recording-browser.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-042-puppeteer_api_migration/changeset.json",
+    ".spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md",
+    ".spec-lite/plan_puppeteer_browser_management.md"
+  ],
+  "baseline": {
+    "sha": "c2dbf872ff9c626fe98744e36d46ab4f51a05f3f",
+    "capturedAt": "2026-09-12T18:49:26.488Z",
+    "dirtyAtBaseline": [
+      ".github/copilot-instructions.md",
+      ".spec-lite.json",
+      "AGENTS.md",
+      ".spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md",
+      ".spec-lite/features/FEAT-043-browser_resolution_lifecycle/spec.md",
+      ".spec-lite/features/FEAT-044-managed_stable_installation/spec.md",
+      ".spec-lite/features/FEAT-045-browser_switching_diagnostics/spec.md",
+      ".spec-lite/features/FEAT-046-explicit_managed_update/spec.md",
+      ".spec-lite/plan_puppeteer_browser_management.md",
+      ".spec-lite/puppeteer_usage_audit.md"
+    ],
+    "dirtyBlobHashes": {
+      ".github/copilot-instructions.md": "44b8a4f73244fd5efca0dbd7c1b0ff60680445fc",
+      ".spec-lite.json": "f049b474c0d255f158f0640b7f6129103f4bc13e",
+      "AGENTS.md": "154ed601af5436f26196510a704ee611fe25299f",
+      ".spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md": "65364b0bb92f7a3152e27bbd862ba0784edf4549",
+      ".spec-lite/features/FEAT-043-browser_resolution_lifecycle/spec.md": "6259876ace969d6c4cd1a2b9323312795b45624e",
+      ".spec-lite/features/FEAT-044-managed_stable_installation/spec.md": "e2e5732583d2f99ffb6389ed80164ff1dd3696ba",
+      ".spec-lite/features/FEAT-045-browser_switching_diagnostics/spec.md": "b3ed15c42d77d2855131a4cb69523a6afb4f82ee",
+      ".spec-lite/features/FEAT-046-explicit_managed_update/spec.md": "982fd529fba6aa94c2dc4a45ed261c0e2685168d",
+      ".spec-lite/plan_puppeteer_browser_management.md": "ea2450b62c97baa493866066f0b5328d21100b34",
+      ".spec-lite/puppeteer_usage_audit.md": "0c1427f4573a418c8c2bb677e79e7acac81302ca"
+    }
+  },
+  "featureId": "FEAT-042"
+}

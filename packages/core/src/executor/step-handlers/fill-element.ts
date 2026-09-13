@@ -20,11 +20,9 @@ import {
 import type { ExecutionContext, StepHandler, StepResult } from '../types.js';
 import { ValueResolver } from '../value-resolver.js';
 
+import { SELECT_ALL_MODIFIER, selectExistingValue } from './fill.js';
 import { resolveLocatorChain } from './locator-helpers.js';
 import { CLICK_NAV_DETECT_MS, FILL_NAV_DETECT_MS, withPageSettling } from './settle-helpers.js';
-
-/** The platform's select-all chord; mirrors the agent controller's choice. */
-const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
  * What this port considers addressable.
@@ -338,8 +336,7 @@ class ReplayWidgetPort implements WidgetPort {
         value,
       );
       if (selected) return;
-      await handle.focus();
-      await handle.click({ clickCount: 3 });
+      await selectExistingValue(handle, this.page);
       await handle.type(value);
     });
   }
@@ -349,8 +346,11 @@ class ReplayWidgetPort implements WidgetPort {
     await withPageSettling(this.ctx, FILL_NAV_DETECT_MS, async () => {
       await handle.focus();
       await this.page.keyboard.down(SELECT_ALL_MODIFIER);
-      await this.page.keyboard.press('a');
-      await this.page.keyboard.up(SELECT_ALL_MODIFIER);
+      try {
+        await this.page.keyboard.press('a');
+      } finally {
+        await this.page.keyboard.up(SELECT_ALL_MODIFIER);
+      }
       await this.page.keyboard.press('Backspace');
     });
   }

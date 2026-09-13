@@ -7,6 +7,10 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/(^|[^:])\/\/.*$/gmu, '$1');
+}
+
 const lintMessagesFor = async (filePath: string) => {
   const eslint = new ESLint({
     cwd: repoRoot,
@@ -37,6 +41,27 @@ describe('@no-llm lint boundary rules', () => {
     );
 
     expect(withNul).toEqual([]);
+  });
+
+  it('forbids the legacy Puppeteer click-count identifier in executable package source', () => {
+    // The identifier is assembled so the boundary rule does not report itself.
+    // Comments remain available to explain the migration, but casts, widened
+    // option types, and local interfaces are executable source and all fail.
+    const forbiddenIdentifier = `click${'Count'}`;
+    const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
+    const violations = sourceFiles.filter((filePath) =>
+      withoutComments(readFileSync(resolve(repoRoot, filePath), 'utf8')).includes(
+        forbiddenIdentifier,
+      ),
+    );
+
+    expect(violations).toEqual([]);
+    expect(
+      withoutComments(`const value = 1; // ${forbiddenIdentifier} migration note`),
+    ).not.toContain(forbiddenIdentifier);
+    expect(withoutComments(`interface Options { ${forbiddenIdentifier}: number }`)).toContain(
+      forbiddenIdentifier,
+    );
   });
 
   it('rejects @yantra/agent imports from packages/core', async () => {

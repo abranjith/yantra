@@ -49,36 +49,42 @@ export async function collectComposedInteractables(
     ...(options.selector === undefined ? {} : { selector: options.selector }),
   });
   const elements: (ElementHandle<Element> | null)[] = [];
+  const owned = new Set<JSHandle<unknown>>([scanHandle]);
+  const transferred = new Set<JSHandle<unknown>>();
   try {
     const recordsHandle = await scanHandle.getProperty('records');
+    owned.add(recordsHandle);
     const records = await recordsHandle.jsonValue();
-    release(recordsHandle);
     const elementsHandle = await scanHandle.getProperty('elements');
+    owned.add(elementsHandle);
     const properties = await elementsHandle.getProperties();
-    const length = properties.size;
+    for (const property of properties.values()) owned.add(property);
+    const indexes = [...properties.keys()]
+      .map(Number)
+      .filter((index) => Number.isInteger(index) && index >= 0);
+    const length = indexes.length === 0 ? 0 : Math.max(...indexes) + 1;
+    elements.push(...Array<ElementHandle<Element> | null>(length).fill(null));
     // Indexed by the numeric string key rather than by iteration order: the
     // correspondence records rely on is positional, and trusting a map's order
     // to reproduce it would reintroduce the coupling this pass removes.
-    for (let index = 0; index < length; index += 1) {
-      const property = properties.get(String(index));
-      const element = (property?.asElement() as ElementHandle<Element> | null) ?? null;
-      elements.push(element);
-      if (property && !element) release(property);
-    }
     for (const [key, property] of properties) {
       const index = Number(key);
-      if (!Number.isInteger(index) || index < 0 || index >= length) release(property);
+      if (!Number.isInteger(index) || index < 0) continue;
+      const element = (property.asElement() as ElementHandle<Element> | null) ?? null;
+      if (element) {
+        elements[index] = element;
+        transferred.add(property);
+      }
     }
-    release(elementsHandle);
     return { records, elements };
   } catch (error) {
-    for (const element of elements) if (element) release(element);
+    transferred.clear();
     throw error;
   } finally {
-    release(scanHandle);
+    await disposeHandles([...owned].filter((handle) => !transferred.has(handle)));
   }
 }
 
-function release(handle: JSHandle<unknown>): void {
-  void Promise.resolve(handle.dispose()).catch(() => undefined);
+async function disposeHandles(handles: readonly JSHandle<unknown>[]): Promise<void> {
+  await Promise.allSettled([...new Set(handles)].map((handle) => handle.dispose()));
 }

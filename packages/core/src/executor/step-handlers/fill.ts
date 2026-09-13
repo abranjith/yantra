@@ -1,4 +1,5 @@
 import type { FillStep } from '@yantra/protocol';
+import type { ElementHandle, KeyInput, Page as PuppeteerPage } from 'puppeteer-core';
 
 import { ExecutorLocatorNotFoundError } from '../errors.js';
 import type { StepHandler, StepResult } from '../types.js';
@@ -6,6 +7,23 @@ import { ValueResolver } from '../value-resolver.js';
 
 import { resolveLocatorChain } from './locator-helpers.js';
 import { FILL_NAV_DETECT_MS, withPageSettling } from './settle-helpers.js';
+
+/** The platform's select-all chord; shared by both deterministic fill paths. */
+export const SELECT_ALL_MODIFIER: KeyInput = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/** Focus and select the current value without dispatching a multi-click gesture. */
+export async function selectExistingValue(
+  elementHandle: Pick<ElementHandle<Element>, 'focus'>,
+  page: Pick<PuppeteerPage, 'keyboard'>,
+): Promise<void> {
+  await elementHandle.focus();
+  await page.keyboard.down(SELECT_ALL_MODIFIER);
+  try {
+    await page.keyboard.press('a');
+  } finally {
+    await page.keyboard.up(SELECT_ALL_MODIFIER);
+  }
+}
 
 /**
  * Fill step handler.
@@ -83,8 +101,9 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
 
   try {
     await withPageSettling(ctx, FILL_NAV_DETECT_MS, async () => {
-      await elementHandle.focus();
-      await elementHandle.click({ clickCount: 3 }); // select all
+      const puppeteerPage = ctx.page?.puppeteerPage;
+      if (!puppeteerPage) throw new Error('Fill step requires a Puppeteer-backed page.');
+      await selectExistingValue(elementHandle, puppeteerPage);
       await elementHandle.type(plaintext);
 
       if (step.submit) {

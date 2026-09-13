@@ -31,6 +31,7 @@ interface RecorderOverlay {
 declare global {
   interface Window {
     __yantraRecorder: RecorderOverlay;
+    __yantraRecorderBootstrapState?: { timeOrigin: number; url: string };
     /** CDP binding registered by Node-side before injection. */
     __yantraRecorderEmit: (payload: string) => void;
   }
@@ -163,6 +164,12 @@ const overlay: RecorderOverlay = {
 // ---------------------------------------------------------------------------
 
 function bootstrap(): void {
+  const documentTimeOrigin = performance.timeOrigin;
+  const state = window.__yantraRecorderBootstrapState;
+  if (state?.timeOrigin === documentTimeOrigin && state.url === location.href) return;
+  // The URL distinguishes the initial about:blank transition on Chromium
+  // builds that preserve both Window and performance.timeOrigin.
+  window.__yantraRecorderBootstrapState = { timeOrigin: documentTimeOrigin, url: location.href };
   window.__yantraRecorder = overlay;
 
   // Mount overlay once DOM is ready

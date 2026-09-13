@@ -16,6 +16,12 @@ import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from '../../src/browser/types.js';
 import { classifyFailure } from '../../src/interaction/attempt.js';
+import {
+  beginMigrationBrowserFixture,
+  type MigrationBrowserFixture,
+} from '../helpers/migration-browser.js';
+
+let migrationFixture: MigrationBrowserFixture | undefined;
 
 const logger: Logger = {
   info: () => undefined,
@@ -126,6 +132,7 @@ describe('@no-llm AgentBrowserController', () => {
   const hangingResponses: ServerResponse[] = [];
 
   beforeAll(async () => {
+    migrationFixture = await beginMigrationBrowserFixture();
     server = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' });
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
@@ -612,6 +619,8 @@ describe('@no-llm AgentBrowserController', () => {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
+    await migrationFixture?.cleanup();
+    migrationFixture = undefined;
   });
 
   it('launches lazily with an ephemeral profile and tears down idempotently', async () => {
@@ -2205,7 +2214,7 @@ function trackingProvider(): {
   };
   const actual = new LocalBrowserProvider({ profileStore: new LocalProfileStore(), logger });
   result.launch.mockImplementation(async (options) => {
-    const session = await actual.launch(options);
+    const session = await actual.launch({ ...options, ...migrationFixture?.launchOptions });
     result.session = session;
     const newPage = session.newPage.bind(session);
     session.newPage = async () => {

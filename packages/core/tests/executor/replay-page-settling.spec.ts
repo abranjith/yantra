@@ -33,6 +33,10 @@ import { createExecutionContext } from '../../src/executor/execution-context.js'
 import { Executor } from '../../src/executor/executor.js';
 import type { EthicsGate, ExecutionContext } from '../../src/executor/types.js';
 import type { EngineLocatorChain } from '../../src/locator/types.js';
+import {
+  beginMigrationBrowserFixture,
+  type MigrationBrowserFixture,
+} from '../helpers/migration-browser.js';
 
 const logger: Logger = {
   info: () => undefined,
@@ -57,6 +61,11 @@ const LOCATORS: Record<string, EngineLocatorChain> = {
     strict: true,
     candidates: [{ intent: { kind: 'css', selector: 'body' }, source: 'authored' }],
   },
+  query_field: {
+    name: 'query_field',
+    strict: true,
+    candidates: [{ intent: { kind: 'css', selector: '#query' }, source: 'authored' }],
+  },
 };
 
 function step(partial: Partial<Step> & { id: string; type: Step['type'] }): Step {
@@ -79,9 +88,11 @@ describe('@no-llm deterministic replay against a live page', () => {
   let baseUrl: string;
   let session: BrowserSession;
   let page: Page;
+  let fixture: MigrationBrowserFixture;
   const runDirs: string[] = [];
 
   beforeAll(async () => {
+    fixture = await beginMigrationBrowserFixture();
     server = createServer((request, response) => {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       if (path === '/result-fragment') {
@@ -113,6 +124,30 @@ describe('@no-llm deterministic replay against a live page', () => {
             mount('open-host', 'open', 'Shadow field');
             mount('closed-host', 'closed', 'Hidden field');
           </script>`);
+        return;
+      }
+      if (path === '/fill-navigation') {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end(`<!doctype html><title>Fill navigation</title>
+          <input id="query" aria-label="Query" value="old">
+          <script>
+            let timer;
+            document.getElementById('query').addEventListener('input', () => {
+              clearTimeout(timer);
+              timer = setTimeout(() => location.href = '/filled', 100);
+            });
+          </script>`);
+        return;
+      }
+      if (path === '/fill-submit') {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end(`<!doctype html><title>Fill submit</title>
+          <form action="/submitted"><input id="query" name="query" aria-label="Query" value="old"></form>`);
+        return;
+      }
+      if (path === '/filled' || path === '/submitted') {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end(`<!doctype html><title>Settled ${path.slice(1)}</title><p>destination</p>`);
         return;
       }
       if (path === '/app-shell') {
@@ -152,7 +187,7 @@ describe('@no-llm deterministic replay against a live page', () => {
     session = await new LocalBrowserProvider({
       profileStore: new LocalProfileStore(),
       logger,
-    }).launch({ profile: { kind: 'ephemeral' }, headless: true });
+    }).launch({ profile: { kind: 'ephemeral' }, headless: true, ...fixture.launchOptions });
     // One page for the whole file: each test navigates it, so the suite runs a
     // single Chrome rather than one per case. Three concurrent Chromes across
     // the core suite push slower tests past the 15s timeout.
@@ -161,6 +196,7 @@ describe('@no-llm deterministic replay against a live page', () => {
 
   afterAll(async () => {
     await session?.close();
+    await fixture?.cleanup();
     await new Promise<void>((resolve, reject) =>
       server?.close((error) => (error ? reject(error) : resolve())),
     );
@@ -317,6 +353,48 @@ describe('@no-llm deterministic replay against a live page', () => {
     };
     expect(outputs.status?.rows?.[0]).toContain('Enter a tracking number');
   }, 90_000);
+
+  it('settles a navigation scheduled by typing before the fill step completes', async () => {
+    const { status } = await runPlan([
+      step({
+        id: 's1',
+        type: 'navigate',
+        url: { kind: 'literal', value: `${baseUrl}fill-navigation` },
+      }),
+      step({
+        id: 's2',
+        type: 'fill',
+        locator: { kind: 'workflow', name: 'query_field' },
+        value: { kind: 'literal', value: 'replacement' },
+        submit: false,
+      }),
+    ]);
+
+    expect(status).toBe('completed');
+    expect(await page.puppeteerPage!.title()).toBe('Settled filled');
+  }, 90_000);
+
+  it('settles an Enter submission before the fill step completes', async () => {
+    const { status } = await runPlan([
+      step({
+        id: 's1',
+        type: 'navigate',
+        url: { kind: 'literal', value: `${baseUrl}fill-submit` },
+      }),
+      step({
+        id: 's2',
+        type: 'fill',
+        locator: { kind: 'workflow', name: 'query_field' },
+        value: { kind: 'literal', value: 'replacement' },
+        submit: true,
+      }),
+    ]);
+
+    expect(status).toBe('completed');
+    expect(await page.puppeteerPage!.title()).toBe('Settled submitted');
+    expect(page.puppeteerPage!.url()).toContain('query=replacement');
+  }, 90_000);
+
   it('replays a fill into a control inside an open shadow root', async () => {
     // The capability gap this closes: every path that minted an addressable
     // element used a flat-tree query, so this control was structurally absent

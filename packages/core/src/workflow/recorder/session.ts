@@ -68,7 +68,7 @@ function nowIso(): string {
 }
 
 async function readOverlayBundle(): Promise<string> {
-  const bundlePath = join(__dirname, '..', '..', '..', '..', 'dist', 'recorder-overlay.iife.js');
+  const bundlePath = join(__dirname, '..', '..', '..', 'dist', 'recorder-overlay.iife.js');
   try {
     return await readFile(bundlePath, 'utf8');
   } catch {
@@ -128,6 +128,14 @@ export class RecordingSession {
   // Module instances
   private idleWatcher: IdleWatcher | null = null;
   private popupHandler: PopupHandler | null = null;
+  private readonly sessionListeners = new Map<
+    CDPSession,
+    {
+      readonly bindingCalled: (params: unknown) => void;
+      readonly frameNavigated: (params: unknown) => void;
+      readonly executionContextCreated: (params: unknown) => void;
+    }
+  >();
 
   // Action accumulator
   private actions: CapturedAction[] = [];
@@ -185,7 +193,7 @@ export class RecordingSession {
     // Read yantra version
     try {
       const pkgJson = JSON.parse(
-        await readFile(join(__dirname, '..', '..', '..', '..', 'package.json'), 'utf8'),
+        await readFile(join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
       ) as { version?: string };
       this.yantraVersion = pkgJson.version ?? '0.0.1';
     } catch {
@@ -250,33 +258,12 @@ export class RecordingSession {
     }
 
     // Register CDP binding (before injecting script)
-    await this.mainPageCDP.send('Runtime.addBinding', {
-      name: '__yantraRecorderEmit',
-    });
-
-    // Read and inject overlay bundle
-    const overlayCode = await readOverlayBundle();
-    await this.mainPageCDP.send('Page.addScriptToEvaluateOnNewDocument', {
-      source: overlayCode,
-    });
-
-    // Listen for binding calls (in-page → Node)
-    this.mainPageCDP.on('Runtime.bindingCalled', (params: unknown) => {
-      this.onBindingCalled(params as { name: string; payload: string });
-    });
-
-    // Navigation capture (TASK-005)
-    this.mainPageCDP.on('Page.frameNavigated', (params: unknown) => {
-      this.onFrameNavigated(params as FrameNavigatedParams);
-    });
+    await this.installOverlayOnSession(this.mainPageCDP);
 
     // Frame attachment for cross-origin detection (TASK-006a)
     this.mainPageCDP.on('Page.frameAttached', (params: unknown) => {
       void this.onFrameAttached(params as FrameAttachedParams);
     });
-
-    // Enable Page domain
-    await this.mainPageCDP.send('Page.enable');
 
     // Crash detection (TASK-013)
     this.browser.on('disconnected', () => {
@@ -292,6 +279,7 @@ export class RecordingSession {
     this.popupHandler = new PopupHandler(this.browserCDP, this.mainTargetId, this.recordingId, {
       onEvent: (event) => this.emit(event),
       onPopupSession: (session, _targetId) => this.installOverlayOnSession(session),
+      onPopupSessionClosed: (session) => this.removeOverlaySessionListeners(session),
       onUnrecordedOrigin: (origin) => {
         this.unrecordedFrameOrigins.add(origin);
       },
@@ -361,6 +349,7 @@ export class RecordingSession {
     const stoppedAt = nowIso();
     const draftPath = await this.writeDraft(stoppedAt, reason);
 
+    await this.cleanupRecorderSessions();
     await this.closeBrowser({ force: false });
     await this.store.destroy(this.recordingId!, { keepProfile: this.keepProfile });
 
@@ -410,6 +399,7 @@ export class RecordingSession {
     }
 
     // Force-close browser
+    await this.cleanupRecorderSessions();
     await this.closeBrowser({ force: true });
 
     // Keep profile on crash for post-mortem (ignore keepProfile setting)
@@ -597,19 +587,95 @@ export class RecordingSession {
   // ---------------------------------------------------------------------------
 
   private async installOverlayOnSession(session: CDPSession): Promise<void> {
-    await session.send('Runtime.addBinding', { name: '__yantraRecorderEmit' });
-
+    if (this.sessionListeners.has(session)) return;
     const overlayCode = await readOverlayBundle();
-    await session.send('Page.addScriptToEvaluateOnNewDocument', { source: overlayCode });
-    await session.send('Page.enable');
-
-    session.on('Runtime.bindingCalled', (params: unknown) => {
+    const bindingCalled = (params: unknown): void => {
       this.onBindingCalled(params as { name: string; payload: string });
-    });
+    };
+    const frameNavigated = (params: unknown): void => {
+      const navigation = params as FrameNavigatedParams;
+      this.onFrameNavigated(navigation);
+      if (!navigation.frame.parentId) {
+        void this.evaluateOverlayOnSession(session, overlayCode).catch((error: unknown) => {
+          this.emit({
+            kind: 'recording_degraded',
+            recordingId: this.recordingId!,
+            reason: `recorder overlay reinjection failed: ${String(error)}`,
+            ts: nowIso(),
+          });
+        });
+      }
+    };
+    const executionContextCreated = (params: unknown): void => {
+      const created = params as ExecutionContextCreatedParams;
+      if (created.context.auxData?.isDefault !== true) return;
+      void this.evaluateOverlayOnSession(session, overlayCode, created.context.id).catch(
+        (error: unknown) => {
+          if (session.detached) return;
+          this.emit({
+            kind: 'recording_degraded',
+            recordingId: this.recordingId!,
+            reason: `recorder overlay context injection failed: ${String(error)}`,
+            ts: nowIso(),
+          });
+        },
+      );
+    };
+    session.on('Runtime.bindingCalled', bindingCalled);
+    session.on('Page.frameNavigated', frameNavigated);
+    session.on('Runtime.executionContextCreated', executionContextCreated);
+    this.sessionListeners.set(session, { bindingCalled, frameNavigated, executionContextCreated });
 
-    session.on('Page.frameNavigated', (params: unknown) => {
-      this.onFrameNavigated(params as FrameNavigatedParams);
+    try {
+      await session.send('Page.enable');
+      await session.send('Runtime.enable');
+      await session.send('Runtime.addBinding', { name: '__yantraRecorderEmit' });
+      await session.send('Page.addScriptToEvaluateOnNewDocument', { source: overlayCode });
+      await this.evaluateOverlayOnSession(session, overlayCode);
+    } catch (error) {
+      this.removeOverlaySessionListeners(session);
+      throw error;
+    }
+  }
+
+  private async evaluateOverlayOnSession(
+    session: CDPSession,
+    overlayCode: string,
+    contextId?: number,
+  ): Promise<void> {
+    const result = await session.send('Runtime.evaluate', {
+      expression: overlayCode,
+      awaitPromise: true,
+      ...(contextId === undefined ? {} : { contextId }),
     });
+    if (result.exceptionDetails) {
+      throw new Error(`Recorder overlay injection failed: ${result.exceptionDetails.text}`);
+    }
+  }
+
+  private removeOverlaySessionListeners(session: CDPSession): void {
+    const listeners = this.sessionListeners.get(session);
+    if (!listeners) return;
+    session.off('Runtime.bindingCalled', listeners.bindingCalled);
+    session.off('Page.frameNavigated', listeners.frameNavigated);
+    session.off('Runtime.executionContextCreated', listeners.executionContextCreated);
+    this.sessionListeners.delete(session);
+  }
+
+  private async cleanupRecorderSessions(): Promise<void> {
+    await this.popupHandler?.dispose();
+    this.popupHandler = null;
+    for (const session of [...this.sessionListeners.keys()]) {
+      this.removeOverlaySessionListeners(session);
+    }
+    const mainPageCDP = this.mainPageCDP;
+    const browserCDP = this.browserCDP;
+    this.mainPageCDP = null;
+    this.browserCDP = null;
+    await Promise.allSettled([
+      mainPageCDP?.detach() ?? Promise.resolve(),
+      browserCDP?.detach() ?? Promise.resolve(),
+    ]);
   }
 
   // ---------------------------------------------------------------------------
@@ -702,4 +768,11 @@ interface FrameNavigatedParams {
 interface FrameAttachedParams {
   frameId: string;
   parentFrameId?: string;
+}
+
+interface ExecutionContextCreatedParams {
+  context: {
+    id: number;
+    auxData?: { isDefault?: boolean };
+  };
 }

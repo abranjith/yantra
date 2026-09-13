@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { LocatorCandidate } from '@yantra/protocol';
-import type { ElementHandle, KeyInput, Page as PuppeteerPage, Target } from 'puppeteer-core';
+import type { Dialog, ElementHandle, KeyInput, Page as PuppeteerPage } from 'puppeteer-core';
 
 import { collectComposedInteractables } from '../discovery/composed-handles.js';
 import type { RawInteractable } from '../discovery/interactable-scan.js';
@@ -239,6 +239,17 @@ interface RetainedPopup {
   readonly openerUrl: string;
 }
 
+interface PagePolicyListeners {
+  readonly generation: number;
+  readonly popup: (page: PuppeteerPage | null) => void;
+  readonly dialog: (dialog: Dialog) => void;
+}
+
+interface DeclaredPopupWaiter {
+  readonly promise: Promise<void>;
+  cancel(): void;
+}
+
 // The actionability error classes moved to `actionability-errors.ts` so the
 // obstruction protocol can throw them without importing the controller that
 // calls it. Re-exported here so every existing import site is unchanged.
@@ -300,7 +311,9 @@ export class AgentBrowserController implements WidgetPort {
   private popupUrls: string[] = [];
   private dialogMessages: string[] = [];
   private readonly popupCaptureTasks = new Set<Promise<void>>();
-  private readonly popupCaptureByTarget = new WeakMap<Target, Promise<void>>();
+  private readonly popupCaptureByPage = new WeakMap<PuppeteerPage, Promise<void>>();
+  private readonly pagePolicyListeners = new Map<PuppeteerPage, PagePolicyListeners>();
+  private activePageGeneration = 0;
   /**
    * The one popup held open for a possible {@link adoptPopup}, or null.
    *
@@ -309,7 +322,6 @@ export class AgentBrowserController implements WidgetPort {
    * forgetting to decide.
    */
   private pendingPopup: RetainedPopup | null = null;
-  private browserPopupListener: ((target: Target) => void) | null = null;
   private teardownPromise: Promise<void> | null = null;
   private lastDigestHash: string | null = null;
   /**
@@ -868,15 +880,9 @@ export class AgentBrowserController implements WidgetPort {
     // Only declared popup actions pay the bounded wait; ordinary clicks keep
     // their existing latency while the background listener covers dynamic
     // event-handler popups best-effort.
-    const popupTarget = declaresPopup
-      ? page
-          .browser()
-          .waitForTarget((target) => target.opener() === page.target(), {
-            timeout: POPUP_CAPTURE_WAIT_MS,
-          })
-          .catch(() => null)
-      : Promise.resolve(null);
+    const popupWaiter = declaresPopup ? this.createDeclaredPopupWaiter(page) : null;
     const watch = this.watchNavigation();
+    let actionCompleted = false;
     try {
       try {
         // Hover first so the pointer scrolls into view and any hover state has
@@ -903,11 +909,16 @@ export class AgentBrowserController implements WidgetPort {
       // fetch/XHR updates are all settled (bounded) before the agent's next
       // tool call can race them.
       await this.awaitPageStable(watch, CLICK_NAV_DETECT_MS);
+      actionCompleted = true;
     } finally {
       watch.dispose();
+      if (!actionCompleted) popupWaiter?.cancel();
     }
-    const target = await popupTarget;
-    if (target) await this.capturePopupTarget(target);
+    try {
+      await popupWaiter?.promise;
+    } finally {
+      popupWaiter?.cancel();
+    }
     return this.currentActionResult(null, attempted);
   }
 
@@ -1168,6 +1179,8 @@ export class AgentBrowserController implements WidgetPort {
   }
 
   private installPagePolicies(page: PuppeteerPage): void {
+    this.removePagePolicies(page);
+    const generation = ++this.activePageGeneration;
     // The settler owns navigation-epoch and in-flight bookkeeping; the
     // controller only needs to know when a navigation commits, because that is
     // the one moment refs are truly dead — the old document is gone. Identity-
@@ -1186,47 +1199,96 @@ export class AgentBrowserController implements WidgetPort {
       },
     });
 
-    // Registered against the browser, not the page, so it has to survive a
-    // page swap (adoption) without being installed twice — a second copy would
-    // capture, and close, the same popup from a listener whose page is gone.
-    // Keying on the *live* page keeps one listener correct across every swap.
-    if (this.browserPopupListener === null) {
-      this.browserPopupListener = (target: Target): void => {
-        const current = this.page;
-        if (!current || target.opener() !== current.target()) return;
-        // Intercepting a popup does not change the main document, so the main
-        // page's refs stay valid.
-        void this.capturePopupTarget(target);
-      };
-      page.browser().on('targetcreated', this.browserPopupListener);
-    }
-    page.on('dialog', (dialog) => {
+    // Popup policy belongs to this page generation. Adoption removes these
+    // exact listeners before installing policy on the replacement page, so a
+    // stale page cannot capture or close a later popup.
+    const popup = (openedPage: PuppeteerPage | null): void => {
+      if (!openedPage) return;
+      if (!this.isActivePage(page, generation)) {
+        void openedPage.close().catch(() => undefined);
+        return;
+      }
+      void this.capturePopupPage(openedPage, page.url(), generation);
+    };
+    const dialog = (openedDialog: Dialog): void => {
+      if (!this.isActivePage(page, generation)) {
+        void openedDialog.dismiss().catch(() => undefined);
+        return;
+      }
       // A JS dialog freezes every evaluate on the page until it is handled —
       // left alone it deadlocks the run. Accept beforeunload so an agent-
       // initiated navigation proceeds; dismiss the rest (auto-accepting a
       // confirm() would silently authorize an action nobody reviewed) and
       // surface the message on the next action result.
-      this.dialogMessages.push(`${dialog.type()}: ${dialog.message()}`.trim());
-      const resolution = dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss();
+      this.dialogMessages.push(`${openedDialog.type()}: ${openedDialog.message()}`.trim());
+      const resolution =
+        openedDialog.type() === 'beforeunload' ? openedDialog.accept() : openedDialog.dismiss();
       void resolution.catch(() => undefined);
-    });
+    };
+    page.on('popup', popup);
+    page.on('dialog', dialog);
+    this.pagePolicyListeners.set(page, { generation, popup, dialog });
   }
 
-  private capturePopupTarget(target: Target): Promise<void> {
-    const existing = this.popupCaptureByTarget.get(target);
+  private createDeclaredPopupWaiter(page: PuppeteerPage): DeclaredPopupWaiter {
+    const policy = this.pagePolicyListeners.get(page);
+    if (!policy) throw new Error('active page policies are not installed');
+    let settled = false;
+    let resolveWaiter: () => void = () => undefined;
+    const listener = (popup: PuppeteerPage | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      page.off('popup', listener);
+      if (!popup) {
+        resolveWaiter();
+        return;
+      }
+      void this.capturePopupPage(popup, page.url(), policy.generation).finally(resolveWaiter);
+    };
+    const promise = new Promise<void>((resolve) => {
+      resolveWaiter = resolve;
+    });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      page.off('popup', listener);
+      resolveWaiter();
+    }, POPUP_CAPTURE_WAIT_MS);
+    page.on('popup', listener);
+    return {
+      promise,
+      cancel: () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        page.off('popup', listener);
+        resolveWaiter();
+      },
+    };
+  }
+
+  private capturePopupPage(
+    popup: PuppeteerPage,
+    openerUrl: string,
+    generation: number,
+  ): Promise<void> {
+    const existing = this.popupCaptureByPage.get(popup);
     if (existing) return existing;
     const task = (async () => {
-      const popup = await target.page();
-      if (!popup) return;
       // window.open popups start life at about:blank and navigate
       // asynchronously; wait (bounded) for the real URL so the agent can
       // re-enter it through navigation policy instead of losing it.
       const deadline = Date.now() + POPUP_URL_WAIT_MS;
-      let url = popup.url() || target.url();
+      let url = popup.url();
       while ((url === '' || url === 'about:blank') && Date.now() < deadline) {
         await sleep(STABILITY_POLL_MS);
         if (popup.isClosed()) break;
-        url = popup.url() || target.url();
+        url = popup.url();
+      }
+      if (!this.isActiveGeneration(generation)) {
+        await popup.close().catch(() => undefined);
+        return;
       }
       if (!url || url === 'about:blank') {
         await popup.close().catch(() => undefined);
@@ -1238,17 +1300,32 @@ export class AgentBrowserController implements WidgetPort {
       // alone often cannot reproduce. Hold it open so the caller can adopt it
       // after a policy check. A third-party popup is an interstitial or an ad
       // and is closed on sight, exactly as before.
-      const openerUrl = this.page?.url() ?? '';
       if (isSameSitePopup(openerUrl, url)) {
         await this.retainPopup({ page: popup, openerUrl });
         return;
       }
       await popup.close().catch(() => undefined);
     })();
-    this.popupCaptureByTarget.set(target, task);
+    this.popupCaptureByPage.set(popup, task);
     this.popupCaptureTasks.add(task);
     void task.finally(() => this.popupCaptureTasks.delete(task));
     return task;
+  }
+
+  private isActivePage(page: PuppeteerPage, generation: number): boolean {
+    return this.page === page && this.isActiveGeneration(generation);
+  }
+
+  private isActiveGeneration(generation: number): boolean {
+    return this.teardownPromise === null && generation === this.activePageGeneration;
+  }
+
+  private removePagePolicies(page: PuppeteerPage): void {
+    const listeners = this.pagePolicyListeners.get(page);
+    if (!listeners) return;
+    page.off('popup', listeners.popup);
+    page.off('dialog', listeners.dialog);
+    this.pagePolicyListeners.delete(page);
   }
 
   private async retainPopup(retained: RetainedPopup): Promise<void> {
@@ -1310,6 +1387,7 @@ export class AgentBrowserController implements WidgetPort {
     this.settler?.dispose();
     this.settler = null;
 
+    this.removePagePolicies(opener);
     this.page = popup;
     this.pageFacade = wrapPuppeteerPage(popup);
     this.installPagePolicies(popup);
@@ -1508,20 +1586,16 @@ export class AgentBrowserController implements WidgetPort {
   }
 
   private async performTeardown(): Promise<void> {
+    this.activePageGeneration += 1;
+    for (const policyPage of [...this.pagePolicyListeners.keys()]) {
+      this.removePagePolicies(policyPage);
+    }
+    await Promise.allSettled([...this.popupCaptureTasks]);
     this.invalidateObservation();
     this.refIdByIdentity.clear();
     this.identityByRef.clear();
     this.lastDigestHash = null;
     await this.discardPendingPopup();
-    const listener = this.browserPopupListener;
-    this.browserPopupListener = null;
-    if (listener && this.page) {
-      try {
-        this.page.browser().off('targetcreated', listener);
-      } catch {
-        // The browser is already gone; nothing to detach from.
-      }
-    }
     this.settler?.dispose();
     this.settler = null;
     const session = this.session;

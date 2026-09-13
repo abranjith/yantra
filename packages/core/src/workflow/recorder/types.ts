@@ -148,6 +148,8 @@ export interface RawInPagePayload {
 export interface PopupEntry {
   readonly targetId: string;
   readonly parentTargetId: string;
+  readonly sessionId: string;
   readonly cdpSession: CDPSession;
   readonly url: string;
+  readonly state: 'attaching' | 'ready' | 'detaching';
 }

@@ -113,6 +113,16 @@ and persisted artifacts inside Yantra, but they do not hide process arguments or
 shell history. Protected clicks and stored-secret fills ask for consent on an
 interactive TTY and fail closed under `--json` or non-interactive execution.
 
+When an action opens a new tab, its result can report the intercepted popup and,
+for a same-site HTTP(S) destination, that the tab is eligible to follow. A
+popup is not navigation authorization by itself: Yantra applies the existing
+URL provenance, host policy, ethics, consent, and budget checks before adopting
+it. Yantra retains at most one eligible popup, checks its live URL again before
+adoption, and closes cross-site, non-HTTP(S), blank, or stale popups. Adoption
+closes the opener and invalidates its element references, so subsequent work
+uses a fresh observation of the adopted page. If the popup is not adopted, the
+next navigation, click, or fill discards it.
+
 Vision assist is disabled by default. When explicitly enabled, the agent may
 request a PNG screenshot only as fallback evidence when text observation is
 insufficient or contradictory. The screenshot tool is absent unless the run
@@ -150,6 +160,19 @@ Explicit `--params` values override the parameter file. Parameters are not a
 secret channel; credential-shaped values are rejected. Workflows live in
 `<data-dir>/workflows/` and can be created by `do --save-as` or by editing YAML.
 There is no public recorder command.
+
+Integrators using the core recording API should treat `popup_attached` as the
+signal that popup actions are covered. If Yantra cannot establish recording
+coverage for a popup within the bounded attachment window, it emits one
+sanitized `recording_degraded` event instead; the main recording remains usable,
+but actions performed in that popup may be absent. It does not emit a false
+`popup_attached` event or redirect recording through an approximate browser
+session. Captured popup fills continue through the normal value redaction path.
+
+Agentic and saved-workflow fills replace existing text with the platform
+select-all keyboard gesture before typing (`Meta+A` on macOS, `Control+A`
+elsewhere). This avoids dispatching the triple-click page events used by the old
+driver path. Workflow schemas and saved run artifacts are unchanged.
 
 A workflow's optional `synthesis.use_llm` field controls whether a model may
 write its final Brief. Model selection never changes replay steps, branching,
@@ -669,6 +692,25 @@ tie-break.
 |   `3` | Environment failure, failed doctor check, or unavailable required model setup             |
 |   `4` | Human handoff, including CAPTCHA, MFA, missing required location, or denied consent       |
 | `130` | An agentic run or live smoke was interrupted with Ctrl+C                                  |
+
+## Browser runtime and migration testing
+
+Application browser sessions use the discoverable system Chrome described in
+the [quickstart](quickstart.md#prerequisites). Core pins
+`puppeteer-core@25.10.0`, but neither it nor the workspace install step provides
+a managed runtime browser. Browser installation, selection, compatibility
+probing, and updates remain outside the current feature set.
+
+The dedicated migration suites instead require the test provisioner to install
+Chrome for Testing `152.0.7977.75` in a test-owned cache. The harness receives
+its absolute executable and manifest through `YANTRA_TEST_BROWSER_PATH` and
+`YANTRA_TEST_BROWSER_MANIFEST`, isolates `YANTRA_HOME`, and refuses a missing or
+mismatched fixture rather than falling back to another browser. CI runs this
+coverage on Windows, macOS, and Linux; the Linux recorder coverage also requires
+Xvfb. These environment variables and the downloaded fixture are test-only and
+do not configure normal Yantra commands. See
+[Puppeteer 25.10 API Migration](features/puppeteer-api-migration.md) for the
+maintainer test scope and preserved behavior.
 
 ## Current boundaries
 

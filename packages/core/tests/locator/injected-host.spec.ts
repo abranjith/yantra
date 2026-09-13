@@ -9,6 +9,10 @@ import type { BrowserSession, Logger, Page } from '../../src/browser/types.js';
 import { resolveActionable } from '../../src/locator/auto-wait.js';
 import { PuppeteerInjectedScriptHost } from '../../src/locator/injected-host.js';
 import { LocatorResolverImpl } from '../../src/locator/resolver.js';
+import {
+  beginMigrationBrowserFixture,
+  type MigrationBrowserFixture,
+} from '../helpers/migration-browser.js';
 
 const logger: Logger = {
   info: () => undefined,
@@ -22,8 +26,10 @@ describe('@no-llm production InjectedScriptHost', () => {
   let baseUrl: string;
   let session: BrowserSession;
   let page: Page;
+  let fixture: MigrationBrowserFixture;
 
   beforeAll(async () => {
+    fixture = await beginMigrationBrowserFixture();
     server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' });
       response.end(`<!doctype html><title>Locator fixture</title>
@@ -33,7 +39,7 @@ describe('@no-llm production InjectedScriptHost', () => {
         <button aria-label="Continue">Next</button>
         <script>setTimeout(() => { const b=document.createElement('button'); b.id='delayed'; b.style.marginTop='120px'; b.textContent='Delayed'; document.body.append(b); }, 80)</script>`);
     });
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, resolve));
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('fixture server did not bind');
     baseUrl = `http://127.0.0.1:${address.port}/`;
@@ -44,6 +50,7 @@ describe('@no-llm production InjectedScriptHost', () => {
     }).launch({
       profile: { kind: 'ephemeral' },
       headless: true,
+      ...fixture.launchOptions,
     });
     page = await session.newPage();
     await page.goto(baseUrl, { waitUntil: 'load' });
@@ -51,6 +58,7 @@ describe('@no-llm production InjectedScriptHost', () => {
 
   afterAll(async () => {
     await session?.close();
+    await fixture?.cleanup();
     await new Promise<void>((resolve, reject) =>
       server?.close((error) => (error ? reject(error) : resolve())),
     );
@@ -105,6 +113,59 @@ describe('@no-llm production InjectedScriptHost', () => {
       { timeoutMs: 3_000 },
     );
     expect(result.kind).toBe('success');
+  });
+
+  it('resolves live same- and cross-origin frames and rejects a removed frame token', async () => {
+    const puppeteerPage = page.puppeteerPage!;
+    const host = page.locatorHost as PuppeteerInjectedScriptHost;
+    const port = new URL(baseUrl).port;
+    await puppeteerPage.evaluate(
+      ({ same, cross }) => {
+        const first = document.createElement('iframe');
+        first.id = 'same-frame';
+        first.src = same;
+        const second = document.createElement('iframe');
+        second.id = 'cross-frame';
+        second.src = cross;
+        document.body.append(first, second);
+      },
+      { same: `${baseUrl}?frame=same`, cross: `http://localhost:${port}/?frame=cross` },
+    );
+    await puppeteerPage.waitForFunction(() => window.frames.length === 2);
+    const children = puppeteerPage.frames().filter((frame) => frame !== puppeteerPage.mainFrame());
+    const same = children.find((frame) => frame.url().includes('127.0.0.1'))!;
+    const cross = children.find((frame) => frame.url().includes('localhost'))!;
+    const sameToken = host.getFrameId(same);
+    const crossToken = host.getFrameId(cross);
+
+    const sameHandle = await host.callHandle(sameToken, 'document.querySelector("button")');
+    const crossHandle = await host.callHandle(crossToken, 'document.querySelector("button")');
+    expect(await sameHandle?.evaluate((element) => element.textContent)).toBe('Covered');
+    expect(await crossHandle?.evaluate((element) => element.textContent)).toBe('Covered');
+    await sameHandle?.dispose();
+    await crossHandle?.dispose();
+
+    await same.goto(`${baseUrl}?frame=navigated`, { waitUntil: 'load' });
+    await expect(
+      host.call(sameToken, 'resolveCandidate', [{ kind: 'css', selector: '#covered' }, true]),
+    ).resolves.toMatchObject({ count: 1 });
+    await puppeteerPage.evaluate(() => document.querySelector('#same-frame')?.remove());
+    await puppeteerPage.waitForFunction(() => window.frames.length === 1);
+    await expect(host.call(sameToken, 'resolveCandidate', [])).rejects.toThrow(
+      /detached or unknown/,
+    );
+
+    await puppeteerPage.evaluate((url) => {
+      const replacement = document.createElement('iframe');
+      replacement.id = 'same-frame-replacement';
+      replacement.src = url;
+      document.body.append(replacement);
+    }, `${baseUrl}?frame=replacement`);
+    await puppeteerPage.waitForFunction(() => window.frames.length === 2);
+    const replacement = puppeteerPage
+      .frames()
+      .find((frame) => frame.url().includes('frame=replacement'))!;
+    expect(host.getFrameId(replacement)).not.toBe(sameToken);
   });
 });
 

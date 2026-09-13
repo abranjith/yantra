@@ -165,6 +165,82 @@ the Pi adapter deterministically projects `config.yaml`'s model registry to
 `<data>/pi/models.json` immediately before constructing Pi's `ModelRegistry`; the projection may
 contain a reference but never resolved credential material.
 
+#### Puppeteer migration and browser-object ownership
+
+Core pins `puppeteer-core` to exactly `25.10.0`. The accompanying exact
+`@puppeteer/browsers` `3.2.2` dependency is used by the migration test provisioner; it is not a
+production installer. Production launch still discovers system Chrome. The migration job instead
+installs the fixed Chrome for Testing build `152.0.7977.75` into a caller-owned test cache and passes
+its absolute executable path through the test-only `YANTRA_TEST_BROWSER_PATH` seam. A manifest records
+the build, detected platform, cache, and executable, and the harness refuses a missing executable,
+manifest/path disagreement, or unsupported platform rather than falling back. Each suite also uses
+an isolated temporary `YANTRA_HOME`. This boundary deliberately does not implement the managed
+Stable installation, browser selection, compatibility, or update behavior planned in later
+features.
+
+The only intentional input-simulation change in the driver migration is how a fill replaces existing
+text. The deterministic fill paths focus the element, hold platform select-all (`Meta+A` on macOS,
+`Control+A` elsewhere), and release the modifier in `finally` before typing. They do not translate the
+old triple-click marker to Puppeteer's v25 `count: 3`, which would dispatch three real clicks and could
+toggle a widget while selecting. Ordinary clicks use `count: 1`. Saved workflow schemas and replay
+artifacts are unchanged, and a source-boundary test rejects any reintroduction of `clickCount`.
+
+Browser resources have explicit, public ownership boundaries:
+
+- `AgentBrowserController` binds one exact popup callback and one dialog callback to each active
+  Puppeteer `Page`. A monotonically increasing page generation makes callbacks from an adopted or
+  torn-down page stale. A declared-popup waiter is registered before click dispatch and shares the
+  permanent listener's `WeakMap<Page, Promise<void>>` capture, while ordinary clicks pay no waiter.
+  Capture snapshots the opener URL, settles `about:blank` within a bound, retains at most one
+  same-site popup, and rechecks its live URL before policy-authorized adoption. Adoption removes the
+  opener's exact callbacks, installs fresh callbacks on the adopted page, invalidates old refs, and
+  closes the opener; teardown removes all registered callbacks and drains capture tasks. Agent popup
+  capture therefore uses page `popup` events, not browser Target tracking.
+- `RecordingSession` owns the browser, main-page and browser-level CDP sessions, and the exact
+  overlay listener functions installed on every instrumented session. Its browser-level CDP session receives
+  only `Target.*` discovery, attach, and detach traffic. `PopupHandler` correlates each page target
+  with the session ID returned by `Target.attachToTarget`, then obtains that exact public child session
+  through `browserCDP.connection()?.session(sessionId)`. Only the main-page or matching child-page
+  session receives `Page.enable`, `Runtime.enable`, the recorder binding, preload, and immediate
+  injection. Pending target ancestry admits descendant popups while their parent initializes, and a
+  five-second bounded lookup reports `recording_degraded` instead of substituting the browser session.
+  On target close, failed instrumentation, stop, abort, or disconnection, recording listeners are
+  removed by their original function references before the handler detaches its owned child session;
+  disposal is awaited and idempotent.
+- `PuppeteerInjectedScriptHost` represents the main frame as `main` and maps each attached non-main
+  Puppeteer `Frame` to a host-unique opaque token in a `WeakMap`. Resolution searches the host page's
+  current `frames()` and accepts only a token already minted for that live Frame object. Tokens remain
+  stable for one attached frame but are rejected across hosts and after detach or replacement. They
+  are locator-session state only: no token is stored in workflow YAML, recording metadata, or run
+  artifacts, so persisted workflows require no frame migration.
+- `collectComposedInteractables` owns every intermediate `JSHandle` acquired during its single page
+  scan. Returning successfully transfers only the element handles occupying the positional result
+  slots to the caller; partial conversion or acquisition failure disposes all acquired intermediates
+  and untransferred elements exactly once. Controller refs dispose their transferred handles when
+  invalidated. Vision capture separately owns a page-scoped CDP session and detaches it in `finally`;
+  its set-of-marks overlay is removed on both capture success and failure without changing viewport
+  dimensions.
+
+```mermaid
+flowchart LR
+  Agent[AgentBrowserController] --> ActivePage[Active Puppeteer Page]
+  ActivePage -->|page popup event| Capture[Page-keyed popup capture]
+  Capture -->|policy-eligible| Retained[One retained popup Page]
+  Retained -->|authorized adoption| ActivePage
+
+  Recorder[RecordingSession] --> BrowserCDP[Browser-level CDP session]
+  BrowserCDP -->|Target discovery and attach only| Registry[Public CDP session registry]
+  Registry --> ChildCDP[Exact child-page CDP session]
+  Recorder --> MainCDP[Main-page CDP session]
+  MainCDP --> Overlay[Recorder Page and Runtime instrumentation]
+  ChildCDP --> Overlay
+  Recorder -->|owns exact callbacks| SessionListeners[Session listener registry]
+  PopupHandler[PopupHandler] -->|owns child detach| ChildCDP
+
+  LocatorHost[Injected-script host] --> FrameTokens[Host-local frame tokens]
+  FrameTokens -->|resolve against current frames| LiveFrames[Attached Frame objects]
+```
+
 #### Composed-tree observation and ref minting
 
 Observation walks the **composed** tree, so a control inside an open shadow root is nameable and
@@ -1028,6 +1104,18 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
 - **Layered dependency direction.** Core cannot import agent, and provider SDK types cannot cross
   the agent provider seam. The adapter confinement makes provider-specific change local and keeps
   deterministic execution independent of model availability.
+- **Pin the driver; prove behavior against a separate browser fixture.** Core uses exactly
+  `puppeteer-core@25.10.0`, while a fixed Chrome for Testing executable is provisioned only for the
+  cross-platform migration suites. This makes driver API drift and actual Chromium behavior visible
+  without turning test provisioning into application installation. Acceptance covers real input,
+  popup, recorder, frame, screenshot, and replay behavior rather than types or launch-option
+  snapshots alone.
+- **Scope browser identity to the public object that owns it.** Agent popup policy follows an active
+  Puppeteer Page; recorder discovery follows browser Targets but page instrumentation follows the
+  exact child CDP session; locator frame identity follows a live Frame within one injected host.
+  Page generations, session/target correlation, and host-local frame tokens cost explicit lifecycle
+  bookkeeping, but prevent callbacks, commands, or locators from silently crossing page/session
+  boundaries after adoption, navigation, detach, or teardown.
 - **No website-specific automation logic, enforced rather than trusted.** There are millions of
   websites; a browser tool that works only because someone hand-tuned it for the top ten has
   failed at its job. No branch, heuristic, selector table, wait tuning, or driver hint may key off
@@ -1115,7 +1203,7 @@ At runtime there are two process shapes:
 
 - a short-lived `yantra` CLI process that constructs dependencies for one command, optionally
   launches a run-scoped Chrome child process and provider session, writes local artifacts, then
-  closes owned handles; and
+  closes owned handles, listeners, and CDP sessions; and
 - an optional long-running scheduler daemon guarded by a single-instance lock, polling every 60
   seconds by default and spawning the same in-process workflow execution path for due schedules.
 
@@ -1128,3 +1216,13 @@ are ordinary Vitest cases tagged `@no-llm`, Turborepo includes them in the full 
 deterministic/browser release gate. Boundary tests and the static checker enforce Pi
 SDK confinement, the core-to-agent prohibition, sanitized model sends, a dependency-light JSON
 render path, and exclusion of local index stores from prompt-assembly import graphs.
+
+A required `browser-migration` job runs separately with `LLM_PROVIDER=none` on Ubuntu, macOS, and
+Windows. It builds both the core locator bundle and recorder overlay, provisions Chrome for Testing
+`152.0.7977.75` through `@puppeteer/browsers`, exports the exact executable and manifest to the test
+process, and reports the Puppeteer/browser/platform pairing. The migration suites are made mandatory
+with `YANTRA_E2E_BROWSER=1` and `YANTRA_MIGRATION_SUITE_REQUIRED=1`; Linux runs the visible recorder
+coverage under Xvfb. The job exercises the migration harness, input and byte-stable replay boundary,
+agent popup policy, exact recorder child sessions, live frame tokens, composed-handle cleanup, and
+page-scoped screenshot cleanup. These are test-only fixtures and environment variables, not runtime
+browser selection or managed installation controls.

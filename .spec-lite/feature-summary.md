@@ -14,6 +14,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-042 — Puppeteer 25.10 API Migration** _(updated: 2026-09-12 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md)
+Agent browser popups are captured from the acting page, retain the opener URL from the causing action, and can be adopted only while their live URL remains same-site; old-page popup and dialog callbacks are removed on adoption and teardown. Input replacement uses a keyboard select-all gesture with guaranteed modifier release, while screenshot capture remains page-scoped and returns its CDP session and overlay resources on both success and failure.
+
 **FEAT-040 — Single-Owner Accounting, Actually On** _(updated: 2026-09-04 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-040-accounting_activation/spec.md)
 One browser fill call now owns exactly one run: a single action ceiling (32), a single stale-ref reacquisition cap (4), a single deadline, and one ordered sequence of recovery verdicts shared by the field plan, the driver plan, the combobox plan, the typing ladder and the open probe's revealed-driver sub-plan. `details.attempted[]` is the verdict projection itself — `strategy`, `axis`, `verdict`, and `entry_evidence` / `charged_actions` / `remaining_actions` / `elapsed_ms` only when they say something, with `error_code` present on failures alone. Per-rung `charged_actions` is exclusive of nested work, so the ledger partitions the call's total and `remaining_actions` never increases down it; ordering is completion order, so a nested rung's verdict precedes the rung that ran it. Drivers no longer build ledger records: they disclose bounded structural evidence (`substituted`, `substitution_position`, `tie_break`, `scroll_steps`, `scroll_stop`, `revealed_driver`, `reacquisitions`) restricted by an allowlist to scalars, so no page text or container path can reach the wire. `attempted` gains `skipped` verdicts naming the step that was not taken and why (`unmet`), and the agent guidance now says a `skipped` entry is information rather than a prohibition. The serialized ledger is bounded at 24 records, keeping the first and the last 23. Legacy attempt artifacts still read back unchanged and no run directory is rewritten; the click path's controller-owned `clear-obstruction` record is the only legacy producer left.
@@ -189,6 +193,10 @@ The `FileUsageWriter` batches `UsageCall` records and persists them as a `UsageL
 
 ## Browser Engine
 
+**FEAT-042 — Puppeteer 25.10 API Migration** _(updated: 2026-09-12 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md)
+Yantra runs on the exact `puppeteer-core` 25.10.0 driver and verifies migration behavior against a fixed Chrome-for-Testing build on Windows, macOS, and Linux. Saved-workflow fills replace existing text without synthetic multi-clicks, and locator frames use opaque session-local tokens that reject foreign, detached, or replaced frames without changing persisted workflow schemas. Intermediate browser handles are disposed on partial failures while handles returned to callers remain live.
+
 ### Locator Engine & Auto-Wait (FEAT-004)
 
 The locator engine resolves named UI targets via ordered **candidate chains** (each candidate is a typed `LocatorIntent`). `LocatorResolverImpl.resolve(chain)` walks candidates in order, calling the browser-side InjectedScript via `InjectedScriptHost.call()`. In strict mode (default) a candidate matching >1 element resolves nothing and the walk **continues to the next candidate**, so a broad candidate can hand off to a narrower one; ambiguity is reported only if the whole chain is exhausted, and it outranks `not_found` in the result so the author is told "your locator matches 3 elements" rather than "nothing matched". A non-strict chain accepts the first of several matches. Per-candidate timeouts fall through to the next candidate rather than aborting. A `LocatorResolutionEvent` is emitted via the optional `LocatorEventSink` after every resolve call carrying chain name, outcome, winning index, and duration (no DOM content — security invariant enforced by property test).
@@ -249,6 +257,10 @@ Source spec: [feature_annotate_and_yaml.md](features/FEAT-009-annotate_and_yaml/
 Closes the record→review→save loop that converts a raw recording draft into a production-ready Workflow YAML file. The `AnnotateSession` state machine walks each captured action interactively (keep/skip, locator name, param/secret/output promotion, scope override) and produces a fully validated `WorkflowFile`. The `FileWorkflowStore` persists workflows atomically to `~/.local/share/yantra/workflows/<name>.yaml`, with sidecar `.locators.json` emission when `_locators` exceeds 50 entries. `yantra lint <file.yaml>` validates offline using 12 pluggable lint rules (mandatory errors: `SecretShapedLiteralInValue`, `UndeclaredSecretRef`, `UndeclaredParamRef`, `JSONataExpressionInvalid`, `ScopeMutatingVerbInReadOnlyData`, `MixedExpressionForms`). A sandboxed `JSONataEvaluator` wraps the `jsonata` package with a 200 ms timeout, 100 KB result cap, no custom functions, and no global access.
 
 ## Recorder
+
+**FEAT-042 — Puppeteer 25.10 API Migration** _(updated: 2026-09-12 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md)
+Recorder popups and descendant popups are instrumented only through their exact public child CDP sessions; browser-level sessions perform Target discovery and attachment only. Overlay injection covers both loaded and future documents without duplicate capture listeners, redacts captured values, reports bounded attachment failures as degraded recording events, and releases child listeners and sessions on close, stop, abort, or failed instrumentation.
 
 ### Recorder Phase 1 (FEAT-008)
 

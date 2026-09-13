@@ -1,13 +1,4 @@
-/**
- * Popup / new-tab handler (TASK-006) and cross-origin iframe detector (TASK-006a).
- *
- * Subscribes to `Target.targetCreated` / `Target.targetDestroyed` on the browser-level
- * CDP session. For each new popup target: attaches, re-injects the overlay, tracks
- * parentage, and emits events.
- *
- * Cross-origin iframes: detects via `Page.frameNavigated` origin comparison.
- * Emits `UnrecordedFrameEvent` and adds the origin to `unrecordedFrameOrigins`.
- */
+/** Popup/new-tab ownership and cross-origin frame detection for recording. */
 
 import type { CDPSession } from 'puppeteer-core';
 
@@ -27,72 +18,107 @@ export type PopupHandlerEvent =
 
 export interface PopupHandlerCallbacks {
   onEvent(event: PopupHandlerEvent): void;
-  /** Called when a new popup CDPSession is ready — install overlay + binding on it. */
+  /** Install the recorder only on this exact child target session. */
   onPopupSession(session: CDPSession, targetId: string): Promise<void>;
-  /** Called when a cross-origin origin is detected (deduplication is caller's responsibility). */
+  /** Remove recording-owned listeners before the handler detaches its child session. */
+  onPopupSessionClosed?(session: CDPSession, targetId: string): Promise<void> | void;
   onUnrecordedOrigin(origin: string): void;
 }
 
-/**
- * Manages popup lifecycle and cross-origin iframe detection.
- *
- * @example
- * const handler = new PopupHandler(browserCDP, mainTargetId, callbacks);
- * await handler.install();
- * // Later:
- * handler.dispose();
- */
+export interface PopupHandlerOptions {
+  readonly attachmentTimeoutMs?: number;
+  readonly now?: () => number;
+  readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  readonly clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
+}
+
+interface PendingAttachment {
+  readonly targetId: string;
+  readonly parentTargetId: string;
+  readonly url: string;
+  readonly wakeups: Set<() => void>;
+  cancelledReason: string | null;
+  promise: Promise<void> | null;
+}
+
+interface AttachmentSignal {
+  readonly targetId: string;
+  readonly sessionId: string;
+}
+
+const DEFAULT_ATTACHMENT_TIMEOUT_MS = 5_000;
+const REGISTRY_POLL_MS = 20;
+
 export class PopupHandler {
-  private readonly browserCDP: CDPSession;
-  private readonly mainTargetId: string;
-  private readonly recordingId: string;
-  private readonly callbacks: PopupHandlerCallbacks;
   private readonly popupChain = new Map<string, PopupEntry>();
+  private readonly pendingTargets = new Map<string, PendingAttachment>();
+  private readonly attachmentSignals = new Map<string, AttachmentSignal>();
+  private readonly detachedSessionIds = new Set<string>();
+  private readonly attachmentTimeoutMs: number;
+  private readonly now: () => number;
+  private readonly setTimer: NonNullable<PopupHandlerOptions['setTimer']>;
+  private readonly clearTimer: NonNullable<PopupHandlerOptions['clearTimer']>;
   private mainFrameOrigin: string | null = null;
   private disposed = false;
+  private installed = false;
+
+  private readonly targetCreatedListener = (params: unknown): void => {
+    const target = params as TargetCreatedParams;
+    void this.onTargetCreated(target).catch((error: unknown) => {
+      this.emitAttachmentFailure(target.targetInfo.targetId, error);
+    });
+  };
+
+  private readonly targetDestroyedListener = (params: unknown): void => {
+    void this.onTargetDestroyed(params as TargetDestroyedParams);
+  };
+
+  private readonly attachedListener = (params: unknown): void => {
+    const attached = params as AttachedToTargetParams;
+    this.attachmentSignals.set(attached.targetInfo.targetId, {
+      targetId: attached.targetInfo.targetId,
+      sessionId: attached.sessionId,
+    });
+    this.wakePending(attached.targetInfo.targetId);
+  };
+
+  private readonly detachedListener = (params: unknown): void => {
+    const detached = params as DetachedFromTargetParams;
+    if (detached.sessionId) this.detachedSessionIds.add(detached.sessionId);
+    if (detached.targetId) this.wakePending(detached.targetId);
+    else this.wakeAllPending();
+  };
 
   constructor(
-    browserCDP: CDPSession,
-    mainTargetId: string,
-    recordingId: string,
-    callbacks: PopupHandlerCallbacks,
+    private readonly browserCDP: CDPSession,
+    private readonly mainTargetId: string,
+    private readonly recordingId: string,
+    private readonly callbacks: PopupHandlerCallbacks,
+    options: PopupHandlerOptions = {},
   ) {
-    this.browserCDP = browserCDP;
-    this.mainTargetId = mainTargetId;
-    this.recordingId = recordingId;
-    this.callbacks = callbacks;
+    this.attachmentTimeoutMs = options.attachmentTimeoutMs ?? DEFAULT_ATTACHMENT_TIMEOUT_MS;
+    this.now = options.now ?? Date.now;
+    this.setTimer = options.setTimer ?? setTimeout;
+    this.clearTimer = options.clearTimer ?? clearTimeout;
   }
 
-  /**
-   * Install CDP subscriptions.
-   * Must be called after the browser CDP session is ready.
-   */
+  /** Register discovery listeners before enabling the Target domain. */
   async install(): Promise<void> {
-    if (this.disposed) return;
-
-    // Enable Target domain for popup discovery
-    await this.browserCDP.send('Target.setDiscoverTargets', { discover: true });
-
-    this.browserCDP.on('Target.targetCreated', (params: unknown) => {
-      void this.onTargetCreated(params as TargetCreatedParams).catch((err: unknown) => {
-        this.callbacks.onEvent({
-          kind: 'recording_degraded',
-          recordingId: this.recordingId,
-          reason: `popup attach failed: ${String(err)}`,
-          ts: new Date().toISOString(),
-        });
-      });
-    });
-
-    this.browserCDP.on('Target.targetDestroyed', (params: unknown) => {
-      this.onTargetDestroyed(params as TargetDestroyedParams);
-    });
+    if (this.disposed || this.installed) return;
+    this.installed = true;
+    this.browserCDP.on('Target.targetCreated', this.targetCreatedListener);
+    this.browserCDP.on('Target.targetDestroyed', this.targetDestroyedListener);
+    this.browserCDP.on('Target.attachedToTarget', this.attachedListener);
+    this.browserCDP.on('Target.detachedFromTarget', this.detachedListener);
+    try {
+      await this.browserCDP.send('Target.setDiscoverTargets', { discover: true });
+    } catch (error) {
+      this.removeDiscoveryListeners();
+      this.installed = false;
+      throw error;
+    }
   }
 
-  /**
-   * Track the main frame's origin for cross-origin comparison.
-   * Call this whenever the main frame navigates.
-   */
   setMainFrameOrigin(url: string): void {
     try {
       this.mainFrameOrigin = new URL(url).origin;
@@ -101,14 +127,6 @@ export class PopupHandler {
     }
   }
 
-  /**
-   * Check a frame's URL against the main frame's origin.
-   * Emits `UnrecordedFrameEvent` for cross-origin frames (once per origin).
-   *
-   * @param frameUrl - The navigated frame's URL
-   * @param frameId - CDP frame ID for the event
-   * @returns true if the frame is cross-origin (not instrumented)
-   */
   checkFrameOrigin(frameUrl: string, frameId: string): boolean {
     if (!this.mainFrameOrigin) return false;
     let frameOrigin: string;
@@ -117,8 +135,6 @@ export class PopupHandler {
     } catch {
       return false;
     }
-
-    // Same origin or data/about frames — instrumented
     if (frameOrigin === this.mainFrameOrigin || frameOrigin === 'null') return false;
 
     this.callbacks.onUnrecordedOrigin(frameOrigin);
@@ -129,123 +145,234 @@ export class PopupHandler {
       frameId,
       detectedAt: new Date().toISOString(),
     });
-
     return true;
   }
 
-  /** Returns the current map of attached popup targets. */
   get popups(): ReadonlyMap<string, PopupEntry> {
     return this.popupChain;
   }
 
-  dispose(): void {
+  /** Cancel in-flight work, remove exact listeners, and detach every owned child. */
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
     this.disposed = true;
-    // CDP session cleanup is handled by the caller (RecordingSession.stop)
+    this.removeDiscoveryListeners();
+    for (const pending of this.pendingTargets.values()) {
+      pending.cancelledReason = 'handler disposed';
+      this.wake(pending);
+    }
+    await Promise.allSettled(
+      [...this.pendingTargets.values()].map((pending) => pending.promise ?? Promise.resolve()),
+    );
+    const entries = [...this.popupChain.values()];
+    this.popupChain.clear();
+    await Promise.allSettled(entries.map((entry) => this.releaseEntry(entry)));
   }
-
-  // ---------------------------------------------------------------------------
-  // Private CDP handlers
-  // ---------------------------------------------------------------------------
 
   private async onTargetCreated(params: TargetCreatedParams): Promise<void> {
     if (this.disposed) return;
-
     const { targetInfo } = params;
     if (targetInfo.type !== 'page') return;
+    const parentTargetId = targetInfo.openerId ?? '';
+    const belongsToRecording =
+      parentTargetId === this.mainTargetId ||
+      this.popupChain.has(parentTargetId) ||
+      this.pendingTargets.has(parentTargetId);
+    if (!belongsToRecording) return;
+    if (this.popupChain.has(targetInfo.targetId) || this.pendingTargets.has(targetInfo.targetId)) {
+      return;
+    }
 
-    // Only handle popups opened from our main target or from a known popup
-    const isOurPopup =
-      targetInfo.openerId === this.mainTargetId || this.popupChain.has(targetInfo.openerId ?? '');
-
-    if (!isOurPopup) return;
-
-    // Attach to the new target
-    const { sessionId } = await this.browserCDP.send('Target.attachToTarget', {
+    const pending: PendingAttachment = {
       targetId: targetInfo.targetId,
-      flatten: true,
-    });
-
-    // Create a CDPSession for this target
-    // puppeteer-core's Connection exposes session creation via the browser's target
-    // For raw CDP sessions, we use the sessionId from the attachment
-    const popupSession = await this.createSessionFromId(sessionId);
-
-    const entry: PopupEntry = {
-      targetId: targetInfo.targetId,
-      parentTargetId: targetInfo.openerId ?? this.mainTargetId,
-      cdpSession: popupSession,
+      parentTargetId: parentTargetId || this.mainTargetId,
       url: targetInfo.url,
+      wakeups: new Set(),
+      cancelledReason: null,
+      promise: null,
     };
-
-    this.popupChain.set(targetInfo.targetId, entry);
-
-    // Install overlay + binding on the popup's session
-    await this.callbacks.onPopupSession(popupSession, targetInfo.targetId);
-
-    this.callbacks.onEvent({
-      kind: 'popup_attached',
-      recordingId: this.recordingId,
-      targetId: targetInfo.targetId,
-      url: targetInfo.url,
-      ts: new Date().toISOString(),
-    });
+    this.pendingTargets.set(pending.targetId, pending);
+    pending.promise = this.attachPopup(pending);
+    try {
+      await pending.promise;
+    } finally {
+      if (this.pendingTargets.get(pending.targetId) === pending) {
+        this.pendingTargets.delete(pending.targetId);
+      }
+    }
   }
 
-  private onTargetDestroyed(params: TargetDestroyedParams): void {
-    const { targetId } = params;
-    if (!this.popupChain.has(targetId)) return;
+  private async attachPopup(pending: PendingAttachment): Promise<void> {
+    const response = await this.browserCDP.send('Target.attachToTarget', {
+      targetId: pending.targetId,
+      flatten: true,
+    });
+    const sessionId = response.sessionId;
+    const childSession = await this.waitForPublicSession(pending, sessionId);
+    if (pending.cancelledReason || this.disposed) {
+      await this.detachSession(sessionId);
+      throw new Error(pending.cancelledReason ?? 'handler disposed');
+    }
 
-    this.popupChain.delete(targetId);
+    let entry: PopupEntry = {
+      targetId: pending.targetId,
+      parentTargetId: pending.parentTargetId,
+      sessionId,
+      cdpSession: childSession,
+      url: pending.url,
+      state: 'attaching',
+    };
+    this.popupChain.set(pending.targetId, entry);
+    try {
+      await this.callbacks.onPopupSession(childSession, pending.targetId);
+      if (pending.cancelledReason || this.disposed || childSession.detached) {
+        throw new Error(pending.cancelledReason ?? 'child session detached during instrumentation');
+      }
+      entry = { ...entry, state: 'ready' };
+      this.popupChain.set(pending.targetId, entry);
+      this.callbacks.onEvent({
+        kind: 'popup_attached',
+        recordingId: this.recordingId,
+        targetId: pending.targetId,
+        url: pending.url,
+        ts: new Date().toISOString(),
+      });
+    } catch (error) {
+      this.popupChain.delete(pending.targetId);
+      await this.callbacks.onPopupSessionClosed?.(childSession, pending.targetId);
+      await this.detachSession(sessionId);
+      throw error;
+    }
+  }
 
+  private async waitForPublicSession(
+    pending: PendingAttachment,
+    sessionId: string,
+  ): Promise<CDPSession> {
+    const deadline = this.now() + this.attachmentTimeoutMs;
+    while (this.now() <= deadline) {
+      if (pending.cancelledReason) throw new Error(pending.cancelledReason);
+      if (this.disposed) throw new Error('handler disposed');
+      if (this.browserCDP.detached || this.detachedSessionIds.has(sessionId)) {
+        throw new Error('browser transport disconnected during popup attachment');
+      }
+      const signal = this.attachmentSignals.get(pending.targetId);
+      if (signal && signal.sessionId !== sessionId) {
+        throw new Error(
+          `popup attachment identity mismatch for target ${pending.targetId}: expected session ${sessionId}`,
+        );
+      }
+      const session = this.browserCDP.connection()?.session(sessionId) ?? null;
+      if (session !== null) {
+        if (session.id() !== sessionId) {
+          throw new Error(
+            `popup session registry returned the wrong session for ${pending.targetId}`,
+          );
+        }
+        return session;
+      }
+      await this.waitForWakeup(pending, Math.min(REGISTRY_POLL_MS, deadline - this.now() + 1));
+    }
+    throw new Error(`popup attachment timed out for target ${pending.targetId}`);
+  }
+
+  private async onTargetDestroyed(params: TargetDestroyedParams): Promise<void> {
+    const pending = this.pendingTargets.get(params.targetId);
+    if (pending) {
+      pending.cancelledReason = `target ${params.targetId} was destroyed during attachment`;
+      this.wake(pending);
+    }
+
+    const entry = this.popupChain.get(params.targetId);
+    if (!entry) return;
+    this.popupChain.delete(params.targetId);
+    await this.releaseEntry({ ...entry, state: 'detaching' });
     this.callbacks.onEvent({
       kind: 'popup_closed',
       recordingId: this.recordingId,
-      targetId,
+      targetId: params.targetId,
       ts: new Date().toISOString(),
     });
   }
 
-  /**
-   * Create a puppeteer CDPSession from a raw sessionId.
-   * In puppeteer-core v24+ the browser's connection exposes the session registry.
-   */
-  private createSessionFromId(sessionId: string): Promise<CDPSession> {
-    // Access the internal connection to get the session — puppeteer-core
-    // does not expose this on its public Target/Session API, so we type the
-    // narrow shape we depend on and tolerate either of the legacy property
-    // names (`_connection` in older releases, `connection` in newer ones).
-    interface ConnectionLike {
-      session(id: string): CDPSession | null;
+  private async releaseEntry(entry: PopupEntry): Promise<void> {
+    await this.callbacks.onPopupSessionClosed?.(entry.cdpSession, entry.targetId);
+    await this.detachSession(entry.sessionId);
+  }
+
+  private async detachSession(sessionId: string): Promise<void> {
+    if (this.detachedSessionIds.has(sessionId)) return;
+    this.detachedSessionIds.add(sessionId);
+    try {
+      await this.browserCDP.send('Target.detachFromTarget', { sessionId });
+    } catch {
+      // Target destruction and transport shutdown make detach an expected no-op.
     }
-    interface SessionWithConnection {
-      _connection?: ConnectionLike;
-      connection?: ConnectionLike;
-    }
-    const sessionWithConn = this.browserCDP as unknown as SessionWithConnection;
-    const conn = sessionWithConn._connection ?? sessionWithConn.connection;
-    if (conn !== undefined && typeof conn.session === 'function') {
-      const session = conn.session(sessionId);
-      if (session !== null) return Promise.resolve(session);
-    }
-    // Fallback: the browserCDP itself is the session for flat CDP connections
-    // (pipe transport) — return it as a shared session.
-    return Promise.resolve(this.browserCDP);
+  }
+
+  private waitForWakeup(pending: PendingAttachment, delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      const wake = (): void => {
+        this.clearTimer(timer);
+        pending.wakeups.delete(wake);
+        resolve();
+      };
+      const timer = this.setTimer(wake, Math.max(0, delayMs));
+      pending.wakeups.add(wake);
+    });
+  }
+
+  private wake(pending: PendingAttachment): void {
+    for (const wake of [...pending.wakeups]) wake();
+  }
+
+  private wakePending(targetId: string): void {
+    const pending = this.pendingTargets.get(targetId);
+    if (pending) this.wake(pending);
+  }
+
+  private wakeAllPending(): void {
+    for (const pending of this.pendingTargets.values()) this.wake(pending);
+  }
+
+  private removeDiscoveryListeners(): void {
+    if (!this.installed) return;
+    this.browserCDP.off('Target.targetCreated', this.targetCreatedListener);
+    this.browserCDP.off('Target.targetDestroyed', this.targetDestroyedListener);
+    this.browserCDP.off('Target.attachedToTarget', this.attachedListener);
+    this.browserCDP.off('Target.detachedFromTarget', this.detachedListener);
+  }
+
+  private emitAttachmentFailure(targetId: string, error: unknown): void {
+    const reason = error instanceof Error ? error.message : String(error);
+    this.callbacks.onEvent({
+      kind: 'recording_degraded',
+      recordingId: this.recordingId,
+      reason: `popup ${targetId} unavailable: ${reason}`,
+      ts: new Date().toISOString(),
+    });
   }
 }
 
-// ---------------------------------------------------------------------------
-// CDP event param shapes
-// ---------------------------------------------------------------------------
-
 interface TargetCreatedParams {
-  targetInfo: {
-    targetId: string;
-    type: string;
-    url: string;
-    openerId?: string;
+  readonly targetInfo: {
+    readonly targetId: string;
+    readonly type: string;
+    readonly url: string;
+    readonly openerId?: string;
   };
 }
 
 interface TargetDestroyedParams {
-  targetId: string;
+  readonly targetId: string;
+}
+
+interface AttachedToTargetParams {
+  readonly sessionId: string;
+  readonly targetInfo: { readonly targetId: string };
+}
+
+interface DetachedFromTargetParams {
+  readonly sessionId?: string;
+  readonly targetId?: string;
 }

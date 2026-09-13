@@ -62,7 +62,7 @@ export const handleClick: StepHandler<ClickStep> = async (step, ctx): Promise<St
         button: 'left',
         ...(step.modifiers
           ? {
-              clickCount: 1,
+              count: 1,
             }
           : {}),
       }),

@@ -8,6 +8,7 @@ import type { InjectedScriptHost } from './types.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 let bundlePromise: Promise<string> | undefined;
+let nextHostId = 1;
 
 /**
  * Production bridge between the Node locator engine and its browser-side IIFE.
@@ -16,6 +17,9 @@ let bundlePromise: Promise<string> | undefined;
  */
 export class PuppeteerInjectedScriptHost implements InjectedScriptHost {
   private preloadInstalled = false;
+  private readonly hostId = nextHostId++;
+  private nextFrameToken = 1;
+  private readonly frameTokens = new WeakMap<Frame, string>();
 
   public constructor(
     private readonly page: Page,
@@ -85,9 +89,28 @@ export class PuppeteerInjectedScriptHost implements InjectedScriptHost {
     return element;
   }
 
+  /**
+   * Return an opaque token scoped to this host and the currently attached
+   * Frame object. Tokens are never persisted and are not inferred from URL,
+   * name, or private Puppeteer fields.
+   */
+  public getFrameId(frame: Frame): string {
+    const attached = this.page.frames();
+    if (!attached.includes(frame)) throw new Error('Cannot tokenize a foreign or detached frame.');
+    if (frame === this.page.mainFrame()) return 'main';
+    let token = this.frameTokens.get(frame);
+    if (!token) {
+      token = `frame:${this.hostId}:${this.nextFrameToken++}`;
+      this.frameTokens.set(frame, token);
+    }
+    return token;
+  }
+
   private resolveFrame(frameId: string): Frame {
     if (frameId === 'main') return this.page.mainFrame();
-    const frame = this.page.frames().find((candidate) => frameIdentifier(candidate) === frameId);
+    const frame = this.page
+      .frames()
+      .find((candidate) => this.frameTokens.get(candidate) === frameId);
     if (!frame) throw new Error(`Frame "${frameId}" is detached or unknown.`);
     return frame;
   }
@@ -115,8 +138,4 @@ async function readFirst(paths: readonly string[]): Promise<string> {
     'Locator injected bundle is missing. Run `pnpm --filter @yantra/core build:injected` before launching Chrome.',
     { cause: lastError },
   );
-}
-
-function frameIdentifier(frame: Frame): string | undefined {
-  return (frame as Frame & { _id?: string })._id;
 }

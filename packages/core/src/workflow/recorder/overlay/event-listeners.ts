@@ -42,6 +42,12 @@ interface RawEventPayload {
   url: string;
 }
 
+declare global {
+  interface Window {
+    __yantraRecorderListenerCleanup?: () => void;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -64,11 +70,17 @@ function getInputType(el: Element): InputTypeHint {
   return MAP[type] ?? 'other';
 }
 
+function isElement(value: EventTarget | null): value is Element {
+  return value !== null && 'nodeType' in value && value.nodeType === 1;
+}
+
+function isTextControl(el: Element): el is HTMLInputElement | HTMLTextAreaElement {
+  const tag = el.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea';
+}
+
 function getRawValue(el: Element): string {
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    return el.value ?? '';
-  }
-  return '';
+  return isTextControl(el) ? (el.value ?? '') : '';
 }
 
 function nowMs(): number {
@@ -115,9 +127,9 @@ const lastFlushTime = new WeakMap<Element, number>();
 const DEBOUNCE_MS = 250;
 
 function shouldFlushInput(el: Element): boolean {
-  const last = lastFlushTime.get(el) ?? 0;
+  const last = lastFlushTime.get(el);
   const now = performance.now();
-  if (now - last < DEBOUNCE_MS) return false;
+  if (last !== undefined && now - last < DEBOUNCE_MS) return false;
   lastFlushTime.set(el, now);
   return true;
 }
@@ -141,7 +153,7 @@ function recordAction(payload: RawEventPayload): void {
 
 function handleClick(event: MouseEvent): void {
   const target = event.target;
-  if (!(target instanceof Element)) return;
+  if (!isElement(target)) return;
 
   // Ignore clicks on the Yantra overlay itself
   if (target.closest('#__yantra-recorder-overlay')) return;
@@ -163,7 +175,7 @@ function handleClick(event: MouseEvent): void {
 
 function handleInput(event: Event): void {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) return;
+  if (!isElement(target) || !isTextControl(target)) return;
   if (!shouldFlushInput(target)) return;
 
   const raw_value = getRawValue(target);
@@ -185,7 +197,7 @@ function handleInput(event: Event): void {
 
 function handleChange(event: Event): void {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) return;
+  if (!isElement(target) || !isTextControl(target)) return;
 
   // Force-flush on change (end-of-input)
   lastFlushTime.delete(target);
@@ -195,7 +207,7 @@ function handleChange(event: Event): void {
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Enter') return;
   const target = event.target;
-  if (!(target instanceof Element)) return;
+  if (!isElement(target)) return;
   if (target.closest('#__yantra-recorder-overlay')) return;
 
   const descriptor = buildElementDescriptor(target);
@@ -227,16 +239,23 @@ export interface EventListenerCallbacks {
  *
  * @param callbacks - Hooks for the overlay UI to update on each capture
  */
-let installed = false;
 export function installEventListeners(callbacks: EventListenerCallbacks): void {
-  if (installed) return;
-  installed = true;
+  // A same-origin initial navigation can preserve Window while replacing
+  // Document. Keep the listeners on Window and replace the exact prior set so
+  // they follow that transition without creating duplicate captures.
+  window.__yantraRecorderListenerCleanup?.();
 
   // eslint-disable-next-line @typescript-eslint/unbound-method -- callback is invoked directly; `this` binding is not needed
   onActionCapturedCb = callbacks.onActionCaptured;
 
-  document.addEventListener('click', handleClick, { capture: true });
-  document.addEventListener('input', handleInput, { capture: true });
-  document.addEventListener('change', handleChange, { capture: true });
-  document.addEventListener('keydown', handleKeydown, { capture: true });
+  window.addEventListener('click', handleClick, { capture: true });
+  window.addEventListener('input', handleInput, { capture: true });
+  window.addEventListener('change', handleChange, { capture: true });
+  window.addEventListener('keydown', handleKeydown, { capture: true });
+  window.__yantraRecorderListenerCleanup = () => {
+    window.removeEventListener('click', handleClick, { capture: true });
+    window.removeEventListener('input', handleInput, { capture: true });
+    window.removeEventListener('change', handleChange, { capture: true });
+    window.removeEventListener('keydown', handleKeydown, { capture: true });
+  };
 }

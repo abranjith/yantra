@@ -64,6 +64,24 @@ describe('@no-llm fill_element replay handler', () => {
     expect(resolve).toHaveBeenCalledWith({ kind: 'secret', key: 'site.password' });
   });
 
+  it('preserves the native select branch and commits the offered option value', async () => {
+    const port = new WidgetTestPort(
+      '<select id="country" aria-label="Country">' +
+        '<option value="">Choose</option><option value="de">Germany</option></select>',
+    );
+    const result = await driveFillElement(
+      fillStep({ kind: 'literal', value: 'Germany' }),
+      context(),
+      port,
+      target(port, '#country', 'Country', 'combobox'),
+    );
+
+    expect(result).toMatchObject({
+      kind: 'completed',
+      details: { committed: 'Germany', driver: 'native-select' },
+    });
+  });
+
   it('surfaces typed engine failures without an LLM fallback', async () => {
     const port = new WidgetTestPort('<button id="action" aria-label="Action">Action</button>');
     const result = await driveFillElement(
