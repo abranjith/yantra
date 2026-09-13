@@ -1,11 +1,14 @@
-import { execFileSync, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import type { Browser, Page as PuppeteerPage } from 'puppeteer-core';
 
 import { PuppeteerInjectedScriptHost } from '../locator/injected-host.js';
 
+import { toChromeInstall } from './browser-resolver.js';
 import { BrowserCrashedError } from './errors.js';
+import type { ResolvedBrowserInstallation } from './installation-types.js';
+import type { OwnedBrowserProcess } from './launcher.js';
 import type {
   BrowserSession,
   BrowserSessionEvent,
@@ -60,14 +63,20 @@ function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
 type EventHandler = (...args: unknown[]) => void;
 
 /**
- * Live browser session wrapping a puppeteer Browser instance.
- * Handles crash detection, event plumbing, and profile cleanup.
+ * Live browser session.
+ *
+ * The session owns exactly what startup handed it: one supervised browser
+ * process, one profile, and (for a managed installation) one use reservation.
+ * Process supervision is delegated rather than reimplemented, so close and
+ * crash paths cannot disagree about what "the browser is gone" means.
  */
 export class LocalBrowserSession implements BrowserSession {
   readonly id: string;
   readonly chrome: ChromeInstall;
+  readonly installation: ResolvedBrowserInstallation;
   readonly profilePath: string;
 
+  private readonly launched: OwnedBrowserProcess;
   private readonly browser: Browser;
   private readonly child: ChildProcess;
   private readonly profile: ResolvedProfile;
@@ -79,21 +88,25 @@ export class LocalBrowserSession implements BrowserSession {
   private crashed = false;
   private stderrBuffer = '';
   private primaryPageClaimed = false;
+  private closing: Promise<void> | null = null;
   /** Maximum bytes of stderr to buffer for crash diagnostics. */
   private static readonly MAX_STDERR_BYTES = 4096;
 
   constructor(deps: {
-    browser: Browser;
-    child: ChildProcess;
-    chrome: ChromeInstall;
+    launched: OwnedBrowserProcess;
+    installation: ResolvedBrowserInstallation;
     profile: ResolvedProfile;
     profileStore: ProfileStore;
     logger: Logger;
   }) {
     this.id = randomUUID();
-    this.browser = deps.browser;
-    this.child = deps.child;
-    this.chrome = deps.chrome;
+    this.launched = deps.launched;
+    this.browser = deps.launched.browser;
+    this.child = deps.launched.child;
+    this.installation = deps.installation;
+    // Existing callers still read `chrome`; it projects the resolved identity,
+    // which stays the one semantic source of truth.
+    this.chrome = toChromeInstall(deps.installation);
     this.profile = deps.profile;
     this.profilePath = deps.profile.absolutePath;
     this.profileStore = deps.profileStore;
@@ -123,14 +136,14 @@ export class LocalBrowserSession implements BrowserSession {
 
       this.emit('crashed', crashErr);
 
-      // Best-effort ephemeral cleanup on crash
-      if (this.profile.kind === 'ephemeral') {
-        void this.profileStore
-          .cleanupEphemeral(this.profile.absolutePath)
-          .catch((e: unknown) =>
-            this.logger.warn({ err: e }, 'Failed to cleanup ephemeral profile after crash'),
-          );
-      }
+      // A crash still has to account for the process and the reservation:
+      // the child exited, but nothing has released ownership yet.
+      void this.launched
+        .shutdown()
+        .catch((e: unknown) =>
+          this.logger.warn({ err: e }, 'Failed to release browser ownership after crash'),
+        )
+        .then(() => this.cleanupOwnedProfile('crash'));
     });
 
     // puppeteer disconnected event (not crash — handled by child exit above)
@@ -192,61 +205,35 @@ export class LocalBrowserSession implements BrowserSession {
   }
 
   /**
-   * Closes the browser session. Idempotent — safe to call multiple times.
-   * Cleans up ephemeral profile directories after close.
+   * Closes the session. Idempotent, and safe under concurrent callers.
+   *
+   * Process supervision is delegated to the launcher's owned process, which
+   * releases the managed reservation only after verified exit. Only an
+   * ephemeral profile this session owns is removed — a workflow or explicit
+   * profile the user owns is never touched.
    */
-  async close(): Promise<void> {
-    if (this.closed) return;
+  close(): Promise<void> {
+    this.closing ??= this.runClose();
+    return this.closing;
+  }
+
+  private async runClose(): Promise<void> {
     this.closed = true;
-
     try {
-      // Give puppeteer 5s to close gracefully
-      await Promise.race([
-        this.browser.close(),
-        new Promise<void>((_, reject) => {
-          const t = setTimeout(() => reject(new Error('puppeteer close timeout')), 5000);
-          if (typeof t.unref === 'function') t.unref();
-        }),
-      ]);
-    } catch {
-      // Timeout or error — fall back to process kill
-      this.killProcess();
-    }
-
-    this.logger.info({ sessionId: this.id }, `browser session ${this.id} closed`);
-
-    // Clean up ephemeral profile
-    if (this.profile.kind === 'ephemeral') {
-      await this.profileStore
-        .cleanupEphemeral(this.profile.absolutePath)
-        .catch((e: unknown) =>
-          this.logger.warn({ err: e }, 'Failed to cleanup ephemeral profile after close'),
-        );
+      await this.launched.shutdown();
+    } finally {
+      this.logger.info({ sessionId: this.id }, `browser session ${this.id} closed`);
+      await this.cleanupOwnedProfile('close');
     }
   }
 
-  private killProcess(): void {
-    try {
-      if (process.platform === 'win32') {
-        // taskkill ensures child processes are also terminated
-        try {
-          execFileSync('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], {
-            timeout: 3000,
-            windowsHide: true,
-          });
-        } catch {
-          this.child.kill();
-        }
-      } else {
-        this.child.kill('SIGTERM');
-        // SIGKILL fallback after 2s if still alive
-        const timer = setTimeout(() => {
-          if (!this.child.killed) this.child.kill('SIGKILL');
-        }, 2000);
-        if (typeof timer.unref === 'function') timer.unref();
-      }
-    } catch {
-      // Ignore kill errors
-    }
+  /** Removes the ephemeral profile this session created, and nothing else. */
+  private async cleanupOwnedProfile(phase: 'close' | 'crash'): Promise<void> {
+    if (this.profile.kind !== 'ephemeral') return;
+    await this.profileStore
+      .cleanupEphemeral(this.profile.absolutePath)
+      .catch((e: unknown) =>
+        this.logger.warn({ err: e }, `Failed to cleanup ephemeral profile after ${phase}`),
+      );
   }
 }

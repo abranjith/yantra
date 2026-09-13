@@ -11,7 +11,10 @@ import {
   HttpFetcher,
   HybridContentFetcher,
   JsonlEventBus,
-  LocalBrowserProvider,
+  createSelectedBrowserProvider,
+  type BrowserRuntimeOptions,
+  type BrowserRuntimeServices,
+  type BrowserSelection,
   LocalProfileStore,
   MarkdownReportBuilder,
   ModelSuppliedValues,
@@ -311,7 +314,18 @@ export interface AgenticTaskDependencies {
     readonly runDir: string;
     readonly taskId: string;
     readonly rankSink: RankSignalSink | null;
+    readonly browser: BrowserRuntimeOptions;
   }) => Promise<AgenticRunEnvironment>;
+  /**
+   * Shared browser selection/compatibility/coordination seam.
+   *
+   * Every browser-capable path in this run — agent tools, deterministic replay,
+   * browser fetch, scraped search — resolves through the same services, so they
+   * cannot disagree about which browser the run is using.
+   */
+  readonly browserServices?: BrowserRuntimeServices;
+  /** Per-invocation browser choice. Never persisted. */
+  readonly browserSelection?: BrowserSelection;
   readonly createProvider?: (
     services: RunServices,
     environment: AgenticRunEnvironment,
@@ -423,6 +437,10 @@ export async function runAgenticTask(
       runDir: created.runDir,
       taskId,
       rankSink: dependencies.rankSink ?? null,
+      browser: {
+        ...(dependencies.browserServices ? { services: dependencies.browserServices } : {}),
+        ...(dependencies.browserSelection ? { selection: dependencies.browserSelection } : {}),
+      },
     });
     const runAbort = new AbortController();
     const budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
@@ -1210,6 +1228,7 @@ async function createDefaultEnvironment(context: {
   readonly runDir: string;
   readonly taskId: string;
   readonly rankSink: RankSignalSink | null;
+  readonly browser?: BrowserRuntimeOptions;
 }): Promise<AgenticRunEnvironment> {
   const logger = {
     info: () => undefined,
@@ -1236,9 +1255,12 @@ async function createDefaultEnvironment(context: {
     ethicsConfig.userAgent,
     { enforceRobotsTxt: ethicsConfig.robotsEnabled },
   );
-  const browserProvider = new LocalBrowserProvider({
-    profileStore: new LocalProfileStore({ logger }),
+  // One provider for the whole run. Constructing it launches nothing: the
+  // browser starts only when a tool actually asks for a page.
+  const browserProvider = createSelectedBrowserProvider({
+    ...(context.browser ?? {}),
     logger,
+    profileStore: new LocalProfileStore({ logger }),
   });
   const browserController = new AgentBrowserController({
     runId: context.runId,

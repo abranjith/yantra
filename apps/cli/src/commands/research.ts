@@ -14,7 +14,8 @@ import {
   FollowUpQueryGenerator,
   HttpFetcher,
   HybridContentFetcher,
-  LocalBrowserProvider,
+  createSelectedBrowserProvider,
+  type BrowserRuntimeOptions,
   LocalProfileStore,
   ReadabilityExtractor,
   RateLimiterImpl,
@@ -287,11 +288,12 @@ function renderBrief(
  */
 export async function createDefaultResearchLoop(
   invocation: ResearchInvocation,
+  browser: BrowserRuntimeOptions = {},
 ): Promise<ResearchLoop> {
   const logger = noopLogger;
 
   const profileStore = new LocalProfileStore({ logger });
-  const browserProvider = new LocalBrowserProvider({ profileStore, logger });
+  const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
 
   const ethicsConfig = await loadEthicsConfig();
   const blocklist = new BlocklistImpl();

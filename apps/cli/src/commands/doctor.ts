@@ -103,7 +103,7 @@ export interface DoctorRuntime {
 
 const CHECK_TITLES: Record<string, string> = {
   'chrome.detected': 'Chrome installation detected',
-  'chrome.version_min': 'Chrome major version >= 120',
+  'chrome.compatibility': 'Browser passes required capabilities',
   'datadir.writable': 'Yantra data directory writable',
   'datadir.permissions': 'Yantra data directory permissions safe',
   'cachedir.writable': 'Cache directory writable',

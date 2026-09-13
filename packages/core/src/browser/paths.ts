@@ -35,6 +35,52 @@ export function doctorCachePath(): string {
   return join(cacheDir(), 'doctor.json');
 }
 
+/**
+ * Returns the root of the Yantra-managed browser tree.
+ *
+ * Every managed binary, the ready pointer, the mutation claim, and the
+ * coordination directory live beneath this one directory, so relocating the
+ * data directory relocates all of them together.
+ */
+export function managedBrowsersRoot(): string {
+  return join(dataDir(), 'browsers');
+}
+
+/**
+ * Returns the path of the single ready pointer.
+ *
+ * This file is the whole selection model for managed browsers: a child of the
+ * managed root that it does not name is an orphan, never a candidate build.
+ */
+export function managedReadyPath(): string {
+  return join(managedBrowsersRoot(), 'ready.json');
+}
+
+/**
+ * Returns the path of the exclusive mutation claim.
+ *
+ * It records the owner and the exact candidate path that owner may write. It
+ * is deliberately *not* a phase record — there is no transaction to resume.
+ */
+export function managedOperationPath(): string {
+  return join(managedBrowsersRoot(), 'operation.json');
+}
+
+/**
+ * Returns the coordination directory holding use reservations and the mutex.
+ *
+ * It sits outside every child cache so deleting one child can never encompass
+ * another child or the coordination state itself.
+ */
+export function managedCoordinationPath(): string {
+  return join(managedBrowsersRoot(), 'coordination');
+}
+
+/** Returns the root of the local compatibility evidence cache. */
+export function browserCompatibilityCacheRoot(): string {
+  return join(cacheDir(), 'browser-compatibility');
+}
+
 /** Returns the root directory where workflow YAML files are stored. */
 export function workflowsRoot(): string {
   return join(dataDir(), 'workflows');

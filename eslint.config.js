@@ -238,6 +238,24 @@ export default tseslint.config(
     },
   },
 
+  // Test fixtures executed as standalone processes: they are real scripts run
+  // by `node`, not modules in any package's TS project, so type-aware rules
+  // have no program to resolve them against.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['**/tests/**/fixtures/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly' },
+      // No TS program covers them, so the project service has nothing to resolve.
+      parserOptions: { projectService: false, project: false },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'import/no-default-export': 'off',
+      'import/order': 'off',
+    },
+  },
+
   {
     ...tseslint.configs.disableTypeChecked,
     files: ['eslint.config.js', 'vitest.workspace.ts'],

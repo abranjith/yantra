@@ -16,7 +16,8 @@ import {
   FileSystemAskCache,
   HttpFetcher,
   HybridContentFetcher,
-  LocalBrowserProvider,
+  createSelectedBrowserProvider,
+  type BrowserRuntimeOptions,
   LocalProfileStore,
   ReadabilityExtractor,
   RateLimiterImpl,
@@ -324,11 +325,16 @@ function renderTemplated(
  * provider registry (FEAT-016) lands, at which point `selectSynthesizer` picks
  * between the two.
  */
-export async function createDefaultAskPipeline(query: AskQuery): Promise<AskPipeline> {
+export async function createDefaultAskPipeline(
+  query: AskQuery,
+  browser: BrowserRuntimeOptions = {},
+): Promise<AskPipeline> {
   const logger = noopLogger;
 
   const profileStore = new LocalProfileStore({ logger });
-  const browserProvider = new LocalBrowserProvider({ profileStore, logger });
+  // The same seam every other launch-capable path uses; building it starts no
+  // browser, so the lazy fetch fallback stays lazy.
+  const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
 
   const ethicsConfig = await loadEthicsConfig();
   const blocklist = new BlocklistImpl();

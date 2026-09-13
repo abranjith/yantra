@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { BrowserLaunchError } from '../../src/browser/errors.js';
 import {
+  BrowserSelectionSchema,
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_VIEWPORT,
   HARDENED_BASE_ARGS,
   parseLaunchOptions,
+  selectionFromLaunchOptions,
 } from '../../src/browser/launch-options.js';
 
 const ephemeralProfile = { kind: 'ephemeral' as const };
@@ -181,6 +183,67 @@ describe('@no-llm launch-options', () => {
         expect(err.context.phase).toBe('spawn');
         expect(err.context.args.length).toBeGreaterThan(0);
       }
+    });
+  });
+
+  describe('browser selection', () => {
+    const absolute = process.platform === 'win32' ? 'C:\\chrome\\chrome.exe' : '/opt/chrome/chrome';
+
+    it('defaults to no selection so the resolver falls through to config/auto', () => {
+      const opts = parseLaunchOptions({ profile: ephemeralProfile });
+      expect(opts.browserSelection).toBeNull();
+      expect(selectionFromLaunchOptions(opts)).toBeUndefined();
+    });
+
+    it('accepts an explicit source', () => {
+      const opts = parseLaunchOptions({
+        profile: ephemeralProfile,
+        browserSelection: { source: 'managed' },
+      });
+      expect(selectionFromLaunchOptions(opts)).toEqual({
+        source: 'managed',
+        executablePath: null,
+      });
+    });
+
+    it('translates the legacy override into a system selection exactly once', () => {
+      const opts = parseLaunchOptions({
+        profile: ephemeralProfile,
+        chromeOverridePath: absolute,
+      });
+      expect(selectionFromLaunchOptions(opts)).toEqual({
+        source: 'system',
+        executablePath: absolute,
+      });
+    });
+
+    it('rejects the legacy override and a selection together', () => {
+      expect(() =>
+        parseLaunchOptions({
+          profile: ephemeralProfile,
+          chromeOverridePath: absolute,
+          browserSelection: { source: 'system', executablePath: absolute },
+        }),
+      ).toThrow(BrowserLaunchError);
+    });
+
+    it('rejects an executable path paired with a non-system source', () => {
+      expect(
+        BrowserSelectionSchema.safeParse({ source: 'auto', executablePath: absolute }).success,
+      ).toBe(false);
+      expect(
+        BrowserSelectionSchema.safeParse({ source: 'managed', executablePath: absolute }).success,
+      ).toBe(false);
+    });
+
+    it('rejects a relative executable path', () => {
+      expect(
+        BrowserSelectionSchema.safeParse({ source: 'system', executablePath: 'chrome' }).success,
+      ).toBe(false);
+    });
+
+    it('rejects an unknown source', () => {
+      expect(BrowserSelectionSchema.safeParse({ source: 'remote' }).success).toBe(false);
     });
   });
 

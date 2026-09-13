@@ -25,11 +25,19 @@ import type {
   RecordingMetadata,
   StopReason,
 } from '@yantra/protocol';
-import type { Browser, CDPSession, Page as PuppeteerPage } from 'puppeteer-core';
-import puppeteer from 'puppeteer-core';
+import type { CDPSession, Page as PuppeteerPage } from 'puppeteer-core';
 
-import { detectChrome } from '../../browser/chrome-discovery.js';
+import { BrowserCompatibilityError } from '../../browser/errors.js';
+import type {
+  BrowserRuntimeServices,
+  BrowserSelection,
+  ResolvedBrowserInstallation,
+} from '../../browser/installation-types.js';
+import { parseLaunchOptions } from '../../browser/launch-options.js';
+import { launchResolvedChrome, type OwnedBrowserProcess } from '../../browser/launcher.js';
+import type { OwnedManagedUseReservation } from '../../browser/managed-coordination.js';
 import { cacheDir } from '../../browser/paths.js';
+import { createLocalBrowserRuntimeServices } from '../../browser/runtime-services.js';
 
 import { normalizeCandidateChain } from './candidate-resolver.js';
 import { assembleDraft, computeDwellPerPage } from './draft-builder.js';
@@ -90,8 +98,17 @@ export interface RecordingStartOptions {
   idleTimeoutMs?: number;
   /** When true, the ephemeral profile dir is preserved on stop. Default: false. */
   keepProfile?: boolean;
-  /** Override the Chrome executable path. */
+  /**
+   * Override the Chrome executable path.
+   *
+   * @deprecated Pass `browserSelection` instead; this is translated into one at
+   * the same shared boundary every other caller uses.
+   */
   chromeOverridePath?: string;
+  /** The one semantic browser choice, identical to the provider's. */
+  browserSelection?: BrowserSelection;
+  /** Startup allowance for the recording browser. */
+  startupTimeoutMs?: number;
 }
 
 export interface RecordingHandle {
@@ -119,7 +136,8 @@ export class RecordingSession {
   private state: RecordingState = 'idle';
 
   // Browser handles
-  private browser: Browser | null = null;
+  private launched: OwnedBrowserProcess | null = null;
+  private reservation: OwnedManagedUseReservation | null = null;
   private mainPage: PuppeteerPage | null = null;
   private mainPageCDP: CDPSession | null = null;
   private browserCDP: CDPSession | null = null;
@@ -157,9 +175,26 @@ export class RecordingSession {
   private doneReject: ((err: Error) => void) | null = null;
   private keepProfile = false;
 
-  constructor(deps?: { store?: RecordingStore; redactor?: CaptureRedactor }) {
+  private readonly services: BrowserRuntimeServices;
+  private readonly launch: typeof launchResolvedChrome;
+
+  constructor(deps?: {
+    store?: RecordingStore;
+    redactor?: CaptureRedactor;
+    /** The same selection/compatibility/coordination seam every caller uses. */
+    services?: BrowserRuntimeServices;
+    /** External boundary: the shared launch path. */
+    launch?: typeof launchResolvedChrome;
+  }) {
     this.store = deps?.store ?? new FileSystemRecordingStore(cacheDir());
     this.redactor = deps?.redactor ?? new DefaultCaptureRedactor();
+    this.services = deps?.services ?? createLocalBrowserRuntimeServices();
+    this.launch = deps?.launch ?? launchResolvedChrome;
+  }
+
+  /** The live Puppeteer browser, or null before startup and after teardown. */
+  private get browser() {
+    return this.launched?.browser ?? null;
   }
 
   // ---------------------------------------------------------------------------
@@ -200,40 +235,125 @@ export class RecordingSession {
       // Non-fatal
     }
 
-    // Launch headful Chrome
-    const chrome = detectChrome(
-      opts.chromeOverridePath ? { override: opts.chromeOverridePath } : {},
-    );
-    if (!chrome) {
-      throw new Error('Chrome not found. Run `yantra doctor` for diagnostics.');
-    }
-
-    this.chromeVersion = chrome.version;
-    this.chromeMajor = chrome.majorVersion;
-
     const profileDir = join(recordingDir, 'profile');
 
-    this.browser = await puppeteer.launch({
-      executablePath: chrome.path,
+    // Everything from here on is rollback-protected: a failed startup must not
+    // leave a browser, a CDP session, or a managed reservation behind, and must
+    // not pretend recording began.
+    try {
+      const installation = await this.resolveRecordingBrowser(opts);
+      this.chromeVersion = installation.version;
+      this.chromeMajor = installation.majorVersion;
+
+      await this.launchRecordingBrowser(installation, profileDir, opts);
+      await this.initializeRecording(workflowName, recordingDir, opts);
+    } catch (error) {
+      await this.rollbackStartup();
+      throw error;
+    }
+
+    const donePromise = new Promise<{ draftPath: string; stopReason: StopReason }>(
+      (resolve, reject) => {
+        this.doneResolve = resolve;
+        this.doneReject = reject;
+      },
+    );
+
+    return {
+      recordingId: this.recordingId,
+      recordingDir,
+      events: this.eventEmitter,
+      done: donePromise,
+    };
+  }
+
+  /**
+   * Resolves and verifies the browser this recording will use.
+   *
+   * Recording needs the automation capability set *plus* the recorder's own
+   * binding, preload, and Page-domain rows, so automation evidence alone can
+   * never approve it — and the check happens before any recording
+   * initialization or user navigation.
+   */
+  private async resolveRecordingBrowser(
+    opts: RecordingStartOptions,
+  ): Promise<ResolvedBrowserInstallation> {
+    // The legacy override is translated into a selection at the same shared
+    // boundary every other caller uses; there is one resolution algorithm.
+    const selection: BrowserSelection | undefined =
+      opts.browserSelection ??
+      (opts.chromeOverridePath
+        ? { source: 'system', executablePath: opts.chromeOverridePath }
+        : undefined);
+    if (opts.browserSelection && opts.chromeOverridePath) {
+      throw new Error(
+        'browserSelection and chromeOverridePath cannot both be set — pass browserSelection only.',
+      );
+    }
+
+    const resolution = await this.services.resolver.resolve(selection);
+    if (resolution.status === 'unavailable') throw resolution.error;
+    const installation = resolution.installation;
+
+    if (installation.ownership === 'managed' && installation.managedIdentity !== null) {
+      this.reservation = (await this.services.coordinator.reserveUse(
+        installation.managedIdentity,
+      )) as OwnedManagedUseReservation;
+    }
+
+    const compatibility = await this.services.compatibility.check(installation, {
+      profile: 'recorder',
+      fresh: false,
+    });
+    if (compatibility.verdict.status === 'failed') {
+      throw new BrowserCompatibilityError({
+        failureClass: compatibility.verdict.failureClass,
+        profile: 'recorder',
+        executablePath: installation.canonicalPath,
+        version: installation.version,
+        capabilities: compatibility.capabilities,
+        remediation: compatibility.verdict.remediation,
+      });
+    }
+    return installation;
+  }
+
+  /** Starts the visible recording browser through the shared launch path. */
+  private async launchRecordingBrowser(
+    installation: ResolvedBrowserInstallation,
+    profileDir: string,
+    opts: RecordingStartOptions,
+  ): Promise<void> {
+    const launchOptions = parseLaunchOptions({
+      // Recording is deliberately visible, and always uses the Yantra-owned
+      // recording profile — never a personal Chrome profile root.
+      profile: { kind: 'explicit', absolutePath: profileDir },
       headless: false,
-      pipe: true,
-      userDataDir: profileDir,
-      args: [
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-features=TranslateUI',
-        '--disable-background-networking',
-        '--disable-default-apps',
-        '--disable-sync',
-      ],
-      defaultViewport: null,
+      viewport: null,
+      ...(opts.startupTimeoutMs === undefined ? {} : { startupTimeoutMs: opts.startupTimeoutMs }),
     });
 
-    // Browser-level CDP for target lifecycle
-    this.browserCDP = await this.browser.target().createCDPSession();
+    this.launched = await this.launch(
+      launchOptions,
+      installation,
+      { absolutePath: profileDir, kind: 'explicit', createdNow: true },
+      this.reservation === null
+        ? { kind: 'external' }
+        : { kind: 'managed', reservation: this.reservation },
+    );
 
+    // Browser-level CDP for target lifecycle
+    this.browserCDP = await this.browser!.target().createCDPSession();
+  }
+
+  /** Everything after the browser exists: pages, bindings, overlay, watchers. */
+  private async initializeRecording(
+    workflowName: string,
+    recordingDir: string,
+    opts: RecordingStartOptions,
+  ): Promise<void> {
     // Open main page
-    this.mainPage = await this.browser.newPage();
+    this.mainPage = await this.browser!.newPage();
     this.mainPageCDP = await this.mainPage.createCDPSession();
 
     // Resolve the main page target ID via CDP (puppeteer-core no longer exposes
@@ -266,7 +386,7 @@ export class RecordingSession {
     });
 
     // Crash detection (TASK-013)
-    this.browser.on('disconnected', () => {
+    this.browser!.on('disconnected', () => {
       if (this.state === 'recording' || this.state === 'paused') {
         void this.abort('browser_disconnected');
       }
@@ -276,7 +396,7 @@ export class RecordingSession {
     if (this.recordingId === null) {
       throw new Error('recordingId is unexpectedly null after session start');
     }
-    this.popupHandler = new PopupHandler(this.browserCDP, this.mainTargetId, this.recordingId, {
+    this.popupHandler = new PopupHandler(this.browserCDP!, this.mainTargetId, this.recordingId, {
       onEvent: (event) => this.emit(event),
       onPopupSession: (session, _targetId) => this.installOverlayOnSession(session),
       onPopupSessionClosed: (session) => this.removeOverlaySessionListeners(session),
@@ -307,22 +427,49 @@ export class RecordingSession {
       recordingId: this.recordingId,
       workflowNameHint: workflowName,
       recordingDir,
-      ts: this.startedAt,
+      ts: this.startedAt!,
     });
+  }
 
-    const donePromise = new Promise<{ draftPath: string; stopReason: StopReason }>(
-      (resolve, reject) => {
-        this.doneResolve = resolve;
-        this.doneReject = reject;
-      },
-    );
-
-    return {
-      recordingId: this.recordingId,
-      recordingDir,
-      events: this.eventEmitter,
-      done: donePromise,
-    };
+  /**
+   * Undoes exactly what a failed startup acquired.
+   *
+   * Only resources this call owns are released: its own CDP sessions and
+   * listeners, its popup and idle watchers, its browser process, and its
+   * managed reservation. The recording directory and the draft the caller may
+   * later inspect are left alone — a failed startup cleans up without
+   * pretending recording began.
+   */
+  private async rollbackStartup(): Promise<void> {
+    this.idleWatcher?.stop();
+    this.idleWatcher = null;
+    try {
+      await this.popupHandler?.dispose();
+    } catch {
+      // A popup handler that never installed has nothing to release.
+    }
+    this.popupHandler = null;
+    await this.cleanupRecorderSessions();
+    try {
+      await this.browserCDP?.detach();
+    } catch {
+      // The transport may already be gone; that is the desired end state.
+    }
+    this.browserCDP = null;
+    this.mainPage = null;
+    this.mainPageCDP = null;
+    this.mainTargetId = null;
+    if (this.launched !== null) {
+      // Closes and awaits process exit, then releases the managed reservation.
+      await this.launched.shutdown().catch(() => undefined);
+    } else {
+      // A reservation taken before the browser existed still has to be given
+      // back, with the proof that nothing was ever spawned under it.
+      await this.reservation?.markNeverSpawned().catch(() => undefined);
+    }
+    this.launched = null;
+    this.reservation = null;
+    this.state = 'idle';
   }
 
   // ---------------------------------------------------------------------------
@@ -724,27 +871,27 @@ export class RecordingSession {
   // Utilities
   // ---------------------------------------------------------------------------
 
+  /**
+   * Closes the recording browser and accounts for its process.
+   *
+   * Both the graceful and the forced path go through the shared supervisor, so
+   * the managed reservation is released only after verified process-tree exit —
+   * `force` shortens the polite window rather than skipping the accounting.
+   */
   private async closeBrowser(opts: { force: boolean }): Promise<void> {
-    if (!this.browser) return;
+    const launched = this.launched;
+    if (!launched) return;
+    this.launched = null;
+    this.reservation = null;
     try {
-      if (opts.force) {
-        const child = this.browser.process();
-        if (child) {
-          child.kill('SIGKILL');
-          return;
-        }
-      }
-      await Promise.race([
-        this.browser.close(),
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('browser close timeout')), 5000),
-        ),
-      ]);
+      // Force skips the polite close and terminates immediately; the shared
+      // shutdown then observes the already-verified exit and releases the
+      // managed reservation. Both paths account for the process.
+      if (opts.force) await launched.supervisor.shutdown();
+      await launched.shutdown();
     } catch {
-      const child = this.browser.process();
-      child?.kill('SIGKILL');
-    } finally {
-      this.browser = null;
+      // A browser that cannot be proved gone is reported through the session's
+      // abort path; teardown itself never throws over it.
     }
   }
 

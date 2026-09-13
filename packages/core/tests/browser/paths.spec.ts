@@ -4,11 +4,16 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  browserCompatibilityCacheRoot,
   cacheDir,
   configPath,
   dataDir,
   doctorCachePath,
   ephemeralRoot,
+  managedBrowsersRoot,
+  managedCoordinationPath,
+  managedOperationPath,
+  managedReadyPath,
   profilesRoot,
   resetPathCache,
   runsRoot,
@@ -85,4 +90,33 @@ describe('@no-llm paths', () => {
     expect(ephemeralRoot()).toBe('/tmp');
     expect(mockTmpdir).toHaveBeenCalled();
   });
+
+  it('places the managed browser tree below the data directory', () => {
+    expect(managedBrowsersRoot()).toBe(join(dataDir(), 'browsers'));
+    expect(managedReadyPath()).toBe(join(managedBrowsersRoot(), 'ready.json'));
+    expect(managedOperationPath()).toBe(join(managedBrowsersRoot(), 'operation.json'));
+    expect(managedCoordinationPath()).toBe(join(managedBrowsersRoot(), 'coordination'));
+  });
+
+  it('keeps coordination state outside every child cache', () => {
+    // Deleting one `installation-*` child must never be able to encompass
+    // another child, the ready pointer, or the coordination directory.
+    const root = managedBrowsersRoot();
+    for (const path of [managedReadyPath(), managedOperationPath(), managedCoordinationPath()]) {
+      expect(path.startsWith(join(root, 'installation-'))).toBe(false);
+    }
+  });
+
+  it('keeps compatibility evidence in the cache directory, not the data directory', () => {
+    expect(browserCompatibilityCacheRoot()).toBe(join(cacheDir(), 'browser-compatibility'));
+    expect(browserCompatibilityCacheRoot().startsWith(dataDir())).toBe(false);
+  });
+
+  it.each(['win32', 'darwin', 'linux'])(
+    'resolves the managed tree identically on %s',
+    (platform) => {
+      setPlatform(platform);
+      expect(managedBrowsersRoot()).toBe(join('/home/testuser', '.yantra', 'data', 'browsers'));
+    },
+  );
 });

@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import type { BrowserSelection } from '../../src/browser/installation-types.js';
 import { resetPathCache } from '../../src/browser/paths.js';
 import type { LaunchOptions } from '../../src/browser/types.js';
 
@@ -16,6 +17,8 @@ export interface MigrationBrowserFixture {
   readonly yantraHome: string;
   readonly executablePath: string | undefined;
   readonly launchOptions: Pick<LaunchOptions, 'chromeOverridePath'> | Record<string, never>;
+  /** The same choice expressed through the current selection contract. */
+  readonly selection: BrowserSelection | undefined;
   cleanup(): Promise<void>;
 }
 
@@ -46,6 +49,9 @@ export async function beginMigrationBrowserFixture(options?: {
     yantraHome,
     executablePath: configuredPath,
     launchOptions: configuredPath ? { chromeOverridePath: configuredPath } : {},
+    selection: configuredPath
+      ? { source: 'system' as const, executablePath: configuredPath }
+      : undefined,
     async cleanup(): Promise<void> {
       if (cleaned) return;
       cleaned = true;

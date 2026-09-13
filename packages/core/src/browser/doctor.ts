@@ -3,9 +3,13 @@ import { access, constants, mkdir, readFile, readdir, stat, writeFile } from 'no
 import { indexDbPath, openIndexDb, setMeta } from '../index-db/db.js';
 import { SqliteHistoryStore } from '../index-db/history-store.js';
 
-import { detectChrome } from './chrome-discovery.js';
-import { MIN_SUPPORTED_CHROME_MAJOR } from './launch-options.js';
+import type {
+  BrowserResolution,
+  BrowserRuntimeServices,
+  CompatibilityEvidenceState,
+} from './installation-types.js';
 import { cacheDir, dataDir, doctorCachePath, profilesRoot } from './paths.js';
+import { createLocalBrowserRuntimeServices } from './runtime-services.js';
 import type { DoctorCheck, DoctorReport } from './types.js';
 
 const DOCTOR_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -26,67 +30,88 @@ function errorCheck(id: DoctorCheck['id'], e: unknown): DoctorCheck {
   return buildCheck(id, 'error', message, { stack });
 }
 
-function checkChromeDetected(): DoctorCheck {
-  try {
-    const chrome = detectChrome();
-    if (!chrome) {
-      return buildCheck(
-        'chrome.detected',
-        'error',
-        'Chrome not found on this system.',
-        { os: process.platform },
-        'Install Chrome from https://www.google.com/chrome/',
-      );
-    }
-    return buildCheck('chrome.detected', 'ok', `Chrome ${chrome.version} found at ${chrome.path}`, {
-      path: chrome.path,
-      version: chrome.version,
-    });
-  } catch (e) {
-    return errorCheck('chrome.detected', e);
+/**
+ * Reports the browser the resolver would actually select.
+ *
+ * Provenance comes from the one resolution path every launch uses, so doctor
+ * can never disagree with what a run will do — the previous implementation had
+ * its own discovery call and could.
+ */
+function checkBrowserSelected(resolution: BrowserResolution): DoctorCheck {
+  if (resolution.status === 'unavailable') {
+    const { code, remediation, message } = resolution.error;
+    return buildCheck('chrome.detected', 'error', message, { code }, remediation);
   }
+  const installation = resolution.installation;
+  return buildCheck(
+    'chrome.detected',
+    'ok',
+    `Chrome ${installation.version} (${installation.ownership}) at ${installation.canonicalPath}`,
+    {
+      path: installation.canonicalPath,
+      version: installation.version,
+      ownership: installation.ownership,
+      source: installation.requestedSelection.source,
+      selectionOrigin: installation.selectionOrigin,
+      selectionReason: installation.selectionReason,
+    },
+  );
 }
 
-function checkChromeVersionMin(detectedCheck: DoctorCheck): DoctorCheck {
-  try {
-    if (detectedCheck.status === 'error') {
-      return buildCheck(
-        'chrome.version_min',
-        'warn',
-        'Chrome was not detected; cannot check minimum version.',
-        {},
-      );
-    }
-    const chrome = detectChrome();
-    if (!chrome) {
-      return buildCheck(
-        'chrome.version_min',
-        'warn',
-        'Chrome not available for version check.',
-        {},
-      );
-    }
-    if (chrome.majorVersion < MIN_SUPPORTED_CHROME_MAJOR) {
-      return buildCheck(
-        'chrome.version_min',
-        'error',
-        `Chrome ${chrome.majorVersion} is below the minimum required version ${MIN_SUPPORTED_CHROME_MAJOR}.`,
-        { found: chrome.majorVersion, required: MIN_SUPPORTED_CHROME_MAJOR },
-        `Update Chrome to version ${MIN_SUPPORTED_CHROME_MAJOR} or newer.`,
-      );
-    }
+/**
+ * Reports local compatibility evidence, and reports its absence honestly.
+ *
+ * Doctor never launches a browser to manufacture an ok result, and it no longer
+ * asserts a minimum Chrome major: a build outside the tested pairing is the
+ * normal case, so what matters is whether the required primitives were proved.
+ */
+function checkBrowserCompatibility(
+  resolution: BrowserResolution,
+  evidence: CompatibilityEvidenceState | null,
+): DoctorCheck {
+  if (resolution.status === 'unavailable') {
     return buildCheck(
-      'chrome.version_min',
-      'ok',
-      `Chrome ${chrome.majorVersion} meets minimum version ${MIN_SUPPORTED_CHROME_MAJOR}.`,
-      {
-        found: chrome.majorVersion,
-        required: MIN_SUPPORTED_CHROME_MAJOR,
-      },
+      'chrome.compatibility',
+      'warn',
+      'No browser was selected, so no compatibility evidence applies.',
+      { compatibility: 'unverified' },
+      resolution.error.remediation,
     );
-  } catch (e) {
-    return errorCheck('chrome.version_min', e);
   }
+  if (evidence === null || evidence.state === 'unverified') {
+    return buildCheck(
+      'chrome.compatibility',
+      'warn',
+      'This browser has not been checked on this machine yet.',
+      { compatibility: 'unverified', path: resolution.installation.canonicalPath },
+      'Run `yantra browser check` to test it locally.',
+    );
+  }
+  const result = evidence.result;
+  if (result.verdict.status === 'failed') {
+    const failing = result.capabilities
+      .filter((row) => row.status === 'failed')
+      .map((row) => row.capability);
+    return buildCheck(
+      'chrome.compatibility',
+      'error',
+      `Chrome ${result.identity.version} failed required capabilities: ${failing.join(', ')}.`,
+      { compatibility: 'failed', failing, failureClass: result.verdict.failureClass },
+      result.verdict.remediation,
+    );
+  }
+  return buildCheck(
+    'chrome.compatibility',
+    'ok',
+    `Chrome ${result.identity.version} passed every required capability (${result.verdict.pairing}, tested against ${result.testedBuild}).`,
+    {
+      compatibility: 'passed',
+      pairing: result.verdict.pairing,
+      testedBuild: result.testedBuild,
+      driverVersion: result.driverVersion,
+      checkedAt: result.checkedAt,
+    },
+  );
 }
 
 async function checkDirWritable(id: DoctorCheck['id'], dirPath: string): Promise<DoctorCheck> {
@@ -273,9 +298,37 @@ function rollupOverall(checks: readonly DoctorCheck[]): DoctorReport['overall'] 
   return 'ok';
 }
 
-async function runAllChecks(): Promise<readonly DoctorCheck[]> {
-  const chromeCheck = checkChromeDetected();
-  const versionCheck = checkChromeVersionMin(chromeCheck);
+async function runAllChecks(services: BrowserRuntimeServices): Promise<readonly DoctorCheck[]> {
+  // One read-only resolution, shared by both browser checks. No launch, no
+  // probe, no network — doctor reports what is there, it does not repair it.
+  // A failure here is reported as a failed browser check, never allowed to
+  // take the rest of the report down with it.
+  let resolution: BrowserResolution | null = null;
+  let evidence: CompatibilityEvidenceState | null = null;
+  let resolverFailure: unknown = null;
+  try {
+    resolution = await services.resolver.resolve();
+    if (resolution.status === 'resolved') {
+      evidence = await services.compatibility
+        .readCached(resolution.installation, 'automation')
+        .catch(() => null);
+    }
+  } catch (error) {
+    resolverFailure = error;
+  }
+  const chromeCheck =
+    resolution === null
+      ? errorCheck('chrome.detected', resolverFailure)
+      : checkBrowserSelected(resolution);
+  const versionCheck =
+    resolution === null
+      ? buildCheck(
+          'chrome.compatibility',
+          'warn',
+          'No browser was resolved, so no compatibility evidence applies.',
+          { compatibility: 'unverified' },
+        )
+      : checkBrowserCompatibility(resolution, evidence);
   const dataDirCheck = await checkDirWritable('datadir.writable', dataDir());
   const dataPermsCheck = await checkDataDirPermissions();
   const cacheDirCheck = await checkDirWritable('cachedir.writable', cacheDir());
@@ -302,7 +355,11 @@ async function runAllChecks(): Promise<readonly DoctorCheck[]> {
  * const report = await doctor();
  * if (report.overall !== 'ok') console.error('Environment has issues!');
  */
-export async function doctor(opts?: { readonly refresh?: boolean }): Promise<DoctorReport> {
+export async function doctor(opts?: {
+  readonly refresh?: boolean;
+  /** Injected for tests; defaults to the local read-only services. */
+  readonly services?: BrowserRuntimeServices;
+}): Promise<DoctorReport> {
   const now = new Date();
 
   // Try to serve from cache
@@ -322,7 +379,7 @@ export async function doctor(opts?: { readonly refresh?: boolean }): Promise<Doc
   // Run all checks, wrapping each in a top-level safety net
   const checks = await (async () => {
     try {
-      return await runAllChecks();
+      return await runAllChecks(opts?.services ?? createLocalBrowserRuntimeServices());
     } catch (e) {
       return [errorCheck('chrome.detected', e)];
     }

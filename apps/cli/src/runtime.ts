@@ -14,8 +14,8 @@ import {
   EthicsGateImpl,
   FileWorkflowStore,
   LlmSynthesizer,
-  LocalBrowserProvider,
   LocalProfileStore,
+  createSelectedBrowserProvider,
   RateLimiterImpl,
   RobotsCacheImpl,
   SqliteDomainRankStore,
@@ -24,6 +24,7 @@ import {
   loadEthicsConfig,
   openIndexDb,
   workflowsRoot,
+  type BrowserRuntimeOptions,
   type ConfirmationGateway,
   type KeychainProvider,
   type Logger,
@@ -179,6 +180,11 @@ export async function buildOrchestratorRuntime(
      * declared `synthesis.use_llm` reach a model.
      */
     readonly synthesis?: OrchestratorSynthesisOptions;
+    /**
+     * Shared browser selection seam. Omitted means the local default
+     * composition with no configured choice, which resolves as `auto`.
+     */
+    readonly browser?: BrowserRuntimeOptions;
   } = {},
 ): Promise<OrchestratorRuntime> {
   const logger = opts.logger ?? noopLogger;
@@ -204,7 +210,11 @@ export async function buildOrchestratorRuntime(
   });
 
   const profileStore = new LocalProfileStore({ logger });
-  const browserProvider = new LocalBrowserProvider({ profileStore, logger });
+  const browserProvider = createSelectedBrowserProvider({
+    ...(opts.browser ?? {}),
+    profileStore,
+    logger,
+  });
   const workflowStore = new FileWorkflowStore(workflowsRoot());
   const runStore = new LocalRunStore();
   const sanitizer = new DefaultSanitizer();

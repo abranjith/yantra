@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ChromeDiscovery from '../../src/browser/chrome-discovery.js';
 import { ProfilePathRefusedError } from '../../src/browser/errors.js';
+import type * as Paths from '../../src/browser/paths.js';
 
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
@@ -29,7 +30,10 @@ vi.mock('node:os', () => ({
 vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'security-test-uuid'),
 }));
-vi.mock('../../src/browser/paths.js', () => ({
+// Partial mock: replacing the module wholesale breaks every consumer of an
+// export this list forgets — memory records exactly that failure mode.
+vi.mock('../../src/browser/paths.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof Paths>()),
   dataDir: vi.fn(() => '/home/testuser/.local/share/yantra'),
   cacheDir: vi.fn(() => '/home/testuser/.cache/yantra'),
   profilesRoot: vi.fn(() => '/home/testuser/.local/share/yantra/profiles'),
@@ -168,45 +172,100 @@ describe('@no-llm TASK-010 security hardening', () => {
   });
 
   describe('launcher log redaction', () => {
-    it('info-level logs do not contain profile path or --user-data-dir', async () => {
+    it('info-level logs do not contain the profile path or launch arguments', async () => {
       const logs: string[] = [];
       const { LocalBrowserProvider } = await import('../../src/browser/provider.js');
       const { LocalProfileStore } = await import('../../src/browser/profile-store.js');
+      const launcher = await import('../../src/browser/launcher.js');
+      const resolverModule = await import('../../src/browser/browser-resolver.js');
 
       const mockLogger = {
-        info: (_: unknown, msg?: string) => logs.push(`info:${msg ?? ''}`),
-        warn: (_: unknown, msg?: string) => logs.push(`warn:${msg ?? ''}`),
-        error: (_: unknown, msg?: string) => logs.push(`error:${msg ?? ''}`),
-        debug: (_: unknown, msg?: string) => logs.push(`debug:${msg ?? ''}`),
+        info: (obj: unknown, msg?: string) => logs.push(`info:${JSON.stringify(obj)} ${msg ?? ''}`),
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
       };
 
-      // Mock the launcher so we don't actually start Chrome
-      vi.mock('../../src/browser/launcher.js', () => ({
-        launchChrome: vi.fn().mockResolvedValue({
-          browser: {
-            process: vi.fn().mockReturnValue({ pid: 1, kill: vi.fn(), on: vi.fn(), stderr: null }),
-            close: vi.fn().mockResolvedValue(undefined),
-            newPage: vi.fn(),
-            on: vi.fn(),
-          },
-          child: { pid: 1, kill: vi.fn(), on: vi.fn(), stderr: null, killed: false },
+      // Stub the one launch seam so no browser starts, while every log the
+      // provider emits on the way there is captured verbatim.
+      const launched = {
+        browser: { on: vi.fn(), pages: vi.fn(), close: vi.fn() },
+        child: { pid: 1, on: vi.fn(), stderr: null },
+        supervisor: { hasExited: () => false },
+        ownership: { kind: 'external' as const },
+        shutdown: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.spyOn(launcher, 'launchResolvedChrome').mockResolvedValue(
+        launched as unknown as Awaited<ReturnType<typeof launcher.launchResolvedChrome>>,
+      );
+      // node:fs/promises is mocked wholesale in this suite, so the provider's
+      // re-stat needs its own boundary stub.
+      vi.spyOn(resolverModule, 'identifyExecutable').mockImplementation((path) =>
+        Promise.resolve({
+          canonicalPath: path,
+          version: '153.0.8010.36',
+          majorVersion: 153,
+          platform: 'linux',
+          architecture: 'x64',
+          statFingerprint: '1:2:3:4',
         }),
-        buildLaunchArgs: vi.fn(() => []),
-      }));
+      );
 
-      const store = new LocalProfileStore();
-      const provider = new LocalBrowserProvider({ profileStore: store, logger: mockLogger });
+      const installation = {
+        canonicalPath: '/usr/bin/google-chrome',
+        version: '153.0.8010.36',
+        majorVersion: 153,
+        platform: 'linux' as const,
+        architecture: 'x64',
+        statFingerprint: '1:2:3:4',
+        ownership: 'external' as const,
+        requestedSelection: { source: 'auto' as const, executablePath: null },
+        selectionOrigin: 'default' as const,
+        selectionReason: 'system-discovery' as const,
+        channel: 'stable' as const,
+        managedIdentity: null,
+      };
+      const provider = new LocalBrowserProvider({
+        profileStore: new LocalProfileStore(),
+        logger: mockLogger,
+        services: {
+          resolver: { resolve: () => Promise.resolve({ status: 'resolved', installation }) },
+          compatibility: {
+            check: () =>
+              Promise.resolve({
+                schemaVersion: 1,
+                identity: installation,
+                driverVersion: '25.10.0',
+                testedBuild: '152.0.7977.75',
+                probeRevision: 1,
+                capabilityTableHash: 'hash',
+                profile: 'automation',
+                checkedAt: '2026-09-13T00:00:00.000Z',
+                capabilities: [],
+                verdict: { status: 'passed', pairing: 'capability-checked' },
+              }),
+            readCached: () => Promise.resolve({ state: 'unverified' }),
+          },
+          coordinator: {
+            reserveUse: vi.fn(),
+            claimMutation: vi.fn(),
+            hasActiveUse: () => Promise.resolve(false),
+          },
+          managedState: {
+            readReady: () => Promise.resolve({ status: 'absent' }),
+            readInventory: () => Promise.resolve({ ready: { status: 'absent' }, orphans: [] }),
+          },
+        } as never,
+      });
 
-      try {
-        await provider.launch({ profile: { kind: 'ephemeral' } });
-      } catch {
-        // may fail since session.ts also runs — that's ok for this test
-      }
+      await provider.launch({ profile: { kind: 'ephemeral' } });
 
       const infoLogs = logs.filter((l) => l.startsWith('info:'));
+      expect(infoLogs.length).toBeGreaterThan(0);
       for (const log of infoLogs) {
         expect(log).not.toContain('--user-data-dir');
-        expect(log).not.toContain('/tmp/yantra-'); // actual profile path
+        expect(log).not.toContain('--no-first-run');
+        expect(log).not.toContain('/tmp/yantra-');
       }
     });
   });

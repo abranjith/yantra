@@ -1,12 +1,18 @@
 /** Shared interfaces and types for the browser module. */
 
-/** Discovered Chrome installation. */
+/**
+ * A Chrome installation as legacy callers see it.
+ *
+ * `source` distinguishes an externally installed browser from a
+ * Yantra-managed one; {@link ResolvedBrowserInstallation} is the semantic
+ * source of truth and this is a projection of it.
+ */
 export interface ChromeInstall {
   readonly path: string;
   readonly version: string;
   readonly majorVersion: number;
   readonly channel: 'stable' | 'beta' | 'dev' | 'canary' | 'chromium' | 'unknown';
-  readonly source: 'system';
+  readonly source: 'system' | 'managed';
 }
 
 /** How a Chrome profile directory is resolved. */
@@ -23,12 +29,22 @@ export interface LaunchOptions {
   readonly extraArgs: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly startupTimeoutMs: number;
+  /**
+   * Legacy single-field override, kept only as a translation into
+   * {@link browserSelection} while repository callers migrate.
+   *
+   * @deprecated Pass `browserSelection` instead.
+   */
   readonly chromeOverridePath: string | null;
+  /** The one semantic browser choice. Null means "resolve from config/auto". */
+  readonly browserSelection: BrowserSelection | null;
 }
 
 import type { Page as PuppeteerPage } from 'puppeteer-core';
 
 import type { InjectedScriptHost } from '../locator/types.js';
+
+import type { BrowserSelection } from './installation-types.js';
 
 /** Minimal structured logger interface (compatible with pino). */
 export interface Logger {
@@ -63,6 +79,7 @@ export interface BrowserProvider {
 /** Live browser handle returned from BrowserProvider.launch(). */
 export interface BrowserSession {
   readonly id: string;
+  /** Legacy projection of {@link installation}; both describe the same browser. */
   readonly chrome: ChromeInstall;
   readonly profilePath: string;
   newPage(): Promise<Page>;
@@ -83,7 +100,7 @@ export interface DoctorReport {
 export interface DoctorCheck {
   readonly id:
     | 'chrome.detected'
-    | 'chrome.version_min'
+    | 'chrome.compatibility'
     | 'datadir.writable'
     | 'datadir.permissions'
     | 'cachedir.writable'
