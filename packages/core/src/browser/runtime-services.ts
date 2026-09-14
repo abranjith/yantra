@@ -11,12 +11,15 @@ import { LocalBrowserResolver } from './browser-resolver.js';
 import { CompatibilityCache } from './compatibility-cache.js';
 import { LocalBrowserCompatibilityService } from './compatibility.js';
 import { DRIVER_COMPATIBILITY } from './driver-compatibility.js';
+import type { InstallOfferGateway } from './install-offer-gateway.js';
 import type {
   BrowserRuntimeServices,
   BrowserSelectionReader,
   DriverCompatibilityDescriptor,
 } from './installation-types.js';
 import { LocalManagedCoordinator } from './managed-coordination.js';
+import type { ManagedInstallService } from './managed-install-types.js';
+import { LocalManagedInstallService } from './managed-install.js';
 import { LocalManagedStateReader } from './managed-state.js';
 import { LocalProfileStore } from './profile-store.js';
 import type { Logger, ProfileStore } from './types.js';
@@ -30,6 +33,8 @@ export interface LocalBrowserRuntimeServicesDeps {
   readonly profileStore?: ProfileStore;
   readonly logger?: Logger;
   readonly descriptor?: DriverCompatibilityDescriptor;
+  readonly installService?: ManagedInstallService;
+  readonly installOfferGateway?: InstallOfferGateway | null;
 }
 
 /**
@@ -64,5 +69,25 @@ export function createLocalBrowserRuntimeServices(
     ...(deps.logger ? { logger: deps.logger } : {}),
   });
 
-  return { resolver, compatibility, coordinator, managedState };
+  let installService = deps.installService;
+  return {
+    resolver,
+    compatibility,
+    coordinator,
+    managedState,
+    // Doctor and other read-only consumers must not construct the acquisition
+    // graph merely by asking for browser resolution services.
+    get installService() {
+      installService ??= new LocalManagedInstallService({
+        state: managedState,
+        coordinator,
+        compatibility,
+        candidateProbe: compatibility,
+      });
+      return installService;
+    },
+    ...(deps.installOfferGateway === undefined
+      ? {}
+      : { installOfferGateway: deps.installOfferGateway }),
+  };
 }

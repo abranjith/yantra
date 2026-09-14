@@ -18,7 +18,7 @@ This repository is a private, unpublished `0.0.1` pnpm workspace. There is no ve
 
 ## Install and start from source
 
-Prerequisites are Node.js 24.15.0 or newer and pnpm 11.1.0. Browser tasks and saved-workflow replay require an existing system Chrome 120 or newer installation. Installing the workspace dependencies does not install, select, or update a runtime browser; the fixed Chrome for Testing fixture used by migration tests is test-only.
+Prerequisites are Node.js 24.15.0 or newer and pnpm 11.1.0. Browser tasks and saved-workflow replay require a compatible Chrome or Chromium installation. Yantra can use a discovered external browser or, on a supported host, install a Yantra-owned Chrome for Testing Stable build after explicit consent. Installing the workspace dependencies never downloads a browser, and ordinary startup and tasks never check for browser updates; the fixed Chrome for Testing fixture used by migration tests remains test-only.
 
 ```console
 pnpm install --frozen-lockfile
@@ -26,6 +26,14 @@ pnpm build
 node apps/cli/dist/bin.js --help
 node apps/cli/dist/bin.js init --provider none --yes
 ```
+
+If Yantra cannot discover a compatible external browser, review the destination and approximate 200 MB download notice, then prepare the managed browser interactively:
+
+```console
+node apps/cli/dist/bin.js browser install
+```
+
+The download is stored below Yantra's resolved data directory and does not modify external Chrome installations. JSON and non-interactive use require explicit acceptance with `browser install --yes`; see the [managed-browser usage guide](docs/usage.md#install-a-managed-browser) before automating that flag.
 
 The smallest useful no-model task uses keyless DuckDuckGo search and local synthesis. It contacts public sites and writes a local run directory:
 
@@ -44,7 +52,7 @@ node apps/cli/dist/bin.js open --print
 
 Credentials are never written to YAML or passed as arguments: `config.yaml` holds only `${env:NAME}` or `${secret:key}` references, resolved at the execution boundary.
 
-See the [Quickstart](docs/quickstart.md) for prerequisites and platform paths, the [Configuration guide](docs/features/configuration.md) for the full key reference and environment-variable table, then the [Usage guide](docs/usage.md) for model credentials, local models, commands, artifacts, and configuration.
+See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisites, the [Configuration guide](docs/features/configuration.md) for the full key reference and environment-variable table, then the [Usage guide](docs/usage.md) for managed-browser installation, model credentials, local models, commands, and artifacts.
 
 ## What you can do
 
@@ -53,11 +61,11 @@ See the [Quickstart](docs/quickstart.md) for prerequisites and platform paths, t
 - Promote successful browser traces or author reviewable YAML workflows, then replay them with a fixed plan that a model cannot steer.
 - Schedule saved workflows through a local daemon. Scheduled runs are always zero-LLM and pause rather than auto-confirm protected actions.
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
-- Manage the installation from the command line with `config`, `model`, and `secret`, and reopen any finished run's artifacts with `open`.
+- Manage configuration, models, credentials, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
 
 ## Safety and current boundaries
 
-Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.
+Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Managed-browser downloads require per-operation consent, stay in Yantra-owned storage, and are never initiated by unattended execution. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.
 
 ## Documentation
 
@@ -70,6 +78,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 ### Features
 
 - [Configuration, Models, Credentials, and Storage](docs/features/configuration.md) — the two-file model, `config.yaml` reference, storage layout, and environment variables.
+- [Managed Stable Installation](docs/features/managed-stable-installation.md) — consented Chrome for Testing acquisition, verification, storage, retries, and current limitations.
 - [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
 - [Research](docs/features/research.md) — agentic and deterministic multi-hop research.
 - [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`.

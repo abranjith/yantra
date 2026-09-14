@@ -149,6 +149,12 @@ jobs:
         working-directory: packages/core
         run: pnpm exec tsx tests/helpers/provision-test-browser.ts
 
+      - name: Run managed Stable installation smoke
+        working-directory: packages/core
+        env:
+          YANTRA_E2E_MANAGED_INSTALL: '1'
+        run: pnpm exec vitest run tests/browser/managed-install-live.spec.ts
+
       - name: Report driver, browser, and platform identity
         run: node -e "const fs=require('node:fs'); const core=require('./packages/core/package.json'); const browser=JSON.parse(fs.readFileSync(process.env.YANTRA_TEST_BROWSER_MANIFEST,'utf8')); console.log(JSON.stringify({puppeteer:core.dependencies['puppeteer-core'],...browser}))"
 

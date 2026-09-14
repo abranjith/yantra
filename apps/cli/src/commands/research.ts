@@ -14,6 +14,7 @@ import {
   FollowUpQueryGenerator,
   HttpFetcher,
   HybridContentFetcher,
+  InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
   LocalProfileStore,
@@ -97,7 +98,10 @@ export interface ResearchRuntime {
   readonly env: NodeJS.ProcessEnv;
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
-  readonly createLoop: (invocation: ResearchInvocation) => Promise<ResearchLoop>;
+  readonly createLoop: (
+    invocation: ResearchInvocation,
+    browser?: BrowserRuntimeOptions,
+  ) => Promise<ResearchLoop>;
   readonly resolveDefaults: () => Promise<EffectivePreferences>;
   readonly runTask: typeof runAgenticTask;
   readonly resolveAgent: typeof resolveAgentInvocation;
@@ -235,7 +239,12 @@ export function registerResearchCommand(
           );
           return;
         }
-        const loop = await resolvedRuntime.createLoop(invocation);
+        const loop = await resolvedRuntime.createLoop(invocation, {
+          installOfferGateway:
+            resolvedRuntime.isTty && format !== 'json'
+              ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
+              : null,
+        });
         const result: ResearchRunResult = await loop.run(invocation.options);
 
         renderBrief(resolvedRuntime, result, { format, detail, options });
@@ -397,17 +406,25 @@ async function runAgenticResearch(
     },
   );
   const profile = resolveCommandTaskProfile('research', runtime.env);
-  const outcome = await runtime.runTask({
-    goal: topic,
-    model: agent.model,
-    auth: agent.auth,
-    profile,
-    budgets: agent.budgets,
-    ...(template === undefined ? {} : { template }),
-    ambient,
-    screenshotsSuppressed: options.screenshots === false,
-    connector,
-  });
+  const outcome = await runtime.runTask(
+    {
+      goal: topic,
+      model: agent.model,
+      auth: agent.auth,
+      profile,
+      budgets: agent.budgets,
+      ...(template === undefined ? {} : { template }),
+      ambient,
+      screenshotsSuppressed: options.screenshots === false,
+      connector,
+    },
+    {
+      browserInstallOfferGateway:
+        runtime.isTty && format !== 'json'
+          ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
+          : null,
+    },
+  );
   if (outcome.kind !== 'published') {
     throw new Error(agentFailureMessage(outcome));
   }

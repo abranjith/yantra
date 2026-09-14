@@ -12,7 +12,10 @@
 
 import { PiAgentProvider } from '@yantra/agent';
 import {
+  BrowserInstallOfferDeclinedError,
+  BrowserManagedInstallError,
   InteractiveConfirmationGateway,
+  InteractiveInstallOfferGateway,
   type EffectivePreferences,
   type Logger,
 } from '@yantra/core';
@@ -82,6 +85,9 @@ export function makeResumeCommand(): Command {
         const runtime = await buildOrchestratorRuntime({
           logger,
           confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+          browser: {
+            installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+          },
           // Omitted, not set to undefined: an absent key disables the stage,
           // which is what a run that never synthesized should inherit.
           ...(inherited === undefined ? {} : { synthesis: inherited }),
@@ -127,7 +133,13 @@ export function makeResumeCommand(): Command {
         if (options.debug === true && err instanceof Error && err.stack !== undefined) {
           process.stderr.write(`${err.stack}\n`);
         }
-        process.exit(1);
+        process.exit(
+          err instanceof BrowserInstallOfferDeclinedError
+            ? 4
+            : err instanceof BrowserManagedInstallError
+              ? 3
+              : 1,
+        );
       }
     });
 

@@ -12,6 +12,11 @@ export * from './compatibility.js';
 export * from './compatibility-cache.js';
 export * from './driver-compatibility.js';
 export * from './managed-state.js';
+export * from './managed-install-types.js';
+export * from './managed-preflight.js';
+export * from './managed-install.js';
+export * from './orphan-collection.js';
+export * from './install-offer-gateway.js';
 export * from './process-identity.js';
 // Permit minting and validation stay module-private: a candidate probe permit
 // exists so one operation can probe its own candidate, never so ordinary code

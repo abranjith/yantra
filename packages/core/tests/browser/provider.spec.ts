@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as resolverModule from '../../src/browser/browser-resolver.js';
 import {
   BrowserCompatibilityError,
+  BrowserInstallOfferDeclinedError,
   BrowserResolutionError,
   ManagedCoordinationError,
 } from '../../src/browser/errors.js';
@@ -222,6 +223,7 @@ describe('@no-llm LocalBrowserProvider startup', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    LocalBrowserProvider.resetInstallOfferForTests();
     recorder = { events: [] };
     vi.spyOn(resolverModule, 'identifyExecutable').mockImplementation((path) =>
       Promise.resolve({
@@ -328,6 +330,156 @@ describe('@no-llm LocalBrowserProvider startup', () => {
     await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toBe(error);
     expect(services.coordinator.reserveUse).not.toHaveBeenCalled();
     expect(mockLaunch).not.toHaveBeenCalled();
+  });
+
+  it('offers once for an automatic missing browser, installs, re-resolves, and resumes launch', async () => {
+    const missing = new BrowserResolutionError({
+      code: 'missing',
+      message: 'No browser is available.',
+      requestedSelection: { source: 'auto', executablePath: null },
+      remediation: 'Run `yantra browser install`.',
+    });
+    const { services } = makeServices(recorder);
+    vi.mocked(services.resolver.resolve)
+      .mockResolvedValueOnce({ status: 'unavailable', error: missing })
+      .mockResolvedValueOnce({ status: 'resolved', installation: makeInstallation() });
+    const gateway = {
+      offer: vi.fn().mockResolvedValue({ accepted: true, source: 'interactive-offer' }),
+    };
+    const install = vi.fn().mockResolvedValue({
+      status: 'already-installed',
+      record: READY_RECORD,
+      executablePath: '/managed/chrome',
+      compatibility: { state: 'unverified' },
+      orphans: { attempted: 0, deleted: 0, bytesReclaimed: 0, skippedLiveOwner: 0, failed: [] },
+      updateCommand: 'yantra browser update',
+    });
+    mockLaunch.mockResolvedValue(makeLaunched(recorder));
+    const provider = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services,
+      logger,
+      installOfferGateway: gateway,
+      installService: { install, collectOrphans: vi.fn() },
+    });
+
+    await provider.launch({ profile: { kind: 'ephemeral' } });
+
+    expect(gateway.offer).toHaveBeenCalledOnce();
+    expect(install).toHaveBeenCalledOnce();
+    expect(services.resolver.resolve).toHaveBeenCalledTimes(2);
+    expect(mockLaunch).toHaveBeenCalledOnce();
+  });
+
+  it('serializes concurrent automatic sessions through one offer and one install', async () => {
+    const missing = new BrowserResolutionError({
+      code: 'missing',
+      message: 'No browser is available.',
+      requestedSelection: { source: 'auto', executablePath: null },
+      remediation: 'Run `yantra browser install`.',
+    });
+    const first = makeServices(recorder);
+    const second = makeServices(recorder);
+    for (const services of [first.services, second.services]) {
+      vi.mocked(services.resolver.resolve)
+        .mockResolvedValueOnce({ status: 'unavailable', error: missing })
+        .mockResolvedValueOnce({ status: 'resolved', installation: makeInstallation() });
+    }
+    let accept!: () => void;
+    const decision = new Promise<{ accepted: true; source: 'interactive-offer' }>((resolve) => {
+      accept = () => resolve({ accepted: true, source: 'interactive-offer' });
+    });
+    const gateway = { offer: vi.fn().mockReturnValue(decision) };
+    const install = vi.fn().mockResolvedValue({
+      status: 'already-installed',
+      record: READY_RECORD,
+      executablePath: '/managed/chrome',
+      compatibility: { state: 'unverified' },
+      orphans: {
+        attempted: 0,
+        deleted: 0,
+        bytesReclaimed: 0,
+        skippedLiveOwner: 0,
+        failed: [],
+      },
+      updateCommand: 'yantra browser update',
+    });
+    mockLaunch.mockResolvedValue(makeLaunched(recorder));
+    const providerOne = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services: first.services,
+      logger,
+      installOfferGateway: gateway,
+      installService: { install, collectOrphans: vi.fn() },
+    });
+    const providerTwo = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services: second.services,
+      logger,
+      installOfferGateway: gateway,
+      installService: { install, collectOrphans: vi.fn() },
+    });
+
+    const launches = [
+      providerOne.launch({ profile: { kind: 'ephemeral' } }),
+      providerTwo.launch({ profile: { kind: 'ephemeral' } }),
+    ];
+    await vi.waitFor(() => expect(gateway.offer).toHaveBeenCalledOnce());
+    accept();
+    await Promise.all(launches);
+
+    expect(install).toHaveBeenCalledOnce();
+    expect(first.services.resolver.resolve).toHaveBeenCalledTimes(2);
+    expect(second.services.resolver.resolve).toHaveBeenCalledTimes(2);
+    expect(mockLaunch).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns a declined automatic offer into a user-handoff error without downloading', async () => {
+    const missing = new BrowserResolutionError({
+      code: 'missing',
+      message: 'No browser is available.',
+      requestedSelection: { source: 'auto', executablePath: null },
+      remediation: 'Run `yantra browser install`.',
+    });
+    const { services } = makeServices(recorder, {
+      resolution: { status: 'unavailable', error: missing },
+    });
+    const install = vi.fn();
+    const provider = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services,
+      logger,
+      installOfferGateway: { offer: vi.fn().mockResolvedValue(null) },
+      installService: { install, collectOrphans: vi.fn() },
+    });
+
+    await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toBeInstanceOf(
+      BrowserInstallOfferDeclinedError,
+    );
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('never offers for an explicitly missing managed selection', async () => {
+    const missing = new BrowserResolutionError({
+      code: 'missing',
+      message: 'Managed Chrome is absent.',
+      requestedSelection: { source: 'managed', executablePath: null },
+      remediation: 'Run `yantra browser install`.',
+    });
+    const { services } = makeServices(recorder, {
+      resolution: { status: 'unavailable', error: missing },
+    });
+    const gateway = { offer: vi.fn() };
+    const provider = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services,
+      logger,
+      selection: { source: 'managed', executablePath: null },
+      installOfferGateway: gateway,
+    });
+
+    await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toBe(missing);
+    expect(gateway.offer).not.toHaveBeenCalled();
   });
 
   it('refuses a capability failure before any profile or page exists', async () => {

@@ -103,6 +103,8 @@ function makeOrchestratorDriver(logger: Logger): {
     async run(request): Promise<FireRunOutcome> {
       const runtime = await buildOrchestratorRuntime({
         logger,
+        // Unattended fires can report install guidance but never authorize a download.
+        browser: { installOfferGateway: null },
         confirmationGateway: request.confirmationGateway,
         // Hard zero-LLM: a scheduled fire is unattended, so it never opens a
         // provider session regardless of how the workflow or environment is
@@ -145,6 +147,8 @@ function makeResumeDriver(logger: Logger): {
       // re-request on resume is satisfied exactly once (never auto-created).
       const runtime = await buildOrchestratorRuntime({
         logger,
+        // A resumed scheduled run remains unattended and cannot prompt for acquisition.
+        browser: { installOfferGateway: null },
         confirmationGateway: new PreGrantedConfirmationGateway({ logger }),
         // Hard zero-LLM, as on the fire path: resuming a parked scheduled run is
         // still an unattended surface.

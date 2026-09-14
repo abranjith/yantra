@@ -13,6 +13,7 @@ repository root. Use live help as the option source of truth:
 ```console
 node apps/cli/dist/bin.js --help
 node apps/cli/dist/bin.js ask --help
+node apps/cli/dist/bin.js browser install --help
 node apps/cli/dist/bin.js daemon start --help
 ```
 
@@ -50,6 +51,147 @@ yantra config path
 ```
 
 Use `--reset` only when that replacement is intended.
+
+## Install a managed browser
+
+Browser tasks can use a compatible external Chrome or Chromium discovered on
+the host. If none is available, Yantra can install one Chrome for Testing Stable
+build into Yantra-owned storage. Installing workspace dependencies does not
+download a browser, and `browser install` accepts no build, version, channel,
+mirror, or destination argument.
+
+### Check the prerequisites
+
+Managed installation requires Node.js 24.15.0 or later, at least 750 MiB free
+at the managed destination, and one supported host/tool combination:
+
+| Host                    | Archive tool                                         |
+| ----------------------- | ---------------------------------------------------- |
+| Linux `x64`             | Executable `unzip` on `PATH`                         |
+| macOS `x64` or `arm64`  | Executable `unzip` on `PATH`                         |
+| Windows `x64` or `ia32` | `System32\\tar.exe`, `powershell.exe`, or `pwsh.exe` |
+
+Yantra checks the platform, archive tool, proxy support, destination
+permissions, and free space before it resolves Stable metadata or starts a
+download. It does not install operating-system packages or request elevated
+permissions. On minimal Linux systems and containers, Chrome can still fail its
+post-download launch probe when runtime libraries are missing; follow the
+package-level remediation in that failure and retry.
+
+### Review and accept the download
+
+In an interactive terminal, run:
+
+```console
+yantra browser install
+```
+
+Yantra writes a pre-download notice to stderr naming Chrome for Testing Stable,
+the exact managed destination, an approximate 200 MB size, the fact that a
+failed download restarts from zero, and that external Chrome installations are
+untouched. The confirmation defaults to no. An affirmative answer authorizes
+only that invocation; consent is not persisted or exposed to a model.
+
+After reviewing that notice, skip the prompt with explicit acceptance:
+
+```console
+yantra browser install --yes
+```
+
+Non-interactive and JSON invocations require `--yes`. Omitting it fails before
+the install service, metadata lookup, or download:
+
+```console
+yantra browser install --yes --json
+```
+
+Do not automate `--yes` unless the caller has already approved the destination
+and download. `yantra browser install --json` by itself is a validation failure,
+not a hidden prompt.
+
+### Read progress and results
+
+Human notices and progress always go to stderr. Progress uses phase names and,
+when known, integer percentages; Windows finalization can be marked
+`(finishing; cancellation pending)`. In ordinary mode, a successful result goes
+to stdout and names the resolved build and executable. If a managed browser is
+already ready, the command succeeds locally without fetching Stable metadata
+and points to the future `yantra browser update` command instead of replacing
+it.
+
+With `--json`, stdout contains exactly one newline-terminated
+`browser_install` envelope. Its `destinationRoot` is the resolved managed root,
+and its `outcome.status` is `installed`, `already-installed`, `cancelled`, or
+`failed`. Installed outcomes include the ready record, executable path,
+compatibility evidence, orphan collection report, and selection notice. The
+compatibility verdict pairing is `tested` or `capability-checked`; the latter is
+normal provenance, not a warning. Failure detail and progress remain on stderr,
+so consumers should capture stdout and stderr separately. Raw helper stderr,
+archive command lines, environment contents, and proxy credentials are not
+emitted.
+
+The installer does not change browser configuration. Automatic resolution
+prefers the ready managed installation; an explicit external selection remains
+external. When output says the new installation is not selected, follow its
+`yantra browser use managed` guidance after that command becomes available in
+the browser-switching feature.
+
+### Understand storage, interruption, and cleanup
+
+Managed files live at `<data-dir>/browsers/`, normally
+`~/.yantra/data/browsers/`. `YANTRA_DATA_DIR`, then `paths.data_dir`, relocates
+that root; `YANTRA_HOME` changes the default fallback. Each attempt uses one
+owner-only `installation-<opaque-id>` child, and `ready.json` points to the only
+selectable child. Yantra never writes to or deletes an external browser.
+
+A candidate not named by `ready.json` is an orphan, not a selectable version.
+An install failure, cancellation, timeout, or abruptly terminated process can
+leave one behind and the transfer cannot resume. Retry the explicit install:
+the next operation safely collects unowned orphans before starting a fresh
+download. It skips a child with a live owner, refuses paths outside the managed
+root, and never deletes the ready child. A cleanup failure is reported in the
+orphan counts and retried by a later explicit operation.
+
+The CLI exposes no cancellation flag. Core API callers can request cooperative
+cancellation; it returns the phase reached and may retain an orphan. On Windows,
+final setup is non-interruptible, so cancellation can wait for that bounded
+phase to finish before the process tree exits. In every interruption case, the
+previous ready installation and browser selection remain unchanged.
+
+### First interactive browser task
+
+When automatic resolution finds no browser, an interactive, non-JSON `run`,
+`resume`, `ask`, `research`, or `do` invocation can offer the same managed
+download. The offer names Chrome for Testing, the destination, and approximate
+size, defaults to no, and waits at most 60 seconds. Accepting records consent,
+installs Stable, resolves the browser again, and resumes the original task.
+Declining, cancelling the prompt, or timing out stops the task as a human
+handoff. Yantra makes this offer at most once per process.
+
+These surfaces never prompt or download implicitly:
+
+- `--json` and non-interactive task invocations;
+- daemon, scheduler, and nested workflow execution;
+- `init`, `doctor`, ordinary startup, browser recording, and local inspection;
+- an explicitly selected managed or custom browser that is missing; and
+- a browser that resolves but fails compatibility checks.
+
+They fail with installation, selection, or compatibility guidance instead.
+There is no model-visible install/update tool. Only an explicit consented
+`browser install` or an accepted first-run offer fetches Stable metadata and the
+artifact; ordinary browser use never performs an update check. See
+[Managed Stable Installation](features/managed-stable-installation.md) for the
+complete outcome schema, failure classes, ownership guarantees, and current
+limitations.
+
+### `browser install` exit codes
+
+| Exit | Meaning                                                                                                  |
+| ---: | -------------------------------------------------------------------------------------------------------- |
+|  `0` | A new managed browser was published, or an existing ready installation was reported locally              |
+|  `1` | Acceptance was missing for JSON or non-interactive use; no download started                              |
+|  `3` | A prerequisite, environment, compatibility, publication, proxy/network, timeout, or coordination failure |
+|  `4` | Interactive consent was declined, or cooperative installation cancellation was returned                  |
 
 ## Choose an execution mode
 
@@ -97,7 +239,8 @@ different source/citation guarantees.
 ### Agentic browser tasks
 
 The following forms require configured model access. Browser tasks also require
-system Chrome and may contact the named sites:
+a compatible managed or external Chrome/Chromium and may contact the named
+sites:
 
 ```console
 yantra do "compare the current return policies for these stores"
@@ -695,11 +838,13 @@ tie-break.
 
 ## Browser runtime and migration testing
 
-Application browser sessions use the discoverable system Chrome described in
-the [quickstart](quickstart.md#prerequisites). Core pins
-`puppeteer-core@25.10.0`, but neither it nor the workspace install step provides
-a managed runtime browser. Browser installation, selection, compatibility
-probing, and updates remain outside the current feature set.
+Application browser sessions use the shared resolver described in
+[Install a managed browser](#install-a-managed-browser). Automatic resolution
+prefers the Yantra-managed ready installation and otherwise discovers external
+Chrome/Chromium. Resolution itself is local and read-only: it never downloads a
+browser or checks for updates. Core pins `puppeteer-core@25.10.0`, and every
+selected executable must pass Yantra's required local capability probe before a
+user page opens.
 
 The dedicated migration suites instead require the test provisioner to install
 Chrome for Testing `152.0.7977.75` in a test-owned cache. The harness receives
@@ -723,6 +868,9 @@ maintainer test scope and preserved behavior.
 - Search and model citations establish provenance, not correctness or freshness.
 - Chrome state is ephemeral for agentic runs; persistent login state is not
   supported there.
+- Managed browser acquisition is Stable-only and explicitly consented. It does
+  not provide version pinning, rollback, a custom mirror, or background update
+  checks.
 - The local daemon does not start automatically at login or reboot.
 - No public package or binary distribution is declared in the current private
   workspace manifests.

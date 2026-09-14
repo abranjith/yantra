@@ -1,3 +1,6 @@
+import type { InstallOfferGateway } from './install-offer-gateway.js';
+import type { ManagedInstallService } from './managed-install-types.js';
+
 /**
  * Browser installation contracts — selection, identity, managed state,
  * coordination, and compatibility.
@@ -303,4 +306,7 @@ export interface BrowserRuntimeServices {
   readonly compatibility: BrowserCompatibilityService;
   readonly coordinator: ManagedCoordinator;
   readonly managedState: ManagedStateReader;
+  /** Optional human-only first-run install boundary; absent on unattended paths. */
+  readonly installService?: ManagedInstallService;
+  readonly installOfferGateway?: InstallOfferGateway | null;
 }

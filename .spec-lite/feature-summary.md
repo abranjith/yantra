@@ -4,6 +4,14 @@ Current-state reference for all implemented features. Updated by the Implement s
 
 ---
 
+## Browser Runtime
+
+**FEAT-044 — Managed Stable Installation** _(updated: 2026-09-14 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-044-managed_stable_installation/spec.md)
+`yantra browser install` downloads Chrome for Testing Stable into Yantra-owned storage only after explicit `--yes` or interactive consent, verifies its executable and automation capabilities, then atomically publishes one managed installation. Installation is bounded and cancellable, checks host tooling, disk, permissions, and proxy support before download, preserves failed candidates as reclaimable orphans, and never modifies an external Chrome or installs OS packages. Interactive non-JSON `run`, `resume`, `ask`, `research`, and `do` sessions may offer this install once when automatic resolution finds no browser; unattended, JSON, daemon, scheduler, and nested workflow paths never prompt or download. Failures use actionable environment or user-handoff exit codes, and interrupted transfers restart from zero.
+
+---
+
 ## Configuration & Storage
 
 **FEAT-043 — Data Directory Relocation with Managed Browsers** _(updated: 2026-09-13 by implement)_

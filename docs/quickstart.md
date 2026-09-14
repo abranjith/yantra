@@ -10,18 +10,19 @@ it from a source checkout.
 
 - Node.js 24.15.0 or newer. The repository pins 24.15.0 in `.nvmrc`.
 - pnpm 11.1.0, as declared by the root `packageManager` field.
-- System Chrome 120 or newer for browser tasks and saved-workflow replay.
+- A compatible Chrome or Chromium installation for browser tasks and
+  saved-workflow replay. Yantra can use a discovered external browser or install
+  a Yantra-owned Chrome for Testing Stable build on a supported host.
 - Internet access for web search, fetching, and remote model providers.
 
 Deterministic local inspection commands do not require Chrome, network access,
 or a model credential. `yantra doctor` reports which optional capabilities are
 available.
 
-Installing the workspace dependencies does not download or manage the browser
-used by Yantra. Runtime browser tasks still discover the system Chrome
-installation. The repository's fixed Chrome for Testing fixture is provisioned
-only for the browser-migration test suites; it is not selected by normal
-commands and is not a user installation path.
+Installing workspace dependencies does not download Chrome. A managed browser
+download happens only after `yantra browser install` receives consent or you
+accept an interactive first-run offer. Yantra does not check for browser updates
+during startup or ordinary tasks.
 
 ## Install and build from source
 
@@ -71,6 +72,24 @@ the existing config to a timestamped `.bak` file, then rewrites the config and
 profile, so use it only when replacement is intended. Screenshot assistance is
 not enabled by `init`: `context.screenshots` remains `false` until explicitly
 granted through `yantra prefs set`.
+
+## Prepare a browser runtime
+
+Skip this step if Yantra can discover a compatible external Chrome or Chromium.
+Otherwise, after initialization has established the data directory, install the
+current Chrome for Testing Stable build on a supported host with at least 750
+MiB free:
+
+```console
+node apps/cli/dist/bin.js browser install
+```
+
+Review the destination and approximate 200 MB download notice, then accept the
+terminal prompt. Linux and macOS need `unzip`; Windows needs `tar.exe`,
+`powershell.exe`, or `pwsh.exe`. The browser is stored below the resolved Yantra
+data directory, and external Chrome installations are never changed. See
+[Managed browser installation](usage.md#install-a-managed-browser) for
+non-interactive and JSON use, output streams, retries, and first-run offers.
 
 ## Know where Yantra stores data
 

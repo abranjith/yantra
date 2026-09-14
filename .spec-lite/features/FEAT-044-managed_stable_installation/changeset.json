@@ -1,0 +1,338 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-14T13:03:27.385Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-14T13:03:28.427Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-14T13:03:29.480Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-14T13:03:30.517Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-14T13:03:31.539Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-14T13:03:32.535Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-14T13:03:33.553Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-14T13:05:03.601Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "fix.post",
+      "at": "2026-09-14T22:38:55.943Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "fix.post",
+      "at": "2026-09-14T22:45:05.325Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    },
+    {
+      "event": "fix.post",
+      "at": "2026-09-14T22:46:33.779Z",
+      "head": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6"
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "status": "M",
+      "role": "fix"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/browser.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/daemon-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/browser-install-offer.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/browser-install.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "fix"
+    },
+    {
+      "path": "docs/features/managed-stable-installation.md",
+      "status": "U",
+      "role": "fix"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "fix"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "fix"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/browser-selection.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/errors.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/install-offer-gateway.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/installation-types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-helper-client.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-helper.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-types.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-preflight.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/orphan-collection.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/paths.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/provider.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/runtime-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/fake-install-helper.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/proxy-request-helper.mjs",
+      "status": "U",
+      "role": "fix"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/spawning-helper.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/install-offer-gateway.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-concurrency.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-helper-client.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-live.spec.ts",
+      "status": "U",
+      "role": "fix"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-packaging.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-preflight.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/no-download-traffic.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/orphan-collection.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/provider.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "fix"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-044-managed_stable_installation/changeset.json",
+    ".spec-lite/features/FEAT-044-managed_stable_installation/spec.md",
+    ".spec-lite/plan_puppeteer_browser_management.md"
+  ],
+  "baseline": {
+    "sha": "b4897c05ff12207cfd72f2187feece5ccd0a4bc6",
+    "capturedAt": "2026-09-13T22:22:59.153Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {}
+  },
+  "featureId": "FEAT-044"
+}

@@ -1,6 +1,12 @@
 import { identifyExecutable, toChromeInstall } from './browser-resolver.js';
 import { detectChrome } from './chrome-discovery.js';
-import { BrowserCompatibilityError, ChromeNotFoundError } from './errors.js';
+import {
+  BrowserCompatibilityError,
+  BrowserInstallOfferDeclinedError,
+  BrowserManagedInstallError,
+  ChromeNotFoundError,
+} from './errors.js';
+import type { InstallOfferGateway } from './install-offer-gateway.js';
 import type {
   BrowserRuntimeServices,
   BrowserSelection,
@@ -10,6 +16,8 @@ import type {
 import { parseLaunchOptions, selectionFromLaunchOptions } from './launch-options.js';
 import { launchResolvedChrome, type LaunchOwnership } from './launcher.js';
 import type { OwnedManagedUseReservation } from './managed-coordination.js';
+import type { ManagedInstallService } from './managed-install-types.js';
+import { managedBrowsersRoot } from './paths.js';
 import { LocalProfileStore } from './profile-store.js';
 import { createLocalBrowserRuntimeServices } from './runtime-services.js';
 import { LocalBrowserSession } from './session.js';
@@ -46,11 +54,15 @@ const noopLogger: Logger = {
  * const session = await provider.launch({ profile: { kind: 'ephemeral' } });
  */
 export class LocalBrowserProvider implements BrowserProvider {
+  private static offerInFlight: Promise<boolean> | null = null;
+  private static offerUsed = false;
   private readonly profileStore: ProfileStore;
   private readonly logger: Logger;
   private readonly services: BrowserRuntimeServices;
   private readonly probeProfile: ProbeProfile;
   private readonly selection: BrowserSelection | undefined;
+  private readonly installOfferGateway: InstallOfferGateway | null | undefined;
+  private readonly installService: ManagedInstallService | undefined;
 
   constructor(deps: {
     profileStore: ProfileStore;
@@ -67,6 +79,8 @@ export class LocalBrowserProvider implements BrowserProvider {
      * `browserSelection` still wins, and nothing here is ever persisted.
      */
     selection?: BrowserSelection;
+    installOfferGateway?: InstallOfferGateway | null;
+    installService?: ManagedInstallService;
   }) {
     this.profileStore = deps.profileStore;
     this.logger = deps.logger ?? noopLogger;
@@ -75,6 +89,11 @@ export class LocalBrowserProvider implements BrowserProvider {
       createLocalBrowserRuntimeServices({ profileStore: deps.profileStore, logger: this.logger });
     this.probeProfile = deps.probeProfile ?? 'automation';
     this.selection = deps.selection;
+    this.installOfferGateway =
+      deps.installOfferGateway === undefined
+        ? this.services.installOfferGateway
+        : deps.installOfferGateway;
+    this.installService = deps.installService ?? this.services.installService;
   }
 
   /**
@@ -100,9 +119,8 @@ export class LocalBrowserProvider implements BrowserProvider {
     const opts = parseLaunchOptions(options);
 
     // 1. Resolve identity.
-    const resolution = await this.services.resolver.resolve(
-      selectionFromLaunchOptions(opts) ?? this.selection,
-    );
+    const requestedSelection = selectionFromLaunchOptions(opts) ?? this.selection;
+    const resolution = await this.resolveWithInstallOffer(requestedSelection);
     if (resolution.status === 'unavailable') throw resolution.error;
     let installation = resolution.installation;
 
@@ -155,6 +173,50 @@ export class LocalBrowserProvider implements BrowserProvider {
       await this.rollback(reservation, profile, profileOwned);
       throw error;
     }
+  }
+
+  /** Offers installation only for an automatic, genuinely missing browser. */
+  private async resolveWithInstallOffer(selection: BrowserSelection | undefined) {
+    let resolution = await this.services.resolver.resolve(selection);
+    if (resolution.status === 'resolved' || resolution.error.code !== 'missing') return resolution;
+    const automatic = selection === undefined || selection.source === 'auto';
+    const gateway = this.installOfferGateway;
+    const installer = this.installService;
+    if (!automatic || gateway === null || gateway === undefined || installer === undefined)
+      return resolution;
+    if (LocalBrowserProvider.offerUsed) return resolution;
+    LocalBrowserProvider.offerInFlight ??= (async () => {
+      const decision = await gateway.offer({
+        destinationRoot: managedBrowsersRoot(),
+        approximateBytes: 200 * 1024 * 1024,
+      });
+      LocalBrowserProvider.offerUsed = true;
+      if (decision === null) throw new BrowserInstallOfferDeclinedError();
+      const outcome = await installer.install({
+        trigger: 'interactive-offer',
+        consent: {
+          granted: true,
+          source: decision.source,
+          grantedAt: new Date().toISOString(),
+          destinationRoot: managedBrowsersRoot(),
+          approximateBytes: 200 * 1024 * 1024,
+        },
+      });
+      if (outcome.status === 'installed' || outcome.status === 'already-installed') return true;
+      if (outcome.status === 'cancelled') throw new BrowserInstallOfferDeclinedError();
+      throw new BrowserManagedInstallError(outcome.error);
+    })();
+    const installed = await LocalBrowserProvider.offerInFlight.finally(() => {
+      LocalBrowserProvider.offerInFlight = null;
+    });
+    if (installed) resolution = await this.services.resolver.resolve(selection);
+    return resolution;
+  }
+
+  /** @internal Clears process-level offer state for isolated behavior tests. */
+  static resetInstallOfferForTests(): void {
+    LocalBrowserProvider.offerInFlight = null;
+    LocalBrowserProvider.offerUsed = false;
   }
 
   /** Reserves the managed installation, or nothing at all for an external one. */
@@ -273,6 +335,8 @@ export interface BrowserRuntimeOptions {
   readonly selection?: BrowserSelection;
   readonly profileStore?: ProfileStore;
   readonly logger?: Logger;
+  readonly installOfferGateway?: InstallOfferGateway | null;
+  readonly installService?: ManagedInstallService;
 }
 
 /**
@@ -288,7 +352,20 @@ export function createSelectedBrowserProvider(opts: BrowserRuntimeOptions = {}):
   return new LocalBrowserProvider({
     profileStore,
     logger,
-    services: opts.services ?? createLocalBrowserRuntimeServices({ profileStore, logger }),
+    services:
+      opts.services ??
+      createLocalBrowserRuntimeServices({
+        profileStore,
+        logger,
+        ...(opts.installOfferGateway === undefined
+          ? {}
+          : { installOfferGateway: opts.installOfferGateway }),
+        ...(opts.installService === undefined ? {} : { installService: opts.installService }),
+      }),
     ...(opts.selection ? { selection: opts.selection } : {}),
+    ...(opts.installOfferGateway === undefined
+      ? {}
+      : { installOfferGateway: opts.installOfferGateway }),
+    ...(opts.installService === undefined ? {} : { installService: opts.installService }),
   });
 }

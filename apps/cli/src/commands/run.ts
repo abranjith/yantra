@@ -30,7 +30,13 @@
 import { readFile } from 'node:fs/promises';
 
 import { PiAgentProvider } from '@yantra/agent';
-import { InteractiveConfirmationGateway, type EffectivePreferences } from '@yantra/core';
+import {
+  BrowserInstallOfferDeclinedError,
+  BrowserManagedInstallError,
+  InteractiveConfirmationGateway,
+  InteractiveInstallOfferGateway,
+  type EffectivePreferences,
+} from '@yantra/core';
 import type { BriefRunArtifacts, RunRequest } from '@yantra/core/workflow/replay';
 import { exitCodeFor } from '@yantra/core/workflow/replay';
 import type { Brief } from '@yantra/protocol';
@@ -114,7 +120,13 @@ export function makeRunCommand(): Command {
       params = parseParams(options.params);
     } catch (err) {
       process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-      process.exit(1);
+      process.exit(
+        err instanceof BrowserInstallOfferDeclinedError
+          ? 4
+          : err instanceof BrowserManagedInstallError
+            ? 3
+            : 1,
+      );
     }
 
     // Resolved BEFORE the try block so a bad `--provider`/`--model` stays a
@@ -143,6 +155,7 @@ export function makeRunCommand(): Command {
       const runtime = await buildOrchestratorRuntime({
         logger,
         confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+        browser: { installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null },
         // The stage is always wired for `run`, so a workflow declaring
         // `synthesis:` always gets a Brief. The *strategy* is the workflow's
         // call: the port below is only ever built for a workflow whose

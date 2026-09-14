@@ -16,6 +16,7 @@ import {
   FileSystemAskCache,
   HttpFetcher,
   HybridContentFetcher,
+  InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
   LocalProfileStore,
@@ -94,7 +95,10 @@ export interface AskRuntime {
   readonly env: NodeJS.ProcessEnv;
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
-  readonly createPipeline: (query: AskQuery) => Promise<AskPipeline>;
+  readonly createPipeline: (
+    query: AskQuery,
+    browser?: BrowserRuntimeOptions,
+  ) => Promise<AskPipeline>;
   /** Resolves the merged effective preferences used for flag defaults. */
   readonly resolveDefaults: () => Promise<EffectivePreferences>;
   /** Records a completed task into the history index (best-effort). */
@@ -234,7 +238,12 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
           );
           return;
         }
-        const pipeline = await resolvedRuntime.createPipeline(query);
+        const pipeline = await resolvedRuntime.createPipeline(query, {
+          installOfferGateway:
+            resolvedRuntime.isTty && format !== 'json'
+              ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
+              : null,
+        });
         const result: AskRunResult = await pipeline.run(query);
 
         renderBrief(resolvedRuntime, result, { format, detail, options });
@@ -430,18 +439,26 @@ async function runAgenticAsk(
     },
   );
   const profile = resolveCommandTaskProfile('ask', runtime.env);
-  const outcome = await runtime.runTask({
-    goal: question,
-    model: agent.model,
-    auth: agent.auth,
-    profile,
-    budgets: agent.budgets,
-    ...(query.personalization ? { profileContext: query.personalization } : {}),
-    ...(template === undefined ? {} : { template }),
-    ambient,
-    screenshotsSuppressed: options.screenshots === false,
-    connector,
-  });
+  const outcome = await runtime.runTask(
+    {
+      goal: question,
+      model: agent.model,
+      auth: agent.auth,
+      profile,
+      budgets: agent.budgets,
+      ...(query.personalization ? { profileContext: query.personalization } : {}),
+      ...(template === undefined ? {} : { template }),
+      ambient,
+      screenshotsSuppressed: options.screenshots === false,
+      connector,
+    },
+    {
+      browserInstallOfferGateway:
+        runtime.isTty && format !== 'json'
+          ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
+          : null,
+    },
+  );
   await renderAgenticOutcome(outcome, runtime, format, detail, options);
 }
 

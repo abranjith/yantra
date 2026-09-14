@@ -15,7 +15,11 @@ import {
   type ActiveReportTemplate,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
-import { UserInputMarkerError, type EffectivePreferences } from '@yantra/core';
+import {
+  InteractiveInstallOfferGateway,
+  UserInputMarkerError,
+  type EffectivePreferences,
+} from '@yantra/core';
 import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
@@ -144,27 +148,35 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     // runtime's implicit default. This also honors the documented
     // `YANTRA_AGENT_DO_*` budget env overrides, matching the `ask` path.
     const profile = resolveCommandTaskProfile('do', runtime.env);
-    const outcome = await runtime.runTask({
-      goal,
-      profile,
-      model: agent.model,
-      auth: agent.auth,
-      budgets: agent.budgets,
-      allowedHosts: normalizeHosts(options.allowHost ?? []),
-      // A user is present only on an interactive TTY run (not --json / piped):
-      // the agent prompt then says a user can approve protected actions but
-      // cannot answer open-ended questions, instead of claiming "no user".
-      interactive: runtime.isTty && !json,
-      // Sensitive ambient facts the user granted. Passed on every agentic
-      // command, not just `ask` — `do` sending none is what let a run infer a
-      // city from its timezone.
-      ambient: resolveAmbientContext(effective),
-      screenshotsSuppressed: options.screenshots === false,
-      ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
-      ...(template === undefined ? {} : { template }),
-      connector,
-      signal: abort.signal,
-    });
+    const outcome = await runtime.runTask(
+      {
+        goal,
+        profile,
+        model: agent.model,
+        auth: agent.auth,
+        budgets: agent.budgets,
+        allowedHosts: normalizeHosts(options.allowHost ?? []),
+        // A user is present only on an interactive TTY run (not --json / piped):
+        // the agent prompt then says a user can approve protected actions but
+        // cannot answer open-ended questions, instead of claiming "no user".
+        interactive: runtime.isTty && !json,
+        // Sensitive ambient facts the user granted. Passed on every agentic
+        // command, not just `ask` — `do` sending none is what let a run infer a
+        // city from its timezone.
+        ambient: resolveAmbientContext(effective),
+        screenshotsSuppressed: options.screenshots === false,
+        ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
+        ...(template === undefined ? {} : { template }),
+        connector,
+        signal: abort.signal,
+      },
+      {
+        browserInstallOfferGateway:
+          runtime.isTty && !json
+            ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
+            : null,
+      },
+    );
     if (template !== undefined && outcome.kind === 'published') {
       const parsed = validateTemplatedReport(
         JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown,

@@ -16,6 +16,8 @@ import {
 } from '@yantra/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
+
 function installation(
   overrides: Partial<ResolvedBrowserInstallation> = {},
 ): ResolvedBrowserInstallation {
@@ -178,29 +180,11 @@ describe('@no-llm agent runtime browser selection', () => {
   });
 
   it('adds no model-visible browser installation or update capability', async () => {
-    const probe = makeServices();
-
-    const provider = createSelectedBrowserProvider({ services: probe.services });
-
-    // The provider a tool can reach exposes selection and launch, and nothing
-    // that could provision a browser.
-    const surface = [
-      ...Object.getOwnPropertyNames(Object.getPrototypeOf(provider) as object),
-      ...Object.keys(provider),
+    const names = [
+      ...new Set(Object.values(COMMAND_TASK_PROFILES).flatMap((profile) => profile.toolNames)),
     ];
-    expect(surface).toContain('launch');
-    expect(surface).toContain('detectChrome');
-    for (const name of surface) {
-      expect(name).not.toMatch(/install|update|download|provision/i);
-    }
-
-    // And the shared services carry no download or update boundary at all.
-    const serviceSurface = Object.keys(probe.services).flatMap((key) =>
-      Object.keys(probe.services[key as keyof BrowserRuntimeServices] as object),
-    );
-    for (const name of serviceSurface) {
-      expect(name).not.toMatch(/install|update|download|fetchMetadata/i);
-    }
+    expect(names).toContain('browser_navigate');
+    expect(names.filter((name) => /install|update|download|provision/i.test(name))).toEqual([]);
     await Promise.resolve();
   });
 });

@@ -52,7 +52,7 @@ Existing user-simulation behavior is preserved **with one carved-out exception**
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------- |
 | FEAT-042 | Puppeteer 25.10 migration — **Stage A** exact pin and text-selection gesture; **Stage B** popup/session/frame ownership and handle/listener lifecycle    | `features/FEAT-042-puppeteer_api_migration/spec.md`       | [x] Complete    |
 | FEAT-043 | Unified browser resolution and launch — one selection/compatibility contract and reliable lifecycle for provider and recorder                            | `features/FEAT-043-browser_resolution_lifecycle/spec.md`  | [x] Complete    |
-| FEAT-044 | Managed Stable installation — explicit install, isolated API operation, interactive missing-browser offer, cancellation and coordination                 | `features/FEAT-044-managed_stable_installation/spec.md`   | [ ] Not started |
+| FEAT-044 | Managed Stable installation — explicit install, isolated API operation, interactive missing-browser offer, cancellation and coordination                 | `features/FEAT-044-managed_stable_installation/spec.md`   | [x] Complete    |
 | FEAT-045 | Browser switching and diagnostics — persistent/per-invocation choice, explicit compatibility check, local list/doctor, terminal/JSON provenance          | `features/FEAT-045-browser_switching_diagnostics/spec.md` | [ ] Not started |
 | FEAT-046 | Explicit managed update — availability-only `--dry-run`, consented single-installation replacement, busy refusal, failure handling and orphan collection | `features/FEAT-046-explicit_managed_update/spec.md`       | [ ] Not started |
 
@@ -338,6 +338,6 @@ Generate one detailed spec per feature from this exact named plan, in a fresh se
 Plan Critic has run — see [plan_critique_puppeteer_browser_management.md](reviews/plan_critique_puppeteer_browser_management.md) and the revision note in §1. Two consequences for downstream work:
 
 - **`FEAT-042` and `FEAT-043` specs were written against the pre-revision plan and must be updated before implementation, not regenerated from scratch.** FEAT-042 in particular repeats the incorrect "removed `clickCount`" premise in its goal statement and data-model sections, and predates the Stage A/Stage B split. FEAT-043 must pick up the single-probe session contract, the `browser use` decision, and the capability table.
-- **`FEAT-044` through `FEAT-046` specs are not yet written** and should be generated from the revised plan directly.
+- **`FEAT-044` through `FEAT-046` specs were generated from the revised plan.** FEAT-044 is implemented; FEAT-045 and FEAT-046 remain queued in the feature table above.
 
 Memory capture: no durable additions are written. These decisions are task-specific; the existing system-only browser rule is explicitly superseded in this plan and should be reconciled when the managed-browser feature is implemented.

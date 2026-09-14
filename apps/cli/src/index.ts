@@ -5,6 +5,7 @@ import { Command, CommanderError } from 'commander';
 
 import { registerAskCommand, type AskRuntime } from './commands/ask.js';
 import { makeAuditCommand } from './commands/audit.js';
+import { makeBrowserCommand } from './commands/browser.js';
 import { makeConfigCommand } from './commands/config.js';
 import { makeConfirmCommand } from './commands/confirm.js';
 import { makeDaemonCommand } from './commands/daemon.js';
@@ -97,6 +98,7 @@ export const run = async (
   program.addCommand(makeAuditCommand());
   program.addCommand(makeReportCommand());
   program.addCommand(makeInitCommand());
+  program.addCommand(makeBrowserCommand());
 
   try {
     await program.parseAsync([...argv], { from: 'user' });

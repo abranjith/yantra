@@ -7,6 +7,7 @@ import type {
   ProbeFailureClass,
   ProbeProfile,
 } from './installation-types.js';
+import type { ManagedInstallError } from './managed-install-types.js';
 
 /**
  * Resolution refused to hand back an installation.
@@ -59,6 +60,28 @@ export class BrowserCompatibilityError extends Error {
     super(
       `Chrome ${context.version} failed the ${context.profile} compatibility check (${context.failureClass}).${named} ${context.remediation}`.trim(),
     );
+  }
+}
+
+/** A human declined or timed out the one interactive managed-browser offer. */
+export class BrowserInstallOfferDeclinedError extends Error {
+  override readonly name = 'BrowserInstallOfferDeclinedError';
+  readonly exitCode = 4;
+
+  constructor() {
+    super(
+      'No browser is available. Run `yantra browser install` when you are ready to download one.',
+    );
+  }
+}
+
+/** A consented interactive managed install failed before the task could resume. */
+export class BrowserManagedInstallError extends Error {
+  override readonly name = 'BrowserManagedInstallError';
+  readonly exitCode = 3;
+
+  constructor(readonly installError: ManagedInstallError) {
+    super(`${installError.detail} ${installError.remediation}`.trim());
   }
 }
 

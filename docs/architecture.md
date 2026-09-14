@@ -11,11 +11,13 @@ There is no application server or hosted control plane in the repository: comman
 policy enforcement, browser control, persistence, and report rendering happen on the user's
 machine.
 
-The system integrates with four external boundaries:
+The system integrates with five external boundaries:
 
 - a local Chrome or Chromium driven through `puppeteer-core` over a CDP pipe — either a
   Yantra-managed installation under the data directory or an externally installed browser,
   chosen by one resolver;
+- the official Chrome for Testing distribution, contacted only by an explicitly consented
+  managed Stable installation;
 - public websites and search providers (Google, DuckDuckGo, Brave, and Tavily);
 - model providers reached through the Pi coding-agent adapter (Anthropic by default, with
   custom/local models such as Ollama configured through the same provider seam); and
@@ -37,6 +39,7 @@ flowchart LR
   User[User or local script] --> CLI[yantra CLI]
   CLI --> Runtime[Yantra runtime]
   Runtime --> Chrome[Managed or external Chrome via CDP pipe]
+  Runtime -->|Explicit consented install only| CfT[Chrome for Testing Stable distribution]
   Runtime --> Search[Search providers]
   Runtime --> Web[Public websites]
   Runtime --> Models[Model providers via Pi adapter]
@@ -173,9 +176,11 @@ contain a reference but never resolved credential material.
 Every browser-backed operation — agent tools, deterministic replay, browser fetch, the workflow
 recorder, and diagnostics — receives the same composed seam, `BrowserRuntimeServices` from
 `packages/core/src/browser/runtime-services.ts`: a resolver, a compatibility service, a managed
-coordinator, and a read-only managed-state reader. Building it is inert. It starts no browser,
-takes no lock, reads no network, and can trigger no download; a browser exists only once a caller
-actually launches. The CLI runtime factory, the `ask` and `research` pipelines, and the agent
+coordinator, a read-only managed-state reader, and a lazily constructed managed installer. An
+optional install-offer gateway is present only when a human-facing caller injects it. Building this
+graph is inert. It starts no browser, takes no lock, reads no network, and can trigger no download;
+a browser exists only once a caller actually launches. The CLI runtime factory, the `ask` and
+`research` pipelines, and the agent
 orchestrator all build their provider through the one `createSelectedBrowserProvider` entry point
 instead of constructing their own, and the recorder consumes the same services directly, so "the
 same browser everywhere in a run" is structural rather than a convention each factory has to
@@ -193,9 +198,13 @@ flowchart TD
     Compatibility[Compatibility service]
     Coordinator[Managed coordinator]
     ManagedState[Managed state reader]
+    Installer[Lazy managed Stable installer]
   end
 
   ManagedState --> Resolver
+  Installer --> ManagedState
+  Installer --> Coordinator
+  Installer --> Compatibility
   Resolver --> Installation[Resolved installation and provenance]
   Installation --> Provider[Browser provider startup]
   Installation --> Recorder[Recorder startup]
@@ -244,6 +253,88 @@ state reader that enumerates them deletes nothing. Managed executable paths are 
 the recorded relative identity through `@puppeteer/browsers` rather than persisted absolute, so a
 relocated data directory still resolves and a record that disagrees with the on-disk layout is
 reported invalid.
+
+#### Managed Stable acquisition
+
+Managed acquisition is a separate mutation path from resolution and launch. It can be entered only
+by `yantra browser install` or by the browser provider after a human accepts the optional first-run
+offer. `LocalManagedInstallService` requires a one-operation `DownloadConsentRecord`; an absent
+record returns `consent-required` before a mutation lease or network boundary is reached. If a ready
+managed record already exists, installation is an idempotent local result: it reads cached
+compatibility when possible, collects unowned orphans, and does not resolve Stable or start the
+helper.
+
+For a new installation the service first claims the existing exclusive managed-mutation lease. A
+live managed-browser reservation or another mutation therefore produces `operation-in-progress`
+before helper I/O. Under that lease it collects abandoned children and runs local preflight:
+Chrome-for-Testing host support, executable ZIP tooling (`unzip` on Unix-like hosts, or Windows tar
+and PowerShell alternatives), proxy capability, destination writability, and at least 750 MiB of
+free space. Preflight never installs system packages or elevates privileges.
+
+Network resolution, download, extraction, and Windows finalization run in the compiled
+`managed-install-helper.js` child under `process.execPath`, not in the CLI event loop. The parent
+spawns without a shell, hides its own process on Windows, passes an allowlisted environment with
+`NODE_USE_ENV_PROXY=1`, and validates versioned IPC messages with Zod. The helper uses the pinned
+`@puppeteer/browsers` API and official provider to resolve only Chrome Stable and install it into
+the operation's exact `installation-<id>` child; download-base overrides and unrelated environment
+values do not cross the boundary. `installDeps` is fixed to `false`, so neither the helper nor the
+upstream API installs Linux packages.
+
+The parent owns the whole-operation, metadata, stalled-transfer, cancellation, and process-tree
+bounds. Interruptible cancellation asks the helper to stop, then terminates and waits for the
+helper and extraction descendants. Windows upstream finalization can synchronously run
+`setup.exe`, so that phase is reported non-interruptible: a cancellation remains pending until the
+helper can acknowledge it, and completion is not reported before the helper exits. Downloads are
+not resumable; cancellation, timeout, or transfer failure can leave only the candidate child, not
+a ready installation.
+
+After acquisition, the parent recomputes and checks the executable, then uses the shared
+compatibility service through a candidate-probe permit bound to the active lease, exact child, and
+executable. Only a passing automation probe can reach publication. Publication writes a
+mode-restricted temporary ready record and atomically renames it to `ready.json`; failures before
+that rename leave the previous pointer unchanged, while the candidate remains an unselectable
+orphan. Chrome for Testing supplies no artifact hash through this path, so the acquisition integrity
+boundary is the official provider over TLS; local readiness means executable presence plus the
+capability probe, not a claimed byte checksum. The permit is revoked and the mutation lease released
+on every path.
+
+Orphan collection has no recovery semantics. It deletes only unowned children whose names match the
+managed child grammar, refuses the ready child, non-direct children, non-directories, and canonical
+symlink or junction escapes, and skips a child with a live mutation owner. Collection runs before a
+new candidate and after successful publication. An individual deletion failure is reported for
+later retry; a post-publication cleanup failure does not roll back a browser that has already been
+verified and published.
+
+```mermaid
+flowchart TD
+  Consent[Explicit one-operation consent] --> Install[Managed install service]
+  Install --> Lease[Exclusive mutation lease]
+  Lease --> Collect[Collect unowned orphan children]
+  Collect --> Preflight[Local host and storage preflight]
+  Preflight --> Helper[Owned Node helper]
+  Helper --> Stable[Official Chrome for Testing Stable]
+  Helper --> Candidate[installation-id child]
+  Candidate --> Probe[Shared isolated capability probe]
+  Probe --> Publish[Atomic ready pointer publication]
+  Publish --> Ready[ready.json selects one child]
+  Candidate -. failure before publication .-> Orphan[Unselectable orphan]
+```
+
+Download consent is capability-shaped rather than a global preference. The explicit command prints
+the managed destination, approximate 200 MB cost, restart-from-zero behavior, and assurance that
+external Chrome is untouched before prompting. `--yes` constructs the record directly; otherwise
+only a TTY can prompt. Non-TTY and JSON command use without `--yes` fails validation before the
+install service is called. Consent is not persisted and authorizes only that one install request.
+
+The first-run offer is narrower still. `LocalBrowserProvider` considers it only when automatic
+selection returns `missing`; explicit missing selections and resolved-but-incompatible browsers keep
+their original failure. Interactive, non-JSON `run`, `resume`, `ask`, `research`, and `do` callers
+inject the human gateway. The provider serializes concurrent offers and spends the opportunity at
+most once per process; acceptance installs and then re-runs resolution before startup continues.
+Decline, prompt cancellation, and the bounded prompt timeout fail closed. Daemon and scheduler
+execution, nested `workflow_run`, JSON and non-TTY invocation, diagnostics, initialization, and
+ordinary startup without a gateway cannot prompt or download. There is no model-visible install or
+update tool.
 
 Support is a declared capability table in `driver-compatibility.ts`, not a minimum browser
 version. Each row states an id, why the primitive is required, which callers require it, and its
@@ -330,9 +421,10 @@ never a browser started to manufacture an `ok` result.
 #### Puppeteer migration and browser-object ownership
 
 Core pins `puppeteer-core` to exactly `25.10.0` and `@puppeteer/browsers` to exactly `3.2.2`. The
-latter is used in production only to recompute a managed installation's executable path from its
-recorded build identity; it is not wired to any download or install path here. The migration job
-installs the fixed Chrome for Testing build `152.0.7977.75` into a caller-owned test cache and passes
+latter is used in production inside the isolated helper to resolve and install official Chrome for
+Testing Stable, and in the parent/runtime to recompute a managed executable path from its recorded
+build identity. The migration job separately installs the fixed Chrome for Testing build
+`152.0.7977.75` into a caller-owned test cache and passes
 its absolute executable path through the test-only `YANTRA_TEST_BROWSER_PATH` seam. A manifest records
 the build, detected platform, cache, and executable, and the harness refuses a missing executable,
 manifest/path disagreement, or unsupported platform rather than falling back. Each suite also uses
@@ -893,7 +985,14 @@ best-effort history, and map outcomes to exit codes. The CLI does not implement 
 reasoning loop.
 
 The installation-management commands compose the core boundaries rather than maintaining their own
-configuration dialect. `yantra config` exposes path provenance, validated reads and writes, editor
+configuration dialect. `yantra browser install` is the explicit managed-acquisition surface. Its
+human progress and notices use stderr; JSON mode keeps stdout to one versioned `browser_install`
+envelope. Missing acceptance is exit 1, decline or cancellation uses the user-handoff exit 4, and
+classified host, network, helper, compatibility, publication, or contention failures use
+environment exit 3. The command never changes browser selection: when a system selection remains in
+effect, the successful result points to the separate `yantra browser use managed` action.
+
+`yantra config` exposes path provenance, validated reads and writes, editor
 validation, and guarded data-root relocation; its document-based YAML mutations preserve comments
 and replace files atomically with owner-only permissions. Relocation is explicitly user-invoked,
 checks the daemon/run lock, prefers rename, and uses copy-then-delete for a cross-volume move or an
@@ -1044,6 +1143,56 @@ sequenceDiagram
   Provider-->>Caller: live session
   Note over Provider,Supervisor: On close or crash: graceful close,<br/>bounded escalation, verified tree exit,<br/>then release the reservation
 ```
+
+### Managed Stable installation
+
+The explicit command and accepted first-run offer converge only after consent. Stable acquisition is
+the sole browser-install network path; ordinary resolution, startup, diagnostics, and compatibility
+cache reads never enter it.
+
+```mermaid
+sequenceDiagram
+  participant Human
+  participant CLI as CLI or interactive provider
+  participant Install as Managed install service
+  participant Coord as Managed coordinator
+  participant State as State and orphan collector
+  participant Preflight
+  participant Helper as Owned Node helper
+  participant CfT as Chrome for Testing
+  participant Compat as Compatibility service
+  participant Files as Managed browser files
+
+  Human->>CLI: accept one install
+  CLI->>Install: request with consent record
+  Install->>State: read ready pointer
+  alt ready installation already exists
+    Install->>State: collect unowned orphans
+    Install-->>CLI: local already-installed result
+  else no ready installation
+    Install->>Coord: claim exclusive mutation for exact child
+    Coord-->>Install: lease or operation-in-progress
+    Install->>State: collect unowned orphans
+    Install->>Preflight: verify host, tools, proxy, space, permissions
+    Install->>Helper: spawn with validated request and allowlisted environment
+    Helper->>CfT: resolve Stable and download official artifact
+    CfT-->>Helper: ZIP artifact
+    Helper->>Files: extract into installation-id child
+    Helper-->>Install: validated result or typed failure
+    Install->>Compat: probe exact candidate under lease permit
+    Compat-->>Install: tested or capability-checked pass
+    Install->>Files: write temp ready record and atomic rename
+    Install->>State: collect superseded orphans
+    Install->>Coord: release mutation lease
+    Install-->>CLI: installed result
+  end
+```
+
+Cancellation or failure before the atomic rename follows the same state transition as a killed
+process: the pointer stays absent or retains its prior target, the new child is an orphan, and the
+next explicit install or update can collect it. No persisted phase machine is consulted or resumed.
+After an accepted first-run offer succeeds, the provider resolves again and then enters the ordinary
+browser-startup flow above.
 
 ### Deterministic web research
 
@@ -1267,12 +1416,25 @@ required for correctness — losing it costs one probe, never a download. Resolv
 reservations, leases, and probe permits are in-memory per-process values that persist nothing
 beyond those files.
 
+Acquisition adds no database state and no recovery document. `DownloadConsentRecord`, bounded
+progress, helper requests/messages, and candidate-probe permits exist only for one operation. The
+helper writes the upstream Chrome-for-Testing cache layout inside its exact
+`installation-<id>` child. Until atomic publication makes `ready.json` name that child, it has the
+same durable meaning as every other orphan; transient progress phases are never written to
+`operation.json` or inferred after a restart.
+
 ```mermaid
 flowchart TD
   Config[config.yaml installation state] --> Runtime[Runtime configuration]
   Ready[browsers/ready.json] --> Selection[Browser resolution]
   Operation[browsers/operation.json] --> Coordination[Managed coordination]
   Reservations[browsers/coordination/] --> Coordination
+  Consent[Run-local download consent] --> Installer[Managed install service]
+  Installer --> Operation
+  Installer --> Candidate[browsers/installation-id child]
+  Operation --> Candidate
+  Ready --> Candidate
+  Installer --> Evidence
   Selection --> Coordination
   Evidence[cache/browser-compatibility] --> Selection
   Coordination --> Runtime
@@ -1297,19 +1459,19 @@ flowchart TD
   Deterministic --> RunDir
 ```
 
-| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                         |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                |
-| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                       |
-| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                   |
-| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data. |
-| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                             |
-| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                      |
-| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (the exclusive mutation claim), `coordination/` (mutex and shared use reservations), and one `installation-<id>` child per build. Only the child the pointer names is selectable; every other child is an orphan.                           |
-| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                           |
-| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                     |
-| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                    |
-| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                  |
+| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                            |
+| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                   |
+| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                               |
+| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data.                                             |
+| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                         |
+| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                  |
+| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update. |
+| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                       |
+| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                 |
+| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                |
+| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                              |
 
 The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
 `YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
@@ -1368,10 +1530,21 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
   on a bounded schedule and releases a managed reservation only after the child's `exit` event, and
   liveness elsewhere is judged by process creation identity rather than age, so PID reuse and
   "cannot tell" both fail in the direction of not reclaiming.
+- **Browser acquisition needs a human-minted, one-operation capability.** The installer has no
+  consent default, stored approval, or model tool. Explicit `--yes` and terminal prompts construct
+  the same short-lived record; unattended callers structurally omit the offer gateway. This costs a
+  separate gateway through runtime composition, but makes absence of a human authorization
+  mechanically equivalent to absence of download capability.
+- **Put an unabortable upstream installer behind an owned process.** `@puppeteer/browsers` does not
+  accept an abort signal and controls extraction itself, so Yantra runs it in a compiled Node helper
+  with validated IPC and a narrow environment. The parent can bound metadata and transfer stalls,
+  terminate enumerable descendants, and wait for exit without making the CLI event loop or managed
+  pointer part of an uninterruptible operation. The tradeoff is a second process protocol and a
+  special pending-cancellation window around synchronous Windows finalization.
 - **One pointer instead of a transaction log.** The managed tree keeps disjoint children and one
   atomically published pointer, which makes every interrupted state the same state: a child the
   pointer does not name is an orphan. That removes the phase machine, the recovery routine, and the
-  user-visible "your last update did not finish" state entirely, at the cost of leaving reclaimable
+  user-visible "your last install or update did not finish" state entirely, at the cost of leaving reclaimable
   bytes on disk until an explicit command collects them.
 - **Scope browser identity to the public object that owns it.** Agent popup policy follows an active
   Puppeteer Page; recorder discovery follows browser Targets but page instrumentation follows the
@@ -1453,7 +1626,9 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
   evidence and remediation instead of silently resolving to something else.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
-  protected side effects.
+  protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,
+  scheduler, and nested workflow paths can report installation guidance but cannot prompt or
+  download.
 
 ## Deployment and Runtime
 
@@ -1465,15 +1640,20 @@ NodeNext module resolution.
 The pnpm workspace contains `packages/*`, `apps/*`, and `e2e`. Turborepo drives build, test,
 type-check, lint, and clean tasks. The `build` task depends on dependency builds and caches
 `dist/**` plus TypeScript build metadata; tests depend on builds. Protocol build first emits
-generated contracts, core additionally builds injected browser/locator assets, and the agent and
-CLI compile against project references.
+generated contracts; core builds injected browser/locator assets and emits the managed-install
+helper in its normal TypeScript `dist/browser/` layout; the agent and CLI compile against project
+references.
 
-At runtime there are two process shapes:
+At runtime there are three process shapes:
 
 - a short-lived `yantra` CLI process that constructs dependencies for one command, optionally
   launches a run-scoped Chrome child process and provider session, writes local artifacts, then
   closes owned handles, listeners, and CDP sessions, and waits for verified process-tree exit
-  before releasing any managed claim it holds; and
+  before releasing any managed claim it holds;
+- during an explicitly consented managed install, one short-lived Node helper child that resolves
+  Stable and owns download/extraction work under an exclusive mutation lease; the CLI parent owns
+  IPC validation, deadlines, cancellation, process-tree termination, verification, and ready-pointer
+  publication; and
 - an optional long-running scheduler daemon guarded by a single-instance lock, polling every 60
   seconds by default and spawning the same in-process workflow execution path for due schedules.
 

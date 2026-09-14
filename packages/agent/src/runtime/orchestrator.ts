@@ -15,6 +15,7 @@ import {
   type BrowserRuntimeOptions,
   type BrowserRuntimeServices,
   type BrowserSelection,
+  type InstallOfferGateway,
   LocalProfileStore,
   MarkdownReportBuilder,
   ModelSuppliedValues,
@@ -326,6 +327,8 @@ export interface AgenticTaskDependencies {
   readonly browserServices?: BrowserRuntimeServices;
   /** Per-invocation browser choice. Never persisted. */
   readonly browserSelection?: BrowserSelection;
+  /** Human-only download offer. CLI injects it only for interactive non-JSON tasks. */
+  readonly browserInstallOfferGateway?: InstallOfferGateway | null;
   readonly createProvider?: (
     services: RunServices,
     environment: AgenticRunEnvironment,
@@ -440,6 +443,9 @@ export async function runAgenticTask(
       browser: {
         ...(dependencies.browserServices ? { services: dependencies.browserServices } : {}),
         ...(dependencies.browserSelection ? { selection: dependencies.browserSelection } : {}),
+        ...(dependencies.browserInstallOfferGateway === undefined
+          ? {}
+          : { installOfferGateway: dependencies.browserInstallOfferGateway }),
       },
     });
     const runAbort = new AbortController();
@@ -1331,10 +1337,16 @@ async function createDefaultEnvironment(context: {
           // nested run directory is asserted to carry no agent-session artifacts.
           // `synthesis` is omitted entirely (not merely `noLlm`), so the nested
           // run also writes no Brief of its own; the agent publishes the result.
+          const nestedBrowserProvider = createSelectedBrowserProvider({
+            ...(context.browser ?? {}),
+            installOfferGateway: null,
+            logger,
+            profileStore: new LocalProfileStore({ logger }),
+          });
           const orchestrator = new RunOrchestrator({
             workflowStore,
             runStore: new LocalRunStore(),
-            browserProvider,
+            browserProvider: nestedBrowserProvider,
             keychain,
             sanitizer: new DefaultSanitizer(),
             ethicsGate: ethics,

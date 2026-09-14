@@ -46,6 +46,11 @@ export function managedBrowsersRoot(): string {
   return join(dataDir(), 'browsers');
 }
 
+/** Absolute cache root for exactly one opaque managed-installation child. */
+export function managedInstallationRoot(installationId: string): string {
+  return join(managedBrowsersRoot(), `installation-${installationId}`);
+}
+
 /**
  * Returns the path of the single ready pointer.
  *
