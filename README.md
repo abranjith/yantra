@@ -78,6 +78,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 ### Features
 
 - [Configuration, Models, Credentials, and Storage](docs/features/configuration.md) — the two-file model, `config.yaml` reference, storage layout, and environment variables.
+- [Browser Resolution and Lifecycle](docs/features/browser-resolution-and-lifecycle.md) — which browser Yantra picks, local capability checking instead of a version floor, and startup and shutdown resource ownership.
 - [Managed Stable Installation](docs/features/managed-stable-installation.md) — consented Chrome for Testing acquisition, verification, storage, retries, and current limitations.
 - [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
 - [Research](docs/features/research.md) — agentic and deterministic multi-hop research.

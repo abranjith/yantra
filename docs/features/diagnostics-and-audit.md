@@ -10,7 +10,10 @@ Yantra keeps diagnostics and run evidence on the local machine so you can check 
 
 `yantra doctor` runs offline checks and reports an overall `ok`, `warn`, or `fail` status. It does not open a model-provider session. The current checks cover:
 
-- Chrome discovery and the minimum supported Chrome major version.
+- Which browser the resolver selects, with its path, version, and ownership, and the last local
+  compatibility evidence recorded for it. Doctor reads that evidence and reports it as passed,
+  failed, or unverified; it never launches a browser. See
+  [Browser Resolution and Lifecycle](browser-resolution-and-lifecycle.md).
 - Write access to the Yantra data and cache directories.
 - Data-directory permissions. On Windows this check is best-effort; on POSIX systems it warns when the data or profile directories are accessible to group or other users.
 - An OS-keychain write/read/delete round trip.
