@@ -94,6 +94,35 @@ export class TerminalRenderer implements OutputRenderer {
         opts.stream.write(`      → ${check.remediation}\n`);
       }
     }
+
+    const browser = result.browser;
+    if (browser !== undefined) {
+      opts.stream.write('\n  browser\n');
+      opts.stream.write(
+        `    selection:     ${browser.source} (${browser.origin})` +
+          (browser.ownership === undefined ? '' : ` → ${browser.ownership}`) +
+          '\n',
+      );
+      if (browser.executablePath !== undefined) {
+        opts.stream.write(
+          `    executable:    ${browser.executablePath}` +
+            (browser.browserVersion === undefined ? '' : ` (${browser.browserVersion})`) +
+            '\n',
+        );
+      }
+      // `capability-checked` is printed plainly: it is the steady state, and a
+      // warning that is always on is a warning nobody reads.
+      opts.stream.write(`    compatibility: ${browser.compatibility}\n`);
+      opts.stream.write(
+        `    managed:       ${browser.managedBuild ?? 'not installed'} under ${browser.managedRoot}\n`,
+      );
+      opts.stream.write(
+        `    reclaimable:   ${browser.orphanCount} superseded installation(s), ${browser.reclaimableBytes} bytes\n`,
+      );
+      if (browser.alternatives.length > 0) {
+        opts.stream.write(`    alternatives:  ${browser.alternatives.join(', ')}\n`);
+      }
+    }
   }
 
   renderDoctorSmoke(result: DoctorSmokeRenderResult, opts: ConnectorRenderOpts): void {

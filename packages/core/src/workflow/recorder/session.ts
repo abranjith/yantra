@@ -98,13 +98,6 @@ export interface RecordingStartOptions {
   idleTimeoutMs?: number;
   /** When true, the ephemeral profile dir is preserved on stop. Default: false. */
   keepProfile?: boolean;
-  /**
-   * Override the Chrome executable path.
-   *
-   * @deprecated Pass `browserSelection` instead; this is translated into one at
-   * the same shared boundary every other caller uses.
-   */
-  chromeOverridePath?: string;
   /** The one semantic browser choice, identical to the provider's. */
   browserSelection?: BrowserSelection;
   /** Startup allowance for the recording browser. */
@@ -278,20 +271,9 @@ export class RecordingSession {
   private async resolveRecordingBrowser(
     opts: RecordingStartOptions,
   ): Promise<ResolvedBrowserInstallation> {
-    // The legacy override is translated into a selection at the same shared
-    // boundary every other caller uses; there is one resolution algorithm.
-    const selection: BrowserSelection | undefined =
-      opts.browserSelection ??
-      (opts.chromeOverridePath
-        ? { source: 'system', executablePath: opts.chromeOverridePath }
-        : undefined);
-    if (opts.browserSelection && opts.chromeOverridePath) {
-      throw new Error(
-        'browserSelection and chromeOverridePath cannot both be set — pass browserSelection only.',
-      );
-    }
-
-    const resolution = await this.services.resolver.resolve(selection);
+    // One resolution algorithm, shared with every other caller: the recorder
+    // hands the resolver a selection and nothing else.
+    const resolution = await this.services.resolver.resolve(opts.browserSelection);
     if (resolution.status === 'unavailable') throw resolution.error;
     const installation = resolution.installation;
 

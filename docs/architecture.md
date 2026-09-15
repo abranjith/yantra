@@ -198,6 +198,7 @@ flowchart TD
     Compatibility[Compatibility service]
     Coordinator[Managed coordinator]
     ManagedState[Managed state reader]
+    Inventory[Inventory projection]
     Installer[Lazy managed Stable installer]
   end
 
@@ -208,13 +209,16 @@ flowchart TD
   Resolver --> Installation[Resolved installation and provenance]
   Installation --> Provider[Browser provider startup]
   Installation --> Recorder[Recorder startup]
-  Installation --> Doctor[Doctor read-only report]
+  Resolver --> Inventory
+  ManagedState --> Inventory
+  Compatibility --> Inventory
+  Inventory --> List[browser list]
+  Inventory --> Doctor[Doctor read-only report]
   Provider --> Coordinator
   Recorder --> Coordinator
   Provider --> Compatibility
   Recorder --> Compatibility
-  Doctor --> Evidence[Cached evidence lookup]
-  Compatibility --> Evidence
+  Compatibility --> Evidence[Cached evidence lookup]
   Compatibility --> Probe[Isolated synthetic probe session]
   Provider --> Launch[launchResolvedChrome]
   Recorder --> Launch
@@ -228,10 +232,14 @@ find a browser and pairing either with a literal path would mean two selections 
 Precedence is the per-invocation selection, then whatever a persisted-selection reader supplies,
 then `auto`, and it applies to the selection as a whole rather than merging field by field: an
 invocation that asks for `system` with no path therefore clears a configured custom path instead
-of inheriting it. The reader is an injected boundary and its default reports no configured
-selection, so `auto` is the effective installation-wide answer. `auto` prefers the single
-ready managed installation under `<data>/browsers` and otherwise falls back to external
-discovery. A corrupt managed record fails closed with remediation rather than quietly running a
+of inheriting it. The reader is an injected boundary whose production implementation,
+`ConfigBrowserSelectionReader` in `packages/core/src/browser/config-selection.ts`, reads the
+`browser` block of `config.yaml` and reports `undefined` when the block is absent — which is what
+lets the resolver distinguish a configured `auto` from no choice at all and record the selection
+origin accordingly. Its paired writer commits `source` and `executable_path` in one document
+mutation, so a source change that would leave a stale path behind never reaches disk. `auto`
+prefers the single ready managed installation under `<data>/browsers` and otherwise falls back to
+external discovery. A corrupt managed record fails closed with remediation rather than quietly running a
 different browser than the machine is set up around. Resolution itself is read-only in the
 strongest sense — it never downloads, never launches, and never contacts a version server — and
 its result carries ownership, selection origin, selection reason, channel, and the managed
@@ -413,10 +421,15 @@ Yantra-owned recording profile directory, and its binding/overlay contract — a
 rollback-protected so a failure leaves behind no browser, no CDP session, and no reservation, and
 does not pretend recording began.
 
-Diagnostics read the same provenance without launching anything. The `chrome.detected` check
-reports the installation the resolver would actually select, and `chrome.compatibility` reports
-cached evidence, an honest `unverified` when there is none, or the failing capability rows —
-never a browser started to manufacture an `ok` result.
+Diagnostics read the same provenance without launching anything, through the one inventory
+projection `yantra browser list` also renders. `browser.selection` reports the installation the
+resolver would actually select, `browser.compatibility` reports cached evidence, an honest
+`unverified` when there is none, `stale` when the evidence describes a different binary, or the
+failing capability rows — never a browser started to manufacture an `ok` result — and
+`browser.managed` reports the managed root, the ready build, and the reclaimable orphan totals
+without collecting any of them. The doctor report cache is keyed on that effective browser
+identity, so changing the selection invalidates stale output by construction rather than by the
+user remembering `--refresh`.
 
 #### Puppeteer migration and browser-object ownership
 

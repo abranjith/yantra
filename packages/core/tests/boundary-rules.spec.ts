@@ -64,6 +64,25 @@ describe('@no-llm lint boundary rules', () => {
     );
   });
 
+  it('forbids the retired single-field Chrome override in executable package source', () => {
+    // FEAT-045 removed the legacy translation: a custom executable is one
+    // spelling of the single `BrowserSelection`, and reintroducing a parallel
+    // field would restore two resolution algorithms. Assembled so the rule does
+    // not report itself; comments may still explain the migration.
+    const retiredIdentifier = `chrome${'OverridePath'}`;
+    const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
+    const violations = sourceFiles.filter((filePath) =>
+      withoutComments(readFileSync(resolve(repoRoot, filePath), 'utf8')).includes(
+        retiredIdentifier,
+      ),
+    );
+
+    expect(violations).toEqual([]);
+    expect(withoutComments(`interface O { ${retiredIdentifier}: string }`)).toContain(
+      retiredIdentifier,
+    );
+  });
+
   it('rejects @yantra/agent imports from packages/core', async () => {
     const fixturePath = resolve(repoRoot, 'packages/core/src/_lint-fixtures/core-imports-agent.ts');
 

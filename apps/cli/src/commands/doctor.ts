@@ -102,8 +102,9 @@ export interface DoctorRuntime {
 }
 
 const CHECK_TITLES: Record<string, string> = {
-  'chrome.detected': 'Chrome installation detected',
-  'chrome.compatibility': 'Browser passes required capabilities',
+  'browser.selection': 'Effective browser selection',
+  'browser.compatibility': 'Browser passes required capabilities',
+  'browser.managed': 'Yantra-managed browser storage',
   'datadir.writable': 'Yantra data directory writable',
   'datadir.permissions': 'Yantra data directory permissions safe',
   'cachedir.writable': 'Cache directory writable',
@@ -208,6 +209,7 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
           version: PROTOCOL_VERSION,
           platform: process.platform,
           nodeVersion: process.versions.node,
+          ...browserProvenance(report.checks),
         };
 
         connector.renderResult({ kind: 'doctor', result }, renderOpts);
@@ -223,6 +225,80 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
     });
 
   return cmd;
+}
+
+type CompatibilityLabel = NonNullable<DoctorRenderResult['browser']>['compatibility'];
+
+/** Maps the core check's state plus pairing onto the one label the CLI renders. */
+function compatibilityLabel(
+  state: string | undefined,
+  pairing: string | undefined,
+): CompatibilityLabel {
+  if (state === 'passed') {
+    return pairing === 'tested' ? 'tested' : 'capability-checked';
+  }
+  if (state === 'stale' || state === 'failed') return state;
+  return 'unverified';
+}
+
+/**
+ * Projects the three browser checks into one provenance block.
+ *
+ * Reads the structured `details` the core checks already carry rather than
+ * re-deriving anything, so the terminal, `--json`, and `yantra browser list` all
+ * describe the same effective browser.
+ */
+function browserProvenance(
+  checks: readonly {
+    readonly id: string;
+    readonly details: Readonly<Record<string, unknown>>;
+    readonly fixHint: string | null;
+  }[],
+): Pick<DoctorRenderResult, 'browser'> {
+  const selection = checks.find((check) => check.id === 'browser.selection');
+  const compatibility = checks.find((check) => check.id === 'browser.compatibility');
+  const managed = checks.find((check) => check.id === 'browser.managed');
+  if (selection === undefined || managed === undefined) return {};
+
+  const text = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.length > 0 ? value : undefined;
+  const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
+
+  const ownership = text(selection.details.ownership);
+  const remediation = selection.fixHint ?? compatibility?.fixHint ?? managed.fixHint;
+
+  return {
+    browser: {
+      source: text(selection.details.source) ?? text(selection.details.selection) ?? 'auto',
+      origin:
+        (text(selection.details.selectionOrigin) as
+          | 'invocation'
+          | 'config'
+          | 'default'
+          | undefined) ?? 'default',
+      ...(ownership === 'managed' || ownership === 'external' ? { ownership } : {}),
+      ...(text(selection.details.path) === undefined
+        ? {}
+        : { executablePath: text(selection.details.path)! }),
+      ...(text(selection.details.version) === undefined
+        ? {}
+        : { browserVersion: text(selection.details.version)! }),
+      // `passed` carries the pairing, which is what the user reads; every other
+      // state is reported as itself so `unverified` and `stale` stay honest.
+      compatibility: compatibilityLabel(
+        text(compatibility?.details.compatibility),
+        text(compatibility?.details.pairing),
+      ),
+      managedRoot: text(managed.details.managedRoot) ?? '',
+      managedBuild: text(managed.details.buildId) ?? null,
+      orphanCount: count(managed.details.orphanCount),
+      reclaimableBytes: count(managed.details.reclaimableBytes),
+      alternatives: Array.isArray(selection.details.alternatives)
+        ? (selection.details.alternatives as readonly string[])
+        : [],
+      ...(remediation === null || remediation === undefined ? {} : { remediation }),
+    },
+  };
 }
 
 interface ConfigurationDoctorCheck {

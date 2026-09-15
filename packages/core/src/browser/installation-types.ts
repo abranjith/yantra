@@ -1,4 +1,5 @@
 import type { InstallOfferGateway } from './install-offer-gateway.js';
+import type { BrowserInventoryService } from './inventory.js';
 import type { ManagedInstallService } from './managed-install-types.js';
 
 /**
@@ -26,8 +27,11 @@ export interface BrowserSelection {
 }
 
 /**
- * Supplies the persisted selection. FEAT-045 owns the validated config
- * adapter; until then the default reader reports "no configured selection".
+ * Supplies the persisted selection.
+ *
+ * `ConfigBrowserSelectionReader` is the production implementation; it returns
+ * `undefined` when `config.yaml` carries no `browser:` block, which is what
+ * distinguishes a configured `auto` from no choice at all.
  */
 export interface BrowserSelectionReader {
   read(): Promise<BrowserSelection | undefined>;
@@ -306,6 +310,13 @@ export interface BrowserRuntimeServices {
   readonly compatibility: BrowserCompatibilityService;
   readonly coordinator: ManagedCoordinator;
   readonly managedState: ManagedStateReader;
+  /**
+   * The local read-only projection `browser list` and `doctor` render.
+   *
+   * Optional so a hand-built test double stays small; the local composition
+   * always supplies it, and the two surfaces must never build their own.
+   */
+  readonly inventory?: BrowserInventoryService;
   /** Optional human-only first-run install boundary; absent on unattended paths. */
   readonly installService?: ManagedInstallService;
   readonly installOfferGateway?: InstallOfferGateway | null;

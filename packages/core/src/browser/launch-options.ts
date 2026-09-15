@@ -100,28 +100,9 @@ export const LaunchOptionsSchema = z
       .transform((args) => args as readonly string[]),
     env: z.record(z.string(), z.string()).default({}),
     startupTimeoutMs: z.number().int().positive().default(DEFAULT_STARTUP_TIMEOUT_MS),
-    chromeOverridePath: z
-      .string()
-      .min(1)
-      .nullable()
-      .default(null)
-      .refine((p) => p === null || isAbsolute(p) || win32.isAbsolute(p), {
-        message: 'chromeOverridePath must be an absolute path',
-      }),
     browserSelection: BrowserSelectionSchema.nullable().default(null),
   })
-  .superRefine((value, ctx) => {
-    // Two resolution algorithms is the failure this feature exists to remove, so
-    // conflicting old and new inputs are rejected rather than silently ranked.
-    if (value.chromeOverridePath !== null && value.browserSelection !== null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['browserSelection'],
-        message:
-          'chromeOverridePath and browserSelection cannot both be set — pass browserSelection only',
-      });
-    }
-  });
+  .strict();
 
 /**
  * Validates and parses raw input into a typed LaunchOptions object.
@@ -149,15 +130,11 @@ export function parseLaunchOptions(input: unknown): LaunchOptions {
 /**
  * Translates validated launch options into the one selection the resolver takes.
  *
- * The legacy `chromeOverridePath` is converted here and nowhere else, so there
- * is exactly one place to delete when the last caller migrates — and exactly
- * one resolution algorithm in the meantime.
+ * There is exactly one semantic browser choice: a null selection means "resolve
+ * from the configured selection, then `auto`", never "use some other field".
  *
  * @returns The invocation selection, or undefined to fall through to config/auto.
  */
 export function selectionFromLaunchOptions(opts: LaunchOptions): BrowserSelection | undefined {
-  if (opts.browserSelection !== null) return opts.browserSelection;
-  if (opts.chromeOverridePath !== null)
-    return { source: 'system', executablePath: opts.chromeOverridePath };
-  return undefined;
+  return opts.browserSelection ?? undefined;
 }

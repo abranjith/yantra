@@ -132,9 +132,8 @@ emitted.
 
 The installer does not change browser configuration. Automatic resolution
 prefers the ready managed installation; an explicit external selection remains
-external. When output says the new installation is not selected, follow its
-`yantra browser use managed` guidance after that command becomes available in
-the browser-switching feature.
+external. When output says the new installation is not selected, run
+`yantra browser use managed` to select it.
 
 ### Understand storage, interruption, and cleanup
 
@@ -192,6 +191,105 @@ limitations.
 |  `1` | Acceptance was missing for JSON or non-interactive use; no download started                              |
 |  `3` | A prerequisite, environment, compatibility, publication, proxy/network, timeout, or coordination failure |
 |  `4` | Interactive consent was declined, or cooperative installation cancellation was returned                  |
+
+## Choose and check a browser
+
+Every command in this section is local: none of them contacts a version server,
+downloads anything, or looks for a newer browser.
+
+### See which browser will run
+
+```bash
+yantra browser list
+yantra browser list --json
+```
+
+`list` reports the current selection and whether it came from `config.yaml` or
+the default, the effective installation with its ownership, path, version and
+channel, the managed installation or `absent`, the external browsers discovery
+found, the reclaimable orphan count and bytes, and the driver version with its
+tested pairing. Exactly one browser is marked effective. A broken selection is
+printed as data with its remediation and `list` still exits `0` — diagnosing is
+its job, not failing.
+
+### Persist a choice
+
+```bash
+yantra browser use auto
+yantra browser use managed
+yantra browser use system
+yantra browser use system --path /opt/google/chrome/chrome
+```
+
+`use` writes `browser.source` and `browser.executable_path` together, so the
+file never holds a stale path under a source that cannot mean one. `auto`
+prefers a ready managed installation and otherwise discovers external Chrome or
+Chromium; `managed` requires an existing ready installation and otherwise fails
+naming `yantra browser install`; `system` uses external discovery, or the one
+binary you name with `--path`.
+
+`--path` is validated for resolvability only — absolute, exists, a regular file
+or a symlink to one, readable, and executable on macOS and Linux. It is
+deliberately **not** probed for compatibility: setting a preference never starts
+a browser, and it must not fail on a host where starting one is the broken
+thing. The command reports the compatibility it already knows about and, when
+that is `unverified`, prints the exact `browser check` command to run.
+
+`--path` is legal only with `system`. A path inside the Yantra-managed root must
+be the exact ready managed executable; a path into a superseded installation, or
+one crossing into the managed root through a symlink or junction, is refused.
+
+### Test the selected browser
+
+```bash
+yantra browser check
+yantra browser check --browser-path /opt/google/chrome/chrome
+yantra browser check --json
+```
+
+`check` runs a fresh isolated probe — its own headless session with its own
+ephemeral profile, closed on success and on failure — for both capability sets
+Yantra uses, `automation` and `recorder`. A cached success never short-circuits
+it. Output names the driver version, the tested pairing, the probe revision, the
+actual browser version, path, ownership and selection origin, then one row per
+required capability with the reason it is required.
+
+A browser newer than the driver's tested pairing is **normal**: it reports
+`capability-checked` rather than a warning, because Chrome ships Stable faster
+than Yantra bumps its driver. On failure the output names the failure class and
+its own remediation — missing operating-system libraries are reported with the
+packages the build actually needs, and a capability failure names exactly the
+primitives that failed without blaming a version mismatch.
+
+### Override one invocation
+
+```bash
+yantra run monthly-invoices --browser system
+yantra ask "what changed in the spec" --browser-path /opt/chromium/chrome
+```
+
+`--browser <auto|managed|system>` and `--browser-path <absolute-executable>`
+select a browser for one command and write nothing. `--browser-path` alone
+implies `system`; `--browser system` with no path clears a configured custom
+path for that invocation, because the override is a whole selection rather than
+a merge. Pairing `--browser-path` with `auto` or `managed` is a conflict, and a
+relative path is rejected — both exit `1`.
+
+These two flags are registered only on the commands that can actually launch a
+browser: `run`, `resume`, `ask`, `research`, `do`, and `browser check`.
+Elsewhere — `daemon`, `schedule`, `init`, `list`, `config`, `doctor`,
+`browser list`, `browser use` — they are rejected as unknown options.
+
+### `browser use`, `list`, and `check` exit codes
+
+| Exit | Meaning                                                                                              |
+| ---: | ---------------------------------------------------------------------------------------------------- |
+|  `0` | The selection was committed, the inventory was reported, or every required capability passed         |
+|  `1` | An invalid or conflicting flag, an unresolvable `--path`, or a managed selection with no ready build |
+|  `3` | `browser check` could not resolve a browser, or the browser failed a required capability             |
+
+See [Browser Selection and Diagnostics](features/browser-selection-and-diagnostics.md)
+for the full behavior and the JSON payloads.
 
 ## Choose an execution mode
 
@@ -539,10 +637,21 @@ surface:
 | `--no-llm`                     | Force a deterministic path where one exists  | model enabled      |
 | `--no-screenshots`             | Suppress vision assist for this run          | grant unchanged    |
 
+`ask`, `research`, `do`, `run`, `resume`, and `browser check` additionally share
+the browser-selection group:
+
+| Flag                                   | Purpose                                            | Default                 |
+| -------------------------------------- | -------------------------------------------------- | ----------------------- |
+| `--browser <auto\|managed\|system>`    | Browser source for this invocation                 | configured, else `auto` |
+| `--browser-path <absolute-executable>` | One specific external executable; implies `system` | configured, else unset  |
+
+Neither writes configuration. See
+[Choose and check a browser](#choose-and-check-a-browser).
+
 A flag reads the same on every command that offers it, and a command offers
-only the flags it can act on. The surface is registered as three groups —
+only the flags it can act on. The surface is registered as groups —
 model selection (`--provider`, `--model`, `--thinking`, `--auth-secret`),
-per-run budgets (the five above), and `--no-llm` — so a command that selects a
+per-run budgets (the five above), `--no-llm`, and browser selection — so a command that selects a
 model without executing a run registers fewer of them. `doctor` is the one such
 command today: it takes the model-selection flags and `--no-llm`, and does not
 accept the budget flags or `--no-screenshots`, because it spends no budget and

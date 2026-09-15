@@ -69,7 +69,7 @@ describe.runIf(runMigrationBrowser)('@no-llm real recorder popup session migrati
     };
     const recording = new RecordingSession({ store });
     const handle = await recording.start('popup-session-migration', {
-      chromeOverridePath: fixture.executablePath,
+      ...(fixture.selection ? { browserSelection: fixture.selection } : {}),
       idleTimeoutMs: 60_000,
     });
     const events: { kind: string; targetId?: string; url?: string }[] = [];

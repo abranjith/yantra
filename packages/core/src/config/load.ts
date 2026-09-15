@@ -74,7 +74,7 @@ export async function loadConfig(
 }
 
 const siblingKeys: Readonly<Record<string, readonly string[]>> = {
-  '': ['version', 'paths', 'models', 'search', 'ethics', 'retention', 'agent'],
+  '': ['version', 'paths', 'models', 'search', 'ethics', 'retention', 'agent', 'browser'],
   paths: ['data_dir', 'cache_dir'],
   search: ['provider', 'fallback_chain', 'fetch_top', 'tavily', 'brave'],
   'search.tavily': ['api_key'],
@@ -84,6 +84,7 @@ const siblingKeys: Readonly<Record<string, readonly string[]>> = {
   'ethics.rate_limit.default': ['tokens_per_second', 'burst'],
   retention: ['runs_days', 'corrupt_index_keep'],
   agent: ['pi_auth_path'],
+  browser: ['source', 'executable_path'],
 };
 
 function toConfigIssues(issue: ZodIssue): readonly ConfigIssue[] {

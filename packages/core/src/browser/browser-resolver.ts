@@ -36,13 +36,19 @@ export const DEFAULT_BROWSER_SELECTION: BrowserSelection = Object.freeze({
   executablePath: null,
 });
 
-/** A reader that reports "no configured selection" — the default until FEAT-045. */
+/**
+ * A reader that reports "no configured selection".
+ *
+ * The resolver's own fallback, so resolver unit tests stay hermetic. Production
+ * composition supplies `ConfigBrowserSelectionReader` through
+ * `createLocalBrowserRuntimeServices`.
+ */
 export const NO_CONFIGURED_SELECTION: BrowserSelectionReader = Object.freeze({
   read: () => Promise.resolve(undefined),
 });
 
 export interface BrowserResolverDeps {
-  /** Persisted selection. Defaults to "none configured". */
+  /** Persisted selection. Defaults to "none configured"; production passes the config adapter. */
   readonly selectionReader?: BrowserSelectionReader;
   readonly managedState?: ManagedStateReader;
   /** External discovery / version probing boundary. Never launches Chrome. */

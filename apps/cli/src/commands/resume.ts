@@ -29,6 +29,11 @@ import {
 import { Command } from 'commander';
 
 import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import {
+  addBrowserSelectionOptions,
+  resolveBrowserSelectionOverride,
+  type BrowserSelectionOptions,
+} from '../browser-options.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import {
@@ -38,7 +43,7 @@ import {
 } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
-interface ResumeOptions extends AgentOptions {
+interface ResumeOptions extends AgentOptions, BrowserSelectionOptions {
   readonly json?: boolean;
   readonly debug?: boolean;
   readonly force?: boolean;
@@ -48,7 +53,7 @@ interface ResumeOptions extends AgentOptions {
 export function makeResumeCommand(): Command {
   const cmd = new Command('resume');
 
-  addAgentOptions(cmd)
+  addBrowserSelectionOptions(addAgentOptions(cmd))
     .description('Resume a previously failed or paused workflow run')
     .argument('<run-id>', 'Run ID to resume (from the run directory name)')
     .option('--json', 'Emit JSON summary to stdout', false)
@@ -63,6 +68,17 @@ export function makeResumeCommand(): Command {
       const logger = makeStderrLogger(options.debug === true);
       logger.info({ runId }, 'yantra resume: starting');
       let closeRuntime = (): void => undefined;
+
+      // Resolved before any run state is touched: a conflicting `--browser`
+      // pair is a validation failure, not a resume that half-started.
+      let browserSelection;
+      try {
+        browserSelection = resolveBrowserSelectionOverride(options);
+      } catch (err) {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}
+`);
+        process.exit(1);
+      }
 
       try {
         // Same consent policy as `run`: prompt only in an interactive TTY,
@@ -87,6 +103,7 @@ export function makeResumeCommand(): Command {
           confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
           browser: {
             installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+            ...(browserSelection === undefined ? {} : { selection: browserSelection }),
           },
           // Omitted, not set to undefined: an absent key disables the stage,
           // which is what a run that never synthesized should inherit.

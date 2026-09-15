@@ -10,10 +10,23 @@ Yantra keeps diagnostics and run evidence on the local machine so you can check 
 
 `yantra doctor` runs offline checks and reports an overall `ok`, `warn`, or `fail` status. It does not open a model-provider session. The current checks cover:
 
-- Which browser the resolver selects, with its path, version, and ownership, and the last local
-  compatibility evidence recorded for it. Doctor reads that evidence and reports it as passed,
-  failed, or unverified; it never launches a browser. See
+- `browser.selection` — which browser a run would actually use: the configured source and whether it
+  came from `config.yaml` or the default, plus ownership, canonical executable, and actual version. A
+  selection that resolves to nothing reports the typed error with its remediation and the alternatives
+  discovery found.
+- `browser.compatibility` — the last local compatibility evidence recorded for that browser, reported
+  as passed, failed, `unverified` when nothing has been checked yet, or `stale` when the evidence
+  describes a different binary. Doctor never launches a browser to produce a verdict, and a build
+  newer than the driver's tested pairing reads as `capability-checked` normal operation rather than a
+  warning.
+- `browser.managed` — the Yantra-managed browser root, the ready build or `absent`, and the orphan
+  count with reclaimable bytes. Doctor reports those totals; it never installs or reclaims anything.
+
+  Both `--json` and the terminal also carry one browser provenance block with the same source, origin,
+  ownership, executable, version, compatibility, managed root, orphan totals, alternatives, and
+  remediation. See [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md) and
   [Browser Resolution and Lifecycle](browser-resolution-and-lifecycle.md).
+
 - Write access to the Yantra data and cache directories.
 - Data-directory permissions. On Windows this check is best-effort; on POSIX systems it warns when the data or profile directories are accessible to group or other users.
 - An OS-keychain write/read/delete round trip.
@@ -26,7 +39,7 @@ Doctor reports the health of stored state, so per-run budget flags are not part 
 
 Under `--no-llm` or `LLM_PROVIDER=none` the three `agent.*` checks report that the deterministic path was selected and name the layer that selected it, no credential is probed, and budgets are not validated — none of them would be used.
 
-Core environment-probe results are cached for one hour; agent model, credential, and budget diagnostics and the configuration checks are recalculated on each invocation. `--refresh` bypasses the core cache only. Warnings do not fail the command; any failed check exits `3`.
+Core environment-probe results are cached for one hour; agent model, credential, and budget diagnostics and the configuration checks are recalculated on each invocation. `--refresh` bypasses the core cache only. The cache is additionally keyed on the effective browser identity — the configured selection, the canonical executable with its version and size/timestamp, the managed ready pointer, and the orphan count — so changing your browser selection produces fresh output without `--refresh`. Warnings do not fail the command; any failed check exits `3`.
 
 `yantra doctor --agent-smoke` is different: it is a live, billable provider check. It opens one fresh provider session in Yantra's pinned environment, exposes only a `status` tool, asks the model to call it once, streams normalized events, prints the effective pinned paths and zero ambient-resource counts, and closes the session. The raw provider session is saved below a timestamped `runs/agent-smoke-.../agent/` directory.
 
@@ -113,9 +126,9 @@ Valid usage types are `ask`, `research`, `run`, and `do`. `--since` accepts `YYY
 
 ### Run IDs and local paths
 
-Normal runs live under `<yantra-data-dir>/runs/<run-id>/`. On Windows the default data directory is `%LOCALAPPDATA%\\yantra`; on Linux and macOS it is `$XDG_DATA_HOME/yantra` when set, otherwise `~/.local/share/yantra`. Run IDs are lexicographically sortable and normally include a compact UTC timestamp, command or workflow name, and short random suffix.
+Normal runs live under `<yantra-data-dir>/runs/<run-id>/`. Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`), identically on Windows, macOS, and Linux, so the default data directory is `~/.yantra/data`. Run IDs are lexicographically sortable and normally include a compact UTC timestamp, command or workflow name, and short random suffix.
 
-The doctor cache lives at `%LOCALAPPDATA%\\yantra\\Cache\\doctor.json` on Windows and `$XDG_CACHE_HOME/yantra/doctor.json` or `~/.cache/yantra/doctor.json` elsewhere.
+The doctor cache lives at `~/.yantra/cache/doctor.json` on every platform, or below `paths.cache_dir` / `YANTRA_CACHE_DIR` when the cache directory has been relocated.
 
 ### JSON envelopes
 

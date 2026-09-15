@@ -102,6 +102,28 @@ export interface DoctorRenderResult {
   readonly version: string;
   readonly platform: NodeJS.Platform;
   readonly nodeVersion: string;
+  /**
+   * Which browser a run would use, and what could be reclaimed.
+   *
+   * Promoted out of the check details so `--json` consumers read one stable
+   * field rather than parsing a check's prose, and so the terminal can show the
+   * managed root and orphan totals without repeating them per check. Absent
+   * when the browser checks could not be read at all.
+   */
+  readonly browser?: {
+    readonly source: string;
+    readonly origin: 'invocation' | 'config' | 'default';
+    readonly ownership?: 'managed' | 'external';
+    readonly executablePath?: string;
+    readonly browserVersion?: string;
+    readonly compatibility: 'tested' | 'capability-checked' | 'unverified' | 'stale' | 'failed';
+    readonly managedRoot: string;
+    readonly managedBuild: string | null;
+    readonly orphanCount: number;
+    readonly reclaimableBytes: number;
+    readonly alternatives: readonly string[];
+    readonly remediation?: string;
+  };
 }
 
 /**

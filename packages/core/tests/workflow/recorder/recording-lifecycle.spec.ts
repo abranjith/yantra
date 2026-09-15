@@ -354,10 +354,12 @@ describe('@no-llm RecordingSession lifecycle', () => {
       await harness.session.stop('user');
     });
 
-    it('translates the legacy override into a system selection', async () => {
+    it('starts from a custom executable through the one selection contract', async () => {
       const harness = makeHarness();
 
-      await harness.session.start('invoices', { chromeOverridePath: '/opt/chrome/chrome' });
+      await harness.session.start('invoices', {
+        browserSelection: { source: 'system', executablePath: '/opt/chrome/chrome' },
+      });
 
       expect(harness.services.resolver.resolve).toHaveBeenCalledWith({
         source: 'system',
@@ -366,15 +368,28 @@ describe('@no-llm RecordingSession lifecycle', () => {
       await harness.session.stop('user');
     });
 
-    it('rejects conflicting legacy and current selection inputs', async () => {
+    it.each(['managed', 'system'] as const)(
+      'starts from a persisted %s selection with no legacy translation left',
+      async (source) => {
+        const harness = makeHarness();
+        const selection = { source, executablePath: null } as const;
+
+        await harness.session.start('invoices', { browserSelection: selection });
+
+        expect(harness.services.resolver.resolve).toHaveBeenCalledWith(selection);
+        await harness.session.stop('user');
+      },
+    );
+
+    it('resolves from the configured selection when the caller supplies none', async () => {
       const harness = makeHarness();
 
-      await expect(
-        harness.session.start('invoices', {
-          chromeOverridePath: '/opt/chrome/chrome',
-          browserSelection: { source: 'managed', executablePath: null },
-        }),
-      ).rejects.toThrow(/cannot both be set/);
+      await harness.session.start('invoices', {});
+
+      // Undefined, not a fabricated `auto`: the resolver is what decides whether
+      // the answer came from config or from the default.
+      expect(harness.services.resolver.resolve).toHaveBeenCalledWith(undefined);
+      await harness.session.stop('user');
     });
 
     it('fails with the resolver’s error when no browser is available', async () => {

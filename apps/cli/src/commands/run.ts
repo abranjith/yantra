@@ -50,6 +50,11 @@ import {
   type AgentInvocation,
   type AgentOptions,
 } from '../agent-options.js';
+import {
+  addBrowserSelectionOptions,
+  resolveBrowserSelectionOverride,
+  type BrowserSelectionOptions,
+} from '../browser-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -59,7 +64,7 @@ import type { ConnectorRenderOpts } from '../render/types.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
-interface RunOptions extends AgentOptions {
+interface RunOptions extends AgentOptions, BrowserSelectionOptions {
   readonly params?: string[];
   readonly paramsFile?: string;
   readonly json?: boolean;
@@ -104,152 +109,168 @@ export function makeRunCommand(): Command {
     .option('--open', 'open the generated brief.html in the default browser', false)
     .option('--template <ref>', 'report templates are supported on ask, research, and do');
 
-  addAgentOptions(cmd).action(async (workflowName: string, options: RunOptions) => {
-    if (options.template !== undefined) {
-      process.stderr.write(
-        'templates are not yet supported on run; see docs/features/report-templates.md\n',
-      );
-      process.exit(1);
-    }
-    const logger = makeStderrLogger(options.debug === true);
-    logger.info({ workflowName }, 'yantra run: starting');
-    let closeRuntime = (): void => undefined;
+  addBrowserSelectionOptions(addAgentOptions(cmd)).action(
+    async (workflowName: string, options: RunOptions) => {
+      if (options.template !== undefined) {
+        process.stderr.write(
+          'templates are not yet supported on run; see docs/features/report-templates.md\n',
+        );
+        process.exit(1);
+      }
+      const logger = makeStderrLogger(options.debug === true);
+      logger.info({ workflowName }, 'yantra run: starting');
+      let closeRuntime = (): void => undefined;
 
-    let params: Record<string, string>;
-    try {
-      params = parseParams(options.params);
-    } catch (err) {
-      process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-      process.exit(
-        err instanceof BrowserInstallOfferDeclinedError
-          ? 4
-          : err instanceof BrowserManagedInstallError
-            ? 3
-            : 1,
-      );
-    }
-
-    // Resolved BEFORE the try block so a bad `--provider`/`--model` stays a
-    // validation failure (exit 1) rather than being reported as an execution
-    // error after a run directory already exists — the `ask` precedent.
-    let wiring: RunSynthesisWiring = { noLlm: true, selection: null };
-    try {
-      wiring = await resolveRunSynthesis(options, process.env, await loadEffectivePreferences());
-    } catch (err) {
-      process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-      process.exit(1);
-    }
-    const { selection } = wiring;
-    if (wiring.reason === 'unavailable' && wiring.unavailableModel !== undefined) {
-      process.stderr.write(
-        `warning: model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
-          'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis\n',
-      );
-    }
-
-    try {
-      // Interactive TTY runs can prompt for consent in-process; `--json` and
-      // non-TTY surfaces stay fail-closed (no gateway) so they never
-      // self-authorize a confirmable step (plan §6).
-      const interactive = process.stdin.isTTY === true && options.json !== true;
-      const runtime = await buildOrchestratorRuntime({
-        logger,
-        confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
-        browser: { installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null },
-        // The stage is always wired for `run`, so a workflow declaring
-        // `synthesis:` always gets a Brief. The *strategy* is the workflow's
-        // call: the port below is only ever built for a workflow whose
-        // `synthesis.use_llm` is set, so an ordinary replay opens no session.
-        synthesis: {
-          noLlm: wiring.noLlm,
-          llm:
-            selection === null
-              ? null
-              : ({ runId, runDir }) =>
-                  createSynthesisLlm({
-                    // Zero tools: the session is a pure completion endpoint.
-                    provider: new PiAgentProvider(),
-                    model: selection.model,
-                    auth: selection.auth,
-                    runId,
-                    runDir,
-                    cwd: process.cwd(),
-                    logger,
-                  }),
-        },
-      });
-      const { orchestrator } = runtime;
-      closeRuntime = runtime.close;
-
-      const request: RunRequest =
-        options.paramsFile === undefined
-          ? {
-              workflowName,
-              params,
-              budgets: {},
-              json: options.json === true,
-              debug: options.debug === true,
-            }
-          : {
-              workflowName,
-              params,
-              paramsFile: options.paramsFile,
-              budgets: {},
-              json: options.json === true,
-              debug: options.debug === true,
-            };
-
-      const outcome = await orchestrator.run(request);
-
-      // Record the completed run into the history index (best-effort — the
-      // index is an optional cache and must never fail a run).
-      if (typeof outcome.runId === 'string' && outcome.runId.length > 0) {
-        await recordTaskHistory(outcome.runId);
+      let params: Record<string, string>;
+      try {
+        params = parseParams(options.params);
+      } catch (err) {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exit(
+          err instanceof BrowserInstallOfferDeclinedError
+            ? 4
+            : err instanceof BrowserManagedInstallError
+              ? 3
+              : 1,
+        );
       }
 
-      // A run that synthesized a Brief has a real document to show; reading it
-      // back from the artifact the stage just wrote keeps the outcome type
-      // serializable for `--json`.
-      const briefArtifacts = outcome.kind === 'success' ? outcome.brief : undefined;
-      const brief = briefArtifacts === undefined ? null : await readBrief(briefArtifacts);
+      // Resolved BEFORE the try block for the same reason as the model wiring
+      // below: a conflicting `--browser` pair is a validation failure, not an
+      // execution error reported after a run directory already exists.
+      let browserSelection;
+      try {
+        browserSelection = resolveBrowserSelectionOverride(options);
+      } catch (err) {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exit(1);
+      }
 
-      if (options.json === true) {
-        process.stdout.write(
-          `${JSON.stringify(
-            brief === null ? outcome : { ...outcome, briefDocument: brief },
-            null,
-            2,
-          )}\n`,
+      // Resolved BEFORE the try block so a bad `--provider`/`--model` stays a
+      // validation failure (exit 1) rather than being reported as an execution
+      // error after a run directory already exists — the `ask` precedent.
+      let wiring: RunSynthesisWiring = { noLlm: true, selection: null };
+      try {
+        wiring = await resolveRunSynthesis(options, process.env, await loadEffectivePreferences());
+      } catch (err) {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exit(1);
+      }
+      const { selection } = wiring;
+      if (wiring.reason === 'unavailable' && wiring.unavailableModel !== undefined) {
+        process.stderr.write(
+          `warning: model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
+            'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis\n',
         );
-      } else {
-        const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
-        process.stdout.write(`${icon} Run ${outcome.runId}: ${outcome.kind}\n`);
-        if (outcome.kind === 'success') {
-          if (brief === null) {
-            process.stdout.write(renderOutputs(outcome.outputs));
-          } else {
-            // The Brief *is* the run's answer — render it the way `ask` does
-            // rather than dumping the raw captures it was synthesized from.
-            renderBrief(brief, briefArtifacts ?? null, options.open === true);
+      }
+
+      try {
+        // Interactive TTY runs can prompt for consent in-process; `--json` and
+        // non-TTY surfaces stay fail-closed (no gateway) so they never
+        // self-authorize a confirmable step (plan §6).
+        const interactive = process.stdin.isTTY === true && options.json !== true;
+        const runtime = await buildOrchestratorRuntime({
+          logger,
+          confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+          browser: {
+            installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+            ...(browserSelection === undefined ? {} : { selection: browserSelection }),
+          },
+          // The stage is always wired for `run`, so a workflow declaring
+          // `synthesis:` always gets a Brief. The *strategy* is the workflow's
+          // call: the port below is only ever built for a workflow whose
+          // `synthesis.use_llm` is set, so an ordinary replay opens no session.
+          synthesis: {
+            noLlm: wiring.noLlm,
+            llm:
+              selection === null
+                ? null
+                : ({ runId, runDir }) =>
+                    createSynthesisLlm({
+                      // Zero tools: the session is a pure completion endpoint.
+                      provider: new PiAgentProvider(),
+                      model: selection.model,
+                      auth: selection.auth,
+                      runId,
+                      runDir,
+                      cwd: process.cwd(),
+                      logger,
+                    }),
+          },
+        });
+        const { orchestrator } = runtime;
+        closeRuntime = runtime.close;
+
+        const request: RunRequest =
+          options.paramsFile === undefined
+            ? {
+                workflowName,
+                params,
+                budgets: {},
+                json: options.json === true,
+                debug: options.debug === true,
+              }
+            : {
+                workflowName,
+                params,
+                paramsFile: options.paramsFile,
+                budgets: {},
+                json: options.json === true,
+                debug: options.debug === true,
+              };
+
+        const outcome = await orchestrator.run(request);
+
+        // Record the completed run into the history index (best-effort — the
+        // index is an optional cache and must never fail a run).
+        if (typeof outcome.runId === 'string' && outcome.runId.length > 0) {
+          await recordTaskHistory(outcome.runId);
+        }
+
+        // A run that synthesized a Brief has a real document to show; reading it
+        // back from the artifact the stage just wrote keeps the outcome type
+        // serializable for `--json`.
+        const briefArtifacts = outcome.kind === 'success' ? outcome.brief : undefined;
+        const brief = briefArtifacts === undefined ? null : await readBrief(briefArtifacts);
+
+        if (options.json === true) {
+          process.stdout.write(
+            `${JSON.stringify(
+              brief === null ? outcome : { ...outcome, briefDocument: brief },
+              null,
+              2,
+            )}\n`,
+          );
+        } else {
+          const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
+          process.stdout.write(`${icon} Run ${outcome.runId}: ${outcome.kind}\n`);
+          if (outcome.kind === 'success') {
+            if (brief === null) {
+              process.stdout.write(renderOutputs(outcome.outputs));
+            } else {
+              // The Brief *is* the run's answer — render it the way `ask` does
+              // rather than dumping the raw captures it was synthesized from.
+              renderBrief(brief, briefArtifacts ?? null, options.open === true);
+            }
           }
         }
-      }
 
-      if (options.open === true && briefArtifacts !== undefined)
-        openArtifact(briefArtifacts.htmlPath);
+        if (options.open === true && briefArtifacts !== undefined)
+          openArtifact(briefArtifacts.htmlPath);
 
-      closeRuntime();
-      process.exit(exitCodeFor(outcome));
-    } catch (err) {
-      closeRuntime();
-      const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`Error: ${message}\n`);
-      if (options.debug === true && err instanceof Error && err.stack !== undefined) {
-        process.stderr.write(`${err.stack}\n`);
+        closeRuntime();
+        process.exit(exitCodeFor(outcome));
+      } catch (err) {
+        closeRuntime();
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`Error: ${message}\n`);
+        if (options.debug === true && err instanceof Error && err.stack !== undefined) {
+          process.stderr.write(`${err.stack}\n`);
+        }
+        process.exit(1);
       }
-      process.exit(1);
-    }
-  });
+    },
+  );
 
   return cmd;
 }

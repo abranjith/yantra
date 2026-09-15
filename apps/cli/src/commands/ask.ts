@@ -19,6 +19,7 @@ import {
   InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
+  type BrowserSelection,
   LocalProfileStore,
   ReadabilityExtractor,
   RateLimiterImpl,
@@ -49,6 +50,11 @@ import {
   type AgentInvocation,
   type AgentOptions,
 } from '../agent-options.js';
+import {
+  addBrowserSelectionOptions,
+  resolveBrowserSelectionOverride,
+  type BrowserSelectionOptions,
+} from '../browser-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -74,7 +80,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface AskOptions extends AgentOptions {
+interface AskOptions extends AgentOptions, BrowserSelectionOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly cache?: boolean;
@@ -125,7 +131,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
   // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
   // `--auth-secret`), identical to `research` and `do`. These bind the LLM
   // provider; `--search-provider` below is the unrelated web-search backend.
-  addAgentOptions(askCommand)
+  addBrowserSelectionOptions(addAgentOptions(askCommand))
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option(
@@ -165,6 +171,9 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
       ).default('100s'),
     )
     .action(async (queryArg: string, options: AskOptions, command: Command) => {
+      // A conflicting `--browser` pair is a validation failure, resolved before
+      // any pipeline or provider session exists.
+      const browserSelection = resolveBrowserSelectionOverride(options);
       // Resolve unset flags from the effective preferences (explicit flag wins).
       const effective = await resolvedRuntime.resolveDefaults();
       const resolved = resolveAskDefaults(options, effective);
@@ -235,6 +244,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
             template,
             agent,
             resolveAmbientContext(effective),
+            browserSelection,
           );
           return;
         }
@@ -243,6 +253,7 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
             resolvedRuntime.isTty && format !== 'json'
               ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
               : null,
+          ...(browserSelection === undefined ? {} : { selection: browserSelection }),
         });
         const result: AskRunResult = await pipeline.run(query);
 
@@ -428,6 +439,7 @@ async function runAgenticAsk(
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
   ambient: ResolvedAmbientContext,
+  browserSelection: BrowserSelection | undefined,
 ): Promise<void> {
   const renderOpts = agentRenderOpts(runtime, format, detail, options);
   const connector = new CLIConnectorIO(
@@ -457,6 +469,7 @@ async function runAgenticAsk(
         runtime.isTty && format !== 'json'
           ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
           : null,
+      ...(browserSelection === undefined ? {} : { browserSelection }),
     },
   );
   await renderAgenticOutcome(outcome, runtime, format, detail, options);

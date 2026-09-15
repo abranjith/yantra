@@ -29,13 +29,6 @@ export interface LaunchOptions {
   readonly extraArgs: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly startupTimeoutMs: number;
-  /**
-   * Legacy single-field override, kept only as a translation into
-   * {@link browserSelection} while repository callers migrate.
-   *
-   * @deprecated Pass `browserSelection` instead.
-   */
-  readonly chromeOverridePath: string | null;
   /** The one semantic browser choice. Null means "resolve from config/auto". */
   readonly browserSelection: BrowserSelection | null;
 }
@@ -99,8 +92,9 @@ export interface DoctorReport {
 
 export interface DoctorCheck {
   readonly id:
-    | 'chrome.detected'
-    | 'chrome.compatibility'
+    | 'browser.selection'
+    | 'browser.compatibility'
+    | 'browser.managed'
     | 'datadir.writable'
     | 'datadir.permissions'
     | 'cachedir.writable'

@@ -17,6 +17,7 @@ import {
   InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
+  type BrowserSelection,
   LocalProfileStore,
   ReadabilityExtractor,
   RateLimiterImpl,
@@ -45,6 +46,11 @@ import {
   type AgentInvocation,
   type AgentOptions,
 } from '../agent-options.js';
+import {
+  addBrowserSelectionOptions,
+  resolveBrowserSelectionOverride,
+  type BrowserSelectionOptions,
+} from '../browser-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -70,7 +76,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface ResearchCommandOptions extends AgentOptions {
+interface ResearchCommandOptions extends AgentOptions, BrowserSelectionOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly color?: boolean;
@@ -128,7 +134,7 @@ export function registerResearchCommand(
   // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
   // `--auth-secret`), identical to `ask` and `do`. These bind the LLM provider;
   // `--search-provider` below is the unrelated web-search backend.
-  addAgentOptions(researchCommand)
+  addBrowserSelectionOptions(addAgentOptions(researchCommand))
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option('--depth <hops>', 'number of research hops (1-3)')
@@ -172,6 +178,9 @@ export function registerResearchCommand(
       ).default('3m'),
     )
     .action(async (topicArg: string, options: ResearchCommandOptions, command: Command) => {
+      // A conflicting `--browser` pair is a validation failure, resolved before
+      // any loop or provider session exists.
+      const browserSelection = resolveBrowserSelectionOverride(options);
       const effective = await resolvedRuntime.resolveDefaults();
       const agent = await resolvedRuntime.resolveAgent(
         'research',
@@ -236,6 +245,7 @@ export function registerResearchCommand(
             template,
             agent,
             resolveAmbientContext(effective),
+            browserSelection,
           );
           return;
         }
@@ -244,6 +254,7 @@ export function registerResearchCommand(
             resolvedRuntime.isTty && format !== 'json'
               ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
               : null,
+          ...(browserSelection === undefined ? {} : { selection: browserSelection }),
         });
         const result: ResearchRunResult = await loop.run(invocation.options);
 
@@ -384,6 +395,7 @@ async function runAgenticResearch(
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
   ambient: ResolvedAmbientContext,
+  browserSelection: BrowserSelection | undefined,
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -423,6 +435,7 @@ async function runAgenticResearch(
         runtime.isTty && format !== 'json'
           ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
           : null,
+      ...(browserSelection === undefined ? {} : { browserSelection }),
     },
   );
   if (outcome.kind !== 'published') {

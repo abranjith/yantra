@@ -74,7 +74,9 @@ describe('@no-llm migration browser harness', () => {
     const fixture = await beginMigrationBrowserFixture({ requireProvisioned: true });
     expect(fixture.yantraHome).not.toBe(developerHome);
     expect(process.env.YANTRA_HOME).toBe(fixture.yantraHome);
-    expect(fixture.launchOptions).toEqual({ chromeOverridePath: executablePath });
+    expect(fixture.launchOptions).toEqual({
+      browserSelection: { source: 'system', executablePath },
+    });
 
     await fixture.cleanup();
     expect(process.env.YANTRA_HOME).toBe(developerHome);

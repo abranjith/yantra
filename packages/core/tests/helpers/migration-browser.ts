@@ -16,8 +16,9 @@ import {
 export interface MigrationBrowserFixture {
   readonly yantraHome: string;
   readonly executablePath: string | undefined;
-  readonly launchOptions: Pick<LaunchOptions, 'chromeOverridePath'> | Record<string, never>;
-  /** The same choice expressed through the current selection contract. */
+  /** Launch options naming the provisioned browser, through the one selection contract. */
+  readonly launchOptions: Pick<LaunchOptions, 'browserSelection'> | Record<string, never>;
+  /** The same choice as a bare selection, for callers that take one directly. */
   readonly selection: BrowserSelection | undefined;
   cleanup(): Promise<void>;
 }
@@ -48,7 +49,9 @@ export async function beginMigrationBrowserFixture(options?: {
   return {
     yantraHome,
     executablePath: configuredPath,
-    launchOptions: configuredPath ? { chromeOverridePath: configuredPath } : {},
+    launchOptions: configuredPath
+      ? { browserSelection: { source: 'system' as const, executablePath: configuredPath } }
+      : {},
     selection: configuredPath
       ? { source: 'system' as const, executablePath: configuredPath }
       : undefined,

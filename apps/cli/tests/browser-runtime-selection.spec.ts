@@ -6,7 +6,7 @@
  * running — and nothing in the output says so.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -192,14 +192,41 @@ describe('@no-llm CLI browser runtime selection', () => {
     await expect(rm(configPathBefore)).rejects.toThrow();
   }, 60_000);
 
-  it('registers no new CLI flags for browser selection in this feature', async () => {
+  it('leaves config.yaml byte-identical after an overridden run', async () => {
+    const configPath = join(home, 'config.yaml');
+    const original = [
+      '# hand edited',
+      'version: 1',
+      'browser:',
+      '  source: managed',
+      '  executable_path: null',
+      '',
+    ].join('\n');
+    await writeFile(configPath, original);
+
+    const probe = makeProbe();
+    const runtime = await buildOrchestratorRuntime({
+      browser: {
+        services: probe.services,
+        selection: { source: 'system', executablePath: '/opt/chrome/chrome' },
+      },
+    });
+    runtime.close();
+
+    // An invocation override is ephemeral: not one byte of the persisted
+    // selection may move, comments included.
+    expect(await readFile(configPath, 'utf8')).toBe(original);
+  }, 60_000);
+
+  it('keeps browser selection flags off `config`, which launches nothing', async () => {
     const { makeConfigCommand } = await import('../src/commands/config.js');
     const command = makeConfigCommand();
 
     const flags = command.commands.flatMap((sub) => sub.options.map((o) => o.long));
 
-    // FEAT-045 owns `--browser` / `--browser-path`; this feature adds the
-    // programmatic seam only.
+    // `config` writes the persisted binding through its generic key surface; an
+    // invocation override there would be a dead control. The full registration
+    // matrix lives in `tests/browser-options.spec.ts`.
     expect(flags).not.toContain('--browser');
     expect(flags).not.toContain('--browser-path');
   });

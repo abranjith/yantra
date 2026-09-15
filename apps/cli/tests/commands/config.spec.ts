@@ -212,4 +212,35 @@ describe('@no-llm config command', () => {
       code: 'ENOENT',
     });
   });
+
+  // The browser binding is installation state, so it must be reachable through
+  // the same key surface as every other `config.yaml` key — no second list.
+  describe('browser binding keys', () => {
+    it('sets and unsets browser.source through the generic key surface', async () => {
+      await run(['set', 'browser.source', 'managed']);
+      const loaded = await loadConfig();
+      expect(loaded.isOk && loaded.value.browser.source).toBe('managed');
+
+      stdout = [];
+      await run(['get', 'browser.source']);
+      expect(stdout.join('')).toContain('managed');
+
+      await run(['unset', 'browser.source']);
+      const reset = await loadConfig();
+      expect(reset.isOk && reset.value.browser.source).toBe('auto');
+    });
+
+    it('refuses an executable path under a non-system source and names the repair', async () => {
+      await expect(
+        run(['set', 'browser.executable_path', '/opt/google/chrome/chrome']),
+      ).rejects.toBeInstanceOf(CommanderError);
+      expect(stderr.join('')).toContain('yantra browser use system --path');
+    });
+
+    it('rejects a browser key that is not in the schema', async () => {
+      await expect(run(['set', 'browser.selected_build', '153.0.8010.36'])).rejects.toBeInstanceOf(
+        CommanderError,
+      );
+    });
+  });
 });

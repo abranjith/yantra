@@ -35,6 +35,14 @@ node apps/cli/dist/bin.js browser install
 
 The download is stored below Yantra's resolved data directory and does not modify external Chrome installations. JSON and non-interactive use require explicit acceptance with `browser install --yes`; see the [managed-browser usage guide](docs/usage.md#install-a-managed-browser) before automating that flag.
 
+To see which browser Yantra will actually use, pin a different one, or test the selected browser against the primitives Yantra needs — all locally, with no network access:
+
+```console
+node apps/cli/dist/bin.js browser list
+node apps/cli/dist/bin.js browser use system
+node apps/cli/dist/bin.js browser check
+```
+
 The smallest useful no-model task uses keyless DuckDuckGo search and local synthesis. It contacts public sites and writes a local run directory:
 
 ```console
@@ -61,7 +69,7 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 - Promote successful browser traces or author reviewable YAML workflows, then replay them with a fixed plan that a model cannot steer.
 - Schedule saved workflows through a local daemon. Scheduled runs are always zero-LLM and pause rather than auto-confirm protected actions.
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
-- Manage configuration, models, credentials, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
+- Manage configuration, models, credentials, browser selection, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
 
 ## Safety and current boundaries
 
@@ -80,6 +88,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Configuration, Models, Credentials, and Storage](docs/features/configuration.md) — the two-file model, `config.yaml` reference, storage layout, and environment variables.
 - [Browser Resolution and Lifecycle](docs/features/browser-resolution-and-lifecycle.md) — which browser Yantra picks, local capability checking instead of a version floor, and startup and shutdown resource ownership.
 - [Managed Stable Installation](docs/features/managed-stable-installation.md) — consented Chrome for Testing acquisition, verification, storage, retries, and current limitations.
+- [Browser Selection and Diagnostics](docs/features/browser-selection-and-diagnostics.md) — persisting and overriding the browser choice, the local inventory, and explicit compatibility checking.
 - [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
 - [Research](docs/features/research.md) — agentic and deterministic multi-hop research.
 - [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`.

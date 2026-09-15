@@ -7,6 +7,7 @@ import * as resolverModule from '../../src/browser/browser-resolver.js';
 import {
   BrowserCompatibilityError,
   BrowserInstallOfferDeclinedError,
+  BrowserLaunchError,
   BrowserResolutionError,
   ManagedCoordinationError,
 } from '../../src/browser/errors.js';
@@ -511,13 +512,20 @@ describe('@no-llm LocalBrowserProvider startup', () => {
       logger,
     });
 
+    // The options surface is strict, so a hopeful bypass flag cannot even be
+    // spelled — it is rejected as an unknown option rather than ignored.
     await expect(
       provider.launch({
         profile: { kind: 'ephemeral' },
-        // Any hopeful bypass flag is simply not part of the contract.
         ...({ skipCompatibilityCheck: true } as Record<string, unknown>),
       }),
-    ).rejects.toBeInstanceOf(BrowserCompatibilityError);
+    ).rejects.toBeInstanceOf(BrowserLaunchError);
+    expect(services.compatibility.check).not.toHaveBeenCalled();
+
+    // And with a valid options object the compatibility gate still refuses.
+    await expect(provider.launch({ profile: { kind: 'ephemeral' } })).rejects.toBeInstanceOf(
+      BrowserCompatibilityError,
+    );
   });
 
   it('releases the managed reservation when compatibility refuses the browser', async () => {
@@ -668,7 +676,7 @@ describe('@no-llm LocalBrowserProvider startup', () => {
     });
   });
 
-  it('translates the legacy override into a system selection', async () => {
+  it('passes a custom executable through as one system selection', async () => {
     const { services } = makeServices(recorder);
     mockLaunch.mockResolvedValue(makeLaunched(recorder));
     const provider = new LocalBrowserProvider({
@@ -679,13 +687,33 @@ describe('@no-llm LocalBrowserProvider startup', () => {
 
     await provider.launch({
       profile: { kind: 'ephemeral' },
-      chromeOverridePath: '/opt/chrome/chrome',
+      browserSelection: { source: 'system', executablePath: '/opt/chrome/chrome' },
     });
 
     expect(services.resolver.resolve).toHaveBeenCalledWith({
       source: 'system',
       executablePath: '/opt/chrome/chrome',
     });
+  });
+
+  it('rejects the removed legacy override key rather than ignoring it', async () => {
+    const { services } = makeServices(recorder);
+    mockLaunch.mockResolvedValue(makeLaunched(recorder));
+    const provider = new LocalBrowserProvider({
+      profileStore: makeProfileStore(recorder),
+      services,
+      logger,
+    });
+
+    // Strict options: a caller still passing the old field is told so rather
+    // than silently getting whatever the resolver would have picked anyway.
+    await expect(
+      provider.launch({
+        profile: { kind: 'ephemeral' },
+        chromeOverridePath: '/opt/chrome/chrome',
+      } as never),
+    ).rejects.toThrow();
+    expect(services.resolver.resolve).not.toHaveBeenCalled();
   });
 
   it('never logs the profile path or launch arguments', async () => {

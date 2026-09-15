@@ -141,6 +141,21 @@ export const configSchema = z
       .object({ pi_auth_path: absolutePath.nullable().default(null) })
       .strict()
       .default({}),
+    /**
+     * Which browser binary Yantra launches.
+     *
+     * This is installation state, not a preference: it answers "what is
+     * installed and selected on this machine?", which is the question
+     * `config.yaml` owns. `executable_path` is meaningful only under
+     * `source: system` — see the cross-field rule in `superRefine` below.
+     */
+    browser: z
+      .object({
+        source: z.enum(['auto', 'managed', 'system']).default('auto'),
+        executable_path: absolutePath.nullable().default(null),
+      })
+      .strict()
+      .default({}),
   })
   .strict()
   .superRefine((config, context) => {
@@ -163,6 +178,17 @@ export const configSchema = z
           message: 'storage directories must not be nested inside the default data directory',
         });
       }
+    }
+    // One grammar for "is this browser binding valid?", shared by every load
+    // path and by `yantra config validate`. A source change that leaves a stale
+    // executable_path behind is exactly the half-written state this refuses, so
+    // the writer never produces an intermediate document either.
+    if (config.browser.executable_path !== null && config.browser.source !== 'system') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['browser', 'executable_path'],
+        message: `an explicit executable path is legal only with source "system", not "${config.browser.source}"; run \`yantra browser use system --path <path>\``,
+      });
     }
     const seen = new Set<string>();
     for (const [index, model] of config.models.entries()) {
@@ -199,4 +225,6 @@ export const KNOWN_CONFIG_KEYS = [
   'retention.runs_days',
   'retention.corrupt_index_keep',
   'agent.pi_auth_path',
+  'browser.source',
+  'browser.executable_path',
 ] as const;

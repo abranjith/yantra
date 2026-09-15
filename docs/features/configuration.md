@@ -68,6 +68,8 @@ This is the complete current schema:
 | `retention.runs_days`                         | Non-negative integer; `0` disables run pruning                                                                                     | `30`                                  |
 | `retention.corrupt_index_keep`                | Non-negative integer; `0` keeps no corrupt-index backups                                                                           | `3`                                   |
 | `agent.pi_auth_path`                          | Absolute path or `null`                                                                                                            | `null`                                |
+| `browser.source`                              | `auto`, `managed`, or `system`                                                                                                     | `auto`                                |
+| `browser.executable_path`                     | Absolute path or `null`; legal only with `browser.source: system`                                                                  | `null`                                |
 
 The old camel-case spelling `retention.runsDays` is not accepted. Use
 `retention.runs_days`.
@@ -101,7 +103,26 @@ retention:
   corrupt_index_keep: 3
 agent:
   pi_auth_path: null
+browser:
+  source: auto
+  executable_path: null
 ```
+
+### Records which browser Yantra launches
+
+The `browser` block is installation state, so it answers "what is installed and selected on this
+machine?" rather than "what do I prefer?". `browser.source` chooses between automatic resolution, the
+Yantra-managed build, and external discovery; `browser.executable_path` names one specific external
+binary and is legal **only** with `source: system`. Setting a path under `auto` or `managed` is a
+validation failure whose message names `yantra browser use system --path <path>` as the repair, so
+`yantra config validate` refuses a hand-written file that pairs them.
+
+Both keys are reachable through the ordinary key surface (`yantra config get/set/unset/validate`), and
+`yantra prefs set browser.source ...` redirects to `yantra config set` by name rather than writing the
+wrong file. `yantra browser use` writes both fields in one mutation so the file never holds a stale
+path under a source that cannot mean one. See
+[Browser Selection and Diagnostics](browser-selection-and-diagnostics.md) for the commands and for the
+per-invocation `--browser` / `--browser-path` overrides, which change nothing on disk.
 
 ### Keeps references instead of literal credentials
 

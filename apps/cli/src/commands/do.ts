@@ -24,6 +24,11 @@ import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
 import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import {
+  addBrowserSelectionOptions,
+  resolveBrowserSelectionOverride,
+  type BrowserSelectionOptions,
+} from '../browser-options.js';
 import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
@@ -38,7 +43,7 @@ import {
   resolveTemplateRef,
 } from '../template-ref.js';
 
-interface DoOptions extends AgentOptions {
+interface DoOptions extends AgentOptions, BrowserSelectionOptions {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly template?: string;
@@ -69,7 +74,7 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
     .alias('discover')
     .description('Run a multi-turn web agent that uses Yantra tools and publishes a Brief.')
     .argument('<goal>', 'browser or web goal to accomplish');
-  addAgentOptions(command)
+  addBrowserSelectionOptions(addAgentOptions(command))
     .addOption(
       new Option('--allow-host <host>', 'restrict outbound work to a host (repeatable)')
         .argParser(collect)
@@ -98,6 +103,9 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
 export const exitCodeForDoOutcome = exitCodeForAgenticOutcome;
 
 async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
+  // A conflicting `--browser` pair is a validation failure, resolved before any
+  // provider session or run directory exists.
+  const browserSelection = resolveBrowserSelectionOverride(options);
   const effective = await runtime.resolveDefaults();
   const agent = await runtime.resolveAgent('do', options, runtime.env, effective);
   if (agent.mode === 'no-llm') {
@@ -175,6 +183,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
           runtime.isTty && !json
             ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
             : null,
+        ...(browserSelection === undefined ? {} : { browserSelection }),
       },
     );
     if (template !== undefined && outcome.kind === 'published') {

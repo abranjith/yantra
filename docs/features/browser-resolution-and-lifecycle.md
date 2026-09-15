@@ -176,10 +176,10 @@ yantra ask "what changed in the release notes"
 yantra run <workflow-name>
 ```
 
-Today `auto` is the effective answer for every invocation, because there is no persisted selection
-and no per-invocation flag yet (see [Limitations](#limitations)). What you control is which browser
-`auto` finds: install the Yantra-managed build and `auto` prefers it; leave it uninstalled and `auto`
-discovers your system Chrome or Chromium.
+`auto` is the default answer when nothing has been configured, and what it finds is still yours to
+control: install the Yantra-managed build and `auto` prefers it; leave it uninstalled and `auto`
+discovers your system Chrome or Chromium. To persist a different source, or to override one
+invocation, see [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md).
 
 To acquire the managed build, see [Managed Stable Installation](managed-stable-installation.md); it
 owns the consent, download, and verification path.
@@ -206,25 +206,26 @@ yantra config data-dir /new/path
 
 ### `yantra doctor`
 
-Two checks come from this feature. Both are read-only: doctor reports what is there and never
-launches a browser to manufacture a passing result.
+Two of doctor's browser checks read this feature's contracts. Both are read-only: doctor reports
+what is there and never launches a browser to manufacture a passing result.
 
-| Check                  | Reports                                                                                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `chrome.detected`      | The resolver's actual selection — version, ownership, and canonical path, with the source, origin, and reason it chose. |
-| `chrome.compatibility` | Cached local evidence for that browser under the `automation` profile.                                                  |
+| Check                   | Reports                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `browser.selection`     | The resolver's actual selection — version, ownership, and canonical path, with the source, origin, and reason it chose. |
+| `browser.compatibility` | Cached local evidence for that browser under the `automation` profile.                                                  |
 
-`chrome.detected` fails with the resolution error's own message, code, and remediation when no
+`browser.selection` fails with the resolution error's own message, code, and remediation when no
 browser can be selected. It uses the one resolution path every launch uses, so it cannot disagree
 with what a run will do.
 
-`chrome.compatibility` reports one of three states honestly:
+`browser.compatibility` reports these states honestly:
 
 | State        | Status | Meaning                                                                                                                |
 | ------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `passed`     | ok     | Every required primitive was proved, with the pairing (`tested` or `capability-checked`), tested build, and timestamp. |
 | `failed`     | error  | Named failing primitives and the failure class, with the check's own remediation.                                      |
 | `unverified` | warn   | This browser has not been checked on this machine yet, or no browser was selected at all.                              |
+| `stale`      | warn   | The recorded evidence describes a different executable than the one now selected.                                      |
 
 `yantra doctor` exits `3` when any check is an error, and `0` otherwise; warnings do not fail it.
 
@@ -305,29 +306,29 @@ Only the ready pointer makes a managed installation selectable. Any other `insta
 the managed root is an orphan by construction — never an alternate version, never selectable, and
 never a blocker for ordinary use. This feature only enumerates orphans; it deletes nothing.
 
-There is no persisted browser selection: `config.yaml` has no browser block, and the selection reader
-this feature consumes reports "none configured" by default. No new permission, credential, or
-authentication path is involved. Browser selection is not consent to use your personal browsing
-data: the existing refusal of real Chrome profile roots is unchanged, and external browsers and their
-profiles are read and launched but never modified.
+The persisted selection this feature's resolver reads lives in the `browser` block of `config.yaml`
+and is written only by `yantra browser use` or the ordinary configuration key surface; see
+[Browser Selection and Diagnostics](browser-selection-and-diagnostics.md). No new permission,
+credential, or authentication path is involved. Browser selection is not consent to use your personal
+browsing data: the existing refusal of real Chrome profile roots is unchanged, and external browsers
+and their profiles are read and launched but never modified.
 
 Resolution, the compatibility check, the evidence cache, session and recorder startup, `doctor`, and
 `config data-dir` never resolve a Stable build, download anything, or check for updates.
 
 ## Limitations
 
-- There is no way to pin a browser choice yet. `yantra browser use`, `browser check`, `browser list`,
-  and `browser update` do not exist, `config.yaml` has no `browser:` block, and there are no
-  `--browser` or `--browser-path` flags. `auto` plus `yantra browser install` is what works today.
-  Some remediation strings and the doctor hint for unverified evidence already name those future
-  commands; they are guidance text from the current code, not commands you can run.
-- Selections other than `auto` — `managed`, `system`, and an explicit executable path — are reachable
-  only through the core API. They are honored exactly as described here, but no shipped command
-  surface supplies them.
+- `yantra browser update` does not exist. The remediation strings that name it are guidance text from
+  the current code, not a command you can run. Pinning, rollback, and a selectable version history are
+  out of scope by design: one ready pointer names the only selectable managed installation.
+- The command surface for every selection this resolver honors — `yantra browser use`, `browser list`,
+  `browser check`, and the `--browser` / `--browser-path` flags — is documented in
+  [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md) rather than here. This
+  document describes the resolution and lifecycle contract those commands drive.
 - A compatibility failure inside a task command (`ask`, `research`, `do`, `run`, `resume`) aborts the
-  run with the typed failure and its remediation. Only `yantra doctor`, `yantra browser install`, and
-  `yantra config data-dir` currently map browser environment failures onto the documented exit code
-  `3` themselves.
+  run with the typed failure and its remediation. `yantra doctor`, `yantra browser install`,
+  `yantra browser check`, and `yantra config data-dir` map browser environment failures onto the
+  documented exit code `3` themselves.
 - Compatibility evidence is per machine, per executable identity, and per probe profile. It is not
   shared between hosts, and replacing the binary in place invalidates it.
 - The check proves the primitives Yantra needs from a browser. It is not a general Chrome health

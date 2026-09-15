@@ -151,9 +151,8 @@ Human-mode success writes one of these results to stdout:
 - `Installed managed Chrome <build> at <path>.`
 - `Managed Chrome <build> is already installed at <path>. To replace it, run yantra browser update.`
 
-If an injected selection reader reports that the installation is not selected, stderr additionally
-emits the current guidance string `yantra browser use managed`; the installer itself does not change
-configuration.
+If the configured selection does not name this installation, stderr additionally points at
+`yantra browser use managed`; the installer itself does not change configuration.
 
 JSON mode writes exactly one newline-terminated object to stdout:
 
@@ -252,9 +251,10 @@ are never modified by this feature.
   flags.
 - The missing-browser offer is once per process, not once per task. After a decline, timeout, or
   failed offer-driven install, later sessions in that process do not prompt again.
-- FEAT-044 adds only `yantra browser install`. The current installer may emit the guidance strings
-  `yantra browser update` and `yantra browser use managed`, but the switching/diagnostic and update
-  subcommands belong to FEAT-045 and FEAT-046 and are not claimed here as available commands.
+- This document covers `yantra browser install` only. Selecting the installed build, listing the
+  browsers on the machine, and testing one belong to
+  [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md). `yantra browser update`
+  does not exist yet, so the guidance string naming it is text, not a command you can run.
 - Installation is the only consented network path in this feature. Ordinary startup and installed
   browser use do not check for newer Stable builds, and there are no background update checks,
   reminders, or schedules.

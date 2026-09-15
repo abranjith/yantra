@@ -199,6 +199,220 @@ function smokeReport(
   });
 }
 
+describe('doctor browser provenance', () => {
+  /** Core browser checks shaped the way `packages/core` actually emits them. */
+  function browserChecks(
+    overrides: {
+      readonly selection?: Partial<{
+        status: 'ok' | 'warn' | 'error';
+        message: string;
+        details: Record<string, unknown>;
+        fixHint: string | null;
+      }>;
+      readonly compatibility?: Partial<{
+        status: 'ok' | 'warn' | 'error';
+        message: string;
+        details: Record<string, unknown>;
+        fixHint: string | null;
+      }>;
+      readonly managed?: Partial<{
+        status: 'ok' | 'warn' | 'error';
+        message: string;
+        details: Record<string, unknown>;
+        fixHint: string | null;
+      }>;
+    } = {},
+  ) {
+    return [
+      {
+        id: 'browser.selection' as const,
+        status: 'ok' as const,
+        message: 'external Chrome 153.0.8010.36 at /opt/google/chrome/chrome',
+        details: {
+          path: '/opt/google/chrome/chrome',
+          version: '153.0.8010.36',
+          ownership: 'external',
+          source: 'auto',
+          selectionOrigin: 'default',
+          selectionReason: 'system-discovery',
+          alternatives: ['/opt/google/chrome/chrome'],
+        } as Record<string, unknown>,
+        fixHint: null as string | null,
+        ...overrides.selection,
+      },
+      {
+        id: 'browser.compatibility' as const,
+        status: 'ok' as const,
+        message: 'Chrome 153.0.8010.36 passed every required capability.',
+        details: {
+          compatibility: 'passed',
+          pairing: 'capability-checked',
+          testedBuild: '152.0.7977.75',
+        } as Record<string, unknown>,
+        fixHint: null as string | null,
+        ...overrides.compatibility,
+      },
+      {
+        id: 'browser.managed' as const,
+        status: 'ok' as const,
+        message: 'No Yantra-managed browser is installed.',
+        details: {
+          managedRoot: '/home/u/.yantra/data/browsers',
+          orphanCount: 2,
+          reclaimableBytes: 3072,
+          status: 'absent',
+        } as Record<string, unknown>,
+        fixHint: null as string | null,
+        ...overrides.managed,
+      },
+    ];
+  }
+
+  function runtimeFor(checks: ReturnType<typeof browserChecks>): {
+    readonly runtime: Partial<DoctorRuntime>;
+    readonly stdout: () => string;
+  } {
+    const stdout = capture();
+    const stderr = capture();
+    const coreDoctor: DoctorRuntime['coreDoctor'] = () =>
+      Promise.resolve({
+        generatedAt: '2026-09-14T00:00:00.000Z',
+        cachedFrom: null,
+        overall: checks.some((check) => check.status === 'error') ? 'error' : 'ok',
+        checks,
+      });
+    return {
+      runtime: {
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        env: {},
+        isTty: false,
+        coreDoctor,
+        agentDiagnostics: () => Promise.resolve([]),
+        loadPreferences: () => Promise.resolve(new Map()),
+      },
+      stdout: stdout.read,
+    };
+  }
+
+  async function run(
+    checks: ReturnType<typeof browserChecks>,
+    args: readonly string[] = ['--json'],
+  ): Promise<{ readonly output: string; readonly failed: boolean }> {
+    const { runtime, stdout } = runtimeFor(checks);
+    const failed = await makeDoctorCommand(runtime)
+      .exitOverride()
+      .parseAsync([...args], { from: 'user' })
+      .then(
+        () => false,
+        () => true,
+      );
+    return { output: stdout(), failed };
+  }
+
+  it('titles the three browser checks and keeps no retired chrome id or 120 threshold', async () => {
+    const { output } = await run(browserChecks());
+    const payload = JSON.parse(output) as {
+      checks: readonly { id: string; title: string }[];
+    };
+
+    // The command appends its own configuration checks, so this asserts the
+    // browser namespace rather than the whole report.
+    expect(
+      payload.checks.filter((check) => check.id.startsWith('browser.')).map((c) => c.id),
+    ).toEqual(['browser.selection', 'browser.compatibility', 'browser.managed']);
+    for (const check of payload.checks) expect(check.title).not.toBe(check.id);
+    // Plan §7.3 deletes the minimum-major decision and its doctor text.
+    expect(output).not.toContain('120');
+    expect(output).not.toContain('chrome.detected');
+    expect(output).not.toContain('version_min');
+  });
+
+  it('exposes the effective browser as one stable JSON block', async () => {
+    const { output } = await run(browserChecks());
+    expect(JSON.parse(output)).toMatchObject({
+      browser: {
+        source: 'auto',
+        origin: 'default',
+        ownership: 'external',
+        executablePath: '/opt/google/chrome/chrome',
+        browserVersion: '153.0.8010.36',
+        compatibility: 'capability-checked',
+        managedRoot: '/home/u/.yantra/data/browsers',
+        managedBuild: null,
+        orphanCount: 2,
+        reclaimableBytes: 3072,
+      },
+    });
+  });
+
+  it('reports unverified compatibility honestly rather than as passed', async () => {
+    const { output } = await run(
+      browserChecks({
+        compatibility: {
+          status: 'warn',
+          details: { compatibility: 'unverified' },
+          fixHint: 'Run `yantra browser check` to test it locally.',
+        },
+      }),
+    );
+    expect(JSON.parse(output)).toMatchObject({ browser: { compatibility: 'unverified' } });
+  });
+
+  it('labels stale evidence as stale', async () => {
+    const { output } = await run(
+      browserChecks({
+        compatibility: { status: 'warn', details: { compatibility: 'stale' } },
+      }),
+    );
+    expect(JSON.parse(output)).toMatchObject({ browser: { compatibility: 'stale' } });
+  });
+
+  it('carries the remediation and alternatives for a broken selection, and exits 3', async () => {
+    const { output, failed } = await run(
+      browserChecks({
+        selection: {
+          status: 'error',
+          message: 'No Chrome or Chromium installation was found.',
+          details: { code: 'missing', alternatives: [] },
+          fixHint: 'Install Chrome or Chromium, or run `yantra browser install`.',
+        },
+      }),
+    );
+
+    expect(failed).toBe(true);
+    expect(JSON.parse(output)).toMatchObject({
+      browser: { remediation: 'Install Chrome or Chromium, or run `yantra browser install`.' },
+    });
+  });
+
+  it('renders the same ownership, path, and version in the terminal as in JSON', async () => {
+    const checks = browserChecks();
+    const json = JSON.parse((await run(checks)).output) as {
+      browser: { ownership: string; executablePath: string; browserVersion: string };
+    };
+    const terminal = (await run(checks, [])).output;
+
+    expect(terminal).toContain(json.browser.ownership);
+    expect(terminal).toContain(json.browser.executablePath);
+    expect(terminal).toContain(json.browser.browserVersion);
+  });
+
+  it('shows the managed root and reclaimable totals in the terminal', async () => {
+    const terminal = (await run(browserChecks(), [])).output;
+    expect(terminal).toContain('/home/u/.yantra/data/browsers');
+    expect(terminal).toContain('2 superseded installation(s)');
+  });
+
+  // `capability-checked` is the steady state — Chrome ships Stable ahead of the
+  // tested pairing — so it must never read as a standing warning.
+  it('does not style capability-checked as a warning', async () => {
+    const terminal = (await run(browserChecks(), [])).output;
+    expect(terminal).toContain('capability-checked');
+    expect(terminal.toLowerCase()).not.toContain('warning');
+  });
+});
+
 describe('doctor option surface', () => {
   const registered = (): readonly string[] =>
     makeDoctorCommand()

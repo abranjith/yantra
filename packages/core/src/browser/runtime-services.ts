@@ -10,6 +10,7 @@
 import { LocalBrowserResolver } from './browser-resolver.js';
 import { CompatibilityCache } from './compatibility-cache.js';
 import { LocalBrowserCompatibilityService } from './compatibility.js';
+import { ConfigBrowserSelectionReader } from './config-selection.js';
 import { DRIVER_COMPATIBILITY } from './driver-compatibility.js';
 import type { InstallOfferGateway } from './install-offer-gateway.js';
 import type {
@@ -17,6 +18,7 @@ import type {
   BrowserSelectionReader,
   DriverCompatibilityDescriptor,
 } from './installation-types.js';
+import { LocalBrowserInventoryService } from './inventory.js';
 import { LocalManagedCoordinator } from './managed-coordination.js';
 import type { ManagedInstallService } from './managed-install-types.js';
 import { LocalManagedInstallService } from './managed-install.js';
@@ -26,8 +28,8 @@ import type { Logger, ProfileStore } from './types.js';
 
 export interface LocalBrowserRuntimeServicesDeps {
   /**
-   * Persisted selection. FEAT-045 supplies the validated config adapter; until
-   * then the default reports "no configured selection" and `auto` applies.
+   * Persisted selection. Defaults to the validated `config.yaml` adapter, so
+   * every launch-capable caller honors `yantra browser use` without opting in.
    */
   readonly selectionReader?: BrowserSelectionReader;
   readonly profileStore?: ProfileStore;
@@ -56,8 +58,9 @@ export function createLocalBrowserRuntimeServices(
     liveMutationCandidate: coordinator.liveMutationCandidate,
   });
 
+  const selectionReader = deps.selectionReader ?? new ConfigBrowserSelectionReader();
   const resolver = new LocalBrowserResolver({
-    ...(deps.selectionReader ? { selectionReader: deps.selectionReader } : {}),
+    selectionReader,
     managedState,
     supportedHost: (platform, arch) => descriptor.isSupportedHost(platform, arch),
   });
@@ -75,6 +78,13 @@ export function createLocalBrowserRuntimeServices(
     compatibility,
     coordinator,
     managedState,
+    inventory: new LocalBrowserInventoryService({
+      resolver,
+      managedState,
+      compatibility,
+      selectionReader,
+      descriptor,
+    }),
     // Doctor and other read-only consumers must not construct the acquisition
     // graph merely by asking for browser resolution services.
     get installService() {

@@ -7,6 +7,8 @@ import type {
   BrowserRuntimeServices,
   CompatibilityEvidenceState,
   CompatibilityResult,
+  ManagedInventory,
+  ManagedReadyRecord,
   ResolvedBrowserInstallation,
 } from '../../src/browser/installation-types.js';
 import type * as Paths from '../../src/browser/paths.js';
@@ -89,6 +91,17 @@ function makeInstallation(
   };
 }
 
+const READY: ManagedReadyRecord = {
+  schemaVersion: 1,
+  installationId: 'one',
+  browser: 'chrome',
+  platform: 'linux',
+  buildId: '153.0.8010.36',
+  cacheRootRelative: 'installation-one',
+  executableRelative: 'chrome/chrome',
+  verifiedAt: '2026-09-14T00:00:00.000Z',
+};
+
 function passingEvidence(installation: ResolvedBrowserInstallation): CompatibilityResult {
   return {
     schemaVersion: 1,
@@ -113,11 +126,13 @@ function makeServices(
     resolution?: BrowserResolution;
     evidence?: CompatibilityEvidenceState;
     resolveError?: Error;
+    managed?: ManagedInventory;
   } = {},
 ): BrowserRuntimeServices & { readonly probes: number } {
   let probes = 0;
   const resolution =
     opts.resolution ?? ({ status: 'resolved', installation: makeInstallation() } as const);
+  const managed: ManagedInventory = opts.managed ?? { ready: { status: 'absent' }, orphans: [] };
   const services = {
     resolver: {
       resolve: vi.fn(() =>
@@ -137,8 +152,8 @@ function makeServices(
       hasActiveUse: vi.fn().mockResolvedValue(false),
     },
     managedState: {
-      readReady: vi.fn().mockResolvedValue({ status: 'absent' }),
-      readInventory: vi.fn().mockResolvedValue({ ready: { status: 'absent' }, orphans: [] }),
+      readReady: vi.fn().mockResolvedValue(managed.ready),
+      readInventory: vi.fn().mockResolvedValue(managed),
     },
   } as unknown as BrowserRuntimeServices & { probes: number };
   Object.defineProperty(services, 'probes', { get: () => probes });
@@ -184,7 +199,7 @@ describe('@no-llm doctor', () => {
     it('returns overall=ok when everything passes', async () => {
       const report = await doctor({ refresh: true, services });
       expect(report.overall).toBe('ok');
-      expect(report.checks).toHaveLength(7);
+      expect(report.checks).toHaveLength(8);
     });
 
     it('has a valid ISO-8601 generatedAt', async () => {
@@ -198,10 +213,10 @@ describe('@no-llm doctor', () => {
     });
   });
 
-  describe('chrome.detected check', () => {
+  describe('browser.selection check', () => {
     it('reports the browser the resolver selected, with its provenance', async () => {
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.detected');
+      const check = report.checks.find((c) => c.id === 'browser.selection');
 
       expect(check?.status).toBe('ok');
       expect(check?.details).toMatchObject({
@@ -224,7 +239,7 @@ describe('@no-llm doctor', () => {
       });
 
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.detected');
+      const check = report.checks.find((c) => c.id === 'browser.selection');
 
       expect(check?.details).toMatchObject({ ownership: 'managed' });
     });
@@ -243,7 +258,7 @@ describe('@no-llm doctor', () => {
       });
 
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.detected');
+      const check = report.checks.find((c) => c.id === 'browser.selection');
 
       expect(check?.status).toBe('error');
       expect(check?.fixHint).toContain('yantra browser install');
@@ -255,15 +270,72 @@ describe('@no-llm doctor', () => {
 
       const report = await doctor({ refresh: true, services });
 
-      expect(report.checks).toHaveLength(7);
-      expect(report.checks.find((c) => c.id === 'chrome.detected')?.status).toBe('error');
+      expect(report.checks).toHaveLength(8);
+      expect(report.checks.find((c) => c.id === 'browser.selection')?.status).toBe('error');
     });
   });
 
-  describe('chrome.compatibility check', () => {
+  describe('browser.managed check', () => {
+    it('reports the managed root and an absent installation without installing', async () => {
+      const report = await doctor({ refresh: true, services });
+      const check = report.checks.find((c) => c.id === 'browser.managed');
+
+      expect(check?.status).toBe('ok');
+      expect(check?.details).toMatchObject({ status: 'absent', orphanCount: 0 });
+      expect(check?.details.managedRoot).toBeTruthy();
+    });
+
+    it('reports a ready build with its id', async () => {
+      services = makeServices({
+        managed: { ready: { status: 'ready', record: READY }, orphans: [] },
+      });
+
+      const report = await doctor({ refresh: true, services });
+      const check = report.checks.find((c) => c.id === 'browser.managed');
+
+      expect(check?.details).toMatchObject({ status: 'ready', buildId: '153.0.8010.36' });
+    });
+
+    it('reports orphan count and reclaimable bytes and collects nothing', async () => {
+      services = makeServices({
+        managed: {
+          ready: { status: 'ready', record: READY },
+          orphans: [
+            { cacheRootRelative: 'installation-old', bytes: 1024, hasLiveOwner: false },
+            { cacheRootRelative: 'installation-gone', bytes: 2048, hasLiveOwner: false },
+          ],
+        },
+      });
+
+      const report = await doctor({ refresh: true, services });
+      const check = report.checks.find((c) => c.id === 'browser.managed');
+
+      expect(check?.details).toMatchObject({ orphanCount: 2, reclaimableBytes: 3072 });
+      expect(check?.message).toContain('2 superseded installation(s)');
+      // Doctor has no collection path at all: there is nothing to have called.
+      expect(services.managedState.readInventory).toHaveBeenCalled();
+    });
+
+    it('reports an unusable ready pointer as an error naming install', async () => {
+      services = makeServices({
+        managed: {
+          ready: { status: 'invalid', reason: 'ready pointer is not valid JSON' },
+          orphans: [],
+        },
+      });
+
+      const report = await doctor({ refresh: true, services });
+      const check = report.checks.find((c) => c.id === 'browser.managed');
+
+      expect(check?.status).toBe('error');
+      expect(check?.fixHint).toContain('yantra browser install');
+    });
+  });
+
+  describe('browser.compatibility check', () => {
     it('reports passing local evidence with the pairing and tested build', async () => {
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.compatibility');
+      const check = report.checks.find((c) => c.id === 'browser.compatibility');
 
       expect(check?.status).toBe('ok');
       expect(check?.details).toMatchObject({
@@ -277,7 +349,7 @@ describe('@no-llm doctor', () => {
       services = makeServices({ evidence: { state: 'unverified' } });
 
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.compatibility');
+      const check = report.checks.find((c) => c.id === 'browser.compatibility');
 
       expect(check?.status).toBe('warn');
       expect(check?.details).toMatchObject({ compatibility: 'unverified' });
@@ -306,7 +378,7 @@ describe('@no-llm doctor', () => {
       });
 
       const report = await doctor({ refresh: true, services });
-      const check = report.checks.find((c) => c.id === 'chrome.compatibility');
+      const check = report.checks.find((c) => c.id === 'browser.compatibility');
 
       expect(check?.status).toBe('error');
       expect(check?.message).toContain('popup-session');
@@ -321,7 +393,9 @@ describe('@no-llm doctor', () => {
       // the tested pairing is now the normal case, not a fault.
       expect(rendered).not.toContain('120');
       expect(rendered).not.toMatch(/minimum (required )?version/i);
-      expect(report.checks.some((c) => c.id === ('chrome.version_min' as never))).toBe(false);
+      // The whole `chrome.` id namespace is retired: the replacement checks
+      // report selection provenance, not bare detection.
+      expect(report.checks.every((c) => !c.id.startsWith('chrome.'))).toBe(true);
     });
 
     it('never launches a browser to manufacture an ok result', async () => {
@@ -440,28 +514,101 @@ describe('@no-llm doctor', () => {
   });
 
   describe('cache behavior', () => {
+    /** The exact payload a fresh run writes, including its browser fingerprint. */
+    async function writtenCache(
+      bag: BrowserRuntimeServices,
+    ): Promise<Record<string, unknown> & { generatedAt: string }> {
+      mockReadFile.mockRejectedValue(new Error('ENOENT'));
+      await doctor({ refresh: true, services: bag });
+      const written = mockWriteFile.mock.calls.at(-1)?.[1];
+      return JSON.parse(String(written)) as Record<string, unknown> & { generatedAt: string };
+    }
+
     it('serves cached report when TTL has not expired', async () => {
-      const freshReport = {
-        generatedAt: new Date().toISOString(),
-        cachedFrom: null,
-        overall: 'ok' as const,
-        checks: [],
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(freshReport));
+      const cached = await writtenCache(services);
+      mockReadFile.mockResolvedValue(JSON.stringify(cached));
+      const keychain = keytarMocks.default.setPassword;
+      keychain.mockClear();
 
       const report = await doctor({ services });
-      expect(report.cachedFrom).toBe(freshReport.generatedAt);
-      expect(services.resolver.resolve).not.toHaveBeenCalled();
+
+      expect(report.cachedFrom).toBe(cached.generatedAt);
+      // The expensive probes are what the cache saves; the browser fingerprint
+      // is read on every invocation, by design, so that a selection change
+      // invalidates the report without `--refresh`.
+      expect(keychain).not.toHaveBeenCalled();
+    });
+
+    it('does not leak the fingerprint field into the returned report', async () => {
+      const cached = await writtenCache(services);
+      mockReadFile.mockResolvedValue(JSON.stringify(cached));
+
+      const report = await doctor({ services });
+
+      expect(report).not.toHaveProperty('browserFingerprint');
+    });
+
+    // The whole point of keying on browser identity: the user changes their
+    // selection and the next `doctor` describes the new browser, with no flag.
+    it('invalidates the cache when the effective browser changes', async () => {
+      const cached = await writtenCache(services);
+      mockReadFile.mockResolvedValue(JSON.stringify(cached));
+
+      const moved = makeServices({
+        resolution: {
+          status: 'resolved',
+          installation: makeInstallation({ canonicalPath: '/opt/other/chrome' }),
+        },
+      });
+      const report = await doctor({ services: moved });
+
+      expect(report.cachedFrom).toBeNull();
+      expect(report.checks.find((c) => c.id === 'browser.selection')?.details).toMatchObject({
+        path: '/opt/other/chrome',
+      });
+    });
+
+    it('invalidates the cache when the managed installation changes', async () => {
+      const cached = await writtenCache(services);
+      mockReadFile.mockResolvedValue(JSON.stringify(cached));
+
+      const installed = makeServices({
+        managed: { ready: { status: 'ready', record: READY }, orphans: [] },
+      });
+      const report = await doctor({ services: installed });
+
+      expect(report.cachedFrom).toBeNull();
+      expect(report.checks.find((c) => c.id === 'browser.managed')?.details).toMatchObject({
+        status: 'ready',
+      });
+    });
+
+    it('re-runs checks when a cache entry records no browser identity at all', async () => {
+      // Pre-fingerprint cache files cannot be trusted: nothing in them says
+      // which browser they described.
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({
+          generatedAt: new Date().toISOString(),
+          cachedFrom: null,
+          overall: 'ok' as const,
+          checks: [],
+        }),
+      );
+
+      const report = await doctor({ services });
+
+      expect(report.cachedFrom).toBeNull();
+      expect(report.checks.length).toBeGreaterThan(0);
     });
 
     it('re-runs checks when cache is stale (> 1 hour old)', async () => {
-      const staleReport = {
-        generatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        cachedFrom: null,
-        overall: 'ok' as const,
-        checks: [],
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(staleReport));
+      const cached = await writtenCache(services);
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({
+          ...cached,
+          generatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        }),
+      );
 
       const report = await doctor({ services });
       expect(report.cachedFrom).toBeNull(); // fresh run

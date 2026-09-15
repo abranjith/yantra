@@ -34,9 +34,9 @@ describe('@no-llm launch-options', () => {
       expect(opts.extraArgs).toEqual([]);
     });
 
-    it('applies default chromeOverridePath null', () => {
+    it('applies default browserSelection null', () => {
       const opts = parseLaunchOptions({ profile: ephemeralProfile });
-      expect(opts.chromeOverridePath).toBeNull();
+      expect(opts.browserSelection).toBeNull();
     });
   });
 
@@ -114,25 +114,45 @@ describe('@no-llm launch-options', () => {
     });
   });
 
-  describe('chromeOverridePath', () => {
+  // The legacy single-field override is gone: a custom executable is now one
+  // spelling of the single semantic selection, and the absolute-path grammar
+  // moved with it rather than being relaxed.
+  describe('custom executable through browserSelection', () => {
     it('rejects empty string', () => {
       expect(() =>
-        parseLaunchOptions({ profile: ephemeralProfile, chromeOverridePath: '' }),
+        parseLaunchOptions({
+          profile: ephemeralProfile,
+          browserSelection: { source: 'system', executablePath: '' },
+        }),
       ).toThrow(BrowserLaunchError);
     });
 
     it('rejects relative path', () => {
       expect(() =>
-        parseLaunchOptions({ profile: ephemeralProfile, chromeOverridePath: 'relative/path' }),
+        parseLaunchOptions({
+          profile: ephemeralProfile,
+          browserSelection: { source: 'system', executablePath: 'relative/path' },
+        }),
       ).toThrow(BrowserLaunchError);
     });
 
     it('accepts absolute path on POSIX', () => {
       const opts = parseLaunchOptions({
         profile: ephemeralProfile,
-        chromeOverridePath: '/usr/bin/chromium',
+        browserSelection: { source: 'system', executablePath: '/usr/bin/chromium' },
       });
-      expect(opts.chromeOverridePath).toBe('/usr/bin/chromium');
+      expect(opts.browserSelection).toEqual({
+        source: 'system',
+        executablePath: '/usr/bin/chromium',
+      });
+    });
+
+    it('rejects the removed legacy key rather than ignoring it', () => {
+      // The schema is strict, so a caller still passing the old field is told so
+      // instead of silently launching whatever the resolver picks.
+      expect(() =>
+        parseLaunchOptions({ profile: ephemeralProfile, chromeOverridePath: '/usr/bin/chromium' }),
+      ).toThrow(BrowserLaunchError);
     });
   });
 
@@ -206,25 +226,15 @@ describe('@no-llm launch-options', () => {
       });
     });
 
-    it('translates the legacy override into a system selection exactly once', () => {
+    it('carries a custom executable through as a system selection', () => {
       const opts = parseLaunchOptions({
         profile: ephemeralProfile,
-        chromeOverridePath: absolute,
+        browserSelection: { source: 'system', executablePath: absolute },
       });
       expect(selectionFromLaunchOptions(opts)).toEqual({
         source: 'system',
         executablePath: absolute,
       });
-    });
-
-    it('rejects the legacy override and a selection together', () => {
-      expect(() =>
-        parseLaunchOptions({
-          profile: ephemeralProfile,
-          chromeOverridePath: absolute,
-          browserSelection: { source: 'system', executablePath: absolute },
-        }),
-      ).toThrow(BrowserLaunchError);
     });
 
     it('rejects an executable path paired with a non-system source', () => {
