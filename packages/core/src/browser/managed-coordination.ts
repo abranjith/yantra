@@ -362,6 +362,29 @@ export class LocalManagedCoordinator implements ManagedCoordinator {
   }
 
   /**
+   * PIDs currently holding the installation open, for a refusal that can name them.
+   *
+   * A read-only projection of {@link findActiveReservation} — deliberately not a
+   * second liveness rule. "Stop the browser that is blocking me" is unactionable
+   * advice if the message cannot say which browser.
+   */
+  async activeUseOwners(): Promise<readonly number[]> {
+    const pids = new Set<number>();
+    for (const record of await this.readReservations()) {
+      if (record.child !== null) {
+        if ((await this.liveness.check(record.child)) !== 'dead') {
+          pids.add(record.child.pid);
+          continue;
+        }
+        continue;
+      }
+      const parentVerdict = await this.liveness.check(record.parent);
+      if (parentVerdict !== 'dead' || record.phase === 'starting') pids.add(record.parent.pid);
+    }
+    return [...pids];
+  }
+
+  /**
    * Candidate root a *live* mutation currently owns, for the orphan inventory.
    *
    * A dead owner's candidate is reported as an ordinary owner-less orphan,

@@ -276,6 +276,86 @@ describe('@no-llm browser command surface guarantees', () => {
     expect(useFlags).toContain('--path');
     expect(useFlags).not.toContain('--browser-path');
   });
+
+  // -------------------------------------------------------------------------
+  // `--dry-run` parity
+  // -------------------------------------------------------------------------
+
+  /**
+   * One idea, one spelling.
+   *
+   * `config data-dir --dry-run` already owns "report what this command would do
+   * without doing it". `browser update` reuses that exact spelling rather than
+   * inventing `--check`, which already means the opposite thing one noun over.
+   */
+  it('spells --dry-run identically on `browser update` and `config data-dir`', () => {
+    const update = subcommand('update').options.find((option) => option.long === '--dry-run');
+    const dataDir = makeConfigCommand()
+      .commands.find((sub) => sub.name() === 'data-dir')!
+      .options.find((option) => option.long === '--dry-run');
+
+    expect(update).toBeDefined();
+    expect(dataDir).toBeDefined();
+    expect(update!.flags).toBe(dataDir!.flags);
+    // Both are boolean switches defaulting to off: an absent flag must mean
+    // "do the thing", identically in both places.
+    expect(update!.defaultValue).toBe(dataDir!.defaultValue);
+    expect(update!.required).toBe(dataDir!.required);
+    expect(update!.optional).toBe(dataDir!.optional);
+  });
+
+  it('describes --dry-run as reporting without changing anything on both commands', () => {
+    const describeDryRun = (command: Command): string =>
+      String(
+        command.options.find((option) => option.long === '--dry-run')?.description ?? '',
+      ).toLowerCase();
+
+    const update = describeDryRun(subcommand('update'));
+    const dataDir = describeDryRun(
+      makeConfigCommand().commands.find((sub) => sub.name() === 'data-dir')!,
+    );
+
+    for (const description of [update, dataDir]) {
+      expect(description).toMatch(/without/u);
+      expect(description).toMatch(/chang|doing/u);
+    }
+  });
+
+  // `browser check` is a local probe with no network; `browser update
+  // --dry-run` is an availability query with no download. They are opposites,
+  // and a reader has to be able to tell which is which from the help alone.
+  it('distinguishes `browser check` from `browser update --dry-run` by help text alone', () => {
+    const check = helpProse('check');
+    const update = helpProse('update');
+
+    expect(check).toContain('no network');
+    expect(check).toContain('does not look for a newer browser');
+    expect(check).not.toContain('--dry-run');
+
+    expect(update).toContain('--dry-run');
+    expect(update).toContain('only command that checks whether a newer browser exists');
+    expect(update).toContain('download');
+  });
+
+  it.each(['--browser', '--browser-path'])(
+    'browser update registers neither %s — it always operates on the managed installation',
+    (flag) => {
+      expect(subcommand('update').options.map((option) => option.long)).not.toContain(flag);
+    },
+  );
+
+  it.each([
+    [['update', '--browser', 'managed'], 'commander.unknownOption'],
+    [['update', '--dry-run', '--browser-path', '/opt/chrome'], 'commander.unknownOption'],
+  ] as const)('rejects %s as an unknown option', async (argv, code) => {
+    const browser = makeBrowserCommand().exitOverride();
+    browser.configureOutput({ writeErr: () => undefined, writeOut: () => undefined });
+    for (const sub of browser.commands) {
+      sub.exitOverride();
+      sub.configureOutput({ writeErr: () => undefined, writeOut: () => undefined });
+    }
+    await expect(browser.parseAsync([...argv], { from: 'user' })).rejects.toMatchObject({ code });
+  });
 });
 
 function captureMessage(run: () => unknown): string {

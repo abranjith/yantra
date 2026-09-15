@@ -31,7 +31,8 @@ describe('@no-llm managed install helper packaging', () => {
     const helper = join(root, 'fake helper.mjs');
     await copyFile(FIXTURE, helper);
     const request: HelperRequest = {
-      protocolVersion: 1,
+      protocolVersion: 2,
+      mode: 'install',
       operationId: 'happy',
       browser: 'chrome',
       platform:

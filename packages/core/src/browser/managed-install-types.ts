@@ -4,18 +4,41 @@ import { z } from 'zod';
 import type {
   CompatibilityEvidenceState,
   CompatibilityResult,
+  ManagedMutationLease,
   ManagedReadyRecord,
   ManagedPlatform,
   ProbeFailureClass,
 } from './installation-types.js';
 
-export type ConsentSource = 'cli-accept-flag' | 'cli-prompt' | 'interactive-offer';
+export type ConsentSource =
+  | 'cli-accept-flag'
+  | 'cli-prompt'
+  | 'interactive-offer'
+  | 'cli-update-prompt';
+
+/**
+ * One acquisition the user accepted.
+ *
+ * There is deliberately one consent type rather than an install record and an
+ * update record: replacing a browser and installing the first one are the same
+ * decision about the same destination, and a second grammar for it would be a
+ * second place for "what did the user actually agree to?" to drift.
+ *
+ * `targetBuildId` is what makes consent verifiable. An update resolves Stable
+ * once, *before* asking, and the service refuses a record that names a
+ * different build — so the build a user accepted is the build that lands even
+ * if upstream publishes a new Stable mid-operation.
+ */
 export interface DownloadConsentRecord {
   readonly granted: true;
   readonly source: ConsentSource;
   readonly grantedAt: string;
   readonly destinationRoot: string;
   readonly approximateBytes: number;
+  /** The exact accepted build. `null` on a first install, which resolves Stable in-helper. */
+  readonly targetBuildId: string | null;
+  /** The build being replaced. `null` on a first install — nothing is replaced. */
+  readonly replaces: string | null;
 }
 export type ManagedInstallTrigger = 'explicit-command' | 'interactive-offer';
 export type ManagedInstallPhase =
@@ -110,6 +133,65 @@ export interface ManagedInstallService {
   install(request: ManagedInstallRequest): Promise<ManagedInstallOutcome>;
   collectOrphans(options?: { readonly bestEffort?: boolean }): Promise<OrphanCollectionReport>;
 }
+
+// ---------------------------------------------------------------------------
+// The single acquisition path
+// ---------------------------------------------------------------------------
+
+/**
+ * One consented acquisition, from orphan collection through atomic publication.
+ *
+ * `install` and `update` are the same transaction with different preconditions,
+ * so they share one implementation rather than two that must be kept in step.
+ * The candidate is not named here: the lease already names the exact child
+ * cache root its owner is authorized to write, and deriving the path from the
+ * authorization is what keeps them from disagreeing.
+ */
+export interface ManagedAcquisitionOptions {
+  readonly lease: ManagedMutationLease;
+  /** The exact accepted build, or `null` to let the helper resolve Stable (first install). */
+  readonly targetBuildId: string | null;
+  /** The build being replaced, for the outcome. `null` on a first install. */
+  readonly previousBuildId: string | null;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (event: ManagedInstallProgress) => void;
+  readonly deadlineMs?: number;
+  /**
+   * Re-verified immediately before publication; throw to abort.
+   *
+   * This is where update closes the window in which a browser starts *during*
+   * the download. Install passes nothing, so its behavior is unchanged.
+   */
+  readonly beforePublish?: () => Promise<void>;
+}
+
+export type ManagedAcquisitionResult =
+  | {
+      readonly status: 'published';
+      readonly record: ManagedReadyRecord;
+      readonly executablePath: string;
+      readonly compatibility: CompatibilityResult;
+      readonly orphans: OrphanCollectionReport;
+      readonly selection: ManagedSelectionNotice;
+      readonly previousBuildId: string | null;
+    }
+  | {
+      readonly status: 'cancelled';
+      readonly at: ManagedInstallPhase;
+      readonly retainedOrphan: string | null;
+    }
+  | { readonly status: 'failed'; readonly error: ManagedInstallError };
+
+/**
+ * The acquisition seam `update` calls instead of building a second one.
+ *
+ * A boundary test asserts that nothing else in `src/browser` spawns an
+ * acquisition helper, because a second path would be invisible until the two
+ * disagreed about verification or publication.
+ */
+export interface ManagedAcquisitionService {
+  acquireAndPublish(options: ManagedAcquisitionOptions): Promise<ManagedAcquisitionResult>;
+}
 export interface ManagedInstallPolicy {
   readonly wholeOperationMs: number;
   readonly metadataMs: number;
@@ -131,15 +213,51 @@ export const DEFAULT_MANAGED_INSTALL_POLICY: ManagedInstallPolicy = Object.freez
   progressIntervalMs: 500,
 });
 
-export const HelperRequestSchema = z.object({
-  protocolVersion: z.literal(1),
-  operationId: z.string().min(1),
-  browser: z.literal('chrome'),
-  platform: z.enum(['linux', 'mac', 'mac_arm', 'win32', 'win64']),
-  cacheDir: z.string().min(1),
-  buildId: z.string().min(1).nullable(),
-  progressIntervalMs: z.number().int().positive(),
-});
+/**
+ * What the helper was asked to do.
+ *
+ * `resolve` answers "which build is Stable, and can it be downloaded?" and
+ * exits. It creates no directory, writes no file, and never calls `install()`.
+ */
+export type HelperMode = 'install' | 'resolve';
+
+/**
+ * Argv contract for the owned acquisition helper.
+ *
+ * `protocolVersion` went 1 -> 2 with `mode` rather than making the field
+ * optional. Parent and helper always ship from the same `dist/`, a mismatch
+ * already means `helper-unavailable`, and an optional field would let a stale
+ * helper silently perform an install when a resolve was requested.
+ */
+export const HelperRequestSchema = z
+  .object({
+    protocolVersion: z.literal(2),
+    mode: z.enum(['install', 'resolve']),
+    operationId: z.string().min(1),
+    browser: z.literal('chrome'),
+    platform: z.enum(['linux', 'mac', 'mac_arm', 'win32', 'win64']),
+    cacheDir: z.string().min(1).nullable(),
+    buildId: z.string().min(1).nullable(),
+    progressIntervalMs: z.number().int().positive(),
+  })
+  // One grammar for "which fields does this mode permit", enforced where the
+  // request is parsed rather than re-checked by each side.
+  .superRefine((value, ctx) => {
+    if (value.mode === 'resolve' && value.cacheDir !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cacheDir'],
+        message: 'resolve mode must not be given a cache directory: it writes nothing',
+      });
+    }
+    if (value.mode === 'install' && value.cacheDir === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cacheDir'],
+        message: 'install mode requires the candidate cache directory it may write',
+      });
+    }
+  });
 export type HelperRequest = z.infer<typeof HelperRequestSchema> & {
   readonly platform: ManagedPlatform;
 };
@@ -156,11 +274,19 @@ const phase = z.enum([
 export const HelperMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('ready'),
-    protocolVersion: z.literal(1),
+    protocolVersion: z.literal(2),
     nodeVersion: z.string(),
     envProxyRequested: z.boolean(),
   }),
   z.object({ kind: z.literal('resolved'), buildId: z.string().min(1) }),
+  // Resolve mode's single answer. It carries `artifactAvailable` because
+  // "Stable is 153" and "153 can actually be downloaded for this platform" are
+  // different facts, and an availability report that conflates them is wrong.
+  z.object({
+    kind: z.literal('availability'),
+    buildId: z.string().min(1),
+    artifactAvailable: z.boolean(),
+  }),
   z.object({ kind: z.literal('phase'), phase, interruptible: z.boolean() }),
   z.object({
     kind: z.literal('progress'),

@@ -41,6 +41,8 @@ describe.runIf(runLiveInstall)('@no-llm live managed Stable installation', () =>
         grantedAt: new Date().toISOString(),
         destinationRoot: managedBrowsersRoot(),
         approximateBytes: 200 * 1024 * 1024,
+        targetBuildId: null,
+        replaces: null,
       },
     });
 

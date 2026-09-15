@@ -59,6 +59,8 @@ describe('@no-llm managed install transaction', () => {
       grantedAt: '2026-09-14T00:00:00.000Z',
       destinationRoot: root,
       approximateBytes: 200,
+      targetBuildId: null,
+      replaces: null,
     };
   }
 

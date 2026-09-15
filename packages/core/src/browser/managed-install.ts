@@ -6,13 +6,14 @@ import { relative } from 'node:path';
 import { Browser, computeExecutablePath } from '@puppeteer/browsers';
 
 import { LocalBrowserCompatibilityService } from './compatibility.js';
-import type {
-  BrowserCompatibilityService,
-  BrowserSelectionReader,
-  CompatibilityResult,
-  ManagedCoordinator,
-  ManagedReadyRecord,
-  ManagedStateReader,
+import {
+  MANAGED_INSTALLATION_PREFIX,
+  type BrowserCompatibilityService,
+  type BrowserSelectionReader,
+  type CompatibilityResult,
+  type ManagedCoordinator,
+  type ManagedReadyRecord,
+  type ManagedStateReader,
 } from './installation-types.js';
 import {
   issueCandidateProbePermit,
@@ -26,6 +27,9 @@ import {
 import {
   DEFAULT_MANAGED_INSTALL_POLICY,
   type HelperRequest,
+  type ManagedAcquisitionOptions,
+  type ManagedAcquisitionResult,
+  type ManagedAcquisitionService,
   type ManagedInstallOutcome,
   type ManagedInstallPhase,
   type ManagedInstallPolicy,
@@ -107,7 +111,9 @@ const emptyReport = (): OrphanCollectionReport => ({
 });
 
 /** Coordinates one consented candidate from local preflight through atomic publication. */
-export class LocalManagedInstallService implements ManagedInstallService {
+export class LocalManagedInstallService
+  implements ManagedInstallService, ManagedAcquisitionService
+{
   private readonly state: ManagedStateReader;
   private readonly coordinator: ManagedCoordinator;
   private readonly compatibility: BrowserCompatibilityService;
@@ -196,6 +202,57 @@ export class LocalManagedInstallService implements ManagedInstallService {
       };
     }
 
+    try {
+      // A first install resolves Stable inside the helper: there is nothing
+      // installed for a user to have consented to replacing.
+      const result = await this.acquireAndPublish({
+        lease,
+        targetBuildId: request.consent.targetBuildId ?? null,
+        previousBuildId: null,
+        ...(request.signal ? { signal: request.signal } : {}),
+        ...(request.onProgress ? { onProgress: request.onProgress } : {}),
+        ...(request.deadlineMs === undefined ? {} : { deadlineMs: request.deadlineMs }),
+      });
+      if (result.status === 'published') {
+        return {
+          status: 'installed',
+          record: result.record,
+          executablePath: result.executablePath,
+          compatibility: result.compatibility,
+          orphans: result.orphans,
+          selection: result.selection,
+        };
+      }
+      if (result.status === 'cancelled') {
+        return { status: 'cancelled', at: result.at, retainedOrphan: result.retainedOrphan };
+      }
+      return { status: 'failed', error: result.error };
+    } finally {
+      await lease
+        .release()
+        .catch((cause: unknown) =>
+          this.logger.error(
+            { err: describe(cause) },
+            'failed to release managed installation lease',
+          ),
+        );
+    }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The one place a managed browser is acquired and published. The caller owns
+   * the lease (claim and release), because install and update map a refused
+   * claim onto different user-facing codes; everything from that point on is
+   * identical and lives here.
+   */
+  async acquireAndPublish(options: ManagedAcquisitionOptions): Promise<ManagedAcquisitionResult> {
+    const { lease } = options;
+    const candidate = lease.candidateRootRelative;
+    const installationId = candidate.slice(MANAGED_INSTALLATION_PREFIX.length);
+    const request = options;
+
     let candidateCreated = false;
     let lastLoggedPhase: ManagedInstallPhase | null = null;
     const emitProgress = (
@@ -249,12 +306,15 @@ export class LocalManagedInstallService implements ManagedInstallService {
       candidateCreated = true;
       const helper = await this.helper.run(
         {
-          protocolVersion: 1,
+          protocolVersion: 2,
+          mode: 'install',
           operationId: installationId,
           browser: 'chrome',
           platform: preflight.platform,
           cacheDir: candidatePath,
-          buildId: null,
+          // The exact accepted build for an update; `null` lets a first install
+          // resolve Stable in-helper. Either way it is never re-resolved later.
+          buildId: request.targetBuildId,
           progressIntervalMs: this.policy.progressIntervalMs,
         },
         effectivePolicy,
@@ -335,6 +395,11 @@ export class LocalManagedInstallService implements ManagedInstallService {
         );
       }
 
+      // The last point at which aborting is free: the pointer is untouched and
+      // the candidate is an ordinary orphan. Update re-verifies here that no
+      // browser started during the transfer.
+      await request.beforePublish?.();
+
       emitProgress({
         phase: 'publishing',
         buildId: helper.buildId,
@@ -361,11 +426,12 @@ export class LocalManagedInstallService implements ManagedInstallService {
         'managed browser installation published',
       );
       return {
-        status: 'installed',
+        status: 'published',
         record,
         executablePath,
         compatibility,
         orphans: postPublish,
+        previousBuildId: request.previousBuildId,
         selection: {
           configuredSource,
           selectsThisInstallation: configuredSource !== 'system',
@@ -394,15 +460,6 @@ export class LocalManagedInstallService implements ManagedInstallService {
         status: 'failed',
         error: { ...error, retainedOrphan: candidateCreated ? candidate : null },
       };
-    } finally {
-      await lease
-        .release()
-        .catch((cause: unknown) =>
-          this.logger.error(
-            { err: describe(cause) },
-            'failed to release managed installation lease',
-          ),
-        );
     }
   }
 

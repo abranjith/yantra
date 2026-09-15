@@ -19,10 +19,13 @@ import type {
   DriverCompatibilityDescriptor,
 } from './installation-types.js';
 import { LocalBrowserInventoryService } from './inventory.js';
+import { LocalStableResolutionService } from './managed-availability.js';
 import { LocalManagedCoordinator } from './managed-coordination.js';
 import type { ManagedInstallService } from './managed-install-types.js';
 import { LocalManagedInstallService } from './managed-install.js';
 import { LocalManagedStateReader } from './managed-state.js';
+import type { ManagedUpdateService } from './managed-update-types.js';
+import { LocalManagedUpdateService } from './managed-update.js';
 import { LocalProfileStore } from './profile-store.js';
 import type { Logger, ProfileStore } from './types.js';
 
@@ -73,6 +76,7 @@ export function createLocalBrowserRuntimeServices(
   });
 
   let installService = deps.installService;
+  let updateService: ManagedUpdateService | undefined;
   return {
     resolver,
     compatibility,
@@ -95,6 +99,23 @@ export function createLocalBrowserRuntimeServices(
         candidateProbe: compatibility,
       });
       return installService;
+    },
+    // Also lazy, for the same reason and one more: building this must not
+    // resolve Stable, spawn the metadata helper, or touch the network. Only
+    // `yantra browser update` ever calls a method on it.
+    get updateService() {
+      updateService ??= new LocalManagedUpdateService({
+        state: managedState,
+        coordinator,
+        acquisition: this.installService as LocalManagedInstallService,
+        availability: new LocalStableResolutionService(
+          deps.logger ? { logger: deps.logger } : undefined,
+        ),
+        selectionReader,
+        descriptor,
+        ...(deps.logger ? { logger: deps.logger } : {}),
+      });
+      return updateService;
     },
     ...(deps.installOfferGateway === undefined
       ? {}

@@ -255,7 +255,7 @@ Persisted output redaction does **not** rewrite the in-memory outcome used for t
 
 Workflows, profiles, and runs are local filesystem data. On Unix-like systems Yantra requests `0700` run directories and `0600` files; Windows uses the current account's inherited ACLs. Persistent `cookies: auto` profiles live under `<yantra-data-dir>/profiles/`, while `cookies: none` profiles are created in the OS temporary directory and removed by the browser lifecycle.
 
-Declared website secrets resolve from the OS keychain only at the execution boundary. Replay preflight requires every declared key to exist before launching the browser. The current CLI has no general `yantra secrets set` command, so keychain population must come from an integration or supported secret-capture path; never work around that by putting a credential in `params`, YAML literals, or outputs.
+Declared website secrets resolve from the OS keychain only at the execution boundary. Replay preflight requires every declared key to exist before launching the browser. Populate the keychain with `yantra secret set <key>`, which takes the value from an echo-disabled prompt or piped stdin rather than argv; never work around a missing key by putting a credential in `params`, YAML literals, or outputs.
 
 Direct replay launches Chrome headlessly. A workflow that needs a persistent authenticated session should use `cookies: auto` and contain enough deterministic login/navigation behavior to establish or reuse that session. Model credentials for `synthesis.use_llm` are separate from website secrets and follow the sources described in [Model and authentication basics](../usage.md#model-and-authentication-basics).
 

@@ -1,7 +1,7 @@
 /**
  * `yantra browser` — the local browser selection and diagnostics surface.
  *
- * Four subcommands, and the boundary between them is what each one is allowed to
+ * Five subcommands, and the boundary between them is what each one is allowed to
  * do rather than what it reports:
  *
  * - `install` downloads Chrome for Testing Stable with explicit consent.
@@ -11,11 +11,17 @@
  *   where starting one is the broken thing.
  * - `check` runs a fresh isolated compatibility probe and writes only the local
  *   evidence cache.
+ * - `update` is the *only* surface that ever asks whether a newer Chrome
+ *   exists. `--dry-run` reports availability and changes nothing; without it,
+ *   the command replaces the managed installation with recorded consent.
  *
- * None of them contacts an update server. `browser update` (FEAT-046) is the
- * only update-check surface.
+ * `check` and `update --dry-run` are deliberate opposites — a local probe with
+ * no network, and an availability query with no download — and the help text of
+ * each has to say which it is, because one word meaning two opposite things
+ * inside one noun namespace is exactly what makes a command surface unreadable.
  */
 import {
+  compareManagedBuild,
   createLocalBrowserRuntimeServices,
   LocalBrowserInventoryService,
   managedBrowsersRoot,
@@ -31,8 +37,13 @@ import {
   type CompatibilityResult,
   type ManagedInstallOutcome,
   type ManagedInstallService,
+  type ManagedUpdateAvailability,
+  type ManagedUpdateOutcome,
+  type ManagedUpdateService,
   type ProbeProfile,
   type ResolvedBrowserInstallation,
+  type StableBuild,
+  type UpdateComparison,
 } from '@yantra/core';
 import { Command, CommanderError } from 'commander';
 import prompts from 'prompts';
@@ -62,8 +73,16 @@ interface CheckOptions extends BrowserSelectionOptions {
   readonly json?: boolean;
 }
 
+interface UpdateOptions {
+  readonly dryRun?: boolean;
+  readonly yes?: boolean;
+  readonly json?: boolean;
+}
+
 export interface BrowserCommandRuntime {
   readonly service?: ManagedInstallService;
+  /** The only update surface, injected so tests never reach a real network. */
+  readonly updateService?: ManagedUpdateService;
   /** Selection, compatibility, managed state, and the inventory projection. */
   readonly services?: BrowserRuntimeServices;
   /** Config writer boundary, injected so `use` tests never touch a real home. */
@@ -98,6 +117,8 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
     return composed;
   };
   const installService = (): ManagedInstallService => runtime.service ?? services().installService!;
+  const updateService = (): ManagedUpdateService =>
+    runtime.updateService ?? services().updateService!;
 
   const browser = new Command('browser').description('Manage Yantra-owned browser installations');
 
@@ -158,6 +179,10 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
           grantedAt: now().toISOString(),
           destinationRoot: destination,
           approximateBytes: APPROXIMATE_BYTES,
+          // A first install resolves Stable in-helper and replaces nothing.
+          // Only an update can name a build before it is acquired.
+          targetBuildId: null,
+          replaces: null,
         },
         onProgress: (event) =>
           stderr.write(
@@ -351,7 +376,393 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
       }
     });
 
+  browser
+    .command('update')
+    .description(
+      'Replace the Yantra-managed browser with current Chrome for Testing Stable. This is the only command that checks whether a newer browser exists; use --dry-run to report availability and download nothing',
+    )
+    .option('--dry-run', 'report what is available without downloading or changing anything', false)
+    .option('--yes', 'accept the replacement without prompting', false)
+    .option('--json', 'emit exactly one JSON outcome', false)
+    .action(async (options: UpdateOptions) => {
+      // Two modes, not a mode plus a modifier. `--yes` accepts a replacement,
+      // and the availability report has no replacement to accept: an acceptance
+      // flag that changes nothing is a dead control, so it is refused rather
+      // than silently ignored.
+      if (options.dryRun === true && options.yes === true) {
+        const message =
+          '`--dry-run` reports availability and changes nothing, so there is nothing for `--yes` to accept. Use one or the other.';
+        stderr.write(`${message}\n`);
+        throw new CommanderError(1, 'yantra.browser.update.conflicting-modes', message);
+      }
+
+      if (options.dryRun === true) {
+        await runDryRun(options);
+        return;
+      }
+      await runReplacement(options);
+    });
+
   return browser;
+
+  // -------------------------------------------------------------------------
+  // `browser update --dry-run`
+  // -------------------------------------------------------------------------
+
+  /**
+   * Availability only.
+   *
+   * Nothing in this branch downloads, installs, replaces, launches, collects
+   * orphans, writes the ready pointer, writes config, or asks for consent — a
+   * `--dry-run` run has to leave the data root, the cache root, and
+   * `config.yaml` byte-identical, and that is asserted by comparison rather
+   * than taken on this comment's word.
+   */
+  async function runDryRun(options: UpdateOptions): Promise<void> {
+    const availability = await updateService().checkAvailability();
+
+    if (options.json === true) {
+      stdout.write(`${JSON.stringify(updatePayload(true, availability, null))}\n`);
+    } else {
+      renderAvailabilityTerminal(stdout, availability);
+    }
+
+    if (availability.comparison.state === 'metadata-unavailable') {
+      const { error } = availability.comparison;
+      stderr.write(
+        `${error.detail} ${error.remediation} The installed managed browser is unaffected and still usable offline.\n`,
+      );
+      throw new CommanderError(3, `yantra.browser.update.${error.code}`, error.detail);
+    }
+    // Every comparison state is a legitimate availability answer, including
+    // "nothing is installed". Exit 0.
+  }
+
+  // -------------------------------------------------------------------------
+  // `browser update`
+  // -------------------------------------------------------------------------
+
+  async function runReplacement(options: UpdateOptions): Promise<void> {
+    const service = updateService();
+
+    // Order matters: local preconditions first, so a refusal never costs a
+    // metadata call, and a busy refusal never costs a 200 MB download.
+    const preflight = await service.preflightMutation();
+    if (preflight.status === 'refused') {
+      const { error } = preflight;
+      if (options.json === true)
+        stdout.write(
+          `${JSON.stringify(updatePayload(false, null, { status: 'failed', error, record: { status: 'absent' } }))}\n`,
+        );
+      stderr.write(`${error.detail} ${error.remediation}\n`);
+      throw new CommanderError(3, `yantra.browser.update.${error.code}`, error.detail);
+    }
+    const installed = preflight.record;
+
+    // Resolved exactly once, before consent, and never re-resolved: the build
+    // the user accepts is the build that lands.
+    const resolution = await service.resolveTarget();
+    if (resolution.status === 'unavailable') {
+      const { error } = resolution;
+      if (options.json === true)
+        stdout.write(
+          `${JSON.stringify(
+            updatePayload(false, null, {
+              status: 'failed',
+              error,
+              record: { status: 'ready', record: installed },
+            }),
+          )}\n`,
+        );
+      stderr.write(
+        `${error.detail} ${error.remediation} Managed Chrome ${installed.buildId} is unaffected and still usable offline.\n`,
+      );
+      throw new CommanderError(3, `yantra.browser.update.${error.code}`, error.detail);
+    }
+    const target = resolution.build;
+
+    // Core owns the ordering grammar. The CLI must not compare build strings of
+    // its own: a string compare puts `…8010.36` before `…8010.9` and would
+    // refuse a real update, and a second grammar beside the one that owns it is
+    // silent divergence rather than redundancy.
+    const comparison = compareManagedBuild({ status: 'ready', record: installed }, target);
+    if (comparison.state === 'up-to-date' || comparison.state === 'installed-newer') {
+      emitNoOp(options, comparison.state, installed.buildId, target);
+      return;
+    }
+
+    stderr.write(
+      `Managed Chrome ${installed.buildId} would be replaced by Chrome for Testing Stable ${target.buildId} in ${destinationRoot()} (about 200 MB).\n` +
+        'An interrupted transfer restarts from zero — there is no resume. External Chrome installations are untouched.\n',
+    );
+
+    if (options.yes !== true && (!isTty() || options.json === true)) {
+      const message = '`yantra browser update --yes` is required for JSON or non-interactive use.';
+      stderr.write(`${message}\n`);
+      if (options.json === true)
+        stdout.write(
+          `${JSON.stringify(
+            updatePayload(false, null, {
+              status: 'failed',
+              error: {
+                code: 'consent-required',
+                phase: 'preflight',
+                remediation: 'Pass --yes only after reviewing the replacement notice.',
+                detail: message,
+                retainedOrphan: null,
+              },
+              record: { status: 'ready', record: installed },
+            }),
+          )}\n`,
+        );
+      throw new CommanderError(1, 'yantra.browser.update.consent-required', message);
+    }
+
+    let granted = options.yes === true;
+    if (!granted) {
+      const answer = (await prompt({
+        type: 'confirm',
+        name: 'granted',
+        message: `Replace managed Chrome ${installed.buildId} with ${target.buildId}?`,
+        initial: false,
+      })) as { granted?: boolean };
+      granted = answer.granted === true;
+    }
+    if (!granted) {
+      stderr.write('Browser replacement was declined; no installation state changed.\n');
+      throw new CommanderError(
+        4,
+        'yantra.browser.update.declined',
+        'Browser replacement was declined.',
+      );
+    }
+
+    const outcome = await service.update({
+      consent: {
+        granted: true,
+        source: options.yes === true ? 'cli-accept-flag' : 'cli-update-prompt',
+        grantedAt: now().toISOString(),
+        destinationRoot: destinationRoot(),
+        approximateBytes: APPROXIMATE_BYTES,
+        targetBuildId: target.buildId,
+        replaces: installed.buildId,
+      },
+      target,
+      onProgress: (event) =>
+        stderr.write(
+          `${event.phase}${event.percent === undefined ? '' : ` ${event.percent}%`}${event.interruptible ? '' : ' (finishing; cancellation pending)'}\n`,
+        ),
+    });
+
+    if (options.json === true) {
+      stdout.write(`${JSON.stringify(updatePayload(false, null, outcome))}\n`);
+      if (outcome.status === 'failed')
+        stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
+      if (outcome.status === 'cancelled')
+        stderr.write(
+          `Browser replacement was cancelled during ${outcome.at}; managed Chrome ${outcome.record.buildId} is unchanged.\n`,
+        );
+    } else {
+      renderUpdateTerminal(stdout, stderr, outcome);
+    }
+
+    if (outcome.status === 'cancelled')
+      throw new CommanderError(
+        4,
+        'yantra.browser.update.cancelled',
+        'Browser replacement was cancelled.',
+      );
+    if (outcome.status === 'failed')
+      throw new CommanderError(
+        // Both acceptance failures are validation: consent was absent, or it
+        // named a build other than the one that was resolved. Everything else
+        // is an environment failure.
+        outcome.error.code === 'consent-required' || outcome.error.code === 'consent-build-mismatch'
+          ? 1
+          : 3,
+        `yantra.browser.update.${outcome.error.code}`,
+        `${outcome.error.detail} ${outcome.error.remediation}`,
+      );
+  }
+
+  /** Renders a no-op verdict identically in both modes and exits 0. */
+  function emitNoOp(
+    options: UpdateOptions,
+    status: 'up-to-date' | 'installed-newer',
+    installedBuildId: string,
+    target: StableBuild,
+  ): void {
+    if (options.json === true) {
+      stdout.write(
+        `${JSON.stringify({
+          schemaVersion: CLI_JSON_SCHEMA_VERSION,
+          kind: 'browser_update',
+          dryRun: false,
+          destinationRoot: destinationRoot(),
+          outcome: { status, installedBuildId, available: target },
+        })}\n`,
+      );
+      return;
+    }
+    stdout.write(
+      status === 'up-to-date'
+        ? `Managed Chrome ${installedBuildId} is current Chrome for Testing Stable. Nothing to do.\n`
+        : `Managed Chrome ${installedBuildId} is newer than current Stable ${target.buildId}. Leaving it in place — Yantra never downgrades.\n`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Update rendering
+// ---------------------------------------------------------------------------
+
+/** The one `browser_update` envelope, marking its mode exactly as `config data-dir` does. */
+function updatePayload(
+  dryRun: boolean,
+  availability: ManagedUpdateAvailability | null,
+  outcome: ManagedUpdateOutcome | null,
+): Record<string, unknown> {
+  return {
+    schemaVersion: CLI_JSON_SCHEMA_VERSION,
+    kind: 'browser_update',
+    dryRun,
+    ...(availability === null
+      ? {}
+      : {
+          managedRoot: availability.managedRoot,
+          driver: availability.driver,
+          concurrentOperation: availability.concurrentOperation,
+          activeManagedRun: availability.activeManagedRun,
+          nextCommand: availability.nextCommand,
+          comparison: comparisonPayload(availability.comparison),
+        }),
+    ...(outcome === null ? {} : { outcome }),
+  };
+}
+
+function comparisonPayload(comparison: UpdateComparison): Record<string, unknown> {
+  if (comparison.state === 'metadata-unavailable') {
+    return {
+      state: comparison.state,
+      installed:
+        comparison.installed.status === 'ready'
+          ? { status: 'ready', buildId: comparison.installed.record.buildId }
+          : comparison.installed,
+      available: null,
+      error: comparison.error,
+    };
+  }
+  return {
+    state: comparison.state,
+    installed:
+      comparison.state === 'no-installation'
+        ? null
+        : { status: 'ready', buildId: comparison.installed.buildId },
+    available: comparison.available,
+    ...(comparison.state === 'no-installation'
+      ? { installCommand: comparison.installCommand }
+      : {}),
+  };
+}
+
+function renderAvailabilityTerminal(
+  stream: NodeJS.WritableStream,
+  availability: ManagedUpdateAvailability,
+): void {
+  const { comparison } = availability;
+  const installedLabel =
+    comparison.state === 'no-installation'
+      ? 'absent'
+      : comparison.state === 'metadata-unavailable'
+        ? comparison.installed.status === 'ready'
+          ? `Chrome for Testing ${comparison.installed.record.buildId}`
+          : 'absent'
+        : `Chrome for Testing ${comparison.installed.buildId}`;
+
+  stream.write(`Installed: ${installedLabel}\n`);
+  stream.write(
+    `Available: ${
+      comparison.state === 'metadata-unavailable'
+        ? 'unknown — Stable metadata could not be resolved'
+        : `Chrome for Testing Stable ${comparison.available.buildId}${comparison.available.artifactAvailable ? '' : ' (no downloadable artifact for this platform)'}`
+    }\n`,
+  );
+  stream.write(`Verdict:   ${verdictProse(comparison)}\n`);
+  stream.write(`Managed root: ${availability.managedRoot}\n`);
+  stream.write(
+    `Driver: puppeteer-core ${availability.driver.version} (tested against Chrome ${availability.driver.testedBuild})\n`,
+  );
+  if (availability.activeManagedRun)
+    stream.write(
+      'A managed browser is running, so a replacement would be refused until it exits.\n',
+    );
+  if (availability.concurrentOperation)
+    stream.write('Another managed browser operation is in progress.\n');
+  if (availability.nextCommand !== null) stream.write(`Next: ${availability.nextCommand}\n`);
+  stream.write('Nothing was downloaded, installed, or changed.\n');
+}
+
+function verdictProse(comparison: UpdateComparison): string {
+  switch (comparison.state) {
+    case 'no-installation':
+      return 'no managed browser is installed yet';
+    case 'up-to-date':
+      return 'the managed browser is current';
+    case 'update-available':
+      return 'a newer Stable build is available';
+    case 'installed-newer':
+      return 'the installed build is newer than current Stable; Yantra never downgrades';
+    default:
+      return 'availability could not be determined';
+  }
+}
+
+function renderUpdateTerminal(
+  stdout: NodeJS.WritableStream,
+  stderr: NodeJS.WritableStream,
+  outcome: ManagedUpdateOutcome,
+): void {
+  if (outcome.status === 'replaced') {
+    stdout.write(
+      `Replaced managed Chrome ${outcome.previousBuildId} with ${outcome.record.buildId} at ${outcome.executablePath}.\n`,
+    );
+    if (outcome.compatibility.verdict.status === 'passed') {
+      // Ordinary provenance, never a warning: Chrome ships Stable faster than
+      // this repository bumps Puppeteer, so this is the normal state.
+      stdout.write(
+        `Compatibility: ${outcome.compatibility.verdict.pairing === 'tested' ? 'this is the tested pairing' : 'capability-checked against this exact build'}.\n`,
+      );
+    }
+    stdout.write(
+      `Reclaimed ${outcome.orphans.deleted} superseded installation(s), ${formatBytes(outcome.orphans.bytesReclaimed)}.\n`,
+    );
+    if (!outcome.selection.selectsThisInstallation && outcome.selection.command !== null)
+      stderr.write(`This installation is not selected. Run ${outcome.selection.command}.\n`);
+    return;
+  }
+  if (outcome.status === 'up-to-date') {
+    stdout.write(
+      `Managed Chrome ${outcome.record.buildId} is current Chrome for Testing Stable. Nothing to do.\n`,
+    );
+    return;
+  }
+  if (outcome.status === 'installed-newer') {
+    stdout.write(
+      `Managed Chrome ${outcome.record.buildId} is newer than current Stable ${outcome.available.buildId}. Leaving it in place — Yantra never downgrades.\n`,
+    );
+    return;
+  }
+  if (outcome.status === 'cancelled') {
+    stderr.write(
+      `Browser replacement was cancelled during ${outcome.at}; managed Chrome ${outcome.record.buildId} is unchanged and an interrupted download restarts from zero.\n`,
+    );
+    return;
+  }
+  stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
+  if (outcome.record.status === 'ready')
+    stderr.write(
+      `Managed Chrome ${outcome.record.record.buildId} is unchanged and still usable.\n`,
+    );
 }
 
 // ---------------------------------------------------------------------------

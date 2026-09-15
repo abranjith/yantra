@@ -1,0 +1,293 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-15T04:40:41.342Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-15T04:40:42.057Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-15T04:45:23.417Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-005",
+      "at": "2026-09-15T04:45:24.128Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-15T04:50:00.243Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-006",
+      "at": "2026-09-15T04:50:00.931Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-007",
+      "at": "2026-09-15T04:50:01.635Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-15T12:53:44.345Z",
+      "head": "c8041f9fd970b29fb25fbc5131f379eebe0135c4"
+    }
+  ],
+  "files": [
+    {
+      "path": "apps/cli/src/commands/browser.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/browser-options.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/commands/browser-update-dry-run.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/commands/browser-update.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/browser-resolution-and-lifecycle.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/browser-selection-and-diagnostics.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/explicit-managed-update.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/managed-stable-installation.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/saved-workflows.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/errors.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/installation-types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-availability.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-coordination.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-helper-client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-helper.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-update-types.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/managed-update.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/provider.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/runtime-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/fake-install-helper.mjs",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/metadata-proxy-helper.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/proxy-request-helper.mjs",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/browser/fixtures/resolve-only-helper.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-availability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-concurrency.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-helper-client.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-live.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-packaging.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-update-concurrency.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-update.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/no-download-traffic.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-046-explicit_managed_update/changeset.json",
+    ".spec-lite/features/FEAT-046-explicit_managed_update/spec.md",
+    ".spec-lite/plan_puppeteer_browser_management.md"
+  ],
+  "baseline": {
+    "sha": "c8041f9fd970b29fb25fbc5131f379eebe0135c4",
+    "capturedAt": "2026-09-15T04:32:20.032Z",
+    "dirtyAtBaseline": [".spec-lite/plan_puppeteer_browser_management.md"],
+    "dirtyBlobHashes": {
+      ".spec-lite/plan_puppeteer_browser_management.md": "c35d2d0a502323448e0266dc345fa27dd8ce7138"
+    }
+  },
+  "featureId": "FEAT-046"
+}

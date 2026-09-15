@@ -68,6 +68,8 @@ describe('@no-llm managed installation concurrency', () => {
       grantedAt: '2026-09-14T00:00:00.000Z',
       destinationRoot: root,
       approximateBytes: 1,
+      targetBuildId: null,
+      replaces: null,
     };
 
     const active = first.install({ trigger: 'explicit-command', consent });
@@ -104,6 +106,8 @@ describe('@no-llm managed installation concurrency', () => {
         grantedAt: '2026-09-14T00:00:00.000Z',
         destinationRoot: '/managed',
         approximateBytes: 1,
+        targetBuildId: null,
+        replaces: null,
       },
     });
     expect(outcome).toMatchObject({ status: 'failed', error: { code: 'operation-in-progress' } });

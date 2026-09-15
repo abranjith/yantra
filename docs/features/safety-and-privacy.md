@@ -201,7 +201,7 @@ yantra audit <run-id> --json
 
 ### Use durable website credentials
 
-Saved workflows declare secret references such as `{{ secret:shop.password }}` rather than literal credentials. Website fills additionally require trusted-host metadata. The current CLI has no general `yantra secrets set` command; keychain population and host metadata must come from an integration or supported secret-capture path. Do not work around this by placing credentials in workflow YAML, params, outputs, or URLs.
+Saved workflows declare secret references such as `{{ secret:shop.password }}` rather than literal credentials. Populate the keychain with `yantra secret set <key>`, which reads the value from an echo-disabled prompt or piped stdin and rejects a positional value so the credential never reaches shell history or a process listing. Website fills additionally require trusted-host metadata: the secret reference carries a `hosts` list naming the sites allowed to receive that credential, and a fill into any other host is refused. Do not work around any of this by placing credentials in workflow YAML, params, outputs, or URLs.
 
 See [Saved Workflows](saved-workflows.md) for workflow syntax and replay behavior.
 

@@ -97,8 +97,8 @@ share one validation vocabulary.
 
 `@yantra/core` contains provider-independent domain and infrastructure services:
 
-- browser resolution, compatibility probing, managed-installation coordination, launch, process
-  supervision, profiles, sessions, locator resolution, widget drivers, and the unified fill
+- browser resolution, compatibility probing, managed acquisition and update coordination, launch,
+  process supervision, profiles, sessions, locator resolution, widget drivers, and the unified fill
   engine;
 - finite plan execution, confirmation gateways, checkpoints, captures, output evaluation, and
   saved-workflow replay/resume;
@@ -176,10 +176,15 @@ contain a reference but never resolved credential material.
 Every browser-backed operation — agent tools, deterministic replay, browser fetch, the workflow
 recorder, and diagnostics — receives the same composed seam, `BrowserRuntimeServices` from
 `packages/core/src/browser/runtime-services.ts`: a resolver, a compatibility service, a managed
-coordinator, a read-only managed-state reader, and a lazily constructed managed installer. An
-optional install-offer gateway is present only when a human-facing caller injects it. Building this
+coordinator, a read-only managed-state reader, a lazily constructed managed installer, and a
+lazily constructed managed update service. An optional install-offer gateway is present only when a
+human-facing caller injects it. The update service is optional for the same reason the offer
+gateway is: it is reached only by `yantra browser update`, so no runtime factory, scheduler,
+daemon, nested `workflow_run`, or model tool can start an update through the services bag it
+already holds. Building this
 graph is inert. It starts no browser, takes no lock, reads no network, and can trigger no download;
-a browser exists only once a caller actually launches. The CLI runtime factory, the `ask` and
+constructing the update service in particular resolves no Stable build and spawns no metadata
+helper. A browser exists only once a caller actually launches. The CLI runtime factory, the `ask` and
 `research` pipelines, and the agent
 orchestrator all build their provider through the one `createSelectedBrowserProvider` entry point
 instead of constructing their own, and the recorder consumes the same services directly, so "the
@@ -200,12 +205,17 @@ flowchart TD
     ManagedState[Managed state reader]
     Inventory[Inventory projection]
     Installer[Lazy managed Stable installer]
+    Updater[Lazy managed update service]
   end
 
   ManagedState --> Resolver
   Installer --> ManagedState
   Installer --> Coordinator
   Installer --> Compatibility
+  Updater --> ManagedState
+  Updater --> Coordinator
+  Updater --> Installer
+  Update[browser update] --> Updater
   Resolver --> Installation[Resolved installation and provenance]
   Installation --> Provider[Browser provider startup]
   Installation --> Recorder[Recorder startup]
@@ -265,12 +275,25 @@ reported invalid.
 #### Managed Stable acquisition
 
 Managed acquisition is a separate mutation path from resolution and launch. It can be entered only
-by `yantra browser install` or by the browser provider after a human accepts the optional first-run
-offer. `LocalManagedInstallService` requires a one-operation `DownloadConsentRecord`; an absent
+by `yantra browser install`, by `yantra browser update`, or by the browser provider after a human
+accepts the optional first-run offer. `LocalManagedInstallService` requires a one-operation
+`DownloadConsentRecord`; an absent
 record returns `consent-required` before a mutation lease or network boundary is reached. If a ready
 managed record already exists, installation is an idempotent local result: it reads cached
 compatibility when possible, collects unowned orphans, and does not resolve Stable or start the
 helper.
+
+There is exactly one acquisition path behind both entries. `LocalManagedInstallService` also
+implements `ManagedAcquisitionService`, whose single method `acquireAndPublish(...)` is the
+transaction body: orphan collection, preflight, helper spawn, verification, and atomic
+publication. `install()` and `LocalManagedUpdateService.update()` both call it rather than
+maintaining two flows that must be kept in step. The split of ownership is deliberate — the
+**caller** claims and releases the mutation lease, because install and update map a refused claim
+onto different user-facing codes, while everything from the lease onward is identical and lives in
+the transaction. The candidate child is not passed in: it is derived from
+`lease.candidateRootRelative`, so the path written and the path authorized cannot disagree. The one
+seam between the two callers is an optional `beforePublish` hook, invoked at the last point where
+aborting is free; update uses it to re-verify, and install passes nothing.
 
 For a new installation the service first claims the existing exclusive managed-mutation lease. A
 live managed-browser reservation or another mutation therefore produces `operation-in-progress`
@@ -288,6 +311,20 @@ the operation's exact `installation-<id>` child; download-base overrides and unr
 values do not cross the boundary. `installDeps` is fixed to `false`, so neither the helper nor the
 upstream API installs Linux packages.
 
+The helper request carries a required `mode` at protocol version `2`. `install` is the flow above.
+`resolve` is the whole of the update-metadata path: it calls `resolveBuildId(..., BrowserTag.STABLE)`
+and then `canDownload(...)`, answers one `availability` message carrying `{ buildId,
+artifactAvailable }`, and exits — creating no directory, writing no file, and never reaching
+`install()`. The mode is what a field may be used for, not a suggestion: `cacheDir` is nullable and
+a Zod `superRefine` rejects a resolve request that names a cache directory and an install request
+that omits one, so resolve mode is structurally given nowhere to write. The version moved `1` -> `2`
+rather than making `mode` optional, because parent and helper always ship from the same `dist/` and
+an optional field would let a stale helper silently perform an install when a resolve was asked
+for. The metadata call goes through the owned helper for a reason beyond isolation: the helper is
+the only place `NODE_USE_ENV_PROXY=1` and the environment allowlist apply, and
+`@puppeteer/browsers` imports `proxy-agent` optionally and goes direct when it is absent — a
+silently bypassed proxy being exactly the failure a user cannot see.
+
 The parent owns the whole-operation, metadata, stalled-transfer, cancellation, and process-tree
 bounds. Interruptible cancellation asks the helper to stop, then terminates and waits for the
 helper and extraction descendants. Windows upstream finalization can synchronously run
@@ -298,7 +335,10 @@ a ready installation.
 
 After acquisition, the parent recomputes and checks the executable, then uses the shared
 compatibility service through a candidate-probe permit bound to the active lease, exact child, and
-executable. Only a passing automation probe can reach publication. Publication writes a
+executable. Only a passing automation probe can reach publication. The optional `beforePublish`
+hook then runs as the final precondition, while aborting is still free: an update re-asserts lease
+ownership and re-checks for a live managed run there, so a browser that started during the transfer
+stops the replacement instead of racing it. Publication writes a
 mode-restricted temporary ready record and atomically renames it to `ready.json`; failures before
 that rename leave the previous pointer unchanged, while the candidate remains an unselectable
 orphan. Chrome for Testing supplies no artifact hash through this path, so the acquisition integrity
@@ -315,24 +355,77 @@ verified and published.
 
 ```mermaid
 flowchart TD
-  Consent[Explicit one-operation consent] --> Install[Managed install service]
-  Install --> Lease[Exclusive mutation lease]
-  Lease --> Collect[Collect unowned orphan children]
+  InstallCmd[browser install or accepted first-run offer] --> Consent[Explicit one-operation consent]
+  UpdateCmd[browser update] --> Local[Local preconditions - installed and idle]
+  Local --> Resolve[Helper resolve mode - buildId and artifactAvailable]
+  Resolve --> Compare[Compare installed against available]
+  Compare --> Consent
+  Compare -. up-to-date or installed-newer .-> NoOp[No lease, no download, nothing changes]
+  Consent --> Lease[Exclusive mutation lease held by the caller]
+  Lease --> Acquire[acquireAndPublish transaction]
+  Acquire --> Collect[Collect unowned orphan children]
   Collect --> Preflight[Local host and storage preflight]
-  Preflight --> Helper[Owned Node helper]
+  Preflight --> Helper[Owned Node helper install mode]
   Helper --> Stable[Official Chrome for Testing Stable]
   Helper --> Candidate[installation-id child]
   Candidate --> Probe[Shared isolated capability probe]
-  Probe --> Publish[Atomic ready pointer publication]
+  Probe --> Before[Optional beforePublish re-verification]
+  Before --> Publish[Atomic ready pointer publication]
   Publish --> Ready[ready.json selects one child]
-  Candidate -. failure before publication .-> Orphan[Unselectable orphan]
+  Candidate -. failure, refusal, or cancellation before publication .-> Orphan[Unselectable orphan]
 ```
 
-Download consent is capability-shaped rather than a global preference. The explicit command prints
+`LocalManagedUpdateService` in `packages/core/src/browser/managed-update.ts` is the only place in
+Yantra that ever asks whether a newer Chrome exists, and it has two modes separated by what each is
+allowed to do. `checkAvailability()` reads the local inventory, asks the coordinator whether a
+managed browser is running, and makes one resolve-mode metadata call — taking no lease, no
+reservation, and no mutation. A running browser and a live mutation are _reported_ as local state
+rather than treated as refusals, because asking whether a newer build exists is not a mutation and
+blocking it would protect nothing. `update()` replaces the single installation under an exclusive
+lease with consent naming the exact build.
+
+Nothing records that a check happened. There is no `lastCheckedAt` field, no availability cache, no
+config key, and no scheduled or startup check anywhere in the runtime — an availability answer is
+in-memory provenance for one invocation. `StableBuild` keeps `buildId` and `artifactAvailable`
+separate on purpose: "Stable is _N_" and "_N_ has a downloadable artifact for this host" are
+different facts, and a report that conflates them tells the user the wrong thing.
+
+The installed-versus-available comparison in `managed-availability.ts` is a closed union —
+`no-installation`, `up-to-date`, `update-available`, `installed-newer`, `metadata-unavailable` —
+and ordering comes from `getVersionComparator(Browser.CHROME)` in the pinned `@puppeteer/browsers`.
+No hand-rolled dotted compare exists anywhere, including in the CLI, which calls core's
+`compareManagedBuild`: lexicographic order disagrees with Chrome's on exactly the builds that
+occur, putting `…8010.36` before `…8010.9` and refusing a real update. `installed-newer` reports
+both identities and proposes nothing, because a silent downgrade is forbidden.
+`metadata-unavailable` carries the local snapshot with it, since an unresolvable Stable is an
+update failure only: the ready pointer, the evidence cache, and every launch path are untouched and
+the installed browser stays fully usable offline.
+
+Refusals are local and ordered so that nothing expensive is paid for a precondition that was going
+to fail. `preflightMutation()` answers "is there an installation, and is it idle?" before any
+metadata call, because detecting a running browser after a 200 MB transfer is a wasted download; a
+missing installation returns `no-managed-installation` directing the user to `yantra browser
+install`. A busy refusal is `managed-run-active` and names the owning PIDs, read through the
+coordinator's read-only `activeUseOwners()` projection of `findActiveReservation` — a projection,
+not a second liveness rule, because "stop the browser that is blocking me" is unactionable advice
+if the message cannot say which one. A managed run is reported and refused, never terminated. The
+update failure taxonomy extends the install taxonomy verbatim and adds exactly three codes
+(`no-managed-installation`, `managed-run-active`, `consent-build-mismatch`), because an extraction
+failure during a replacement is the same failure with the same repair as one during a first
+install.
+
+Download consent is capability-shaped rather than a global preference, and there is one consent
+type rather than an install record and an update record: replacing a browser and installing the
+first one are the same decision about the same destination. The explicit command prints
 the managed destination, approximate 200 MB cost, restart-from-zero behavior, and assurance that
 external Chrome is untouched before prompting. `--yes` constructs the record directly; otherwise
 only a TTY can prompt. Non-TTY and JSON command use without `--yes` fails validation before the
-install service is called. Consent is not persisted and authorizes only that one install request.
+install service is called. Consent is not persisted and authorizes only that one request.
+`DownloadConsentRecord` carries `targetBuildId` and `replaces`, both `null` on a first install
+because Stable is resolved in-helper and nothing is being replaced. An update resolves Stable once,
+_before_ asking, and `update()` refuses a record naming a different build or a different
+predecessor with `consent-build-mismatch` — which is what makes "the build you accepted is the
+build you get" true even when upstream publishes a new Stable mid-operation.
 
 The first-run offer is narrower still. `LocalBrowserProvider` considers it only when automatic
 selection returns `missing`; explicit missing selections and resolved-but-incompatible browsers keep
@@ -1005,6 +1098,21 @@ classified host, network, helper, compatibility, publication, or contention fail
 environment exit 3. The command never changes browser selection: when a system selection remains in
 effect, the successful result points to the separate `yantra browser use managed` action.
 
+`yantra browser update` is the only command that asks whether a newer browser exists, and it is two
+modes rather than a mode plus a modifier. `--dry-run` reports availability and changes nothing;
+without it the command replaces the managed installation. Because the availability report has no
+replacement to accept, `--dry-run --yes` is refused as conflicting modes rather than silently
+ignoring a dead control. The flag is spelled `--dry-run` because `yantra config data-dir` already
+owns that spelling for "report what this would do without doing it", and it is deliberately not
+spelled `--check`, since `browser check` in the same noun namespace already means a local
+compatibility probe with no network — the opposite operation. The command follows the same output
+and exit contract as `install`: notices and progress on stderr, one versioned `browser_update`
+envelope on stdout in JSON mode, `--yes` required before any replacement under `--json` or a
+non-TTY, exit 1 for missing or mismatched acceptance, exit 4 for a decline or cancellation, and
+exit 3 for classified metadata, host, helper, compatibility, publication, or busy failures.
+`up-to-date` and `installed-newer` are successes that exit 0 and change nothing, and the CLI never
+compares build strings itself — it calls core's `compareManagedBuild`.
+
 `yantra config` exposes path provenance, validated reads and writes, editor
 validation, and guarded data-root relocation; its document-based YAML mutations preserve comments
 and replace files atomically with owner-only permissions. Relocation is explicitly user-invoked,
@@ -1157,17 +1265,19 @@ sequenceDiagram
   Note over Provider,Supervisor: On close or crash: graceful close,<br/>bounded escalation, verified tree exit,<br/>then release the reservation
 ```
 
-### Managed Stable installation
+### Managed Stable acquisition and replacement
 
-The explicit command and accepted first-run offer converge only after consent. Stable acquisition is
-the sole browser-install network path; ordinary resolution, startup, diagnostics, and compatibility
-cache reads never enter it.
+The explicit install command, the explicit update command, and an accepted first-run offer converge
+on one transaction after consent. Stable acquisition is the sole browser-download network path and
+resolve-mode metadata is the sole update-check network path; ordinary resolution, startup,
+diagnostics, and compatibility cache reads enter neither.
 
 ```mermaid
 sequenceDiagram
   participant Human
   participant CLI as CLI or interactive provider
-  participant Install as Managed install service
+  participant Update as Managed update service
+  participant Install as Managed install service and acquisition transaction
   participant Coord as Managed coordinator
   participant State as State and orphan collector
   participant Preflight
@@ -1176,35 +1286,57 @@ sequenceDiagram
   participant Compat as Compatibility service
   participant Files as Managed browser files
 
-  Human->>CLI: accept one install
-  CLI->>Install: request with consent record
-  Install->>State: read ready pointer
-  alt ready installation already exists
-    Install->>State: collect unowned orphans
-    Install-->>CLI: local already-installed result
-  else no ready installation
+  alt yantra browser update
+    CLI->>Update: local preflight before any network cost
+    Update->>State: read ready pointer
+    Update->>Coord: is a managed browser in use?
+    Coord-->>Update: idle, or busy with the owning pids
+    Update->>Helper: spawn in resolve mode with no cache directory
+    Helper->>CfT: resolve Stable and test artifact availability
+    Helper-->>Update: buildId and artifactAvailable, then exit
+    Update-->>CLI: comparison verdict
+    Note over CLI,Update: --dry-run stops here: nothing downloaded,<br/>installed, replaced, published, or collected
+    Human->>CLI: accept replacing the named build
+    CLI->>Update: consent naming target build and predecessor
+    Update->>Coord: claim exclusive mutation for exact child
+    Coord-->>Update: lease, or busy and operation-in-progress
+    Update->>Install: acquireAndPublish under the held lease
+  else yantra browser install or accepted first-run offer
+    Human->>CLI: accept one install
+    CLI->>Install: request with consent record
+    Install->>State: read ready pointer
+    opt ready installation already exists
+      Install->>State: collect unowned orphans
+      Install-->>CLI: local already-installed result
+    end
     Install->>Coord: claim exclusive mutation for exact child
     Coord-->>Install: lease or operation-in-progress
-    Install->>State: collect unowned orphans
-    Install->>Preflight: verify host, tools, proxy, space, permissions
-    Install->>Helper: spawn with validated request and allowlisted environment
-    Helper->>CfT: resolve Stable and download official artifact
-    CfT-->>Helper: ZIP artifact
-    Helper->>Files: extract into installation-id child
-    Helper-->>Install: validated result or typed failure
-    Install->>Compat: probe exact candidate under lease permit
-    Compat-->>Install: tested or capability-checked pass
-    Install->>Files: write temp ready record and atomic rename
-    Install->>State: collect superseded orphans
-    Install->>Coord: release mutation lease
-    Install-->>CLI: installed result
   end
+
+  Install->>State: collect unowned orphans
+  Install->>Preflight: verify host, tools, proxy, space, permissions
+  Install->>Helper: spawn in install mode with validated request and allowlisted environment
+  Helper->>CfT: download the accepted build, or resolve Stable on a first install
+  CfT-->>Helper: ZIP artifact
+  Helper->>Files: extract into installation-id child
+  Helper-->>Install: validated result or typed failure
+  Install->>Compat: probe exact candidate under lease permit
+  Compat-->>Install: tested or capability-checked pass
+  opt replacement
+    Install->>Coord: beforePublish re-check for a browser started mid-transfer
+  end
+  Install->>Files: write temp ready record and atomic rename
+  Install->>State: collect superseded orphans
+  Install-->>CLI: published result
+  Note over CLI,Coord: The caller that claimed the lease releases it on every path
 ```
 
 Cancellation or failure before the atomic rename follows the same state transition as a killed
 process: the pointer stays absent or retains its prior target, the new child is an orphan, and the
 next explicit install or update can collect it. No persisted phase machine is consulted or resumed.
-After an accepted first-run offer succeeds, the provider resolves again and then enters the ordinary
+A failed replacement therefore re-reads the ready pointer rather than echoing the snapshot it
+opened with, so the outcome proves which installation survived instead of asserting it. After an
+accepted first-run offer succeeds, the provider resolves again and then enters the ordinary
 browser-startup flow above.
 
 ### Deterministic web research
@@ -1431,10 +1563,18 @@ beyond those files.
 
 Acquisition adds no database state and no recovery document. `DownloadConsentRecord`, bounded
 progress, helper requests/messages, and candidate-probe permits exist only for one operation. The
+record names the accepted `targetBuildId` and the `replaces` predecessor — both `null` on a first
+install — and is still never written anywhere. The
 helper writes the upstream Chrome-for-Testing cache layout inside its exact
 `installation-<id>` child. Until atomic publication makes `ready.json` name that child, it has the
 same durable meaning as every other orphan; transient progress phases are never written to
 `operation.json` or inferred after a restart.
+
+Update adds nothing durable either, and the absences are the design: no `lastCheckedAt` timestamp,
+no availability cache, no update-interval or retained-version config key, and no history of checks.
+A resolved `StableBuild`, the installed-versus-available comparison, and the availability report are
+per-invocation memory, which is what makes `yantra browser update --dry-run` leave the data root,
+the cache root, and `config.yaml` byte-identical.
 
 ```mermaid
 flowchart TD
@@ -1442,7 +1582,10 @@ flowchart TD
   Ready[browsers/ready.json] --> Selection[Browser resolution]
   Operation[browsers/operation.json] --> Coordination[Managed coordination]
   Reservations[browsers/coordination/] --> Coordination
-  Consent[Run-local download consent] --> Installer[Managed install service]
+  Consent[Run-local download consent naming the accepted build] --> Installer[Managed acquisition service]
+  Ready --> Updater[Managed update service]
+  Updater --> Consent
+  Updater --> Installer
   Installer --> Operation
   Installer --> Candidate[browsers/installation-id child]
   Operation --> Candidate
@@ -1545,15 +1688,45 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
   "cannot tell" both fail in the direction of not reclaiming.
 - **Browser acquisition needs a human-minted, one-operation capability.** The installer has no
   consent default, stored approval, or model tool. Explicit `--yes` and terminal prompts construct
-  the same short-lived record; unattended callers structurally omit the offer gateway. This costs a
+  the same short-lived record; unattended callers structurally omit the offer gateway. There is one
+  consent type rather than an install record and an update record, because replacing a browser and
+  installing the first one are the same decision about the same destination; an update's record
+  additionally names the exact build it accepted and the one it replaces, and a mismatch is
+  refused, so a Stable published mid-operation cannot substitute itself for what the user agreed
+  to. This costs a
   separate gateway through runtime composition, but makes absence of a human authorization
   mechanically equivalent to absence of download capability.
+- **Install and update are one transaction with different preconditions.** A managed browser is
+  acquired and published in exactly one place, `acquireAndPublish`, which both callers enter; the
+  caller owns the mutation lease because only it knows which user-facing code a refused claim maps
+  to, and a single optional `beforePublish` hook is the one behavioral difference between them. Two
+  acquisition flows would stay invisible until they disagreed about verification or publication, so
+  the update service takes the acquisition seam as an injected dependency and a test asserts a
+  replacement makes exactly one `acquireAndPublish` call. The update failure taxonomy
+  extends the install one verbatim for the same reason: an extraction failure has the same repair
+  whichever command caused it.
+- **The update check is explicit, and the system remembers nothing about it.** `yantra browser
+update` is the only surface that contacts a version server, and only when a human runs it. There
+  is no background or startup check, no `lastCheckedAt`, no availability cache, no update interval,
+  and no retained-version count — deliberately, because a stored timestamp is the seed of the
+  background-check feature this design excludes. The cost is that a stale browser stays stale until
+  someone asks; the benefit is that a local-first tool makes no unrequested network call, and
+  `--dry-run` is verifiable as leaving the data root, cache root, and `config.yaml` byte-identical
+  rather than merely intended to. Ordering is delegated to `getVersionComparator(Browser.CHROME)`
+  from the pinned package rather than re-derived, since a version grammar duplicated beside the one
+  that owns it is silent divergence: a lexicographic compare would refuse a real update. A build
+  newer than current Stable is reported and left alone, never silently downgraded.
 - **Put an unabortable upstream installer behind an owned process.** `@puppeteer/browsers` does not
   accept an abort signal and controls extraction itself, so Yantra runs it in a compiled Node helper
   with validated IPC and a narrow environment. The parent can bound metadata and transfer stalls,
   terminate enumerable descendants, and wait for exit without making the CLI event loop or managed
-  pointer part of an uninterruptible operation. The tradeoff is a second process protocol and a
-  special pending-cancellation window around synchronous Windows finalization.
+  pointer part of an uninterruptible operation. The same helper answers the update-metadata
+  question in a `resolve` mode that is given no cache directory and writes nothing — the helper is
+  also the only place the environment allowlist and `NODE_USE_ENV_PROXY=1` apply, and
+  `@puppeteer/browsers` imports `proxy-agent` optionally and goes direct when it is absent, so an
+  in-process metadata call would silently bypass a configured proxy. The tradeoff is a second
+  process protocol, whose mode is a required field at protocol version `2` rather than an optional
+  one, and a special pending-cancellation window around synchronous Windows finalization.
 - **One pointer instead of a transaction log.** The managed tree keeps disjoint children and one
   atomically published pointer, which makes every interrupted state the same state: a child the
   pointer does not name is an orphan. That removes the phase machine, the recovery routine, and the
@@ -1663,10 +1836,12 @@ At runtime there are three process shapes:
   launches a run-scoped Chrome child process and provider session, writes local artifacts, then
   closes owned handles, listeners, and CDP sessions, and waits for verified process-tree exit
   before releasing any managed claim it holds;
-- during an explicitly consented managed install, one short-lived Node helper child that resolves
-  Stable and owns download/extraction work under an exclusive mutation lease; the CLI parent owns
-  IPC validation, deadlines, cancellation, process-tree termination, verification, and ready-pointer
-  publication; and
+- one short-lived Node helper child per managed browser operation, in one of two modes: during an
+  explicitly consented install or replacement it resolves or downloads the accepted build and owns
+  extraction under an exclusive mutation lease, and during `yantra browser update` it answers the
+  Stable-availability question and exits without a cache directory, a lease, or a byte written. The
+  CLI parent owns IPC validation, deadlines, cancellation, process-tree termination, verification,
+  and ready-pointer publication; and
 - an optional long-running scheduler daemon guarded by a single-instance lock, polling every 60
   seconds by default and spawning the same in-process workflow execution path for due schedules.
 

@@ -7,7 +7,7 @@ const finish = (message) => send(message, () => process.disconnect?.());
 
 send({
   kind: 'ready',
-  protocolVersion: 1,
+  protocolVersion: 2,
   nodeVersion: process.versions.node,
   envProxyRequested: process.env.NODE_USE_ENV_PROXY === '1',
 });

@@ -195,7 +195,9 @@ keys above. Neither mutates a browser installation.
   so evidence is only as current as the last `browser check`.
 - `browser list` and `doctor` report the orphan count and reclaimable bytes but never reclaim them.
   Collection happens during an explicit `browser install` or `browser update`.
-- There is no browser `update` or availability check in this feature. `yantra browser update` and its
-  `--dry-run` availability mode belong to FEAT-046 and are not available commands here.
+- No command in this feature checks whether a newer browser exists. `browser list`, `browser use`,
+  `browser check`, and `doctor` are local and offline; asking that question is `yantra browser update`,
+  documented in [Explicit Managed Update](explicit-managed-update.md). In particular `browser check`
+  probes the browser you already have and never looks for a newer one.
 - The recorder takes the same selection through its core startup API; no separate recorder CLI command
   is introduced for it.

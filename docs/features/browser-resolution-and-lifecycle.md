@@ -318,9 +318,10 @@ Resolution, the compatibility check, the evidence cache, session and recorder st
 
 ## Limitations
 
-- `yantra browser update` does not exist. The remediation strings that name it are guidance text from
-  the current code, not a command you can run. Pinning, rollback, and a selectable version history are
-  out of scope by design: one ready pointer names the only selectable managed installation.
+- Pinning, rollback, and a selectable version history are out of scope by design: one ready pointer
+  names the only selectable managed installation, and replacing it is the whole of
+  [Explicit Managed Update](explicit-managed-update.md). This resolver never resolves a Stable build
+  and never downloads one.
 - The command surface for every selection this resolver honors — `yantra browser use`, `browser list`,
   `browser check`, and the `--browser` / `--browser-path` flags — is documented in
   [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md) rather than here. This

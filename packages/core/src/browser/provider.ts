@@ -200,6 +200,10 @@ export class LocalBrowserProvider implements BrowserProvider {
           grantedAt: new Date().toISOString(),
           destinationRoot: managedBrowsersRoot(),
           approximateBytes: 200 * 1024 * 1024,
+          // A first install has no accepted build and replaces nothing: Stable
+          // is resolved in-helper. Only an update names a build in advance.
+          targetBuildId: null,
+          replaces: null,
         },
       });
       if (outcome.status === 'installed' || outcome.status === 'already-installed') return true;

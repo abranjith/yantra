@@ -21,6 +21,12 @@ export interface ManagedHelperClientDeps {
 
 export type ManagedHelperRunOutcome =
   | { readonly status: 'completed'; readonly buildId: string; readonly executableRelative: string }
+  /** Resolve mode's answer. Reaches here through the same deadlines and the same termination. */
+  | {
+      readonly status: 'availability';
+      readonly buildId: string;
+      readonly artifactAvailable: boolean;
+    }
   | { readonly status: 'cancelled'; readonly at: ManagedInstallPhase };
 
 const ENV_NAMES = [
@@ -100,7 +106,7 @@ export class ManagedInstallHelperClient {
     let interruptible = true;
     let lastProgress = Date.now();
     let cancelRequested = false;
-    let finalResult: Extract<ManagedHelperRunOutcome, { status: 'completed' }> | null = null;
+    let finalResult: Exclude<ManagedHelperRunOutcome, { status: 'cancelled' }> | null = null;
     let finalError: ManagedInstallException | null = null;
     let stderrTail = '';
     let finished = false;
@@ -166,6 +172,15 @@ export class ManagedInstallHelperClient {
       const message = parsed.data;
       if (message.kind === 'resolved') {
         buildId = message.buildId;
+      } else if (message.kind === 'availability') {
+        // Sets `buildId` as well, so the metadata deadline stops arming once the
+        // question this run exists to answer has been answered.
+        buildId = message.buildId;
+        finalResult = {
+          status: 'availability',
+          buildId: message.buildId,
+          artifactAvailable: message.artifactAvailable,
+        };
       } else if (message.kind === 'phase') {
         phase = message.phase;
         interruptible = message.interruptible;

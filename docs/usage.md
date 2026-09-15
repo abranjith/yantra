@@ -116,8 +116,7 @@ when known, integer percentages; Windows finalization can be marked
 `(finishing; cancellation pending)`. In ordinary mode, a successful result goes
 to stdout and names the resolved build and executable. If a managed browser is
 already ready, the command succeeds locally without fetching Stable metadata
-and points to the future `yantra browser update` command instead of replacing
-it.
+and points to `yantra browser update` instead of replacing it.
 
 With `--json`, stdout contains exactly one newline-terminated
 `browser_install` envelope. Its `destinationRoot` is the resolved managed root,
@@ -290,6 +289,99 @@ Elsewhere — `daemon`, `schedule`, `init`, `list`, `config`, `doctor`,
 
 See [Browser Selection and Diagnostics](features/browser-selection-and-diagnostics.md)
 for the full behavior and the JSON payloads.
+
+## Update the managed browser
+
+`yantra browser update` is the only command that asks whether a newer Chrome
+exists. Nothing else does — not startup, not `run`, `resume`, `ask`, `research`,
+or `do`, not the recorder, `init`, `doctor`, `browser list`, `browser use`, or
+`browser check`, and not the scheduler or the daemon. There is no schedule, no
+reminder, no background probe, and nothing records that a check happened.
+
+It has exactly two modes.
+
+### Ask what is available
+
+```bash
+yantra browser update --dry-run
+```
+
+This resolves current Chrome for Testing Stable, compares it with the build you
+have, prints the answer, and stops. It downloads nothing, installs nothing,
+takes no lock, needs no acceptance, and reclaims no disk. It is not blocked by a
+running managed browser — a live browser and an in-progress operation are
+reported as state, not treated as refusals.
+
+The report names the installed build or `absent`, the available Stable build,
+the verdict, the managed root, and the next command to run. `--json` emits one
+`browser_update` envelope with `dryRun: true`.
+
+The flag is spelled `--dry-run` because `yantra config data-dir --dry-run`
+already means "report what this would do without doing it". It is deliberately
+not `--check`: `browser check` in the same command group already means a local
+compatibility probe with no network, which is the opposite operation.
+
+Because the availability report has nothing to accept, `--dry-run --yes` is
+refused as conflicting modes rather than silently ignored.
+
+### Replace the installation
+
+```bash
+yantra browser update           # prompts on a terminal
+yantra browser update --yes     # accepts without prompting
+```
+
+The command checks local preconditions before paying for anything: it requires
+an existing managed installation, and it refuses while a managed browser is
+running, naming the process IDs to stop. Both refusals happen before any network
+request, so a busy machine never costs you a 200 MB download.
+
+It then resolves Stable exactly once. If your build is current, or newer than
+Stable, it says so and exits `0` without prompting or downloading — Yantra never
+downgrades. Otherwise it names the current build, the proposed build, the
+destination, the approximate size, the fact that an interrupted transfer
+restarts from zero, and that external Chrome installations are untouched, then
+asks.
+
+The build you accept is the build that is installed. Consent names that exact
+build, and the update is refused if the two ever disagree — so a new Stable
+published mid-operation cannot substitute itself for what you approved.
+
+A replacement publishes one new installation atomically and the build it
+replaced becomes an orphan, which the same operation reclaims. `--json` emits
+one `browser_update` envelope with `dryRun: false` carrying the outcome, the
+previous and new build ids, the executable path, the compatibility verdict, the
+orphan counts and bytes reclaimed, and the selection notice. A
+`capability-checked` pairing is ordinary provenance, not a warning: Chrome ships
+Stable faster than Yantra bumps its driver, so it is the normal state.
+
+Like `install`, this command changes no configuration. If the replaced
+installation is not the selected one, the output names `yantra browser use managed`.
+
+### When an update fails or is interrupted
+
+Any failure, refusal, or cancellation before publication leaves the previous
+installation exactly as it was — still selected, still launchable, still usable
+offline. A metadata, proxy, or network failure is an update failure only and
+never makes an installed browser unusable.
+
+There is nothing to resume and nothing to repair. A killed update simply leaves
+an orphan directory that the next `yantra browser install` or
+`yantra browser update` collects, reporting the bytes reclaimed. Yantra never
+shows a "your last update did not finish" state, because there is no action you
+could take about one.
+
+### `browser update` exit codes
+
+| Exit | Meaning                                                                                                                                                                 |
+| ---: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  `0` | Replaced, already current, or the installed build is newer than Stable                                                                                                  |
+|  `1` | `--dry-run --yes`, an unsupported flag, or missing `--yes` under `--json` or a non-TTY                                                                                  |
+|  `3` | No managed installation, a managed browser is running, another operation holds the lease, or a classified metadata, host, helper, compatibility, or publication failure |
+|  `4` | You declined the prompt, or the replacement was cancelled                                                                                                               |
+
+See [Explicit Managed Update](features/explicit-managed-update.md) for the full
+behavior, the JSON payloads, and the guarantees.
 
 ## Choose an execution mode
 

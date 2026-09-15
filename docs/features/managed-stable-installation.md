@@ -253,8 +253,8 @@ are never modified by this feature.
   failed offer-driven install, later sessions in that process do not prompt again.
 - This document covers `yantra browser install` only. Selecting the installed build, listing the
   browsers on the machine, and testing one belong to
-  [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md). `yantra browser update`
-  does not exist yet, so the guidance string naming it is text, not a command you can run.
+  [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md); replacing it belongs to
+  [Explicit Managed Update](explicit-managed-update.md).
 - Installation is the only consented network path in this feature. Ordinary startup and installed
   browser use do not check for newer Stable builds, and there are no background update checks,
   reminders, or schedules.

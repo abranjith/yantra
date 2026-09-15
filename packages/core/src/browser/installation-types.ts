@@ -1,6 +1,7 @@
 import type { InstallOfferGateway } from './install-offer-gateway.js';
 import type { BrowserInventoryService } from './inventory.js';
 import type { ManagedInstallService } from './managed-install-types.js';
+import type { ManagedUpdateService } from './managed-update-types.js';
 
 /**
  * Browser installation contracts — selection, identity, managed state,
@@ -319,5 +320,13 @@ export interface BrowserRuntimeServices {
   readonly inventory?: BrowserInventoryService;
   /** Optional human-only first-run install boundary; absent on unattended paths. */
   readonly installService?: ManagedInstallService;
+  /**
+   * The only update-check surface, and deliberately optional.
+   *
+   * Present for the CLI's `browser update` and nothing else: no runtime path,
+   * no scheduler, no daemon, no nested workflow, and no model tool can reach an
+   * update through the services bag it already holds.
+   */
+  readonly updateService?: ManagedUpdateService;
   readonly installOfferGateway?: InstallOfferGateway | null;
 }

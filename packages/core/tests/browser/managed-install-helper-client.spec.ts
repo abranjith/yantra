@@ -37,7 +37,8 @@ const servers: Server[] = [];
 
 function request(operationId: string, cacheDir: string): HelperRequest {
   return {
-    protocolVersion: 1,
+    protocolVersion: 2,
+    mode: 'install',
     operationId,
     browser: 'chrome',
     platform:

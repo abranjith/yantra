@@ -8,6 +8,7 @@ import type {
   ProbeProfile,
 } from './installation-types.js';
 import type { ManagedInstallError } from './managed-install-types.js';
+import type { ManagedUpdateError } from './managed-update-types.js';
 
 /**
  * Resolution refused to hand back an installation.
@@ -82,6 +83,24 @@ export class BrowserManagedInstallError extends Error {
 
   constructor(readonly installError: ManagedInstallError) {
     super(`${installError.detail} ${installError.remediation}`.trim());
+  }
+}
+
+/**
+ * An explicit managed update failed, was refused, or could not resolve Stable.
+ *
+ * It carries the surviving installation deliberately. Every failure in this
+ * feature leaves the previous browser selectable and launchable, and an error
+ * that cannot say so invites the user to look for a repair that does not exist.
+ */
+export class BrowserManagedUpdateError extends Error {
+  override readonly name = 'BrowserManagedUpdateError';
+
+  constructor(
+    readonly updateError: ManagedUpdateError,
+    readonly survivingBuildId: string | null = null,
+  ) {
+    super(`${updateError.detail} ${updateError.remediation}`.trim());
   }
 }
 

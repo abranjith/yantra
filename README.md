@@ -89,6 +89,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Browser Resolution and Lifecycle](docs/features/browser-resolution-and-lifecycle.md) — which browser Yantra picks, local capability checking instead of a version floor, and startup and shutdown resource ownership.
 - [Managed Stable Installation](docs/features/managed-stable-installation.md) — consented Chrome for Testing acquisition, verification, storage, retries, and current limitations.
 - [Browser Selection and Diagnostics](docs/features/browser-selection-and-diagnostics.md) — persisting and overriding the browser choice, the local inventory, and explicit compatibility checking.
+- [Explicit Managed Update](docs/features/explicit-managed-update.md) — the only update-check surface, availability-only `--dry-run`, consented replacement, and why nothing checks in the background.
 - [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
 - [Research](docs/features/research.md) — agentic and deterministic multi-hop research.
 - [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`.

@@ -21,8 +21,10 @@ available.
 
 Installing workspace dependencies does not download Chrome. A managed browser
 download happens only after `yantra browser install` receives consent or you
-accept an interactive first-run offer. Yantra does not check for browser updates
-during startup or ordinary tasks.
+accept an interactive first-run offer. Yantra never checks for browser updates on
+its own: `yantra browser update` is the only command that asks whether a newer
+browser exists, and `yantra browser update --dry-run` answers that question
+without downloading anything.
 
 ## Install and build from source
 
