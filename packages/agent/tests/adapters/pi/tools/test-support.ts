@@ -9,6 +9,7 @@ import type {
   EthicsGate,
   Extractor,
   FetchedDoc,
+  Logger,
   SearchProvider,
 } from '@yantra/core';
 import { DefaultSanitizer, type UserInputVault } from '@yantra/core';
@@ -57,6 +58,12 @@ export interface BuildServicesOptions {
    * real run earns it from a tool result.
    */
   readonly urlProvenance?: UrlProvenance;
+  /**
+   * The run's operator diagnostic logger. Absent by default, matching a
+   * fixture that injects its own environment; supply a recorder to assert what
+   * the middleware writes to `runtime.jsonl`.
+   */
+  readonly runtimeLogger?: Logger;
 }
 
 /** Build a RunServices with sensible fakes and overridable domain deps. */
@@ -119,6 +126,24 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     now: () => Date.now(),
     nowIso: () => new Date().toISOString(),
     domain,
+    ...(options.runtimeLogger ? { runtimeLogger: options.runtimeLogger } : {}),
+  };
+}
+
+/** A {@link Logger} that keeps every structured payload it was handed. */
+export function recordingRuntimeLogger(): Logger & {
+  readonly lines: Record<string, unknown>[];
+} {
+  const lines: Record<string, unknown>[] = [];
+  const at = (level: string) => (obj: Record<string, unknown> | string) => {
+    lines.push(typeof obj === 'string' ? { level, msg: obj } : { level, ...obj });
+  };
+  return {
+    lines,
+    info: at('info'),
+    warn: at('warn'),
+    error: at('error'),
+    debug: at('debug'),
   };
 }
 

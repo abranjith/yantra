@@ -79,6 +79,10 @@ function makeProbe(target = installation()): Probe {
         probes += 1;
         return Promise.resolve(result);
       },
+      decide: () => {
+        probes += 1;
+        return Promise.resolve({ result, evidenceSource: 'probe' as const });
+      },
       readCached: () => Promise.resolve({ state: 'unverified' }),
     },
     coordinator: {

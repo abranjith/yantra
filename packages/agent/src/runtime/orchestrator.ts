@@ -16,6 +16,7 @@ import {
   type BrowserRuntimeServices,
   type BrowserSelection,
   type InstallOfferGateway,
+  type Logger,
   LocalProfileStore,
   MarkdownReportBuilder,
   ModelSuppliedValues,
@@ -94,6 +95,7 @@ import {
   type ToolDomainDeps,
   type WorkflowRunToolOutcome,
 } from './run-services.js';
+import { RunRuntimeLog } from './runtime-log.js';
 import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
@@ -304,6 +306,20 @@ export interface AgenticRunEnvironment {
   readonly resolveModelSecret?: (secretRef: string) => Promise<string>;
   /** Workflow store used by `--save-as` promotion; omit to disable promotion. */
   readonly workflowStore?: WorkflowStore;
+  /**
+   * The run's operator diagnostic logger, shared by every component this
+   * environment composed. Optional: an injected test environment has none, and
+   * the run must behave identically without it.
+   */
+  readonly runtimeLogger?: Logger;
+  /**
+   * Closes the runtime log this environment opened. Idempotent.
+   *
+   * The environment owns the destination because the environment opened it —
+   * including on the partial-construction path, where nothing else has a
+   * reference to close.
+   */
+  readonly closeRuntimeLog?: () => Promise<void>;
 }
 
 /** Injectable boundaries for hermetic lifecycle/chaos tests. */
@@ -533,6 +549,7 @@ export async function runAgenticTask(
       nowIso: () => now().toISOString(),
       domain,
       workflowToolMode: profile.workflowToolMode,
+      ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
     };
     const tools = createYantraTools(services, profile);
     const provider =
@@ -624,6 +641,8 @@ export async function runAgenticTask(
       const startup = toStartupError(error);
       await runStore.finalizeStartupFailure(created.runId, startup.toAgentError());
       startupFinalized = true;
+      // This branch skips the teardown block below, so it owns the close.
+      await environment?.closeRuntimeLog?.().catch(() => undefined);
       terminal = failed(created.runId, created.runDir, startup.toAgentError());
     } else {
       terminal = failed(created.runId, created.runDir, {
@@ -653,6 +672,11 @@ export async function runAgenticTask(
           persistenceGoal: userInput.neutralize(redacted.goal),
         });
       }
+
+      // Browser, session and recorder tear down while the destination is still
+      // open, so their terminal lifecycle lines persist. Only then is the log
+      // closed — and only then can the report see whether the artifact exists.
+      await captureTeardown(() => environment?.closeRuntimeLog?.(), teardownErrors);
 
       if (teardownErrors.length > 0 && terminal?.kind === 'published') {
         terminal = failed(created.runId, created.runDir, {
@@ -1236,12 +1260,32 @@ async function createDefaultEnvironment(context: {
   readonly rankSink: RankSignalSink | null;
   readonly browser?: BrowserRuntimeOptions;
 }): Promise<AgenticRunEnvironment> {
-  const logger = {
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    debug: () => undefined,
-  };
+  // The run directory already exists by the time this runs, so the diagnostic
+  // destination can be opened here rather than lazily. Every component below
+  // receives this one logger: a second destination on the same file would
+  // interleave two buffers into one append-only artifact.
+  const runtimeLog = RunRuntimeLog.open({ runId: context.runId, runDir: context.runDir });
+  try {
+    return await composeDefaultEnvironment(context, runtimeLog);
+  } catch (error) {
+    // Partial construction still opened the destination, and nothing else holds
+    // a reference to it — close it here or the handle outlives the run.
+    await runtimeLog.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function composeDefaultEnvironment(
+  context: {
+    readonly runId: string;
+    readonly runDir: string;
+    readonly taskId: string;
+    readonly rankSink: RankSignalSink | null;
+    readonly browser?: BrowserRuntimeOptions;
+  },
+  runtimeLog: RunRuntimeLog,
+): Promise<AgenticRunEnvironment> {
+  const logger = runtimeLog.logger;
   const keychain = await createKeychainProvider();
   const ethicsConfig = await loadEthicsConfig();
   // Load the search config once for this run so the combined `web_search` tool's
@@ -1289,6 +1333,8 @@ async function createDefaultEnvironment(context: {
   return {
     browserController,
     workflowStore,
+    runtimeLogger: logger,
+    closeRuntimeLog: () => runtimeLog.close(),
     domain: {
       search: {
         resolveProvider: async () => {

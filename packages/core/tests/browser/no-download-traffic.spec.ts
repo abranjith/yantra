@@ -21,7 +21,7 @@ describe('@no-llm browser acquisition traffic boundary', () => {
     const install = vi.fn();
     const services = {
       resolver: { resolve: vi.fn().mockResolvedValue({ status: 'unavailable', error }) },
-      compatibility: { check: vi.fn(), readCached: vi.fn() },
+      compatibility: { check: vi.fn(), decide: vi.fn(), readCached: vi.fn() },
       coordinator: { reserveUse: vi.fn(), claimMutation: vi.fn(), hasActiveUse: vi.fn() },
       managedState: { readReady: vi.fn(), readInventory: vi.fn() },
       installService: { install, collectOrphans: vi.fn() },

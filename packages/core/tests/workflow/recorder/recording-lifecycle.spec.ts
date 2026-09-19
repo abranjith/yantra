@@ -263,6 +263,13 @@ describe('@no-llm RecordingSession lifecycle', () => {
           events.push(`compatibility:${options.profile}`);
           return Promise.resolve(opts.compatibility ?? evidence(target));
         }),
+        decide: vi.fn((target: ResolvedBrowserInstallation, options) => {
+          events.push(`compatibility:${options.profile}`);
+          return Promise.resolve({
+            result: opts.compatibility ?? evidence(target),
+            evidenceSource: 'probe' as const,
+          });
+        }),
         readCached: vi.fn().mockResolvedValue({ state: 'unverified' }),
       },
       coordinator: {

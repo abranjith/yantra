@@ -21,6 +21,7 @@ import { Type, type Static } from 'typebox';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
+import { mapBrowserStartupError } from './browser-startup-errors.js';
 import { writeCapture } from './capture.js';
 
 const WebFetchParams = Type.Object(
@@ -112,6 +113,13 @@ async function runWebFetch(
       recordFailure(services, allowed.value.url, 'fetch_failed');
       return { ok: false, ...mapFetchError(error) };
     }
+    // The hybrid fetcher escalates to a headless browser for script-rendered
+    // pages, so a browser that will not start reaches `web_fetch` too — as a
+    // typed core error rather than a `FetchError`. Without this the agent was
+    // told a generic tool fault and kept retrying a fetch no retry could fix.
+    // Not a rank signal: the site did nothing wrong.
+    const startup = mapBrowserStartupError(error);
+    if (startup !== null) return startup;
     throw error;
   }
 

@@ -7,7 +7,12 @@
  * one, or touch an update boundary.
  */
 
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import {
+  BrowserResolutionError,
   createSelectedBrowserProvider,
   type BrowserRuntimeServices,
   type BrowserSelection,
@@ -74,6 +79,10 @@ function makeServices(target = installation()): Probe {
       check: () => {
         probes += 1;
         return Promise.resolve(evidence(target));
+      },
+      decide: () => {
+        probes += 1;
+        return Promise.resolve({ result: evidence(target), evidenceSource: 'probe' as const });
       },
       readCached: () => Promise.resolve({ state: 'unverified' }),
     },
@@ -161,10 +170,14 @@ describe('@no-llm agent runtime browser selection', () => {
 
   it('keeps a resolution failure as its typed cause at the runtime boundary', async () => {
     const probe = makeServices();
-    const error = Object.assign(new Error('No Chrome or Chromium installation was found.'), {
-      code: 'missing' as const,
-      requestedSelection: { source: 'auto' as const, executablePath: null },
-      evidence: {},
+    // The real exported class, not a structural stand-in: the startup mapper
+    // classifies by `instanceof`, so a double that merely satisfies the shape
+    // would be reported as an unexpected fault and this test would prove the
+    // opposite of what it claims.
+    const error = new BrowserResolutionError({
+      code: 'missing',
+      message: 'No Chrome or Chromium installation was found.',
+      requestedSelection: { source: 'auto', executablePath: null },
       remediation: 'Install Chrome or run `yantra browser install`.',
     });
     probe.services.resolver.resolve = () => Promise.resolve({ status: 'unavailable', error });
@@ -187,4 +200,105 @@ describe('@no-llm agent runtime browser selection', () => {
     expect(names.filter((name) => /install|update|download|provision/i.test(name))).toEqual([]);
     await Promise.resolve();
   });
+
+  it('hands a launch its own logger, so provenance lands where the run can read it', async () => {
+    const probe = makeServices();
+    const lines: Record<string, unknown>[] = [];
+    const record = (obj: Record<string, unknown> | string): void => {
+      lines.push(typeof obj === 'string' ? { msg: obj } : obj);
+    };
+    const logger = { info: record, warn: record, error: record, debug: record };
+    // The real exported class, not a structural stand-in: the startup mapper
+    // classifies by `instanceof`, so a double that merely satisfies the shape
+    // would be reported as an unexpected fault and this test would prove the
+    // opposite of what it claims.
+    const error = new BrowserResolutionError({
+      code: 'missing',
+      message: 'No Chrome or Chromium installation was found.',
+      requestedSelection: { source: 'auto', executablePath: null },
+      remediation: 'Install Chrome or run `yantra browser install`.',
+    });
+    probe.services.resolver.resolve = () => Promise.resolve({ status: 'unavailable', error });
+    const provider = createSelectedBrowserProvider({ services: probe.services, logger });
+
+    await provider.launch({ profile: { kind: 'ephemeral' } }).catch(() => undefined);
+
+    // Why the run could not open a browser is now recoverable from the run's
+    // own logger. Before this feature the agent runtime handed every component
+    // a no-op, so the answer existed only in the thrown error.
+    const startup = lines.find((line) => line.event === 'browser_startup_failed');
+    expect(startup).toMatchObject({ phase: 'resolution', failure_kind: 'resolution' });
+    // And the remediation prose stays on the error, not in the durable log.
+    expect(JSON.stringify(lines)).not.toContain('yantra browser install');
+  });
 });
+
+/**
+ * One run, one destination.
+ *
+ * `createDefaultEnvironment` composes roughly a dozen collaborators, and the
+ * only way `runtime.jsonl` stays a single coherent append-only artifact is for
+ * every one of them to receive the same bound logger. That is a property of the
+ * composition, not of any single call, so it is asserted over the source: a
+ * second `RunRuntimeLog.open` or a revived no-op logger is exactly the
+ * regression that would be invisible at runtime until an operator read a file
+ * with interleaved halves.
+ */
+describe('@no-llm agent runtime owns exactly one runtime destination', () => {
+  const orchestratorSource = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../../src/runtime/orchestrator.ts'),
+    'utf8',
+  );
+
+  it('opens the destination exactly once across the whole agent package', () => {
+    const agentSrc = resolve(dirname(fileURLToPath(import.meta.url)), '../../src');
+    const opens = collectTypeScriptFiles(agentSrc).flatMap((file) => {
+      const text = readFileSync(file, 'utf8');
+      return text.includes('RunRuntimeLog.open(') ? [file] : [];
+    });
+
+    expect(opens).toHaveLength(1);
+    expect(opens[0]?.replaceAll('\\', '/')).toContain('src/runtime/orchestrator.ts');
+    expect(orchestratorSource.split('RunRuntimeLog.open(')).toHaveLength(2);
+  });
+
+  it('binds the run logger once and hands it to every browser-capable factory', () => {
+    expect(orchestratorSource).toContain('const logger = runtimeLog.logger;');
+    // The no-op logger this replaced must not come back: a component that gets
+    // it logs into nothing while its siblings log into the artifact.
+    expect(orchestratorSource).not.toContain('info: () => undefined');
+
+    for (const factory of [
+      'createSelectedBrowserProvider(',
+      'new LocalProfileStore(',
+      'new AgentBrowserController(',
+      'new RunOrchestrator(',
+    ]) {
+      const occurrences = orchestratorSource.split(factory).length - 1;
+      expect(occurrences).toBeGreaterThan(0);
+    }
+    // Both the default and the nested-workflow provider composition pass it.
+    const providerCalls = orchestratorSource
+      .split('createSelectedBrowserProvider({')
+      .slice(1)
+      .map((tail) => tail.slice(0, tail.indexOf('});')));
+    expect(providerCalls.length).toBeGreaterThanOrEqual(2);
+    for (const call of providerCalls) expect(call).toContain('logger');
+  });
+
+  it('exposes the same logger to the tool middleware it gave the browser', () => {
+    expect(orchestratorSource).toContain('runtimeLogger: logger');
+    expect(orchestratorSource).toContain(
+      '...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),',
+    );
+  });
+});
+
+function collectTypeScriptFiles(root: string, into: string[] = []): string[] {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const full = join(root, entry.name);
+    if (entry.isDirectory()) collectTypeScriptFiles(full, into);
+    else if (entry.isFile() && entry.name.endsWith('.ts')) into.push(full);
+  }
+  return into;
+}

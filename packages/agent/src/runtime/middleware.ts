@@ -420,8 +420,20 @@ async function runPipeline<TParams extends TSchema>(
     };
   } catch (error) {
     // 8. Unexpected exception: audited, genericized. No secret/raw-content leak.
-    logger.error(
-      { tool: spec.name, error_type: error instanceof Error ? error.name : 'UnknownError' },
+    const errorClass = error instanceof Error ? error.name : 'UnknownError';
+    logger.error({ tool: spec.name, error_type: errorClass }, 'unexpected tool error');
+    // The model keeps the generic result below — an unexpected fault is exactly
+    // the case where we do not know what is safe to say. The operator's half of
+    // the same event goes to the run log, where it stays distinguishable from a
+    // browser startup refusal by class alone, with no message, stack, or URL.
+    (services.runtimeLogger ?? null)?.error(
+      {
+        schema_version: 1,
+        event: 'tool_unexpected_failure',
+        tool: spec.name,
+        operation_phase: 'domain',
+        error_class: errorClass,
+      },
       'unexpected tool error',
     );
     return failure(

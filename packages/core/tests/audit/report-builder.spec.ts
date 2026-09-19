@@ -268,4 +268,56 @@ describe('@no-llm report builder — agentic runs', () => {
 
     await rm(runDir, { recursive: true, force: true });
   });
+
+  it('lists runtime.jsonl in the audit trail when the run wrote one', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-agentic-runtime-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(
+      join(runDir, 'runtime.jsonl'),
+      `${JSON.stringify({ run_id: 'agentic-run', event: 'browser_ready' })}\n`,
+      'utf8',
+    );
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain('## Audit Trail');
+    expect(markdown).toContain('- runtime.jsonl');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('omits runtime.jsonl from a pre-feature run directory that has none', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-agentic-no-runtime-'));
+    await writeAgenticRun(runDir, []);
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    // Backward compatibility: a run directory written before this artifact
+    // existed renders exactly as it always did.
+    expect(markdown).toContain('## Audit Trail');
+    expect(markdown).not.toContain('runtime.jsonl');
+    expect(markdown).toContain('- tool-calls.jsonl');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('never reads the runtime log or lets it change the rendered outcome', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-agentic-opaque-'));
+    await writeAgenticRun(runDir, []);
+    // Deliberately unparseable, and claiming a failure the run did not have.
+    await writeFile(
+      join(runDir, 'runtime.jsonl'),
+      'not json at all\n{"event":"browser_startup_failed"}\n',
+      'utf8',
+    );
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain('Outcome: completed');
+    expect(markdown).toContain('Failure class: none');
+    expect(markdown).toContain('- runtime.jsonl');
+    expect(markdown).not.toContain('browser_startup_failed');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
 });

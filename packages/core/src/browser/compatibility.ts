@@ -33,6 +33,7 @@ import type {
   CapabilityEvidence,
   CapabilityId,
   CompatibilityCheckOptions,
+  CompatibilityDecision,
   CompatibilityEvidenceState,
   CompatibilityResult,
   DriverCompatibilityDescriptor,
@@ -317,8 +318,33 @@ export class LocalBrowserCompatibilityService implements BrowserCompatibilitySer
     installation: ResolvedBrowserInstallation,
     options: CompatibilityCheckOptions,
   ): Promise<CompatibilityResult> {
-    if (!options.fresh) return this.ensureCompatible(installation, options.profile, options.signal);
-    return this.runProbe(installation, options.profile, { kind: 'external' }, options.signal);
+    return (await this.decide(installation, options)).result;
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The one body {@link check} and {@link ensureCompatible} are projections of.
+   * There is no second cache lookup and no second probe call site here — only
+   * the extra sentence about which of the two produced the answer.
+   */
+  async decide(
+    installation: ResolvedBrowserInstallation,
+    options: CompatibilityCheckOptions,
+  ): Promise<CompatibilityDecision> {
+    if (!options.fresh) {
+      const cached = await this.readCached(installation, options.profile);
+      if (cached.state === 'evidence') return { result: cached.result, evidenceSource: 'cache' };
+    }
+    return {
+      result: await this.runProbe(
+        installation,
+        options.profile,
+        { kind: 'external' },
+        options.signal,
+      ),
+      evidenceSource: 'probe',
+    };
   }
 
   /** @inheritdoc Never launches. */
@@ -340,9 +366,12 @@ export class LocalBrowserCompatibilityService implements BrowserCompatibilitySer
     profile: ProbeProfile,
     signal?: AbortSignal,
   ): Promise<CompatibilityResult> {
-    const cached = await this.readCached(installation, profile);
-    if (cached.state === 'evidence') return cached.result;
-    return this.runProbe(installation, profile, { kind: 'external' }, signal);
+    const decision = await this.decide(installation, {
+      profile,
+      fresh: false,
+      ...(signal ? { signal } : {}),
+    });
+    return decision.result;
   }
 
   /**

@@ -21,6 +21,7 @@ import type {
   SearchProviderName,
   SearchResult,
   AgentBrowserController,
+  Logger,
   SensitiveScreenLatch,
   OpaqueRefResolver,
   RankSignalSink,
@@ -423,6 +424,16 @@ export interface RunServices {
   readonly domain: ToolDomainDeps;
   /** Command-profile restriction for the optional deterministic workflow tool. */
   readonly workflowToolMode?: WorkflowToolMode;
+  /**
+   * The run's operator diagnostic logger (`runtime.jsonl`), when one exists.
+   *
+   * Optional, and deliberately typed as the provider-neutral core `Logger`
+   * rather than the owning `RunRuntimeLog`: the middleware writes through it
+   * but must never be able to close it, and a fixture that injects its own
+   * environment has no destination to offer. Absent means "log to the process
+   * logger", never "buffer until one appears".
+   */
+  readonly runtimeLogger?: Logger;
 }
 
 export type { SearchProviderName, SearchResult };

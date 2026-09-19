@@ -1,6 +1,7 @@
 import { it } from 'vitest';
 
 export * from './brief.js';
+export * from './runtime-log-safety.js';
 
 /**
  * Returns the current LLM provider as configured via the `LLM_PROVIDER`

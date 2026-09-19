@@ -143,6 +143,7 @@ function makeServices(
   opts: {
     resolution?: BrowserResolution;
     compatibility?: CompatibilityResult;
+    evidenceSource?: 'cache' | 'probe';
     reserveError?: Error;
   } = {},
 ): { services: BrowserRuntimeServices; reservation: OwnedManagedUseReservation } {
@@ -171,6 +172,13 @@ function makeServices(
       check: vi.fn((installation: ResolvedBrowserInstallation) => {
         recorder.events.push('compatibility:check');
         return Promise.resolve(opts.compatibility ?? passing(installation));
+      }),
+      decide: vi.fn((installation: ResolvedBrowserInstallation) => {
+        recorder.events.push('compatibility:check');
+        return Promise.resolve({
+          result: opts.compatibility ?? passing(installation),
+          evidenceSource: opts.evidenceSource ?? ('probe' as const),
+        });
       }),
       readCached: vi.fn().mockResolvedValue({ state: 'unverified' }),
     },
@@ -652,7 +660,7 @@ describe('@no-llm LocalBrowserProvider startup', () => {
     await provider.launch({ profile: { kind: 'ephemeral' } });
 
     // Stale evidence is refused: the second build is verified before launch.
-    expect(services.compatibility.check).toHaveBeenCalledTimes(2);
+    expect(services.compatibility.decide).toHaveBeenCalledTimes(2);
     expect(mockLaunch.mock.calls[0]![1]).toMatchObject({ version: '154.0.1.0' });
   });
 
@@ -734,8 +742,10 @@ describe('@no-llm LocalBrowserProvider startup', () => {
     const combined = infos.join('\n');
     expect(combined).not.toContain('/tmp/yantra-ephemeral');
     expect(combined).not.toContain('--user-data-dir');
+    // Nor the full executable path: the binary is named by basename + hash.
+    expect(combined).not.toContain('/usr/bin/google-chrome');
     // Selection provenance is what the log is for.
-    expect(combined).toContain('"reason":"system-discovery"');
+    expect(combined).toContain('"selection_reason":"system-discovery"');
     expect(combined).toContain('"ownership":"external"');
   });
 });

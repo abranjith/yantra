@@ -14,6 +14,7 @@ import {
   observeAfterAction,
   recordActionProvenance,
 } from './browser-common.js';
+import { mapBrowserStartupError } from './browser-startup-errors.js';
 
 const BrowserNavigateParams = Type.Object(
   {
@@ -100,7 +101,18 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     }
     throw error;
   }
-  const result = await controller.navigate(allowed.value.url);
+  // The browser starts lazily, so THIS is where a startup refusal surfaces on
+  // the first navigation of a run. The catch is scoped to the controller call
+  // alone: everything after it is our own bookkeeping, and widening the scope
+  // would let an unrelated bug be reported as a browser problem.
+  let result;
+  try {
+    result = await controller.navigate(allowed.value.url);
+  } catch (error) {
+    const startup = mapBrowserStartupError(error);
+    if (startup !== null) return startup;
+    throw error;
+  }
   recordActionProvenance(services, result);
   services.trace?.append({
     kind: 'navigate',

@@ -9,6 +9,89 @@ export const AGENT_INTERACTION_MESSAGES = [
   ),
   tool('BROWSER_UNAVAILABLE', 'services-missing', () => 'Browser services are not configured.'),
   tool('BROWSER_NOT_STARTED', 'not-started', passThrough, ['message']),
+  // Browser startup refusals. Each one is a condition on the user's machine
+  // that this run cannot repair, so every message ends the same way: tell the
+  // user what to do, then publish. They name `result_publish` — the one move
+  // the agent actually has — and never a browser-management command it cannot
+  // invoke. The prose is authored here rather than passed through from the core
+  // error, whose message may carry an executable path or raw helper output.
+  tool(
+    'BROWSER_RESOLUTION_FAILED',
+    'resolution',
+    () =>
+      'No usable browser is available on this machine, so browser-backed steps cannot run. ' +
+      'Do not retry: nothing in this run can install or repair one. Tell the user that Yantra ' +
+      'found no usable Chrome or Chromium and that they can install one, or run ' +
+      '`yantra browser install` themselves, then finish with result_publish using whatever ' +
+      'evidence you already have.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_COMPATIBILITY_FAILED',
+    'capability',
+    () =>
+      'The browser on this machine is missing an automation primitive Yantra requires, so it ' +
+      'was refused before any page opened. Do not retry: the same browser will fail the same ' +
+      'check. Tell the user their browser failed the local compatibility check and that ' +
+      '`yantra browser check` names the failing primitive, then finish with result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_COORDINATION_FAILED',
+    'coordination',
+    () =>
+      'The Yantra-managed browser is busy with another operation, so this run could not claim ' +
+      'it. Do not retry: the claim is held outside this run. Tell the user another Yantra ' +
+      'browser operation is in progress and to try again once it finishes, then finish with ' +
+      'result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_LAUNCH_FAILED',
+    'launch',
+    () =>
+      'The browser could not be started on this machine. Do not retry: the failure is in the ' +
+      'local environment, not in how this call was formed. Tell the user the browser failed to ' +
+      'launch and that `yantra doctor` reports the local browser state, then finish with ' +
+      'result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_PROCESS_FAILED',
+    'process',
+    () =>
+      'The browser process could not be accounted for, so this run will not use it. Do not ' +
+      'retry. Tell the user the browser process did not start or exit cleanly and that a ' +
+      'leftover browser process may need to be closed, then finish with result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_INSTALL_DECLINED',
+    'declined',
+    () =>
+      'The user declined the offer to download a Yantra-managed browser, so browser-backed ' +
+      'steps are unavailable. This is their decision, not an error — do not ask again and do ' +
+      'not retry. Tell the user they can run `yantra browser install` whenever they are ready, ' +
+      'then finish with result_publish using whatever evidence you already have.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'BROWSER_INSTALL_FAILED',
+    'managed-install',
+    () =>
+      'Installing the Yantra-managed browser failed, so no browser is available for this run. ' +
+      'Do not retry: this run cannot re-attempt the download. Tell the user the managed browser ' +
+      'install did not complete and that `yantra browser install` reports the specific cause, ' +
+      'then finish with result_publish.',
+    [],
+    'result_publish',
+  ),
   tool(
     'URL_NOT_FROM_EVIDENCE',
     'unattested-url',

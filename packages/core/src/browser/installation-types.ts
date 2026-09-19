@@ -293,11 +293,38 @@ export interface CompatibilityCheckOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * Where *this invocation's* verdict came from.
+ *
+ * Deliberately not part of {@link CompatibilityResult}: the result is the
+ * persisted cache record, and "I read this from the cache" is a fact about one
+ * call, not about the evidence. Writing it into the record would make every
+ * cache hit rewrite the file with a provenance that is already wrong for the
+ * next reader.
+ */
+export type CompatibilityEvidenceSource = 'cache' | 'probe';
+
+/** One compatibility answer plus how this call obtained it. Invocation-only. */
+export interface CompatibilityDecision {
+  readonly result: CompatibilityResult;
+  readonly evidenceSource: CompatibilityEvidenceSource;
+}
+
 export interface BrowserCompatibilityService {
   check(
     installation: ResolvedBrowserInstallation,
     options: CompatibilityCheckOptions,
   ): Promise<CompatibilityResult>;
+  /**
+   * The same answer as {@link check}, plus this call's evidence provenance.
+   *
+   * Both funnel through one cache lookup and one probe implementation; the only
+   * difference is whether the caller is told which of the two answered.
+   */
+  decide(
+    installation: ResolvedBrowserInstallation,
+    options: CompatibilityCheckOptions,
+  ): Promise<CompatibilityDecision>;
   /** Never launches. */
   readCached(
     installation: ResolvedBrowserInstallation,
@@ -329,4 +356,91 @@ export interface BrowserRuntimeServices {
    */
   readonly updateService?: ManagedUpdateService;
   readonly installOfferGateway?: InstallOfferGateway | null;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime lifecycle projections
+// ---------------------------------------------------------------------------
+
+/**
+ * Structured browser-lifecycle evidence for an operator diagnostic log.
+ *
+ * These are *projections*, not errors and not model input. They answer "which
+ * browser ran, why was it chosen, and where did the compatibility evidence come
+ * from?" without persisting anything that identifies the user's machine: the
+ * executable is named by basename plus a hash of its canonical path, never by
+ * the path itself, so the same binary is recognizable across events while a
+ * home-directory path never reaches the artifact.
+ */
+export interface BrowserReadyRuntimeEvent {
+  readonly schema_version: 1;
+  readonly event: 'browser_ready';
+  readonly selection_source: BrowserSource;
+  readonly selection_origin: SelectionOrigin;
+  readonly selection_reason: SelectionReason;
+  readonly ownership: 'managed' | 'external';
+  readonly browser_version: string;
+  readonly executable_basename: string;
+  readonly executable_path_sha256: string;
+  readonly executable_stat_fingerprint: string;
+  readonly driver_version: string;
+  readonly tested_build: string;
+  readonly probe_revision: number;
+  readonly probe_profile: ProbeProfile;
+  readonly compatibility_verdict: 'passed';
+  readonly pairing: 'tested' | 'capability-checked';
+  readonly evidence_source: CompatibilityEvidenceSource;
+  readonly evidence_checked_at: string;
+}
+
+/** Which startup step was in flight when a launch attempt threw. */
+export type BrowserStartupPhase =
+  | 'resolution'
+  | 'reservation'
+  | 'compatibility'
+  | 'profile'
+  | 'identity-revalidation'
+  | 'launch';
+
+/** Closed classification of why a startup attempt refused. */
+export type BrowserStartupFailureKind =
+  | 'resolution'
+  | 'compatibility'
+  | 'install-declined'
+  | 'managed-install'
+  | 'coordination'
+  | 'launch'
+  | 'process'
+  | 'unexpected';
+
+/**
+ * Safe lifecycle evidence for a startup attempt that threw, emitted once,
+ * before rollback.
+ *
+ * Every field is a closed enum, a class name, or a boolean. It carries no
+ * `message`, `stack`, `args`, `lastStderr`, raw `detail`, executable or profile
+ * path, page or task URL, or environment value — the original error still
+ * propagates unchanged to the caller, which is where that context belongs.
+ */
+export interface BrowserStartupFailedRuntimeEvent {
+  readonly schema_version: 1;
+  readonly event: 'browser_startup_failed';
+  readonly phase: BrowserStartupPhase;
+  readonly error_class: string;
+  readonly failure_kind: BrowserStartupFailureKind;
+  /** Closed resolution cause, for a `resolution` failure. */
+  readonly resolution_code?: BrowserResolutionErrorCode;
+  /** Closed probe failure class, for a `compatibility` failure. */
+  readonly compatibility_failure_class?: ProbeFailureClass;
+  readonly compatibility_profile?: ProbeProfile;
+  /** Closed coordination cause, for a `coordination` failure. */
+  readonly coordination_reason?: string;
+  /** Closed managed-install code/phase, for a `managed-install` failure. */
+  readonly install_code?: string;
+  readonly install_phase?: string;
+  /** Closed launch or process phase. */
+  readonly launch_phase?: string;
+  readonly process_phase?: string;
+  /** False when Yantra could not prove the browser process tree exited. */
+  readonly exit_proven?: boolean;
 }

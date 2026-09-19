@@ -1,15 +1,26 @@
+import { createHash } from 'node:crypto';
+import { basename } from 'node:path';
+
 import { identifyExecutable, toChromeInstall } from './browser-resolver.js';
 import { detectChrome } from './chrome-discovery.js';
 import {
   BrowserCompatibilityError,
   BrowserInstallOfferDeclinedError,
+  BrowserLaunchError,
   BrowserManagedInstallError,
+  BrowserProcessError,
+  BrowserResolutionError,
   ChromeNotFoundError,
+  ManagedCoordinationError,
 } from './errors.js';
 import type { InstallOfferGateway } from './install-offer-gateway.js';
 import type {
+  BrowserReadyRuntimeEvent,
   BrowserRuntimeServices,
   BrowserSelection,
+  BrowserStartupFailedRuntimeEvent,
+  BrowserStartupPhase,
+  CompatibilityDecision,
   ProbeProfile,
   ResolvedBrowserInstallation,
 } from './installation-types.js';
@@ -63,6 +74,8 @@ export class LocalBrowserProvider implements BrowserProvider {
   private readonly selection: BrowserSelection | undefined;
   private readonly installOfferGateway: InstallOfferGateway | null | undefined;
   private readonly installService: ManagedInstallService | undefined;
+  private readonly identify: typeof identifyExecutable;
+  private readonly spawnBrowser: typeof launchResolvedChrome;
 
   constructor(deps: {
     profileStore: ProfileStore;
@@ -81,6 +94,16 @@ export class LocalBrowserProvider implements BrowserProvider {
     selection?: BrowserSelection;
     installOfferGateway?: InstallOfferGateway | null;
     installService?: ManagedInstallService;
+    /**
+     * External boundary: reading a binary's identity off disk.
+     *
+     * Injected for the same reason {@link LocalBrowserCompatibilityService}
+     * injects it — re-stat is a filesystem call, and a module-scope spy cannot
+     * intercept the sibling call this class makes to it.
+     */
+    identify?: typeof identifyExecutable;
+    /** External boundary: spawning the browser process. */
+    launch?: typeof launchResolvedChrome;
   }) {
     this.profileStore = deps.profileStore;
     this.logger = deps.logger ?? noopLogger;
@@ -94,6 +117,8 @@ export class LocalBrowserProvider implements BrowserProvider {
         ? this.services.installOfferGateway
         : deps.installOfferGateway;
     this.installService = deps.installService ?? this.services.installService;
+    this.identify = deps.identify ?? identifyExecutable;
+    this.spawnBrowser = deps.launch ?? launchResolvedChrome;
   }
 
   /**
@@ -118,47 +143,55 @@ export class LocalBrowserProvider implements BrowserProvider {
   async launch(options: Partial<LaunchOptions>): Promise<BrowserSession> {
     const opts = parseLaunchOptions(options);
 
-    // 1. Resolve identity.
-    const requestedSelection = selectionFromLaunchOptions(opts) ?? this.selection;
-    const resolution = await this.resolveWithInstallOffer(requestedSelection);
-    if (resolution.status === 'unavailable') throw resolution.error;
-    let installation = resolution.installation;
-
-    // 2. Acquire managed ownership before anything else touches the tree, and
-    //    hold this one reservation across both the probe and the task launch.
-    const reservation = await this.acquireManagedUse(installation);
+    // The startup phase is tracked rather than inferred from the error class:
+    // the same class can be thrown from two steps (a resolution failure during
+    // first resolve and during identity revalidation), and "which step were we
+    // on?" is the fact an operator reading the log actually needs.
+    let phase: BrowserStartupPhase = 'resolution';
+    let reservation: OwnedManagedUseReservation | null = null;
     let profile: ResolvedProfile | null = null;
     let profileOwned = false;
 
     try {
+      // 1. Resolve identity.
+      const requestedSelection = selectionFromLaunchOptions(opts) ?? this.selection;
+      const resolution = await this.resolveWithInstallOffer(requestedSelection);
+      if (resolution.status === 'unavailable') throw resolution.error;
+      let installation = resolution.installation;
+
+      // 2. Acquire managed ownership before anything else touches the tree, and
+      //    hold this one reservation across both the probe and the task launch.
+      phase = 'reservation';
+      reservation = await this.acquireManagedUse(installation);
+
       // 3. Verify compatibility. The probe runs its own synthetic session under
       //    the reservation we already hold; it never acquires a second.
-      await this.assertCompatible(installation);
+      phase = 'compatibility';
+      let decision = await this.assertCompatible(installation);
 
       // 4. Create the requested profile.
+      phase = 'profile';
       profile = await this.profileStore.resolve(opts.profile);
       profileOwned = profile.kind === 'ephemeral' && profile.createdNow;
 
       // 5. Re-stat the executable. If the binary changed while we were probing,
-      //    the evidence describes a different file and must not be reused.
-      installation = await this.confirmIdentity(installation);
+      //    the evidence describes a different file and must not be reused — so
+      //    the installation AND its decision are replaced together. Logging the
+      //    pre-revalidation pair would name a build that never ran.
+      phase = 'identity-revalidation';
+      ({ installation, decision } = await this.confirmIdentity(installation, decision));
 
       // 6. Launch.
+      phase = 'launch';
       const ownership: LaunchOwnership =
         reservation === null ? { kind: 'external' } : { kind: 'managed', reservation };
 
       this.logger.info(
-        {
-          source: installation.requestedSelection.source,
-          origin: installation.selectionOrigin,
-          reason: installation.selectionReason,
-          ownership: installation.ownership,
-          browserVersion: installation.version,
-        },
-        `launching Chrome ${installation.version} from ${installation.canonicalPath}`,
+        toLogPayload(readyEvent(installation, decision, this.probeProfile)),
+        `launching Chrome ${installation.version}`,
       );
 
-      const launched = await launchResolvedChrome(opts, installation, profile, ownership);
+      const launched = await this.spawnBrowser(opts, installation, profile, ownership);
 
       // Ownership of the process, the profile, and the reservation transfers
       // into the session exactly once, here.
@@ -170,8 +203,25 @@ export class LocalBrowserProvider implements BrowserProvider {
         logger: this.logger,
       });
     } catch (error) {
+      this.logStartupFailure(phase, error);
       await this.rollback(reservation, profile, profileOwned);
       throw error;
+    }
+  }
+
+  /**
+   * Records one safe projection of a startup refusal, before rollback.
+   *
+   * The original error is never touched: it propagates unchanged to the caller,
+   * which is the surface that may legitimately render its message. What lands
+   * in the durable operator log is the closed classification only.
+   */
+  private logStartupFailure(phase: BrowserStartupPhase, error: unknown): void {
+    const event = startupFailedEvent(phase, error);
+    if (event.failure_kind === 'launch' || event.failure_kind === 'process') {
+      this.logger.error(toLogPayload(event), 'browser startup failed');
+    } else {
+      this.logger.warn(toLogPayload(event), 'browser startup refused');
     }
   }
 
@@ -239,12 +289,15 @@ export class LocalBrowserProvider implements BrowserProvider {
    * version mismatch alone caused it — a build outside the tested pairing is the
    * normal case, not a fault.
    */
-  private async assertCompatible(installation: ResolvedBrowserInstallation): Promise<void> {
-    const result = await this.services.compatibility.check(installation, {
+  private async assertCompatible(
+    installation: ResolvedBrowserInstallation,
+  ): Promise<CompatibilityDecision> {
+    const decision = await this.services.compatibility.decide(installation, {
       profile: this.probeProfile,
       // Cached evidence satisfies a launch; only `browser check` forces a probe.
       fresh: false,
     });
+    const result = decision.result;
     if (result.verdict.status === 'failed') {
       throw new BrowserCompatibilityError({
         failureClass: result.verdict.failureClass,
@@ -255,6 +308,7 @@ export class LocalBrowserProvider implements BrowserProvider {
         remediation: result.verdict.remediation,
       });
     }
+    return decision;
   }
 
   /**
@@ -265,8 +319,12 @@ export class LocalBrowserProvider implements BrowserProvider {
    */
   private async confirmIdentity(
     installation: ResolvedBrowserInstallation,
-  ): Promise<ResolvedBrowserInstallation> {
-    const current = await identifyExecutable(installation.canonicalPath, {
+    decision: CompatibilityDecision,
+  ): Promise<{
+    readonly installation: ResolvedBrowserInstallation;
+    readonly decision: CompatibilityDecision;
+  }> {
+    const current = await this.identify(installation.canonicalPath, {
       platform: installation.platform,
       architecture: installation.architecture,
     });
@@ -280,15 +338,19 @@ export class LocalBrowserProvider implements BrowserProvider {
       current.statFingerprint === installation.statFingerprint &&
       current.version === installation.version
     ) {
-      return installation;
+      return { installation, decision };
     }
 
     // The file changed underneath us: re-resolve, then re-verify against the
-    // build that is actually there before any user navigation.
+    // build that is actually there before any user navigation. The new decision
+    // travels with the new installation — a caller holding one and logging the
+    // other would describe a pairing that was never authorized.
     const reresolved = await this.services.resolver.resolve(installation.requestedSelection);
     if (reresolved.status === 'unavailable') throw reresolved.error;
-    await this.assertCompatible(reresolved.installation);
-    return reresolved.installation;
+    return {
+      installation: reresolved.installation,
+      decision: await this.assertCompatible(reresolved.installation),
+    };
   }
 
   /**
@@ -307,7 +369,7 @@ export class LocalBrowserProvider implements BrowserProvider {
         .cleanupEphemeral(profile.absolutePath)
         .catch((error: unknown) =>
           this.logger.warn(
-            { err: error },
+            { error_class: errorClassOf(error) },
             'failed to remove the ephemeral profile after a failed startup',
           ),
         );
@@ -317,7 +379,7 @@ export class LocalBrowserProvider implements BrowserProvider {
         .markNeverSpawned()
         .catch((error: unknown) =>
           this.logger.warn(
-            { err: error },
+            { error_class: errorClassOf(error) },
             'failed to release the managed reservation after a failed startup',
           ),
         );
@@ -372,4 +434,136 @@ export function createSelectedBrowserProvider(opts: BrowserRuntimeOptions = {}):
       : { installOfferGateway: opts.installOfferGateway }),
     ...(opts.installService === undefined ? {} : { installService: opts.installService }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Runtime lifecycle projections
+// ---------------------------------------------------------------------------
+
+/**
+ * Projects the launch that is about to happen into safe, durable evidence.
+ *
+ * Built from the *final* installation and the *final* decision so the event
+ * always describes the binary that actually runs. The canonical path is hashed
+ * rather than recorded: a run directory is local diagnostics, but a home
+ * directory path in it identifies a person, and every question this event is
+ * asked ("same binary as yesterday?", "which build?") is answered by the hash,
+ * the basename, and the version.
+ */
+export function readyEvent(
+  installation: ResolvedBrowserInstallation,
+  decision: CompatibilityDecision,
+  probeProfile: ProbeProfile,
+): BrowserReadyRuntimeEvent {
+  const result = decision.result;
+  return {
+    schema_version: 1,
+    event: 'browser_ready',
+    selection_source: installation.requestedSelection.source,
+    selection_origin: installation.selectionOrigin,
+    selection_reason: installation.selectionReason,
+    ownership: installation.ownership,
+    browser_version: installation.version,
+    executable_basename: basename(installation.canonicalPath),
+    executable_path_sha256: hashExecutablePath(installation.canonicalPath),
+    executable_stat_fingerprint: installation.statFingerprint,
+    driver_version: result.driverVersion,
+    tested_build: result.testedBuild,
+    probe_revision: result.probeRevision,
+    probe_profile: probeProfile,
+    compatibility_verdict: 'passed',
+    // A `capability-checked` pairing is the steady state (plan §7.3/§10), so it
+    // is ordinary INFO provenance here — never a warning nobody reads.
+    pairing: result.verdict.status === 'passed' ? result.verdict.pairing : 'capability-checked',
+    evidence_source: decision.evidenceSource,
+    evidence_checked_at: result.checkedAt,
+  };
+}
+
+/** SHA-256 over the normalized canonical path. Case-folded where the OS is. */
+export function hashExecutablePath(canonicalPath: string): string {
+  const normalized =
+    process.platform === 'win32'
+      ? canonicalPath.replaceAll('\\', '/').toLowerCase()
+      : canonicalPath.replaceAll('\\', '/');
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
+}
+
+/**
+ * Projects a thrown startup error into closed, non-sensitive fields.
+ *
+ * Every branch reads only enumerated context off the real exported error class.
+ * Nothing here touches `message`, `stack`, `args`, `lastStderr`, or a raw
+ * `detail` string — those are exactly the fields that carry a launch command
+ * line, a loader dump, or a filesystem path.
+ */
+export function startupFailedEvent(
+  phase: BrowserStartupPhase,
+  error: unknown,
+): BrowserStartupFailedRuntimeEvent {
+  const base = {
+    schema_version: 1 as const,
+    event: 'browser_startup_failed' as const,
+    phase,
+    error_class: errorClassOf(error),
+  };
+  if (error instanceof BrowserResolutionError) {
+    return { ...base, failure_kind: 'resolution', resolution_code: error.code };
+  }
+  if (error instanceof ChromeNotFoundError) {
+    return { ...base, failure_kind: 'resolution', resolution_code: 'missing' };
+  }
+  if (error instanceof BrowserCompatibilityError) {
+    return {
+      ...base,
+      failure_kind: 'compatibility',
+      compatibility_failure_class: error.context.failureClass,
+      compatibility_profile: error.context.profile,
+    };
+  }
+  if (error instanceof BrowserInstallOfferDeclinedError) {
+    return { ...base, failure_kind: 'install-declined' };
+  }
+  if (error instanceof BrowserManagedInstallError) {
+    return {
+      ...base,
+      failure_kind: 'managed-install',
+      install_code: error.installError.code,
+      install_phase: error.installError.phase,
+    };
+  }
+  if (error instanceof ManagedCoordinationError) {
+    return { ...base, failure_kind: 'coordination', coordination_reason: error.context.reason };
+  }
+  if (error instanceof BrowserLaunchError) {
+    return { ...base, failure_kind: 'launch', launch_phase: error.context.phase };
+  }
+  if (error instanceof BrowserProcessError) {
+    return {
+      ...base,
+      failure_kind: 'process',
+      process_phase: error.context.phase,
+      exit_proven: error.context.exitProven,
+    };
+  }
+  return { ...base, failure_kind: 'unexpected' };
+}
+
+/** The class name alone — never the message, which is caller-facing prose. */
+export function errorClassOf(error: unknown): string {
+  if (error instanceof Error && typeof error.name === 'string' && error.name.length > 0) {
+    return error.name;
+  }
+  return 'UnknownError';
+}
+
+/**
+ * Widens a closed projection to the shape a {@link Logger} method accepts.
+ *
+ * The event types are interfaces, and an interface has no implicit index
+ * signature, so this one copy is where that gap is bridged — rather than at
+ * every emit site, or by loosening the event contracts themselves.
+ */
+function toLogPayload(event: object): Record<string, unknown> {
+  return { ...event };
 }

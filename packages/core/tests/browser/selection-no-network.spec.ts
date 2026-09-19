@@ -67,6 +67,10 @@ function services(): BrowserRuntimeServices & { readonly probes: () => number } 
         probes += 1;
         return Promise.reject(new Error('the local surface must not probe'));
       }),
+      decide: vi.fn(() => {
+        probes += 1;
+        return Promise.reject(new Error('the local surface must not probe'));
+      }),
       readCached: vi.fn().mockResolvedValue({ state: 'unverified' }),
     },
     coordinator: {

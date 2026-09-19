@@ -144,6 +144,10 @@ function makeServices(
         probes += 1;
         return Promise.reject(new Error('doctor must never probe'));
       }),
+      decide: vi.fn(() => {
+        probes += 1;
+        return Promise.reject(new Error('doctor must never probe'));
+      }),
       readCached: vi.fn(() => Promise.resolve(opts.evidence ?? { state: 'unverified' as const })),
     },
     coordinator: {

@@ -471,6 +471,15 @@ is re-verified against the question rather than trusted because the filename mat
 else reads back as `unverified`, an honest answer a caller can report without launching a
 browser.
 
+One implementation answers two different questions. `check()` returns the `CompatibilityResult`
+that is the cache record; `decide()` returns that same result plus this invocation's
+`evidenceSource` — `cache` or `probe` — so a caller can report where the verdict came from. Both
+funnel through the same cache lookup and the same probe body, and the provenance is deliberately
+absent from the persisted document: "I read this from the cache" is a fact about one call, not
+about the evidence, so storing it would make every cache hit rewrite the file with a provenance
+that is already wrong for the next reader. The evidence cache therefore stays at schema version 1,
+and `check()` remains the projection the CLI, install, and recorder paths consume.
+
 Concurrency across processes uses two claims that are mutually exclusive at claim time: any
 number of shared use reservations, and at most one exclusive mutation lease, both taken under a
 short `proper-lockfile` metadata mutex over `<data>/browsers/coordination`. Readiness is
@@ -505,6 +514,29 @@ because a binary replaced between the probe and the launch would otherwise let e
 old build authorize the new one; a changed fingerprint re-resolves and re-verifies before any user
 navigation. Rollback removes only an ephemeral profile that startup itself created — a workflow or
 explicit profile the user owns survives a failed startup untouched.
+
+That sequence also narrates itself into whatever logger the caller injected. The provider tracks
+which step is in flight — `resolution`, `reservation`, `compatibility`, `profile`,
+`identity-revalidation`, `launch` — rather than inferring it from the error class, because the
+same class can be thrown from two steps and "which step were we on?" is the fact an operator
+actually needs. Immediately before the real launch, and after identity revalidation, it writes
+exactly one INFO `browser_ready` projection built from the final installation paired with the
+final compatibility decision, so the record always describes the build that ran rather than the
+one that was probed; a re-stat that changes the binary replaces the installation and its decision
+together. A `capability-checked` pairing is ordinary INFO provenance there, never a warning. Any
+startup throw writes at most one `browser_startup_failed` projection — WARN, or ERROR for launch
+and process failures — before rollback, and the original error then propagates unchanged to the
+caller, which is the surface that may legitimately render its message.
+
+Both projections are closed by construction. The executable is named by basename, the SHA-256 of
+its normalized canonical path, and the resolver's stat fingerprint — never the path itself — so
+the same binary stays recognizable across events while a home-directory path never reaches a
+durable artifact. The failure projection carries a phase and a closed failure kind plus enumerated
+subtype fields such as a resolution code, a compatibility failure class, a launch phase, or
+`exit_proven`, and never `message`, `stack`, `args`, `lastStderr`, or a raw `detail`. Executable
+identification and the launch call are injected dependencies on `LocalBrowserProvider`, defaulting
+to the shared `identifyExecutable` and `launchResolvedChrome`, so the startup sequence has a seam
+at each of its two external boundaries.
 
 The workflow recorder is a caller of that same seam rather than a second implementation. It
 resolves through the same resolver, takes the same managed reservation, launches through the same
@@ -1050,6 +1082,46 @@ flowchart LR
   AuditProjection --> Audit[Events, tool audit, usage, and artifact metadata]
 ```
 
+The run also owns one operator diagnostic destination. `RunRuntimeLog`
+(`packages/agent/src/runtime/runtime-log.ts`) opens an asynchronous Pino destination on
+`<runDir>/runtime.jsonl` once the run directory exists, binds `run_id` to every line, and hands
+that single logger to every component that can say something about the browser: the selected
+browser provider, the profile store, the agent browser controller, search-provider resolution, the
+nested `workflow_run` browser composition, and the tool middleware. Those components log into the
+run rather than into a no-op, which is what makes "which browser ran, and why was that pairing
+accepted?" answerable after the fact. `close()` is idempotent and asynchronous — it flushes, ends
+the destination, and resolves only once the handle is actually closed — and writes after close are
+dropped rather than buffered or reopened, because a component logging later is logging about a run
+that no longer exists. `RunServices` exposes it as the provider-neutral core `Logger`, so
+middleware can write to it but cannot close it; the environment owns the close.
+
+Lifecycle order is load-bearing. Browser, session, and recorder teardown run while the destination
+is still open so their terminal lines persist; only then is the log closed; only then can the
+report builder observe whether the artifact exists; and the run lock is released last, after the
+report. A default environment that fails partway through construction closes the destination it
+already opened before rethrowing, and the early startup-failure branch, which skips the teardown
+block entirely, closes it itself, so no terminal path leaks a handle.
+
+Typed browser startup failures survive the tool boundary. A browser starts lazily, on the first
+tool call that needs a page, so every "no usable browser" condition surfaces inside a tool rather
+than at run startup. `mapBrowserStartupError`
+(`packages/agent/src/adapters/pi/tools/browser-startup-errors.ts`) is one ordered `instanceof`
+table over the real exported core error classes, consulted by `browser_navigate` and by the
+HTTP-to-browser fallback path in `web_fetch`. Resolution, compatibility, coordination, launch,
+process, install-decline, and managed-install causes each become a stable agent error code
+carrying closed safe details plus the exit-class semantics the CLI already assigns them
+(`environment` or `user-handoff`), so downstream orchestration and audit keep the distinction
+without the tool seam aborting the run. Every mapped result is non-retryable, because nothing
+repairs a browser mid-run and saying otherwise sends the agent into a loop that burns the budget
+it needs to publish what it has. The mapper returns `null` for anything it does not recognize — a
+site fault, a driver bug, a post-launch session crash — so those keep going to middleware's
+unexpected branch and reach the model as the generic `TOOL_EXECUTION_FAILED`. Middleware writes
+the operator's half of that same event, `tool_unexpected_failure`, to the runtime log with nothing
+but the tool name, the operation phase, and the error class, which is what keeps an unexpected
+site fault distinguishable from an expected browser refusal without either one leaking page data.
+Model-visible text always comes from the registered message catalog, never from the core error's
+own prose, which can embed an executable path or a raw helper `detail`.
+
 ### Vision-assist boundary
 
 Vision availability is an immutable run decision made before tool-catalog construction. The
@@ -1230,7 +1302,10 @@ the source artifact.
 Every browser start follows the same sequence, whether it serves an agent run, deterministic
 replay, a browser-backed fetch, or a recording. Resolution and evidence lookup are read-only, the
 managed claim is taken before anything else touches the tree, compatibility is settled before any
-user page can exist, and each step's acquisitions are undone if a later one fails.
+user page can exist, and each step's acquisitions are undone if a later one fails. The provider
+narrates the sequence to the logger its caller injected: one `browser_ready` projection for the
+build that is about to launch, or one `browser_startup_failed` projection naming the step that
+refused.
 
 ```mermaid
 sequenceDiagram
@@ -1258,6 +1333,7 @@ sequenceDiagram
   end
   Compat-->>Provider: passed or typed failure
   Provider->>Provider: create profile, then re-stat the executable
+  Note over Provider: One browser_ready projection, built from the<br/>revalidated installation and its decision
   Provider->>Launch: launch under the held ownership
   Launch->>Supervisor: adopt the child process
   Launch-->>Provider: owned browser process
@@ -1381,7 +1457,9 @@ Agentic `ask`, `research`, and `do` share the same orchestrator but receive diff
 allowlists. User-authored values are parsed and redacted before provider or browser state exists.
 The runtime creates the run directory before provider validation, constructs policy and evidence
 ledgers, opens a fresh Pi-backed session, and records only normalized audit projections alongside
-the sensitive run-local provider session. Browser startup is lazy for browser-capable runs. A
+the sensitive run-local provider session. Browser startup is lazy for browser-capable runs, and the run's component telemetry goes
+to its own operator-only `runtime.jsonl`, closed after teardown and before `report.md` is built so
+the report can list the artifact by presence. A
 successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
 plain assistant text alone is not the success contract.
 
@@ -1410,7 +1488,8 @@ sequenceDiagram
   end
   Pi->>Tools: result_publish
   Tools->>Run: validated Brief or document artifacts
-  Agent->>Run: finalize trace, manifest, events, report, and lock
+  Agent->>Run: tear down browser and session, finalize trace
+  Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock
   Agent-->>CLI: published, failed, handoff, or aborted outcome
   CLI-->>User: progress and terminal outcome
 ```
@@ -1545,6 +1624,19 @@ and `SensitiveScreenLatch` are run-local memory. Accepted PNGs are filesystem ar
 `runs/<run-id>/screenshots/`; the strict `ToolAuditEntry` schema has an optional, backward-compatible
 `captures` array containing only relative path, SHA-256, MIME type, dimensions, and byte length.
 
+The agentic runtime log adds no table and no migration either. `runtime.jsonl` is an append-only
+Pino JSONL file inside the run directory, owned and closed by exactly one `RunRuntimeLog`: an
+agentic run has zero or one of them, and a run that never constructed an environment — a preflight
+handoff — legitimately has none. Named browser projections carry `schema_version: 1` and stable
+snake-case fields; ordinary component lines keep their own. It is local operator diagnostics and
+nothing else: never model input, never an evidence-ledger entry, never a retry signal, never part
+of publication, and the report builder lists it under the agentic Audit Trail by presence alone,
+never parsing it and never deriving run status from it. It carries no page or task URL, page text,
+profile path, full executable path, launch arguments, environment values, credentials, error
+message or stack, whole error objects, raw helper stderr, or raw managed-install detail. Run
+directories written without it stay valid and no protocol schema changes, so the artifact and its
+report entry are purely additive.
+
 Browser management adds no table and no migration either; its model is filesystem state under the
 managed root plus one cache. `<data>/browsers/ready.json` is the entire selection model for
 managed builds — a strict, versioned record naming exactly one `installation-<id>` child by
@@ -1615,19 +1707,19 @@ flowchart TD
   Deterministic --> RunDir
 ```
 
-| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                            |
-| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                   |
-| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                               |
-| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data.                                             |
-| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                         |
-| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                  |
-| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update. |
-| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                       |
-| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                 |
-| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                |
-| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                              |
+| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                          |
+| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                 |
+| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` where one exists. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data; `runtime.jsonl` is the one artifact the model never sees. |
+| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                       |
+| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                |
+| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                               |
+| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                     |
+| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                               |
+| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                              |
+| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                            |
 
 The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
 `YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
@@ -1810,6 +1902,29 @@ update` is the only surface that contacts a version server, and only when a huma
   of routing even the recorder's deliberately different, visible session through the shared
   ownership path. An explicit selection that is missing, corrupt, or incompatible fails with
   evidence and remediation instead of silently resolving to something else.
+- **Component telemetry belongs to the run directory, and only to the operator.** A run could
+  already say which tools it called and which task steps it took, but not which browser actually
+  ran or why that pairing was accepted, because the components holding that knowledge logged into
+  a no-op. The answer is a fourth agentic run artifact, `runtime.jsonl`, and it is deliberately
+  the only one the model never sees: an executable identity, a startup phase, and an error class
+  are exactly the material a prompt-injected page would like read back to it. The costs are a
+  destination the orchestrator must close on every terminal path — after teardown, before the
+  report, because presence is the report's only test — and a rule that every projection carries
+  closed, enumerated fields, with the executable reduced to a basename, a path hash, and a stat
+  fingerprint rather than a path. Provenance that belongs to a call rather than to the evidence,
+  such as whether a compatibility verdict came from cache or a probe, stays out of the persisted
+  cache for the same reason and travels only on the invocation that asked.
+- **An expected refusal and an unexpected fault must not read alike.** A browser that will not
+  start is a typed core error with remediation already attached; flattening it into the generic
+  `TOOL_EXECUTION_FAILED` told the agent a retryable-looking story about a condition no retry can
+  fix and discarded the remediation on the way. One ordered `instanceof` table over the real
+  exported error classes maps the declared startup causes to stable, non-retryable codes at both
+  browser-backed tool boundaries, and returns `null` for everything else so a site fault, a driver
+  bug, or a post-launch crash keeps the generic path unchanged. Classifying by real class rather
+  than by structure is the point: something merely shaped like the error is not one, and treating
+  it as one would let a stand-in prove behavior the production path does not have. The operator
+  still sees both kinds, because the generic branch writes its own class-only projection to the
+  runtime log.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { DefaultSanitizer, ModelSuppliedValues, UserInputVault } from '@yantra/core';
-import type { ConfirmationGateway, ConfirmationOutcome, ConfirmationRequest } from '@yantra/core';
+import type {
+  ConfirmationGateway,
+  ConfirmationOutcome,
+  ConfirmationRequest,
+  Logger,
+} from '@yantra/core';
+import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +36,7 @@ interface ServicesOverrides {
   readonly modelValues?: ModelSuppliedValues;
   readonly runDir?: string;
   readonly visionAvailable?: boolean;
+  readonly runtimeLogger?: Logger;
 }
 
 function makeServices(overrides: ServicesOverrides = {}): RunServices {
@@ -69,7 +76,17 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     // open each top-level tool call against the browser controller, so the
     // container itself has to exist with nothing in it.
     domain: { browser: null } as unknown as RunServices['domain'],
+    ...(overrides.runtimeLogger ? { runtimeLogger: overrides.runtimeLogger } : {}),
   };
+}
+
+/** A {@link Logger} that keeps every structured payload it was handed. */
+function recordingLogger(): Logger & { readonly lines: Record<string, unknown>[] } {
+  const lines: Record<string, unknown>[] = [];
+  const at = (level: string) => (obj: Record<string, unknown> | string) => {
+    lines.push(typeof obj === 'string' ? { level, msg: obj } : { level, ...obj });
+  };
+  return { lines, info: at('info'), warn: at('warn'), error: at('error'), debug: at('debug') };
 }
 
 const OK: DomainResult = { ok: true, model: { answer: 42 } };
@@ -500,6 +517,68 @@ describe('@no-llm middleware error genericization and sanitization', () => {
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('TOOL_EXECUTION_FAILED');
     expect(JSON.stringify(result)).not.toContain(CANARY);
+  });
+
+  it('records an unexpected throw in the run log as class, tool, and phase only', async () => {
+    const runtimeLogger = recordingLogger();
+    const services = makeServices({ runtimeLogger });
+    const run = (): Promise<DomainResult> => {
+      throw new TypeError(`boom ${CANARY} at https://site.example.com/secret-path`);
+    };
+
+    const result = await wrapTool(spec(run), services).execute({ q: 'a' }, undefined);
+
+    // The model still gets the generic result: an unexpected fault is exactly
+    // the case where nothing is known to be safe to say.
+    expect(result.error_code).toBe('TOOL_EXECUTION_FAILED');
+    // The operator's half makes it distinguishable from a browser startup
+    // refusal by class alone, with no message, stack, URL, or canary.
+    const unexpected = runtimeLogger.lines.filter(
+      (line) => line.event === 'tool_unexpected_failure',
+    );
+    expect(unexpected).toHaveLength(1);
+    expect(unexpected[0]).toMatchObject({
+      level: 'error',
+      schema_version: 1,
+      event: 'tool_unexpected_failure',
+      tool: 'demo_tool',
+      operation_phase: 'domain',
+      error_class: 'TypeError',
+    });
+    assertRuntimeEventIsSafe(unexpected[0], [CANARY, 'https://site.example.com/secret-path']);
+  });
+
+  it('behaves identically when the run has no runtime logger', async () => {
+    const services = makeServices();
+    const run = (): Promise<DomainResult> => {
+      throw new Error(`boom ${CANARY}`);
+    };
+
+    const result = await wrapTool(spec(run), services).execute({ q: 'a' }, undefined);
+
+    // Absent means "log to the process logger", never "buffer until one
+    // appears" and never "fail the call".
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('TOOL_EXECUTION_FAILED');
+    expect(JSON.stringify(result)).not.toContain(CANARY);
+  });
+
+  it('writes nothing to the run log for an expected domain failure', async () => {
+    const runtimeLogger = recordingLogger();
+    const services = makeServices({ runtimeLogger });
+    const run = async (): Promise<DomainResult> => ({
+      ok: false,
+      errorCode: 'BROWSER_RESOLUTION_FAILED',
+      message: 'No usable browser is available.',
+      retryable: false,
+    });
+
+    const result = await wrapTool(spec(run), services).execute({ q: 'a' }, undefined);
+
+    // A mapped refusal is not an unexpected exception; recording it here would
+    // make every ordinary refusal look like a crash to whoever reads the log.
+    expect(result.error_code).toBe('BROWSER_RESOLUTION_FAILED');
+    expect(runtimeLogger.lines).toEqual([]);
   });
 
   it('sanitizes credential shapes out of a successful model payload', async () => {

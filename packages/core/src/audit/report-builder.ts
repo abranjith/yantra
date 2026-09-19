@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { TaskEvent, ToolAuditEntryType, UsageLedger } from '@yantra/protocol';
@@ -46,6 +46,10 @@ export class MarkdownReportBuilder implements ReportBuilder {
           secretEntries,
           usage,
           outcome,
+          // Presence only. The report never parses the runtime log and never
+          // derives run status from it: it is operator diagnostics, and a
+          // report that read it would make an optional artifact load-bearing.
+          hasRuntimeLog: await fileExists(join(runDir, 'runtime.jsonl')),
           ...(failure ? { failure } : {}),
         })
       : renderReport({
@@ -104,6 +108,8 @@ function renderAgenticReport(input: {
   readonly secretEntries: SecretsJsonlEntry[];
   readonly usage: UsageLedger | null;
   readonly outcome: 'completed' | 'failed';
+  /** Whether `runtime.jsonl` exists in the run directory. Presence, not content. */
+  readonly hasRuntimeLog: boolean;
   readonly failure?: FailureContext;
 }): string {
   const lines: string[] = [];
@@ -200,6 +206,10 @@ function renderAgenticReport(input: {
   lines.push('- tool-calls.jsonl');
   lines.push('- events.jsonl');
   lines.push('- secrets.jsonl');
+  // Listed only when it exists: a run that never built an environment (a
+  // preflight handoff) legitimately has none, and every report written before
+  // this artifact existed stays exactly as valid as it was.
+  if (input.hasRuntimeLog) lines.push('- runtime.jsonl');
   const sessionFile = stringOr(agent.session_file, '');
   if (sessionFile.length > 0) {
     lines.push(`- ${sessionFile}`);
@@ -455,5 +465,15 @@ async function readJsonLines<T>(filePath: string): Promise<T[]> {
       .map((line) => JSON.parse(line) as T);
   } catch {
     return [];
+  }
+}
+
+/** Read-only presence probe. Never opens, parses, or locks the file. */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
   }
 }

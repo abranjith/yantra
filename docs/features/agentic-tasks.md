@@ -129,6 +129,24 @@ These properties are enforced mechanically rather than reviewed. Each next step 
 
 Single-field recovery also keeps one absolute 25-second widget deadline and one action allowance across the initial drive, field re-resolution, and the second drive. Re-resolving a replaced field does not restart the clock. One `browser_fill_element` call is one run: the field plan and every fill it drives share a single 32-action ceiling, a single deadline, a single stale-ref reacquisition cap of four, and a single ordered verdict sequence, so a retry after an expensive first attempt gets no fresh allowance of its own. `browser_fill_form` drives each field as its own run, and each failed field carries its own ledger. Either way the result combines the outer `fill` / `re-resolve-field-and-retry` verdicts with the typing and driver work underneath them, so success and failure expose one complete ledger for the bounded operation.
 
+**A browser that will not start is a distinct, final answer rather than a generic tool fault.** Chrome opens lazily, on the first tool call that needs a page, so a "no usable browser" condition surfaces inside a tool: `browser_navigate` on a run's first navigation, and `web_fetch` when a script-rendered or bot-refused page escalates the HTTP fetch to the browser fallback. Both boundaries report the local cause under a stable code with a message written for that cause:
+
+| Code                           | Cause                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `BROWSER_RESOLUTION_FAILED`    | No usable Chrome or Chromium could be resolved on this machine.                                                 |
+| `BROWSER_COMPATIBILITY_FAILED` | The local browser is missing an automation primitive Yantra requires, so it was refused before any page opened. |
+| `BROWSER_COORDINATION_FAILED`  | The Yantra-managed browser is claimed by another Yantra browser operation, so this run could not reserve it.    |
+| `BROWSER_LAUNCH_FAILED`        | The browser could not be started.                                                                               |
+| `BROWSER_PROCESS_FAILED`       | The browser process could not be accounted for, so the run will not use it.                                     |
+| `BROWSER_INSTALL_DECLINED`     | The user declined the offer to download a Yantra-managed browser.                                               |
+| `BROWSER_INSTALL_FAILED`       | Installing the Yantra-managed browser did not complete.                                                         |
+
+Every one of them is non-retryable: nothing in a run installs or repairs a browser, so an identical retry cannot succeed, and each message tells the agent to report the local remediation — installing a browser, `yantra browser install`, `yantra browser check`, `yantra doctor`, or waiting for the other operation to finish — and then finish with `result_publish` using the evidence it already has. It names no browser-management capability the agent itself possesses, because it has none.
+
+The model sees the code, that message, and `retryable: false`. The sanitized `details` recorded in the run's tool audit carry the closed structural evidence — the resolution code and selected source, the compatibility failure class, probe profile, browser version and failing capability ids, the coordination reason, the launch or process phase and whether the exit was proven, or the managed-install code and phase. Launch arguments, helper output, executable and profile paths, and raw error text are never among them. Each result also carries a `failure_class` detail, `environment` for the six environment causes and `user-handoff` with `handoff: true` for a declined install, so audit and downstream orchestration keep the distinction between a broken local environment and a decision the user made.
+
+These codes cover browser startup only. An ordinary site or navigation fault is still reported to the model as the generic, retryable `TOOL_EXECUTION_FAILED`, and `web_fetch`'s own `FETCH_TIMEOUT`, `CONTENT_TOO_LARGE`, `FETCH_HTTP_ERROR`, `FETCH_FAILED`, `CONTENT_TYPE_REFUSED`, and `EXTRACTION_EMPTY` results, along with its ethics refusals, are unaffected.
+
 The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. Without both, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
 
 ## How to Use It
@@ -222,6 +240,7 @@ A normal successful run writes a validated task Brief:
   agent/<session>.jsonl
   tool-calls.jsonl
   confirmations.jsonl       # when confirmation activity exists
+  runtime.jsonl             # when the run built a runtime environment
   usage.json
   captures/                 # when extracted content exceeds inline limits
   trace.json
@@ -234,6 +253,8 @@ A normal successful run writes a validated task Brief:
 Template mode writes `document.json`, `document.md`, and `document.html` in place of `brief.*`. The authored Markdown structure remains engine-controlled while the model fills declared slots; see [Controlled publication and rendering](report-templates.md#controlled-publication-and-rendering). A failed publication may additionally write `result.md`, which is diagnostic and does not turn the failed run into a successful result.
 
 `manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, and tool-catalog hash without credential material. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
+
+`runtime.jsonl` is local operator diagnostics for the run: which browser and driver it used, why that browser was selected, whether the compatibility evidence came from cache or a fresh probe, and the safe class of any browser startup failure or unexpected tool failure. It is never sent to the model, never part of the published result, and never an evidence source, and it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` only when it exists; a run that hands off before building an environment, such as the location pre-flight described above, has none. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
 
 ### Exit codes and failures
 

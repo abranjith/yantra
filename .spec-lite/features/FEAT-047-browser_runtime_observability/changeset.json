@@ -1,0 +1,275 @@
+{
+  "vcs": "git",
+  "captures": [
+    {
+      "event": "implement.task.post",
+      "task": "TASK-001",
+      "at": "2026-09-19T20:11:39.650Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-002",
+      "at": "2026-09-19T20:21:37.002Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-003",
+      "at": "2026-09-19T20:29:35.886Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    },
+    {
+      "event": "implement.task.post",
+      "task": "TASK-004",
+      "at": "2026-09-19T21:06:12.649Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-19T21:18:32.229Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    },
+    {
+      "event": "implement.post",
+      "at": "2026-09-19T21:19:01.232Z",
+      "head": "76f3791c322170604c197526182b2b7a8a42bb3a"
+    }
+  ],
+  "files": [
+    {
+      "path": "apps/cli/tests/browser-runtime-selection.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/browser-list.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-navigate.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-startup-errors.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/web-fetch.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/runtime-log.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-startup-errors.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/browser-selection.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-log-lifecycle.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-log.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-observability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/browser/compatibility.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/installation-types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/provider.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/compatibility.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/doctor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/no-download-traffic.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/provider-observability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/provider.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/security.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/selection-no-network.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/helpers/runtime-log-safety.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/workflow/recorder/recording-lifecycle.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/test-helpers/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/test-helpers/src/runtime-log-safety.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-047-browser_runtime_observability/changeset.json",
+    ".spec-lite/features/FEAT-047-browser_runtime_observability/spec.md",
+    ".spec-lite/plan_puppeteer_browser_management.md"
+  ],
+  "baseline": {
+    "sha": "76f3791c322170604c197526182b2b7a8a42bb3a",
+    "capturedAt": "2026-09-19T19:54:30.384Z",
+    "dirtyAtBaseline": [
+      ".spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md",
+      ".spec-lite/plan_puppeteer_browser_management.md",
+      ".spec-lite/features/FEAT-047-browser_runtime_observability/spec.md"
+    ],
+    "dirtyBlobHashes": {
+      ".spec-lite/features/FEAT-042-puppeteer_api_migration/spec.md": "37d06657f8d621b9508f046fd1a3214f22a191f2",
+      ".spec-lite/plan_puppeteer_browser_management.md": "10e936ab3ffbc1fdafebe198dd0df188309fd669",
+      ".spec-lite/features/FEAT-047-browser_runtime_observability/spec.md": "115cbc3689bce108010feba8d75692debcac29ec"
+    }
+  },
+  "featureId": "FEAT-047"
+}

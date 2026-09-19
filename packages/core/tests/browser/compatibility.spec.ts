@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -571,6 +571,70 @@ describe('@no-llm compatibility evidence reuse', () => {
     await harness.service.ensureCompatible(installation('154.0.1.0'), 'automation');
 
     expect(harness.launchConfigs).toHaveLength(2);
+  });
+
+  it('reports cache provenance without probing, and probe provenance when it probes', async () => {
+    const harness = makeHarness({ cacheRoot });
+
+    const first = await harness.service.decide(installation(), {
+      profile: 'automation',
+      fresh: false,
+    });
+    const second = await harness.service.decide(installation(), {
+      profile: 'automation',
+      fresh: false,
+    });
+
+    expect(first.evidenceSource).toBe('probe');
+    expect(second.evidenceSource).toBe('cache');
+    // The second answer is the first answer — provenance is the only difference.
+    expect(second.result).toEqual(first.result);
+    expect(harness.launchConfigs).toHaveLength(1);
+  });
+
+  it('reports probe provenance for a fresh decision even with valid evidence cached', async () => {
+    const harness = makeHarness({ cacheRoot });
+    await harness.service.decide(installation(), { profile: 'automation', fresh: false });
+
+    const fresh = await harness.service.decide(installation(), {
+      profile: 'automation',
+      fresh: true,
+    });
+
+    expect(fresh.evidenceSource).toBe('probe');
+    expect(harness.launchConfigs).toHaveLength(2);
+  });
+
+  it('routes check() and decide() through the same single probe implementation', async () => {
+    const harness = makeHarness({ cacheRoot });
+    const runProbe = vi.spyOn(harness.service, 'runProbe');
+
+    await harness.service.check(installation(), { profile: 'automation', fresh: true });
+    await harness.service.decide(installation(), { profile: 'automation', fresh: true });
+
+    expect(runProbe).toHaveBeenCalledTimes(2);
+    expect(runProbe.mock.instances.every((instance) => instance === harness.service)).toBe(true);
+  });
+
+  it('never writes invocation-only provenance into the persisted cache record', async () => {
+    const harness = makeHarness({ cacheRoot });
+    await harness.service.decide(installation(), { profile: 'automation', fresh: false });
+
+    const state = await harness.service.readCached(installation(), 'automation');
+
+    expect(state.state).toBe('evidence');
+    if (state.state !== 'evidence') throw new Error('unreachable');
+    expect(state.result).not.toHaveProperty('evidenceSource');
+    expect(state.result.schemaVersion).toBe(1);
+    // And the bytes on disk agree: a cache hit must not have rewritten the file
+    // with a provenance that is already wrong for the next reader.
+    const files = await readdir(cacheRoot, { recursive: true, withFileTypes: true });
+    const records = files.filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+    expect(records.length).toBeGreaterThan(0);
+    for (const entry of records) {
+      const raw = await readFile(join(entry.parentPath, entry.name), 'utf8');
+      expect(raw).not.toContain('evidenceSource');
+    }
   });
 
   it('never records a failure as reusable evidence', async () => {

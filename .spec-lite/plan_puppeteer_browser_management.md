@@ -55,6 +55,7 @@ Existing user-simulation behavior is preserved **with one carved-out exception**
 | FEAT-044 | Managed Stable installation — explicit install, isolated API operation, interactive missing-browser offer, cancellation and coordination                 | `features/FEAT-044-managed_stable_installation/spec.md`   | [x] Complete |
 | FEAT-045 | Browser switching and diagnostics — persistent/per-invocation choice, explicit compatibility check, local list/doctor, terminal/JSON provenance          | `features/FEAT-045-browser_switching_diagnostics/spec.md` | [x] Complete |
 | FEAT-046 | Explicit managed update — availability-only `--dry-run`, consented single-installation replacement, busy refusal, failure handling and orphan collection | `features/FEAT-046-explicit_managed_update/spec.md`       | [x] Complete |
+| FEAT-047 | Browser runtime observability — run-local `runtime.jsonl` browser provenance and typed startup-failure projection at agent tool boundaries               | `features/FEAT-047-browser_runtime_observability/spec.md` | [x] Complete |
 
 IDs 042–046 follow the maximum 041 found across every existing plan's numbered feature rows and modern/legacy feature directories. IDs are immutable. Feature generation fills `Spec File`; only Implement changes statuses.
 
@@ -337,7 +338,8 @@ Generate one detailed spec per feature from this exact named plan, in a fresh se
 
 Plan Critic has run — see [plan_critique_puppeteer_browser_management.md](reviews/plan_critique_puppeteer_browser_management.md) and the revision note in §1. Two consequences for downstream work:
 
-- **`FEAT-042` and `FEAT-043` specs were written against the pre-revision plan and must be updated before implementation, not regenerated from scratch.** FEAT-042 in particular repeats the incorrect "removed `clickCount`" premise in its goal statement and data-model sections, and predates the Stage A/Stage B split. FEAT-043 must pick up the single-probe session contract, the `browser use` decision, and the capability table.
-- **`FEAT-044` through `FEAT-046` specs were generated from the revised plan.** All three are implemented.
+- **`FEAT-042` and `FEAT-043` specs were written against the pre-revision plan and were updated in place before implementation, not regenerated from scratch.** FEAT-042 had repeated the incorrect "removed `clickCount`" premise in its goal statement and data-model sections and predated the Stage A/Stage B split; its spec now carries both stages and an explicit "Corrected premise — `clickCount` was not removed" section. FEAT-043 picked up the single-probe session contract, the `browser use` decision, and the capability table.
+- **`FEAT-044` through `FEAT-046` specs were generated from the revised plan.**
+- **All five features are implemented** (verified 2026-09-15): repo-wide `lint` and `typecheck` green, build green, and the core, CLI, agent, protocol and E2E suites passing. The real-browser migration suites are gated on `YANTRA_E2E_BROWSER` and run in CI's `browser-migration` job across Windows, macOS and Linux.
 
 Memory capture: no durable additions are written. These decisions are task-specific; the existing system-only browser rule is explicitly superseded in this plan and should be reconciled when the managed-browser feature is implemented.

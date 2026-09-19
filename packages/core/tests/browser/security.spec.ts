@@ -3,6 +3,7 @@
  * Covers: profile-dir permission enforcement, doctor permission reporting,
  * and launcher logging redaction.
  */
+import type * as NodeCrypto from 'node:crypto';
 import { chmod, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -10,6 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ChromeDiscovery from '../../src/browser/chrome-discovery.js';
 import { ProfilePathRefusedError } from '../../src/browser/errors.js';
+import type {
+  CompatibilityResult,
+  ResolvedBrowserInstallation,
+} from '../../src/browser/installation-types.js';
 import type * as Paths from '../../src/browser/paths.js';
 
 vi.mock('node:fs/promises', () => ({
@@ -27,7 +32,10 @@ vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),
   tmpdir: vi.fn(() => '/tmp'),
 }));
-vi.mock('node:crypto', () => ({
+// Partial: the provider hashes the executable path with `createHash`, and a
+// wholesale replacement here makes that read as a missing export.
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeCrypto>()),
   randomUUID: vi.fn(() => 'security-test-uuid'),
 }));
 // Partial mock: replacing the module wholesale breaks every consumer of an
@@ -231,18 +239,11 @@ describe('@no-llm TASK-010 security hardening', () => {
         services: {
           resolver: { resolve: () => Promise.resolve({ status: 'resolved', installation }) },
           compatibility: {
-            check: () =>
+            check: () => Promise.resolve(passingEvidence(installation)),
+            decide: () =>
               Promise.resolve({
-                schemaVersion: 1,
-                identity: installation,
-                driverVersion: '25.10.0',
-                testedBuild: '152.0.7977.75',
-                probeRevision: 1,
-                capabilityTableHash: 'hash',
-                profile: 'automation',
-                checkedAt: '2026-09-13T00:00:00.000Z',
-                capabilities: [],
-                verdict: { status: 'passed', pairing: 'capability-checked' },
+                result: passingEvidence(installation),
+                evidenceSource: 'probe' as const,
               }),
             readCached: () => Promise.resolve({ state: 'unverified' }),
           },
@@ -270,3 +271,19 @@ describe('@no-llm TASK-010 security hardening', () => {
     });
   });
 });
+
+/** One passing verdict, shared by the `check`/`decide` projections of the double. */
+function passingEvidence(target: ResolvedBrowserInstallation): CompatibilityResult {
+  return {
+    schemaVersion: 1,
+    identity: target,
+    driverVersion: '25.10.0',
+    testedBuild: '152.0.7977.75',
+    probeRevision: 1,
+    capabilityTableHash: 'hash',
+    profile: 'automation',
+    checkedAt: '2026-09-13T00:00:00.000Z',
+    capabilities: [],
+    verdict: { status: 'passed', pairing: 'capability-checked' },
+  };
+}

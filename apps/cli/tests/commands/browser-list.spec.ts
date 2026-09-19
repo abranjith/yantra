@@ -109,6 +109,7 @@ function services(view: BrowserInventory): {
     resolver: { resolve: () => Promise.reject(new Error('list must use the inventory')) },
     compatibility: {
       check: () => Promise.reject(new Error('list must not probe')),
+      decide: () => Promise.reject(new Error('list must not probe')),
       readCached: () => Promise.resolve({ state: 'unverified' as const }),
     },
     coordinator: {

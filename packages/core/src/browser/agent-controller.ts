@@ -322,6 +322,20 @@ export class AgentBrowserController implements WidgetPort {
    * forgetting to decide.
    */
   private pendingPopup: RetainedPopup | null = null;
+  /**
+   * The opener's URL just before the in-flight action was dispatched, or null
+   * between actions.
+   *
+   * A gesture that opens a popup can also navigate the opener in the same
+   * synchronous handler (the bounce a results-tab site uses to send its
+   * opener to a partner). Both the declared-popup waiter and the persistent
+   * background listener in {@link installPagePolicies} race to classify the
+   * same 'popup' event via {@link capturePopupPage}'s dedup, so they must
+   * agree on the opener's address or whichever fires first decides with
+   * whatever URL it happens to read. Freezing it here, before dispatch, gives
+   * both the same answer regardless of order.
+   */
+  private pendingActionOpenerUrl: string | null = null;
   private teardownPromise: Promise<void> | null = null;
   private lastDigestHash: string | null = null;
   /**
@@ -875,51 +889,59 @@ export class AgentBrowserController implements WidgetPort {
       const inlineHandler = element.getAttribute('onclick')?.toLowerCase() ?? '';
       return target === '_blank' || inlineHandler.includes('window.open');
     });
-    // Register before dispatching the click so a popup event cannot land in
-    // the gap between click completion and result assembly under suite load.
-    // Only declared popup actions pay the bounded wait; ordinary clicks keep
-    // their existing latency while the background listener covers dynamic
-    // event-handler popups best-effort.
-    const popupWaiter = declaresPopup ? this.createDeclaredPopupWaiter(page) : null;
-    const watch = this.watchNavigation();
-    let actionCompleted = false;
+    // Frozen before dispatch: see `pendingActionOpenerUrl`'s doc comment for
+    // why both the declared waiter below and the persistent background
+    // listener must read the opener's address from here rather than live.
+    this.pendingActionOpenerUrl = page.url();
     try {
+      // Register before dispatching the click so a popup event cannot land in
+      // the gap between click completion and result assembly under suite load.
+      // Only declared popup actions pay the bounded wait; ordinary clicks keep
+      // their existing latency while the background listener covers dynamic
+      // event-handler popups best-effort.
+      const popupWaiter = declaresPopup ? this.createDeclaredPopupWaiter(page) : null;
+      const watch = this.watchNavigation();
+      let actionCompleted = false;
       try {
-        // Hover first so the pointer scrolls into view and any hover state has
-        // time to settle, then prove the resulting click point belongs to this
-        // element, then dispatch a held press (down, pause, up) at THAT point.
-        const prepared = await this.preparePointer(handle, ref);
-        attempted = prepared.attempted;
-        await dispatchAt(page, prepared.point, { delay: CLICK_HOLD_MS });
-      } catch (error) {
-        // The element lost its layout box between the pre-flight and the click.
-        if (isNoLayoutBoxError(error)) throw hiddenError();
-        // A click that submits or navigates can destroy the execution context
-        // while the CDP call is in flight. Treat the click as landed ONLY once
-        // the navigation actually commits (a framenavigated epoch bump) — a
-        // mere in-flight request can still abort, and an unrelated request must
-        // not be mistaken for the click's outcome. If no commit lands, the node
-        // itself vanished and the ref is genuinely stale.
-        if (!isNavigationRaceError(error)) throw error;
-        await settle();
-        if (!(await this.awaitCommit(watch))) throw new StaleElementRefError(ref);
+        try {
+          // Hover first so the pointer scrolls into view and any hover state has
+          // time to settle, then prove the resulting click point belongs to this
+          // element, then dispatch a held press (down, pause, up) at THAT point.
+          const prepared = await this.preparePointer(handle, ref);
+          attempted = prepared.attempted;
+          await dispatchAt(page, prepared.point, { delay: CLICK_HOLD_MS });
+        } catch (error) {
+          // The element lost its layout box between the pre-flight and the click.
+          if (isNoLayoutBoxError(error)) throw hiddenError();
+          // A click that submits or navigates can destroy the execution context
+          // while the CDP call is in flight. Treat the click as landed ONLY once
+          // the navigation actually commits (a framenavigated epoch bump) — a
+          // mere in-flight request can still abort, and an unrelated request must
+          // not be mistaken for the click's outcome. If no commit lands, the node
+          // itself vanished and the ref is genuinely stale.
+          if (!isNavigationRaceError(error)) throw error;
+          await settle();
+          if (!(await this.awaitCommit(watch))) throw new StaleElementRefError(ref);
+        }
+        // Hold the result until the page stops moving: navigations the site
+        // starts hundreds of ms after the click, redirect chains, and in-flight
+        // fetch/XHR updates are all settled (bounded) before the agent's next
+        // tool call can race them.
+        await this.awaitPageStable(watch, CLICK_NAV_DETECT_MS);
+        actionCompleted = true;
+      } finally {
+        watch.dispose();
+        if (!actionCompleted) popupWaiter?.cancel();
       }
-      // Hold the result until the page stops moving: navigations the site
-      // starts hundreds of ms after the click, redirect chains, and in-flight
-      // fetch/XHR updates are all settled (bounded) before the agent's next
-      // tool call can race them.
-      await this.awaitPageStable(watch, CLICK_NAV_DETECT_MS);
-      actionCompleted = true;
+      try {
+        await popupWaiter?.promise;
+      } finally {
+        popupWaiter?.cancel();
+      }
+      return this.currentActionResult(null, attempted);
     } finally {
-      watch.dispose();
-      if (!actionCompleted) popupWaiter?.cancel();
+      this.pendingActionOpenerUrl = null;
     }
-    try {
-      await popupWaiter?.promise;
-    } finally {
-      popupWaiter?.cancel();
-    }
-    return this.currentActionResult(null, attempted);
   }
 
   /** Fill a current ref without returning or logging the supplied value. */
@@ -1208,7 +1230,7 @@ export class AgentBrowserController implements WidgetPort {
         void openedPage.close().catch(() => undefined);
         return;
       }
-      void this.capturePopupPage(openedPage, page.url(), generation);
+      void this.capturePopupPage(openedPage, this.pendingActionOpenerUrl ?? page.url(), generation);
     };
     const dialog = (openedDialog: Dialog): void => {
       if (!this.isActivePage(page, generation)) {
@@ -1233,6 +1255,11 @@ export class AgentBrowserController implements WidgetPort {
   private createDeclaredPopupWaiter(page: PuppeteerPage): DeclaredPopupWaiter {
     const policy = this.pagePolicyListeners.get(page);
     if (!policy) throw new Error('active page policies are not installed');
+    // `pendingActionOpenerUrl` is frozen by the caller before dispatch, so it
+    // (not a fresh page.url() read here) is what both this listener and the
+    // persistent background one in installPagePolicies agree on — see its
+    // doc comment for why a live read races the opener's own navigation.
+    const openerUrl = this.pendingActionOpenerUrl ?? page.url();
     let settled = false;
     let resolveWaiter: () => void = () => undefined;
     const listener = (popup: PuppeteerPage | null): void => {
@@ -1244,7 +1271,7 @@ export class AgentBrowserController implements WidgetPort {
         resolveWaiter();
         return;
       }
-      void this.capturePopupPage(popup, page.url(), policy.generation).finally(resolveWaiter);
+      void this.capturePopupPage(popup, openerUrl, policy.generation).finally(resolveWaiter);
     };
     const promise = new Promise<void>((resolve) => {
       resolveWaiter = resolve;
