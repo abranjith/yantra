@@ -1,5 +1,5 @@
 // @no-llm
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -151,6 +151,56 @@ describe('LocalRunStore', () => {
       const list = await store.listRuns();
       expect(list).toHaveLength(0);
     });
+
+    it('skips legacy task manifests that do not have workflow run metadata', async () => {
+      await mkdir(join(tmpDir, '000-legacy-task'));
+      await writeFile(
+        join(tmpDir, '000-legacy-task', 'manifest.json'),
+        JSON.stringify({
+          task_id: 'task-1',
+          type: 'ask',
+          query: 'latest local news',
+          started_at: '2026-05-11T09:12:34.000Z',
+          status: 'ok',
+        }),
+      );
+      await mkdir(join(tmpDir, '001-workflow-run'));
+      await writeFile(
+        join(tmpDir, '001-workflow-run', 'manifest.json'),
+        JSON.stringify({
+          runId: 'workflow-run-1',
+          workflowName: 'test-workflow',
+          workflowVersion: 1,
+          startedAt: '2026-05-11T10:12:34.000Z',
+          status: 'completed',
+        }),
+      );
+
+      const store = new LocalRunStore(tmpDir);
+
+      await expect(store.listRuns()).resolves.toMatchObject([{ runId: 'workflow-run-1' }]);
+    });
+
+    it.each([undefined, null, 42])(
+      'skips workflow manifests whose startedAt is not a string (%j)',
+      async (startedAt) => {
+        await mkdir(join(tmpDir, 'invalid-workflow-run'));
+        await writeFile(
+          join(tmpDir, 'invalid-workflow-run', 'manifest.json'),
+          JSON.stringify({
+            runId: 'invalid-workflow-run',
+            workflowName: 'test-workflow',
+            workflowVersion: 1,
+            ...(startedAt === undefined ? {} : { startedAt }),
+            status: 'completed',
+          }),
+        );
+
+        const store = new LocalRunStore(tmpDir);
+
+        await expect(store.listRuns()).resolves.toEqual([]);
+      },
+    );
   });
 
   describe('getRun', () => {

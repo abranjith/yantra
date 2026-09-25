@@ -188,6 +188,9 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       entries.map(async (entry) => {
         try {
           const manifest = await readManifest(join(this.root, entry));
+          if (!hasListableRunMetadata(manifest)) {
+            return;
+          }
           summaries.push({
             runId: manifest.runId,
             workflowName: manifest.workflowName,
@@ -279,4 +282,17 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       if (code !== 'ENOENT') throw err;
     }
   }
+}
+
+/**
+ * Run directories are shared with historical task artifacts whose
+ * `manifest.json` uses a different schema. Only workflow run manifests belong
+ * in this store's listing.
+ */
+function hasListableRunMetadata(manifest: RunManifest): boolean {
+  return (
+    typeof manifest.runId === 'string' &&
+    typeof manifest.workflowName === 'string' &&
+    typeof manifest.startedAt === 'string'
+  );
 }

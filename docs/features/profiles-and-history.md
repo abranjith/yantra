@@ -117,9 +117,12 @@ run ID, task type (`ask`, `research`, `run`, or `do`), intent text, document ID,
 terminal status, start/end time, duration, provider, and cost when available.
 Intent text remains local history and is not an input to personalization.
 
-`yantra list runs` merges indexed rows with the file-based run store, de-duplicates
-by run ID, sorts newest first, and then applies its filters. This lets listing
-continue from run files even when the index cannot be read. `yantra show`
+`yantra list runs` merges two deliberately different sources. Its filesystem
+component lists workflow-run manifests only; it skips legacy task artifacts,
+whose manifests use a different schema. The indexed history is the compatibility
+path for those legacy task artifacts. The merged rows are de-duplicated by run
+ID, sorted newest first, and then filtered. If the index cannot be read, the
+command continues with workflow-run manifests from files only. `yantra show`
 inspects the canonical run directory rather than the history row.
 
 `yantra usage` reads the history index only. It groups task count and known cost
