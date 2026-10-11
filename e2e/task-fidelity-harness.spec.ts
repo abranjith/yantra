@@ -7,7 +7,7 @@
  * piece of the harness against the production code it drives.
  */
 
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +20,10 @@ import {
   resetPathCache,
   type BrowserSession,
 } from '@yantra/core';
+import { assertRuntimeLinesAreSafe } from '@yantra/test-helpers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { ScriptStep } from './task-fidelity/agent/scripted-provider.js';
 import { ARTICLE_FACTS, ARTICLE_SECTIONS } from './task-fidelity/fixtures/article-corpus.js';
 import { ARTICLE_PATH } from './task-fidelity/fixtures/article.js';
 import {
@@ -55,6 +57,13 @@ import {
   type SiteName,
 } from './task-fidelity/fixtures/sites.js';
 import { structuredPageItems } from './task-fidelity/fixtures/structured-listing.js';
+import {
+  parseJsonl,
+  readArtifacts,
+  runScenario,
+  type ScenarioRun,
+} from './task-fidelity/runner.js';
+import type { Scenario } from './task-fidelity/scenario.js';
 import {
   ScriptedSearchProvider,
   scriptedSearchLeaf,
@@ -737,5 +746,184 @@ describe('@no-llm task-fidelity scripted search', () => {
     const provider = new ScriptedSearchProvider({ serps });
     const resolved = await scriptedSearchLeaf(provider)();
     expect(resolved.isOk && resolved.value).toBe(provider);
+  });
+});
+
+describe('@no-llm task-fidelity runner', () => {
+  let runRoot: string;
+
+  beforeAll(async () => {
+    runRoot = await mkdtemp(join(tmpdir(), 'yantra-task-fidelity-runner-'));
+  });
+
+  afterAll(async () => {
+    if (runRoot) await rm(runRoot, { recursive: true, force: true });
+  });
+
+  const article = `${originOf('article')}${ARTICLE_PATH}`;
+  const publishStep: ScriptStep = {
+    kind: 'call',
+    tool: 'result_publish',
+    params: { brief: { title: 'Runner self-test', overview: 'The runner self-test published.' } },
+  };
+  const scenario = (overrides: Partial<Scenario>): Scenario => ({
+    id: 'runner-self-test',
+    sites: ['article'],
+    command: 'research',
+    goal: `Summarize the guide at ${article}`,
+    contract: { deliverable: 'answer', requiredFields: [], filters: [], requiredSources: [] },
+    userLocation: null,
+    serps: [{ match: 'battery', results: [{ url: article, title: 'Guide' }] }],
+    script: [],
+    expectations: [],
+    tiers: ['deterministic'],
+    truth: () => [],
+    ...overrides,
+  });
+  const run = (overrides: Partial<Scenario>): Promise<ScenarioRun> =>
+    runScenario(scenario(overrides), {
+      mode: 'deterministic',
+      runRoot,
+      runtimeLogScanner: assertRuntimeLinesAreSafe,
+    });
+
+  it('publishes a two-step script and audits it with the Pi seam’s own projection', async () => {
+    const result = await run({
+      script: [{ kind: 'call', tool: 'web_fetch', params: { url: article } }, publishStep],
+    });
+
+    expect(result.outcome.kind).toBe('published');
+    const lines = (result.artifacts.toolCalls?.lines ?? []) as {
+      readonly phase: string;
+      readonly tool: string;
+      readonly output_sanitized: unknown;
+    }[];
+    expect(lines.map((line) => [line.tool, line.phase])).toEqual([
+      ['web_fetch', 'start'],
+      ['web_fetch', 'end'],
+      ['result_publish', 'start'],
+      ['result_publish', 'end'],
+    ]);
+    // `audit` is `auditProjectionOf(result)`, computed by the scripted agent
+    // from the result it received: the recorder persisted exactly that.
+    expect(
+      lines.filter((line) => line.phase === 'end').map((line) => line.output_sanitized),
+    ).toEqual(result.toolResults.map((received) => received.audit));
+    expect(result.artifacts.toolCalls?.unparseable).toEqual([]);
+    expect(result.requests.map((entry) => `${entry.host}${entry.path}`)).toEqual([
+      'article.yantra.test/guides/home-backup-battery-sizing',
+    ]);
+    expect(result.egress).toEqual([]);
+    expect(result.canaryHits).toEqual([]);
+    expect(result.runtimeLogFindings).toEqual([]);
+  }, 60_000);
+
+  it('issues a parallel step concurrently: the two searches overlap in the call log', async () => {
+    const result = await run({
+      script: [
+        {
+          kind: 'parallel',
+          steps: [
+            { kind: 'call', tool: 'web_search', params: { query: 'battery sizing', limit: 1 } },
+            { kind: 'call', tool: 'web_search', params: { query: 'battery backup', limit: 1 } },
+          ],
+        },
+        publishStep,
+      ],
+    });
+
+    const [first, second] = result.searchCalls;
+    expect(result.searchCalls).toHaveLength(2);
+    expect(second?.startedAt ?? Infinity).toBeLessThan(first?.endedAt ?? -Infinity);
+    expect(result.searchPeakConcurrency).toBe(2);
+  }, 60_000);
+
+  it('records a resolver that finds nothing as unreachable and makes no call', async () => {
+    const result = await run({
+      script: [
+        {
+          kind: 'call',
+          tool: 'web_fetch',
+          label: 'follow first record',
+          params: (ctx) => {
+            const record = ctx.recordsFrom()[0];
+            return record?.url ? { url: record.url } : null;
+          },
+        },
+        publishStep,
+      ],
+    });
+
+    expect(result.unreachable).toEqual(['follow first record']);
+    expect(result.toolResults.map((received) => received.tool)).toEqual(['result_publish']);
+    expect(result.requests).toEqual([]);
+  }, 60_000);
+
+  it('leaves the developer’s home untouched, and ignores YANTRA_AGENT_RESEARCH_BROWSE', async () => {
+    const developerHome = await mkdtemp(join(tmpdir(), 'yantra-developer-home-'));
+    await writeFile(join(developerHome, 'canary.yaml'), 'untouched: true\n', 'utf8');
+    const previousHome = process.env.YANTRA_HOME;
+    const previousBrowse = process.env.YANTRA_AGENT_RESEARCH_BROWSE;
+    process.env.YANTRA_HOME = developerHome;
+    process.env.YANTRA_AGENT_RESEARCH_BROWSE = '1';
+    try {
+      const result = await run({
+        script: [{ kind: 'call', tool: 'browser_navigate', params: { url: article } }, publishStep],
+      });
+
+      expect(result.unreachable).toEqual(['browser_navigate (tool not registered)']);
+      expect(result.browserLaunches).toBe(0);
+      expect(process.env.YANTRA_HOME).toBe(developerHome);
+      expect(await readdir(developerHome)).toEqual(['canary.yaml']);
+      expect(await readFile(join(developerHome, 'canary.yaml'), 'utf8')).toBe('untouched: true\n');
+    } finally {
+      if (previousHome === undefined) delete process.env.YANTRA_HOME;
+      else process.env.YANTRA_HOME = previousHome;
+      if (previousBrowse === undefined) delete process.env.YANTRA_AGENT_RESEARCH_BROWSE;
+      else process.env.YANTRA_AGENT_RESEARCH_BROWSE = previousBrowse;
+      resetPathCache();
+      await rm(developerHome, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('reads a missing artifact as null and reports unparseable JSONL lines by number', async () => {
+    const empty = await mkdtemp(join(tmpdir(), 'yantra-empty-run-'));
+    try {
+      await writeFile(join(empty, 'tool-calls.jsonl'), '{"a":1}\nnot json\n\n{"b":2}\n', 'utf8');
+      await writeFile(join(empty, 'usage.json'), '{ broken', 'utf8');
+
+      const artifacts = await readArtifacts(empty);
+
+      expect(artifacts.manifest).toBeNull();
+      expect(artifacts.brief).toBeNull();
+      expect(artifacts.runHealth).toBeNull();
+      expect(artifacts.report).toBeNull();
+      expect(artifacts.runtime).toBeNull();
+      expect(artifacts.usage).toBeNull();
+      expect(artifacts.unparseableJson).toEqual(['usage.json']);
+      expect(artifacts.toolCalls).toEqual({ lines: [{ a: 1 }, { b: 2 }], unparseable: [2] });
+    } finally {
+      await rm(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a runtime-log scanner refusal as a finding instead of throwing it', async () => {
+    const result = await runScenario(scenario({ script: [publishStep] }), {
+      mode: 'deterministic',
+      runRoot,
+      runtimeLogScanner: () => {
+        throw new Error('runtime.jsonl line 1 carries forbidden key "url"');
+      },
+    });
+
+    expect(result.outcome.kind).toBe('published');
+    expect(result.runtimeLogFindings).toEqual(['runtime.jsonl line 1 carries forbidden key "url"']);
+  }, 60_000);
+
+  it('parses a clean JSONL file with no unparseable lines', () => {
+    expect(parseJsonl('{"event":"x"}\n{"event":"y"}\n')).toEqual({
+      lines: [{ event: 'x' }, { event: 'y' }],
+      unparseable: [],
+    });
   });
 });

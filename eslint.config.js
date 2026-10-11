@@ -39,6 +39,8 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       '**/_lint-fixtures/**',
       '.claude/**',
+      // Task-fidelity harness output (scorecards, run directories); gitignored.
+      'e2e/task-fidelity/.out/**',
     ],
   },
   js.configs.recommended,

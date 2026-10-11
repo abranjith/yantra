@@ -16,3 +16,6 @@ packages/core/tests/report-template/fixtures/exec-brief-guidance.md
 
 # Stale agent worktrees managed outside the repo.
 .claude/
+
+# Task-fidelity harness output (scorecards, run directories); gitignored.
+e2e/task-fidelity/.out/

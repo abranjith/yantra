@@ -8,6 +8,12 @@
       "task": "TASK-002"
     },
     {
+      "path": ".prettierignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -24,6 +30,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/agent/scripted-provider.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "e2e/task-fidelity/fixtures/article-corpus.ts",
@@ -104,10 +122,28 @@
       "task": "TASK-002"
     },
     {
-      "path": "e2e/task-fidelity/search/scripted-provider.ts",
+      "path": "e2e/task-fidelity/runner.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/scenario.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/search/scripted-provider.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "e2e/tsconfig.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "eslint.config.js",
