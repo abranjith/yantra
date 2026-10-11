@@ -46,8 +46,10 @@ export {
 export type { AgentProgressEvent, AgentTaskConnector } from './connector.js';
 export {
   DEFAULT_AGENT_BUDGETS,
+  defaultEnvironmentLeaves,
   isRunFatalBudget,
   runAgenticTask,
+  type EnvironmentLeaves,
   type AgentBudgetConfig,
   type ActiveReportTemplate,
   type AgenticRunEnvironment,

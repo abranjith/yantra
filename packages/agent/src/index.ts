@@ -16,6 +16,7 @@ export type { PiAgentProviderOptions } from './adapters/pi/provider.js';
 export { AGENT_SMOKE_PROMPT_VERSION, runAgentSmoke } from './adapters/pi/smoke.js';
 export type { AgentSmokeOptions, AgentSmokeReport } from './adapters/pi/smoke.js';
 export {
+  auditProjectionOf,
   buildYantraWrappedTools,
   browserClickSpec,
   browserExtractSpec,
