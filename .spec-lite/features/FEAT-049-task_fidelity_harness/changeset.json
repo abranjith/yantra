@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": ".gitignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -15,45 +21,93 @@
     },
     {
       "path": "e2e/task-fidelity-harness.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
-      "path": "e2e/task-fidelity/fixtures/faceted-listing.ts",
+      "path": "e2e/task-fidelity/fixtures/article-corpus.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/article.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/census.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/challenge-interstitial.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/client-rendered-listing.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/faceted-listing.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/fixtures/host-mapping.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/fixtures/html.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/fixtures/inventory.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
-      "path": "e2e/task-fidelity/fixtures/server.ts",
+      "path": "e2e/task-fidelity/fixtures/multi-table.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/server.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/fixtures/sites.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/structured-listing.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [

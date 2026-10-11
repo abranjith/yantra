@@ -11,6 +11,19 @@
  * byte-identical output, read from `inventory.ts` or a checked-in corpus.
  */
 
+import { ARTICLE_PATTERN, ARTICLE_PROVENANCE, ARTICLE_ROUTES, renderArticle } from './article.js';
+import {
+  CHALLENGE_INTERSTITIAL_PATTERN,
+  CHALLENGE_INTERSTITIAL_PROVENANCE,
+  CHALLENGE_INTERSTITIAL_ROUTES,
+  renderChallengeInterstitial,
+} from './challenge-interstitial.js';
+import {
+  CLIENT_RENDERED_LISTING_PATTERN,
+  CLIENT_RENDERED_LISTING_PROVENANCE,
+  CLIENT_RENDERED_LISTING_ROUTES,
+  renderClientRenderedListing,
+} from './client-rendered-listing.js';
 import {
   FACETED_LISTING_PATTERN,
   FACETED_LISTING_PROVENANCE,
@@ -18,6 +31,18 @@ import {
   renderFacetedListing,
 } from './faceted-listing.js';
 import type { RenderedPage } from './html.js';
+import {
+  MULTI_TABLE_PATTERN,
+  MULTI_TABLE_PROVENANCE,
+  MULTI_TABLE_ROUTES,
+  renderMultiTable,
+} from './multi-table.js';
+import {
+  STRUCTURED_LISTING_PATTERN,
+  STRUCTURED_LISTING_PROVENANCE,
+  STRUCTURED_LISTING_ROUTES,
+  renderStructuredListing,
+} from './structured-listing.js';
 
 /** The reserved second-level domain every fixture host lives under. */
 export const FIXTURE_DOMAIN = 'yantra.test';
@@ -41,7 +66,14 @@ export interface TaskSite {
   readonly render: (path: string, query: URLSearchParams) => RenderedPage | null;
 }
 
-export const SITE_NAMES = ['faceted-listing'] as const;
+export const SITE_NAMES = [
+  'faceted-listing',
+  'structured-listing',
+  'client-rendered-listing',
+  'challenge-interstitial',
+  'article',
+  'multi-table',
+] as const;
 
 export type SiteName = (typeof SITE_NAMES)[number];
 
@@ -52,6 +84,35 @@ export const TASK_SITES: readonly TaskSite[] = Object.freeze([
     FACETED_LISTING_PROVENANCE,
     FACETED_LISTING_ROUTES,
     renderFacetedListing,
+  ),
+  site(
+    'structured-listing',
+    STRUCTURED_LISTING_PATTERN,
+    STRUCTURED_LISTING_PROVENANCE,
+    STRUCTURED_LISTING_ROUTES,
+    renderStructuredListing,
+  ),
+  site(
+    'client-rendered-listing',
+    CLIENT_RENDERED_LISTING_PATTERN,
+    CLIENT_RENDERED_LISTING_PROVENANCE,
+    CLIENT_RENDERED_LISTING_ROUTES,
+    renderClientRenderedListing,
+  ),
+  site(
+    'challenge-interstitial',
+    CHALLENGE_INTERSTITIAL_PATTERN,
+    CHALLENGE_INTERSTITIAL_PROVENANCE,
+    CHALLENGE_INTERSTITIAL_ROUTES,
+    renderChallengeInterstitial,
+  ),
+  site('article', ARTICLE_PATTERN, ARTICLE_PROVENANCE, ARTICLE_ROUTES, renderArticle),
+  site(
+    'multi-table',
+    MULTI_TABLE_PATTERN,
+    MULTI_TABLE_PROVENANCE,
+    MULTI_TABLE_ROUTES,
+    renderMultiTable,
   ),
 ]);
 

@@ -7,9 +7,10 @@
  * piece of the harness against the production code it drives.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   HttpFetcher,
@@ -20,6 +21,20 @@ import {
 } from '@yantra/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { ARTICLE_FACTS, ARTICLE_SECTIONS } from './task-fidelity/fixtures/article-corpus.js';
+import { ARTICLE_PATH } from './task-fidelity/fixtures/article.js';
+import {
+  fixtureSources,
+  loadSiteTokenPattern,
+  siteCensus,
+  sourceLiteralFindings,
+  truthPlacementFindings,
+  type CensusSite,
+} from './task-fidelity/fixtures/census.js';
+import {
+  CHALLENGE_PATHS,
+  ESCALATION_SIZE_BYTES,
+} from './task-fidelity/fixtures/challenge-interstitial.js';
 import {
   EgressLog,
   HarnessEgressError,
@@ -27,9 +42,18 @@ import {
   mappedRequestFn,
   type HostMappedBrowserProvider,
 } from './task-fidelity/fixtures/host-mapping.js';
+import { htmlPage } from './task-fidelity/fixtures/html.js';
 import { INVENTORY, formatAmount, truthRows } from './task-fidelity/fixtures/inventory.js';
+import { MULTI_TABLE_ANSWER, MULTI_TABLE_PATH } from './task-fidelity/fixtures/multi-table.js';
 import { serveTaskSites, type TaskSiteServer } from './task-fidelity/fixtures/server.js';
-import { TASK_SITES, originOf, renderRoute, siteNamed } from './task-fidelity/fixtures/sites.js';
+import {
+  TASK_SITES,
+  originOf,
+  renderRoute,
+  siteNamed,
+  type SiteName,
+} from './task-fidelity/fixtures/sites.js';
+import { structuredPageItems } from './task-fidelity/fixtures/structured-listing.js';
 
 const neverAborted = (): AbortSignal => new AbortController().signal;
 
@@ -298,6 +322,22 @@ describe('@no-llm task-fidelity host mapping — real Chrome', () => {
     expect(server.requests()).toEqual([]);
   }, 30_000);
 
+  it('renders all six page-1 client-rendered cards in the DOM after load', async () => {
+    if (session === undefined) throw new Error('no browser session');
+    const page = await session.newPage();
+    try {
+      await page.goto(`${originOf('client-rendered-listing')}/results`, {
+        waitUntil: 'networkidle2',
+      });
+      const html = await renderedHtml(page);
+      const sellers = INVENTORY.slice(0, 6).map((entry) => entry.seller);
+      expect(sellers.filter((seller) => !html.includes(seller))).toEqual([]);
+      expect(html).toContain('<main>');
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
   it('counts exactly one launch and delegates every other member unchanged', async () => {
     expect(provider.launchCount).toBe(1);
     expect(provider).toBeInstanceOf(LocalBrowserProvider);
@@ -327,5 +367,210 @@ describe('@no-llm task-fidelity site registry', () => {
       expect(site.host).toBe(`${site.name}.yantra.test`);
       expect(originOf(site.name)).toBe(`http://${site.host}`);
     }
+  });
+});
+
+describe('@no-llm task-fidelity fixtures — remaining patterns', () => {
+  const body = (name: SiteName, route: string): string => {
+    const page = renderRoute(siteNamed(name), route);
+    if (page === null) throw new Error(`${name} does not serve ${route}`);
+    return page.body;
+  };
+  const truthValues = (): string[] =>
+    truthRows().flatMap((row) => [
+      row.fields.seller,
+      row.fields.price,
+      row.fields.exteriorColor,
+      row.fields.interiorColor,
+    ]);
+
+  it('renders every route of every pattern deterministically, byte for byte', () => {
+    const unstable = TASK_SITES.flatMap((site) =>
+      site.routes
+        .filter((route) => renderRoute(site, route)?.body !== renderRoute(site, route)?.body)
+        .map((route) => `${site.name}${route}`),
+    );
+    expect(unstable).toEqual([]);
+  });
+
+  it('structured-listing: JSON-LD parses, and its Offer prices equal the truth prices', () => {
+    const page = body('structured-listing', '/results');
+    const script = /<script type="application\/ld\+json">\n([\s\S]*?)\n<\/script>/.exec(page);
+    const list = JSON.parse(script?.[1] ?? 'null') as {
+      readonly '@type': string;
+      readonly itemListElement: readonly {
+        readonly item: {
+          readonly '@type': string;
+          readonly offers: { readonly price: number; readonly seller: { readonly name: string } };
+        };
+      }[];
+    };
+    expect(list['@type']).toBe('ItemList');
+    expect(list.itemListElement).toHaveLength(6);
+    expect(list.itemListElement.every((element) => element.item['@type'] === 'Product')).toBe(true);
+    expect(list.itemListElement.map((element) => element.item.offers.price)).toEqual(
+      structuredPageItems(1).map((entry) => entry.price),
+    );
+    expect(list.itemListElement.map((element) => element.item.offers.seller.name)).toEqual(
+      structuredPageItems(1).map((entry) => entry.seller),
+    );
+  });
+
+  it('structured-listing: the visible body is a thin shell with no cards and no prices', () => {
+    const visible = body('structured-listing', '/results').split('<body>')[1] ?? '';
+    expect(visible).not.toContain('listing-card');
+    expect(
+      structuredPageItems(1).filter((entry) => visible.includes(formatAmount(entry.price))),
+    ).toEqual([]);
+  });
+
+  it('client-rendered-listing: the HTTP shell is under 10 KB, scripted, rootless, and truth-free', () => {
+    const shell = body('client-rendered-listing', '/results');
+    expect(Buffer.byteLength(shell, 'utf8')).toBeLessThan(10_000);
+    expect(shell).toMatch(/<script src="[^"]+"><\/script>/);
+    expect(shell).not.toMatch(/<main|<article/);
+    expect(INVENTORY.filter((entry) => shell.includes(entry.seller))).toEqual([]);
+    expect(body('client-rendered-listing', '/assets/listing.js')).toContain(
+      JSON.stringify(INVENTORY[0]?.seller),
+    );
+  });
+
+  it('challenge-interstitial: both variants return 200 with the widget and no truth value', () => {
+    const site = siteNamed('challenge-interstitial');
+    for (const route of Object.values(CHALLENGE_PATHS)) {
+      const page = renderRoute(site, route);
+      expect(page?.status).toBe(200);
+      expect(page?.body).toContain('data-sitekey=');
+      expect(page?.body).toContain('name="captcha-token"');
+      expect(page?.body).toContain('verify you are human');
+      expect(truthValues().filter((value) => page?.body.includes(value))).toEqual([]);
+    }
+  });
+
+  it('challenge-interstitial: the small variant escalates by today’s heuristic; large-main does not', () => {
+    const small = body('challenge-interstitial', CHALLENGE_PATHS.small);
+    const large = body('challenge-interstitial', CHALLENGE_PATHS['large-main']);
+    expect(small.length).toBeLessThan(ESCALATION_SIZE_BYTES);
+    expect(small).toContain('<script src=');
+    expect(small).not.toMatch(/<main|<article/);
+    expect(large.length).toBeGreaterThan(ESCALATION_SIZE_BYTES);
+    expect(large).toContain('<main>');
+  });
+
+  it('article: about 1,500 words with a byline and a datePublished JSON-LD block', () => {
+    const page = body('article', ARTICLE_PATH);
+    const words = ARTICLE_SECTIONS.flatMap((section) => section.paragraphs)
+      .join(' ')
+      .split(/\s+/).length;
+    expect(words).toBeGreaterThanOrEqual(1_300);
+    expect(words).toBeLessThanOrEqual(1_800);
+    expect(page).toContain('"datePublished": "2026-03-14"');
+    expect(page).toContain('<p class="byline">By <span rel="author">Mara Ellison</span>');
+    expect(page).toContain('<article>');
+    expect(page).toContain(ARTICLE_FACTS.coverageDays);
+    expect(page).toContain(ARTICLE_FACTS.exampleCapacity);
+  });
+
+  it('multi-table: the answer cell is in table index 1, not 0', () => {
+    const tables = body('multi-table', MULTI_TABLE_PATH).split('<table>').slice(1);
+    expect(tables).toHaveLength(2);
+    expect(tables[0]).not.toContain(MULTI_TABLE_ANSWER.cell);
+    expect(tables[MULTI_TABLE_ANSWER.tableIndex]).toContain(
+      `<td>${MULTI_TABLE_ANSWER.trim}</td><td>${MULTI_TABLE_ANSWER.drivetrain}</td><td>${MULTI_TABLE_ANSWER.cell}</td>`,
+    );
+  });
+});
+
+describe('@no-llm task-fidelity fixture census', () => {
+  let siteTokens: RegExp;
+
+  beforeAll(async () => {
+    siteTokens = await loadSiteTokenPattern();
+  });
+
+  /** A real site token, derived from the shared list so no site name is typed here. */
+  const firstSiteToken = (): string => siteTokens.source.split('|')[0] ?? '';
+
+  const synthetic = (overrides: Partial<CensusSite> = {}): CensusSite => ({
+    name: 'synthetic-site',
+    host: 'synthetic-site.yantra.test',
+    pattern: 'A synthetic pattern used only by the census self-test.',
+    provenance: { gaps: ['G2'] },
+    routes: ['/'],
+    render: () => htmlPage('<!-- header: gaps G2 -->\n<p>plain body</p>'),
+    ...overrides,
+  });
+
+  it('passes on the registered gallery', () => {
+    expect(siteCensus(TASK_SITES, siteTokens)).toEqual([]);
+  });
+
+  it('finds every truth field where the truth says it renders', () => {
+    expect(truthPlacementFindings()).toEqual([]);
+  });
+
+  it('finds no site token in any fixture string literal', async () => {
+    const directory = join(dirname(fileURLToPath(import.meta.url)), 'task-fidelity', 'fixtures');
+    const files = (await readdir(directory))
+      .filter((file) => file.endsWith('.ts'))
+      .map((file) => join(directory, file));
+    expect(files.length).toBeGreaterThanOrEqual(8);
+    expect(sourceLiteralFindings(await fixtureSources(files), siteTokens)).toEqual([]);
+  });
+
+  it('fails on a synthetic site carrying a real-site token in a body string', () => {
+    const token = firstSiteToken();
+    const findings = siteCensus(
+      [
+        ...TASK_SITES,
+        synthetic({
+          render: () => htmlPage(`<!-- header: gaps G2 -->\n<p>compare with ${token}</p>`),
+        }),
+      ],
+      siteTokens,
+    );
+    expect(findings.map((finding) => [finding.site, finding.problem])).toEqual([
+      ['synthetic-site', `site token "${token}" outside the header comment`],
+    ]);
+  });
+
+  it('fails on a duplicate pattern', () => {
+    const findings = siteCensus(
+      [...TASK_SITES, synthetic({ pattern: siteNamed('article').pattern })],
+      siteTokens,
+    );
+    expect(findings).toEqual([
+      { site: 'synthetic-site', problem: 'duplicate pattern (also used by article)' },
+    ]);
+  });
+
+  it('fails when provenance leaks outside the header comment, or a page has no header', () => {
+    expect(
+      siteCensus(
+        [synthetic({ render: () => htmlPage('<!-- header: gaps G2 -->\n<p>see G2</p>') })],
+        siteTokens,
+      ).map((finding) => finding.problem),
+    ).toEqual(['provenance \\bG2\\b appears outside the header comment']);
+    expect(
+      siteCensus([synthetic({ render: () => htmlPage('<p>no header</p>') })], siteTokens).map(
+        (finding) => finding.problem,
+      ),
+    ).toEqual(['page has no leading header comment', 'header comment omits provenance \\bG2\\b']);
+  });
+
+  it('flags a site token in a literal but not in a comment', () => {
+    const token = firstSiteToken();
+    const findings = sourceLiteralFindings(
+      [
+        {
+          path: 'synthetic.ts',
+          text: `// evidence: ${token} showed the defect\nconst host = 'www.${token}.example';\n`,
+        },
+      ],
+      siteTokens,
+    );
+    expect(findings).toEqual([
+      { site: 'synthetic.ts', problem: `site token "${token}" in a literal at line 2` },
+    ]);
   });
 });
