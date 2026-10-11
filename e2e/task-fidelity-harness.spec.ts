@@ -24,6 +24,23 @@ import { assertRuntimeLinesAreSafe } from '@yantra/test-helpers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { ScriptStep } from './task-fidelity/agent/scripted-provider.js';
+import {
+  atLeast,
+  atMost,
+  count,
+  equals,
+  evaluateExpectation,
+  everyLine,
+  excludesAll,
+  expectationCensus,
+  expectationTestName,
+  includesAll,
+  matchesShape,
+  show,
+  type Expectation,
+  type Matcher,
+  type Owner,
+} from './task-fidelity/expectations.js';
 import { ARTICLE_FACTS, ARTICLE_SECTIONS } from './task-fidelity/fixtures/article-corpus.js';
 import { ARTICLE_PATH } from './task-fidelity/fixtures/article.js';
 import {
@@ -924,6 +941,223 @@ describe('@no-llm task-fidelity runner', () => {
     expect(parseJsonl('{"event":"x"}\n{"event":"y"}\n')).toEqual({
       lines: [{ event: 'x' }, { event: 'y' }],
       unparseable: [],
+    });
+  });
+});
+
+describe('@no-llm task-fidelity expectations', () => {
+  /** A stand-in run: measures in these tests read only `requests`. */
+  const runWith = (requests: number): ScenarioRun =>
+    ({ requests: Array.from({ length: requests }, (_, index) => index) }) as unknown as ScenarioRun;
+  const fetchesOfResults: Pick<Expectation, 'id' | 'measure' | 'note'> = {
+    id: 'one-request-per-url',
+    measure: (run) => run.requests.length,
+    note: 'G5: the results page is fetched once.',
+  };
+  const pendingFifty = new Set<Owner>(['FEAT-050']);
+
+  it('passes a pending expectation whose baseline holds and whose target fails', () => {
+    const verdict = evaluateExpectation(
+      runWith(3),
+      { ...fetchesOfResults, owner: 'FEAT-050', target: equals(1), baseline: equals(3) },
+      pendingFifty,
+    );
+    expect(verdict).toEqual({
+      pass: true,
+      asserted: 'baseline',
+      message: 'one-request-per-url (baseline for FEAT-050): expected equals 3; measured 3',
+    });
+  });
+
+  it('fails a pending expectation whose target already holds, naming the owner to flip', () => {
+    const verdict = evaluateExpectation(
+      runWith(1),
+      { ...fetchesOfResults, owner: 'FEAT-050', target: equals(1), baseline: atLeast(1) },
+      pendingFifty,
+    );
+    expect(verdict.pass).toBe(false);
+    expect(verdict.message).toBe(
+      "one-request-per-url: FEAT-050's target already holds (equals 1); remove FEAT-050 from " +
+        'PENDING_OWNERS and delete this baseline.',
+    );
+  });
+
+  it('fails a pending expectation whose baseline no longer characterizes the run', () => {
+    const verdict = evaluateExpectation(
+      runWith(2),
+      { ...fetchesOfResults, owner: 'FEAT-050', target: equals(1), baseline: equals(3) },
+      pendingFifty,
+    );
+    expect(verdict).toMatchObject({ pass: false, asserted: 'baseline' });
+    expect(verdict.message).toContain('measured 2');
+  });
+
+  it('switches to the target once the owner leaves the pending set', () => {
+    const expectation: Expectation = {
+      ...fetchesOfResults,
+      owner: 'FEAT-050',
+      target: equals(1),
+      baseline: equals(3),
+    };
+    expect(evaluateExpectation(runWith(3), expectation, pendingFifty).asserted).toBe('baseline');
+
+    const landed = evaluateExpectation(runWith(3), expectation, new Set<Owner>());
+    expect(landed).toEqual({
+      pass: false,
+      asserted: 'target',
+      message: 'one-request-per-url: expected equals 1; measured 3',
+    });
+    expect(evaluateExpectation(runWith(1), expectation, new Set<Owner>()).pass).toBe(true);
+  });
+
+  it('asserts the target of a current expectation regardless of the pending set', () => {
+    const expectation: Expectation = { ...fetchesOfResults, owner: 'current', target: atMost(2) };
+    expect(evaluateExpectation(runWith(2), expectation, pendingFifty).pass).toBe(true);
+    expect(evaluateExpectation(runWith(3), expectation, pendingFifty).pass).toBe(false);
+  });
+
+  it('fails loudly when a measure throws, instead of passing a baseline vacuously', () => {
+    const verdict = evaluateExpectation(
+      runWith(0),
+      {
+        ...fetchesOfResults,
+        owner: 'FEAT-050',
+        measure: () => {
+          throw new Error('brief.json is missing');
+        },
+        target: equals(1),
+        baseline: equals(null),
+      },
+      pendingFifty,
+    );
+    expect(verdict).toEqual({
+      pass: false,
+      asserted: 'baseline',
+      message: 'one-request-per-url: the measure threw: brief.json is missing',
+    });
+  });
+
+  it('fails a pending expectation that has no baseline', () => {
+    const verdict = evaluateExpectation(
+      runWith(3),
+      { ...fetchesOfResults, owner: 'FEAT-050', target: equals(1) },
+      pendingFifty,
+    );
+    expect(verdict.pass).toBe(false);
+    expect(verdict.message).toContain('needs a baseline');
+  });
+
+  it('includes the measured value in every matcher’s failure message', () => {
+    const cases: readonly [Matcher, unknown, string][] = [
+      [equals(1), 2, 'expected equals 1; measured 2'],
+      [atLeast(3), 2, 'expected a number ≥ 3; measured 2'],
+      [atMost(1), 2, 'expected a number ≤ 1; measured 2'],
+      [includesAll(['a', 'b']), ['a'], 'expected includes all of ["a","b"]; measured ["a"]'],
+      [excludesAll(['a']), ['a', 'c'], 'expected excludes all of ["a"]; measured ["a","c"]'],
+      [
+        matchesShape({ kind: 'blocked' }),
+        { kind: 'ok', n: 1 },
+        'expected matches shape {"kind":"blocked"}; measured {"kind":"ok","n":1}',
+      ],
+      [
+        everyLine('parses', (line) => line !== null),
+        [1, null],
+        'expected every line parses; measured [1,null]',
+      ],
+      [count(2), ['x'], 'expected a list whose length equals 2; measured 1: ["x"]'],
+    ];
+    expect(cases.map(([candidate, value]) => candidate.test(value))).toEqual(
+      cases.map(([, , message]) => ({ pass: false, message })),
+    );
+  });
+
+  it('applies each matcher’s semantics', () => {
+    expect(equals({ a: [1, { b: 2 }] }).test({ a: [1, { b: 2 }] }).pass).toBe(true);
+    expect(equals({ a: 1 }).test({ a: 1, b: 2 }).pass).toBe(false);
+    expect(includesAll(['seller']).test('a seller line').pass).toBe(true);
+    expect(excludesAll(['S1']).test('S2 S3').pass).toBe(true);
+    expect(matchesShape({ a: { b: 1 } }).test({ a: { b: 1, c: 2 }, d: 3 }).pass).toBe(true);
+    expect(matchesShape([{ kind: 'facet' }]).test([{ kind: 'facet', url: 'x' }]).pass).toBe(true);
+    expect(everyLine('is even', (line) => (line as number) % 2 === 0).test([]).pass).toBe(true);
+    expect(everyLine('is even', () => true).test('not a list').pass).toBe(false);
+    expect(count(atLeast(2)).test([1, 2, 3]).pass).toBe(true);
+    expect(show('x'.repeat(400))).toMatch(/… \(402 chars\)$/);
+    expect(show(undefined)).toBe('<undefined>');
+  });
+
+  describe('census', () => {
+    const current: Expectation = {
+      id: 'audit-parses',
+      owner: 'current',
+      measure: () => 0,
+      target: equals(0),
+      note: 'Every audit line parses.',
+    };
+    const catalogue = (
+      expectations: readonly Expectation[],
+    ): { readonly id: string; readonly expectations: readonly Expectation[] }[] => [
+      { id: 'synthetic', expectations: [current, ...expectations] },
+    ];
+    const pendingFiftyExpectation: Expectation = {
+      ...fetchesOfResults,
+      owner: 'FEAT-050',
+      target: equals(1),
+      baseline: equals(3),
+    };
+
+    it('passes a well-formed catalogue', () => {
+      expect(expectationCensus(catalogue([pendingFiftyExpectation]), pendingFifty)).toEqual([]);
+    });
+
+    it('fails a landed owner that still carries a baseline, naming the expectation', () => {
+      expect(expectationCensus(catalogue([pendingFiftyExpectation]), new Set<Owner>())).toEqual([
+        'synthetic › one-request-per-url: FEAT-050 has landed; delete this leftover baseline',
+      ]);
+    });
+
+    it('fails a current baseline, a missing pending baseline, a blank note, and a duplicate id', () => {
+      const findings = expectationCensus(
+        catalogue([
+          { ...current, id: 'current-with-baseline', baseline: equals(0) },
+          { ...fetchesOfResults, owner: 'FEAT-050', target: equals(1) },
+          { ...pendingFiftyExpectation, id: 'blank-note', note: ' ' },
+          { ...current },
+        ]),
+        pendingFifty,
+      );
+      expect(findings).toEqual([
+        'synthetic › current-with-baseline: a "current" expectation must not carry a baseline',
+        'synthetic › one-request-per-url: pending owner FEAT-050 needs a baseline',
+        'synthetic › blank-note: empty note',
+        'synthetic › audit-parses: duplicate expectation id',
+      ]);
+    });
+
+    it('fails a pending owner with no baseline anywhere, and an all-baseline scenario', () => {
+      expect(
+        expectationCensus(
+          [{ id: 'all-baseline', expectations: [pendingFiftyExpectation] }],
+          new Set<Owner>(['FEAT-050', 'FEAT-051']),
+        ),
+      ).toEqual([
+        'all-baseline: no "current" expectation — the scenario is all-baseline',
+        'pending owner FEAT-051 has no baseline anywhere in the catalogue',
+      ]);
+    });
+
+    it('fails an undeclared owner', () => {
+      expect(
+        expectationCensus(
+          catalogue([{ ...current, id: 'stray', owner: 'FEAT-099' as Owner }]),
+          new Set<Owner>(),
+        ),
+      ).toEqual(['synthetic › stray: undeclared owner "FEAT-099"']);
+    });
+
+    it('names each expectation’s test as scenario › owner › id', () => {
+      expect(expectationTestName('listing-table', current)).toBe(
+        'listing-table › current › audit-parses',
+      );
     });
   });
 });

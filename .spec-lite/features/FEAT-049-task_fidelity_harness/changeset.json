@@ -33,13 +33,13 @@
     },
     {
       "path": "e2e/task-fidelity/agent/scripted-provider.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "e2e/task-fidelity/expectations.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -123,13 +123,13 @@
     },
     {
       "path": "e2e/task-fidelity/runner.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "e2e/task-fidelity/scenario.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
