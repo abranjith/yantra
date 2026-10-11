@@ -16,10 +16,11 @@ import {
   HttpFetcher,
   LocalBrowserProvider,
   LocalProfileStore,
+  ScrapeSearchError,
   resetPathCache,
   type BrowserSession,
 } from '@yantra/core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ARTICLE_FACTS, ARTICLE_SECTIONS } from './task-fidelity/fixtures/article-corpus.js';
 import { ARTICLE_PATH } from './task-fidelity/fixtures/article.js';
@@ -54,6 +55,10 @@ import {
   type SiteName,
 } from './task-fidelity/fixtures/sites.js';
 import { structuredPageItems } from './task-fidelity/fixtures/structured-listing.js';
+import {
+  ScriptedSearchProvider,
+  scriptedSearchLeaf,
+} from './task-fidelity/search/scripted-provider.js';
 
 const neverAborted = (): AbortSignal => new AbortController().signal;
 
@@ -572,5 +577,165 @@ describe('@no-llm task-fidelity fixture census', () => {
     expect(findings).toEqual([
       { site: 'synthetic.ts', problem: `site token "${token}" in a literal at line 2` },
     ]);
+  });
+});
+
+describe('@no-llm task-fidelity scripted search', () => {
+  const serps = [
+    {
+      match: 'teyra',
+      results: [
+        { url: `${originOf('faceted-listing')}/new/results`, title: 'Listing' },
+        { url: `${originOf('article')}${ARTICLE_PATH}`, title: 'Article' },
+        { url: `${originOf('multi-table')}${MULTI_TABLE_PATH}`, title: 'Specs' },
+      ],
+    },
+  ];
+  const search = (provider: ScriptedSearchProvider, query = 'norvale teyra', limit = 3) =>
+    provider.search(query, { limit, signal: neverAborted() });
+
+  it('serves the matching SERP with ranks, its own name as source, and at most `limit` hits', async () => {
+    const provider = new ScriptedSearchProvider({ serps, name: 'brave', latencyMs: 0 });
+
+    const results = await search(provider, 'NORVALE TEYRA prices', 2);
+
+    expect(results).toEqual([
+      {
+        url: 'http://faceted-listing.yantra.test/new/results',
+        title: 'Listing',
+        snippet: null,
+        source: 'brave',
+        rank: 1,
+        publishedAt: null,
+      },
+      {
+        url: 'http://article.yantra.test/guides/home-backup-battery-sizing',
+        title: 'Article',
+        snippet: null,
+        source: 'brave',
+        rank: 2,
+        publishedAt: null,
+      },
+    ]);
+  });
+
+  it('challenges the overlapping call of a concurrent pair with the real ScrapeSearchError', async () => {
+    const provider = new ScriptedSearchProvider({
+      serps,
+      faults: [{ kind: 'challenge-on-concurrency' }],
+    });
+
+    const settled = await Promise.allSettled([search(provider), search(provider)]);
+
+    expect(settled[0]?.status).toBe('fulfilled');
+    expect(settled[1]?.status).toBe('rejected');
+    const error = (settled[1] as PromiseRejectedResult).reason as unknown;
+    expect(error).toBeInstanceOf(ScrapeSearchError);
+    expect((error as ScrapeSearchError).context).toMatchObject({
+      provider: 'duckduckgo',
+      code: 'anomaly-challenge',
+    });
+    expect(provider.calls().map((call) => call.outcome)).toEqual(['ok', 'challenge']);
+  });
+
+  it('lets sequential calls through under challenge-on-concurrency', async () => {
+    const provider = new ScriptedSearchProvider({
+      serps,
+      faults: [{ kind: 'challenge-on-concurrency' }],
+    });
+
+    await search(provider);
+    await search(provider);
+
+    expect(provider.calls().map((call) => call.outcome)).toEqual(['ok', 'ok']);
+    expect(provider.peakConcurrency()).toBe(1);
+  });
+
+  it('throws empty and timeout on exactly the listed calls', async () => {
+    const provider = new ScriptedSearchProvider({
+      serps,
+      latencyMs: 0,
+      timeoutMs: 20,
+      faults: [
+        { kind: 'empty', onCall: [2] },
+        { kind: 'timeout', onCall: [3] },
+        { kind: 'challenge', onCall: [5] },
+      ],
+    });
+
+    const outcomes: string[] = [];
+    for (let call = 1; call <= 5; call += 1) {
+      try {
+        await search(provider);
+        outcomes.push('ok');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ScrapeSearchError);
+        outcomes.push(String((error as ScrapeSearchError).context.code));
+      }
+    }
+
+    expect(outcomes).toEqual(['ok', 'empty-results', 'timeout', 'ok', 'anomaly-challenge']);
+    expect(provider.faultedCalls().map((call) => call.call)).toEqual([2, 3, 5]);
+  });
+
+  it('ends a timeout within 50 ms of the abort signal, as the transport does', async () => {
+    const provider = new ScriptedSearchProvider({
+      serps,
+      timeoutMs: 10_000,
+      faults: [{ kind: 'timeout', onCall: [1] }],
+    });
+    const controller = new AbortController();
+    const started = performance.now();
+    const pending = provider.search('norvale teyra', { limit: 3, signal: controller.signal });
+    setTimeout(() => controller.abort(), 20);
+
+    await expect(pending).rejects.toMatchObject({ context: { code: 'aborted' } });
+
+    expect(performance.now() - started).toBeLessThan(20 + 50);
+    expect(provider.calls()[0]?.outcome).toBe('aborted');
+  });
+
+  it('answers `limit: 0` with nothing and never consults the table', async () => {
+    const provider = new ScriptedSearchProvider({
+      serps,
+      faults: [{ kind: 'challenge', onCall: [1] }],
+    });
+
+    await expect(search(provider, 'norvale teyra', 0)).resolves.toEqual([]);
+
+    expect(provider.calls()[0]?.outcome).toBe('discovery');
+  });
+
+  it('records exact peak concurrency per call and overall, on the injected clock', async () => {
+    let tick = 0;
+    const provider = new ScriptedSearchProvider({ serps, latencyMs: 15, now: () => (tick += 1) });
+
+    await Promise.all([search(provider), search(provider), search(provider)]);
+    await search(provider);
+
+    const calls = provider.calls();
+    expect(calls.map((call) => call.peakConcurrency)).toEqual([3, 3, 3, 1]);
+    expect(provider.peakConcurrency()).toBe(3);
+    expect(calls.every((call) => call.endedAt !== null && call.endedAt > call.startedAt)).toBe(
+      true,
+    );
+    expect(calls.map((call) => call.startedAt)).toEqual([1, 2, 3, calls[3]?.startedAt]);
+  });
+
+  it('answers an unmatched query with nothing, without throwing or touching the network', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const provider = new ScriptedSearchProvider({ serps, latencyMs: 0 });
+
+    await expect(search(provider, 'something else entirely')).resolves.toEqual([]);
+
+    expect(provider.calls()[0]?.outcome).toBe('unmatched');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('wires into the run as an ok() search-provider resolution', async () => {
+    const provider = new ScriptedSearchProvider({ serps });
+    const resolved = await scriptedSearchLeaf(provider)();
+    expect(resolved.isOk && resolved.value).toBe(provider);
   });
 });

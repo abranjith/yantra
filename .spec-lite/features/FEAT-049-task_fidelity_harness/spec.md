@@ -486,7 +486,7 @@ If an equivalent helper already exists (a JSONL reader, a temp-home helper, the 
 - [x] TASK-001: Host-routed task-site server with reserved hostnames, and the `faceted-listing` pattern
 - [x] TASK-002: The remaining fixture patterns and the fixture census
 - [x] TASK-003: Two inert production seams: environment leaves and the audit projection
-- [ ] TASK-004: Scripted search provider with fault injection
+- [x] TASK-004: Scripted search provider with fault injection
 - [ ] TASK-005: Scripted agent and the scenario runner
 - [ ] TASK-006: Expectation ledger with an owner ratchet
 - [ ] TASK-007: The deterministic tier: the scenario catalogue, gating CI

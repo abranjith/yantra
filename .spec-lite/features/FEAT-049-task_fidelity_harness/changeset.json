@@ -104,6 +104,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "e2e/task-fidelity/search/scripted-provider.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "eslint.config.js",
       "status": "M",
       "role": "implement",
@@ -141,7 +147,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/environment-leaves.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     }
