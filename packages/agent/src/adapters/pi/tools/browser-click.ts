@@ -63,6 +63,7 @@ async function reacquireClickTarget(
   try {
     observation = await controller.observe({ cap: 400, trackDigest: false });
   } catch {
+    // swallow-ok: an unreadable page means the element cannot be re-acquired; the caller reports that
     return null;
   }
   if (!observation || !Array.isArray(observation.interactables)) return null;

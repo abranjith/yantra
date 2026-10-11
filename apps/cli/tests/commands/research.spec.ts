@@ -238,3 +238,36 @@ describe('@no-llm cli/research command', () => {
     expect(h.stderr.value()).toContain('column 7');
   });
 });
+
+describe('@no-llm cli/research goal echo (FEAT-048)', () => {
+  it.each([
+    ['deterministic', ['--no-llm']],
+    ['agentic', []],
+  ] as const)('echoes the received goal right after the preamble (%s)', async (_mode, flags) => {
+    const h = harness();
+
+    await h.program
+      .parseAsync(['research', 'top 5 hybrid SUVs to buy now for under ,000', ...flags], {
+        from: 'user',
+      })
+      .catch(() => undefined);
+
+    const lines = h.stderr.value().split('\n');
+    const preamble = lines.findIndex((line) => line.startsWith('research: search-provider='));
+    expect(preamble).toBeGreaterThanOrEqual(0);
+    expect(lines[preamble + 1]).toBe('goal: "top 5 hybrid SUVs to buy now for under ,000"');
+  });
+
+  it('keeps --json stdout free of the echo', async () => {
+    const h = harness();
+
+    await h.program.parseAsync(
+      ['research', 'top 5 hybrid SUVs to buy now for under ,000', '--no-llm', '--json'],
+      { from: 'user' },
+    );
+
+    expect(h.stderr.value()).toContain('goal: "top 5 hybrid SUVs to buy now for under ,000"\n');
+    expect(h.stdout.value()).not.toContain('goal: "');
+    expect(() => JSON.parse(h.stdout.value()) as unknown).not.toThrow();
+  });
+});

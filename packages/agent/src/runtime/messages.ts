@@ -92,6 +92,177 @@ export const AGENT_INTERACTION_MESSAGES = [
     [],
     'result_publish',
   ),
+  // `web_search` provider failures (FEAT-048). One template per cause, each
+  // saying what happened (naming the provider), whether a retry can help, and
+  // one engineered next step. Setup commands appear only as advice to relay to
+  // the user — the agent has no tool that configures a provider.
+  tool(
+    'SEARCH_BLOCKED',
+    'anomaly-challenge',
+    (details) =>
+      `${text(details.provider)} served an anti-bot challenge instead of search results. Do not ` +
+      'search again in this run: repeating the query meets the same challenge. Use web_fetch on a ' +
+      'URL an earlier result already returned, or finish with result_publish and say in the ' +
+      'overview that web search was blocked.',
+    ['provider'],
+    'web_fetch',
+  ),
+  tool(
+    'SEARCH_BLOCKED',
+    'rate-limited',
+    (details) =>
+      `${text(details.provider)} rejected the search because its rate limit was reached. Do not ` +
+      'retry: further searches in this run will be throttled the same way. Use web_fetch on a URL ' +
+      'an earlier result already returned, or finish with result_publish and say that search was ' +
+      'rate-limited.',
+    ['provider'],
+    'web_fetch',
+  ),
+  tool(
+    'SEARCH_NO_RESULTS',
+    'empty-results',
+    (details) =>
+      `${text(details.provider)} returned no results for this query; the search itself worked. ` +
+      'Reformulate the query once with broader or different keywords and search again. If that ' +
+      'also returns nothing, finish with result_publish and state that no results were found.',
+    ['provider'],
+    'web_search',
+  ),
+  tool(
+    'SEARCH_TIMEOUT',
+    'timeout',
+    (details) =>
+      `The search through ${text(details.provider)} timed out before results arrived. One retry ` +
+      'of the same query may succeed. If it times out again, stop searching and finish with ' +
+      'result_publish using the evidence you already have.',
+    ['provider'],
+    'web_search',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'ethics-refused',
+    (details) =>
+      `Yantra's ethics policy refused the ${text(details.provider)} search page ` +
+      `(${text(details.reason)}), so searching through it is not permitted in this run. Do not ` +
+      'retry. Use web_fetch on a URL you already have, or finish with result_publish and say that ' +
+      'web search was unavailable.',
+    ['provider', 'reason'],
+    'web_fetch',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'key-missing',
+    (details) =>
+      `${text(details.provider)} needs an API key that is not configured, so web search is ` +
+      'unavailable for this run. Do not retry: nothing in this run can add a key. Tell the user ' +
+      'to store the key with `yantra init`, or to choose a key-free provider with ' +
+      '`--search-provider duckduckgo`, then finish with result_publish.',
+    ['provider'],
+    'result_publish',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'no-provider-available',
+    () =>
+      'No search provider is usable: every configured provider needs an API key that is missing. ' +
+      'Do not retry. Tell the user to configure a keyed provider with `yantra init`, or to add a ' +
+      'key-free provider to the search fallback chain, then finish with result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'unknown-provider',
+    () =>
+      'The configured search provider is not one Yantra recognizes, so web search is ' +
+      'unavailable. Do not retry. Tell the user to correct the provider setting ' +
+      '(`--search-provider` or `search.provider`), then finish with result_publish.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'auth-rejected',
+    (details) =>
+      `${text(details.provider)} rejected the configured API key, so web search is unavailable ` +
+      'for this run. Do not retry with the same key. Tell the user to check or replace the key ' +
+      'with `yantra init`, then finish with result_publish.',
+    ['provider'],
+    'result_publish',
+  ),
+  tool(
+    'SEARCH_PROVIDER_UNAVAILABLE',
+    'http-5xx',
+    (details) =>
+      `${text(details.provider)} returned a server error. The fault is on the provider's side and ` +
+      'may clear: retry the search once. If it fails again, finish with result_publish using the ' +
+      'evidence you already have.',
+    ['provider'],
+    'web_search',
+  ),
+  tool(
+    'SEARCH_FAILED',
+    'http-4xx',
+    (details) =>
+      `${text(details.provider)} refused the search request. Retrying the same request will fail ` +
+      'the same way. Use web_fetch on a URL you already have, or finish with result_publish.',
+    ['provider'],
+    'web_fetch',
+  ),
+  tool(
+    'SEARCH_FAILED',
+    'invalid-response',
+    (details) =>
+      `${text(details.provider)} answered with a response Yantra could not read, so this search ` +
+      'produced no results. Do not repeat the same query. Use web_fetch on a URL you already ' +
+      'have, or finish with result_publish.',
+    ['provider'],
+    'web_fetch',
+  ),
+  tool(
+    'SEARCH_FAILED',
+    'serp-fetch-failed',
+    (details) =>
+      `Loading the ${text(details.provider)} results page failed before any results could be ` +
+      'read. This can be transient: retry the search once. If it fails again, finish with ' +
+      'result_publish using the evidence you already have.',
+    ['provider'],
+    'web_search',
+  ),
+  tool(
+    'SEARCH_FAILED',
+    'aborted',
+    (details) =>
+      `The search through ${text(details.provider)} was cancelled before it completed. Do not ` +
+      'retry; finish with result_publish using the evidence you already have.',
+    ['provider'],
+    'result_publish',
+  ),
+  tool(
+    'SEARCH_FAILED',
+    'unexpected',
+    (details) =>
+      `The search through ${text(details.provider)} failed for a reason Yantra could not ` +
+      'classify. Do not repeat the same query. Use web_fetch on a URL you already have, or ' +
+      'finish with result_publish.',
+    ['provider'],
+    'web_fetch',
+  ),
+  // The run's own navigation/host budget ran out inside one `web_search`
+  // (FEAT-048 G6). Reported once at the top of the result, never per site,
+  // and worded so it can never be read as the sites refusing the run.
+  tool(
+    'BUDGET_EXHAUSTED',
+    'search-reads-skipped',
+    (details) =>
+      `Yantra's own ${details.limit === 'hosts' ? 'distinct-host' : 'navigation'} budget for ` +
+      `this run is spent, so ${text(details.skipped)} further search result(s) were not read. ` +
+      'This is the run limit, not the sites refusing you, and searching again cannot read more ' +
+      'pages. Finish with result_publish now; the evidence already gathered is attached ' +
+      'automatically.',
+    ['limit', 'skipped'],
+    'result_publish',
+  ),
   tool(
     'URL_NOT_FROM_EVIDENCE',
     'unattested-url',

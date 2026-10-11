@@ -28,11 +28,7 @@
               },
               "provider": {
                 "type": "string",
-                "enum": [
-                  "anthropic",
-                  "ollama",
-                  "openai"
-                ],
+                "minLength": 1,
                 "description": "Provider identifier."
               },
               "input_tokens": {

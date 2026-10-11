@@ -470,6 +470,47 @@ required to clear that protection.
 [Safety and Privacy](features/safety-and-privacy.md) before using browser
 mutation or sensitive input.
 
+### Check the goal Yantra received
+
+`ask`, `research` (with or without `--no-llm`), and `do` print the goal exactly
+as Yantra received it, on stderr, as one line:
+
+```text
+goal: "<text>"
+```
+
+`ask` and `research` print it on the line right after their `ask:` or
+`research:` settings line. `do` prints it after its own checks (the model
+requirement and `--template` resolution) and before the agent starts, so a `do`
+that is refused prints no goal line. stdout, including `--json` output, is
+unchanged.
+
+The line is made safe to show:
+
+- Credential-shaped values and `@{...}`-marked values print as their
+  placeholders, for example `{{user:api_key:1}}`, never the value.
+- Control characters are removed and runs of whitespace collapse to one space.
+- At most 200 characters are shown. A longer goal ends in `…` followed by
+  ` (N characters received)`.
+- Quotes and backslashes inside the goal are escaped.
+- A goal with a malformed `@{...}` marker prints
+  `goal: [not shown: the goal has a malformed @{...} marker]`, because an
+  unclosed marker may hold a secret.
+
+The line exists because your shell can rewrite the goal before Yantra sees it.
+In bash, `"$40"` inside double quotes expands `$4` (normally empty) followed by
+`0`:
+
+```console
+$ yantra research "under $40"
+research: ...
+goal: "under 0"
+```
+
+Use single quotes (`'under $40'`) or escape the dollar sign (`"under \$40"`) to
+pass it literally. Yantra does not guess at shell expansion; the goal line only
+makes it visible so you can rerun with the intended text.
+
 ## Saved workflows
 
 List and inspect local workflows:

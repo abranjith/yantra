@@ -253,8 +253,13 @@ describe('@no-llm agentic runtime log lifecycle', () => {
       await readFile(join(result.runDir, 'runtime.jsonl'), 'utf8'),
     );
     // The destination was still open while the browser tore down, so the
-    // teardown line is on disk rather than lost to an early close.
-    expect(lines.map((line) => line.event)).toEqual(['browser_ready', 'browser_torn_down']);
+    // teardown line is on disk rather than lost to an early close. FEAT-048's
+    // run_health summary follows teardown and precedes the close.
+    expect(lines.map((line) => line.event)).toEqual([
+      'browser_ready',
+      'browser_torn_down',
+      'run_health',
+    ]);
     expect(result.log?.isClosed()).toBe(true);
   });
 

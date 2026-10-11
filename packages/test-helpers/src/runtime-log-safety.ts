@@ -25,6 +25,10 @@ export const FORBIDDEN_RUNTIME_KEYS: readonly string[] = Object.freeze([
   'err',
   'error',
   'stack',
+  // `cause` is forbidden as a serialized `Error.cause`. The one legal use is
+  // a closed cause TOKEN (FEAT-048 `tool_failure`: `anomaly-challenge`,
+  // `budget:navigations`, `unexpected:TypeError`), which cannot hold prose;
+  // see CLOSED_CAUSE_TOKEN.
   'cause',
   'args',
   'argv',
@@ -47,6 +51,19 @@ export const FORBIDDEN_RUNTIME_KEYS: readonly string[] = Object.freeze([
   'goal',
 ]);
 
+/**
+ * The only shape a `cause` value may take: one short token with no whitespace,
+ * so it can name a closed cause but never carry a message, path, or URL.
+ */
+export const CLOSED_CAUSE_TOKEN = /^[A-Za-z0-9_.:-]{1,80}$/;
+
+/** True for a `cause` entry that is a closed token rather than a serialized error. */
+const isClosedCause = (key: string, value: unknown): boolean =>
+  key === 'cause' &&
+  typeof value === 'string' &&
+  CLOSED_CAUSE_TOKEN.test(value) &&
+  !value.includes('//');
+
 function walk(value: unknown, keys: string[], strings: string[]): void {
   if (typeof value === 'string') {
     strings.push(value);
@@ -58,7 +75,8 @@ function walk(value: unknown, keys: string[], strings: string[]): void {
   }
   if (value !== null && typeof value === 'object') {
     for (const [key, entry] of Object.entries(value)) {
-      keys.push(key);
+      // A closed cause token is legal; its key is not reported as forbidden.
+      if (!isClosedCause(key, entry)) keys.push(key);
       walk(entry, keys, strings);
     }
   }

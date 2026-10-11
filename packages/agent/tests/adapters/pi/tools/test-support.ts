@@ -25,6 +25,7 @@ import {
 } from '../../../../src/runtime/budget.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 import {
   ActionPhase,
   EvidenceLedger,
@@ -58,6 +59,7 @@ export interface BuildServicesOptions {
    * real run earns it from a tool result.
    */
   readonly urlProvenance?: UrlProvenance;
+  readonly runHealth?: RunHealthLedger;
   /**
    * The run's operator diagnostic logger. Absent by default, matching a
    * fixture that injects its own environment; supply a recorder to assert what
@@ -117,6 +119,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     ...(options.userInput ? { userInput: options.userInput } : {}),
     urlPolicy: new UrlPolicy(budgets),
     urlProvenance: options.urlProvenance ?? new UrlProvenance(),
+    runHealth: options.runHealth ?? new RunHealthLedger(),
     confirmation: null,
     actionPhase: new ActionPhase(),
     evidence: new EvidenceLedger(sanitizer),

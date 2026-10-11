@@ -167,12 +167,10 @@ export class AskPipeline {
       );
 
       for (const entry of processed) {
-        if (entry.failure !== null) {
-          safeRecordRankSignal(this.rankSink, {
-            domain: entry.failure.host,
-            delta: -1,
-            reason: rankReasonForFailureStage(entry.failure.stage),
-          });
+        const reason =
+          entry.failure === null ? null : rankReasonForFailureStage(entry.failure.stage);
+        if (entry.failure !== null && reason !== null) {
+          safeRecordRankSignal(this.rankSink, { domain: entry.failure.host, delta: -1, reason });
         }
       }
 

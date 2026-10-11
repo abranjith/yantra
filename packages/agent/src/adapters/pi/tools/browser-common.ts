@@ -312,6 +312,7 @@ export function drainFillMetadata(
   try {
     return mergeActionMetadata(collected, controller.takeActionMetadata());
   } catch {
+    // swallow-ok: optional controller metadata; the drained sink is still complete
     return collected;
   }
 }
@@ -390,6 +391,7 @@ export async function safeLocatorFor(
   try {
     return await controller.locatorFor(ref);
   } catch {
+    // swallow-ok: locator candidates are optional enrichment
     return [];
   }
 }
@@ -479,6 +481,7 @@ export async function followSiteOpenedTab(
       stepId: 'browser_follow_new_tab',
     });
   } catch {
+    // swallow-ok: refused popup adoption leaves popup_intercepted for the model to decide
     // Refused, rate-limited, or unreachable: the tab stays unadopted and the
     // model still has `popup_intercepted` to decide about explicitly.
     return result;
@@ -511,6 +514,7 @@ export async function observeAfterAction(
     const delta = deltaAfterAction(controller);
     return delta === null ? { observation } : { observation, delta };
   } catch {
+    // swallow-ok: the post-action read is best-effort; the action result stands alone
     return {};
   }
 }
@@ -531,6 +535,7 @@ export function deltaAfterAction(controller: AgentBrowserController): PageDelta 
   try {
     return controller.deltaSinceBaseline();
   } catch {
+    // swallow-ok: the page delta is optional enrichment
     return null;
   }
 }

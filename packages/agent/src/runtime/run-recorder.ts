@@ -30,6 +30,8 @@ export interface RunRecorderOptions {
   readonly sdkVersion?: string;
   /** Test/embedding override for capture-metadata logging. */
   readonly logger?: RunRecorderLogger;
+  /** Clock for the first turn's latency baseline (tests); defaults to `new Date()`. */
+  readonly now?: () => Date;
 }
 
 export interface RunRecorderLogger {
@@ -51,6 +53,8 @@ export class RunRecorder {
   private readonly startedCalls = new Map<string, number>();
   private readonly turnUsage: AgentUsage[] = [];
   private readonly unsubscribe: () => void;
+  /** End of the previous turn (or recorder open), the baseline for turn latency. */
+  private lastTurnEndMs: number;
   private eventTail: Promise<void> = Promise.resolve();
   private recordingError: Error | undefined;
   private closePromise: Promise<void> | null = null;
@@ -61,6 +65,7 @@ export class RunRecorder {
     private readonly toolCalls: ToolCallWriter,
     private readonly usage: FileUsageWriter,
   ) {
+    this.lastTurnEndMs = (options.now?.() ?? new Date()).getTime();
     this.unsubscribe = options.session.subscribe((event) => this.enqueueEvent(event));
   }
 
@@ -189,9 +194,30 @@ export class RunRecorder {
         }
         return;
       }
-      case 'turn_finished':
+      case 'turn_finished': {
         this.turnUsage.push(event.usage);
+        // One `usage.json` call per provider turn, so agentic `calls`/`totals`
+        // agree with the `agent` block whenever the provider reports per-turn
+        // usage. `latency_ms` is the turn's wall time measured from the
+        // previous turn's end (or recorder open), so it INCLUDES in-turn tool
+        // execution — it is not pure model latency.
+        const endMs = Date.parse(event.at);
+        const latency = Number.isNaN(endMs)
+          ? 0
+          : Math.max(0, Math.round(endMs - this.lastTurnEndMs));
+        if (!Number.isNaN(endMs)) this.lastTurnEndMs = endMs;
+        await this.usage.append({
+          step_id: `turn-${this.turnUsage.length}`,
+          model: this.options.model.id,
+          provider: this.options.model.provider,
+          input_tokens: event.usage.inputTokens ?? 0,
+          output_tokens: event.usage.outputTokens ?? 0,
+          cost_estimate_usd: event.usage.costUsd ?? null,
+          latency_ms: latency,
+          at: event.at,
+        });
         return;
+      }
       case 'assistant_text':
       case 'failed':
         return;

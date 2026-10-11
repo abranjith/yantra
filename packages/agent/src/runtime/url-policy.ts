@@ -55,6 +55,11 @@ export interface UrlPolicyRejection {
   readonly message: string;
   /** Whether retrying with a corrected URL could succeed. */
   readonly retryable: boolean;
+  /**
+   * Which run budget was spent, set only for `BUDGET_EXHAUSTED`. Callers use
+   * it to attribute the refusal to Yantra's own limit rather than the site.
+   */
+  readonly budgetLimit?: 'navigations' | 'hosts';
 }
 
 /** A URL that passed every policy check. */
@@ -208,5 +213,12 @@ function hostMatches(host: string, allowed: string): boolean {
 
 /** Map a budget exhaustion into a URL policy rejection (never retryable). */
 function budgetRejection(decision: BudgetDecision): UrlPolicyRejection {
-  return { code: 'BUDGET_EXHAUSTED', message: decision.message, retryable: false };
+  return {
+    code: 'BUDGET_EXHAUSTED',
+    message: decision.message,
+    retryable: false,
+    ...(decision.limit === 'navigations' || decision.limit === 'hosts'
+      ? { budgetLimit: decision.limit }
+      : {}),
+  };
 }

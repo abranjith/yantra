@@ -2,7 +2,12 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { AgentManifestSection, ToolAuditEntry } from '@yantra/protocol';
+import {
+  AgentManifestSection,
+  ToolAuditEntry,
+  UsageLedger,
+  type UsageLedger as UsageLedgerType,
+} from '@yantra/protocol';
 import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -380,5 +385,151 @@ describe('@no-llm run recorder and catalog hashing', () => {
         expect(await readFile(artifactPath, 'utf8')).not.toContain(SECRET_CANARY);
       }
     }
+  });
+});
+
+describe('@no-llm run recorder — one usage call per provider turn (FEAT-048)', () => {
+  let root: string;
+  let runDir: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'yantra-run-recorder-usage-'));
+    runDir = join(root, 'run-1');
+    await seedRun(runDir, 'run-1');
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function openRecorder(provider: string) {
+    const session = makeSession(runDir);
+    const recorder = await RunRecorder.open({
+      runId: 'run-1',
+      runDir,
+      session,
+      model: { provider, id: 'model-x' },
+      systemPrompt: 'agent prompt',
+      tools: [],
+      sdkVersion: '0.80.6',
+      now: () => new Date('2026-07-14T12:00:00.000Z'),
+    });
+    return { session, recorder };
+  }
+
+  async function readLedger(): Promise<UsageLedgerType> {
+    return UsageLedger.parse(JSON.parse(await readFile(join(runDir, 'usage.json'), 'utf8')));
+  }
+
+  it('writes one call per turn whose totals agree with the agent block', async () => {
+    const { session, recorder } = await openRecorder('anthropic');
+    const turns = [
+      { at: '2026-07-14T12:00:02.000Z', inputTokens: 100, outputTokens: 20, costUsd: 0.01 },
+      { at: '2026-07-14T12:00:05.500Z', inputTokens: 150, outputTokens: 30, costUsd: 0.02 },
+      { at: '2026-07-14T12:00:06.000Z', inputTokens: 50, outputTokens: 10, costUsd: 0.005 },
+    ];
+    for (const turn of turns) {
+      session.emit({
+        type: 'turn_finished',
+        usage: {
+          turns: 1,
+          inputTokens: turn.inputTokens,
+          outputTokens: turn.outputTokens,
+          costUsd: turn.costUsd,
+        },
+        at: turn.at,
+      });
+    }
+    await recorder.close({ outcome: 'completed', stopReason: 'stop', usage: { turns: 3 } });
+
+    const ledger = await readLedger();
+    expect(ledger.calls).toEqual([
+      {
+        step_id: 'turn-1',
+        model: 'model-x',
+        provider: 'anthropic',
+        input_tokens: 100,
+        output_tokens: 20,
+        cost_estimate_usd: 0.01,
+        latency_ms: 2000,
+        at: '2026-07-14T12:00:02.000Z',
+      },
+      expect.objectContaining({ step_id: 'turn-2', latency_ms: 3500 }),
+      expect.objectContaining({ step_id: 'turn-3', latency_ms: 500 }),
+    ]);
+    expect(ledger.totals.input_tokens).toBe(ledger.agent?.input_tokens);
+    expect(ledger.totals.output_tokens).toBe(ledger.agent?.output_tokens);
+    expect(ledger.totals.cost_estimate_usd).toBeCloseTo(ledger.agent?.cost_usd ?? -1, 10);
+    expect(ledger.totals.call_count).toBe(3);
+    expect(ledger.agent?.turns).toBe(3);
+  });
+
+  it('reports a null total cost when any turn lacks cost, leaving the agent block unchanged', async () => {
+    const { session, recorder } = await openRecorder('anthropic');
+    session.emit({
+      type: 'turn_finished',
+      usage: { turns: 1, inputTokens: 10, outputTokens: 2, costUsd: 0.01 },
+      at: '2026-07-14T12:00:01.000Z',
+    });
+    session.emit({
+      type: 'turn_finished',
+      usage: { turns: 1, inputTokens: 5, outputTokens: 1 },
+      at: '2026-07-14T12:00:02.000Z',
+    });
+    await recorder.close({
+      outcome: 'completed',
+      stopReason: 'stop',
+      usage: { turns: 2, inputTokens: 15, outputTokens: 3, costUsd: 0.04 },
+    });
+
+    const ledger = await readLedger();
+    expect(ledger.calls[1]?.cost_estimate_usd).toBeNull();
+    expect(ledger.totals.cost_estimate_usd).toBeNull();
+    expect(ledger.agent?.cost_usd).toBe(0.04);
+  });
+
+  it('records zero tokens for a turn whose provider reported no usage', async () => {
+    const { session, recorder } = await openRecorder('ollama');
+    session.emit({ type: 'turn_finished', usage: { turns: 1 }, at: '2026-07-14T12:00:01.000Z' });
+    await recorder.close({ outcome: 'completed', stopReason: 'stop', usage: { turns: 1 } });
+
+    const ledger = await readLedger();
+    expect(ledger.calls).toEqual([
+      expect.objectContaining({ input_tokens: 0, output_tokens: 0, cost_estimate_usd: null }),
+    ]);
+    expect(ledger.agent?.input_tokens).toBeNull();
+  });
+
+  it('accepts a registry provider outside the old closed enum (groq)', async () => {
+    const { session, recorder } = await openRecorder('groq');
+    session.emit({
+      type: 'turn_finished',
+      usage: { turns: 1, inputTokens: 1, outputTokens: 1, costUsd: 0 },
+      at: '2026-07-14T12:00:01.000Z',
+    });
+    await recorder.close({ outcome: 'completed', stopReason: 'stop', usage: { turns: 1 } });
+
+    expect((await readLedger()).calls[0]?.provider).toBe('groq');
+  });
+
+  it('clamps latency to zero for a turn timestamp earlier than its baseline', async () => {
+    const { session, recorder } = await openRecorder('anthropic');
+    session.emit({ type: 'turn_finished', usage: { turns: 1 }, at: '2026-07-14T11:59:59.000Z' });
+    session.emit({ type: 'turn_finished', usage: { turns: 1 }, at: '2026-07-14T12:00:01.250Z' });
+    await recorder.close({ outcome: 'completed', stopReason: 'stop', usage: { turns: 2 } });
+
+    const ledger = await readLedger();
+    expect(ledger.calls.map((call) => call.latency_ms)).toEqual([0, 2250]);
+  });
+
+  it('still validates an old agentic usage.json with calls: [] and an agent block', () => {
+    const old = {
+      run_id: 'old-run',
+      calls: [],
+      totals: { input_tokens: 0, output_tokens: 0, cost_estimate_usd: 0, call_count: 0 },
+      agent: { turns: 15, input_tokens: 90000, output_tokens: 4000, cost_usd: 0.165 },
+    };
+
+    expect(UsageLedger.safeParse(old).success).toBe(true);
   });
 });

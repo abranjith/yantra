@@ -29,10 +29,17 @@ import type {
   UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
-import type { Brief, Result, TemplateManifest, TemplatedReport } from '@yantra/protocol';
+import type {
+  Brief,
+  BriefNotice,
+  Result,
+  TemplateManifest,
+  TemplatedReport,
+} from '@yantra/protocol';
 
 import type { BudgetTracker } from './budget.js';
 import type { WorkflowToolMode } from './profiles.js';
+import type { RunHealthLedger } from './run-health.js';
 import type { AgentTrace } from './trace.js';
 import type { UrlPolicy } from './url-policy.js';
 import type { UrlProvenance } from './url-provenance.js';
@@ -52,11 +59,13 @@ export interface ConfirmationServices {
  */
 export interface SearchToolDeps {
   /**
-   * Resolve the active search provider for this run. Returns a retryable error
-   * when no provider is available (missing key, all providers down) so the tool
-   * surfaces a stable error rather than crashing.
+   * Resolve the active search provider for this run. A failure carries the
+   * ORIGINAL typed error (`SearchProviderKeyMissingError`,
+   * `NoSearchProviderAvailableError`, …) so `web_search` can classify the
+   * cause; flattening it to a message is what made configuration failures read
+   * as retryable outages.
    */
-  readonly resolveProvider: () => Promise<Result<SearchProvider, { readonly message: string }>>;
+  readonly resolveProvider: () => Promise<Result<SearchProvider, Error>>;
   /** Maximum search hits requested from the provider (search breadth). */
   readonly resultCap: number;
   /**
@@ -137,14 +146,28 @@ export interface PublishToolDeps {
    * @param brief The candidate content (agent-authored or complete Brief).
    * @param options `assembledByRuntime` marks the deterministic fallback path
    *   (the orchestrator packaging the agent's draft), stamped honestly into the
-   *   Brief's metadata and notices.
+   *   Brief's metadata and notices. `runtimeFacts` are the run's own facts
+   * (`RunHealthLedger.briefFacts()`): their notices are appended after any
+   * existing ones and their provider fills `metadata.search_provider`.
    * @returns `ok(paths+brief)` on a successful, validated publication, or
    *   `err(validationError)` listing offending references.
    */
   readonly publish: (
     brief: unknown,
-    options?: { readonly assembledByRuntime?: boolean },
+    options?: PublishOptions,
   ) => Promise<Result<PublishOutcome, PublishValidationError>>;
+}
+
+/** Runtime-derived facts a publisher attaches to the document it writes. */
+export interface PublishRuntimeFacts {
+  readonly notices: readonly BriefNotice[];
+  readonly searchProvider: string | null;
+}
+
+/** Options for one publication. */
+export interface PublishOptions {
+  readonly assembledByRuntime?: boolean;
+  readonly runtimeFacts?: PublishRuntimeFacts;
 }
 
 /** Shared structural validation error consumed by the publication retry loop. */
@@ -400,6 +423,14 @@ export interface RunServices {
    * to supply it would silently disable the control.
    */
   readonly urlProvenance: UrlProvenance;
+  /**
+   * Run-scoped record of what happened to the run (tool outcomes, per-site
+   * failures, fetches, budget exhaustion, browser launches). Required, not
+   * optional, for the same reason as `urlProvenance`: a construction site that
+   * forgot it would silently drop every runtime-derived notice and the
+   * run-health summary.
+   */
+  readonly runHealth: RunHealthLedger;
   /** Confirmation gateway + persistence, or null when no connector is wired. */
   readonly confirmation: ConfirmationServices | null;
   /** Run-scoped action-phase latch (closed by `result_publish`). */

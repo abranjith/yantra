@@ -9,6 +9,25 @@
       "run": "npm run format",
       "onFailure": "abort",
       "timeoutMs": 120000
+    },
+    {
+      "name": "prepare-worktree",
+      "enabled": true,
+      "options": {
+        "fromBranch": "development"
+      }
+    },
+    {
+      "name": "commit-progress",
+      "enabled": true
+    },
+    {
+      "name": "create-pull-request",
+      "enabled": true,
+      "options": {
+        "provider": "github",
+        "targetBranch": "development"
+      }
     }
   ]
 }

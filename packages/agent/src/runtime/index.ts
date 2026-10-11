@@ -15,6 +15,12 @@ export {
 } from './prompt.js';
 export { UrlProvenance } from './url-provenance.js';
 export {
+  RunHealthLedger,
+  normalizeFetchUrl,
+  type ToolOutcomeRecord,
+  type ToolOutcomeStatus,
+} from './run-health.js';
+export {
   resolveVisionAvailability,
   type ModelVisionCapability,
   type VisionAvailability,

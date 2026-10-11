@@ -5,7 +5,10 @@ import { validateBrief } from '@yantra/protocol';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { DeterministicSynthesizer } from '../../src/synthesis/deterministic.js';
+import {
+  DeterministicSynthesizer,
+  noticesFromFailures,
+} from '../../src/synthesis/deterministic.js';
 import type { SynthesisDoc, SynthesisInput, SynthesisOptions } from '../../src/synthesis/types.js';
 
 import { synthesisInputArb } from './arbitraries.js';
@@ -712,5 +715,36 @@ describe('@no-llm synthesis/DeterministicSynthesizer sentiment opinion demotion 
     expect(result.isOk).toBe(true);
     if (!result.isOk) return;
     expect(JSON.stringify(result.value.brief)).not.toMatch(/sentiment/iu);
+  });
+});
+
+describe('@no-llm noticesFromFailures stage mapping', () => {
+  it('maps every failure stage to its notice kind, keeping the run’s own refusals distinct', () => {
+    const notices = noticesFromFailures([
+      { url: 'https://a.example/', host: 'a.example', stage: 'fetch', reason: 'fetch timed out' },
+      { url: 'https://b.example/', host: 'b.example', stage: 'extract', reason: 'no article' },
+      { url: 'https://c.example/', host: 'c.example', stage: 'blocked', reason: 'robots - no' },
+      {
+        url: 'https://d.example/',
+        host: 'd.example',
+        stage: 'budget',
+        reason: 'budget - Navigation budget of 30 navigations is exhausted.',
+      },
+      {
+        url: 'http://e.example/',
+        host: 'e.example',
+        stage: 'policy',
+        reason: 'policy - https only',
+      },
+    ]);
+
+    expect(notices.map((notice) => notice.kind)).toEqual([
+      'fetch_failed',
+      'extract_failed',
+      'blocked',
+      'budget_exhausted',
+      'other',
+    ]);
+    expect(notices[3]?.source).toBe('d.example');
   });
 });

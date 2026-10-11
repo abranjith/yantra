@@ -91,7 +91,33 @@ describe('@no-llm UrlPolicy rejections', () => {
     expect(policy.check('https://a.com/').isOk).toBe(true);
     const denied = policy.check('https://b.com/');
     expect(denied.isOk).toBe(false);
-    if (!denied.isOk) expect(denied.error.code).toBe('BUDGET_EXHAUSTED');
+    if (!denied.isOk) {
+      expect(denied.error.code).toBe('BUDGET_EXHAUSTED');
+      expect(denied.error.budgetLimit).toBe('hosts');
+    }
+  });
+
+  it('names the navigation limit on a navigation-budget refusal', () => {
+    const budgets = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, maxNavigations: 1 });
+    const policy = new UrlPolicy(budgets, DEFAULT_URL_POLICY_CONFIG);
+
+    expect(policy.check('https://a.com/1').isOk).toBe(true);
+    const denied = policy.check('https://a.com/2');
+
+    expect(denied.isOk).toBe(false);
+    if (!denied.isOk) expect(denied.error.budgetLimit).toBe('navigations');
+  });
+
+  it('sets no budgetLimit on a non-budget refusal', () => {
+    const policy = new UrlPolicy(
+      new BudgetTracker(DEFAULT_BUDGET_LIMITS),
+      DEFAULT_URL_POLICY_CONFIG,
+    );
+
+    const denied = policy.check('not a url');
+
+    expect(denied.isOk).toBe(false);
+    if (!denied.isOk) expect(denied.error.budgetLimit).toBeUndefined();
   });
 });
 

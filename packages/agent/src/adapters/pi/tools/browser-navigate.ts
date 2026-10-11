@@ -156,6 +156,7 @@ function normalizeRefusedUrl(value: string): string {
     url.searchParams.sort();
     return url.toString();
   } catch {
+    // swallow-ok: URL parse helper; an unparseable value is compared as text
     return value.trim();
   }
 }

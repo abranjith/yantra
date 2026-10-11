@@ -29,6 +29,20 @@ export function truncateUtf8(
   };
 }
 
+/**
+ * The longest prefix of `text` that fits in `byteBudget` UTF-8 bytes without
+ * splitting a codepoint. No marker is appended; callers add their own.
+ *
+ * @param text Input text.
+ * @param byteBudget Maximum UTF-8 byte length of the prefix.
+ */
+export function utf8Prefix(text: string, byteBudget: number): string {
+  const normalizedBudget = Number.isFinite(byteBudget) ? Math.max(0, Math.floor(byteBudget)) : 0;
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= normalizedBudget) return text;
+  return bytes.subarray(0, findSafeBoundary(bytes, normalizedBudget)).toString('utf8');
+}
+
 function findSafeBoundary(buffer: Buffer, budget: number): number {
   let end = Math.min(Math.max(0, budget), buffer.length);
 

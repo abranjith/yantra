@@ -119,6 +119,25 @@ describe('@no-llm briefToMarkdown', () => {
     expect(withoutNotice).not.toContain('## Notices');
   });
 
+  it('renders a runtime search_failed notice like every other kind', () => {
+    const md = briefToMarkdown(
+      makeBrief({
+        notices: [
+          {
+            source: 'search:duckduckgo',
+            reason:
+              '9 of 22 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).',
+            kind: 'search_failed',
+          },
+        ],
+      }),
+    );
+
+    expect(md).toContain(
+      '- **search_failed** — search:duckduckgo: 9 of 22 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).',
+    );
+  });
+
   it('is deterministic — identical input yields identical bytes', () => {
     expect(briefToMarkdown(canonicalBrief)).toBe(briefToMarkdown(canonicalBrief));
   });

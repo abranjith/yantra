@@ -1,8 +1,18 @@
 import { z } from 'zod';
 
+/**
+ * Provider used for the model call. A non-empty registry name rather than a
+ * closed enum: the model registry admits more providers (`google`, `groq`,
+ * `mistral`, `openrouter`, `xai`, …) than any fixed list, and a closed enum
+ * made recording one of their turns fail `UsageLedger.parse`. Every value the
+ * old enum allowed remains valid.
+ */
 export const UsageProvider = z
-  .enum(['anthropic', 'ollama', 'openai'])
-  .describe('Provider used for the model call.');
+  .string()
+  .min(1)
+  .describe(
+    'Provider registry name used for the model call (for example `anthropic`, `ollama`, `groq`).',
+  );
 
 export type UsageProvider = z.infer<typeof UsageProvider>;
 

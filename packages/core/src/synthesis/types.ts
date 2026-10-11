@@ -48,8 +48,13 @@ export interface SourceFailure {
   readonly url: string;
   /** Host of the failed source. */
   readonly host: string;
-  /** Which pipeline stage failed. */
-  readonly stage: 'fetch' | 'extract' | 'blocked';
+  /**
+   * Which pipeline stage failed. `fetch`, `extract`, and `blocked` (an ethics
+   * refusal) are the site's outcome. `budget` and `policy` are Yantra's own
+   * refusals — a spent navigation/host budget or the outbound URL policy —
+   * and never count against the site.
+   */
+  readonly stage: 'fetch' | 'extract' | 'blocked' | 'budget' | 'policy';
   /** Human-readable failure reason. */
   readonly reason: string;
 }

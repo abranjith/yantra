@@ -383,6 +383,25 @@ describe('@no-llm brief schema — evidence-first additions (FEAT-FP-001)', () =
     expect(Brief.safeParse(brief).success).toBe(true);
   });
 
+  it('accepts the search_failed notice kind (FEAT-048) and still accepts a Brief without one', () => {
+    const withSearchFailure = makeBrief({
+      notices: [
+        {
+          source: 'search:duckduckgo',
+          reason:
+            '9 of 22 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).',
+          kind: 'search_failed',
+        },
+      ],
+    });
+    const old = makeBrief({
+      notices: [{ source: 'a.example', reason: 'timed out', kind: 'fetch_failed' }],
+    });
+
+    expect(Brief.safeParse(withSearchFailure).success).toBe(true);
+    expect(Brief.safeParse(old).success).toBe(true);
+  });
+
   it('rejects an unknown notice kind', () => {
     const brief = makeBrief({
       notices: [{ source: 'x', reason: 'y', kind: 'totally_made_up' as never }],

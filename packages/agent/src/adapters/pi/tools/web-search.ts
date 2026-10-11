@@ -23,15 +23,18 @@ import {
   safeRecordRankSignal,
   webResearch,
   type AskEthicsGate,
+  type BudgetLimitName,
   type ProcessedSource,
   type SearchResult,
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import { writeCapture } from './capture.js';
+import { mapSearchError } from './search-errors.js';
 
 /** Absolute ceiling on the number of sites fetched+returned to the model. */
 const HARD_FETCH_CAP = 5;
@@ -104,12 +107,10 @@ async function runWebSearch(
 
   const resolved = await deps.resolveProvider();
   if (!resolved.isOk) {
-    return {
-      ok: false,
-      errorCode: 'SEARCH_PROVIDER_UNAVAILABLE',
-      message: resolved.error.message,
-      retryable: true,
-    };
+    // A resolution failure is configuration (missing key, no usable provider),
+    // never a transient outage: classified through the same table as a search
+    // throw, so it is no longer reported as retryable.
+    return mapSearchError(resolved.error, null);
   }
 
   const perFetchTimeoutMs = Math.max(
@@ -117,32 +118,30 @@ async function runWebSearch(
     Math.floor(services.budgets.perToolTimeoutMs * FETCH_TIMEOUT_FRACTION),
   );
 
+  // Which hits the run's own budget refused, and which limit refused each:
+  // filled by the gate, read once when the outcome is projected.
+  const budgetRefusals = new Map<string, BudgetLimitName>();
   let outcome;
   try {
     outcome = await webResearch(
       {
         provider: resolved.value,
-        ethicsGate: buildPerUrlGate(services),
+        ethicsGate: buildPerUrlGate(services, budgetRefusals),
         fetcher: fetchDeps.fetcher,
         extractor: fetchDeps.extractor,
       },
       params.query,
       { fetchTop, resultCap: deps.resultCap, perFetchTimeoutMs, signal },
     );
-  } catch {
-    // Provider search failure/unavailability is retryable, never a crash. (Per-
-    // source fetch/extract failures never throw — they are in `processed`.)
-    return {
-      ok: false,
-      errorCode: 'SEARCH_FAILED',
-      message: 'The search provider failed or is temporarily unavailable.',
-      retryable: true,
-    };
+  } catch (error) {
+    // Only the provider search throws here (per-source fetch/extract failures
+    // are carried on `processed`). Every cause maps to its own stable code.
+    return mapSearchError(error, resolved.value.name);
   }
 
   recordOutcomeRanks(outcome, services);
 
-  return mapOutcome(params.query, resolved.value.name, outcome, services);
+  return mapOutcome(params.query, resolved.value.name, outcome, services, budgetRefusals);
 }
 
 /** Record every provider hit once, plus a negative observation for failures. */
@@ -157,12 +156,11 @@ function recordOutcomeRanks(outcome: WebResearchOutcomeLike, services: RunServic
       delta: 1,
       reason: 'search_result',
     });
-    if (item.failure !== null) {
-      safeRecordRankSignal(services.domain.rank, {
-        domain,
-        delta: -1,
-        reason: rankReasonForFailureStage(item.failure.stage),
-      });
+    // Only site-caused failures are negative evidence about a domain; the
+    // run's own budget and URL-policy refusals (null reason) are not.
+    const reason = item.failure === null ? null : rankReasonForFailureStage(item.failure.stage);
+    if (reason !== null) {
+      safeRecordRankSignal(services.domain.rank, { domain, delta: -1, reason });
     }
   }
 
@@ -180,11 +178,17 @@ function recordOutcomeRanks(outcome: WebResearchOutcomeLike, services: RunServic
 
 /**
  * A per-URL gate that runs the outbound URL policy *then* the ethics gate for
- * every fetched hit, so a policy refusal (length/scheme/credential-shape/host
- * budget) or an ethics block both degrade to a per-site `blocked` failure inside
- * {@link processSource} rather than aborting the whole batch.
+ * every fetched hit, so no refusal aborts the whole batch. The three outcomes
+ * stay distinct inside {@link processSource}: a spent navigation/host budget
+ * is stage `budget`, any other URL-policy refusal is stage `policy` (both the
+ * run's own limits), and only an ethics refusal is stage `blocked`.
+ *
+ * @param budgetRefusals Filled with each budget-refused URL and its limit.
  */
-function buildPerUrlGate(services: RunServices): AskEthicsGate {
+function buildPerUrlGate(
+  services: RunServices,
+  budgetRefusals: Map<string, BudgetLimitName>,
+): AskEthicsGate {
   const ethics = createAskEthicsAdapter(services.domain.fetch.ethics, {
     taskId: services.runId,
     runId: services.runId,
@@ -195,7 +199,18 @@ function buildPerUrlGate(services: RunServices): AskEthicsGate {
     async checkUrl(url) {
       const allowed = services.urlPolicy.check(url);
       if (!allowed.isOk) {
-        return { ok: false, reason: 'blocklist', detail: `url-policy: ${allowed.error.message}` };
+        const rejection = allowed.error;
+        if (rejection.code === 'BUDGET_EXHAUSTED') {
+          const limit = rejection.budgetLimit ?? 'navigations';
+          budgetRefusals.set(url, limit);
+          return { ok: false, reason: 'budget', limit, detail: rejection.message };
+        }
+        return {
+          ok: false,
+          reason: 'policy',
+          code: rejection.code,
+          detail: `url-policy: ${rejection.message}`,
+        };
       }
       return ethics.checkUrl(allowed.value.url);
     },
@@ -213,14 +228,22 @@ async function mapOutcome(
   provider: string,
   outcome: WebResearchOutcomeLike,
   services: RunServices,
+  budgetRefusals: ReadonlyMap<string, BudgetLimitName>,
 ): Promise<DomainResult> {
   const threshold = services.domain.fetch.captureThresholdBytes;
   const sites: unknown[] = [];
   const failures: { url: string; stage: string; reason: string }[] = [];
+  const skippedByLimit = new Map<BudgetLimitName, number>();
   let captureCount = 0;
   let n = 0;
 
   for (const item of outcome.processed) {
+    // A real network fetch happened whenever a fetch mode is known, including
+    // a page that was fetched but could not be extracted.
+    const fetchedUrl = item.doc?.url ?? item.failure?.url;
+    if (item.fetchMode !== null && fetchedUrl !== undefined) {
+      services.runHealth.recordFetch(fetchedUrl, item.fetchMode);
+    }
     if (item.doc) {
       n += 1;
       const doc = item.doc;
@@ -253,6 +276,19 @@ async function mapOutcome(
         sites.push({ ...base, text: doc.text });
       }
     } else if (item.failure) {
+      if (item.failure.stage === 'budget') {
+        // Reported once at the top level, never per site: the site did
+        // nothing, and a per-site line read as the site refusing the run.
+        const limit = budgetRefusals.get(item.failure.url) ?? 'navigations';
+        skippedByLimit.set(limit, (skippedByLimit.get(limit) ?? 0) + 1);
+        continue;
+      }
+      services.runHealth.recordSourceFailure({
+        tool: 'web_search',
+        host: item.failure.host,
+        stage: item.failure.stage,
+        reason: item.failure.reason,
+      });
       failures.push({
         url: item.failure.url,
         stage: item.failure.stage,
@@ -260,6 +296,11 @@ async function mapOutcome(
       });
     }
   }
+
+  for (const [limit, skipped] of skippedByLimit) {
+    services.runHealth.recordBudgetExhaustion(limit, 'web_search', skipped);
+  }
+  const budget = budgetReport(skippedByLimit);
 
   const moreResults = outcome.remaining.map((hit) => ({
     url: hit.url,
@@ -277,6 +318,7 @@ async function mapOutcome(
       sites,
       more_results: moreResults,
       failures,
+      ...(budget === null ? {} : { budget }),
       // Small local models cannot reliably round-trip URLs into a typed
       // payload (observed: sources: [{url: "N/A"}], and a post-nudge re-search
       // that changed the answer). Sources now attach from the run's evidence
@@ -286,12 +328,40 @@ async function mapOutcome(
         'result_publish with your title and overview — do not search again for the same topic ' +
         'and do not re-type URLs.',
     },
+    diagnostic: { provider },
     details: {
       provider,
       fetched: sites.length,
       failed: failures.length,
+      ...(budget === null
+        ? {}
+        : { budget_limit: budget.exhausted, skipped_reads: budget.skipped_reads }),
       more_results: moreResults.length,
       captures: captureCount,
     },
+  };
+}
+
+/**
+ * The single top-level report of reads the run's own budget skipped, or null
+ * when none were. With more than one limit spent, the first one hit is named
+ * and the skipped reads are summed.
+ */
+function budgetReport(skippedByLimit: ReadonlyMap<BudgetLimitName, number>): {
+  readonly exhausted: BudgetLimitName;
+  readonly skipped_reads: number;
+  readonly message: string;
+} | null {
+  const first = skippedByLimit.keys().next();
+  if (first.done === true) return null;
+  const limit = first.value;
+  const skipped = [...skippedByLimit.values()].reduce((sum, count) => sum + count, 0);
+  return {
+    exhausted: limit,
+    skipped_reads: skipped,
+    message: renderAgentMessage('tool', 'BUDGET_EXHAUSTED', 'search-reads-skipped', {
+      limit,
+      skipped,
+    }),
   };
 }

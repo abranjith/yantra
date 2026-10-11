@@ -1,0 +1,257 @@
+{
+  "$ref": "#/definitions/RunHealth",
+  "definitions": {
+    "RunHealth": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Run-health schema version."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "searches": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Searches attempted (ok + failed)."
+            },
+            "ok": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Searches that returned results."
+            },
+            "failed_by_code": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "propertyNames": {
+                "minLength": 1
+              },
+              "description": "Failed searches by stable failure code."
+            },
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Distinct search providers used, in first-use order."
+            }
+          },
+          "required": [
+            "total",
+            "ok",
+            "failed_by_code",
+            "providers"
+          ],
+          "additionalProperties": false,
+          "description": "Web searches by outcome."
+        },
+        "fetches": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Real network page fetches."
+            },
+            "by_mode": {
+              "type": "object",
+              "properties": {
+                "http": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Pages served by the HTTP tier."
+                },
+                "browser": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Pages served by a browser render."
+                }
+              },
+              "required": [
+                "http",
+                "browser"
+              ],
+              "additionalProperties": false,
+              "description": "Network fetches by how they were served."
+            },
+            "repeat_fetches": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Network fetches of a normalized URL already fetched earlier in the run."
+            },
+            "failed_by_code": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+              },
+              "propertyNames": {
+                "minLength": 1
+              },
+              "description": "Failed `web_fetch` calls by stable error code."
+            }
+          },
+          "required": [
+            "total",
+            "by_mode",
+            "repeat_fetches",
+            "failed_by_code"
+          ],
+          "additionalProperties": false,
+          "description": "Network page fetches."
+        },
+        "source_failures": {
+          "type": "object",
+          "properties": {
+            "fetch": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-site fetch failures."
+            },
+            "extract": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-site pages fetched but not readable."
+            },
+            "blocked": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-site ethics refusals (robots, blocklist, rate limit)."
+            },
+            "budget": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Page reads skipped by the run's own navigation/host budget (web_search sites and web_fetch calls)."
+            },
+            "policy": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-site reads refused by the run's own URL policy."
+            }
+          },
+          "required": [
+            "fetch",
+            "extract",
+            "blocked",
+            "budget",
+            "policy"
+          ],
+          "additionalProperties": false,
+          "description": "Per-site read failures inside multi-source tools, by stage."
+        },
+        "browser": {
+          "type": "object",
+          "properties": {
+            "launches": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Successful browser process launches."
+            }
+          },
+          "required": [
+            "launches"
+          ],
+          "additionalProperties": false,
+          "description": "Browser processes."
+        },
+        "budgets": {
+          "type": "object",
+          "properties": {
+            "navigations_used": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Navigations consumed."
+            },
+            "navigations_limit": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Configured navigation ceiling."
+            },
+            "hosts_used": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Distinct hosts consumed."
+            },
+            "hosts_limit": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Configured distinct-host ceiling."
+            },
+            "exhausted": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Budget limits that refused at least one call, in first-hit order."
+            }
+          },
+          "required": [
+            "navigations_used",
+            "navigations_limit",
+            "hosts_used",
+            "hosts_limit",
+            "exhausted"
+          ],
+          "additionalProperties": false,
+          "description": "Run budget consumption."
+        },
+        "tool_failures": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Tool calls that ended in error or timeout."
+            },
+            "by_code": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+              },
+              "propertyNames": {
+                "minLength": 1
+              },
+              "description": "Failed tool calls by stable error code."
+            }
+          },
+          "required": [
+            "total",
+            "by_code"
+          ],
+          "additionalProperties": false,
+          "description": "Tool failures across every tool."
+        },
+        "notices": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runtime-derived notices attached to the published document; 0 when nothing was published."
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "searches",
+        "fetches",
+        "source_failures",
+        "browser",
+        "budgets",
+        "tool_failures",
+        "notices"
+      ],
+      "additionalProperties": false,
+      "description": "An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

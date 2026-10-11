@@ -33,6 +33,7 @@ import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';
+import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
@@ -131,6 +132,9 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
           runtime.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
           throw error;
         });
+  // The goal exactly as received, before the agent starts, so a shell-rewritten
+  // argument is visible. Same spelling as `ask` and `research`.
+  runtime.stderr.write(renderGoalEcho(goal));
   const json = options.json === true;
   const renderOpts: ConnectorRenderOpts = {
     json,

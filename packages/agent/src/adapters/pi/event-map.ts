@@ -9,7 +9,7 @@
  */
 
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
-import { sanitize } from '@yantra/core';
+import { sanitize, sanitizeStructured } from '@yantra/core';
 
 import type { AgentError, AgentEvent, AgentUsage } from '../../provider/types.js';
 
@@ -50,22 +50,16 @@ export function createDefaultPiEventMapContext(): PiEventMapContext {
   const sanitizeText = (text: string): string => sanitize(text, 'authenticated').text;
   return {
     sanitizeText,
-    // Mapping decision: the sanitizer is text-based, so structured payloads
-    // are serialized, sanitized, then re-parsed when the result is still
-    // valid JSON. Redaction or truncation can break JSON validity — in that
-    // case the sanitized *text* is emitted. Consumers treat `input`/`output`
-    // as opaque `unknown` either way.
-    sanitizePayload: (payload: unknown): unknown => {
-      const sanitized = sanitize(payload, 'authenticated');
-      if (typeof payload === 'string') {
-        return sanitized.text;
-      }
-      try {
-        return JSON.parse(sanitized.text) as unknown;
-      } catch {
-        return sanitized.text;
-      }
-    },
+    // Mapping decision: structured payloads are sanitized leaf by leaf
+    // (`sanitizeStructured`), never serialized-sanitized-reparsed. The text
+    // path corrupted double-encoded `content[].text` (a URL pattern swallowed
+    // an escaped quote), so the stable `tool-calls.jsonl` projection stored
+    // unparseable strings. Every leaf, including JSON-in-string leaves, gets
+    // the identical `authenticated` redaction, and the byte cap shortens
+    // leaves instead of cutting the serialization, so the output is always
+    // structured JSON.
+    sanitizePayload: (payload: unknown): unknown =>
+      sanitizeStructured(payload, 'authenticated').value,
     now: () => new Date().toISOString(),
   };
 }

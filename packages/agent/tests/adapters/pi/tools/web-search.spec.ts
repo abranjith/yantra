@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import {
   EthicsRefusedError,
   FetchError,
+  NoSearchProviderAvailableError,
+  ScrapeSearchError,
   type ContentFetcher,
   type DomainRankSignal,
   type EthicsGate,
@@ -280,7 +282,7 @@ describe('@no-llm web_search combined tool', () => {
     expect(stages).toEqual(['extract', 'fetch']);
   });
 
-  it('surfaces a URL-policy refusal as a per-site blocked failure, not a whole-tool error', async () => {
+  it('surfaces a URL-policy refusal as a per-site policy failure, not a whole-tool error', async () => {
     // The default URL policy requires https; an http hit is refused per-site.
     const hits = [
       hit({ url: 'http://insecure.com/', rank: 1 }),
@@ -309,9 +311,10 @@ describe('@no-llm web_search combined tool', () => {
     expect(result.status).toBe('ok');
     const payload = JSON.parse(result.modelText) as SitePayload;
     expect(payload.sites.map((s) => s.url)).toEqual(['https://ok.com/']);
-    const blocked = payload.failures.find((f) => f.url === 'http://insecure.com/');
-    expect(blocked?.stage).toBe('blocked');
-    expect(blocked?.reason).toMatch(/url-policy/i);
+    const refused = payload.failures.find((f) => f.url === 'http://insecure.com/');
+    // The run's own URL policy refused it: stage `policy`, never `blocked`.
+    expect(refused?.stage).toBe('policy');
+    expect(refused?.reason).toMatch(/url-policy/i);
   });
 
   it('surfaces an ethics block as a per-site blocked failure', async () => {
@@ -356,12 +359,12 @@ describe('@no-llm web_search combined tool', () => {
     expect(payload.failures.find((f) => f.url === 'https://robots.com/')?.stage).toBe('blocked');
   });
 
-  it('returns the stable SEARCH_PROVIDER_UNAVAILABLE retryable error when no provider resolves', async () => {
+  it('classifies a resolve-time NoSearchProviderAvailableError as non-retryable SEARCH_PROVIDER_UNAVAILABLE', async () => {
     const services = buildServices({
       runDir,
       search: {
         resolveProvider: () =>
-          Promise.resolve({ isOk: false, error: { message: 'no key configured' } }),
+          Promise.resolve({ isOk: false, error: new NoSearchProviderAvailableError(['tavily']) }),
         resultCap: 5,
         fetchTop: 3,
       },
@@ -372,10 +375,11 @@ describe('@no-llm web_search combined tool', () => {
 
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('SEARCH_PROVIDER_UNAVAILABLE');
-    expect(result.retryable).toBe(true);
+    expect(result.retryable).toBe(false);
+    expect(result.modelText).toMatch(/yantra init/);
   });
 
-  it('maps a provider search throw to a retryable SEARCH_FAILED, not a crash', async () => {
+  it('maps an unknown provider throw to non-retryable SEARCH_FAILED, never TOOL_EXECUTION_FAILED', async () => {
     const services = buildServices({
       runDir,
       search: {
@@ -394,7 +398,35 @@ describe('@no-llm web_search combined tool', () => {
 
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('SEARCH_FAILED');
-    expect(result.retryable).toBe(true);
+    expect(result.retryable).toBe(false);
+    expect(result.modelText).not.toContain('boom');
+  });
+
+  it('reports a typed anomaly challenge as SEARCH_BLOCKED with provider-specific advice', async () => {
+    const challenge = new ScrapeSearchError('DuckDuckGo served an anti-bot challenge', {
+      provider: 'duckduckgo',
+      code: 'anomaly-challenge',
+    });
+    const services = buildServices({
+      runDir,
+      search: {
+        resolveProvider: () =>
+          Promise.resolve({
+            isOk: true,
+            value: { name: 'duckduckgo', search: () => Promise.reject(challenge) },
+          }),
+        resultCap: 5,
+        fetchTop: 3,
+      },
+    });
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    const result = await tool.execute({ query: 'x' }, undefined);
+
+    expect(result.error_code).toBe('SEARCH_BLOCKED');
+    expect(result.retryable).toBe(false);
+    const parsed = JSON.parse(result.modelText) as { message: string };
+    expect(parsed.message).toMatch(/^duckduckgo served an anti-bot challenge/);
   });
 
   it('sanitizes credential canaries out of untrusted page content', async () => {
@@ -523,5 +555,168 @@ describe('@no-llm web_search combined tool', () => {
     );
 
     expect(result.status).toBe('ok');
+  });
+});
+
+describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G6)", () => {
+  function searchServices(
+    hits: readonly SearchResult[],
+    options: {
+      readonly limits?: NonNullable<Parameters<typeof buildServices>[0]>['limits'];
+      readonly signals?: DomainRankSignal[];
+      readonly ethics?: EthicsGate;
+    } = {},
+  ) {
+    return buildServices({
+      runDir,
+      ...(options.limits ? { limits: options.limits } : {}),
+      domain: { rank: { record: (signal) => options.signals?.push(signal) } },
+      search: {
+        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        resultCap: 5,
+        fetchTop: 5,
+      },
+      fetch: {
+        fetcher: keyedFetcher(),
+        extractor: textExtractor((url) => `body ${url}`),
+        ethics: options.ethics ?? allowingEthics(),
+        allowedContentTypes: ['text/html'],
+        maxContentBytes: 1024 * 1024,
+        captureThresholdBytes: 16 * 1024,
+      },
+    });
+  }
+
+  interface BudgetPayload extends SitePayload {
+    readonly budget?: { exhausted: string; skipped_reads: number; message: string };
+  }
+
+  it('reports navigation exhaustion once at the top, never per site, and records no rank penalty', async () => {
+    const signals: DomainRankSignal[] = [];
+    const hits = [
+      hit({ url: 'https://one.example/', rank: 1 }),
+      hit({ url: 'https://two.example/', rank: 2 }),
+      hit({ url: 'https://three.example/', rank: 3 }),
+    ];
+    const services = searchServices(hits, { limits: { maxNavigations: 1 }, signals });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const payload = JSON.parse(result.modelText) as BudgetPayload;
+    expect(payload.sites).toHaveLength(1);
+    expect(payload.failures.filter((f) => f.stage === 'blocked' || f.stage === 'budget')).toEqual(
+      [],
+    );
+    expect(payload.budget).toMatchObject({ exhausted: 'navigations', skipped_reads: 2 });
+    expect(payload.budget?.message).toMatch(/Yantra's own navigation budget/);
+    expect(payload.budget?.message).toContain('result_publish');
+    expect(signals.every((signal) => signal.reason === 'search_result')).toBe(true);
+    expect([...services.runHealth.budgetExhaustions()]).toEqual([
+      ['navigations', { firstTool: 'web_search', skippedReads: 2 }],
+    ]);
+    expect(services.runHealth.sourceFailures()).toEqual([]);
+    expect(services.runHealth.fetches()).toHaveLength(1);
+  });
+
+  it('names the hosts limit when the distinct-host budget is what ran out', async () => {
+    const hits = [
+      hit({ url: 'https://one.example/', rank: 1 }),
+      hit({ url: 'https://two.example/', rank: 2 }),
+    ];
+    const services = searchServices(hits, { limits: { maxHosts: 1 } });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as BudgetPayload;
+    expect(payload.budget).toMatchObject({ exhausted: 'hosts', skipped_reads: 1 });
+    expect(payload.budget?.message).toMatch(/distinct-host budget/);
+  });
+
+  it('reports a URL_TOO_LONG hit as stage policy with no rank signal', async () => {
+    const signals: DomainRankSignal[] = [];
+    const longUrl = `https://long.example/${'a'.repeat(2100)}`;
+    const services = searchServices([hit({ url: longUrl, rank: 1 })], { signals });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as BudgetPayload;
+    expect(payload.failures).toHaveLength(1);
+    expect(payload.failures[0]?.stage).toBe('policy');
+    expect(payload.budget).toBeUndefined();
+    expect(signals).toEqual([{ domain: 'long.example', delta: 1, reason: 'search_result' }]);
+    expect(services.runHealth.sourceFailures()).toMatchObject([
+      { tool: 'web_search', host: 'long.example', stage: 'policy' },
+    ]);
+  });
+
+  it('keeps an ethics robots refusal as stage blocked with a blocked rank signal', async () => {
+    const signals: DomainRankSignal[] = [];
+    const refusal = new EthicsRefusedError(
+      {
+        host: 'robots.example',
+        rule: 'Disallow: /',
+        reason: 'disallowed by robots.txt',
+        source: 'robots',
+      },
+      { taskId: 't', runId: 'r', stepId: 'web_search' },
+    );
+    const services = searchServices([hit({ url: 'https://robots.example/', rank: 1 })], {
+      signals,
+      ethics: { check: () => Promise.reject(refusal) },
+    });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as BudgetPayload;
+    expect(payload.failures[0]?.stage).toBe('blocked');
+    expect(signals).toEqual([
+      { domain: 'robots.example', delta: 1, reason: 'search_result' },
+      { domain: 'robots.example', delta: -1, reason: 'blocked' },
+    ]);
+  });
+
+  it('records fetches (including fetched-but-unreadable pages) and per-site failures in the ledger', async () => {
+    const hits = [
+      hit({ url: 'https://ok.example/', rank: 1 }),
+      hit({ url: 'https://timeout.example/', rank: 2 }),
+    ];
+    const services = buildServices({
+      runDir,
+      search: {
+        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        resultCap: 5,
+        fetchTop: 2,
+      },
+      fetch: {
+        fetcher: keyedFetcher(),
+        extractor: textExtractor(() => null),
+      },
+    });
+
+    await wrapTool(webSearchSpec(services), services).execute({ query: 'x' }, undefined);
+
+    expect(services.runHealth.fetches()).toEqual([
+      { normalizedUrl: 'https://ok.example/', mode: 'http' },
+    ]);
+    expect(services.runHealth.sourceFailures().map((f) => `${f.host}:${f.stage}`)).toEqual([
+      'ok.example:extract',
+      'timeout.example:fetch',
+    ]);
+    expect(services.runHealth.toolOutcomes()).toMatchObject([
+      { tool: 'web_search', status: 'ok', provider: 'duckduckgo' },
+    ]);
   });
 });

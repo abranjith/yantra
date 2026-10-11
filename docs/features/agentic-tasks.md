@@ -147,6 +147,32 @@ The model sees the code, that message, and `retryable: false`. The sanitized `de
 
 These codes cover browser startup only. An ordinary site or navigation fault is still reported to the model as the generic, retryable `TOOL_EXECUTION_FAILED`, and `web_fetch`'s own `FETCH_TIMEOUT`, `CONTENT_TOO_LARGE`, `FETCH_HTTP_ERROR`, `FETCH_FAILED`, `CONTENT_TYPE_REFUSED`, and `EXTRACTION_EMPTY` results, along with its ethics refusals, are unaffected.
 
+**A failed web search says why, names the provider, and offers one move the agent can actually make.** Every `web_search` provider failure maps through one ordered table to a stable code, and a failure to resolve the configured provider is classified the same way and is never reported as retryable. The model-visible message names the provider, says whether a retry can help, and gives one next step: search once more, `web_fetch` a URL an earlier result already returned, or finish with `result_publish`. Setup commands such as `yantra init` appear only as advice for the agent to relay to the user; nothing in a run can add a key or change the provider.
+
+| Code                          | When                                                                                                                                                                                                                            | Retryable |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `SEARCH_BLOCKED`              | The provider served an anti-bot challenge instead of results, or rejected the search because its rate limit was reached.                                                                                                        | No        |
+| `SEARCH_NO_RESULTS`           | The search itself worked and returned nothing. The agent is told to reformulate the query once and, if that also returns nothing, to publish and say so.                                                                        | Yes       |
+| `SEARCH_TIMEOUT`              | The search timed out before results arrived.                                                                                                                                                                                    | Yes       |
+| `SEARCH_PROVIDER_UNAVAILABLE` | Yantra's ethics policy refused the provider's search page, the provider needs an API key that is not configured, no configured provider is usable, the configured provider is not recognized, or the provider rejected the key. | No        |
+|                               | The provider returned a server (5xx) error.                                                                                                                                                                                     | Yes       |
+| `SEARCH_FAILED`               | Loading the provider's results page failed before any results could be read.                                                                                                                                                    | Yes       |
+|                               | The provider refused the request (4xx), answered with a response Yantra could not read, the search was cancelled, or the failure could not be classified.                                                                       | No        |
+
+A scraped provider whose results-page browser cannot start returns the browser startup code from the table above, with that table's message, rather than a search code. The result's `details` carry the provider name and a closed cause token, never the provider's own error text.
+
+**Reads skipped by the run's own budget are reported once, never as the sites' fault.** A successful `web_search` returns `sites` it read and per-site `failures`, each with a `stage`. When the run's navigation or distinct-host budget refuses a hit's read, that hit appears in neither list and is never reported as `blocked`; the result instead carries one top-level `budget` object:
+
+| Field           | Meaning                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `exhausted`     | The limit that refused the reads, `navigations` or `hosts`. With both spent, the first is named. |
+| `skipped_reads` | How many hits were not read, summed across limits.                                               |
+| `message`       | Fixed wording that names the limit and the count, as below.                                      |
+
+> Yantra's own navigation budget for this run is spent, so 3 further search result(s) were not read. This is the run limit, not the sites refusing you, and searching again cannot read more pages. Finish with result_publish now; the evidence already gathered is attached automatically.
+
+For the host limit the message says `distinct-host` in place of `navigation`. Any other URL-policy refusal of a hit is a per-site failure with stage `policy`; only an ethics refusal is stage `blocked`. Neither a budget nor a policy refusal counts against that site's ranking, because the run's own limits refused the read, not the site.
+
 The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. Without both, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
 
 ## How to Use It
@@ -256,6 +282,16 @@ Template mode writes `document.json`, `document.md`, and `document.html` in plac
 
 `runtime.jsonl` is local operator diagnostics for the run: which browser and driver it used, why that browser was selected, whether the compatibility evidence came from cache or a fresh probe, and the safe class of any browser startup failure or unexpected tool failure. It is never sent to the model, never part of the published result, and never an evidence source, and it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` only when it exists; a run that hands off before building an environment, such as the location pre-flight described above, has none. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
 
+**A published document also carries notices the runtime derives from the run's own record.** This applies whether the agent published the Brief, the runtime assembled the fallback Brief, or a templated report was published. The runtime notices are appended after any notices the document already has, so the runtime-assembly notice stays first. They are built only from fixed phrase tables, counts, and hostnames, never from page or provider text, in this order:
+
+| Kind                                                 | Source              | When                                                                                                                                                                                                                   |
+| ---------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_failed`                                      | `search:<provider>` | One per failure code among the searches the run attempted, for example `2 of 3 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).` The source is `search` when no provider was resolved. |
+| `budget_exhausted`                                   | `runtime`           | One per spent navigation or distinct-host limit, quoting the ceiling and how many page reads were not attempted.                                                                                                       |
+| `fetch_failed`, `extract_failed`, `blocked`, `other` | the hostname        | One per host and failure kind across `web_search` sites and `web_fetch` calls. `other` means Yantra's URL policy refused reads on that host; `blocked` names the robots, rate-limit, or blocklist refusal.             |
+
+A `web_search` call refused before the provider was asked, or one that was aborted or denied, is not counted as an attempted search. At most 10 runtime notices are attached: past that, the first nine are kept and a final `other` notice with source `runtime` reads `N more run notices are summarized in report.md under Run Health.` `metadata.search_provider` names the distinct providers the run searched through, joined by `, `, and stays `null` when no search ran. The same record produces the report's Run Health section and `run-health.json`; see [Run Health](diagnostics-and-audit.md#run-health).
+
 ### Exit codes and failures
 
 |  Exit | Meaning for `do`                                                                                                                                                                         |
@@ -297,6 +333,7 @@ Personalization includes only approved, sanitized preferences. Date, timezone, a
 - Browser control depends on observable, accessible page semantics. Hidden, disabled, ambiguous, stale, or unusually implemented controls may return typed failures. The fill engine retries boundedly and never claims success without verifying the committed value.
 - Multi-field form fill accepts one through ten non-secret fields and does not submit. Stored secrets must be filled individually with host binding and confirmation. Literal credential-shaped fill values are refused.
 - `web_fetch` accepts readable text pages, not PDFs, images, binaries, paywall bypasses, or arbitrary downloads. JavaScript-heavy pages, bot defenses, CAPTCHAs, robots rules, and rate limits can reduce evidence or require handoff.
+- A `SEARCH_BLOCKED` result tells the agent not to search again in the run, but the runtime does not refuse a later `web_search` call after one.
 - Evidence-ledger sources prove which pages Yantra consulted; they do not prove that every model-authored statement is entailed, correct, or current. Inspect consequential claims and notices against the linked sources.
 - Report-template runs require a valid model-authored slot payload. The runtime cannot safely assemble a missing templated report from free-form draft prose, so an invalid or missing template publication remains a failure.
 - `--save-as` promotes only the successful browser trace. It cannot preserve transient login state or run-scoped marked values, and later replay may still need workflow parameters, stored website secrets, confirmation, and a compatible page structure.

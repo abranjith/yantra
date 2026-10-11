@@ -21,6 +21,7 @@ import {
   type BudgetLimits,
 } from '../../src/runtime/budget.js';
 import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import { ActionPhase, type RunServices } from '../../src/runtime/run-services.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../src/runtime/url-provenance.js';
@@ -64,6 +65,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     ...(overrides.modelValues ? { modelValues: overrides.modelValues } : {}),
     urlPolicy: new UrlPolicy(budgets),
     urlProvenance: new UrlProvenance(),
+    runHealth: new RunHealthLedger(),
     confirmation: overrides.gateway ? { gateway: overrides.gateway, store: null } : null,
     actionPhase: overrides.actionPhase ?? new ActionPhase(),
     evidence: { isEmpty: () => true, entries: () => [], add: () => undefined } as never,
@@ -563,7 +565,7 @@ describe('@no-llm middleware error genericization and sanitization', () => {
     expect(JSON.stringify(result)).not.toContain(CANARY);
   });
 
-  it('writes nothing to the run log for an expected domain failure', async () => {
+  it('writes exactly one tool_failure warning, and no error line, for an expected domain failure', async () => {
     const runtimeLogger = recordingLogger();
     const services = makeServices({ runtimeLogger });
     const run = async (): Promise<DomainResult> => ({
@@ -575,10 +577,20 @@ describe('@no-llm middleware error genericization and sanitization', () => {
 
     const result = await wrapTool(spec(run), services).execute({ q: 'a' }, undefined);
 
-    // A mapped refusal is not an unexpected exception; recording it here would
-    // make every ordinary refusal look like a crash to whoever reads the log.
+    // A mapped refusal is not an unexpected exception, so it never writes the
+    // error-level `tool_unexpected_failure` line; FEAT-048 does record it as
+    // one warn-level `tool_failure`, so failures are no longer invisible.
     expect(result.error_code).toBe('BROWSER_RESOLUTION_FAILED');
-    expect(runtimeLogger.lines).toEqual([]);
+    expect(runtimeLogger.lines).toEqual([
+      {
+        level: 'warn',
+        schema_version: 1,
+        event: 'tool_failure',
+        tool: 'demo_tool',
+        code: 'BROWSER_RESOLUTION_FAILED',
+        cause: 'browser-resolution-failed',
+      },
+    ]);
   });
 
   it('sanitizes credential shapes out of a successful model payload', async () => {
@@ -763,5 +775,320 @@ describe('@no-llm middleware model-supplied value preservation', () => {
 
     expect(result.modelText).not.toContain('john.doe@example.com');
     expect(result.modelText).not.toContain('415-555-0142');
+  });
+});
+
+describe('@no-llm middleware outcome chokepoint (FEAT-048)', () => {
+  const failureLines = (logger: { readonly lines: Record<string, unknown>[] }) =>
+    logger.lines.filter((line) => line.event === 'tool_failure');
+
+  /** Run one call and return its result, warn lines, and ledger outcomes. */
+  async function once(
+    toolSpec: ToolWrapperSpec<ReturnType<typeof paramsSchema>>,
+    overrides: ServicesOverrides = {},
+    params: unknown = { q: 'a' },
+    mutate: (services: RunServices) => RunServices = (services) => services,
+  ) {
+    const runtimeLogger = recordingLogger();
+    const services = mutate(makeServices({ ...overrides, runtimeLogger }));
+    const result = await wrapTool(toolSpec, services).execute(params, undefined);
+    return {
+      result,
+      warns: failureLines(runtimeLogger),
+      lines: runtimeLogger.lines,
+      outcomes: services.runHealth.toolOutcomes(),
+    };
+  }
+
+  it('INVALID_INPUT → cause schema-validation', async () => {
+    const { warns, outcomes } = await once(
+      spec(async () => OK),
+      {},
+      { q: 1 },
+    );
+
+    expect(warns).toEqual([
+      expect.objectContaining({
+        tool: 'demo_tool',
+        code: 'INVALID_INPUT',
+        cause: 'schema-validation',
+      }),
+    ]);
+    expect(outcomes).toEqual([
+      { tool: 'demo_tool', status: 'error', code: 'INVALID_INPUT', cause: 'schema-validation' },
+    ]);
+  });
+
+  it('TOOL_TIMEOUT → status timeout, cause per-tool-timeout', async () => {
+    const never = (): Promise<DomainResult> => new Promise<DomainResult>(() => undefined);
+
+    const { warns, outcomes } = await once(spec(never), { limits: { perToolTimeoutMs: 10 } });
+
+    expect(warns).toEqual([
+      expect.objectContaining({ code: 'TOOL_TIMEOUT', cause: 'per-tool-timeout' }),
+    ]);
+    expect(outcomes).toEqual([
+      { tool: 'demo_tool', status: 'timeout', code: 'TOOL_TIMEOUT', cause: 'per-tool-timeout' },
+    ]);
+  });
+
+  it('a reservation refusal → cause budget:<limit> with budget_limit', async () => {
+    const { warns, outcomes } = await once(
+      spec(async () => OK),
+      { limits: { maxBytesPerRun: 1 } },
+      { q: 'a' },
+      (services) => {
+        services.budgets.accountResultBytes(2);
+        return services;
+      },
+    );
+
+    expect(warns).toEqual([
+      {
+        level: 'warn',
+        schema_version: 1,
+        event: 'tool_failure',
+        tool: 'demo_tool',
+        code: 'BUDGET_EXHAUSTED',
+        cause: 'budget:cumulative-bytes',
+        budget_limit: 'cumulative-bytes',
+      },
+    ]);
+    expect(outcomes[0]).toMatchObject({ status: 'error', budgetLimit: 'cumulative-bytes' });
+  });
+
+  it('a result-bytes refusal → cause budget:<limit> and keeps the domain diagnostic', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: true,
+      model: { body: 'x'.repeat(64) },
+      diagnostic: { provider: 'duckduckgo' },
+    });
+
+    const { warns, outcomes } = await once(spec(run), { limits: { maxBytesPerRun: 8 } });
+
+    expect(warns).toEqual([
+      expect.objectContaining({
+        code: 'BUDGET_EXHAUSTED',
+        cause: 'budget:cumulative-bytes',
+        provider: 'duckduckgo',
+      }),
+    ]);
+    expect(outcomes).toHaveLength(1);
+  });
+
+  it('EVIDENCE_FROZEN → cause evidence-frozen', async () => {
+    const { warns } = await once(
+      spec(async () => OK, { evidenceGathering: true }),
+      {},
+      { q: 'a' },
+      (services) => ({
+        ...services,
+        evidencePhase: { isFrozen: () => true, freeze: () => undefined } as never,
+      }),
+    );
+
+    expect(warns).toEqual([
+      expect.objectContaining({ code: 'EVIDENCE_FROZEN', cause: 'evidence-frozen' }),
+    ]);
+  });
+
+  it('ACTION_PHASE_CLOSED → cause action-phase-closed', async () => {
+    const actionPhase = new ActionPhase();
+    actionPhase.close();
+
+    const { warns } = await once(
+      spec(async () => OK, { mutating: true }),
+      { actionPhase },
+    );
+
+    expect(warns).toEqual([
+      expect.objectContaining({ code: 'ACTION_PHASE_CLOSED', cause: 'action-phase-closed' }),
+    ]);
+  });
+
+  it('an unexpected throw → cause unexpected:<ErrorClass>, alongside the FEAT-047 error line', async () => {
+    const run = (): Promise<DomainResult> => {
+      throw new RangeError(`boom ${CANARY}`);
+    };
+
+    const { warns, lines, outcomes } = await once(spec(run));
+
+    expect(warns).toEqual([
+      expect.objectContaining({ code: 'TOOL_EXECUTION_FAILED', cause: 'unexpected:RangeError' }),
+    ]);
+    expect(lines.filter((line) => line.event === 'tool_unexpected_failure')).toHaveLength(1);
+    expect(outcomes).toHaveLength(1);
+  });
+
+  it('a domain failure carries its own typed cause, provider, and host', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: false,
+      errorCode: 'SEARCH_BLOCKED',
+      message: 'blocked',
+      retryable: false,
+      diagnostic: {
+        cause: 'anomaly-challenge',
+        provider: 'duckduckgo',
+        host: 'html.duckduckgo.com',
+      },
+    });
+
+    const { warns, outcomes } = await once(spec(run));
+
+    expect(warns).toEqual([
+      {
+        level: 'warn',
+        schema_version: 1,
+        event: 'tool_failure',
+        tool: 'demo_tool',
+        code: 'SEARCH_BLOCKED',
+        cause: 'anomaly-challenge',
+        provider: 'duckduckgo',
+        host: 'html.duckduckgo.com',
+      },
+    ]);
+    expect(outcomes).toEqual([
+      {
+        tool: 'demo_tool',
+        status: 'error',
+        code: 'SEARCH_BLOCKED',
+        cause: 'anomaly-challenge',
+        provider: 'duckduckgo',
+        host: 'html.duckduckgo.com',
+      },
+    ]);
+  });
+
+  it('a policy refusal is recorded with its code-derived cause', async () => {
+    const policy = () =>
+      ({ ok: false, errorCode: 'HOST_BLOCKED', message: 'blocked', retryable: false }) as const;
+
+    const { warns } = await once(spec(async () => OK, { policy }));
+
+    expect(warns).toEqual([
+      expect.objectContaining({ code: 'HOST_BLOCKED', cause: 'host-blocked' }),
+    ]);
+  });
+
+  it('denied consent and an aborted run are recorded but never warned', async () => {
+    const deny: ConfirmationGateway = {
+      request: (req: ConfirmationRequest): Promise<ConfirmationOutcome> =>
+        Promise.resolve({
+          confirmation_id: req.confirmation_id,
+          decision: 'denied',
+          decided_at: new Date().toISOString(),
+          decided_by: 'user_interactive',
+        }),
+    };
+    const confirmed = spec(async () => OK, {
+      requiresConfirmation: () => true,
+      buildConfirmation: () => ({ action_kind: 'navigate', host: 'example.com', description: 'x' }),
+    });
+    const aborted = new AbortController();
+    aborted.abort();
+
+    const denied = await once(confirmed, { gateway: deny });
+    const abortedCall = await once(
+      spec(async () => OK),
+      { abortSignal: aborted.signal },
+    );
+
+    expect(denied.warns).toEqual([]);
+    expect(denied.outcomes).toEqual([
+      {
+        tool: 'demo_tool',
+        status: 'denied',
+        code: 'CONFIRMATION_DENIED',
+        cause: 'confirmation-denied',
+      },
+    ]);
+    expect(abortedCall.warns).toEqual([]);
+    expect(abortedCall.outcomes).toEqual([
+      { tool: 'demo_tool', status: 'aborted', code: 'AGENT_ABORTED', cause: 'run-aborted' },
+    ]);
+  });
+
+  it('a success writes no warn line and one ok outcome with its provider and fetch mode', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: true,
+      model: { answer: 1 },
+      diagnostic: { provider: 'tavily', fetch_mode: 'browser', host: 'example.com' },
+    });
+
+    const { lines, outcomes } = await once(spec(run));
+
+    expect(lines).toEqual([]);
+    expect(outcomes).toEqual([
+      {
+        tool: 'demo_tool',
+        status: 'ok',
+        provider: 'tavily',
+        host: 'example.com',
+        fetchMode: 'browser',
+      },
+    ]);
+  });
+
+  it('never lets a diagnostic smuggle a URL path or prose into the log', async () => {
+    const run = async (): Promise<DomainResult> => ({
+      ok: false,
+      errorCode: 'FETCH_FAILED',
+      message: `failed for https://site.example.com/secret-path?token=${CANARY}`,
+      retryable: true,
+      details: { url: `https://site.example.com/secret-path?token=${CANARY}` },
+      diagnostic: {
+        cause: `the server said ${CANARY}`,
+        host: 'site.example.com/secret-path',
+      },
+    });
+
+    const { warns, outcomes } = await once(spec(run));
+
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatchObject({ code: 'FETCH_FAILED', cause: 'fetch-failed' });
+    expect(warns[0]).not.toHaveProperty('host');
+    assertRuntimeEventIsSafe(warns[0], [CANARY, 'secret-path', 'https://']);
+    expect(JSON.stringify(outcomes)).not.toContain(CANARY);
+  });
+
+  it('records exactly one outcome per call across a mixed sequence', async () => {
+    const runtimeLogger = recordingLogger();
+    const services = makeServices({ runtimeLogger });
+    let call = 0;
+    const tool = wrapTool(
+      spec(async (): Promise<DomainResult> => {
+        call += 1;
+        return call % 2 === 0
+          ? { ok: true, model: { n: call } }
+          : { ok: false, errorCode: 'X_FAILED', message: 'x', retryable: true };
+      }),
+      services,
+    );
+
+    for (let i = 0; i < 5; i += 1) await tool.execute({ q: 'a' }, undefined);
+
+    expect(services.runHealth.toolOutcomes().map((outcome) => outcome.status)).toEqual([
+      'error',
+      'ok',
+      'error',
+      'ok',
+      'error',
+    ]);
+    expect(failureLines(runtimeLogger)).toHaveLength(3);
+  });
+
+  it('falls back to the process logger when the run has no runtime logger', async () => {
+    const services = makeServices();
+    const run = async (): Promise<DomainResult> => ({
+      ok: false,
+      errorCode: 'X_FAILED',
+      message: 'x',
+      retryable: false,
+    });
+
+    const result = await wrapTool(spec(run), services).execute({ q: 'a' }, undefined);
+
+    expect(result.error_code).toBe('X_FAILED');
+    expect(services.runHealth.toolOutcomes()).toHaveLength(1);
   });
 });

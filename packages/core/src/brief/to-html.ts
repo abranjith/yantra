@@ -288,6 +288,7 @@ const NOTICE_SEVERITY: Readonly<Record<BriefNotice['kind'], 'danger' | 'warn' | 
   uncited_claim_flagged: 'warn',
   budget_exhausted: 'warn',
   limited_evidence: 'warn',
+  search_failed: 'warn',
   other: 'info',
 };
 

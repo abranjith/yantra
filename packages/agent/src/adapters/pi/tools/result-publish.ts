@@ -35,6 +35,7 @@ import {
   validateBrief,
   validateTemplatedReport,
   type Brief,
+  type BriefNotice,
   type BriefSource,
   type BriefValidationError,
   type KeyFinding,
@@ -48,7 +49,9 @@ import { Type, type Static, type TObject } from 'typebox';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
   EvidenceEntry,
+  PublishOptions,
   PublishOutcome,
+  PublishRuntimeFacts,
   PublishToolDeps,
   PublishValidationError,
   RunServices,
@@ -152,8 +155,11 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   }
 
   const paramsRecord = asRecord(params) ?? {};
+  // The run's own facts (search failures, budget exhaustion, read failures,
+  // provider), computed once at publish time and attached by the publisher.
+  const runtimeFacts = services.runHealth.briefFacts();
   if (services.template !== null) {
-    const result = await services.domain.publish.publish(paramsRecord.report);
+    const result = await services.domain.publish.publish(paramsRecord.report, { runtimeFacts });
     if (!result.isOk) {
       return {
         ok: false,
@@ -164,6 +170,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       };
     }
     services.actionPhase.close();
+    services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
     const report = result.value.brief as TemplatedReport;
     return {
       ok: true,
@@ -182,7 +189,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     evidence.length > 0 && !isCompleteBrief(briefInput)
       ? withLedgerEvidence(briefInput, evidence)
       : briefInput;
-  const result = await services.domain.publish.publish(content);
+  const result = await services.domain.publish.publish(content, { runtimeFacts });
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
     // been observed publishing placeholder sources ("N/A") instead of copying
@@ -200,6 +207,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   }
 
   services.actionPhase.close();
+  services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
   return {
     ok: true,
     model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
@@ -270,6 +278,7 @@ function parseableUrl(value: string | null): string | null {
     new URL(value);
     return value;
   } catch {
+    // swallow-ok: URL parse helper; null means not parseable
     return null;
   }
 }
@@ -305,12 +314,13 @@ export function createBriefPublisher(
   return {
     publish: async (
       raw: unknown,
-      options?: { readonly assembledByRuntime?: boolean },
+      options?: PublishOptions,
     ): Promise<Result<PublishOutcome, BriefValidationError>> => {
       const assembled = options?.assembledByRuntime === true;
-      const candidate = isCompleteBrief(raw)
+      const built = isCompleteBrief(raw)
         ? raw
         : buildBriefFromAgentContent(raw, context, assembled);
+      const candidate = withRuntimeFacts(built, options?.runtimeFacts);
       const validated = validateBrief(candidate);
       if (!validated.isOk) {
         return validated;
@@ -378,8 +388,12 @@ export function createTemplatedReportPublisher(
   context: TemplatedReportPublisherContext = {},
 ): PublishToolDeps {
   return {
-    publish: async (raw: unknown): Promise<Result<PublishOutcome, PublishValidationError>> => {
+    publish: async (
+      raw: unknown,
+      options?: PublishOptions,
+    ): Promise<Result<PublishOutcome, PublishValidationError>> => {
       const valuesRecord = asRecord(raw) ?? {};
+      const facts = options?.runtimeFacts;
       // The generated provider schema excludes sources; direct/internal callers
       // get the same invariant by having any supplied value ignored here.
       const values = Object.fromEntries(
@@ -414,7 +428,7 @@ export function createTemplatedReportPublisher(
         rendered_md: renderTemplate(manifest, slotValues, sources),
         sources,
         metadata: {
-          search_provider: null,
+          search_provider: facts?.searchProvider ?? null,
           synthesis: 'llm',
           deterministic_fallback_used: false,
           coverage: null,
@@ -424,7 +438,7 @@ export function createTemplatedReportPublisher(
           evidence: null,
           run_id: context.runId ?? null,
         },
-        notices: [],
+        notices: [...(facts?.notices ?? [])],
       };
       const validated = validateTemplatedReport(report);
       if (!validated.isOk) return validated;
@@ -462,6 +476,27 @@ function titleFromName(name: string | null): string {
 function briefSummary(brief: Brief): string {
   const firstLine = brief.overview.split('\n').find((line) => line.trim().length > 0) ?? '';
   return `Published "${brief.title}" with ${brief.sources.length} source(s). ${firstLine}`.trim();
+}
+
+/**
+ * Attach the run's own facts to a candidate Brief: runtime notices go after
+ * any existing ones (the runtime-assembly notice stays first), and a known
+ * search provider fills `metadata.search_provider`. Non-object candidates pass
+ * through so validation reports them as before.
+ */
+function withRuntimeFacts(candidate: unknown, facts: PublishRuntimeFacts | undefined): unknown {
+  if (facts === undefined) return candidate;
+  const record = asRecord(candidate);
+  if (record === undefined) return candidate;
+  const existing = Array.isArray(record.notices) ? (record.notices as readonly BriefNotice[]) : [];
+  const metadata = asRecord(record.metadata);
+  return {
+    ...record,
+    notices: [...existing, ...facts.notices],
+    ...(metadata !== undefined && facts.searchProvider !== null
+      ? { metadata: { ...metadata, search_provider: facts.searchProvider } }
+      : {}),
+  };
 }
 
 /** A payload carrying protocol identity fields is treated as a complete Brief. */
@@ -554,6 +589,7 @@ function hostOf(url: string): string {
   try {
     return new URL(url).host || 'unknown';
   } catch {
+    // swallow-ok: URL parse helper; schema validation reports the bad URL
     // An unparsable URL fails schema validation at sources[n].url with an
     // actionable pointer; a placeholder host avoids a second, noisier issue.
     return 'unknown';

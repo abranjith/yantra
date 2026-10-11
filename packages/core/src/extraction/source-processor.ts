@@ -26,6 +26,8 @@ export interface ProcessedSource {
   readonly doc: SynthesisDoc | null;
   /** The per-source failure, or null on success. */
   readonly failure: SourceFailure | null;
+  /** How the page was fetched, or null when no network fetch happened. */
+  readonly fetchMode: 'http' | 'browser' | null;
 }
 
 /** Injected stage dependencies shared by the pipeline callers. */
@@ -74,10 +76,15 @@ export async function processSource(
   try {
     const ethics = await deps.ethicsGate.checkUrl(result.url);
     if (!ethics.ok) {
+      // The run's own refusals keep their own stages so nothing downstream
+      // (rank signals, notices) can read them as the site blocking us.
+      const stage =
+        ethics.reason === 'budget' ? 'budget' : ethics.reason === 'policy' ? 'policy' : 'blocked';
       return {
         rank: result.rank,
         doc: null,
-        failure: sourceFailure(result.url, 'blocked', `${ethics.reason} - ${ethics.detail}`),
+        failure: sourceFailure(result.url, stage, `${ethics.reason} - ${ethics.detail}`),
+        fetchMode: null,
       };
     }
 
@@ -96,6 +103,7 @@ export async function processSource(
         rank: result.rank,
         doc: null,
         failure: sourceFailure(result.url, 'extract', 'could not extract a readable article'),
+        fetchMode: fetched.fetchMode,
       };
     }
 
@@ -110,7 +118,7 @@ export async function processSource(
       excerpt: article.excerpt,
     };
 
-    return { rank: result.rank, doc, failure: null };
+    return { rank: result.rank, doc, failure: null, fetchMode: fetched.fetchMode };
   } catch (error) {
     if (error instanceof FetchError && error.context.kind === 'timeout') {
       opts.onTimeout?.();
@@ -119,6 +127,7 @@ export async function processSource(
       rank: result.rank,
       doc: null,
       failure: sourceFailure(result.url, 'fetch', buildFailureReason(error)),
+      fetchMode: null,
     };
   }
 }

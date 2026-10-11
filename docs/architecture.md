@@ -1077,10 +1077,27 @@ flowchart LR
   Domain --> ImageGate[Verify authorized PNG artifact]
   Sanitize --> Result[Stable text or text-plus-image result]
   ImageGate --> Result
+  Result --> Outcome[Outcome chokepoint: run-health ledger and tool_failure line]
   Result --> Provider[Pi result blocks]
   Provider --> AuditProjection[Remove image bytes from stable projection]
   AuditProjection --> Audit[Events, tool audit, usage, and artifact metadata]
 ```
+
+The stable projection that reaches `tool-calls.jsonl` is sanitized at the Pi seam structurally, not
+as one serialized string. `createDefaultPiEventMapContext().sanitizePayload` in
+`packages/agent/src/adapters/pi/event-map.ts` hands every `tool_started` input and `tool_finished`
+output to `sanitizeStructured(payload, 'authenticated')` from
+`packages/core/src/sanitizer/structured.ts`, which walks the payload leaf by leaf. Every string leaf
+and every object key passes `redactText` in `packages/core/src/sanitizer/pipeline.ts` — the same
+redaction pass the text sanitizer `sanitize` runs — so the structural path can never redact less
+than the text path. A string leaf that is itself a serialized object or array, which is exactly
+Pi's `content[].text`, is parsed, sanitized recursively to a bounded depth, and re-serialized; a
+number whose text a redactor would change becomes the redacted string. The profile's byte cap is
+enforced by shortening the longest string leaves with a `…[truncated]` marker, then dropping tail
+items of the longest array, and never by cutting the serialized text. Input that is not JSON at all
+(a cycle, a bigint, a function) degrades to a sanitized string exactly as the text path coerces it.
+Every record is therefore valid JSON. The middleware's model-visible `sanitizeAndBound` path is a
+separate, unchanged pass over a singly encoded payload.
 
 The run also owns one operator diagnostic destination. `RunRuntimeLog`
 (`packages/agent/src/runtime/runtime-log.ts`) opens an asynchronous Pino destination on
@@ -1096,18 +1113,21 @@ that no longer exists. `RunServices` exposes it as the provider-neutral core `Lo
 middleware can write to it but cannot close it; the environment owns the close.
 
 Lifecycle order is load-bearing. Browser, session, and recorder teardown run while the destination
-is still open so their terminal lines persist; only then is the log closed; only then can the
-report builder observe whether the artifact exists; and the run lock is released last, after the
-report. A default environment that fails partway through construction closes the destination it
-already opened before rethrowing, and the early startup-failure branch, which skips the teardown
-block entirely, closes it itself, so no terminal path leaks a handle.
+is still open so their terminal lines persist; the run's health summary is then computed, written
+to `run-health.json`, and logged as one `run_health` line, so its facts are final and its line
+still lands in the log; only then is the log closed; only then can the report builder observe
+whether the artifact exists; and the run lock is released last, after the report. A default
+environment that fails partway through construction closes the destination it already opened
+before rethrowing, and the early startup-failure branch, which skips the teardown block entirely,
+closes it itself and writes no run-health summary, so no terminal path leaks a handle.
 
 Typed browser startup failures survive the tool boundary. A browser starts lazily, on the first
 tool call that needs a page, so every "no usable browser" condition surfaces inside a tool rather
 than at run startup. `mapBrowserStartupError`
 (`packages/agent/src/adapters/pi/tools/browser-startup-errors.ts`) is one ordered `instanceof`
-table over the real exported core error classes, consulted by `browser_navigate` and by the
-HTTP-to-browser fallback path in `web_fetch`. Resolution, compatibility, coordination, launch,
+table over the real exported core error classes, consulted by `browser_navigate`, by the
+HTTP-to-browser fallback path in `web_fetch`, and by the `web_search` failure mapper when a
+results-page browser will not start. Resolution, compatibility, coordination, launch,
 process, install-decline, and managed-install causes each become a stable agent error code
 carrying closed safe details plus the exit-class semantics the CLI already assigns them
 (`environment` or `user-handoff`), so downstream orchestration and audit keep the distinction
@@ -1121,6 +1141,93 @@ but the tool name, the operation phase, and the error class, which is what keeps
 site fault distinguishable from an expected browser refusal without either one leaking page data.
 Model-visible text always comes from the registered message catalog, never from the core error's
 own prose, which can embed an executable path or a raw helper `detail`.
+
+#### Run facts and run health
+
+A run's account of itself — the operator's `tool_failure` lines, the published document's
+runtime-derived notices and search provider, `run-health.json`, and the report's "Run Health"
+section — is derived from one per-run accumulator, `RunHealthLedger` in
+`packages/agent/src/runtime/run-health.ts`, so those surfaces cannot disagree. The orchestrator
+constructs it before the environment, so the browser provider can count into it, and `RunServices`
+requires it rather than making it optional: a construction site that forgot it would silently
+switch the facts off. Every input is data already in hand at a chokepoint; recording adds no page
+read, fetch, or browser call.
+
+```mermaid
+flowchart TD
+  Calls[Every wrapped tool call] --> Chokepoint[Middleware recordOutcome]
+  Mapper[Tool-boundary mappers such as mapSearchError] -->|operator-only diagnostic| Chokepoint
+  Chokepoint --> Ledger[RunHealthLedger, one per run]
+  Chokepoint -->|error or timeout| Warn[One warn tool_failure line]
+  ReadTools[web_search and web_fetch] -->|source failures, fetches, budget exhaustion| Ledger
+  Counter[countingBrowserProvider] -->|successful launches| Ledger
+  Ledger -->|briefFacts at publish| Document[Brief or templated report notices and search_provider]
+  Ledger -->|summary at teardown| HealthFile[run-health.json]
+  Ledger -->|summary at teardown| HealthLine[One info run_health line]
+  Warn --> RuntimeLog[runtime.jsonl]
+  HealthLine --> RuntimeLog
+  HealthFile --> Report[report.md Run Health section]
+```
+
+**One outcome chokepoint.** Every exit from the middleware pipeline — success, domain failure,
+schema refusal, the per-tool timeout, a result-byte refusal, abort, denied consent, or an
+unexpected exception — passes `recordOutcome` in `packages/agent/src/runtime/middleware.ts` exactly
+once. It records one outcome (`ok`, `error`, `timeout`, `aborted`, or `denied`) in the ledger and,
+for `error` or `timeout`, writes exactly one `warn` `tool_failure` line to the run's runtime logger
+with closed fields only: `tool`, `code`, `cause`, and optionally `provider`, a bare `host`, and
+`budget_limit`. The cause comes from the operator-only `diagnostic` a domain operation attaches to
+its `DomainFailure` or `DomainSuccess` — never serialized into model text — or, absent one, is
+derived from the stable code (`FETCH_TIMEOUT` becomes `fetch-timeout`); anything that is not a
+short closed token is dropped. Recording never changes the call's result: a fault while recording
+is logged to the process logger and the result is returned unchanged. The FEAT-047
+`tool_unexpected_failure` error line is unaffected; the warn line is written in addition to it.
+
+**Causes are typed at the nearest tool boundary.** `mapSearchError` in
+`packages/agent/src/adapters/pi/tools/search-errors.ts` is `web_search`'s counterpart to the
+browser-startup table: one ordered classification over the real exported core search error classes
+(subclasses before parents, then the error's `code`, then its HTTP status) onto `SEARCH_BLOCKED`,
+`SEARCH_NO_RESULTS`, `SEARCH_TIMEOUT`, `SEARCH_PROVIDER_UNAVAILABLE`, or residual `SEARCH_FAILED`,
+each with a closed, exported cause vocabulary and a registered message template. Raw codes that
+embed text are normalized and never copied, and a results-page browser that will not start defers
+to `mapBrowserStartupError`. Provider resolution failures go through the same table, which is why
+`resolveProvider` passes the typed error through untouched.
+
+**The read tools add the facts only they hold.** `web_search` records each per-site read failure,
+each real network fetch with whether the HTTP tier or a browser served it, and budget exhaustion
+with the reads it skipped; `web_fetch` records its successful fetches and its budget refusals. A
+navigation or host budget refusal inside a search is stage `budget`, and any other URL-policy
+refusal is stage `policy`. Both are the run's own limits rather than evidence about a site, so
+`rankReasonForFailureStage` returns `null` for them and neither produces a domain-rank signal. A
+budget refusal is reported once at the top of the search result rather than per site.
+
+**Browser launches are counted by decoration.** `countingBrowserProvider` wraps the run's single
+selected browser provider in a pass-through that delegates `launch` and `detectChrome` unchanged
+and counts each launch that succeeds. The agent browser controller, the scraped-search transport,
+and `BrowserFallbackFetcher` all share that one wrapped provider, so one decorator sees every launch
+in the run; a nested `workflow_run` builds its own provider and wraps it with the same counter into
+the same ledger.
+
+**Three readers, at three moments.**
+
+- _Publish time._ `result_publish`, and the runtime assembly of an unpublished draft, call
+  `briefFacts()` once and pass the result to the publisher as `runtimeFacts`. The Brief publisher
+  and the templated-report publisher both append the notices after any existing notice (a runtime
+  assembly notice stays first) and set `metadata.search_provider` to the distinct providers in
+  first-use order, or `null` when no search ran. Notices are built in a fixed order — one
+  `search_failed` per failing search code, one `budget_exhausted` per spent limit, then per-host
+  read failures — from fixed phrase tables, counts, and hostnames only, never page or provider
+  text, so nothing untrusted enters the document through this path. At most ten are attached; the
+  overflow becomes one `other` notice pointing to the report's Run Health section. The count
+  actually attached is recorded on the ledger at that moment rather than recomputed later.
+- _Teardown._ After browser, session, and recorder teardown and before the runtime log closes,
+  `summary()` produces a `RunHealth` document (`packages/protocol/src/schemas/run-health.ts`),
+  which is validated against the schema, written atomically to `<runDir>/run-health.json` through a
+  temporary file and rename, and then emitted as one `info` `run_health` line. A write failure is a
+  teardown error like any other and never skips finalization.
+- _Report._ `MarkdownReportBuilder` reads `run-health.json` with the same schema and renders
+  `## Run Health` after "Tool Calls", listing the file under the Audit Trail. An absent file
+  renders nothing, so older reports are unchanged; an invalid one renders a single
+  "run-health.json unreadable" line.
 
 ### Vision-assist boundary
 
@@ -1459,9 +1566,11 @@ The runtime creates the run directory before provider validation, constructs pol
 ledgers, opens a fresh Pi-backed session, and records only normalized audit projections alongside
 the sensitive run-local provider session. Browser startup is lazy for browser-capable runs, and the run's component telemetry goes
 to its own operator-only `runtime.jsonl`, closed after teardown and before `report.md` is built so
-the report can list the artifact by presence. A
-successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
-plain assistant text alone is not the success contract.
+the report can list the artifact by presence. Every tool outcome is recorded in the run's
+`RunHealthLedger` as it completes; publication attaches the ledger's runtime-derived notices and
+search provider, and teardown writes `run-health.json` and its `run_health` line before the log
+closes. A successful run ends with `result_publish` producing a protocol-valid Brief or templated
+report; plain assistant text alone is not the success contract.
 
 ```mermaid
 sequenceDiagram
@@ -1483,12 +1592,14 @@ sequenceDiagram
     Pi->>Tools: closed-schema call
     Tools->>Core: policy-approved domain operation
     Core-->>Tools: result or stable failure
+    Tools->>Tools: record outcome in RunHealthLedger, warn on failure
     Tools-->>Pi: sanitized, bounded result
-    Pi-->>Run: normalized events, tool audit, and usage
+    Pi-->>Run: normalized events, structurally sanitized tool audit, and usage
   end
   Pi->>Tools: result_publish
-  Tools->>Run: validated Brief or document artifacts
-  Agent->>Run: tear down browser and session, finalize trace
+  Tools->>Run: validated Brief or document with runtime notices and search provider
+  Agent->>Run: tear down browser, session, and recorder, finalize trace
+  Agent->>Run: write run-health.json, then log run_health
   Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock
   Agent-->>CLI: published, failed, handoff, or aborted outcome
   CLI-->>User: progress and terminal outcome
@@ -1627,8 +1738,9 @@ and `SensitiveScreenLatch` are run-local memory. Accepted PNGs are filesystem ar
 The agentic runtime log adds no table and no migration either. `runtime.jsonl` is an append-only
 Pino JSONL file inside the run directory, owned and closed by exactly one `RunRuntimeLog`: an
 agentic run has zero or one of them, and a run that never constructed an environment — a preflight
-handoff — legitimately has none. Named browser projections carry `schema_version: 1` and stable
-snake-case fields; ordinary component lines keep their own. It is local operator diagnostics and
+handoff — legitimately has none. Named projections — the browser lines, `tool_failure`, and
+`run_health` — carry `schema_version: 1` and stable snake-case fields; ordinary component lines
+keep their own. It is local operator diagnostics and
 nothing else: never model input, never an evidence-ledger entry, never a retry signal, never part
 of publication, and the report builder lists it under the agentic Audit Trail by presence alone,
 never parsing it and never deriving run status from it. It carries no page or task URL, page text,
@@ -1636,6 +1748,18 @@ profile path, full executable path, launch arguments, environment values, creden
 message or stack, whole error objects, raw helper stderr, or raw managed-install detail. Run
 directories written without it stay valid and no protocol schema changes, so the artifact and its
 report entry are purely additive.
+
+Run health adds one optional run artifact and no table. `RunHealthLedger` is in-memory, one per
+agentic run; its durable form is `<runDir>/run-health.json`, a `RunHealth` document at
+`schema_version: 1` whose JSON Schema is emitted with the other protocol artifacts. It holds only
+counts, closed codes, budget names, and provider names: searches by outcome and failure code (the
+schema enforces `total = ok + failed`), network fetches by mode with repeat fetches of an
+already-fetched normalized URL, per-site failures by stage (`fetch`, `extract`, `blocked`,
+`budget`, `policy`), browser launches, navigation and host usage against their limits with the
+exhausted limits named, tool failures by code, and the number of runtime-derived notices attached
+to the published document. A run has zero or one such file and zero or one `run_health` line; a
+startup failure before the environment exists writes neither. Every reader treats the file as
+optional, so older run directories validate and render unchanged.
 
 Browser management adds no table and no migration either; its model is filesystem state under the
 managed root plus one cache. `<data>/browsers/ready.json` is the entire selection model for
@@ -1707,19 +1831,19 @@ flowchart TD
   Deterministic --> RunDir
 ```
 
-| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                          |
-| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                 |
-| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` where one exists. `tool-calls.jsonl` references screenshots by metadata only; the raw provider session can contain image data; `runtime.jsonl` is the one artifact the model never sees. |
-| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                       |
-| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                |
-| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                               |
-| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                     |
-| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                               |
-| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                              |
-| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                            |
+| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                                                                                                                                  |
+| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. |
+| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                               |
+| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                        |
+| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                       |
+| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                       |
+| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                      |
+| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
 `YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
@@ -1906,7 +2030,7 @@ update` is the only surface that contacts a version server, and only when a huma
   already say which tools it called and which task steps it took, but not which browser actually
   ran or why that pairing was accepted, because the components holding that knowledge logged into
   a no-op. The answer is a fourth agentic run artifact, `runtime.jsonl`, and it is deliberately
-  the only one the model never sees: an executable identity, a startup phase, and an error class
+  never model input: an executable identity, a startup phase, and an error class
   are exactly the material a prompt-injected page would like read back to it. The costs are a
   destination the orchestrator must close on every terminal path — after teardown, before the
   report, because presence is the report's only test — and a rule that every projection carries
@@ -1925,6 +2049,26 @@ update` is the only surface that contacts a version server, and only when a huma
   it as one would let a stand-in prove behavior the production path does not have. The operator
   still sees both kinds, because the generic branch writes its own class-only projection to the
   runtime log.
+- **A run's account of itself has one source and one entry point.** Every tool call's terminal
+  result passes one middleware chokepoint into one per-run `RunHealthLedger`, and the operator's
+  `tool_failure` lines, the published document's notices and search provider, `run-health.json`,
+  and the report's Run Health section are all derived from it. Facts reported by several
+  independent paths drift until they contradict each other — a Brief claiming no notices while the
+  runtime knew its searches had failed is exactly that drift. The ledger is required on
+  `RunServices` so it cannot be left out, it is fed only from data already in hand so it costs no
+  page read, and every notice it produces is built from fixed phrases, counts, and hostnames so it
+  cannot become a path for page text into the document. The run's own budget and URL-policy
+  refusals are classified as the run's, never as a site blocking it, so they produce no rank
+  signal. The cost is a ledger every new failure path must feed through the chokepoint rather than
+  report on its own, which a boundary test backs by rejecting unannotated swallowed `catch` blocks
+  on the tool path.
+- **Sanitize structured payloads as structure.** Serializing a payload, running the text sanitizer
+  over the string, and re-parsing it can corrupt the JSON it was handed — a URL pattern that
+  swallows the backslash of an escaped quote leaves an unparseable record — so the audit projection
+  is sanitized leaf by leaf instead, recursing into JSON-in-string leaves and enforcing the byte cap
+  by shortening leaves. Both sanitizers call the same redaction pass, so the structural one is
+  never weaker; the cost is a second walker over the profile that must stay in step, which a
+  property test pins on both re-parse and canary redaction.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

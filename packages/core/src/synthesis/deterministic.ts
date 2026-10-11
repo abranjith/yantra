@@ -116,17 +116,21 @@ interface ComposedGroup {
   readonly children: readonly ComposedClaim[];
 }
 
+/** Notice kind for each failure stage; Yantra's own refusals keep their own kinds. */
+const NOTICE_KIND_FOR_STAGE: Readonly<Record<SourceFailure['stage'], BriefNotice['kind']>> = {
+  fetch: 'fetch_failed',
+  extract: 'extract_failed',
+  blocked: 'blocked',
+  budget: 'budget_exhausted',
+  policy: 'other',
+};
+
 /** Maps per-source pipeline failures to honest Brief notices. */
 export function noticesFromFailures(failures: readonly SourceFailure[]): BriefNotice[] {
   return failures.map((failure) => ({
     source: failure.host,
     reason: stripAnsi(failure.reason) || 'source failed',
-    kind:
-      failure.stage === 'fetch'
-        ? ('fetch_failed' as const)
-        : failure.stage === 'extract'
-          ? ('extract_failed' as const)
-          : ('blocked' as const),
+    kind: NOTICE_KIND_FOR_STAGE[failure.stage],
   }));
 }
 

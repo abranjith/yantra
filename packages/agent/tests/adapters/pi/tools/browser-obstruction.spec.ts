@@ -23,6 +23,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { browserClickSpec } from '../../../../src/adapters/pi/tools/browser-click.js';
 import { PROTECTED_ACTION_RE } from '../../../../src/adapters/pi/tools/browser-common.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 import type { RunServices } from '../../../../src/runtime/run-services.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
@@ -83,6 +84,7 @@ function servicesFor(
   provenance.record('https://example.com/');
   return buildServices({
     urlProvenance: provenance,
+    runHealth: new RunHealthLedger(),
     ...(userInput ? { userInput } : {}),
     domain: {
       browser: {

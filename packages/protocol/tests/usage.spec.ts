@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UsageLedger, validateUsageLedgerTotals } from '../src/index.js';
+import { UsageCall, UsageLedger, validateUsageLedgerTotals } from '../src/index.js';
 
 describe('@no-llm usage ledger', () => {
   it('round-trips a usage ledger and validates totals', () => {
@@ -80,5 +80,23 @@ describe('@no-llm usage ledger', () => {
       output_tokens: null,
       cost_usd: null,
     });
+  });
+
+  it('accepts every registry provider name and still rejects an empty one', () => {
+    const call = (provider: string) => ({
+      step_id: 'turn-1',
+      model: 'm',
+      provider,
+      input_tokens: 1,
+      output_tokens: 1,
+      cost_estimate_usd: null,
+      latency_ms: 1,
+      at: '2026-05-12T00:00:00.000Z',
+    });
+
+    for (const provider of ['anthropic', 'ollama', 'openai', 'groq', 'google', 'xai']) {
+      expect(UsageCall.safeParse(call(provider)).success).toBe(true);
+    }
+    expect(UsageCall.safeParse(call('')).success).toBe(false);
   });
 });

@@ -266,10 +266,11 @@ export const BriefNotice = z
         'uncited_claim_flagged',
         'budget_exhausted',
         'limited_evidence',
+        'search_failed',
         'other',
       ])
       .describe(
-        'Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates.',
+        'Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access.',
       ),
   })
   .describe('An honest per-source failure or validator flag.');

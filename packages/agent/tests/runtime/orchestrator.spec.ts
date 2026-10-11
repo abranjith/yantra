@@ -16,9 +16,16 @@ import {
   type SearchProvider,
 } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
-import { createBrief, type ConfirmationRequest, type WorkflowFile } from '@yantra/protocol';
+import {
+  RunHealth,
+  createBrief,
+  type ConfirmationRequest,
+  type WorkflowFile,
+} from '@yantra/protocol';
+import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createDefaultPiEventMapContext } from '../../src/adapters/pi/event-map.js';
 import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
@@ -1313,6 +1320,60 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
   });
 
+  it('reads status from a seam-projected web_search success whose text ends a URL at an escaped quote', async () => {
+    // FEAT-048 G8: the projected output used to degrade to a string here, which
+    // hid `status`/`error_code`/`budget_limit` from toolMetadata.
+    const seam = createDefaultPiEventMapContext();
+    const modelText = JSON.stringify({
+      sites: [{ n: 1, url: 'https://cars.example/new-cars/dallas-tx/', title: 'Dallas' }],
+    });
+    const output = seam.sanitizePayload({
+      content: [{ type: 'text', text: modelText }],
+      details: { provider: 'duckduckgo' },
+      status: 'ok',
+    });
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [event('tool_finished', { callId: 's1', tool: 'web_search', output, isError: false })],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider });
+
+    const finished = result.connector.events.find((e) => e.type === 'tool_finished');
+    expect(finished).toMatchObject({ tool: 'web_search', status: 'ok' });
+  });
+
+  it('reads error_code and budget_limit from a seam-projected budget refusal', async () => {
+    const seam = createDefaultPiEventMapContext();
+    const output = seam.sanitizePayload({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            status: 'error',
+            error_code: 'BUDGET_EXHAUSTED',
+            message: 'see https://x.example/a/',
+          }),
+        },
+      ],
+      details: { budget_limit: 'wall-clock' },
+      status: 'error',
+      error_code: 'BUDGET_EXHAUSTED',
+    });
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [event('tool_finished', { callId: 'b1', tool: 'web_fetch', output, isError: true })],
+      ],
+    });
+
+    const result = await fixture({ provider });
+
+    expect(result.outcome.kind).toBe('budget_exhausted');
+  });
+
   it('maps an already-aborted caller signal to aborted and still tears down once', async () => {
     const controller = new AbortController();
     controller.abort('ctrl-c');
@@ -1324,5 +1385,227 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.abortCount).toBe(1);
     expect(provider.sessions[0]?.closeCount).toBe(1);
     expect(result.teardown).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('@no-llm runAgenticTask run-health finalization (FEAT-048)', () => {
+  interface Ordered {
+    readonly outcome: AgenticTaskOutcome;
+    readonly order: string[];
+    readonly lines: Record<string, unknown>[];
+  }
+
+  /**
+   * Run once with an environment whose runtime logger, log close, browser
+   * teardown, and report builder all record into one ordered list, each
+   * noting whether `run-health.json` existed at that moment.
+   */
+  async function ordered(
+    provider: AgentProvider,
+    options: {
+      readonly signal?: AbortSignal;
+      readonly teardownFails?: boolean;
+      readonly budgets?: AgenticTaskRequest['budgets'];
+    } = {},
+  ): Promise<Ordered> {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-health-'));
+    tempDirs.push(root);
+    const order: string[] = [];
+    const lines: Record<string, unknown>[] = [];
+    let runDir = '';
+    const healthExists = async (): Promise<string> => {
+      try {
+        await access(join(runDir, 'run-health.json'));
+        return 'present';
+      } catch {
+        return 'absent';
+      }
+    };
+    const record = (level: string) => (obj: Record<string, unknown> | string) => {
+      const line = typeof obj === 'string' ? { level, msg: obj } : { level, ...obj };
+      lines.push(line);
+      if (line.event === 'run_health') order.push('run_health logged');
+    };
+    const runtimeLogger = {
+      info: record('info'),
+      warn: record('warn'),
+      error: record('error'),
+      debug: record('debug'),
+    };
+    const base = buildEnvironment(
+      vi.fn(async () => {
+        order.push(`browser teardown (health ${await healthExists()})`);
+        if (options.teardownFails === true) throw new Error('teardown failed');
+      }),
+    );
+    const environment: AgenticRunEnvironment = {
+      ...base,
+      runtimeLogger,
+      closeRuntimeLog: async () => {
+        order.push(`runtime log closed (health ${await healthExists()})`);
+      },
+    };
+    const outcome = await runAgenticTask(
+      {
+        goal: 'Complete the fixture task',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector: new RecordingConnector(),
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.budgets ? { budgets: options.budgets } : {}),
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: (context) => {
+          runDir = context.runDir;
+          return Promise.resolve(environment);
+        },
+        createProvider: () => provider,
+        reportBuilder: {
+          build: async (dir: string) => {
+            order.push(`report built (health ${await healthExists()})`);
+            return dir;
+          },
+        },
+      },
+    );
+    return { outcome, order, lines };
+  }
+
+  const EXPECTED_ORDER = [
+    'browser teardown (health absent)',
+    'run_health logged',
+    'runtime log closed (health present)',
+    'report built (health present)',
+  ];
+
+  async function healthFile(outcome: AgenticTaskOutcome): Promise<Record<string, unknown>> {
+    return JSON.parse(await readFile(join(outcome.runDir, 'run-health.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+  }
+
+  it('published: teardown, then run-health.json, then run_health, then log close, then report', async () => {
+    const provider = new FakeAgentProvider({
+      onRun: async (_prompt, _runIndex, session) => {
+        const runDir = join(session.logPath, '..', '..');
+        const brief = createBrief({
+          task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          title: 'Published',
+          overview: 'Done.',
+        });
+        await Promise.all([
+          writeFile(join(runDir, 'brief.json'), JSON.stringify(brief), 'utf8'),
+          writeFile(join(runDir, 'brief.md'), '# Published\n', 'utf8'),
+          writeFile(join(runDir, 'brief.html'), '<h1>Published</h1>', 'utf8'),
+        ]);
+        session.emit(
+          event('tool_finished', {
+            callId: 'publish',
+            tool: 'result_publish',
+            output: { status: 'ok', details: { brief_id: brief.brief_id } },
+            isError: false,
+          }),
+        );
+      },
+      runResult: completed,
+    });
+
+    const { outcome, order, lines } = await ordered(provider);
+
+    expect(outcome.kind).toBe('published');
+    expect(order).toEqual(EXPECTED_ORDER);
+    const health = await healthFile(outcome);
+    expect(RunHealth.safeParse(health).success).toBe(true);
+    expect(health.run_id).toBe(outcome.runId);
+    const healthLines = lines.filter((line) => line.event === 'run_health');
+    expect(healthLines).toHaveLength(1);
+    expect(healthLines[0]).toMatchObject({
+      level: 'info',
+      schema_version: 1,
+      run_id: outcome.runId,
+    });
+    assertRuntimeEventIsSafe(healthLines[0]);
+  });
+
+  it('failed (completion missing): same order, and notices is 0 when nothing was published', async () => {
+    const provider = new FakeAgentProvider({ runResult: completed });
+
+    const { outcome, order } = await ordered(provider);
+
+    expect(outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_COMPLETION_MISSING' } });
+    expect(order).toEqual(EXPECTED_ORDER);
+    expect((await healthFile(outcome)).notices).toBe(0);
+  });
+
+  it('budget exhausted: same order', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          event('tool_finished', {
+            callId: 'b1',
+            tool: 'web_fetch',
+            output: {
+              status: 'error',
+              error_code: 'BUDGET_EXHAUSTED',
+              details: { budget_limit: 'wall-clock' },
+            },
+            isError: true,
+          }),
+        ],
+      ],
+    });
+
+    const { outcome, order } = await ordered(provider);
+
+    expect(outcome.kind).toBe('budget_exhausted');
+    expect(order).toEqual(EXPECTED_ORDER);
+  });
+
+  it('aborted: same order', async () => {
+    const controller = new AbortController();
+    controller.abort('ctrl-c');
+
+    const { outcome, order } = await ordered(new FakeAgentProvider(), {
+      signal: controller.signal,
+    });
+
+    expect(outcome.kind).toBe('aborted');
+    expect(order).toEqual(EXPECTED_ORDER);
+  });
+
+  it('teardown failed: the summary is still written and logged before the log closes', async () => {
+    const { outcome, order } = await ordered(new FakeAgentProvider({ runResult: completed }), {
+      teardownFails: true,
+    });
+
+    expect(outcome.kind).toBe('failed');
+    expect(order).toEqual(EXPECTED_ORDER);
+    expect(RunHealth.safeParse(await healthFile(outcome)).success).toBe(true);
+  });
+
+  it('a startup failure before the environment exists writes no run-health.json', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-health-startup-'));
+    tempDirs.push(root);
+
+    const outcome = await runAgenticTask(
+      {
+        goal: 'Complete the fixture task',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector: new RecordingConnector(),
+      },
+      {
+        runStore: new LocalRunStore(root),
+        sanitizer: new DefaultSanitizer(),
+        createEnvironment: () => Promise.reject(new Error('environment unavailable')),
+        createProvider: () => new FakeAgentProvider(),
+      },
+    );
+
+    expect(outcome.kind).toBe('failed');
+    await expect(access(join(outcome.runDir, 'run-health.json'))).rejects.toThrow();
   });
 });

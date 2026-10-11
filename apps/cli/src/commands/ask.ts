@@ -63,6 +63,7 @@ import {
   resolveAmbientContext,
   type ResolvedAmbientContext,
 } from '../preferences.js';
+import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
@@ -229,6 +230,8 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
           (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
           '\n',
       );
+      // The goal exactly as received, so a shell-rewritten argument is visible.
+      resolvedRuntime.stderr.write(renderGoalEcho(queryArg));
 
       try {
         // Selection happens before the agent runtime/provider is constructed.

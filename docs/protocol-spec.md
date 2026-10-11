@@ -225,11 +225,11 @@ Example:
 
 An honest per-source failure or validator flag.
 
-| Field  | Description                                                                                                                                                                                                                                         |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| source | Host or subsystem the notice concerns.                                                                                                                                                                                                              |
-| reason | Human-readable reason for the notice.                                                                                                                                                                                                               |
-| kind   | Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates. |
+| Field  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source | Host or subsystem the notice concerns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| reason | Human-readable reason for the notice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| kind   | Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access. |
 
 Example:
 
@@ -1401,6 +1401,38 @@ Example:
 "button"
 ```
 
+## RunHealth
+
+An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only.
+
+| Field           | Description                                                                               |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| schema_version  | Run-health schema version.                                                                |
+| run_id          | Owning run id.                                                                            |
+| searches        | Web searches by outcome.                                                                  |
+| fetches         | Network page fetches.                                                                     |
+| source_failures | Per-site read failures inside multi-source tools, by stage.                               |
+| browser         | Browser processes.                                                                        |
+| budgets         | Run budget consumption.                                                                   |
+| tool_failures   | Tool failures across every tool.                                                          |
+| notices         | Runtime-derived notices attached to the published document; 0 when nothing was published. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "run_id": "<run_id>",
+  "searches": "<searches>",
+  "fetches": "<fetches>",
+  "source_failures": "<source_failures>",
+  "browser": "<browser>",
+  "budgets": "<budgets>",
+  "tool_failures": "<tool_failures>",
+  "notices": "<notices>"
+}
+```
+
 ## ScalarValue
 
 Scalar value for task params.
@@ -1785,12 +1817,12 @@ Example:
 
 ## UsageProvider
 
-Provider used for the model call.
+Provider registry name used for the model call (for example `anthropic`, `ollama`, `groq`).
 
 Example:
 
 ```json
-"anthropic"
+"<value>"
 ```
 
 ## ValueRef

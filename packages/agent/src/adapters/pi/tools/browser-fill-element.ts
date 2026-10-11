@@ -369,6 +369,7 @@ async function appendSemanticTrace(
 }
 
 async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promise<void> {
+  // swallow-ok: dismiss-on-cleanup; the fill result is already decided
   await dismissWidget(port, target, '', () => true).catch(() => undefined);
 }
 

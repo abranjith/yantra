@@ -18,11 +18,31 @@ import {
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
-import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
+import type { DomainFailure, DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import { mapBrowserStartupError } from './browser-startup-errors.js';
 import { writeCapture } from './capture.js';
+
+/**
+ * The closed `web_fetch` failure-cause vocabulary (operator-only diagnostics).
+ * Parametric entries: `ethics-refused:<reason>` (robots | blocklist |
+ * rate-limit), `budget:<limit>` (navigations | hosts), and `url-<code>` for
+ * the outbound URL policy's stable codes.
+ */
+export const WEB_FETCH_FAILURE_CAUSES = Object.freeze([
+  'url-policy:<code>',
+  'budget:<limit>',
+  'ethics-refused:<reason>',
+  'timeout',
+  'too-large',
+  'http-4xx',
+  'http-5xx',
+  'network',
+  'browser-startup',
+  'content-type-refused',
+  'extraction-empty',
+] as const);
 
 const WebFetchParams = Type.Object(
   {
@@ -72,13 +92,26 @@ async function runWebFetch(
   // 1. Outbound URL policy (length, https, credential shapes, host budget).
   const allowed = services.urlPolicy.check(params.url);
   if (!allowed.isOk) {
-    return {
-      ok: false,
-      errorCode: allowed.error.code,
-      message: allowed.error.message,
-      retryable: allowed.error.retryable,
-    };
+    const rejection = allowed.error;
+    const budgetLimit = rejection.code === 'BUDGET_EXHAUSTED' ? rejection.budgetLimit : undefined;
+    if (budgetLimit !== undefined) {
+      // The run's own limit refused this read, not the site.
+      services.runHealth.recordBudgetExhaustion(budgetLimit, 'web_fetch', 1);
+    }
+    return withHost(
+      {
+        ok: false,
+        errorCode: rejection.code,
+        message: rejection.message,
+        retryable: rejection.retryable,
+      },
+      budgetLimit !== undefined
+        ? `budget:${budgetLimit}`
+        : `url-policy:${rejection.code.toLowerCase().replaceAll('_', '-')}`,
+      domainFromUrl(params.url),
+    );
   }
+  const host = allowed.value.host;
 
   // 2. Ethics gate (robots/blocklist/rate limit) — no evasion path exists.
   try {
@@ -90,13 +123,19 @@ async function runWebFetch(
   } catch (error) {
     if (error instanceof EthicsRefusedError) {
       recordFailure(services, allowed.value.url, 'blocked');
-      return {
-        ok: false,
-        errorCode: 'ETHICS_BLOCKED',
-        message: `Fetch refused for ${allowed.value.host}: ${error.ethicsContext.reason}.`,
-        retryable: false,
-        details: { source: error.ethicsContext.source, host: allowed.value.host },
-      };
+      const source =
+        error.ethicsContext.source === 'rate_limit' ? 'rate-limit' : error.ethicsContext.source;
+      return withHost(
+        {
+          ok: false,
+          errorCode: 'ETHICS_BLOCKED',
+          message: `Fetch refused for ${allowed.value.host}: ${error.ethicsContext.reason}.`,
+          retryable: false,
+          details: { source: error.ethicsContext.source, host: allowed.value.host },
+        },
+        `ethics-refused:${source}`,
+        host,
+      );
     }
     throw error;
   }
@@ -111,7 +150,8 @@ async function runWebFetch(
   } catch (error) {
     if (error instanceof FetchError) {
       recordFailure(services, allowed.value.url, 'fetch_failed');
-      return { ok: false, ...mapFetchError(error) };
+      const mapped = mapFetchError(error);
+      return withHost({ ok: false, ...mapped.failure }, mapped.cause, host);
     }
     // The hybrid fetcher escalates to a headless browser for script-rendered
     // pages, so a browser that will not start reaches `web_fetch` too — as a
@@ -119,20 +159,26 @@ async function runWebFetch(
     // told a generic tool fault and kept retrying a fetch no retry could fix.
     // Not a rank signal: the site did nothing wrong.
     const startup = mapBrowserStartupError(error);
-    if (startup !== null) return startup;
+    if (startup !== null) return withHost(startup, 'browser-startup', host);
     throw error;
   }
+  // A page came back over the network: count it whether or not it can be read.
+  services.runHealth.recordFetch(doc.finalUrl, doc.fetchMode);
 
   // 4. Content-type allowlist.
   const contentType = (doc.contentType ?? '').toLowerCase();
   if (!deps.allowedContentTypes.some((prefix) => contentType.includes(prefix))) {
     recordFailure(services, allowed.value.url, 'extract_failed');
-    return {
-      ok: false,
-      errorCode: 'CONTENT_TYPE_REFUSED',
-      message: `Refusing non-text content type "${doc.contentType ?? 'unknown'}".`,
-      retryable: false,
-    };
+    return withHost(
+      {
+        ok: false,
+        errorCode: 'CONTENT_TYPE_REFUSED',
+        message: `Refusing non-text content type "${doc.contentType ?? 'unknown'}".`,
+        retryable: false,
+      },
+      'content-type-refused',
+      host,
+    );
   }
 
   // 5. Readability extraction. An empty result usually means the URL is not an
@@ -142,15 +188,19 @@ async function runWebFetch(
   const article = await deps.extractor.extract(doc);
   if (article === null || article.contentText.trim().length === 0) {
     recordFailure(services, allowed.value.url, 'extract_failed');
-    return {
-      ok: false,
-      errorCode: 'EXTRACTION_EMPTY',
-      message:
-        'No readable article content could be extracted from the page. It is likely an ' +
-        'index/hub, media-only, or script-rendered page; fetch a specific article URL instead.',
-      retryable: false,
-      details: { final_url: doc.finalUrl, fetch_mode: doc.fetchMode },
-    };
+    return withHost(
+      {
+        ok: false,
+        errorCode: 'EXTRACTION_EMPTY',
+        message:
+          'No readable article content could be extracted from the page. It is likely an ' +
+          'index/hub, media-only, or script-rendered page; fetch a specific article URL instead.',
+        retryable: false,
+        details: { final_url: doc.finalUrl, fetch_mode: doc.fetchMode },
+      },
+      'extraction-empty',
+      host,
+    );
   }
 
   // A successfully fetched page is an attested URL, so the model may navigate
@@ -186,6 +236,7 @@ async function runWebFetch(
         note: 'Full content stored as a capture; the excerpt is shown here.',
       },
       details: { capture_ref: captureRef, bytes: textBytes },
+      diagnostic: { host, fetch_mode: doc.fetchMode },
     };
   }
 
@@ -199,7 +250,16 @@ async function runWebFetch(
       text: article.contentText,
     },
     details: { bytes: textBytes, final_url: doc.finalUrl },
+    diagnostic: { host, fetch_mode: doc.fetchMode },
   };
+}
+
+/**
+ * Attach the operator-only cause and hostname to a failure. The cause comes
+ * from {@link WEB_FETCH_FAILURE_CAUSES}; the host is a bare hostname.
+ */
+function withHost(failure: DomainFailure, cause: string, host: string | null): DomainFailure {
+  return { ...failure, diagnostic: { cause, ...(host === null ? {} : { host }) } };
 }
 
 function recordFailure(services: RunServices, url: string, reason: DomainRankReason): void {
@@ -209,32 +269,49 @@ function recordFailure(services: RunServices, url: string, reason: DomainRankRea
   }
 }
 
-/** Map a core FetchError kind to a stable tool error. */
+/** Map a core FetchError kind to a stable tool error plus its closed cause. */
 function mapFetchError(error: FetchError): {
-  readonly errorCode: string;
-  readonly message: string;
-  readonly retryable: boolean;
+  readonly failure: {
+    readonly errorCode: string;
+    readonly message: string;
+    readonly retryable: boolean;
+  };
+  readonly cause: string;
 } {
   switch (error.context.kind) {
     case 'timeout':
-      return { errorCode: 'FETCH_TIMEOUT', message: 'The fetch timed out.', retryable: true };
+      return {
+        failure: { errorCode: 'FETCH_TIMEOUT', message: 'The fetch timed out.', retryable: true },
+        cause: 'timeout',
+      };
     case 'too-large':
       return {
-        errorCode: 'CONTENT_TOO_LARGE',
-        message: 'The page body exceeded the size limit and was aborted.',
-        retryable: false,
+        failure: {
+          errorCode: 'CONTENT_TOO_LARGE',
+          message: 'The page body exceeded the size limit and was aborted.',
+          retryable: false,
+        },
+        cause: 'too-large',
       };
-    case 'http-status':
+    case 'http-status': {
+      const status = error.context.statusCode;
       return {
-        errorCode: 'FETCH_HTTP_ERROR',
-        message: `The server returned HTTP ${error.context.statusCode ?? '4xx/5xx'}.`,
-        retryable: true,
+        failure: {
+          errorCode: 'FETCH_HTTP_ERROR',
+          message: `The server returned HTTP ${status ?? '4xx/5xx'}.`,
+          retryable: true,
+        },
+        cause: status !== undefined && status >= 500 ? 'http-5xx' : 'http-4xx',
       };
+    }
     default:
       return {
-        errorCode: 'FETCH_FAILED',
-        message: 'A network failure occurred while fetching the page.',
-        retryable: true,
+        failure: {
+          errorCode: 'FETCH_FAILED',
+          message: 'A network failure occurred while fetching the page.',
+          retryable: true,
+        },
+        cause: 'network',
       };
   }
 }

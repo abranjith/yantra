@@ -184,4 +184,26 @@ describe('@no-llm templated result_publish', () => {
     };
     expect(stored.sources).toEqual([]);
   });
+
+  it('attaches runtime notices and the search provider instead of hardcoded empties', async () => {
+    const { services, tool } = setup();
+    services.runHealth.recordToolOutcome({
+      tool: 'web_search',
+      status: 'error',
+      code: 'SEARCH_NO_RESULTS',
+      cause: 'empty-results',
+      provider: 'duckduckgo',
+    });
+
+    const result = await tool.execute(validReport(), undefined);
+
+    expect(result.status).toBe('ok');
+    const stored = JSON.parse(await readFile(join(runDir, 'document.json'), 'utf8')) as {
+      notices: { kind: string; source: string }[];
+      metadata: { search_provider: string | null };
+    };
+    expect(stored.metadata.search_provider).toBe('duckduckgo');
+    expect(stored.notices).toMatchObject([{ kind: 'search_failed', source: 'search:duckduckgo' }]);
+    expect(services.runHealth.publishedNoticeCount()).toBe(1);
+  });
 });

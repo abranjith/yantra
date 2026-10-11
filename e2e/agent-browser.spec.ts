@@ -9,6 +9,7 @@ import {
   EvidenceLedger,
   EvidencePhase,
   UrlPolicy,
+  RunHealthLedger,
   UrlProvenance,
   buildYantraWrappedTools,
   resolveVisionAvailability,
@@ -78,6 +79,7 @@ describe('@no-llm real Chrome browser tools', () => {
       sanitizer,
       urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
       urlProvenance: provenance,
+      runHealth: new RunHealthLedger(),
       confirmation: { gateway: grantingGateway(), store: null },
       actionPhase: new ActionPhase(),
       evidence: new EvidenceLedger(sanitizer),
@@ -88,7 +90,7 @@ describe('@no-llm real Chrome browser tools', () => {
       nowIso: () => new Date().toISOString(),
       domain: {
         search: {
-          resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
+          resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
           resultCap: 5,
           fetchTop: 3,
         },

@@ -11,6 +11,7 @@ import { TaskEvent } from '../schemas/events.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
+import { RunHealth } from '../schemas/run-health.js';
 import { Step } from '../schemas/steps.js';
 import { TaskRequest } from '../schemas/task.js';
 import { UsageLedger } from '../schemas/usage.js';
@@ -37,6 +38,7 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'confirmation-request.json': { schema: ConfirmationRequest, name: 'ConfirmationRequest' },
   'confirmation-decision.json': { schema: ConfirmationDecision, name: 'ConfirmationDecision' },
   'discovery-session.json': { schema: DiscoverySession, name: 'DiscoverySession' },
+  'run-health.json': { schema: RunHealth, name: 'RunHealth' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

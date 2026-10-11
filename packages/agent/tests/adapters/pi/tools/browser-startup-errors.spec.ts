@@ -34,6 +34,7 @@ import {
 } from '../../../../src/adapters/pi/tools/browser-startup-errors.js';
 import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 import { buildServices } from './test-support.js';
@@ -257,6 +258,7 @@ describe('@no-llm startup failures at the browser-backed tool boundaries', () =>
     const services = buildServices({
       runDir,
       urlProvenance: provenance,
+      runHealth: new RunHealthLedger(),
       domain: {
         browser: {
           controller: {

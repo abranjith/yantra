@@ -1,7 +1,12 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { TaskEvent, ToolAuditEntryType, UsageLedger } from '@yantra/protocol';
+import {
+  RunHealth,
+  type TaskEvent,
+  type ToolAuditEntryType,
+  type UsageLedger,
+} from '@yantra/protocol';
 
 import { normalizeAttemptArtifact } from '../interaction/escalation.js';
 
@@ -50,6 +55,7 @@ export class MarkdownReportBuilder implements ReportBuilder {
           // derives run status from it: it is operator diagnostics, and a
           // report that read it would make an optional artifact load-bearing.
           hasRuntimeLog: await fileExists(join(runDir, 'runtime.jsonl')),
+          runHealth: await readRunHealth(join(runDir, 'run-health.json')),
           ...(failure ? { failure } : {}),
         })
       : renderReport({
@@ -110,6 +116,8 @@ function renderAgenticReport(input: {
   readonly outcome: 'completed' | 'failed';
   /** Whether `runtime.jsonl` exists in the run directory. Presence, not content. */
   readonly hasRuntimeLog: boolean;
+  /** `run-health.json`, when the run wrote one (absent on older runs). */
+  readonly runHealth: RunHealthRead;
   readonly failure?: FailureContext;
 }): string {
   const lines: string[] = [];
@@ -164,6 +172,8 @@ function renderAgenticReport(input: {
   }
   lines.push('');
 
+  lines.push(...renderRunHealth(input.runHealth));
+
   lines.push('## Captures');
   const captures = input.toolCalls.flatMap((entry) =>
     (entry.captures ?? []).map((capture) => ({ entry, capture })),
@@ -210,12 +220,77 @@ function renderAgenticReport(input: {
   // preflight handoff) legitimately has none, and every report written before
   // this artifact existed stays exactly as valid as it was.
   if (input.hasRuntimeLog) lines.push('- runtime.jsonl');
+  if (input.runHealth.kind !== 'absent') lines.push('- run-health.json');
   const sessionFile = stringOr(agent.session_file, '');
   if (sessionFile.length > 0) {
     lines.push(`- ${sessionFile}`);
   }
 
   return lines.join('\n');
+}
+
+/** What reading `run-health.json` found. */
+type RunHealthRead =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'valid'; readonly value: RunHealth };
+
+/**
+ * Read `run-health.json` with the protocol schema. The file is optional for
+ * every reader: a run written before it existed simply has none.
+ */
+async function readRunHealth(path: string): Promise<RunHealthRead> {
+  if (!(await fileExists(path))) return { kind: 'absent' };
+  const raw = await readJson<unknown>(path);
+  const parsed = RunHealth.safeParse(raw);
+  return parsed.success ? { kind: 'valid', value: parsed.data } : { kind: 'invalid' };
+}
+
+/**
+ * The "Run Health" section. Absent renders nothing, so every older report
+ * stays byte-identical; an unreadable file renders one line saying so.
+ */
+function renderRunHealth(read: RunHealthRead): string[] {
+  if (read.kind === 'absent') return [];
+  if (read.kind === 'invalid') return ['Run Health: run-health.json unreadable', ''];
+  const health = read.value;
+  const failedSearches = Object.values(health.searches.failed_by_code).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  const providers =
+    health.searches.providers.length === 0 ? 'none' : health.searches.providers.join(', ');
+  const fetchFailures = codeList(health.fetches.failed_by_code);
+  const failures = health.source_failures;
+  const exhausted =
+    health.budgets.exhausted.length === 0 ? 'none' : health.budgets.exhausted.join(', ');
+  return [
+    '## Run Health',
+    `Searches: ${health.searches.total} total, ${health.searches.ok} ok, ${failedSearches} failed` +
+      `${failedSearches === 0 ? '' : ` (${codeList(health.searches.failed_by_code)})`}` +
+      ` - providers: ${providers}`,
+    `Fetches: ${health.fetches.total} total (${health.fetches.by_mode.http} http, ` +
+      `${health.fetches.by_mode.browser} browser), ${health.fetches.repeat_fetches} repeat` +
+      `${fetchFailures.length === 0 ? '' : ` - failed: ${fetchFailures}`}`,
+    `Source failures: fetch ${failures.fetch}, extract ${failures.extract}, ` +
+      `blocked ${failures.blocked}, budget ${failures.budget}, policy ${failures.policy}`,
+    `Browser launches: ${health.browser.launches}`,
+    `Navigations: ${health.budgets.navigations_used}/${health.budgets.navigations_limit}   ` +
+      `Hosts: ${health.budgets.hosts_used}/${health.budgets.hosts_limit}   ` +
+      `Exhausted: ${exhausted}`,
+    `Tool failures: ${health.tool_failures.total}` +
+      `${health.tool_failures.total === 0 ? '' : ` (${codeList(health.tool_failures.by_code)})`}`,
+    `Notices: ${health.notices}`,
+    '',
+  ];
+}
+
+/** `CODE n, CODE n` in descending count, then code order. */
+function codeList(counts: Readonly<Record<string, number>>): string {
+  return Object.entries(counts)
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .map(([code, count]) => `${code} ${count}`)
+    .join(', ');
 }
 
 /**

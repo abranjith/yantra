@@ -16,6 +16,7 @@ import {
   type DomainResult,
   type ToolWrapperSpec,
 } from '../../../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 
 import { buildServices, extractorReturning, fetchedDoc, fetcherReturning } from './test-support.js';
 
@@ -515,5 +516,121 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
       deterministic_fallback_used: true,
     });
     expect(brief.notices).toMatchObject([{ source: 'runtime', kind: 'other' }]);
+  });
+});
+
+describe('@no-llm result_publish — runtime-derived notices and search provider (FEAT-048)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-publish-facts-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  async function storedBrief(): Promise<{
+    notices: { kind: string; source: string; reason: string }[];
+    metadata: { search_provider: string | null };
+  }> {
+    return JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8')) as {
+      notices: { kind: string; source: string; reason: string }[];
+      metadata: { search_provider: string | null };
+    };
+  }
+
+  /** A ledger seeded with a small G4/G6 fault mix. */
+  function faultyLedger(): RunHealthLedger {
+    const ledger = new RunHealthLedger({ maxNavigations: 30 });
+    ledger.recordToolOutcome({ tool: 'web_search', status: 'ok', provider: 'duckduckgo' });
+    ledger.recordToolOutcome({
+      tool: 'web_search',
+      status: 'error',
+      code: 'SEARCH_BLOCKED',
+      cause: 'anomaly-challenge',
+      provider: 'duckduckgo',
+    });
+    ledger.recordBudgetExhaustion('navigations', 'web_search', 2);
+    return ledger;
+  }
+
+  it('attaches the ledger notices and provider to an agent-authored Brief', async () => {
+    const runHealth = faultyLedger();
+    const services = buildServices({ runDir, runHealth, publish: createBriefPublisher(runDir) });
+
+    const result = await wrapTool(resultPublishSpec(services), services).execute(
+      { brief: { title: 'Answer', overview: 'Short answer.' } },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    const brief = await storedBrief();
+    expect(brief.metadata.search_provider).toBe('duckduckgo');
+    expect(brief.notices.map((notice) => notice.kind)).toEqual([
+      'search_failed',
+      'budget_exhausted',
+    ]);
+    expect(brief.notices[0]?.source).toBe('search:duckduckgo');
+    expect(runHealth.publishedNoticeCount()).toBe(2);
+    const markdown = await readFile(join(runDir, 'brief.md'), 'utf8');
+    expect(markdown).toContain(
+      '**search_failed** — search:duckduckgo: 1 of 2 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).',
+    );
+  });
+
+  it('publishes notices: [] and a null provider for a fault-free, search-free run', async () => {
+    const services = buildServices({ runDir, publish: createBriefPublisher(runDir) });
+
+    await wrapTool(resultPublishSpec(services), services).execute(
+      { brief: { title: 'Answer', overview: 'Short answer.' } },
+      undefined,
+    );
+
+    const brief = await storedBrief();
+    expect(brief.notices).toEqual([]);
+    expect(brief.metadata.search_provider).toBeNull();
+    expect(services.runHealth.publishedNoticeCount()).toBe(0);
+  });
+
+  it('appends runtime notices to a complete Brief and sets its provider', async () => {
+    const runHealth = faultyLedger();
+    const services = buildServices({ runDir, runHealth, publish: createBriefPublisher(runDir) });
+    const complete = createBrief({
+      task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      title: 'Complete',
+      overview: 'Already a Brief.',
+      notices: [{ source: 'x.example', reason: 'own notice', kind: 'other' }],
+    });
+
+    await wrapTool(resultPublishSpec(services), services).execute({ brief: complete }, undefined);
+
+    const brief = await storedBrief();
+    expect(brief.notices.map((notice) => notice.kind)).toEqual([
+      'other',
+      'search_failed',
+      'budget_exhausted',
+    ]);
+    expect(brief.metadata.search_provider).toBe('duckduckgo');
+  });
+
+  it('keeps the runtime-assembly notice first when the runtime assembles the Brief', async () => {
+    const publisher = createBriefPublisher(runDir);
+
+    const published = await publisher.publish(
+      {
+        title: 'Assembled',
+        overview: 'Draft answer.',
+        sources: ['https://news.example.com/final-report'],
+      },
+      { assembledByRuntime: true, runtimeFacts: faultyLedger().briefFacts() },
+    );
+
+    expect(published.isOk).toBe(true);
+    const brief = await storedBrief();
+    expect(brief.notices.map((notice) => `${notice.source}:${notice.kind}`)).toEqual([
+      'runtime:other',
+      'search:duckduckgo:search_failed',
+      'runtime:budget_exhausted',
+    ]);
   });
 });

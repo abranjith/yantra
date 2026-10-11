@@ -205,6 +205,7 @@ const noticeArb = (dangerous: boolean): fc.Arbitrary<BriefNotice> =>
       'uncited_claim_flagged',
       'budget_exhausted',
       'limited_evidence',
+      'search_failed',
       'other',
     ),
   });

@@ -27,6 +27,7 @@ import { modelDelta } from '../../../../src/adapters/pi/tools/browser-common.js'
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-observe.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 import type { BrowserToolDeps, RunServices } from '../../../../src/runtime/run-services.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
@@ -175,6 +176,7 @@ function services(
   provenance.record(`${PAGE}next`);
   return buildServices({
     urlProvenance: provenance,
+    runHealth: new RunHealthLedger(),
     domain: {
       browser: {
         controller: controller as unknown as AgentBrowserController,

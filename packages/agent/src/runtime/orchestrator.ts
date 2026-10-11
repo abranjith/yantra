@@ -1,4 +1,4 @@
-import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -50,6 +50,7 @@ import {
   type RunStatus,
 } from '@yantra/core/workflow/replay';
 import {
+  RunHealth,
   generateUlid,
   validateBrief,
   validateTemplatedReport,
@@ -85,6 +86,7 @@ import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
 import { COMMAND_TASK_PROFILES, promptAddendumFor, type CommandTaskProfile } from './profiles.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
+import { countingBrowserProvider, RunHealthLedger } from './run-health.js';
 import { RunRecorder } from './run-recorder.js';
 import {
   ActionPhase,
@@ -332,6 +334,8 @@ export interface AgenticTaskDependencies {
     readonly taskId: string;
     readonly rankSink: RankSignalSink | null;
     readonly browser: BrowserRuntimeOptions;
+    /** The run's health ledger; the default environment counts browser launches into it. */
+    readonly runHealth: RunHealthLedger;
   }) => Promise<AgenticRunEnvironment>;
   /**
    * Shared browser selection/compatibility/coordination seam.
@@ -447,8 +451,17 @@ export async function runAgenticTask(
   let executionState: ExecutionState | undefined;
   let startupFinalized = false;
   let terminal: AgenticTaskOutcome | undefined;
+  let budgetTracker: BudgetTracker | undefined;
   const trace = new AgentTrace();
   const teardownErrors: Error[] = [];
+  // The run's own record of what happened to it: every runtime-derived
+  // notice, the run-health summary, and the `tool_failure` lines read it.
+  // Constructed before the environment so the browser provider can count
+  // its launches into it.
+  const runHealth = new RunHealthLedger({
+    maxNavigations: budgetsConfig.maxNavigations,
+    maxHosts: budgetsConfig.maxHosts,
+  });
 
   try {
     environment = await (dependencies.createEnvironment ?? createDefaultEnvironment)({
@@ -456,6 +469,7 @@ export async function runAgenticTask(
       runDir: created.runDir,
       taskId,
       rankSink: dependencies.rankSink ?? null,
+      runHealth,
       browser: {
         ...(dependencies.browserServices ? { services: dependencies.browserServices } : {}),
         ...(dependencies.browserSelection ? { selection: dependencies.browserSelection } : {}),
@@ -465,13 +479,14 @@ export async function runAgenticTask(
       },
     });
     const runAbort = new AbortController();
-    const budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
+    budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
+    const runBudget = budgetTracker;
     const actionPhase = new ActionPhase();
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
       timeoutMs: budgetsConfig.confirmationWaitMs,
       runSignal: runAbort.signal,
-      remainingWallClockMs: () => budgetTracker.remainingWallClockMs(),
+      remainingWallClockMs: () => runBudget.remainingWallClockMs(),
       store: createConfirmationStore(created.runDir),
       nowIso: () => now().toISOString(),
     });
@@ -525,11 +540,11 @@ export async function runAgenticTask(
       runDir: created.runDir,
       template: request.template?.manifest ?? null,
       vision,
-      budgets: budgetTracker,
+      budgets: runBudget,
       sanitizer,
       userInput,
       modelValues,
-      urlPolicy: new UrlPolicy(budgetTracker, {
+      urlPolicy: new UrlPolicy(runBudget, {
         maxUrlLength: dependencies.urlPolicyConfig?.maxUrlLength ?? 2048,
         requireHttps: dependencies.urlPolicyConfig?.requireHttps ?? true,
         ...(request.allowedHosts && request.allowedHosts.length > 0
@@ -539,6 +554,7 @@ export async function runAgenticTask(
             : {}),
       }),
       urlProvenance,
+      runHealth,
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
       evidence,
@@ -607,7 +623,7 @@ export async function runAgenticTask(
       connector: request.connector,
       runAbort,
       budgets: budgetsConfig,
-      budgetTracker,
+      budgetTracker: runBudget,
       runId: created.runId,
       runDir: created.runDir,
     });
@@ -672,6 +688,23 @@ export async function runAgenticTask(
           persistenceGoal: userInput.neutralize(redacted.goal),
         });
       }
+
+      // The run's health summary is computed after browser/session/recorder
+      // teardown (so their facts are final) and persisted before the runtime
+      // log closes, so its `run_health` line lands in `runtime.jsonl` and the
+      // report can render the file. A failure here is a teardown error like
+      // the others; it never skips finalization.
+      const health = runHealth.summary({
+        runId: created.runId,
+        snapshot: budgetTracker?.snapshot() ?? { navigations: 0, hosts: 0 },
+        limits: budgetsConfig,
+        noticeCount: runHealth.publishedNoticeCount(),
+      });
+      await captureTeardown(() => writeRunHealth(created.runDir, health), teardownErrors);
+      await captureTeardown(() => {
+        logRunHealth(environment?.runtimeLogger, health);
+        return Promise.resolve();
+      }, teardownErrors);
 
       // Browser, session and recorder tear down while the destination is still
       // open, so their terminal lifecycle lines persist. Only then is the log
@@ -929,6 +962,7 @@ async function maybeAssembleUnpublishedResult(
   // resolve them for the published Brief — the artifact is the user's own
   // deliverable and must carry the real values (same contract as tool params).
   const overview = services.userInput?.resolve(draft) ?? draft;
+  const runtimeFacts = services.runHealth.briefFacts();
   const published = await services.domain.publish.publish(
     {
       title: assembledTitle(overview),
@@ -936,10 +970,11 @@ async function maybeAssembleUnpublishedResult(
       key_findings: [],
       sources: evidenceToSourceRecords(services.evidence.entries()),
     },
-    { assembledByRuntime: true },
+    { assembledByRuntime: true, runtimeFacts },
   );
   if (!published.isOk) return undefined;
   services.actionPhase.close();
+  services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
 
   const brief = await readPublishedBrief(services.runDir);
   if (brief === undefined) return undefined;
@@ -1259,6 +1294,7 @@ async function createDefaultEnvironment(context: {
   readonly taskId: string;
   readonly rankSink: RankSignalSink | null;
   readonly browser?: BrowserRuntimeOptions;
+  readonly runHealth: RunHealthLedger;
 }): Promise<AgenticRunEnvironment> {
   // The run directory already exists by the time this runs, so the diagnostic
   // destination can be opened here rather than lazily. Every component below
@@ -1282,6 +1318,7 @@ async function composeDefaultEnvironment(
     readonly taskId: string;
     readonly rankSink: RankSignalSink | null;
     readonly browser?: BrowserRuntimeOptions;
+    readonly runHealth: RunHealthLedger;
   },
   runtimeLog: RunRuntimeLog,
 ): Promise<AgenticRunEnvironment> {
@@ -1306,12 +1343,17 @@ async function composeDefaultEnvironment(
     { enforceRobotsTxt: ethicsConfig.robotsEnabled },
   );
   // One provider for the whole run. Constructing it launches nothing: the
-  // browser starts only when a tool actually asks for a page.
-  const browserProvider = createSelectedBrowserProvider({
-    ...(context.browser ?? {}),
-    logger,
-    profileStore: new LocalProfileStore({ logger }),
-  });
+  // browser starts only when a tool actually asks for a page. The controller,
+  // the scraped-search transport, and the fetch fallback all share it, so one
+  // pass-through counter sees every launch.
+  const browserProvider = countingBrowserProvider(
+    createSelectedBrowserProvider({
+      ...(context.browser ?? {}),
+      logger,
+      profileStore: new LocalProfileStore({ logger }),
+    }),
+    context.runHealth,
+  );
   const browserController = new AgentBrowserController({
     runId: context.runId,
     browserProvider,
@@ -1337,16 +1379,14 @@ async function composeDefaultEnvironment(
     closeRuntimeLog: () => runtimeLog.close(),
     domain: {
       search: {
-        resolveProvider: async () => {
-          const result = await resolveSearchProvider({
+        // The typed resolution error is passed through untouched: `web_search`
+        // classifies it (key missing vs. no provider vs. unknown name).
+        resolveProvider: () =>
+          resolveSearchProvider({
             env: process.env,
             config: searchConfig,
             deps: { keychain, browserProvider, ethicsGate: searchEthics, logger },
-          });
-          return result.isOk
-            ? result
-            : { isOk: false as const, error: { message: result.error.message } };
-        },
+          }),
         resultCap: 8,
         fetchTop: searchConfig.fetchTop,
       },
@@ -1383,12 +1423,15 @@ async function composeDefaultEnvironment(
           // nested run directory is asserted to carry no agent-session artifacts.
           // `synthesis` is omitted entirely (not merely `noLlm`), so the nested
           // run also writes no Brief of its own; the agent publishes the result.
-          const nestedBrowserProvider = createSelectedBrowserProvider({
-            ...(context.browser ?? {}),
-            installOfferGateway: null,
-            logger,
-            profileStore: new LocalProfileStore({ logger }),
-          });
+          const nestedBrowserProvider = countingBrowserProvider(
+            createSelectedBrowserProvider({
+              ...(context.browser ?? {}),
+              installOfferGateway: null,
+              logger,
+              profileStore: new LocalProfileStore({ logger }),
+            }),
+            context.runHealth,
+          );
           const orchestrator = new RunOrchestrator({
             workflowStore,
             runStore: new LocalRunStore(),
@@ -1538,6 +1581,35 @@ function toStartupError(error: unknown): AgentStartupError {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected agent runtime failure.';
+}
+
+/**
+ * Persist `run-health.json` atomically (temp file, then rename), validated
+ * against the protocol schema so a malformed summary never reaches disk.
+ */
+async function writeRunHealth(runDir: string, health: RunHealth): Promise<void> {
+  const validated = RunHealth.parse(health);
+  const target = join(runDir, 'run-health.json');
+  const temp = `${target}.${process.pid}.tmp`;
+  await writeFile(temp, `${JSON.stringify(validated, null, 2)}\n`, 'utf8');
+  await rename(temp, target);
+}
+
+/** The `run_health` runtime-log projection: the summary, under a fixed event name. */
+interface RunHealthEvent extends RunHealth {
+  readonly event: 'run_health';
+}
+
+/** Emit the one `run_health` info line, when the run has a runtime log. */
+function logRunHealth(logger: Logger | undefined, health: RunHealth): void {
+  if (logger === undefined) return;
+  const event: RunHealthEvent = { ...health, event: 'run_health' };
+  logger.info(toLogPayload(event), 'run health');
+}
+
+/** Bridge a closed log projection (an interface) to the logger's record type. */
+function toLogPayload(event: object): Record<string, unknown> {
+  return { ...event };
 }
 
 async function captureTeardown(

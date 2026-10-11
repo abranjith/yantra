@@ -86,8 +86,10 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
     const finalPath = join(services.runDir, ...relativePath.split('/'));
     tempPath = `${finalPath}.tmp`;
     await mkdir(screenshotsDir, { recursive: true, mode: 0o700 });
+    // swallow-ok: best-effort chmod; permissions are hardening only
     await chmod(screenshotsDir, 0o700).catch(() => undefined);
     await writeFile(tempPath, bytes, { mode: 0o600 });
+    // swallow-ok: best-effort chmod; permissions are hardening only
     await chmod(tempPath, 0o600).catch(() => undefined);
     await rename(tempPath, finalPath);
     tempPath = undefined;
@@ -132,6 +134,7 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
     if (error instanceof SetOfMarksError) return unavailable(error.message);
     return unavailable('Screenshot capture failed before a complete artifact could be written.');
   } finally {
+    // swallow-ok: best-effort unlink of a temp file during cleanup
     if (tempPath !== undefined) await unlink(tempPath).catch(() => undefined);
   }
 }

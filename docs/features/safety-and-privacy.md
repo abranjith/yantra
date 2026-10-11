@@ -66,6 +66,16 @@ Source-attributed sanitization can also apply packaged low-false-positive redact
 
 The `read-only-data` profile is an intentional disclosure mode, not a stronger redaction profile. Its safety property is the static no-mutation scope. A plan that puts any other step type in that scope is rejected before execution.
 
+### Structural sanitization of audited tool payloads
+
+Tool inputs and outputs that cross the provider-session seam into the session audit (the `tool-calls.jsonl` projection) are sanitized with the `authenticated` profile, leaf by leaf, by `sanitizeStructured`. Payloads are not serialized, sanitized as one string, and re-parsed. Every string leaf passes through `redactText`, the same redaction function the text sanitizer uses, so the structural path is never weaker than the text path. Object keys are redacted too. A number that matches a sensitive pattern, such as a card number stored as a JSON number, is replaced by its redaction marker string.
+
+A string leaf that holds a serialized object or array, such as Pi's `content[].text`, is parsed, sanitized recursively, and re-serialized with the producer's original indentation. Recursion into embedded JSON stops at a fixed depth, and a leaf past that depth is sanitized as plain text. Scalar-looking strings such as `"42"` stay strings.
+
+The profile byte cap is enforced on the structure, not by cutting serialized text. The longest string leaves are shortened first, on a UTF-8 boundary, and end with `…[truncated]`. If the structure is still too large, tail items of the longest array are dropped. A structure that still does not fit is replaced by the `…[truncated]` marker string. Input that is not JSON-compatible, such as a cycle, a `bigint`, or a function, becomes a sanitized and truncated string, the same result the text path produces. Every record therefore re-parses as JSON. A property test (`packages/core/tests/sanitizer/structured.spec.ts`) checks both that the output re-parses and that the canary values it plants are redacted. The record-level format is described under [Tool-call records](diagnostics-and-audit.md#tool-call-records).
+
+The text sanitizer's in-text URL pattern stops at a backslash. A URL inside JSON-escaped text therefore ends before an escaped quote (`\"`) instead of absorbing it. Before this change, absorbing the quote corrupted audit records and inflated the URL-rewrite counts.
+
 ### Stored secrets and trusted hosts
 
 Workflow and tool payloads use typed references instead of literal stored credentials:
@@ -122,13 +132,17 @@ Each run has a local directory under `<yantra-data-dir>/runs/<run-id>/`. Dependi
 | Artifact                                             | Safety-relevant contents                                                                                            |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `manifest.json`                                      | Outcome, scope summary, model/provider and prompt/tool provenance; credential source but never credential value     |
-| `tool-calls.jsonl`                                   | Ordered sanitized input/output projections, status, error code, duration, and confirmation linkage                  |
+| `tool-calls.jsonl`                                   | Ordered input/output projections sanitized leaf by leaf, status, error code, duration, and confirmation linkage     |
 | `secrets.jsonl`                                      | Secret reference keys and resolution outcomes only                                                                  |
 | `confirmations.jsonl`                                | Requested action/host/description/cost/consequence and human decision provenance                                    |
 | `trace.json`                                         | Successful browser actions with marked placeholders or secret keys, not resolved values                             |
 | `captures/`                                          | Oversized sanitized web/browser extraction payloads                                                                 |
 | `agent/<session>.jsonl`                              | Raw provider-session format containing the model-visible conversation and model responses; sensitive local material |
 | `report.md`, `brief.*`, `events.jsonl`, `usage.json` | Human report, published result, lifecycle, and usage data                                                           |
+
+Runtime-derived Brief notices carry no untrusted text. Notices that Yantra attaches to a published result for search failures, exhausted budgets, and per-source read failures are built only from fixed phrase tables, counts, stable error codes, and bare hostnames. They never include page text or provider text. A per-source failure reason that is not one of the known stable phrases, which could contain a URL, is replaced by a stable phrase such as `fetch failed`. The same ledger produces `run-health.json` and the report's Run Health section, which are described in [Run Health](diagnostics-and-audit.md#run-health).
+
+Operator diagnostics in the runtime log carry closed fields only. A `tool_failure` line has a tool name, error code, cause, provider name, bare hostname, and budget limit. A `run_health` line holds the run-health summary. A `cause` is accepted only as a closed token: no whitespace, at most 80 characters from `A–Z`, `a–z`, `0–9`, `_`, `.`, `:`, and `-`. Any other cause is dropped, and a token derived from the error code is used instead. A host that is not hostname-shaped is dropped. The runtime-log safety assertions in `@yantra/test-helpers` reject a `cause` that is not such a token or that contains `//`.
 
 `yantra audit <run-id>` is read-only. It renders the structured manifest, tool-call, confirmation, secret-reference, event, and usage projections; it does not parse the raw provider session. An incomplete start record is shown as incomplete rather than treated as success.
 
@@ -149,6 +163,8 @@ yantra do "sign in as @username{u1} with @password{p1}" --allow-host xyz.com
 ```
 
 Yantra deliberately does not use `${...}` because bash and PowerShell expand it inside double quotes before Yantra can protect it. Markers do not hide command-line arguments from shell history, the terminal process, the operating system, or other local software that can inspect process arguments.
+
+`do`, `ask`, and `research` each print the goal as received to stderr as `goal: "<text>"`, so you can see when the shell rewrote it. Before printing, this goal echo replaces credential-shaped and `@{...}`-marked values with their placeholders, the same way the run sees them. It also removes control characters and escapes quotes and backslashes. A goal with a malformed `@{...}` marker is never printed. In its place the echo reads `goal: [not shown: the goal has a malformed @{...} marker]`, because an unclosed marker may hold a secret. The goal echo goes only to stderr, so `--json` stdout is unchanged.
 
 Values of eight or more characters are echo-masked wherever they occur. Shorter values are masked only at token boundaries to avoid corrupting unrelated text. A marked value under three characters produces an advisory warning in human-readable output because a site can embed it inside a longer token; warnings are suppressed under JSON output. Ingress protection still applies regardless of length.
 

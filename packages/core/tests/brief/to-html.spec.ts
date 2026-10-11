@@ -303,6 +303,17 @@ describe('@no-llm briefToHtml', () => {
     expect(html).not.toContain('fetch_failed');
   });
 
+  it('renders search_failed as a warning with a humanized kind', () => {
+    const html = briefToHtml(
+      makeBrief({
+        notices: [{ kind: 'search_failed', source: 'search:duckduckgo', reason: '2 of 3 failed' }],
+      }),
+    );
+
+    expect(html).toContain('<li class="notice--warn">');
+    expect(html).toContain('<strong class="notice-kind">search failed</strong>');
+  });
+
   it('gives every citation target a scroll anchor that resolves in the document', () => {
     const doc = new JSDOM(briefToHtml(canonicalBrief)).window.document;
     // The `:target` highlight is what makes a citation click legible.

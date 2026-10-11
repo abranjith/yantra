@@ -19,12 +19,39 @@ and from the agentic `web_search` and `web_fetch` tools:
 | A domain appears in a search-provider result                        |         `+1` | `search_result`  |
 | Fetching the page fails                                             |         `-1` | `fetch_failed`   |
 | A page is empty, unreadable, or has a refused non-text content type |         `-1` | `extract_failed` |
-| URL policy, ethics policy, robots rules, or another gate blocks it  |         `-1` | `blocked`        |
+| The ethics gate refuses it (robots rules, blocklist, or rate limit) |         `-1` | `blocked`        |
 
 An agentic `web_search` result can receive both signals: `+1` because it was a
 search hit and `-1` when the attempted fetch or extraction then fails. A direct
 successful `web_fetch` does not add a positive signal; its failure paths add the
 appropriate negative signal.
+
+### Records only site-caused failures as negative evidence
+
+A negative signal means the site itself failed or refused the read. Each
+source failure carries a stage, and only three stages map to a negative
+reason:
+
+| Failure stage | Cause                                                                                               | Rank signal           |
+| ------------- | --------------------------------------------------------------------------------------------------- | --------------------- |
+| `fetch`       | The network fetch failed                                                                            | `-1` `fetch_failed`   |
+| `extract`     | The page could not be read as an article                                                            | `-1` `extract_failed` |
+| `blocked`     | The ethics gate refused it (robots, blocklist, rate limit)                                          | `-1` `blocked`        |
+| `budget`      | The run's own navigation or host budget was spent                                                   | none                  |
+| `policy`      | The outbound URL policy refused it (for example, a URL that is too long or uses an insecure scheme) | none                  |
+
+`budget` and `policy` are Yantra's own refusals and say nothing about the
+site, so they never produce a rank signal on any path: agentic `web_search`,
+deterministic `ask`, or deterministic `research`. Every caller skips the
+signal when the stage has no reason. Before this rule, a run that exhausted its
+own budget recorded the refused hits as negative signals, which penalized
+those domains in cross-run ranking.
+
+The agentic `web_fetch` tool follows the same rule: an outbound URL-policy
+refusal, including a spent run budget, records no signal, and neither does a
+browser that fails to start. A search hit still records its positive
+`search_result` signal even when its fetch is then refused by the run's own
+budget or URL policy.
 
 Signals are best-effort. An invalid observed hostname is ignored, and an
 unavailable or failing ranking store does not fail the search, research run, or
@@ -84,8 +111,8 @@ yantra sites add WWW.Example.COM --json
 Calling it repeatedly adds another positive signal each time.
 
 There is no separate `like` command. There is also no manual `dislike` command;
-negative observations currently come only from blocked, failed, or unreadable
-research pages.
+negative observations currently come only from ethics-blocked, failed, or
+unreadable research pages.
 
 ### Delete a domain row
 
@@ -186,6 +213,9 @@ providers and sites.
   credibility, or trust guarantee. A high score can simply mean a domain
   appeared often, while a negative signal can reflect robots policy, a timeout,
   unsupported content, or the local environment rather than poor information.
+- In the deterministic pipelines, any error thrown while fetching is recorded as
+  `fetch_failed`, including a fetch aborted because the run was cancelled or
+  `ask`'s pipeline time budget expired.
 - Scores currently do not influence web-search order, source selection,
   synthesis, or conflict resolution. Only `yantra sites list` is sorted by the
   stored score.

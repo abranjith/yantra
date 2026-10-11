@@ -211,7 +211,7 @@ function bridgeEnvironment(input: {
     workflowStore: input.workflowStore,
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
+        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
         resultCap: 5,
         fetchTop: 3,
       },

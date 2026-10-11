@@ -390,11 +390,14 @@ export class ResearchLoop {
         }
       } else if (processed.failure) {
         failures.push(processed.failure);
-        safeRecordRankSignal(this.deps.rankSink, {
-          domain: processed.failure.host,
-          delta: -1,
-          reason: rankReasonForFailureStage(processed.failure.stage),
-        });
+        const reason = rankReasonForFailureStage(processed.failure.stage);
+        if (reason !== null) {
+          safeRecordRankSignal(this.deps.rankSink, {
+            domain: processed.failure.host,
+            delta: -1,
+            reason,
+          });
+        }
       }
     }
 

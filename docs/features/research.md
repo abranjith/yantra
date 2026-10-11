@@ -17,6 +17,8 @@ Both paths apply Yantra's outbound URL policy, ethics gate, blocklist, robots po
 
 The agentic `web_search` tool searches and then fetches and extracts the configured top results in parallel. A call returns the successfully extracted sites, per-site failures, and a snippet-only tail of additional results. `web_fetch` is reserved for one specific URL already supplied by the user or discovered in fetched evidence.
 
+A failed `web_search` returns a typed code: `SEARCH_BLOCKED`, `SEARCH_NO_RESULTS`, `SEARCH_TIMEOUT`, `SEARCH_PROVIDER_UNAVAILABLE`, or `SEARCH_FAILED`. Its message names the provider, says whether a retry can help, and gives one cause-specific next step, For example, after empty results the agent is told to reformulate the query once. After an anti-bot challenge it is told not to search again in the run, and to `web_fetch` a URL an earlier result returned or finish with `result_publish`. `SEARCH_BLOCKED` is not retryable. When the run's own navigation or distinct-host budget refuses reads, the search result reports that once at the top and never as the sites' fault. See the [search failure table](agentic-tasks.md#what-it-does) for every code and cause.
+
 Every successfully consulted page enters a run-local evidence ledger in first-consulted order. The ledger deduplicates by final URL and stores bounded, sanitized titles and excerpts. At publication, Yantra replaces any model-supplied source list with this ledger, assigns the source numbers, validates the resulting Brief, and writes the artifacts. Raw assistant prose is not a successful result.
 
 The model controls how many searches to make and when the evidence is broad enough. Agentic research does not use the deterministic hop counter, source pool, numeric coverage score, or follow-up-query generator. Its bounds are the shared agent budgets: a 15-minute default hard deadline, publication wind-down after 80% of that time, a 2,000,000-provider-token ceiling, a three-minute per-tool timeout, and three retries after an identical tool failure. Tool-call counts are audit data, not caps.
@@ -47,6 +49,8 @@ The source pool:
 Final local synthesis is evidence-first. It excludes off-topic sources, rejects headings, page chrome, junk, and weak claims, preserves contradictions instead of merging them, and demotes strongly opinionated factual sentences from `Key facts`. Supported restatements merge with their citations, related findings may become one-level child bullets, and comparison tables appear only when values are anchored to the query. Detail sections consolidate into `Key facts` and `Additional findings`; thin sections disappear instead of being padded.
 
 Per-source blocks, timeouts, HTTP failures, unreadable pages, and extraction failures become notices while the loop continues. A search failure for one query also becomes a notice. A wall-clock or source-budget stop is a successful partial Brief with a `budget_exhausted` notice, not an execution failure.
+
+Each per-source failure has a stage. `fetch`, `extract`, and `blocked` (a robots, blocklist, or rate-limit refusal) map to the notices `fetch_failed`, `extract_failed`, and `blocked`, and only these three record a negative local domain-rank signal. The shared pipeline also defines the stages `budget` and `policy` for refusals by Yantra's own run budget or URL policy. They map to the notices `budget_exhausted` and `other` and never record a rank signal. The deterministic loop's gate refuses only for robots, blocklist, and rate-limit reasons, so it does not produce these two stages today.
 
 ## How to Use It
 
@@ -122,6 +126,8 @@ Agentic model, credential, duration, token, tool-timeout, retry, confirmation, a
 
 The required input is one topic string. Ordinary agentic runs receive the sanitized topic plus approved ambient/profile context. Guaranteed-input markers such as `@{...}` or `@password{...}` keep marked values out of model-visible text while allowing tools to resolve them at the execution boundary; malformed markers are validation errors. A location-dependent phrase such as “near me” cannot cause Yantra to infer a location: the agentic pre-flight requires a granted configured location or returns an actionable blocker.
 
+In both modes, the command writes the topic exactly as it received it to stderr, right after the `research:` preamble line, as `goal: "<text>"`. This shows when the shell rewrote the argument: in bash, `yantra research "under $40"` receives `under 0` and echoes `goal: "under 0"`. The echo shows credential-shaped and `@{...}`-marked values as their placeholders, replaces control characters, collapses whitespace, and escapes quotes and backslashes. It shows at most 200 characters; a longer topic ends with `…` followed by ` (N characters received)`. A topic with a malformed `@{...}` marker echoes as `goal: [not shown: the goal has a malformed @{...} marker]` and is never printed raw. The echo goes only to stderr, so `--json` stdout is unchanged.
+
 A normal result is a protocol Brief containing:
 
 - a title and answer-first overview;
@@ -134,6 +140,7 @@ A normal result is a protocol Brief containing:
 Source semantics differ by mode:
 
 - In agentic mode, the Sources list means “pages successfully consulted by Yantra tools.” The evidence ledger, not the model, owns URLs and numbering. Model-authored findings are published as editorial text when they do not carry engine-verifiable claim citations, so the presence of a source list does not prove that every sentence is supported by one particular source.
+- In agentic mode, the runtime also appends notices it derives from the run's own record, after any notices the document already carries. These are one `search_failed` notice per failing search code, one `budget_exhausted` notice per spent navigation or distinct-host limit, and per-host read failures, up to 10 in total. `metadata.search_provider` names the providers the run searched through and is `null` only when no search ran. A templated report gets the same notices. See [runtime notices](agentic-tasks.md#inputs-and-outputs).
 - In deterministic mode, the Sources list contains only sources retained by relevance selection and clustering. Structured finding citations derive from documents whose extracted sentences support the claim. `metadata.citation_verdict` records the post-synthesis validation result, while excluded sources and failures remain visible as notices.
 
 Terminal output uses progressive disclosure. Markdown is a portable full-detail document. HTML is self-contained and inert: source-derived text is escaped, source links are restricted to HTTP(S), and no scripts or remote assets are emitted. JSON contains the complete validated document.
@@ -154,7 +161,7 @@ brief.html
 
 `research-state.json` is atomically replaced after each hop, so it contains the latest checkpoint: issued queries, fetch/keep counts, source identities and hashes, subtopic coverage, remaining budgets, and the final termination reason. Fetched HTML is retained locally for post-mortem inspection. Brief artifact writes are best-effort; a run can still succeed and render stdout if those three writes fail.
 
-Agentic runs use the shared run layout, including `manifest.json`, `events.jsonl`, provider session data under `agent/`, `tool-calls.jsonl`, `usage.json`, captures for oversized extracted text, `report.md`, and the published `brief.*` or `document.*` artifacts. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
+Agentic runs use the shared run layout, including `manifest.json`, `events.jsonl`, provider session data under `agent/`, `tool-calls.jsonl`, `usage.json`, `run-health.json`, captures for oversized extracted text, `report.md`, and the published `brief.*` or `document.*` artifacts. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) and [Run Health](diagnostics-and-audit.md#run-health).
 
 Invalid CLI choices and shared agent-option values exit as validation failures. Deterministic per-source failures and budget stops usually return exit 0 with notices. An unrecoverable loop/synthesis error, failed agent publication, provider-session failure, or user handoff is currently reported by the `research` command as an execution failure. If an agent finishes without publishing but has both a draft and ledger evidence, the runtime first attempts to assemble and validate a fallback Brief; without enough material, it preserves the final unvalidated response as diagnostic `result.md` and the command still fails.
 

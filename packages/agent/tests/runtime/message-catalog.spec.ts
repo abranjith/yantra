@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { buildYantraWrappedTools, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
 import { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from '../../src/runtime/messages.js';
+import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import {
   ActionPhase,
   EvidenceLedger,
@@ -187,6 +188,7 @@ function buildServices(): RunServices {
     sanitizer,
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
     urlProvenance: provenance,
+    runHealth: new RunHealthLedger(),
     confirmation: {
       gateway: {
         request: (request) =>
@@ -208,7 +210,7 @@ function buildServices(): RunServices {
     nowIso: () => new Date().toISOString(),
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
+        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
         resultCap: 5,
         fetchTop: 3,
       },

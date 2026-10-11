@@ -10,7 +10,10 @@ import {
 } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
+import {
+  WEB_FETCH_FAILURE_CAUSES,
+  webFetchSpec,
+} from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 
 import {
@@ -307,5 +310,186 @@ describe('@no-llm web_fetch tool', () => {
     );
 
     expect(result.error_code).toBe('EXTRACTION_EMPTY');
+  });
+});
+
+describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-fetch-health-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  /** True when `cause` is in the declared vocabulary (parametric entries by prefix). */
+  function declared(cause: string): boolean {
+    if ((WEB_FETCH_FAILURE_CAUSES as readonly string[]).includes(cause))
+      return !cause.includes('<');
+    if (/^budget:(navigations|hosts)$/.test(cause)) return true;
+    if (/^ethics-refused:(robots|blocklist|rate-limit)$/.test(cause)) return true;
+    return /^url-policy:url-[a-z-]+$/.test(cause);
+  }
+
+  it('records a successful fetch with its mode and host', async () => {
+    const services = buildServices({
+      runDir,
+      fetch: {
+        fetcher: fetcherReturning(fetchedDoc({ fetchMode: 'browser' })),
+        extractor: extractorReturning('Readable text.'),
+      },
+    });
+
+    await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://example.com/a' },
+      undefined,
+    );
+
+    expect(services.runHealth.fetches()).toEqual([
+      { normalizedUrl: 'https://example.com/a', mode: 'browser' },
+    ]);
+    expect(services.runHealth.toolOutcomes()).toEqual([
+      { tool: 'web_fetch', status: 'ok', host: 'example.com', fetchMode: 'browser' },
+    ]);
+  });
+
+  it('counts a fetched-but-unreadable page as a fetch and records the failure host', async () => {
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning('') },
+    });
+
+    await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://example.com/a' },
+      undefined,
+    );
+
+    expect(services.runHealth.fetches()).toHaveLength(1);
+    expect(services.runHealth.toolOutcomes()).toEqual([
+      {
+        tool: 'web_fetch',
+        status: 'error',
+        code: 'EXTRACTION_EMPTY',
+        cause: 'extraction-empty',
+        host: 'example.com',
+      },
+    ]);
+  });
+
+  it('attributes a navigation-budget refusal to the run, not the site', async () => {
+    const signals: DomainRankSignal[] = [];
+    const services = buildServices({
+      runDir,
+      limits: { maxNavigations: 1 },
+      domain: { rank: { record: (signal) => signals.push(signal) } },
+      fetch: {
+        fetcher: fetcherReturning(fetchedDoc()),
+        extractor: extractorReturning('Readable text.'),
+      },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    await tool.execute({ url: 'https://example.com/a' }, undefined);
+    const refused = await tool.execute({ url: 'https://example.com/b' }, undefined);
+
+    expect(refused.error_code).toBe('BUDGET_EXHAUSTED');
+    expect([...services.runHealth.budgetExhaustions()]).toEqual([
+      ['navigations', { firstTool: 'web_fetch', skippedReads: 1 }],
+    ]);
+    expect(services.runHealth.toolOutcomes()[1]).toMatchObject({
+      status: 'error',
+      cause: 'budget:navigations',
+      host: 'example.com',
+    });
+    expect(signals).toEqual([]);
+  });
+
+  it('declares a closed cause for every failure path', async () => {
+    const robots = new EthicsRefusedError(
+      { host: 'example.com', rule: 'robots.txt', reason: 'Disallowed', source: 'robots' },
+      { taskId: 't', runId: 'r', stepId: 'web_fetch' },
+    );
+    const failing = (error: unknown) => ({ fetch: () => Promise.reject(error) });
+    const scenarios: {
+      readonly name: string;
+      readonly options: Parameters<typeof buildServices>[0];
+      readonly url?: string;
+    }[] = [
+      { name: 'ethics', options: { fetch: { ethics: refusingEthics(robots) } } },
+      {
+        name: 'timeout',
+        options: {
+          fetch: { fetcher: failing(new FetchError('t', { url: 'u', kind: 'timeout' })) },
+        },
+      },
+      {
+        name: 'too-large',
+        options: {
+          fetch: { fetcher: failing(new FetchError('t', { url: 'u', kind: 'too-large' })) },
+        },
+      },
+      {
+        name: 'http-5xx',
+        options: {
+          fetch: {
+            fetcher: failing(
+              new FetchError('t', { url: 'u', kind: 'http-status', statusCode: 503 }),
+            ),
+          },
+        },
+      },
+      {
+        name: 'http-4xx',
+        options: {
+          fetch: {
+            fetcher: failing(
+              new FetchError('t', { url: 'u', kind: 'http-status', statusCode: 404 }),
+            ),
+          },
+        },
+      },
+      {
+        name: 'network',
+        options: {
+          fetch: { fetcher: failing(new FetchError('t', { url: 'u', kind: 'network' })) },
+        },
+      },
+      {
+        name: 'content-type',
+        options: {
+          fetch: { fetcher: fetcherReturning(fetchedDoc({ contentType: 'application/pdf' })) },
+        },
+      },
+      { name: 'policy', options: {}, url: 'http://example.com/insecure' },
+    ];
+
+    const causes: string[] = [];
+    for (const scenario of scenarios) {
+      const services = buildServices({ runDir, ...scenario.options });
+      await wrapTool(webFetchSpec(services), services).execute(
+        { url: scenario.url ?? 'https://example.com/a' },
+        undefined,
+      );
+      const outcome = services.runHealth.toolOutcomes()[0];
+      expect({ scenario: scenario.name, status: outcome?.status, host: outcome?.host }).toEqual({
+        scenario: scenario.name,
+        status: 'error',
+        host: 'example.com',
+      });
+      causes.push(outcome?.cause ?? '');
+    }
+
+    expect(causes).toEqual([
+      'ethics-refused:robots',
+      'timeout',
+      'too-large',
+      'http-5xx',
+      'http-4xx',
+      'network',
+      'content-type-refused',
+      'url-policy:url-insecure',
+    ]);
+    expect(causes.filter((cause) => !declared(cause))).toEqual([]);
   });
 });

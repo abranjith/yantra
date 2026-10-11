@@ -428,14 +428,22 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Make the stable audit projection JSON-safe without weakening redaction
-- [ ] TASK-002: Classify every `web_search` failure by its real cause
-- [ ] TASK-003: One failure chokepoint: `tool_failure` warnings, run-health outcomes, and a no-swallow boundary test
-- [ ] TASK-004: Classify our own budget and URL policy as ours, not the site's
-- [ ] TASK-005: Runtime-derived Brief notices and `metadata.search_provider`
-- [ ] TASK-006: Run-health summary: `run_health` event, `run-health.json`, and report "Run Health"
-- [ ] TASK-007: Agentic `usage.json` records one call per provider turn
-- [ ] TASK-008: Echo the received goal on every agentic and deterministic entry point
-- [ ] TASK-009: Pin the integrated contract against the G4/G6/G8 fault mix
+- [x] TASK-001: Make the stable audit projection JSON-safe without weakening redaction
+- [x] TASK-002: Classify every `web_search` failure by its real cause
+- [x] TASK-003: One failure chokepoint: `tool_failure` warnings, run-health outcomes, and a no-swallow boundary test
+- [x] TASK-004: Classify our own budget and URL policy as ours, not the site's
+- [x] TASK-005: Runtime-derived Brief notices and `metadata.search_provider`
+- [x] TASK-006: Run-health summary: `run_health` event, `run-health.json`, and report "Run Health"
+- [x] TASK-007: Agentic `usage.json` records one call per provider turn
+- [x] TASK-008: Echo the received goal on every agentic and deterministic entry point
+- [x] TASK-009: Pin the integrated contract against the G4/G6/G8 fault mix
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+### Implementation notes
+
+- DEVIATION (TASK-003): the FEAT-047 runtime-log safety vocabulary (`@yantra/test-helpers` `FORBIDDEN_RUNTIME_KEYS`) banned the key `cause` outright, which conflicts with the `tool_failure` field this spec requires. The ban now applies to any `cause` that is not a closed token (`/^[A-Za-z0-9_.:-]{1,80}$/`, no `//`), so a serialized `Error.cause` or prose under `cause` is still rejected. Covered by `packages/test-helpers/tests/runtime-log-safety.spec.ts`.
+- TASK-002: the search cause vocabulary adds `serp-fetch-failed` (SERP navigation failure, retryable) and `aborted` (cancelled SERP fetch) to the spec table's causes; both are rows the table's "anything else" would otherwise have reported as `unexpected:ScrapeSearchError`. Keyed providers' `TavilyAuthError` with code `missing-api-key` maps to `key-missing`, not `auth-rejected`.
+- TASK-008: the manual check's expectation was off by one character. Bash parses `$40` as `${4}` followed by `0`, so `yantra research "under $40"` receives `under 0` and the echo prints `goal: "under 0"`, which is the received goal. Verified against the built `renderGoalEcho` with a real bash-expanded argument instead of a live research run (which would scrape a search engine). A goal with a malformed `@{...}` marker echoes as `goal: [not shown: …]`, never raw, because an unclosed marker may hold a secret. `do` writes the echo after its no-LLM and template guards, so a refused `do` prints none.
+- TASK-009: the integrated scenario (`packages/agent/tests/runtime/fault-mix.spec.ts`) holds ONE scripted search provider for the run, because `resolveProvider` is called per search (the G4 per-call construction FEAT-050 removes); a provider rebuilt per call reset the script's call counter. Final gate: repo-wide `turbo run lint typecheck` green; protocol 265, test-helpers 8, CLI 535, agent 797 (2 skipped), e2e 106 (1 skipped) tests pass. Three real-Chrome core tests (`managed-install-helper-client`, `injected-host`, `agent-controller` popup) timed out under full-suite load and pass alone (12/12 and 75/75); none touch files this feature changed.
+- TASK-003: a domain failure that carries no typed diagnostic gets its cause derived from its stable code (`FETCH_TIMEOUT` → `fetch-timeout`), so every `tool_failure` line has a non-null closed cause.

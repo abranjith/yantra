@@ -43,7 +43,10 @@ export interface TransformResult {
 }
 
 const AUTH_QUERY_PARAM_RE = /(token|access_token|api_key|session|auth|sid|jwt)/i;
-const URL_IN_TEXT_RE = /https?:\/\/[^\s"'<>]+/gi;
+// A backslash is never a legal unescaped URL character. Stopping at it keeps a
+// URL inside JSON-escaped text (`…/dallas-tx\",`) from swallowing the escape,
+// which `new URL()` would then normalize to `/` and un-escape the quote.
+const URL_IN_TEXT_RE = /https?:\/\/[^\s"'<>\\]+/gi;
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
 const CARD_CANDIDATE_RE = /\b(?:\d[ -]?){13,19}\b/g;

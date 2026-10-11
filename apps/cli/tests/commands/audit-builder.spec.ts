@@ -389,6 +389,49 @@ describe('@no-llm cli/audit-builder', () => {
     expect(result.report.rawSessionLogCaptureBearing).toBe(false);
   });
 
+  it('reads usage from a per-turn agentic ledger whose provider is outside the old enum', async () => {
+    await writeFile(
+      join(runDir, 'manifest.json'),
+      JSON.stringify({
+        workflowName: 'research',
+        status: 'completed',
+        agent: { provider: 'groq' },
+      }),
+      'utf8',
+    );
+    const turn = (n: number, at: string) => ({
+      step_id: `turn-${n}`,
+      model: 'llama-x',
+      provider: 'groq',
+      input_tokens: 10,
+      output_tokens: 4,
+      cost_estimate_usd: 0.01,
+      latency_ms: 1000,
+      at,
+    });
+    await writeFile(
+      join(runDir, 'usage.json'),
+      JSON.stringify({
+        run_id: 'groq-run',
+        calls: [turn(1, '2026-07-14T12:00:01.000Z'), turn(2, '2026-07-14T12:00:02.000Z')],
+        totals: { input_tokens: 20, output_tokens: 8, cost_estimate_usd: 0.02, call_count: 2 },
+        agent: { turns: 2, input_tokens: 20, output_tokens: 8, cost_usd: 0.02 },
+      }),
+      'utf8',
+    );
+
+    const result = await buildAuditReport('groq-run', runDir);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.report.usage).toEqual({
+      turns: 2,
+      inputTokens: 20,
+      outputTokens: 8,
+      costUsd: 0.02,
+    });
+  });
+
   it('renders typed startup failures from the manifest', async () => {
     await writeFile(
       join(runDir, 'manifest.json'),

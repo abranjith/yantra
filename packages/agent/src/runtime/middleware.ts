@@ -36,6 +36,7 @@ import { Check, Errors } from 'typebox/value';
 
 import type { BudgetDecision, BudgetLimit } from './budget.js';
 import { renderAgentMessage } from './messages.js';
+import type { ToolOutcomeStatus } from './run-health.js';
 import type { RunServices } from './run-services.js';
 import type { CaptureMetadata } from './vision.js';
 
@@ -77,6 +78,33 @@ export type YantraToolContent =
       readonly artifact: CaptureMetadata;
     };
 
+/**
+ * Operator-only facts about a tool outcome (FEAT-048).
+ *
+ * Read by the middleware's single outcome chokepoint, which records them in
+ * the run-health ledger and the `tool_failure` runtime log line. They are
+ * never serialized into `modelText` and never copied into `details`, so every
+ * field must already be a closed value: a provider name, a bare hostname, a
+ * fetch mode — never a message, URL path or query, or page text.
+ */
+export interface ToolDiagnostic {
+  /** Search provider name when the tool used one. */
+  readonly provider?: string;
+  /** Hostname only, never a full URL. */
+  readonly host?: string;
+  /** How a page was actually fetched, on `web_fetch` success. */
+  readonly fetch_mode?: 'http' | 'browser';
+}
+
+/** A failure's diagnostic: the closed, per-tool cause is mandatory. */
+export interface ToolFailureDiagnostic extends ToolDiagnostic {
+  /**
+   * Closed per-tool cause vocabulary (`anomaly-challenge`, `rate-limited`,
+   * `timeout`, `unexpected:<ErrorClass>`, …). Never contains a message.
+   */
+  readonly cause: string;
+}
+
 /** Successful domain-operation output before sanitization/bounding. */
 export interface DomainSuccess {
   readonly ok: true;
@@ -88,6 +116,8 @@ export interface DomainSuccess {
   readonly details?: unknown;
   /** Terminal tools set this to close the run after the batch. */
   readonly terminate?: boolean;
+  /** Operator-only provider/fetch-mode facts; never model-visible. */
+  readonly diagnostic?: ToolDiagnostic;
 }
 
 /** Expected (structured) domain failure — a stable-coded tool result. */
@@ -101,6 +131,8 @@ export interface DomainFailure {
   readonly retryable: boolean;
   /** Optional artifacts recorded in `details`. */
   readonly details?: unknown;
+  /** Operator-only typed cause; never model-visible and never in `details`. */
+  readonly diagnostic?: ToolFailureDiagnostic;
 }
 
 /** A domain operation's result: structured success or structured failure. */
@@ -216,12 +248,42 @@ export function wrapTool<TParams extends TSchema>(
   };
 }
 
+/**
+ * A terminal result plus the operator-only facts the outcome chokepoint
+ * records. Every exit from {@link runStages} produces exactly one.
+ */
+interface PipelineOutcome {
+  readonly result: YantraToolResult;
+  /** Closed cause for a non-`ok` result; derived from the code when absent. */
+  readonly cause?: string;
+  /** Provider/host/fetch-mode facts the domain op reported. */
+  readonly diagnostic?: ToolDiagnostic;
+}
+
 async function runPipeline<TParams extends TSchema>(
   spec: ToolWrapperSpec<TParams>,
   services: RunServices,
   rawParams: unknown,
   callSignal: AbortSignal | undefined,
 ): Promise<YantraToolResult> {
+  const outcome = await runStages(spec, services, rawParams, callSignal);
+  recordOutcome(spec.name, services, outcome);
+  return outcome.result;
+}
+
+/** A domain failure's result together with its own typed diagnostic. */
+function domainFailureOutcome(result: YantraToolResult, domain: DomainFailure): PipelineOutcome {
+  return domain.diagnostic === undefined
+    ? { result }
+    : { result, cause: domain.diagnostic.cause, diagnostic: domain.diagnostic };
+}
+
+async function runStages<TParams extends TSchema>(
+  spec: ToolWrapperSpec<TParams>,
+  services: RunServices,
+  rawParams: unknown,
+  callSignal: AbortSignal | undefined,
+): Promise<PipelineOutcome> {
   try {
     // 1. Input validation — a closed schema rejects unknown/invalid input
     //    before any budget, policy, or domain code runs.
@@ -235,15 +297,18 @@ async function runPipeline<TParams extends TSchema>(
       const pointer = first?.instancePath ?? first?.path;
       const where = pointer !== undefined && pointer.length > 0 ? ` at "${pointer}"` : '';
       const invalidMessage = `Invalid tool input${where}: ${first?.message ?? 'schema validation failed'}.`;
-      return failure(
-        spec,
-        services,
-        'INVALID_INPUT',
-        renderAgentMessage('middleware', 'INVALID_INPUT', 'schema-validation', {
-          message: invalidMessage,
-        }),
-        true,
-      );
+      return {
+        result: failure(
+          spec,
+          services,
+          'INVALID_INPUT',
+          renderAgentMessage('middleware', 'INVALID_INPUT', 'schema-validation', {
+            message: invalidMessage,
+          }),
+          true,
+        ),
+        cause: 'schema-validation',
+      };
     }
     // 1.4. Record what the model itself supplied, BEFORE resolution, so the
     //      registry can only ever hold values the model already had. These are
@@ -266,7 +331,7 @@ async function runPipeline<TParams extends TSchema>(
 
     // 2. Budget / timeout / abort check.
     if (isAborted(services, callSignal)) {
-      return abortedResult(spec, services);
+      return { result: abortedResult(spec, services), cause: 'run-aborted' };
     }
     const terminal = spec.terminal === true;
     const reserved = services.budgets.reserveCall(spec.name, { terminal });
@@ -281,46 +346,55 @@ async function runPipeline<TParams extends TSchema>(
         terminal || reserved.error.carriesPublishRemedy
           ? ''
           : ' Publish your result now with the evidence you already gathered — it is attached automatically.';
-      return failure(
-        spec,
-        services,
-        reserved.error.code,
-        renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
-          message: `${reserved.error.message}${remedy}`,
-        }),
-        false,
-        // The orchestrator needs the specific limit to decide whether the RUN
-        // is over or only this tool is; the prose message is not a contract.
-        { budget_limit: reserved.error.limit },
-      );
+      return {
+        result: failure(
+          spec,
+          services,
+          reserved.error.code,
+          renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
+            message: `${reserved.error.message}${remedy}`,
+          }),
+          false,
+          // The orchestrator needs the specific limit to decide whether the RUN
+          // is over or only this tool is; the prose message is not a contract.
+          { budget_limit: reserved.error.limit },
+        ),
+        cause: `budget:${reserved.error.limit}`,
+      };
     }
 
     // 3. Host + ethics + scope policy, plus the action-phase latch: after a
     //    successful publish, mutating tools are structurally rejected.
     if (spec.mutating && services.actionPhase.isClosed()) {
-      return failure(
-        spec,
-        services,
-        'ACTION_PHASE_CLOSED',
-        renderAgentMessage('middleware', 'ACTION_PHASE_CLOSED', 'published'),
-        false,
-      );
+      return {
+        result: failure(
+          spec,
+          services,
+          'ACTION_PHASE_CLOSED',
+          renderAgentMessage('middleware', 'ACTION_PHASE_CLOSED', 'published'),
+          false,
+        ),
+        cause: 'action-phase-closed',
+      };
     }
     // Evidence-phase latch: once the completion nudge closed evidence
     // gathering, the only forward path is packaging what was already fetched.
     if (spec.evidenceGathering && services.evidencePhase.isFrozen()) {
-      return failure(
-        spec,
-        services,
-        'EVIDENCE_FROZEN',
-        renderAgentMessage('middleware', 'EVIDENCE_FROZEN', 'evidence-closed'),
-        false,
-      );
+      return {
+        result: failure(
+          spec,
+          services,
+          'EVIDENCE_FROZEN',
+          renderAgentMessage('middleware', 'EVIDENCE_FROZEN', 'evidence-closed'),
+          false,
+        ),
+        cause: 'evidence-frozen',
+      };
     }
     if (spec.policy) {
       const refusal = await spec.policy(params, { services });
       if (refusal) {
-        return fromFailure(spec, services, refusal);
+        return domainFailureOutcome(fromFailure(spec, services, refusal), refusal);
       }
     }
 
@@ -330,16 +404,19 @@ async function runPipeline<TParams extends TSchema>(
       const consent = await runConfirmation(spec, services, params);
       if (consent.kind === 'denied') {
         return {
-          status: 'denied',
-          modelText: jsonText({
+          result: {
             status: 'denied',
+            modelText: jsonText({
+              status: 'denied',
+              error_code: consent.errorCode,
+              message: consent.message,
+            }),
+            details: null,
             error_code: consent.errorCode,
-            message: consent.message,
-          }),
-          details: null,
-          error_code: consent.errorCode,
-          retryable: false,
-          ...(consent.confirmationId ? { confirmation_id: consent.confirmationId } : {}),
+            retryable: false,
+            ...(consent.confirmationId ? { confirmation_id: consent.confirmationId } : {}),
+          },
+          cause: codeCause(consent.errorCode),
         };
       }
       confirmationId = consent.confirmationId;
@@ -357,29 +434,14 @@ async function runPipeline<TParams extends TSchema>(
       callSignal,
     );
     if (guarded.kind === 'aborted') {
-      return abortedResult(spec, services, confirmationId);
+      return { result: abortedResult(spec, services, confirmationId), cause: 'run-aborted' };
     }
     if (guarded.kind === 'timeout') {
-      return {
-        status: 'error',
-        modelText: jsonText({
-          status: 'error',
-          error_code: 'TOOL_TIMEOUT',
-          message: renderAgentMessage('middleware', 'TOOL_TIMEOUT', 'execution-timeout', {
-            tool: spec.name,
-            timeoutMs: services.budgets.perToolTimeoutMs,
-          }),
-          retryable: true,
-        }),
-        details: null,
-        error_code: 'TOOL_TIMEOUT',
-        retryable: true,
-        ...(confirmationId ? { confirmation_id: confirmationId } : {}),
-      };
+      return { result: timeoutResult(spec, services, confirmationId), cause: 'per-tool-timeout' };
     }
     const domain = guarded.value;
     if (!domain.ok) {
-      return fromFailure(spec, services, domain, confirmationId);
+      return domainFailureOutcome(fromFailure(spec, services, domain, confirmationId), domain);
     }
 
     // 6. Sanitizer + output bounding, then 7. stable tool result.
@@ -387,36 +449,46 @@ async function runPipeline<TParams extends TSchema>(
     const account = services.budgets.accountResultBytes(bounded.bytes, { terminal });
     if (!account.isOk) {
       return {
-        status: 'error',
-        modelText: jsonText({
+        result: {
           status: 'error',
-          error_code: account.error.code,
-          message: renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
-            message: account.error.message,
+          modelText: jsonText({
+            status: 'error',
+            error_code: account.error.code,
+            message: renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'budget-decision', {
+              message: account.error.message,
+            }),
+            retryable: false,
           }),
+          details: { ...asDetailsRecord(domain.details), budget_limit: account.error.limit },
+          error_code: account.error.code,
           retryable: false,
-        }),
-        details: { ...asDetailsRecord(domain.details), budget_limit: account.error.limit },
-        error_code: account.error.code,
-        retryable: false,
-        ...(confirmationId ? { confirmation_id: confirmationId } : {}),
+          ...(confirmationId ? { confirmation_id: confirmationId } : {}),
+        },
+        cause: `budget:${account.error.limit}`,
+        ...(domain.diagnostic === undefined ? {} : { diagnostic: domain.diagnostic }),
       };
     }
     const rich = await validateScreenshotContent(spec.name, domain.content, services);
     if (!rich.isOk) {
-      return failure(spec, services, rich.error.code, rich.error.message, false, {
-        budget_limit: rich.error.limit,
-      });
+      return {
+        result: failure(spec, services, rich.error.code, rich.error.message, false, {
+          budget_limit: rich.error.limit,
+        }),
+        cause: `budget:${rich.error.limit}`,
+      };
     }
     return {
-      status: 'ok',
-      modelText: bounded.text,
-      ...(rich.value.length > 0
-        ? { content: [{ kind: 'text' as const, text: bounded.text }, ...rich.value] }
-        : {}),
-      details: maskUserInputDeep(domain.details ?? null, services.userInput),
-      ...(domain.terminate ? { terminate: true } : {}),
-      ...(confirmationId ? { confirmation_id: confirmationId } : {}),
+      result: {
+        status: 'ok',
+        modelText: bounded.text,
+        ...(rich.value.length > 0
+          ? { content: [{ kind: 'text' as const, text: bounded.text }, ...rich.value] }
+          : {}),
+        details: maskUserInputDeep(domain.details ?? null, services.userInput),
+        ...(domain.terminate ? { terminate: true } : {}),
+        ...(confirmationId ? { confirmation_id: confirmationId } : {}),
+      },
+      ...(domain.diagnostic === undefined ? {} : { diagnostic: domain.diagnostic }),
     };
   } catch (error) {
     // 8. Unexpected exception: audited, genericized. No secret/raw-content leak.
@@ -436,16 +508,132 @@ async function runPipeline<TParams extends TSchema>(
       },
       'unexpected tool error',
     );
-    return failure(
-      spec,
-      services,
-      'TOOL_EXECUTION_FAILED',
-      renderAgentMessage('middleware', 'TOOL_EXECUTION_FAILED', 'unexpected', {
+    return {
+      result: failure(
+        spec,
+        services,
+        'TOOL_EXECUTION_FAILED',
+        renderAgentMessage('middleware', 'TOOL_EXECUTION_FAILED', 'unexpected', {
+          tool: spec.name,
+        }),
+        true,
+      ),
+      cause: `unexpected:${errorClass}`,
+    };
+  }
+}
+
+/** The per-tool timeout result (the domain op was abandoned, not awaited). */
+function timeoutResult<TParams extends TSchema>(
+  spec: ToolWrapperSpec<TParams>,
+  services: RunServices,
+  confirmationId: string | null,
+): YantraToolResult {
+  return {
+    status: 'error',
+    modelText: jsonText({
+      status: 'error',
+      error_code: 'TOOL_TIMEOUT',
+      message: renderAgentMessage('middleware', 'TOOL_TIMEOUT', 'execution-timeout', {
         tool: spec.name,
+        timeoutMs: services.budgets.perToolTimeoutMs,
       }),
-      true,
+      retryable: true,
+    }),
+    details: null,
+    error_code: 'TOOL_TIMEOUT',
+    retryable: true,
+    ...(confirmationId ? { confirmation_id: confirmationId } : {}),
+  };
+}
+
+/**
+ * The `tool_failure` runtime-log projection (FEAT-048). Closed fields only:
+ * a code, a cause token, a provider name, a bare hostname, a budget limit.
+ */
+interface ToolFailureEvent {
+  readonly schema_version: 1;
+  readonly event: 'tool_failure';
+  readonly tool: string;
+  readonly code: string;
+  readonly cause: string;
+  readonly provider?: string;
+  readonly host?: string;
+  readonly budget_limit?: string;
+}
+
+/**
+ * The one outcome chokepoint. Every terminal result of every tool call passes
+ * here exactly once: it is recorded in the run-health ledger, and an `error`
+ * or `timeout` additionally emits exactly one `warn` `tool_failure` line.
+ *
+ * Recording must never change the call's result, so a fault while recording is
+ * logged to the process logger and the result is returned unchanged.
+ */
+function recordOutcome(tool: string, services: RunServices, outcome: PipelineOutcome): void {
+  const { result } = outcome;
+  const status: ToolOutcomeStatus =
+    result.status === 'error' && result.error_code === 'TOOL_TIMEOUT' ? 'timeout' : result.status;
+  const diagnostic = outcome.diagnostic ?? {};
+  const host = safeHost(diagnostic.host);
+  const budgetLimit = stringField(asDetailsRecord(result.details).budget_limit);
+  const code = result.error_code;
+  const cause =
+    status === 'ok' ? undefined : (safeCause(outcome.cause) ?? codeCause(code ?? 'unknown'));
+  try {
+    services.runHealth.recordToolOutcome({
+      tool,
+      status,
+      ...(code === undefined ? {} : { code }),
+      ...(cause === undefined ? {} : { cause }),
+      ...(diagnostic.provider === undefined ? {} : { provider: diagnostic.provider }),
+      ...(host === undefined ? {} : { host }),
+      ...(budgetLimit === undefined ? {} : { budgetLimit }),
+      ...(diagnostic.fetch_mode === undefined ? {} : { fetchMode: diagnostic.fetch_mode }),
+    });
+    if ((status === 'error' || status === 'timeout') && cause !== undefined) {
+      const event: ToolFailureEvent = {
+        schema_version: 1,
+        event: 'tool_failure',
+        tool,
+        code: code ?? 'UNKNOWN',
+        cause,
+        ...(diagnostic.provider === undefined ? {} : { provider: diagnostic.provider }),
+        ...(host === undefined ? {} : { host }),
+        ...(budgetLimit === undefined ? {} : { budget_limit: budgetLimit }),
+      };
+      (services.runtimeLogger ?? logger).warn(toLogPayload(event), 'tool failure');
+    }
+  } catch (error) {
+    logger.error(
+      { tool, error_type: error instanceof Error ? error.name : 'UnknownError' },
+      'tool outcome recording failed',
     );
   }
+}
+
+/** Bridge a closed log projection (an interface) to the logger's record type. */
+function toLogPayload(event: object): Record<string, unknown> {
+  return { ...event };
+}
+
+/** Derive a closed cause token from a stable error code (`FETCH_TIMEOUT` → `fetch-timeout`). */
+function codeCause(code: string): string {
+  return code.toLowerCase().replaceAll('_', '-');
+}
+
+/** A cause is a short token, never prose: anything else is dropped. */
+function safeCause(cause: string | undefined): string | undefined {
+  return cause !== undefined && /^[A-Za-z0-9_.:-]{1,80}$/.test(cause) ? cause : undefined;
+}
+
+/** Hostname only — a value that looks like anything more is dropped. */
+function safeHost(host: string | undefined): string | undefined {
+  return host !== undefined && /^[A-Za-z0-9.-]{1,253}(?::\d{1,5})?$/.test(host) ? host : undefined;
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 async function validateScreenshotContent(
@@ -489,6 +677,7 @@ async function validateScreenshotContent(
   try {
     bytes = await readFile(absolute);
   } catch {
+    // swallow-ok: screenshot-file probe; a missing file is refused with a stable budget code
     return denied('capture-bytes', 'Screenshot artifact is missing.');
   }
   const digest = createHash('sha256').update(bytes).digest('hex');

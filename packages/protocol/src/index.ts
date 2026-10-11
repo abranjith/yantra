@@ -109,6 +109,7 @@ export {
   UsageProvider,
   validateUsageLedgerTotals,
 } from './schemas/usage.js';
+export { RUN_HEALTH_SCHEMA_VERSION, RunHealth } from './schemas/run-health.js';
 export {
   LocatorCandidate,
   ParamDeclaration,

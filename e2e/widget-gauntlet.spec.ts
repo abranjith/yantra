@@ -19,6 +19,7 @@ import {
   EvidenceLedger,
   EvidencePhase,
   UrlPolicy,
+  RunHealthLedger,
   UrlProvenance,
   buildYantraWrappedTools,
   resolveVisionAvailability,
@@ -332,6 +333,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     sanitizer,
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
     urlProvenance: provenance,
+    runHealth: new RunHealthLedger(),
     confirmation: {
       gateway: {
         request: (request) =>
@@ -359,7 +361,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     nowIso: () => new Date().toISOString(),
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: { message: 'unused' } }),
+        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
         resultCap: 5,
         fetchTop: 3,
       },

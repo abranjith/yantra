@@ -315,3 +315,37 @@ describe('@no-llm yantra do cutover', () => {
     expect(source).toContain('runAgenticTask');
   });
 });
+
+describe('@no-llm yantra do goal echo (FEAT-048)', () => {
+  it('writes the received goal as its first stderr line, before the agent starts', async () => {
+    const result = await invoke(
+      ['do', 'top 5 hybrid SUVs to buy now for under ,000'],
+      outcome('published'),
+    );
+
+    expect(result.stderr.split('\n')[0]).toBe(
+      'goal: "top 5 hybrid SUVs to buy now for under ,000"',
+    );
+    expect(result.request.goal).toBe('top 5 hybrid SUVs to buy now for under ,000');
+  });
+
+  it('keeps --json stdout free of the echo', async () => {
+    const result = await invoke(
+      ['do', 'top 5 hybrid SUVs to buy now for under ,000', '--json'],
+      outcome('published'),
+      { render: true },
+    );
+
+    expect(result.stderr).toContain('goal: "top 5 hybrid SUVs to buy now for under ,000"\n');
+    expect(result.stdout).not.toContain('goal: "');
+  });
+
+  it('writes no echo when the command is refused before the agent could start', async () => {
+    const result = await invoke(
+      ['do', 'top 5 hybrid SUVs to buy now for under ,000', '--no-llm'],
+      outcome('published'),
+    );
+
+    expect(result.stderr).not.toContain('goal: "');
+  });
+});

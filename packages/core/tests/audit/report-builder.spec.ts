@@ -320,4 +320,104 @@ describe('@no-llm report builder — agentic runs', () => {
 
     await rm(runDir, { recursive: true, force: true });
   });
+
+  const RUN_HEALTH = {
+    schema_version: 1,
+    run_id: 'agentic-run',
+    searches: {
+      total: 22,
+      ok: 11,
+      failed_by_code: { SEARCH_NO_RESULTS: 2, SEARCH_BLOCKED: 9 },
+      providers: ['duckduckgo'],
+    },
+    fetches: {
+      total: 26,
+      by_mode: { http: 20, browser: 6 },
+      repeat_fetches: 9,
+      failed_by_code: { FETCH_TIMEOUT: 1 },
+    },
+    source_failures: { fetch: 4, extract: 1, blocked: 0, budget: 2, policy: 0 },
+    browser: { launches: 3 },
+    budgets: {
+      navigations_used: 30,
+      navigations_limit: 30,
+      hosts_used: 12,
+      hosts_limit: 20,
+      exhausted: ['navigations'],
+    },
+    tool_failures: {
+      total: 12,
+      by_code: { FETCH_TIMEOUT: 1, SEARCH_BLOCKED: 9, SEARCH_NO_RESULTS: 2 },
+    },
+    notices: 5,
+  };
+
+  it('renders Run Health after Tool Calls and lists run-health.json in the audit trail', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-run-health-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(join(runDir, 'run-health.json'), JSON.stringify(RUN_HEALTH), 'utf8');
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    const section = [
+      '## Run Health',
+      'Searches: 22 total, 11 ok, 11 failed (SEARCH_BLOCKED 9, SEARCH_NO_RESULTS 2) - providers: duckduckgo',
+      'Fetches: 26 total (20 http, 6 browser), 9 repeat - failed: FETCH_TIMEOUT 1',
+      'Source failures: fetch 4, extract 1, blocked 0, budget 2, policy 0',
+      'Browser launches: 3',
+      'Navigations: 30/30   Hosts: 12/20   Exhausted: navigations',
+      'Tool failures: 12 (SEARCH_BLOCKED 9, SEARCH_NO_RESULTS 2, FETCH_TIMEOUT 1)',
+      'Notices: 5',
+      '',
+      '## Captures',
+    ].join('\n');
+    expect(markdown).toContain(section);
+    expect(markdown.indexOf('## Tool Calls')).toBeLessThan(markdown.indexOf('## Run Health'));
+    expect(markdown).toContain('- run-health.json');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('renders an old run without run-health.json byte-identically to before', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-no-run-health-'));
+    await writeAgenticRun(runDir, []);
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).not.toContain('Run Health');
+    expect(markdown).not.toContain('run-health.json');
+    expect(markdown).toContain('- none\n\n## Captures');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('renders one unreadable line for an invalid run-health.json and never throws', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-bad-run-health-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(
+      join(runDir, 'run-health.json'),
+      JSON.stringify({ ...RUN_HEALTH, searches: { ...RUN_HEALTH.searches, total: 3 } }),
+      'utf8',
+    );
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain('Run Health: run-health.json unreadable');
+    expect(markdown).not.toContain('## Run Health');
+    expect(markdown).toContain('- run-health.json');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('treats unparseable run-health.json as unreadable', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-garbage-run-health-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(join(runDir, 'run-health.json'), 'not json', 'utf8');
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain('Run Health: run-health.json unreadable');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
 });

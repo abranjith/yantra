@@ -86,6 +86,38 @@ describe('@no-llm sanitizer strippers', () => {
     expect(result.text).toContain('example.com/p');
   });
 
+  it('a URL followed by an escaped quote is rewritten without consuming the backslash', () => {
+    // Regression (FEAT-048 G8): inside double-encoded JSON the URL pattern
+    // captured `…/dallas-tx\`, and `new URL()` normalized the backslash to `/`,
+    // un-escaping the closing quote so the audit record no longer parsed.
+    const inner = JSON.stringify({ url: 'https://example.com/new-cars/dallas-tx/' });
+    const outer = JSON.stringify({ text: inner });
+
+    const query = stripQueryStrings(outer);
+    const auth = stripAuthQueryParams(outer);
+
+    expect(query.text).toBe(outer);
+    expect(query.hits).toBe(0);
+    expect(auth.text).toBe(outer);
+    expect(auth.hits).toBe(0);
+    expect(JSON.parse(JSON.parse(query.text).text)).toEqual({
+      url: 'https://example.com/new-cars/dallas-tx/',
+    });
+  });
+
+  it('a URL ending at an escaped backslash or newline keeps the escape intact', () => {
+    const outer = JSON.stringify({
+      text: 'see https://a.example/x?token=s3cret\\ and https://b.example/y\nnext',
+    });
+
+    const result = stripQueryStrings(outer);
+
+    expect(result.text).not.toContain('s3cret');
+    expect(JSON.parse(result.text)).toEqual({
+      text: 'see https://a.example/x\\ and https://b.example/y\nnext',
+    });
+  });
+
   it('stripQueryStrings stops at a quote instead of eating JSON structure', () => {
     // Regression: the fallback ran from any `?` to the next whitespace, so a
     // tool result containing a field named "Where to?" came back as

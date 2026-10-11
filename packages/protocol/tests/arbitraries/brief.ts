@@ -179,6 +179,7 @@ const noticeArb: fc.Arbitrary<BriefNotice> = fc.record({
     'uncited_claim_flagged',
     'budget_exhausted',
     'limited_evidence',
+    'search_failed',
     'other',
   ),
 });
