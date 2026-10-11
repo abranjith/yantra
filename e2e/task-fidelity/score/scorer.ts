@@ -673,13 +673,18 @@ export function stability(
       const a = new Set(sets[left]);
       const b = new Set(sets[right]);
       const union = new Set([...a, ...b]);
+      // Two runs that both delivered nothing agree about nothing: the pair
+      // says nothing about stability, so it is not counted either way.
+      if (union.size === 0) continue;
       const intersection = [...a].filter((key) => b.has(key)).length;
-      total += union.size === 0 ? 1 : intersection / union.size;
+      total += intersection / union.size;
       pairs += 1;
     }
   }
   const groups = new Map<string, number>();
-  for (const set of sets) groups.set(set.join('|'), (groups.get(set.join('|')) ?? 0) + 1);
+  for (const set of sets) {
+    if (set.length > 0) groups.set(set.join('|'), (groups.get(set.join('|')) ?? 0) + 1);
+  }
   return {
     mean_jaccard_top5: pairs === 0 ? null : Math.round((total / pairs) * 1000) / 1000,
     same_top5_in_at_least: Math.max(0, ...groups.values()),

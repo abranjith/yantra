@@ -19,6 +19,7 @@
     "@yantra/protocol": "workspace:*"
   },
   "devDependencies": {
-    "@yantra/test-helpers": "workspace:*"
+    "@yantra/test-helpers": "workspace:*",
+    "zod": "^3.24.1"
   }
 }

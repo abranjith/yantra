@@ -21,6 +21,7 @@ import {
   resolveCommandTaskProfile,
   runAgenticTask,
   type AgentAuthSelection,
+  type AgentBudgetConfig,
   type AgentModelSelection,
   type AgentProgressEvent,
   type AgentTaskConnector,
@@ -137,6 +138,8 @@ export interface RunScenarioOptions {
   readonly agentOverride?: 'scripted';
   /** Scans `runtime.jsonl`; the deterministic tier always supplies it. */
   readonly runtimeLogScanner?: RuntimeLogScanner;
+  /** Agentic mode: the CLI-resolved budgets. The scenario's own budgets override them. */
+  readonly budgets?: Partial<AgentBudgetConfig>;
 }
 
 /** Planted where nothing should ever copy it from; found anywhere, it is a leak. */
@@ -202,7 +205,9 @@ export async function runScenario(
         profile,
         model: scripted ? SCRIPTED_MODEL : (options.model ?? SCRIPTED_MODEL),
         auth: options.auth ?? { mode: 'managed' },
-        ...(scenario.budgets === undefined ? {} : { budgets: scenario.budgets }),
+        ...(options.budgets === undefined && scenario.budgets === undefined
+          ? {}
+          : { budgets: { ...options.budgets, ...scenario.budgets } }),
         ambient: {
           grants: { location: true, screenshots: false },
           userLocation: locationOf(scenario.userLocation),

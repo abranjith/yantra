@@ -19,3 +19,6 @@ packages/core/tests/report-template/fixtures/exec-brief-guidance.md
 
 # Task-fidelity harness output (scorecards, run directories); gitignored.
 e2e/task-fidelity/.out/
+
+# Task-fidelity goldens are byte-for-byte renderer/extractor output.
+e2e/task-fidelity/golden/

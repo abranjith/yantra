@@ -26,7 +26,8 @@ import {
   type FilterName,
 } from '../fixtures/inventory.js';
 import { originOf } from '../fixtures/sites.js';
-import type { Scenario } from '../scenario.js';
+import type { Scenario, ScenarioContract } from '../scenario.js';
+import { scoreRun } from '../score/scorer.js';
 
 import {
   arrayOf,
@@ -112,6 +113,19 @@ function resultsRecords(run: Parameters<Expectation['measure']>[0]): readonly un
 }
 
 const firstItem = INVENTORY[0];
+
+/** The faithful answer: new 2026 Summit AWD rows from the required site, cheapest five. */
+const CONTRACT: ScenarioContract = {
+  deliverable: 'table',
+  requiredFields: ['seller', 'price', 'exteriorColor', 'interiorColor'],
+  filters: (Object.keys(CANONICAL_FILTERS) as FilterName[]).map((name) => ({
+    name,
+    value: CANONICAL_FILTERS[name],
+  })),
+  requiredSources: [LISTING_HOST],
+  ranking: { field: 'price', order: 'asc' },
+  limit: 5,
+};
 
 const expectations: readonly Expectation[] = [
   ...crossCuttingExpectations(),
@@ -273,6 +287,16 @@ const expectations: readonly Expectation[] = [
     target: matchesShape({ status: 'ok' }),
     note: 'The results page is reachable from search evidence alone (no invented URL).',
   },
+  {
+    id: 'field-coverage-oracle',
+    owner: 'FEAT-053',
+    // The scorer itself, on this deterministic run: proves end to end that a
+    // correct run can reach plan §11's "≥ 90% of requested cells" target.
+    measure: (run) => scoreRun(run, { contract: CONTRACT }, truthRows()).field_coverage.value,
+    target: atLeast(0.9),
+    baseline: equals(0),
+    note: '§11 "requested cells delivered from the required source": ≥ 90% on this scenario.',
+  },
 ];
 
 export const listingTable: Scenario = {
@@ -282,17 +306,7 @@ export const listingTable: Scenario = {
   goal:
     'List dealer, lowest price, exterior and interior color for new 2026 Norvale Teyra Summit ' +
     'in AWD near me. Use faceted-listing.yantra.test',
-  contract: {
-    deliverable: 'table',
-    requiredFields: ['seller', 'price', 'exteriorColor', 'interiorColor'],
-    filters: (Object.keys(CANONICAL_FILTERS) as FilterName[]).map((name) => ({
-      name,
-      value: CANONICAL_FILTERS[name],
-    })),
-    requiredSources: [LISTING_HOST],
-    ranking: { field: 'price', order: 'asc' },
-    limit: 5,
-  },
+  contract: CONTRACT,
   userLocation: USER_LOCATION,
   serps: [
     {

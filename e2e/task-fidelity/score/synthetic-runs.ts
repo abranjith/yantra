@@ -15,6 +15,8 @@ import type { RunArtifacts, ScenarioRun } from '../runner.js';
 import { listingTable } from '../scenarios/listing-table.js';
 import type { SearchCallRecord } from '../search/scripted-provider.js';
 
+import type { ScoreCard } from './scorecard-schema.js';
+
 const RUN_ID = '20260925T130634Z-research-fixture';
 
 /** A source entry as a Brief carries it. */
@@ -154,6 +156,28 @@ export function syntheticRun(input: {
     canaryHits: [],
     runtimeLogFindings: null,
     wallMs: input.wallMs ?? 0,
+  };
+}
+
+/**
+ * A scorecard with every run-to-run variable pinned (run ids, wall times, the
+ * commit), so a scripted evaluation renders byte-identical Markdown.
+ */
+export function stableScorecard(card: ScoreCard): ScoreCard {
+  let run = 0;
+  return {
+    ...card,
+    git_sha: null,
+    scenarios: card.scenarios.map((scenario) => ({
+      ...scenario,
+      aggregate: { ...scenario.aggregate, wall_ms: 0 },
+      runs: scenario.runs.map((entry) => ({
+        ...entry,
+        run_id: `run-${(run += 1)}`,
+        cost: { ...entry.cost, wall_ms: 0 },
+      })),
+    })),
+    totals: { ...card.totals, wall_ms: 0 },
   };
 }
 

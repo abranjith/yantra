@@ -8,13 +8,16 @@
 
 import type { Scenario, Tier } from '../scenario.js';
 
+import { articleQuestion } from './article-question.js';
 import { article } from './article.js';
 import { budgetExhaustion } from './budget-exhaustion.js';
 import { challengeLargeMain } from './challenge-large-main.js';
+import { challengeRequiredSource } from './challenge-required-source.js';
 import { challengeSmall } from './challenge-small.js';
 import { handAssembledUrl } from './hand-assembled-url.js';
 import { listingClientRendered } from './listing-client-rendered.js';
 import { listingStructured } from './listing-structured.js';
+import { listingTableFaults } from './listing-table-faults.js';
 import { listingTable } from './listing-table.js';
 import { multiTable } from './multi-table.js';
 import { repeatRead } from './repeat-read.js';
@@ -39,6 +42,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
   budgetExhaustion,
   repeatRead,
   handAssembledUrl,
+  // Agentic tier only.
+  challengeRequiredSource,
+  articleQuestion,
+  listingTableFaults,
 ]);
 
 /** The scenarios that run in `tier`, in catalogue order. */

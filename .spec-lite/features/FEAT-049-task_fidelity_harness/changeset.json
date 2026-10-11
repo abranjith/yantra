@@ -14,6 +14,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -24,6 +30,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity-harness.spec.ts",
@@ -42,6 +54,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/baselines/README.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/eval.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/expectations.ts",
@@ -134,6 +158,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "e2e/task-fidelity/runner.ts",
       "status": "A",
       "role": "implement",
@@ -144,6 +174,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/article-question.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/scenarios/article.ts",
@@ -162,6 +198,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/challenge-required-source.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/scenarios/challenge-small.ts",
@@ -206,6 +248,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "e2e/task-fidelity/scenarios/listing-table-faults.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "e2e/task-fidelity/scenarios/listing-table.ts",
       "status": "A",
       "role": "implement",
@@ -242,14 +290,26 @@
       "task": "TASK-007"
     },
     {
-      "path": "e2e/task-fidelity/score/scorer.ts",
+      "path": "e2e/task-fidelity/score/render-md.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorecard-schema.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorer.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/score/synthetic-runs.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -270,6 +330,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/index.ts",

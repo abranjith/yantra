@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { AgentAuthUnavailableError, DEFAULT_AGENT_BUDGETS, PROMPT_VERSION } from '@yantra/agent';
 import {
   HttpFetcher,
   LocalBrowserProvider,
@@ -24,6 +25,13 @@ import { assertRuntimeLinesAreSafe } from '@yantra/test-helpers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { ScriptStep } from './task-fidelity/agent/scripted-provider.js';
+import {
+  EvalUsageError,
+  MODEL_FLAGS,
+  evalFailure,
+  evaluate,
+  parseEvalArgs,
+} from './task-fidelity/eval.js';
 import {
   atLeast,
   atMost,
@@ -89,6 +97,13 @@ import {
   scenariosFor,
 } from './task-fidelity/scenarios/index.js';
 import { listingTable } from './task-fidelity/scenarios/listing-table.js';
+import { renderScorecardMarkdown } from './task-fidelity/score/render-md.js';
+import {
+  BaselineSchema,
+  ScoreCardSchema,
+  baselineOf,
+  type ScoreCard,
+} from './task-fidelity/score/scorecard-schema.js';
 import {
   deliveredUnits,
   median,
@@ -102,6 +117,7 @@ import {
   fetchAudit,
   motivatingRun,
   oracleRun,
+  stableScorecard,
   syntheticRun,
 } from './task-fidelity/score/synthetic-runs.js';
 import {
@@ -1397,6 +1413,11 @@ describe('@no-llm task-fidelity scorer', () => {
       mean_jaccard_top5: null,
       same_top5_in_at_least: 1,
     });
+    // Runs that delivered nothing agree about nothing.
+    expect(stability([{ delivered_row_keys: [] }, { delivered_row_keys: [] }])).toEqual({
+      mean_jaccard_top5: null,
+      same_top5_in_at_least: 0,
+    });
   });
 
   it('falls back without throwing when run-health.json and usage.json are absent', () => {
@@ -1441,5 +1462,226 @@ describe('@no-llm task-fidelity scorer', () => {
     const units = deliveredUnits(oracleRun()).map((entry) => entry.origin);
     expect(units.slice(0, 5)).toEqual(Array.from({ length: 5 }, () => 'comparison'));
     expect(units.at(-1)).toBe('overview');
+  });
+});
+
+describe('@no-llm task-fidelity eval', () => {
+  const harnessDirectory = join(dirname(fileURLToPath(import.meta.url)), 'task-fidelity');
+  const fixedNow = (): Date => new Date('2026-10-11T00:00:00.000Z');
+  let outRoot: string;
+
+  beforeAll(async () => {
+    outRoot = await mkdtemp(join(tmpdir(), 'yantra-task-fidelity-eval-'));
+  });
+
+  afterAll(async () => {
+    if (outRoot) await rm(outRoot, { recursive: true, force: true });
+  });
+
+  it('spells the model flags exactly as the CLI registers them', async () => {
+    const source = await readFile(
+      join(harnessDirectory, '..', '..', 'apps', 'cli', 'src', 'agent-options.ts'),
+      'utf8',
+    );
+    const registrar = /export function addAgentModelOptions[\s\S]*?\n}/.exec(source)?.[0] ?? '';
+    const registered = [...registrar.matchAll(/new Option\('(--[a-z-]+)/g)].map(
+      (match) => match[1],
+    );
+    expect(registered).toEqual([...MODEL_FLAGS]);
+  });
+
+  it('accepts the shared model flags and its own options', () => {
+    expect(
+      parseEvalArgs([
+        '--provider',
+        'anthropic',
+        '--model',
+        'claude-opus-5-5',
+        '--thinking',
+        'high',
+        '--auth-secret',
+        'anthropic-key',
+        '--scenario',
+        'listing-table',
+        '--scenario',
+        'multi-table',
+        '--runs',
+        '2',
+        '--out',
+        'scores',
+        '--json',
+      ]),
+    ).toEqual({
+      provider: 'anthropic',
+      model: 'claude-opus-5-5',
+      thinking: 'high',
+      authSecret: 'anthropic-key',
+      scenarios: ['listing-table', 'multi-table'],
+      runs: 2,
+      out: 'scores',
+      json: true,
+    });
+    expect(parseEvalArgs([])).toEqual({ scenarios: [], runs: 3, out: null, json: false });
+  });
+
+  it('refuses an unknown flag, a positional, and a non-positive run count', () => {
+    expect(() => parseEvalArgs(['--max-cost', '5'])).toThrow(EvalUsageError);
+    expect(() => parseEvalArgs(['listing-table'])).toThrow(EvalUsageError);
+    expect(() => parseEvalArgs(['--runs', '0'])).toThrow('--runs must be a positive integer.');
+  });
+
+  it('writes a schema-valid scorecard for 2 scenarios × 2 scripted runs, rendered as the golden', async () => {
+    const lines: string[] = [];
+    const out = join(outRoot, 'scripted');
+
+    const result = await evaluate(
+      { scenarios: ['listing-table', 'multi-table'], runs: 2, out, json: false },
+      { agentOverride: 'scripted', stderr: (line) => lines.push(line), now: fixedNow },
+    );
+
+    const written = JSON.parse(await readFile(join(out, 'scorecard.json'), 'utf8')) as unknown;
+    expect(ScoreCardSchema.safeParse(written).success).toBe(true);
+    expect(written).toEqual(result.card);
+    expect(await readFile(join(out, 'scorecard.md'), 'utf8')).toBe(result.markdown);
+    const projected = JSON.parse(await readFile(join(out, 'baseline.json'), 'utf8')) as unknown;
+    expect(BaselineSchema.safeParse(projected).success).toBe(true);
+    expect(JSON.stringify(projected)).not.toContain('delivered_row_keys');
+    expect(result.card.scenarios.map((scenario) => scenario.runs.length)).toEqual([2, 2]);
+    expect(result.card.totals.runs).toBe(4);
+    expect(lines[0]).toBe(
+      `2 scenarios × 2 runs = 4 agentic runs with fixture/scripted-agent (prompt ${PROMPT_VERSION})`,
+    );
+    expect(lines.slice(1, 5).map((line) => line.replace(/ · \d+ s$/, ' · N s'))).toEqual([
+      'listing-table 1/2 · published · 8 turns · N s',
+      'listing-table 2/2 · published · 8 turns · N s',
+      'multi-table 1/2 · published · 2 turns · N s',
+      'multi-table 2/2 · published · 2 turns · N s',
+    ]);
+    expect(renderScorecardMarkdown(stableScorecard(result.card))).toBe(
+      await readFile(join(harnessDirectory, 'golden', 'scorecard.md'), 'utf8'),
+    );
+  }, 120_000);
+
+  it('fails fast with the typed credential error, before any fixture server starts', async () => {
+    const runScenarioSpy = vi.fn<typeof runScenario>();
+
+    await expect(
+      evaluate(
+        { scenarios: [], runs: 1, out: join(outRoot, 'unused'), json: false },
+        {
+          resolveInvocation: () =>
+            Promise.resolve({
+              mode: 'no-llm',
+              reason: 'unavailable',
+              model: { provider: 'anthropic', id: 'claude-opus-5-5' },
+              auth: { mode: 'managed' },
+              budgets: DEFAULT_AGENT_BUDGETS,
+            }),
+          runScenario: runScenarioSpy,
+          stderr: () => undefined,
+        },
+      ),
+    ).rejects.toBeInstanceOf(AgentAuthUnavailableError);
+    expect(runScenarioSpy).not.toHaveBeenCalled();
+  });
+
+  it('maps failures to the CLI’s exit codes: credentials 3, usage 1, anything else 2', () => {
+    expect(
+      evalFailure(
+        new AgentAuthUnavailableError('anthropic', 'managed auth', 'Pass --auth-secret.'),
+      ),
+    ).toMatchObject({
+      exitCode: 3,
+      line: expect.stringMatching(/^AGENT_AUTH_UNAVAILABLE: /) as unknown,
+    });
+    expect(evalFailure(new EvalUsageError('bad flag'))).toEqual({
+      line: 'eval:tasks: bad flag',
+      exitCode: 1,
+    });
+    expect(evalFailure(new Error('boom'))).toEqual({
+      line: 'eval:tasks failed: boom',
+      exitCode: 2,
+    });
+  });
+
+  it('refuses an unknown scenario and a no-LLM environment as usage errors', async () => {
+    await expect(
+      evaluate(
+        { scenarios: ['no-such'], runs: 1, out: null, json: false },
+        { stderr: () => undefined },
+      ),
+    ).rejects.toThrow(/Unknown agentic scenario "no-such"/);
+    await expect(
+      evaluate(
+        { scenarios: [], runs: 1, out: null, json: false },
+        {
+          resolveInvocation: () => Promise.resolve({ mode: 'no-llm', reason: 'env' }),
+          stderr: () => undefined,
+        },
+      ),
+    ).rejects.toBeInstanceOf(EvalUsageError);
+  });
+
+  it('offers every agentic scenario the spec names', () => {
+    expect(scenariosFor('agentic').map((scenario) => scenario.id)).toEqual([
+      'listing-table',
+      'listing-structured',
+      'listing-client-rendered',
+      'multi-table',
+      'challenge-required-source',
+      'article-question',
+      'listing-table+faults',
+    ]);
+  });
+});
+
+describe('@no-llm task-fidelity baselines', () => {
+  const baselinesDirectory = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'task-fidelity',
+    'baselines',
+  );
+
+  it('validates every committed baseline and keeps its scenarios in the agentic catalogue', async () => {
+    const files = (await readdir(baselinesDirectory)).filter((file) => file.endsWith('.json'));
+    const agentic = new Set(scenariosFor('agentic').map((scenario) => scenario.id));
+    const problems: string[] = [];
+    for (const file of files) {
+      const parsed = BaselineSchema.safeParse(
+        JSON.parse(await readFile(join(baselinesDirectory, file), 'utf8')) as unknown,
+      );
+      if (!parsed.success) {
+        problems.push(`${file}: ${parsed.error.issues[0]?.message ?? 'invalid'}`);
+        continue;
+      }
+      for (const scenario of parsed.data.scenarios) {
+        if (!agentic.has(scenario.id)) problems.push(`${file}: orphaned scenario ${scenario.id}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('projects a scorecard onto an aggregate-only baseline without per-run row keys', async () => {
+    const out = await mkdtemp(join(tmpdir(), 'yantra-task-fidelity-baseline-'));
+    let card: ScoreCard;
+    try {
+      ({ card } = await evaluate(
+        { scenarios: ['article-question'], runs: 1, out, json: false },
+        { agentOverride: 'scripted', stderr: () => undefined },
+      ));
+    } finally {
+      await rm(out, { recursive: true, force: true });
+    }
+    expect(card.scenarios[0]?.runs[0]?.delivered_row_keys).toEqual(['article-answer']);
+    const baseline = baselineOf(card);
+    expect(BaselineSchema.safeParse(baseline).success).toBe(true);
+    expect(
+      baseline.scenarios
+        .flatMap((scenario) => scenario.runs)
+        .every((run) => !('delivered_row_keys' in run)),
+    ).toBe(true);
+    expect(baseline.scenarios.map((scenario) => scenario.aggregate)).toEqual(
+      card.scenarios.map((scenario) => scenario.aggregate),
+    );
   });
 });
