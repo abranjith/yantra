@@ -1,0 +1,72 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/fixtures/serve.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity-harness.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/faceted-listing.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/host-mapping.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/html.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/inventory.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/server.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/sites.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-049-task_fidelity_harness/changeset.json",
+    ".spec-lite/features/FEAT-049-task_fidelity_harness/spec.md",
+    ".spec-lite/plan_task_fidelity.md"
+  ],
+  "baseline": {
+    "sha": "e53c8ce560c38a845267cd4a7af5ac66d152d338",
+    "capturedAt": "2026-10-11T17:54:59.356Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-049-task-fidelity-harness@e53c8ce560c38a845267cd4a7af5ac66d152d338"
+  },
+  "featureId": "FEAT-049"
+}

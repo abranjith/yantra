@@ -803,10 +803,10 @@ Example:
 
 Row-level extraction error envelope.
 
-| Field     | Description                                 |
-| --------- | ------------------------------------------- |
-| \_\_error | Coercion failure reason for this row.       |
-| \_\_raw   | Original raw row payload prior to coercion. |
+| Field   | Description                                 |
+| ------- | ------------------------------------------- |
+| __error | Coercion failure reason for this row.       |
+| __raw   | Original raw row payload prior to coercion. |
 
 Example:
 
@@ -1069,7 +1069,7 @@ Example:
 
 ## LocatorCandidate
 
-Candidate locator entry in workflow \_locators block.
+Candidate locator entry in workflow _locators block.
 
 Example:
 
@@ -1891,22 +1891,22 @@ Example:
 
 Workflow YAML schema source used by parser, linter, and editor integrations.
 
-| Field               | Description                                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------------------------- |
-| version             | Workflow format major version.                                                                                |
-| name                | Workflow slug name.                                                                                           |
-| description         | Optional workflow description.                                                                                |
-| security_class      | Workflow security class.                                                                                      |
-| recorded_with       | Optional recording metadata.                                                                                  |
-| params              | Workflow parameter declarations.                                                                              |
-| secrets             | Declared workflow secret keys.                                                                                |
-| cookies             | Cookie/profile handling mode.                                                                                 |
-| steps               | Ordered workflow steps.                                                                                       |
-| outputs             | Workflow output declarations.                                                                                 |
-| synthesis           | Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only. |
-| outputs_unredacted  | Whether outputs bypass redaction safeguards.                                                                  |
-| \_unrecorded_frames | Cross-origin frames not instrumented at record time.                                                          |
-| \_locators          | Named locator chains captured or authored for replay.                                                         |
+| Field              | Description                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| version            | Workflow format major version.                                                                                |
+| name               | Workflow slug name.                                                                                           |
+| description        | Optional workflow description.                                                                                |
+| security_class     | Workflow security class.                                                                                      |
+| recorded_with      | Optional recording metadata.                                                                                  |
+| params             | Workflow parameter declarations.                                                                              |
+| secrets            | Declared workflow secret keys.                                                                                |
+| cookies            | Cookie/profile handling mode.                                                                                 |
+| steps              | Ordered workflow steps.                                                                                       |
+| outputs            | Workflow output declarations.                                                                                 |
+| synthesis          | Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only. |
+| outputs_unredacted | Whether outputs bypass redaction safeguards.                                                                  |
+| _unrecorded_frames | Cross-origin frames not instrumented at record time.                                                          |
+| _locators          | Named locator chains captured or authored for replay.                                                         |
 
 Example:
 
