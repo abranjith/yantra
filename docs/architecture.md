@@ -1099,6 +1099,15 @@ items of the longest array, and never by cutting the serialized text. Input that
 Every record is therefore valid JSON. The middleware's model-visible `sanitizeAndBound` path is a
 separate, unchanged pass over a singly encoded payload.
 
+That projection is also exported as a function. `auditProjectionOf(result)` in
+`packages/agent/src/adapters/pi/tools/index.ts`, re-exported from the package index, returns exactly
+what the seam records as `tool_finished.output` —
+`createDefaultPiEventMapContext().sanitizePayload(toAgentToolResult(result))` — typed `unknown` so no
+Pi SDK type crosses the package boundary. A driver that executes the run's wrapped tools without a
+Pi session, such as the task-fidelity harness's scripted agent, reports its tool results through it,
+so the `tool-calls.jsonl` it produces comes from the same projection, and every later fix to it, that
+a real session's does.
+
 The run also owns one operator diagnostic destination. `RunRuntimeLog`
 (`packages/agent/src/runtime/runtime-log.ts`) opens an asynchronous Pino destination on
 `<runDir>/runtime.jsonl` once the run directory exists, binds `run_id` to every line, and hands
@@ -1229,6 +1238,57 @@ the same ledger.
   renders nothing, so older reports are unchanged; an invalid one renders a single
   "run-health.json unreadable" line.
 
+#### Default environment composition and leaves
+
+`runAgenticTask()` builds each run's service graph through one of two paths. A caller-supplied
+`createEnvironment` replaces the whole environment, which is how the lifecycle and chaos tests
+inject hand-built graphs. Otherwise the default composer in
+`packages/agent/src/runtime/orchestrator.ts` builds it, in two stages: `defaultEnvironmentLeaves()`
+produces the `EnvironmentLeaves` — the things the environment _uses_ — and `composeDefaultEnvironment`
+builds production wiring on top of them.
+
+| Leaf                    | Production default                              | What consumes it                                                                                                      |
+| ----------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `keychain`              | OS keychain provider                            | Model and search credentials, the opaque-ref secret resolver, nested workflows                                        |
+| `ethicsConfig`          | `loadEthicsConfig()`                            | Robots cache, rate limiter, and user agent of the run's ethics gate                                                   |
+| `searchConfig`          | `loadSearchConfig()`                            | `web_search` provider selection and inline-fetch depth                                                                |
+| `blocklist`             | `BlocklistImpl`, reloaded from disk             | The run's ethics gate                                                                                                 |
+| `createBrowserProvider` | `createSelectedBrowserProvider`                 | The agent controller's provider, the provider shared by fetch fallback and scraped search, and each nested workflow's |
+| `httpRequestFn`         | Absent, so `HttpFetcher` uses its own transport | The HTTP tier of the hybrid fetcher behind `web_fetch` and `web_search` page reads                                    |
+| `resolveSearchProvider` | Core `resolveSearchProvider`                    | Each `web_search` call's provider resolution                                                                          |
+
+`AgenticTaskDependencies.environmentLeaves?: Partial<EnvironmentLeaves>` lets a test or embedding
+host replace any subset of those leaves, merged over the production ones. An overridden leaf is never
+built, because building a default can touch the machine: replacing the keychain never loads the
+native keychain module, and replacing the blocklist never reads the blocklist file. The field is
+ignored entirely when `createEnvironment` is supplied.
+
+The seam replaces leaves only. Everything composed from them stays production code in every case:
+the ethics gate, the `HybridContentFetcher` with its HTTP-to-browser escalation, the
+`AgentBrowserController`, the `countingBrowserProvider` launch counter, the Brief publisher, the
+workflow store and nested `RunOrchestrator`, and the run's `runtime.jsonl` destination. The
+orchestrator-owned controls — URL policy, budgets, the payload sanitizer, consent, tool middleware,
+and audit recording — are composed outside the environment and are not reachable through it at all.
+A swapped leaf therefore changes where bytes come from, never what policy is applied to them, and a
+harness built on it measures the composer as it is rather than a hand-copied environment that has
+drifted from it.
+
+```mermaid
+flowchart LR
+  Overrides[environmentLeaves overrides] --> Leaves[defaultEnvironmentLeaves]
+  Production[Production leaf defaults<br/>built only when not overridden] --> Leaves
+  Leaves --> Composer[composeDefaultEnvironment]
+  Composer --> Ethics[Ethics gate]
+  Composer --> Fetcher[Hybrid fetcher]
+  Composer --> Browser[Counted provider and AgentBrowserController]
+  Composer --> Publisher[Publisher and nested workflow runner]
+  Orchestrator[runAgenticTask-owned controls<br/>URL policy, budgets, sanitizer,<br/>consent, middleware, audit] --> Run[Run service graph]
+  Ethics --> Run
+  Fetcher --> Run
+  Browser --> Run
+  Publisher --> Run
+```
+
 ### Vision-assist boundary
 
 Vision availability is an immutable run decision made before tool-catalog construction. The
@@ -1267,7 +1327,9 @@ in `src/index.ts`, which registers the public command surface. Commands parse an
 merge flags/environment/profile defaults, choose deterministic or agentic execution before
 constructing a provider, build runtime dependencies, render terminal or machine output, record
 best-effort history, and map outcomes to exit codes. The CLI does not implement a second agent
-reasoning loop.
+reasoning loop. Besides renderers, its package index re-exports `resolveAgentInvocation` and
+`loadEffectivePreferences` solely so the dev-only task-fidelity runner resolves model, credentials,
+and budgets through the same flag > environment > profile > pinned-default chain the commands use.
 
 The installation-management commands compose the core boundaries rather than maintaining their own
 configuration dialect. `yantra browser install` is the explicit managed-acquisition surface. Its
@@ -1327,8 +1389,8 @@ The principal execution surfaces are:
 
 `@yantra/test-helpers` supplies shared fixtures and no-LLM/provider tag plumbing. `e2e/` depends on
 the production workspaces to exercise CLI flows, deterministic research, scheduling, real-Chrome
-browser actions, agent orchestration, workflow promotion/replay, golden Briefs, and compatibility
-boundaries. Vitest remains the common test runner across every workspace. Managed-browser
+browser actions, agent orchestration, workflow promotion/replay, golden Briefs, task fidelity, and
+compatibility boundaries. Vitest remains the common test runner across every workspace. Managed-browser
 exclusion is the one contract that cannot be demonstrated with mocked asynchronous functions,
 because the guarantee is about two operating-system processes racing for the same files, so a
 standalone fixture script takes a real claim in a real child process and holds it while the parent
@@ -1401,6 +1463,78 @@ implementations restored. Runner tests pin rung ordering, cap admission, shared 
 cleanup, fast failure on an injected clock, and the discriminated wire keys. The old nullable
 success-code shape remains only a reader-compatibility input and is normalized without rewriting
 the source artifact.
+
+#### Task-fidelity harness
+
+The gauntlets prove that each tool behaves; the task-fidelity harness under `e2e/task-fidelity/`
+measures whether a whole run delivered what the user asked for. It has two tiers over one shared set
+of generic loopback fixture sites (`<pattern>.yantra.test`, all served by one `Host`-routed server
+with its own request log) whose listing pages and scores all derive from one truth dataset:
+
+| Tier          | Entry point                                     | Drives the run with                              | Runs                    | Gates CI |
+| ------------- | ----------------------------------------------- | ------------------------------------------------ | ----------------------- | -------- |
+| Deterministic | `e2e/task-fidelity.spec.ts` (`@no-llm`)         | `ScriptedAgentProvider`, a fixed script          | With every e2e test run | Yes      |
+| Agentic       | `pnpm eval:tasks` (`e2e/task-fidelity/eval.ts`) | A real model, three runs per scenario by default | On demand only          | Never    |
+
+Both tiers call `runScenario` in `e2e/task-fidelity/runner.ts`, which calls the real
+`runAgenticTask()` with the default environment composer and swaps leaves only, through
+`environmentLeaves`: the HTTP transport becomes `mappedRequestFn`, which serves fixture hosts from
+the loopback server and refuses and logs every other non-loopback host; `createBrowserProvider`
+wraps the production selected provider so each launch carries Chrome `--host-resolver-rules` that
+map fixture hosts to loopback and make every other name fail to resolve; `resolveSearchProvider`
+returns a scripted search provider whose injected faults throw the real core search error classes;
+and the deterministic tier substitutes an in-memory canary keychain. Ethics, fetch escalation,
+budgets, URL policy, middleware, publication, run health, and audit all run as in production. After
+the run fully finalizes, the runner reads every artifact tolerantly (an absent file reads as `null`)
+alongside the harness's own independent counts of fixture requests, search calls, launches, rank
+signals, and refused egress.
+
+`ScriptedAgentProvider` implements the provider-neutral `AgentProvider` seam. It calls only the
+tools the run's command profile registered, through the full middleware, and reports each result's
+`tool_finished.output` with `auditProjectionOf`, so the recorder writes `tool-calls.jsonl` exactly as
+for a Pi session. A script step that cannot derive its input from a SERP-seeded origin or a field a
+prior result actually returned is recorded as unreachable and makes no call; scripts never invent
+URLs, so an unreachable step measures what the tools did not offer.
+
+The two tiers assert different things:
+
+- _Deterministic tier._ Each scenario runs once, and every expectation it declares in the ledger
+  (`expectations.ts`) is its own test, named `<scenario> › <owner> › <id>`. Each expectation names
+  an owner: `current` (holds today and must keep holding) or the feature that will build the
+  capability. For an owner still in `PENDING_OWNERS`, the test asserts a pinned baseline that
+  characterizes today's behavior exactly and also evaluates the target; a target that already
+  holds fails the suite with an instruction to retire the owner and its baselines. This ratchet
+  makes an owning feature's landing a deliberate edit, and a census fails on leftover baselines and
+  unregistered scenarios.
+- _Agentic tier._ Each run is scored from the published Brief's delivered rows, extracted in
+  structural order and matched to truth items by exact normalized keys, never fuzzily: field
+  coverage, constraint fidelity, source fidelity, citation validity, honesty about injected faults,
+  cost, and cross-run stability. Every score is a fraction with a per-decision `detail` line, or
+  `null` when its denominator is 0. The runner writes a Zod-validated `scorecard.json`, a rendered
+  `scorecard.md`, and an aggregate-only `baseline.json` (no run directories, page text, or per-run
+  row keys) under the gitignored `e2e/task-fidelity/.out/<timestamp>/`. Scores are observational:
+  the process exits 0 whenever the scorecard was written.
+
+The agentic runner resolves its model, credentials, and budgets through the CLI's own chain rather
+than a copy: `@yantra/cli` re-exports `resolveAgentInvocation` and `loadEffectivePreferences` for it,
+and it accepts the shared agentic flag spellings (`--provider`, `--model`, `--thinking`,
+`--auth-secret`). Missing model credentials fail with `AGENT_AUTH_UNAVAILABLE` and environment exit
+3 before any fixture server starts; usage errors exit 1 and execution failures exit 2.
+
+```mermaid
+flowchart LR
+  Scenario[Scenario catalogue] --> Runner[runScenario]
+  Runner --> Orchestrator[runAgenticTask and default composer]
+  Leaves[Leaf overrides: mapped HTTP,<br/>host-mapped browser, scripted search,<br/>canary keychain] --> Orchestrator
+  Orchestrator --> Fixtures[Loopback fixture server]
+  Scripted[ScriptedAgentProvider] -->|deterministic tier| Orchestrator
+  Model[Real model via Pi] -->|agentic tier| Orchestrator
+  Orchestrator --> Artifacts[Run artifacts and harness counts]
+  Artifacts --> Ledger[Expectation ledger and owner ratchet]
+  Artifacts --> Scorer[Outcome scorer]
+  Ledger --> Vitest["@no-llm Vitest cases"]
+  Scorer --> Scorecard[scorecard.json, scorecard.md, baseline.json]
+```
 
 ## Data Flow
 
@@ -2069,6 +2203,17 @@ update` is the only surface that contacts a version server, and only when a huma
   by shortening leaves. Both sanitizers call the same redaction pass, so the structural one is
   never weaker; the cost is a second walker over the profile that must stay in step, which a
   property test pins on both re-parse and canary redaction.
+- **Measure the production composer; replace only its leaves.** A hand-built test environment keeps
+  exercising whatever wiring it copied while the real composer moves on, so a fidelity measurement
+  taken through one says nothing about shipped behavior. `environmentLeaves` therefore lets a
+  harness swap only the things the environment uses — credentials, loaded configuration, the
+  browser factory, the HTTP transport, and search-provider resolution — while the ethics gate,
+  hybrid fetcher, browser controller, launch counter, publisher, and every orchestrator-owned
+  control stay production-composed and unreachable through the seam. The same reasoning puts the
+  audit projection behind `auditProjectionOf`, so a scripted driver cannot record a different
+  `tool-calls.jsonl` than a real session. The costs are a public seam on `runAgenticTask()` that must
+  stay leaf-shaped as the composer grows, and a deterministic tier whose pending-owner baselines
+  must be retired by each owning feature rather than edited to pass.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,
@@ -2110,7 +2255,9 @@ jobs run the static security/import-graph checks, a deterministic/browser releas
 (`build`, `test:no-llm`, static checks, and protocol verification), and an opt-in live Anthropic
 smoke when the repository secret is configured. Because the two gauntlets and both catalog suites
 are ordinary Vitest cases tagged `@no-llm`, Turborepo includes them in the full matrix and in the
-deterministic/browser release gate. Boundary tests and the static checker enforce Pi
+deterministic/browser release gate. The task-fidelity deterministic tier and its harness self-tests
+are `@no-llm` e2e specs and gate the same way; the agentic tier, `pnpm eval:tasks`, is not a
+`*.spec.ts`, spends real model tokens, and is never run by CI. Boundary tests and the static checker enforce Pi
 SDK confinement, the core-to-agent prohibition, sanitized model sends, a dependency-light JSON
 render path, and exclusion of local index stores from prompt-assembly import graphs.
 

@@ -495,3 +495,16 @@ If an equivalent helper already exists (a JSONL reader, a temp-home helper, the 
 - [/] TASK-010: Baseline today's pipeline and record it
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Implementation Notes
+
+- **BLOCKED (TASK-010, and TASK-009's manual check):** no model credential is available in the implementation environment (`anthropic/claude-haiku-4-5` from the profile; `pnpm eval:tasks` exits 3 with `AGENT_AUTH_UNAVAILABLE`). The tooling is complete — `eval.ts` writes `baseline.json` (the aggregate-only projection) next to the scorecard, and the self-tests validate every file in `baselines/` — but the baseline itself, the plan revision-log row, and the §11 "Today" values must come from a real run. A baseline was not fabricated.
+- **DEVIATION (ethics leaf):** the harness uses `defaultEthicsConfig` (robots disabled, the production default), not "robots honored". Robots fetching uses global `fetch`, which no leaf can host-map; enabling it would send `*.yantra.test` lookups off-box. The fixture server still serves an allow-all `robots.txt` on every host.
+- **DEVIATION (ownership of capabilities that already hold):** a pending target may not already pass, so these are owned by `current`: `listing-client-rendered` ≤ 1 browser launch (spec said FEAT-050); `challenge-small` never-a-source, never-extracted, and HTTP-plus-one-render; `search-breaker` zero browser launches.
+- **DEVIATION (third production change):** `apps/cli/src/index.ts` re-exports `resolveAgentInvocation` and `loadEffectivePreferences`, so the eval resolves models through the CLI's own chain instead of a copy (memory: duplicated grammars diverge). `@yantra/cli`'s `exports` map blocks a deep import.
+- **DEVIATION (`listing-table` script):** a guarded fallback `web_search {limit: 1}` runs only when discovery (`limit: 0`) is refused; it is recorded as skipped, not unreachable, once FEAT-050 lands.
+- **ADDITION (FEAT-052 expectation):** the census needs a FEAT-052 baseline; `listing-table › FEAT-052 › research-can-browse` measures the tool catalog the profile registers (`ScenarioRun.registeredTools`).
+- **ADDITION:** `zod` added to the `e2e` devDependencies (already a workspace dependency, same range as `@yantra/protocol`) for the scorecard schema.
+- **Structural:** harness modules never load Vitest (`pnpm eval:tasks` runs under tsx): `assertExpectations` takes Vitest's `it`, and the runner takes the runtime-log scanner as an injected option.
+- **DEVIATION (test expectation adjusted):** `packages/agent/tests/runtime/browser-selection.spec.ts` pins the orchestrator's source text. Its browser factories now read `leaves.createBrowserProvider({…logger…})`, so the test looks for that spelling and additionally pins `createSelectedBrowserProvider` as the default leaf. The invariant it guards (every browser-capable factory receives the run logger) is unchanged.
+- **Agentic mode** keeps the developer's `YANTRA_HOME` (where the CLI's credentials live); run directories still go under `--out/runs/`. The deterministic tier always uses a temporary home.

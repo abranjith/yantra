@@ -20,6 +20,18 @@
       "task": "TASK-009"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -57,13 +69,13 @@
     },
     {
       "path": "e2e/task-fidelity/baselines/README.md",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/eval.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -159,9 +171,15 @@
     },
     {
       "path": "e2e/task-fidelity/golden/scorecard.md",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/README.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "e2e/task-fidelity/runner.ts",
@@ -177,7 +195,7 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/article-question.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -201,7 +219,7 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/challenge-required-source.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -249,7 +267,7 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/listing-table-faults.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -291,13 +309,13 @@
     },
     {
       "path": "e2e/task-fidelity/score/render-md.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/score/scorecard-schema.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -368,15 +386,29 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/browser-selection.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/agent/tests/runtime/environment-leaves.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-049-task_fidelity_harness/changeset.json",
     ".spec-lite/features/FEAT-049-task_fidelity_harness/spec.md",
+    ".spec-lite/memory.md",
     ".spec-lite/plan_task_fidelity.md"
   ],
   "baseline": {

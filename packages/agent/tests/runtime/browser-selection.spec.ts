@@ -269,7 +269,7 @@ describe('@no-llm agent runtime owns exactly one runtime destination', () => {
     expect(orchestratorSource).not.toContain('info: () => undefined');
 
     for (const factory of [
-      'createSelectedBrowserProvider(',
+      'leaves.createBrowserProvider(',
       'new LocalProfileStore(',
       'new AgentBrowserController(',
       'new RunOrchestrator(',
@@ -277,9 +277,14 @@ describe('@no-llm agent runtime owns exactly one runtime destination', () => {
       const occurrences = orchestratorSource.split(factory).length - 1;
       expect(occurrences).toBeGreaterThan(0);
     }
+    // The browser factory is a leaf (FEAT-049); production's leaf is the
+    // selected-browser provider.
+    expect(orchestratorSource).toContain(
+      'createBrowserProvider: overrides.createBrowserProvider ?? createSelectedBrowserProvider,',
+    );
     // Both the default and the nested-workflow provider composition pass it.
     const providerCalls = orchestratorSource
-      .split('createSelectedBrowserProvider({')
+      .split('leaves.createBrowserProvider({')
       .slice(1)
       .map((tail) => tail.slice(0, tail.indexOf('});')));
     expect(providerCalls.length).toBeGreaterThanOrEqual(2);
