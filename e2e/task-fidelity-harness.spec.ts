@@ -88,6 +88,22 @@ import {
   scenarioNamed,
   scenariosFor,
 } from './task-fidelity/scenarios/index.js';
+import { listingTable } from './task-fidelity/scenarios/listing-table.js';
+import {
+  deliveredUnits,
+  median,
+  normalize,
+  scoreRun,
+  stability,
+} from './task-fidelity/score/scorer.js';
+import {
+  brief,
+  detailText,
+  fetchAudit,
+  motivatingRun,
+  oracleRun,
+  syntheticRun,
+} from './task-fidelity/score/synthetic-runs.js';
 import {
   ScriptedSearchProvider,
   scriptedSearchLeaf,
@@ -1224,5 +1240,206 @@ describe('@no-llm task-fidelity scenario catalogue census', () => {
     expect(
       scenariosFor('deterministic').every((scenario) => scenario.tiers.includes('deterministic')),
     ).toBe(true);
+  });
+});
+
+describe('@no-llm task-fidelity scorer', () => {
+  const score = (run: ScenarioRun) => scoreRun(run, listingTable, truthRows());
+  const listing = 'http://faceted-listing.yantra.test/new/results';
+  const rowById = (id: string) => {
+    const row = truthRows().find((candidate) => candidate.itemId === id);
+    if (row === undefined) throw new Error(`no truth row ${id}`);
+    return row;
+  };
+  const tableRun = (
+    ids: readonly string[],
+    options: { readonly sourceFor?: (id: string) => string; readonly evidence?: boolean } = {},
+  ): ScenarioRun => {
+    const rows = ids.map(rowById);
+    const sourceFor = options.sourceFor ?? ((id: string) => rowById(id).detailUrl);
+    return syntheticRun({
+      brief: brief({
+        title: 'Listings',
+        overview: 'Listings from the requested site.',
+        comparison: {
+          columns: ['Seller', 'Price', 'Exterior color', 'Interior color'],
+          rows: rows.map((row) => [
+            row.fields.seller,
+            row.fields.price,
+            row.fields.exteriorColor,
+            row.fields.interiorColor,
+          ]),
+          row_citations: rows.map((_, index) => [index + 1]),
+        },
+        sources: ids.map((id) => ({ url: sourceFor(id) })),
+      }),
+      toolCalls:
+        options.evidence === false
+          ? []
+          : rows.map((row, index) => fetchAudit(sourceFor(ids[index] ?? ''), detailText(row))),
+    });
+  };
+
+  it('scores the motivating run near zero, with one asserted-unverified constraint and 0/12 honesty', () => {
+    const scores = score(motivatingRun());
+
+    expect(scores.field_coverage).toMatchObject({ value: 0.1, numerator: 2, denominator: 20 });
+    expect(scores.delivered_row_keys).toEqual(['itm-01']);
+    expect(scores.constraint_fidelity).toMatchObject({ value: 0, numerator: 0, denominator: 1 });
+    expect(scores.constraint_fidelity.detail).toEqual([
+      'asserts drivetrain=AWD in the title or overview without a verified constraint',
+    ]);
+    expect(scores.citation_validity).toMatchObject({ value: null, numerator: 0, denominator: 0 });
+    expect(scores.honesty).toMatchObject({ value: 0, numerator: 0, denominator: 12 });
+    expect(scores.honesty.detail).toContain(
+      'heuristic: the document asserts a site-side cause no injected fault supports',
+    );
+    expect(scores.source_fidelity).toMatchObject({ value: 0, numerator: 0, denominator: 1 });
+    expect(scores.cost).toMatchObject({
+      turns: 15,
+      input_tokens: 135_000,
+      output_tokens: 6_000,
+      navigations: 30,
+      browser_launches: 48,
+    });
+  });
+
+  it('scores an oracle Brief at full coverage, fidelity, and validity', () => {
+    const scores = score(oracleRun());
+
+    expect(scores.field_coverage).toMatchObject({ value: 1, numerator: 20, denominator: 20 });
+    expect(scores.constraint_fidelity).toMatchObject({ value: 1, detail: [] });
+    expect(scores.source_fidelity).toMatchObject({ value: 1, numerator: 5, denominator: 5 });
+    expect(scores.citation_validity).toMatchObject({ value: 1, numerator: 20, denominator: 20 });
+    expect(scores.delivered_row_keys).toEqual(['itm-08', 'itm-03', 'itm-13', 'itm-01', 'itm-10']);
+    expect(scores.honesty).toMatchObject({ value: null, denominator: 0 });
+  });
+
+  it('counts a delivered FWD row as a constraint violation', () => {
+    const scores = score(tableRun(['itm-08', 'itm-02']));
+
+    expect(scores.constraint_fidelity).toMatchObject({ value: 0.5, numerator: 1, denominator: 2 });
+    expect(scores.constraint_fidelity.detail).toEqual([
+      'itm-02 violates drivetrain=AWD (truth: FWD)',
+    ]);
+  });
+
+  it('lowers source fidelity for a row cited to an off-contract host', () => {
+    const scores = score(
+      tableRun(['itm-08', 'itm-03'], {
+        sourceFor: (id) =>
+          id === 'itm-03' ? 'http://structured-listing.yantra.test/results' : rowById(id).detailUrl,
+      }),
+    );
+
+    expect(scores.source_fidelity).toMatchObject({ value: 0.5, numerator: 1, denominator: 2 });
+    expect(scores.source_fidelity.detail).toEqual([
+      'itm-03: off-contract structured-listing.yantra.test',
+    ]);
+  });
+
+  it('counts a citation whose source lacks the value as invalid', () => {
+    const scores = score(tableRun(['itm-08'], { evidence: false }));
+
+    expect(scores.citation_validity).toMatchObject({ value: 0, numerator: 0, denominator: 4 });
+    expect(scores.citation_validity.detail).toContain(
+      `itm-08.exteriorColor = "${rowById('itm-08').fields.exteriorColor}" is not in cited [1]`,
+    );
+  });
+
+  it('excludes rows in an alternatives section from the answer', () => {
+    const offContract = rowById('itm-03');
+    const run = syntheticRun({
+      brief: brief({
+        title: 'Listings',
+        overview: 'Listings.',
+        sections: [
+          {
+            heading: 'Alternatives',
+            kind: 'alternatives',
+            body_md: `- ${offContract.fields.seller} at ${offContract.fields.price}`,
+          },
+        ],
+      }),
+    });
+    expect(score(run).delivered_row_keys).toEqual([]);
+  });
+
+  it('matches a row by title and seller only when that pair is unique in the truth', () => {
+    const unique = rowById('itm-04');
+    const run = syntheticRun({
+      brief: brief({
+        title: 'Listings',
+        overview: 'Listings.',
+        findings: [
+          { text: `${unique.key.title} from ${unique.fields.seller}` },
+          { text: `${rowById('itm-01').key.title} from Lakeside Motors` },
+        ],
+      }),
+    });
+    const scores = score(run);
+    expect(scores.delivered_row_keys).toEqual(['itm-04']);
+    expect(scores.field_coverage.detail).toContain(
+      'ambiguous: "New 2026 Norvale Teyra Summit" by Lakeside Motors names 2 items without a price',
+    );
+  });
+
+  it('rates three identical runs fully stable and three disjoint runs not at all', () => {
+    const top = ['itm-08', 'itm-03', 'itm-13', 'itm-01', 'itm-10'];
+    expect(stability([top, top, top].map((keys) => ({ delivered_row_keys: keys })))).toEqual({
+      mean_jaccard_top5: 1,
+      same_top5_in_at_least: 3,
+    });
+    expect(
+      stability([['itm-01'], ['itm-03'], ['itm-08']].map((keys) => ({ delivered_row_keys: keys }))),
+    ).toEqual({ mean_jaccard_top5: 0, same_top5_in_at_least: 1 });
+    expect(stability([{ delivered_row_keys: top }])).toEqual({
+      mean_jaccard_top5: null,
+      same_top5_in_at_least: 1,
+    });
+  });
+
+  it('falls back without throwing when run-health.json and usage.json are absent', () => {
+    const run = syntheticRun({
+      brief: brief({ title: 'Listings', overview: 'Listings.' }),
+      toolCalls: [fetchAudit(listing, 'text'), fetchAudit(`${listing}?page=2`, 'text')],
+      wallMs: 1234.4,
+    });
+    expect(score(run).cost).toEqual({
+      turns: null,
+      input_tokens: null,
+      output_tokens: null,
+      cost_usd: null,
+      wall_ms: 1234,
+      navigations: 2,
+      browser_launches: 0,
+      fixture_requests: 0,
+    });
+  });
+
+  it('reports every zero-denominator score as null, never 1.0', () => {
+    const scores = scoreRun(
+      syntheticRun({}),
+      { contract: { ...listingTable.contract, requiredSources: [] } },
+      [],
+    );
+
+    expect(scores.field_coverage.value).toBeNull();
+    expect(scores.source_fidelity.value).toBeNull();
+    expect(scores.citation_validity.value).toBeNull();
+    expect(scores.honesty.value).toBeNull();
+  });
+
+  it('normalizes currency formatting and whitespace, never fuzzily', () => {
+    expect(normalize('  $50,265\n MSRP  $1,234,567 ')).toBe('50265 msrp 1234567');
+    expect(normalize('Teyra')).not.toBe(normalize('Terya'));
+    expect(median([0.2, null, 0.6, 0.4])).toBe(0.4);
+    expect(median([null, null])).toBeNull();
+  });
+
+  it('extracts delivered units in structural order', () => {
+    const units = deliveredUnits(oracleRun()).map((entry) => entry.origin);
+    expect(units.slice(0, 5)).toEqual(Array.from({ length: 5 }, () => 'comparison'));
+    expect(units.at(-1)).toBe('overview');
   });
 });

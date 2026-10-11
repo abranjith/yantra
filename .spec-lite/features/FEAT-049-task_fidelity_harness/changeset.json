@@ -33,7 +33,7 @@
     },
     {
       "path": "e2e/task-fidelity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -129,7 +129,7 @@
     },
     {
       "path": "e2e/task-fidelity/golden/article.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -147,99 +147,111 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/article.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/budget-exhaustion.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/challenge-large-main.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/challenge-small.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/challenge.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/common.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/hand-assembled-url.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/listing-client-rendered.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/listing-structured.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/listing-table.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/multi-table.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/repeat-read.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/search-breaker.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/search-concurrency.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "e2e/task-fidelity/scenarios/search-empty-timeout.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorer.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/score/synthetic-runs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/search/scripted-provider.ts",
