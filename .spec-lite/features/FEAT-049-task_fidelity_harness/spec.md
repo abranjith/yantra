@@ -489,7 +489,7 @@ If an equivalent helper already exists (a JSONL reader, a temp-home helper, the 
 - [x] TASK-004: Scripted search provider with fault injection
 - [x] TASK-005: Scripted agent and the scenario runner
 - [x] TASK-006: Expectation ledger with an owner ratchet
-- [ ] TASK-007: The deterministic tier: the scenario catalogue, gating CI
+- [x] TASK-007: The deterministic tier: the scenario catalogue, gating CI
 - [ ] TASK-008: The outcome scorer
 - [ ] TASK-009: The agentic tier: `pnpm eval:tasks` and the scorecard
 - [ ] TASK-010: Baseline today's pipeline and record it

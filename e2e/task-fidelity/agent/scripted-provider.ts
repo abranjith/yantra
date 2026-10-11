@@ -62,6 +62,9 @@ export interface ReceivedResult {
   readonly details: unknown;
   /** The audit projection emitted as `tool_finished.output`. */
   readonly audit: unknown;
+  /** Wall-clock call window (ms since epoch), comparable with fixture request times. */
+  readonly startedAt: number;
+  readonly endedAt: number;
 }
 
 /** A link a result offers (FEAT-051 wire form `{ text, url, kind }`). */
@@ -109,6 +112,8 @@ export interface ScriptReport {
   readonly skipped: readonly string[];
   /** Top-level script steps executed (one `turn_finished` each). */
   readonly turns: number;
+  /** The tool catalog the run's profile gave the agent, sorted by name. */
+  readonly registeredTools: readonly string[];
 }
 
 /** Zero-cost usage for a scripted turn, so turn accounting runs its real path. */
@@ -120,6 +125,7 @@ export class ScriptedAgentProvider implements AgentProvider {
   private readonly unreachableSteps: string[] = [];
   private readonly skippedSteps: string[] = [];
   private turnCount = 0;
+  private catalog: readonly string[] = [];
 
   /**
    * @param services The run's services (from `createProvider`).
@@ -139,6 +145,7 @@ export class ScriptedAgentProvider implements AgentProvider {
       unreachable: [...this.unreachableSteps],
       skipped: [...this.skippedSteps],
       turns: this.turnCount,
+      registeredTools: this.catalog,
     };
   }
 
@@ -146,6 +153,7 @@ export class ScriptedAgentProvider implements AgentProvider {
     const tools = new Map<string, WrappedTool>(
       buildYantraWrappedTools(this.services, this.profile).map((tool) => [tool.name, tool]),
     );
+    this.catalog = [...tools.keys()].sort();
     const listeners = new Set<(event: AgentEvent) => void>();
     const emit = (event: AgentEvent): void => {
       for (const listener of listeners) listener(event);
@@ -186,7 +194,9 @@ export class ScriptedAgentProvider implements AgentProvider {
         input: sanitizeStructured(params, 'authenticated').value,
         at: new Date().toISOString(),
       });
+      const startedAt = Date.now();
       const result = await tool.execute(params, undefined);
+      const endedAt = Date.now();
       const audit = auditProjectionOf(result);
       emit({
         type: 'tool_finished',
@@ -206,6 +216,8 @@ export class ScriptedAgentProvider implements AgentProvider {
         modelText: result.modelText,
         details: result.details,
         audit,
+        startedAt,
+        endedAt,
       });
     };
 

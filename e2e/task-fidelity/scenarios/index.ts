@@ -1,0 +1,54 @@
+/**
+ * The task-fidelity scenario catalogue (FEAT-049).
+ *
+ * Every scenario module in this directory is registered here exactly once; the
+ * census asserts the registration in both directions (every file registered,
+ * every registered id unique), so a scenario cannot be written and forgotten.
+ */
+
+import type { Scenario, Tier } from '../scenario.js';
+
+import { article } from './article.js';
+import { budgetExhaustion } from './budget-exhaustion.js';
+import { challengeLargeMain } from './challenge-large-main.js';
+import { challengeSmall } from './challenge-small.js';
+import { handAssembledUrl } from './hand-assembled-url.js';
+import { listingClientRendered } from './listing-client-rendered.js';
+import { listingStructured } from './listing-structured.js';
+import { listingTable } from './listing-table.js';
+import { multiTable } from './multi-table.js';
+import { repeatRead } from './repeat-read.js';
+import { searchBreaker } from './search-breaker.js';
+import { searchConcurrency } from './search-concurrency.js';
+import { searchEmptyTimeout } from './search-empty-timeout.js';
+
+/** Modules in this directory that hold shared code, not a scenario. */
+export const HELPER_MODULES: readonly string[] = Object.freeze(['index', 'common', 'challenge']);
+
+export const SCENARIOS: readonly Scenario[] = Object.freeze([
+  listingTable,
+  listingStructured,
+  listingClientRendered,
+  challengeSmall,
+  challengeLargeMain,
+  article,
+  multiTable,
+  searchConcurrency,
+  searchBreaker,
+  searchEmptyTimeout,
+  budgetExhaustion,
+  repeatRead,
+  handAssembledUrl,
+]);
+
+/** The scenarios that run in `tier`, in catalogue order. */
+export function scenariosFor(tier: Tier): readonly Scenario[] {
+  return SCENARIOS.filter((scenario) => scenario.tiers.includes(tier));
+}
+
+/** The scenario registered under `id`; throws for an unregistered id. */
+export function scenarioNamed(id: string): Scenario {
+  const found = SCENARIOS.find((scenario) => scenario.id === id);
+  if (found === undefined) throw new Error(`no task-fidelity scenario named ${id}`);
+  return found;
+}

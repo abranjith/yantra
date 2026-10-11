@@ -146,6 +146,14 @@ export function everyLine(description: string, predicate: (line: unknown) => boo
   );
 }
 
+/**
+ * A value satisfying a named predicate — for a contract the small matchers
+ * cannot state alone (e.g. "one citation list per comparison row").
+ */
+export function satisfies(description: string, predicate: (value: unknown) => boolean): Matcher {
+  return matcher(description, (value) => predicate(value));
+}
+
 /** An array whose length satisfies `expected` (a number, or another matcher). */
 export function count(expected: number | Matcher): Matcher {
   const inner = typeof expected === 'number' ? equals(expected) : expected;

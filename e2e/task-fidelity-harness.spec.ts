@@ -67,6 +67,7 @@ import { INVENTORY, formatAmount, truthRows } from './task-fidelity/fixtures/inv
 import { MULTI_TABLE_ANSWER, MULTI_TABLE_PATH } from './task-fidelity/fixtures/multi-table.js';
 import { serveTaskSites, type TaskSiteServer } from './task-fidelity/fixtures/server.js';
 import {
+  SITE_NAMES,
   TASK_SITES,
   originOf,
   renderRoute,
@@ -81,6 +82,12 @@ import {
   type ScenarioRun,
 } from './task-fidelity/runner.js';
 import type { Scenario } from './task-fidelity/scenario.js';
+import {
+  HELPER_MODULES,
+  SCENARIOS,
+  scenarioNamed,
+  scenariosFor,
+} from './task-fidelity/scenarios/index.js';
 import {
   ScriptedSearchProvider,
   scriptedSearchLeaf,
@@ -1159,5 +1166,63 @@ describe('@no-llm task-fidelity expectations', () => {
         'listing-table › current › audit-parses',
       );
     });
+  });
+});
+
+describe('@no-llm task-fidelity scenario catalogue census', () => {
+  const scenariosDirectory = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'task-fidelity',
+    'scenarios',
+  );
+
+  it('passes the expectation census: owners, baselines, notes, and a current expectation each', () => {
+    expect(expectationCensus(scenariosFor('deterministic'))).toEqual([]);
+  });
+
+  it('gives every scenario a unique id', () => {
+    const ids = SCENARIOS.map((scenario) => scenario.id);
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+  });
+
+  it('registers every scenario file in the index, and nothing the directory lacks', async () => {
+    const files = (await readdir(scenariosDirectory))
+      .filter((file) => file.endsWith('.ts'))
+      .map((file) => file.replace(/\.ts$/, ''))
+      .filter((module) => !HELPER_MODULES.includes(module))
+      .sort();
+    const index = await readFile(join(scenariosDirectory, 'index.ts'), 'utf8');
+    const imported = [...index.matchAll(/from '\.\/([\w-]+)\.js';/g)]
+      .map((match) => match[1] ?? '')
+      .filter((module) => !HELPER_MODULES.includes(module))
+      .sort();
+
+    expect(imported).toEqual(files);
+    expect(SCENARIOS).toHaveLength(files.length);
+  });
+
+  it('keeps every deterministic scenario hermetic: registered sites, fixture-only SERPs', () => {
+    const problems = SCENARIOS.flatMap((scenario) => [
+      ...scenario.sites
+        .filter((name) => !SITE_NAMES.includes(name))
+        .map((name) => `${scenario.id}: unknown site ${name}`),
+      ...scenario.serps.flatMap((entry) =>
+        entry.results
+          .filter((hit) => !new URL(hit.url).hostname.endsWith('.yantra.test'))
+          .map((hit) => `${scenario.id}: SERP points off-fixture at ${hit.url}`),
+      ),
+      ...(scenario.tiers.includes('deterministic') && scenario.script.length === 0
+        ? [`${scenario.id}: a deterministic scenario needs a script`]
+        : []),
+    ]);
+    expect(problems).toEqual([]);
+  });
+
+  it('looks scenarios up by id and filters them by tier', () => {
+    expect(scenarioNamed('listing-table').id).toBe('listing-table');
+    expect(() => scenarioNamed('no-such-scenario')).toThrow(/no task-fidelity scenario/);
+    expect(
+      scenariosFor('deterministic').every((scenario) => scenario.tiers.includes('deterministic')),
+    ).toBe(true);
   });
 });

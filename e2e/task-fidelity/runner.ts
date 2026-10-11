@@ -95,6 +95,8 @@ export interface ScenarioRun {
   readonly toolResults: readonly ReceivedResult[];
   readonly unreachable: readonly string[];
   readonly skipped: readonly string[];
+  /** Deterministic tier only: the tool catalog the run's profile registered. */
+  readonly registeredTools: readonly string[];
   /** Fixture-server requests, counted outside the code under test. */
   readonly requests: readonly RequestLogEntry[];
   readonly searchCalls: readonly SearchCallRecord[];
@@ -236,6 +238,7 @@ export async function runScenario(
       toolResults: report?.results ?? [],
       unreachable: report?.unreachable ?? [],
       skipped: report?.skipped ?? [],
+      registeredTools: report?.registeredTools ?? [],
       requests: server.requests(),
       searchCalls: search.calls(),
       searchPeakConcurrency: search.peakConcurrency(),
