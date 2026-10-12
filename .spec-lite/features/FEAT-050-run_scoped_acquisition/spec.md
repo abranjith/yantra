@@ -546,7 +546,7 @@ If an equivalent helper already exists, extend it rather than adding a parallel 
 
 - [x] TASK-001: Run document store with stable evidence IDs: `web_fetch` reads a page once
 - [x] TASK-002: `web_search` reads through the store, plus `limit: 0` discovery
-- [ ] TASK-003: Every evidence result shows its ID and the run's budget meter
+- [x] TASK-003: Every evidence result shows its ID and the run's budget meter
 - [ ] TASK-004: One shared headless browser (`PagePool`) for SERP scrapes and fetch fallbacks
 - [ ] TASK-005: Classify every response before extraction, and treat challenge pages as blocked (policy b)
 - [ ] TASK-006: One search service per run, with a politeness gate and a challenge breaker

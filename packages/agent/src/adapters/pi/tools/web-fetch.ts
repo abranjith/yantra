@@ -95,6 +95,7 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
       'a source for your published result automatically.',
     parameters: WebFetchParams,
     sanitizationProfile: 'public',
+    budgetMeter: true,
     evidenceGathering: true,
     run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
       runWebFetch(params, ctx.services, ctx.signal),

@@ -656,7 +656,8 @@ describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G
     const payload = JSON.parse(result.modelText) as BudgetPayload;
     expect(payload.failures).toHaveLength(1);
     expect(payload.failures[0]?.stage).toBe('policy');
-    expect(payload.budget).toBeUndefined();
+    // Only the meter: no exhaustion report, because no budget refused a read.
+    expect(payload.budget).toEqual({ navigations: '0/30', hosts: '0/20' });
     expect(signals).toEqual([{ domain: 'long.example', delta: 1, reason: 'search_result' }]);
     expect(services.runHealth.sourceFailures()).toMatchObject([
       { tool: 'web_search', host: 'long.example', stage: 'policy' },

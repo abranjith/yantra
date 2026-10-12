@@ -104,6 +104,7 @@ export function webSearchSpec(_services: RunServices): ToolWrapperSpec<typeof We
       'a specific URL you already have.',
     parameters: WebSearchParams,
     sanitizationProfile: 'public',
+    budgetMeter: true,
     evidenceGathering: true,
     run: (params: WebSearchParamsType, ctx): Promise<DomainResult> =>
       runWebSearch(params, ctx.services, ctx.signal),

@@ -1092,3 +1092,139 @@ describe('@no-llm middleware outcome chokepoint (FEAT-048)', () => {
     expect(services.runHealth.toolOutcomes()).toHaveLength(1);
   });
 });
+
+describe('@no-llm middleware budget meter (FEAT-050)', () => {
+  /** Spend `count` navigations on distinct-or-shared hosts, as real reads do. */
+  function reserve(services: RunServices, hosts: readonly string[]): void {
+    for (const host of hosts) {
+      const allowed = services.urlPolicy.check(`https://${host}/`);
+      if (!allowed.isOk) throw new Error(`unexpected refusal for ${host}`);
+    }
+  }
+
+  it('adds the exact meter string to an object payload when the spec asks for it', async () => {
+    const services = makeServices();
+    reserve(services, ['a.example', 'a.example']);
+    const tool = wrapTool(
+      spec(async () => OK, { budgetMeter: true }),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(JSON.parse(result.modelText)).toEqual({
+      answer: 42,
+      budget: { navigations: '2/30', hosts: '1/20' },
+    });
+  });
+
+  it('reads the meter after the tool ran, so the tool’s own navigation is counted', async () => {
+    const services = makeServices();
+    const tool = wrapTool(
+      spec(
+        async () => {
+          reserve(services, ['a.example']);
+          return OK;
+        },
+        { budgetMeter: true },
+      ),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      budget: { navigations: '1/30', hosts: '1/20' },
+    });
+  });
+
+  it('honors configured limits in the meter', async () => {
+    const services = makeServices({ limits: { maxNavigations: 12, maxHosts: 5 } });
+    const tool = wrapTool(
+      spec(async () => OK, { budgetMeter: true }),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      budget: { navigations: '0/12', hosts: '0/5' },
+    });
+  });
+
+  it('leaves a spec without the flag byte-identical', async () => {
+    const services = makeServices();
+    reserve(services, ['a.example']);
+    const tool = wrapTool(
+      spec(async () => OK),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(result.modelText).toBe(JSON.stringify({ answer: 42 }));
+  });
+
+  it('never adds a meter to a failure', async () => {
+    const services = makeServices();
+    const tool = wrapTool(
+      spec(async () => ({ ok: false, errorCode: 'X_FAILED', message: 'nope', retryable: false }), {
+        budgetMeter: true,
+      }),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(result.modelText).not.toContain('budget');
+  });
+
+  it('leaves non-object payloads untouched', async () => {
+    for (const model of ['plain text', ['a', 'b']]) {
+      const services = makeServices();
+      const tool = wrapTool(
+        spec(async () => ({ ok: true, model }), { budgetMeter: true }),
+        services,
+      );
+
+      const result = await tool.execute({ q: 'x' }, undefined);
+
+      expect(result.modelText).not.toContain('navigations');
+    }
+  });
+
+  it('merges into a pre-existing budget object instead of replacing it', async () => {
+    const services = makeServices();
+    reserve(services, ['a.example']);
+    const tool = wrapTool(
+      spec(
+        async () => ({
+          ok: true,
+          model: { sites: [], budget: { exhausted: 'navigations', skipped_reads: 2 } },
+        }),
+        { budgetMeter: true },
+      ),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(JSON.parse(result.modelText)).toEqual({
+      sites: [],
+      budget: { exhausted: 'navigations', skipped_reads: 2, navigations: '1/30', hosts: '1/20' },
+    });
+  });
+
+  it('counts the meter toward the bounded result size', async () => {
+    const services = makeServices({ limits: { maxBytesPerResult: 20 } });
+    const tool = wrapTool(
+      spec(async () => OK, { budgetMeter: true }),
+      services,
+    );
+
+    const result = await tool.execute({ q: 'x' }, undefined);
+
+    expect(Buffer.byteLength(result.modelText, 'utf8')).toBeLessThanOrEqual(20);
+    expect(result.modelText).not.toBe(JSON.stringify({ answer: 42 }));
+  });
+});

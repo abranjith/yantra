@@ -199,6 +199,16 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
    */
   readonly evidenceGathering?: boolean;
   /**
+   * True for tools whose results are evidence reads (`web_search`,
+   * `web_fetch`, `browser_navigate`, `browser_extract`). On an `ok` result
+   * whose payload is a plain object, the middleware adds
+   * `budget: { navigations: 'used/limit', hosts: 'used/limit' }` before
+   * sanitization and bounding, so the agent always sees what the run has left
+   * (FEAT-050). A payload that already carries a `budget` object keeps its
+   * fields; the meter is merged in.
+   */
+  readonly budgetMeter?: boolean;
+  /**
    * Optional pre-domain policy hook (host/ethics/scope beyond the standard
    * budget/URL checks). Returns a structured failure to refuse, or null to
    * proceed.
@@ -444,8 +454,12 @@ async function runStages<TParams extends TSchema>(
       return domainFailureOutcome(fromFailure(spec, services, domain, confirmationId), domain);
     }
 
-    // 6. Sanitizer + output bounding, then 7. stable tool result.
-    const bounded = sanitizeAndBound(domain.model, spec.sanitizationProfile, services);
+    // 6. Sanitizer + output bounding, then 7. stable tool result. The budget
+    //    meter joins the payload first, so it counts toward the result size
+    //    like any other field.
+    const model =
+      spec.budgetMeter === true ? withBudgetMeter(domain.model, services) : domain.model;
+    const bounded = sanitizeAndBound(model, spec.sanitizationProfile, services);
     const account = services.budgets.accountResultBytes(bounded.bytes, { terminal });
     if (!account.isOk) {
       return {
@@ -521,6 +535,35 @@ async function runStages<TParams extends TSchema>(
       cause: `unexpected:${errorClass}`,
     };
   }
+}
+
+/**
+ * Add the run's navigation/host meter to a plain-object success payload.
+ * Anything else (a string, an array) is returned unchanged. An existing
+ * `budget` object (FEAT-048's exhaustion report on `web_search`) keeps its
+ * fields; the meter's two counters are merged into it.
+ */
+function withBudgetMeter(model: unknown, services: RunServices): unknown {
+  if (!isPlainObject(model)) return model;
+  const used = services.budgets.snapshot();
+  const limits = services.budgets.limitsView();
+  const meter = {
+    navigations: `${used.navigations}/${meterLimit(limits.maxNavigations)}`,
+    hosts: `${used.hosts}/${meterLimit(limits.maxHosts)}`,
+  };
+  const existing = model.budget;
+  return { ...model, budget: isPlainObject(existing) ? { ...existing, ...meter } : meter };
+}
+
+/** A ceiling as the meter prints it; an unbounded one reads as `∞`. */
+function meterLimit(limit: number): string {
+  return Number.isFinite(limit) ? String(Math.floor(limit)) : '∞';
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /** The per-tool timeout result (the domain op was abandoned, not awaited). */

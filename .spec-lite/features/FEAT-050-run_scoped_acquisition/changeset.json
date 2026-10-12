@@ -20,6 +20,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/browser-navigate.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/web-fetch.ts",
       "status": "M",
       "role": "implement",
@@ -32,6 +38,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/runtime/budget.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/agent/src/runtime/index.ts",
       "status": "M",
       "role": "implement",
@@ -42,6 +54,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/agent/src/runtime/orchestrator.ts",
@@ -66,6 +84,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/result-publish.spec.ts",
@@ -102,6 +126,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/agent/tests/runtime/run-health.spec.ts",
