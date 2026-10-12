@@ -22,6 +22,14 @@ import { wrapTool } from '../../../../src/runtime/middleware.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 import {
+  LISTING_SELLERS,
+  articleHtml,
+  detailHtml,
+  emptyHtml,
+  hubHtml,
+  listingHtml,
+} from './page-fixtures.js';
+import {
   buildServices,
   attestedHosts,
   extractorReturning,
@@ -180,8 +188,9 @@ describe('@no-llm web_fetch tool', () => {
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('EXTRACTION_EMPTY');
     expect(result.retryable).toBe(false);
-    // The message must steer the agent to a different URL, not a blind retry.
-    expect(result.modelText).toMatch(/article URL/i);
+    // The message says what was looked for and steers to a different URL, not a blind retry.
+    expect(result.modelText).toMatch(/looked for .*readable article.*found none/iu);
+    expect(result.modelText).toMatch(/different URL/iu);
   });
 
   it('recovers a bot-refused fetch through the hybrid browser fallback (401/403 class)', async () => {
@@ -254,10 +263,16 @@ describe('@no-llm web_fetch tool', () => {
     const tool = wrapTool(webFetchSpec(services), services);
     const result = await tool.execute({ url: 'https://example.com/a' }, undefined);
     expect(result.status).toBe('ok');
-    const payload = JSON.parse(result.modelText) as { capture_ref?: string };
+    const payload = JSON.parse(result.modelText) as {
+      capture_ref?: string;
+      coverage?: { omitted?: string[] };
+    };
     expect(payload.capture_ref).toMatch(/^cap-/);
+    expect(payload.coverage?.omitted?.join(' ')).toMatch(/excerpt is shown/u);
+    // The full text, and the full analysis (written whenever a view is trimmed).
     const files = await readdir(join(runDir, 'captures'));
-    expect(files.length).toBe(1);
+    expect(files).toHaveLength(2);
+    expect(files).toContain(`${payload.capture_ref ?? ''}.txt`);
   });
 
   it('records blocked and fetch failures with the matching negative reason', async () => {
@@ -830,7 +845,8 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   });
 
   it('a repeat of a captured page carries the capture reference, not the text', async () => {
-    const big = 'x'.repeat(20 * 1024);
+    // Larger than the full-view budget (90% of a 24 KiB result), so it is excerpted.
+    const big = 'lorem ipsum dolor '.repeat(2_000);
     const services = buildServices({
       urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
@@ -1138,5 +1154,153 @@ describe('@no-llm web_fetch — discovered-link provenance (FEAT-051)', () => {
 
     expect(result.modelText).not.toContain('LEAKYKEY');
     expect(services.urlProvenance.has(leaky)).toBe(false);
+  });
+});
+
+describe('@no-llm web_fetch — shape-aware view (FEAT-051)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-web-fetch-shape-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const URL_OF = (path: string): string => `https://shop.test${path}`;
+
+  function fetchOf(html: string, path = '/page') {
+    const url = URL_OF(path);
+    const calls: string[] = [];
+    const services = buildServices({
+      runDir,
+      urlProvenance: attestedHosts('shop.test'),
+      fetch: {
+        fetcher: {
+          fetch: (target) => {
+            calls.push(target);
+            return Promise.resolve(fetchedDoc({ url: target, finalUrl: target, html }));
+          },
+        },
+        extractor: new ReadabilityExtractor(),
+      },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+    return { services, calls, url, run: () => tool.execute({ url }, undefined) };
+  }
+
+  it('reads a listing as a collection with anchored records that keep the seller', async () => {
+    const { run, services } = fetchOf(listingHtml(), '/new/results');
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      records: { id: string; text?: string[]; links?: { text: string }[] }[];
+      links: { kind: string; text: string }[];
+    };
+
+    expect(model.shape).toBe('collection');
+    expect(model.records.map((record) => record.id)).toEqual([
+      'S1#r1',
+      'S1#r2',
+      'S1#r3',
+      'S1#r4',
+      'S1#r5',
+      'S1#r6',
+    ]);
+    expect(model.records[0]?.text).toContain(LISTING_SELLERS[0]);
+    expect(model.links.filter((link) => link.kind === 'facet').map((link) => link.text)).toEqual([
+      'AWD (9)',
+      'FWD (3)',
+    ]);
+    // The ledger excerpt for a collection is its first records, not article fragments.
+    const [entry] = services.evidence.entries();
+    expect(entry?.excerpt).toContain(LISTING_SELLERS[0]);
+    for (const seller of LISTING_SELLERS.slice(0, 3)) expect(entry?.excerpt).toContain(seller);
+    expect(entry?.excerpt).not.toContain(LISTING_SELLERS[3]);
+    expect(services.documents.resolveAnchor('S1#r2')?.record.title).toBe('New 2026 Teyra Summit 2');
+  });
+
+  it('reads a detail page as fields holding both colors', async () => {
+    const { run } = fetchOf(detailHtml('Glacier White', 'Black Leather', 'Lakeside Motors'));
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      fields: Record<string, string>;
+    };
+
+    expect(model.shape).toBe('detail');
+    expect(model.fields['Exterior color']).toBe('Glacier White');
+    expect(model.fields['Interior color']).toBe('Black Leather');
+  });
+
+  it('keeps an article text byte-identical to the article extractor', async () => {
+    const { run, url } = fetchOf(articleHtml());
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      text: string;
+      published_at: string;
+    };
+    const article = await new ReadabilityExtractor().extract(
+      fetchedDoc({ url, finalUrl: url, html: articleHtml() }),
+    );
+
+    expect(model.shape).toBe('article');
+    expect(model.text).toBe(article?.contentText);
+    expect(model.published_at).toBe('2026-05-10T12:00:00.000Z');
+  });
+
+  it('reads a hub as an index of links', async () => {
+    const { run } = fetchOf(hubHtml());
+    const model = JSON.parse((await run()).modelText) as { shape: string; links: unknown[] };
+
+    expect(model.shape).toBe('index');
+    expect(model.links).toHaveLength(3);
+  });
+
+  it('reports an empty page with what was looked for', async () => {
+    const result = await fetchOf(emptyHtml()).run();
+
+    expect(result.error_code).toBe('EXTRACTION_EMPTY');
+    expect(result.modelText).toContain('repeated records, structured data, tables');
+  });
+
+  it('serves a page first shown as a search summary in full from the store, then already_read', async () => {
+    const { services, calls, url, run } = fetchOf(listingHtml(), '/new/results');
+    // As web_search leaves it: read once, attached as a summary.
+    const read = await services.documents.read(url, () =>
+      Promise.resolve({
+        ok: true as const,
+        value: null,
+        meta: {
+          url,
+          finalUrl: url,
+          title: 'Teyra',
+          fetchMode: 'http' as const,
+          tool: 'web_search' as const,
+        },
+      }),
+    );
+    const analysis = (
+      await new ReadabilityExtractor().extractPage(
+        fetchedDoc({ url, finalUrl: url, html: listingHtml() }),
+      )
+    ).page;
+    services.documents.attachPage(read.kind === 'fetched' ? read.record.sourceId : 'S0', analysis, {
+      delivered: 'summary',
+      article: null,
+    });
+    const before = services.budgets.snapshot().navigations;
+
+    const full = JSON.parse((await run()).modelText) as {
+      from_store?: boolean;
+      records: unknown[];
+    };
+    const again = JSON.parse((await run()).modelText) as { already_read?: string };
+
+    expect(full.from_store).toBe(true);
+    expect(full.records).toHaveLength(6);
+    expect(again.already_read).toBe('S1');
+    expect(calls).toEqual([]);
+    expect(services.budgets.snapshot().navigations).toBe(before);
+    expect(services.evidence.isEmpty()).toBe(true);
   });
 });

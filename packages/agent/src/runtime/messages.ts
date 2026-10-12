@@ -301,6 +301,133 @@ export const AGENT_INTERACTION_MESSAGES = [
     [],
     'web_fetch',
   ),
+  // Shape-aware page reads (FEAT-051). Each coverage phrase states one bound
+  // that dropped data and names an engineered way to the rest, or says plainly
+  // that there is none; only a pagination link is a real way to more records.
+  tool(
+    'PAGE_COVERAGE',
+    'records-beyond-limit',
+    (details) =>
+      `${text(details.count)} records beyond the first 25 were not shown` +
+      (details.pagination === true
+        ? '; pagination links are in links[], and web_fetch of one reads the next page.'
+        : '; no tool lists the rest of this page.'),
+    ['count', 'pagination'],
+    'web_fetch',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'record-text-cut',
+    (details) =>
+      `${text(details.count)} record(s) were cut to 400 characters at a segment boundary; no tool returns the rest of their text.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'links-beyond-limit',
+    (details) =>
+      `${text(details.count)} links beyond the first 40 were not shown; no tool lists them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'tables-beyond-limit',
+    (details) =>
+      `${text(details.count)} tables beyond the first 10 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-rows-beyond-limit',
+    (details) =>
+      `Table ${text(details.table)}: ${text(details.count)} rows beyond the first 50 were not shown; no tool reads them.`,
+    ['count', 'table'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-columns-beyond-limit',
+    (details) =>
+      `Table ${text(details.table)}: columns beyond the first 20 were not shown; no tool reads them.`,
+    ['table'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-beyond-limit',
+    (details) =>
+      `${text(details.count)} structured entities beyond the first 25 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-blocks-skipped',
+    (details) =>
+      `Structured-data blocks totaling ${text(details.count)} bytes exceeded the read limit and were skipped; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'fields-beyond-limit',
+    (details) =>
+      `${text(details.count)} label/value fields beyond the first 60 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'snapshot-truncated',
+    () =>
+      'The page was larger than the read limit, so content past the cut was not analyzed; no tool reads it.',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'text-excerpted',
+    () =>
+      'The full text did not fit this result: a 1,000-character excerpt is shown, and the full text is stored with this run as capture_ref; no tool reads it back.',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'links-trimmed',
+    (details) =>
+      `${text(details.count)} links were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-trimmed',
+    (details) =>
+      `${text(details.count)} structured entities were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-rows-trimmed',
+    (details) =>
+      `${text(details.count)} table rows were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'records-trimmed',
+    (details) =>
+      `${text(details.count)} records were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'EXTRACTION_EMPTY',
+    'nothing-readable',
+    (details) =>
+      `Nothing readable was found on the page: looked for ${text(details.looked_for)}, and found none. ` +
+      'It is not worth fetching again. Use a different URL from search results or from links[] of a page you already read.',
+    ['looked_for'],
+    'web_fetch',
+  ),
+  tool(
+    'WEB_READ',
+    'page-summary',
+    () =>
+      "This is a summary of the page. web_fetch of this URL returns its full records, links, and tables from this run's store, with no new fetch and no navigation spent.",
+    [],
+    'web_fetch',
+  ),
   // A human-verification page (FEAT-050 G10, policy b). The run never solves,
   // waits out, or retries a challenge, so the only moves are other evidence
   // or publishing; the handoff detail makes an unpublished run a handoff.

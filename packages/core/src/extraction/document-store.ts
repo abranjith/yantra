@@ -26,6 +26,7 @@
 import { EthicsRefusedError } from '../executor/errors.js';
 
 import { FetchError } from './fetcher.js';
+import type { PageAnalysis, PageRecord } from './page/types.js';
 import { canonicalUrl } from './url-identity.js';
 
 /** How a stored page was obtained. `observed` means a browser already showed it. */
@@ -33,6 +34,26 @@ export type DocumentFetchMode = 'http' | 'browser' | 'observed';
 
 /** The tools that read pages into the store. */
 export type DocumentTool = 'web_search' | 'web_fetch' | 'browser_extract';
+
+/**
+ * The shape-aware view stored for one source (FEAT-051): the latest analysis,
+ * the stable anchor of every record key ever seen on it, the article metadata,
+ * and how much of it the model has been shown.
+ */
+export interface StoredPage {
+  readonly analysis: PageAnalysis;
+  /** Record key → anchor `k` (`S<n>#r<k>`). Never reassigned within a run. */
+  readonly anchors: ReadonlyMap<string, number>;
+  readonly article: { readonly byline: string | null; readonly publishedAt: string | null } | null;
+  /** `summary` until a full view has been returned (a search summary), then `full`. */
+  readonly delivered: 'full' | 'summary';
+}
+
+/** Options for {@link DocumentStore.attachPage}. */
+export interface AttachPageOptions {
+  readonly delivered: 'full' | 'summary';
+  readonly article: StoredPage['article'];
+}
 
 /** One page read successfully in this run. */
 export interface DocumentRecord {
@@ -56,6 +77,8 @@ export interface DocumentRecord {
   readonly captureRef: string | null;
   /** The first read plus each repeat served from the store. */
   readonly reads: number;
+  /** The shape-aware view, once a shape-aware read attached one. */
+  readonly page: StoredPage | null;
 }
 
 /** Facts about a successful load, recorded on the minted {@link DocumentRecord}. */
@@ -189,6 +212,7 @@ interface MutableRecord {
   firstReadAt: string;
   captureRef: string | null;
   reads: number;
+  page: StoredPage | null;
 }
 
 /** What an in-flight load settles to, shared with concurrent readers. */
@@ -301,6 +325,77 @@ export class DocumentStore {
     if (record?.captureRef === null) record.captureRef = ref;
   }
 
+  /**
+   * Store a shape-aware analysis for a source, replacing any earlier one.
+   *
+   * Anchors are stable: a record whose key already has an anchor on this
+   * source keeps it, and a new key gets `max(k) + 1`. Re-extracting a live
+   * page therefore never renumbers a record that was already cited.
+   *
+   * @param sourceId The source's evidence ID.
+   * @param analysis The page analysis.
+   * @param opts What the model was shown, and the article metadata.
+   * @returns The stored page, or null for an unknown source.
+   */
+  public attachPage(
+    sourceId: string,
+    analysis: PageAnalysis,
+    opts: AttachPageOptions,
+  ): StoredPage | null {
+    const record = this.records.find((entry) => entry.sourceId === sourceId);
+    if (record === undefined) return null;
+    const anchors = new Map(record.page?.anchors ?? []);
+    let next = Math.max(0, ...anchors.values());
+    for (const entry of analysis.records) {
+      if (!anchors.has(entry.key)) {
+        next += 1;
+        anchors.set(entry.key, next);
+      }
+    }
+    const page: StoredPage = Object.freeze({
+      analysis,
+      anchors,
+      article: opts.article,
+      delivered: opts.delivered,
+    });
+    record.page = page;
+    return page;
+  }
+
+  /**
+   * Record that a source's full view has now been returned.
+   *
+   * @param sourceId The source's evidence ID.
+   */
+  public markDelivered(sourceId: string, delivered: 'full'): void {
+    const record = this.records.find((entry) => entry.sourceId === sourceId);
+    if (record?.page) record.page = Object.freeze({ ...record.page, delivered });
+  }
+
+  /**
+   * Resolve a record anchor (`S3#r5`) to its source and record.
+   *
+   * @param id The anchor ID.
+   * @returns The source ID and record, or null for a malformed ID, an unknown
+   *   source, or an anchor the source's current analysis does not hold.
+   */
+  public resolveAnchor(
+    id: string,
+  ): { readonly sourceId: string; readonly record: PageRecord } | null {
+    const match = /^(S[1-9]\d*)#r([1-9]\d*)$/u.exec(id.trim());
+    if (match === null) return null;
+    const [, sourceId, anchor] = match;
+    const page = this.records.find((entry) => entry.sourceId === sourceId)?.page;
+    if (page === null || page === undefined || sourceId === undefined) return null;
+    const k = Number(anchor);
+    for (const [key, value] of page.anchors) {
+      if (value !== k) continue;
+      const found = page.analysis.records.find((entry) => entry.key === key);
+      return found === undefined ? null : { sourceId, record: found };
+    }
+    return null;
+  }
+
   /** The record for an evidence ID, or null. */
   public get(sourceId: string): DocumentRecord | null {
     const record = this.records.find((entry) => entry.sourceId === sourceId);
@@ -387,6 +482,7 @@ export class DocumentStore {
       firstReadAt: this.nowIso(),
       captureRef: null,
       reads: 1,
+      page: null,
     };
     this.records.push(record);
     this.index.set(key, record);

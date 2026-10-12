@@ -33,13 +33,13 @@
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/page-payload.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/provenance-refusals.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -104,6 +104,18 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/page-fixtures.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/page-payload.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/result-publish.spec.ts",
       "status": "M",
       "role": "implement",
@@ -144,6 +156,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/extraction/document-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/extraction/html-to-text.ts",
@@ -312,6 +330,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/document-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/extraction/page/analyze.spec.ts",
