@@ -23,6 +23,7 @@ import {
 import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import { ActionPhase, type RunServices } from '../../src/runtime/run-services.js';
+import { TaskContractStore } from '../../src/runtime/task-contract.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../src/runtime/url-provenance.js';
 
@@ -79,6 +80,12 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
     // container itself has to exist with nothing in it.
     domain: { browser: null } as unknown as RunServices['domain'],
     ...(overrides.runtimeLogger ? { runtimeLogger: overrides.runtimeLogger } : {}),
+    contract: new TaskContractStore({
+      runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      runDir: '.',
+      command: 'ask',
+      required: false,
+    }),
   };
 }
 

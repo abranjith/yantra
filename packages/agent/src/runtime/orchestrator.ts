@@ -111,6 +111,7 @@ import {
   type WorkflowRunToolOutcome,
 } from './run-services.js';
 import { RunRuntimeLog } from './runtime-log.js';
+import { TaskContractStore, renderContractEcho } from './task-contract.js';
 import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
@@ -639,6 +640,14 @@ export async function runAgenticTask(
       suppressedByFlag: request.screenshotsSuppressed === true,
       zeroLlm: false,
     });
+    // The run's declared contract (FEAT-052). `research` and `do` are expected
+    // to declare one; `ask` has no contract tool and never carries the notice.
+    const contract = new TaskContractStore({
+      runId: created.runId,
+      runDir: created.runDir,
+      command: profile.command,
+      required: profile.command === 'research' || profile.command === 'do',
+    });
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
@@ -671,6 +680,7 @@ export async function runAgenticTask(
       domain,
       workflowToolMode: profile.workflowToolMode,
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
+      contract,
     };
     const tools = createYantraTools(services, profile);
     const provider =
@@ -731,6 +741,7 @@ export async function runAgenticTask(
       budgetTracker: runBudget,
       runId: created.runId,
       runDir: created.runDir,
+      contract,
     });
     executionState = state;
     unsubscribe = session.subscribe((event) => state.onEvent(event));
@@ -875,8 +886,11 @@ function createExecutionState(input: {
   readonly budgetTracker: BudgetTracker;
   readonly runId: string;
   readonly runDir: string;
+  /** The run's contract store; each new revision is echoed once to the connector. */
+  readonly contract: TaskContractStore;
 }): ExecutionState {
   const starts = new Map<string, number>();
+  let echoedRevisions = 0;
   let providerTokens = 0;
   let published = false;
   let budgetReason: string | undefined;
@@ -970,6 +984,21 @@ function createExecutionState(input: {
           at: event.at,
         });
         if (event.tool === 'result_publish' && metadata.status === 'ok') published = true;
+        if (event.tool === 'task_contract' && metadata.status === 'ok') {
+          // Parallel declarations can finish before either event arrives, so
+          // echo every revision not yet shown, each exactly once.
+          while (echoedRevisions < input.contract.revisionCount()) {
+            echoedRevisions += 1;
+            const body = input.contract.revisionAt(echoedRevisions);
+            if (body === null) break;
+            input.connector.emitAgentEvent({
+              type: 'contract_declared',
+              revision: echoedRevisions,
+              summary: renderContractEcho(body),
+              at: event.at,
+            });
+          }
+        }
         if (metadata.errorCode === 'BUDGET_EXHAUSTED' && isRunFatalBudget(metadata.budgetLimit))
           interrupt('tool-budget');
         if (metadata.handoff) {

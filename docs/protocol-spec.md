@@ -1525,6 +1525,58 @@ Example:
 "user"
 ```
 
+## TaskContractBody
+
+A normalized task contract: the deliverable, required fields, filters, and required sources a run declared for the user's goal.
+
+| Field            | Description                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| deliverable      | What the run delivers: rows of fields, a direct answer, or a prose report.                                |
+| subject          | What the rows or the answer are about.                                                                    |
+| required_fields  | Fields each row or answer must carry, unique case-insensitively. Non-empty for a table.                   |
+| filters          | Every condition the goal states, with names unique case-insensitively.                                    |
+| required_sources | Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique. |
+| ranking          | How results are ordered, when the goal asks for an order.                                                 |
+| limit            | How many results the goal asks for, when it says.                                                         |
+| notes            | Anything the structure cannot express, such as a site named without its address.                          |
+
+Example:
+
+```json
+{
+  "deliverable": "<deliverable>",
+  "subject": "<subject>",
+  "required_fields": "<required_fields>",
+  "filters": "<filters>",
+  "required_sources": "<required_sources>",
+  "ranking": "<ranking>",
+  "limit": "<limit>",
+  "notes": "<notes>"
+}
+```
+
+## TaskContractRecord
+
+The task contract an agentic research/do run declared (contract.json): every revision in declaration order, the last being current. Sanitized, model-authored, and never a source of authority.
+
+| Field          | Description                                                  |
+| -------------- | ------------------------------------------------------------ |
+| schema_version | Task-contract schema version.                                |
+| run_id         | Owning run id.                                               |
+| command        | The agentic command that declared the contract.              |
+| revisions      | Declarations in order; the last one is the current contract. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "run_id": "<run_id>",
+  "command": "<command>",
+  "revisions": "<revisions>"
+}
+```
+
 ## TaskEvent
 
 Discriminated union for task lifecycle events.

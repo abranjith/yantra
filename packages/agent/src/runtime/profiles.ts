@@ -16,7 +16,8 @@ export type YantraToolName =
   | 'browser_fill_element'
   | 'browser_fill_form'
   | 'browser_extract'
-  | 'browser_screenshot';
+  | 'browser_screenshot'
+  | 'task_contract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
 export type WorkflowToolMode = 'none' | 'list' | 'run';
@@ -47,6 +48,7 @@ const INTERACT_TOOLS: ReadonlySet<string> = new Set([
 const ALL_TOOLS = [
   ...READ_TOOLS,
   'workflow_run',
+  'task_contract',
   ...BROWSE_TOOLS,
   'browser_click',
   'browser_fill_element',
@@ -70,7 +72,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
   },
   research: {
     command: 'research',
-    toolNames: [...READ_TOOLS, 'workflow_run'],
+    toolNames: [...READ_TOOLS, 'workflow_run', 'task_contract'],
     workflowToolMode: 'run',
     promptAddendum:
       'Research broadly before publishing: use independent sources and cover material gaps, ' +

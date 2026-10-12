@@ -58,9 +58,13 @@ describe('@no-llm command task profiles', () => {
     const explicit = resolveCommandTaskProfile('research', { browse: true });
     const noBrowse = resolveCommandTaskProfile('research', { browse: false });
 
-    expect([...browse.toolNames].sort()).toEqual([...READ_TOOLS, 'workflow_run', ...BROWSE].sort());
+    expect([...browse.toolNames].sort()).toEqual(
+      [...READ_TOOLS, 'workflow_run', 'task_contract', ...BROWSE].sort(),
+    );
     expect(explicit.toolNames).toEqual(browse.toolNames);
-    expect([...noBrowse.toolNames].sort()).toEqual([...READ_TOOLS, 'workflow_run'].sort());
+    expect([...noBrowse.toolNames].sort()).toEqual(
+      [...READ_TOOLS, 'workflow_run', 'task_contract'].sort(),
+    );
     for (const variant of [browse, noBrowse]) {
       // Research browsing is a read-only mode: nothing that clicks or fills.
       for (const mutating of ['browser_click', 'browser_fill_element', 'browser_fill_form']) {
@@ -77,6 +81,18 @@ describe('@no-llm command task profiles', () => {
     expect(resolveCommandTaskProfile('do', { browse: false }).toolNames).toEqual(
       COMMAND_TASK_PROFILES.do.toolNames,
     );
+  });
+
+  it('gives task_contract to research (both variants) and do, never ask', () => {
+    expect(resolveCommandTaskProfile('research').toolNames).toContain('task_contract');
+    expect(resolveCommandTaskProfile('research', { browse: false }).toolNames).toContain(
+      'task_contract',
+    );
+    expect(resolveCommandTaskProfile('do').toolNames).toContain('task_contract');
+    expect(resolveCommandTaskProfile('ask').toolNames).not.toContain('task_contract');
+    expect(
+      yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.ask).map((tool) => tool.name),
+    ).not.toContain('task_contract');
   });
 
   it('derives the browser capability from catalog names alone', () => {

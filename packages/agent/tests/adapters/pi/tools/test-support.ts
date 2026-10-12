@@ -44,6 +44,7 @@ import {
   type SearchToolDeps,
   type ToolDomainDeps,
 } from '../../../../src/runtime/run-services.js';
+import { TaskContractStore } from '../../../../src/runtime/task-contract.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { UrlPolicy } from '../../../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
@@ -76,6 +77,8 @@ export interface BuildServicesOptions {
    * the middleware writes to `runtime.jsonl`.
    */
   readonly runtimeLogger?: Logger;
+  /** The run's contract store; defaults to an unrequired, empty one. */
+  readonly contract?: TaskContractStore;
 }
 
 /**
@@ -153,6 +156,14 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     nowIso: () => new Date().toISOString(),
     domain,
     ...(options.runtimeLogger ? { runtimeLogger: options.runtimeLogger } : {}),
+    contract:
+      options.contract ??
+      new TaskContractStore({
+        runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        runDir,
+        command: 'do',
+        required: false,
+      }),
   };
 }
 
@@ -382,6 +393,8 @@ function minimalValidFor(spec: ToolWrapperSpec<TObject>): Record<string, unknown
       return { kind: 'content' };
     case 'workflow_run':
       return { mode: 'list' };
+    case 'task_contract':
+      return { deliverable: 'answer', subject: 'x' };
     default:
       return {};
   }

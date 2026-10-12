@@ -53,6 +53,18 @@ export {
   type AgenticTaskRequest,
 } from './orchestrator.js';
 export {
+  CONTRACT_FILE,
+  MISSING_CONTRACT_REASON,
+  TaskContractStore,
+  hostSatisfiesRequiredSource,
+  normalizeContract,
+  normalizeSourceHost,
+  renderContractEcho,
+  type ContractIssue,
+  type TaskContractParams,
+  type TaskContractStoreOptions,
+} from './task-contract.js';
+export {
   COMMAND_TASK_PROFILES,
   browserCapabilityOf,
   promptAddendumFor,

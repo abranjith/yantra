@@ -31,6 +31,7 @@ import type { Brief, ConfirmationRequest, TaskEvent, TemplatedReport } from '@ya
 import { SCHEMA_VERSION } from '@yantra/protocol';
 
 import type { GlobalFlags } from './global-flags.js';
+import { stripControlCharacters } from './render/goal-echo.js';
 import type {
   AuditRenderReport,
   BriefArtifactPaths,
@@ -181,6 +182,15 @@ export class CLIConnectorIO implements ConnectorIO {
         opts.stream.write(
           `[${event.tool}] ${event.status} â€” ${event.summary}` +
             `${event.durationMs === null ? '' : ` (${event.durationMs}ms)`}\n`,
+        );
+        return;
+      case 'contract_declared':
+        // What the run understood, beside the goal echo on stderr, so a
+        // misreading is visible in the first seconds. Control characters are
+        // stripped again here: the terminal is the last boundary.
+        opts.errStream.write(
+          `${event.revision === 1 ? 'understood' : 'understood (revised)'}: ` +
+            `${stripControlCharacters(event.summary)}\n`,
         );
         return;
     }

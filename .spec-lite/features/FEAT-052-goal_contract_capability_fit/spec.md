@@ -519,8 +519,8 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 - [x] TASK-001: Research browses read-only by default, governed by `agent.research_browse`
 - [x] TASK-002: `research --no-browse` overrides the preference for one run, and the preamble says which applied
-- [ ] TASK-003: The `task_contract` tool: validate, normalize, record, and persist `contract.json`
-- [ ] TASK-004: Show the user what the run understood: attended echo, report section
+- [x] TASK-003: The `task_contract` tool: validate, normalize, record, and persist `contract.json`
+- [x] TASK-004: Show the user what the run understood: attended echo, report section
 - [ ] TASK-005: A `research`/`do` run that never declares a contract says so in its Brief
 - [ ] TASK-006: A site the user names by bare hostname is reachable at its root
 - [ ] TASK-007: The repeated-failure breaker counts per tool, so other tools cannot reset it

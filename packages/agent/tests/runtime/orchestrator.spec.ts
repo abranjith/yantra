@@ -25,7 +25,12 @@ import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDefaultPiEventMapContext } from '../../src/adapters/pi/event-map.js';
-import { createBriefPublisher, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
+import {
+  auditProjectionOf,
+  buildYantraWrappedTools,
+  createBriefPublisher,
+  yantraToolCatalog,
+} from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
 import {
@@ -36,8 +41,13 @@ import {
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
-import { resolveCommandTaskProfile } from '../../src/runtime/profiles.js';
+import {
+  resolveCommandTaskProfile,
+  type AgenticCommand,
+  type CommandTaskProfile,
+} from '../../src/runtime/profiles.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
+import { renderContractEcho } from '../../src/runtime/task-contract.js';
 import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
@@ -1648,5 +1658,176 @@ describe('@no-llm runAgenticTask run-health finalization (FEAT-048)', () => {
 
     expect(outcome.kind).toBe('failed');
     await expect(access(join(outcome.runDir, 'run-health.json'))).rejects.toThrow();
+  });
+});
+
+/** One tool call the scripted provider executes through the run's real wrapped tools. */
+interface ScriptedCall {
+  readonly tool: string;
+  readonly params: unknown;
+}
+
+/**
+ * Runs one agentic task whose provider executes `calls` against the run's own
+ * wrapped tools (so stores, files, and middleware are real) and emits the
+ * seam events a Pi session would, in order. Run 0 executes the calls; the
+ * completion-nudge run, if any, does nothing.
+ */
+async function scriptedRun(options: {
+  readonly command: AgenticCommand;
+  readonly calls: readonly ScriptedCall[];
+  readonly draft?: string;
+  readonly beforeCalls?: (services: RunServices) => void;
+}): Promise<{
+  readonly outcome: AgenticTaskOutcome;
+  readonly connector: RecordingConnector;
+  readonly services: RunServices;
+}> {
+  const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-contract-'));
+  tempDirs.push(root);
+  const connector = new RecordingConnector();
+  const profile: CommandTaskProfile = resolveCommandTaskProfile(options.command, { browse: false });
+  const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+  let services: RunServices | undefined;
+  const provider = new FakeAgentProvider({
+    onRun: async (_prompt, runIndex, session) => {
+      if (runIndex !== 0 || services === undefined) return;
+      options.beforeCalls?.(services);
+      const tools = buildYantraWrappedTools(services, profile);
+      for (const [index, call] of options.calls.entries()) {
+        const tool = tools.find((entry) => entry.name === call.tool);
+        if (tool === undefined) throw new Error(`tool ${call.tool} is not in the catalog`);
+        const callId = `c${index}`;
+        session.emit(event('tool_started', { callId, tool: call.tool, input: call.params }));
+        const result = await tool.execute(call.params, undefined);
+        session.emit(
+          event('tool_finished', {
+            callId,
+            tool: call.tool,
+            output: auditProjectionOf(result),
+            isError: result.status !== 'ok',
+          }),
+        );
+      }
+      if (options.draft !== undefined) {
+        session.emit(event('assistant_text', { text: options.draft }));
+      }
+    },
+  });
+  const outcome = await runAgenticTask(
+    {
+      goal: 'List new SUV listings from example-listings.test with dealer and price',
+      profile,
+      model: { provider: 'fixture', id: 'fixture-model' },
+      auth: { mode: 'managed' },
+      connector,
+    },
+    {
+      runStore: new LocalRunStore(root),
+      sanitizer: new DefaultSanitizer(),
+      createEnvironment: (context) =>
+        Promise.resolve({
+          ...environment,
+          domain: {
+            ...environment.domain,
+            publish: createBriefPublisher(context.runDir, {
+              taskId: context.taskId,
+              runId: context.runId,
+            }),
+          },
+        }),
+      createProvider: (runServices) => {
+        services = runServices;
+        return provider;
+      },
+    },
+  );
+  if (services === undefined) throw new Error('provider was never created');
+  return { outcome, connector, services };
+}
+
+const CONTRACT_CALL: ScriptedCall = {
+  tool: 'task_contract',
+  params: {
+    deliverable: 'table',
+    subject: 'new SUV listings',
+    required_fields: ['dealer', 'price'],
+    filters: [{ name: 'condition', value: 'new' }],
+    required_sources: ['example-listings.test'],
+  },
+};
+
+const PUBLISH_CALL: ScriptedCall = {
+  tool: 'result_publish',
+  params: { brief: { title: 'SUV listings', overview: 'Two dealers list new SUVs.' } },
+};
+
+function contractEvents(connector: RecordingConnector): AgentProgressEvent[] {
+  return connector.events.filter((entry) => entry.type === 'contract_declared');
+}
+
+describe('@no-llm runAgenticTask task contract echo (FEAT-052)', () => {
+  it('emits exactly one contract_declared event per successful declaration', async () => {
+    const { connector, services } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    const declared = contractEvents(connector);
+    expect(declared).toHaveLength(1);
+    const current = services.contract.current();
+    if (current === null) throw new Error('no contract recorded');
+    expect(declared[0]).toMatchObject({
+      type: 'contract_declared',
+      revision: 1,
+      summary: renderContractEcho(current),
+    });
+  });
+
+  it('emits revisions 1 and 2 for two declarations', async () => {
+    const revised: ScriptedCall = {
+      tool: 'task_contract',
+      params: { ...(CONTRACT_CALL.params as Record<string, unknown>), limit: 5 },
+    };
+    const { connector } = await scriptedRun({
+      command: 'do',
+      calls: [CONTRACT_CALL, revised, PUBLISH_CALL],
+    });
+
+    const declared = contractEvents(connector);
+    expect(declared.map((entry) => (entry as { revision: number }).revision)).toEqual([1, 2]);
+    expect((declared[1] as { summary: string }).summary).toMatch(/top 5$/u);
+  });
+
+  it('emits nothing for a failed declaration', async () => {
+    const { connector, services } = await scriptedRun({
+      command: 'research',
+      calls: [
+        { tool: 'task_contract', params: { deliverable: 'table', subject: 'x' } },
+        PUBLISH_CALL,
+      ],
+    });
+
+    expect(contractEvents(connector)).toEqual([]);
+    expect(services.contract.current()).toBeNull();
+  });
+
+  it('records one tool-calls.jsonl start/end pair and contract.json for a declaration', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    const record = JSON.parse(await readFile(join(outcome.runDir, 'contract.json'), 'utf8')) as {
+      revisions: unknown[];
+    };
+    expect(record.revisions).toHaveLength(1);
+    const lines = (await readFile(join(outcome.runDir, 'tool-calls.jsonl'), 'utf8'))
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as { tool: string; phase: string });
+    expect(lines.filter((line) => line.tool === 'task_contract').map((line) => line.phase)).toEqual(
+      ['start', 'end'],
+    );
   });
 });

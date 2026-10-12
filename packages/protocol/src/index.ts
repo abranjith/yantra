@@ -111,6 +111,13 @@ export {
 } from './schemas/usage.js';
 export { RUN_HEALTH_SCHEMA_VERSION, RunHealth } from './schemas/run-health.js';
 export {
+  SOURCE_HOST_PATTERN,
+  TASK_CONTRACT_MAX_REVISIONS,
+  TASK_CONTRACT_SCHEMA_VERSION,
+  TaskContractBody,
+  TaskContractRecord,
+} from './schemas/task-contract.js';
+export {
   LocatorCandidate,
   ParamDeclaration,
   RegexShape,
