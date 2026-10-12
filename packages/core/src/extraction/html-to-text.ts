@@ -56,7 +56,7 @@ interface DomNode {
 }
 
 /** Elements whose boundaries become blank lines (hard block separators). */
-const BLOCK_TAGS: ReadonlySet<string> = new Set([
+export const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
   'address',
   'article',
   'aside',
@@ -93,10 +93,10 @@ const BLOCK_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 /** Table row/cell elements: separated by a single newline, never glued. */
-const ROW_TAGS: ReadonlySet<string> = new Set(['tr', 'td', 'th']);
+export const HTML_ROW_TAGS: ReadonlySet<string> = new Set(['tr', 'td', 'th']);
 
 /** Non-content subtrees skipped entirely. */
-const SKIP_TAGS: ReadonlySet<string> = new Set([
+export const HTML_SKIP_TAGS: ReadonlySet<string> = new Set([
   'script',
   'style',
   'noscript',
@@ -135,13 +135,23 @@ export function htmlToText(html: string): string {
   }
 
   const $ = load(html);
+  return htmlNodesToText($.root().toArray());
+}
+
+/**
+ * {@link htmlToText} over nodes of a parse the caller already holds, so a
+ * caller with a cheerio tree in hand serializes it without parsing again.
+ *
+ * @param nodes Cheerio nodes (e.g. `$('body').toArray()`).
+ * @returns Blocks separated by blank lines; empty string when there is no text.
+ */
+export function htmlNodesToText(nodes: readonly unknown[]): string {
   const parts: string[] = [];
   // Cheerio's own node types are not exported; the structural DomNode view is
   // sufficient for a read-only walk.
-  for (const node of $.root().toArray() as readonly DomNode[]) {
+  for (const node of nodes as readonly DomNode[]) {
     serializeNode(node, parts);
   }
-
   return normalizeExtractedText(parts.join(''));
 }
 
@@ -188,7 +198,7 @@ function serializeNode(node: DomNode, parts: string[]): void {
   if (
     node.type === 'script' ||
     node.type === 'style' ||
-    (name !== undefined && SKIP_TAGS.has(name))
+    (name !== undefined && HTML_SKIP_TAGS.has(name))
   ) {
     return;
   }
@@ -198,9 +208,9 @@ function serializeNode(node: DomNode, parts: string[]): void {
   }
 
   const separator =
-    name !== undefined && ROW_TAGS.has(name)
+    name !== undefined && HTML_ROW_TAGS.has(name)
       ? '\n'
-      : name !== undefined && BLOCK_TAGS.has(name)
+      : name !== undefined && HTML_BLOCK_TAGS.has(name)
         ? '\n\n'
         : '';
   if (separator.length > 0) {

@@ -676,7 +676,7 @@ Named constants, each in the module that uses it with a one-line rationale:
 
 ## 8. State Tracking
 
-- [ ] TASK-001: `extractPage` on one parse: shape skeleton, link harvest, and the structural-only boundary
+- [x] TASK-001: `extractPage` on one parse: shape skeleton, link harvest, and the structural-only boundary
 - [ ] TASK-002: Collection records and facet lists, including the G2 regression
 - [ ] TASK-003: Schema.org structured data (JSON-LD and microdata) as untrusted, bounded data
 - [ ] TASK-004: All tables, detail fields, and shape arbitration

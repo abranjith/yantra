@@ -6,6 +6,7 @@ export * from './ethics-adapter.js';
 export * from './fetcher.js';
 export * from './html-to-text.js';
 export * from './live-page.js';
+export * from './page/index.js';
 export * from './readability.js';
 export * from './response-classifier.js';
 export * from './search/config.js';

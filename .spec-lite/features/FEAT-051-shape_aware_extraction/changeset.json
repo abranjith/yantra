@@ -1,0 +1,216 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "packages/core/src/extraction/html-to-text.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/analyze.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/dom.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/fields.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/links.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/records.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/shape.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/structured.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/tables.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/page/types.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/readability.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/goldens/article.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/goldens/malformed.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/goldens/paywall.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/goldens/wiki-refs.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/article-with-infobox.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/comment-thread.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/detail-attributes.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/facet-list.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/hub.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/json-ld-itemlist.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/links.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/listing-card-linked-seller.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/listing-cards.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/microdata-product.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/__fixtures__/page/multi-table.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/analyze.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/helpers.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/links.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/structural-only.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/readability.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-051-shape_aware_extraction/changeset.json",
+    ".spec-lite/features/FEAT-051-shape_aware_extraction/spec.md",
+    ".spec-lite/plan_task_fidelity.md"
+  ],
+  "baseline": {
+    "sha": "cd580016e89d7d3af9a7729733a4f372b7ca4c27",
+    "capturedAt": "2026-10-12T14:59:02.872Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-051-shape-aware-extraction@cd580016e89d7d3af9a7729733a4f372b7ca4c27"
+  },
+  "featureId": "FEAT-051"
+}

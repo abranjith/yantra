@@ -1,0 +1,14 @@
+{
+  "url": "https://news.example/paywall",
+  "article": {
+    "url": "https://news.example/paywall",
+    "title": "Paywalled Story",
+    "byline": null,
+    "publishedAt": null,
+    "siteName": null,
+    "contentText": "Please subscribe to read the full article.",
+    "contentHtml": "<div id=\"readability-page-1\" class=\"page\"><div>\n      <article>\n        \n        <p>Please subscribe to read the full article.</p>\n      </article>\n    </div></div>",
+    "excerpt": "Please subscribe to read the full article.",
+    "lengthChars": 42
+  }
+}
