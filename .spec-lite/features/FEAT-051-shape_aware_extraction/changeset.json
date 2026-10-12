@@ -176,6 +176,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/extraction/page/fields.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/extraction/page/helpers.ts",
       "status": "A",
       "role": "implement",
@@ -194,6 +200,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/extraction/page/shape.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/extraction/page/structural-only.spec.ts",
       "status": "A",
       "role": "implement",
@@ -201,9 +213,15 @@
     },
     {
       "path": "packages/core/tests/extraction/page/structured.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/tables.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/extraction/readability.spec.ts",

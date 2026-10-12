@@ -57,6 +57,16 @@ Out of scope, owned elsewhere:
 3. **Clarification, not a deviation: `web_fetch` gains a provenance gate.** Plan §5 says hand-assembled URLs are "refused exactly as today". That is true of `browser_navigate`, but `web_fetch` accepts any URL today (TODO line 208; FEAT-049 pins the acceptance as a baseline). Plan §6 ("Hand-assembled URLs remain refused. This closes the laundering path TODO line 208 describes") requires the gate, so TASK-005 adds it.
 4. **Supersedes a FEAT-050 rule.** FEAT-050 TASK-003 says a `table` extraction mints no source by itself. Plan §13 (line 210) says FEAT-051's extract kinds feed the ledger. Under FEAT-051, every `browser_extract` kind except `links` records evidence (TASK-008).
 
+#### Implementation deviations (recorded by Implement, 2026-10-12)
+
+5. **DEVIATION: `detail` mass floors each field at `FIELD_FACT_CHARS` (60).** §2 says detail mass is "field text". On FEAT-049's own faceted detail page (8 attributes, two boilerplate paragraphs), raw field text (129 chars) lost to the article reading, so a detail page read as an article. A label/value pair states one fact that prose spends a sentence on, so each pair now counts as at least 60 characters (`shape.ts`). The article-with-infobox and comment-thread fixtures still read as articles.
+6. **DEVIATION: article mass counts only unexplained prose.** The article reading's mass is Readability's text minus the pieces other parts already return (record text, field labels/values, table cells, offered link labels), counted as letter/digit runs, × `ARTICLE_MASS_WEIGHT`. An article with no prose of its own does not qualify. Without this, a hub whose Readability text is only its link labels could never be `index`, and under the raw formula `multi-table` lost to the article reading, 230 to 246. `shape_basis` reports both numbers.
+7. **DEVIATION: facet groups need 2 items, not `MIN_RECORDS`.** FEAT-049's facet sidebar offers two-value groups (new/used, AWD/FWD), and §2's candidate rule (≥ 3 children) would never see them, so the AWD facet target was unreachable. `FACET_MIN_ITEMS = 2`. Each item must still pass all three facet tests, and a label must accompany the count, so a numbered page list is never a facet group. An anchor to the page itself (the selected value) counts toward its group.
+8. **DEVIATION: `coverage.omitted` is data in core, rendered by the agent.** Core emits `{ id, count, table?, paginationOffered? }`, and `projectPage` renders each through the registered message catalog. TASK-006 requires the omitted phrases to be registered templates that declare their capabilities, and core cannot import the agent's registry. The model still sees `coverage.omitted: string[]`.
+9. **Clarification: `analyzePage` is two phases.** `analyzePage($, { baseUrl, fetchMode })` scans the untouched parse, and `completeAnalysis(scan, { articleText, fallbackText })` folds in Readability and decides the shape. Analysis must run before the pre-clean, and the article is known only after it.
+10. **Clarification: the `not_found` phrase is "no structured data".** §2's example "no schema.org data" matches the boundary test's own hostname-literal rule.
+11. **Clarification: a page with only sub-threshold parts is not empty.** A page with no qualifying reading but a non-layout table, or fields/entities, reads as `table` or `detail` before `index` is considered. Only a page with no article and no page parts is `EXTRACTION_EMPTY`.
+
 ## 2. Data Model (Granular)
 
 No relational store, and `.spec-lite/data_model.md` does not exist. Everything here is either in-memory run state or a tool payload, plus one additive optional block on FEAT-048's `RunHealth`.
@@ -679,7 +689,7 @@ Named constants, each in the module that uses it with a one-line rationale:
 - [x] TASK-001: `extractPage` on one parse: shape skeleton, link harvest, and the structural-only boundary
 - [x] TASK-002: Collection records and facet lists, including the G2 regression
 - [x] TASK-003: Schema.org structured data (JSON-LD and microdata) as untrusted, bounded data
-- [ ] TASK-004: All tables, detail fields, and shape arbitration
+- [x] TASK-004: All tables, detail fields, and shape arbitration
 - [ ] TASK-005: Discovered-link provenance, with `web_fetch` gated on it (closes TODO line 208)
 - [ ] TASK-006: `web_fetch` returns the full shape-aware view, with stable record anchors
 - [ ] TASK-007: `web_search` sites carry a shape summary, and the full view is one store read away
