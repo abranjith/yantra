@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 pnpm-lock.yaml
+e2e/task-fidelity/.out/
 .env*
 .vscode/*
 !.vscode/settings.json

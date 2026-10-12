@@ -17,8 +17,11 @@ const PI_SDK_BOUNDARY_MESSAGE =
  *
  * Not exhaustive, and not meant to be: it is a tripwire for the habit, not a
  * blocklist of the web. Extend it whenever a review catches a new one.
+ *
+ * Exported so the task-fidelity fixture census (`e2e/task-fidelity`) reads this
+ * one list instead of a copy that would drift from it.
  */
-const SITE_TOKEN_SOURCE =
+export const SITE_TOKEN_SOURCE =
   'expedia|kayak|priceline|orbitz|skyscanner|booking[.]com|trip[.]com|google flights|google travel';
 const SITE_SPECIFIC_LOGIC_MESSAGE =
   'Website-specific logic is forbidden: automation must work from generic structural signals ' +
@@ -36,6 +39,8 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       '**/_lint-fixtures/**',
       '.claude/**',
+      // Task-fidelity harness output (scorecards, run directories); gitignored.
+      'e2e/task-fidelity/.out/**',
     ],
   },
   js.configs.recommended,

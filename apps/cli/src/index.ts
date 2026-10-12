@@ -38,6 +38,18 @@ import { makeUsageCommand } from './commands/usage.js';
 export { renderBriefTerminal, type BriefTerminalOptions } from './render/brief-terminal.js';
 export type { BriefDetailLevel, BriefOutputFormat } from './render/types.js';
 
+// Re-exported so the dev-only task-fidelity runner (`pnpm eval:tasks`) resolves
+// its model, credentials, and budgets through the exact chain the commands use
+// (flag > env > profile > pinned) instead of a copy that would drift.
+export {
+  resolveAgentInvocation,
+  type AgentInvocation,
+  type AgentInvocationDependencies,
+  type AgentModelOptions,
+  type AgentOptions,
+} from './agent-options.js';
+export { loadEffectivePreferences } from './preferences.js';
+
 export interface CliRunOptions {
   readonly askRuntime?: Partial<AskRuntime>;
   readonly researchRuntime?: Partial<ResearchRuntime>;

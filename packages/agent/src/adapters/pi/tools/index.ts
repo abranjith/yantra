@@ -17,6 +17,7 @@ import type { HashableToolDefinition } from '../../../runtime/catalog-hash.js';
 import { wrapTool, type WrappedTool, type YantraToolResult } from '../../../runtime/middleware.js';
 import type { CommandTaskProfile, YantraToolName } from '../../../runtime/profiles.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+import { createDefaultPiEventMapContext } from '../event-map.js';
 
 import { browserClickSpec } from './browser-click.js';
 import { browserExtractSpec } from './browser-extract.js';
@@ -173,4 +174,22 @@ export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unk
   // The extra audit fields are intentional (read by the FEAT-023 recorder); Pi
   // ignores unknown fields on the result object.
   return out;
+}
+
+/**
+ * Exactly what the Pi seam records as `tool_finished.output` for a tool
+ * result: the Pi tool-result projection, sanitized by the seam's default
+ * mapping context.
+ *
+ * A driver that executes the run's wrapped tools without a Pi session (the
+ * task-fidelity harness's scripted agent) emits this as its `tool_finished`
+ * output, so the `tool-calls.jsonl` it produces comes from the same projection
+ * a real session's does — including every fix to that projection. Typed
+ * `unknown` so no provider SDK type crosses the package boundary.
+ *
+ * @param result A wrapped tool's result.
+ * @returns The sanitized audit projection.
+ */
+export function auditProjectionOf(result: YantraToolResult): unknown {
+  return createDefaultPiEventMapContext().sanitizePayload(toAgentToolResult(result));
 }

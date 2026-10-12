@@ -483,15 +483,29 @@ If an equivalent helper already exists (a JSONL reader, a temp-home helper, the 
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Host-routed task-site server with reserved hostnames, and the `faceted-listing` pattern
-- [ ] TASK-002: The remaining fixture patterns and the fixture census
-- [ ] TASK-003: Two inert production seams: environment leaves and the audit projection
-- [ ] TASK-004: Scripted search provider with fault injection
-- [ ] TASK-005: Scripted agent and the scenario runner
-- [ ] TASK-006: Expectation ledger with an owner ratchet
-- [ ] TASK-007: The deterministic tier: the scenario catalogue, gating CI
-- [ ] TASK-008: The outcome scorer
-- [ ] TASK-009: The agentic tier: `pnpm eval:tasks` and the scorecard
-- [ ] TASK-010: Baseline today's pipeline and record it
+- [x] TASK-001: Host-routed task-site server with reserved hostnames, and the `faceted-listing` pattern
+- [x] TASK-002: The remaining fixture patterns and the fixture census
+- [x] TASK-003: Two inert production seams: environment leaves and the audit projection
+- [x] TASK-004: Scripted search provider with fault injection
+- [x] TASK-005: Scripted agent and the scenario runner
+- [x] TASK-006: Expectation ledger with an owner ratchet
+- [x] TASK-007: The deterministic tier: the scenario catalogue, gating CI
+- [x] TASK-008: The outcome scorer
+- [x] TASK-009: The agentic tier: `pnpm eval:tasks` and the scorecard
+- [x] TASK-010: Baseline today's pipeline and record it
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Implementation Notes
+
+- **FIX after the first agentic run (2026-10-12, `opencode-go/deepseek-v4-pro`, 21 runs, $1.05):** that scorecard measured harness defects, not the pipeline, and was not recorded as the baseline. 33 of 187 fetches used `https://` and all became `TOOL_EXECUTION_FAILED` (fixtures served plain HTTP only); 72 more were 404s on guessed paths (no site had a home page); 13 of 42 searches returned nothing (SERPs matched only "teyra", not the site's host); and honesty counted 404s on the challenge host as challenge pages. Fixed: one port serves HTTP and TLS (an in-memory self-signed `*.yantra.test` certificate, `--ignore-certificate-errors` for the harness's Chrome only; the HTTP tier serves `https:` fixture URLs from the same loopback server); every site has a home page, and the challenge site challenges every page; SERPs match the subject and the site's host; honesty counts only pages that served the challenge (status 200). The deterministic tier's 103 expectations are unchanged.
+- **DONE (TASK-010):** the baseline was recorded by the user on the fixed harness (`opencode-go/deepseek-v4-pro`, `agent-v8`, 3 runs × 7 scenarios, commit `9cbb4a7`) and committed as `baselines/2026-10-baseline.json`; the plan's revision log and §11 "Today" cells cite it. The remaining failures in that scorecard were each traced to the pipeline or the model (invented paths, the identical-failure breaker, unextracted JSON-LD), not the harness. The default profile model (`anthropic/claude-haiku-4-5`) was not used: the user has no key for it, and the scorecard records the model that produced it.
+- **DEVIATION (ethics leaf):** the harness uses `defaultEthicsConfig` (robots disabled, the production default), not "robots honored". Robots fetching uses global `fetch`, which no leaf can host-map; enabling it would send `*.yantra.test` lookups off-box. The fixture server still serves an allow-all `robots.txt` on every host.
+- **DEVIATION (ownership of capabilities that already hold):** a pending target may not already pass, so these are owned by `current`: `listing-client-rendered` ≤ 1 browser launch (spec said FEAT-050); `challenge-small` never-a-source, never-extracted, and HTTP-plus-one-render; `search-breaker` zero browser launches.
+- **DEVIATION (third production change):** `apps/cli/src/index.ts` re-exports `resolveAgentInvocation` and `loadEffectivePreferences`, so the eval resolves models through the CLI's own chain instead of a copy (memory: duplicated grammars diverge). `@yantra/cli`'s `exports` map blocks a deep import.
+- **DEVIATION (`listing-table` script):** a guarded fallback `web_search {limit: 1}` runs only when discovery (`limit: 0`) is refused; it is recorded as skipped, not unreachable, once FEAT-050 lands.
+- **ADDITION (FEAT-052 expectation):** the census needs a FEAT-052 baseline; `listing-table › FEAT-052 › research-can-browse` measures the tool catalog the profile registers (`ScenarioRun.registeredTools`).
+- **ADDITION:** `zod` added to the `e2e` devDependencies (already a workspace dependency, same range as `@yantra/protocol`) for the scorecard schema.
+- **Structural:** harness modules never load Vitest (`pnpm eval:tasks` runs under tsx): `assertExpectations` takes Vitest's `it`, and the runner takes the runtime-log scanner as an injected option.
+- **DEVIATION (test expectation adjusted):** `packages/agent/tests/runtime/browser-selection.spec.ts` pins the orchestrator's source text. Its browser factories now read `leaves.createBrowserProvider({…logger…})`, so the test looks for that spelling and additionally pins `createSelectedBrowserProvider` as the default leaf. The invariant it guards (every browser-capable factory receives the run logger) is unchanged.
+- **Agentic mode** keeps the developer's `YANTRA_HOME` (where the CLI's credentials live); run directories still go under `--out/runs/`. The deterministic tier always uses a temporary home.

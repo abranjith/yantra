@@ -2,6 +2,9 @@ import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
 import { createDefaultPiEventMapContext, mapPiEvent } from '../../../src/adapters/pi/event-map.js';
+import { auditProjectionOf, toAgentToolResult } from '../../../src/adapters/pi/tools/index.js';
+import type { YantraToolResult } from '../../../src/runtime/middleware.js';
+import type { CaptureMetadata } from '../../../src/runtime/vision.js';
 
 const RESULTS_URL =
   'https://www.autotrader.example/cars-for-sale/new-cars/2026/hyundai/santa-fe/dallas-tx/';
@@ -102,5 +105,83 @@ describe('@no-llm Pi event map — structural payload sanitization', () => {
     expect(typeof output).toBe('object');
     const inner = JSON.parse(output.content[0]!.text) as { sites: { url: string }[] };
     expect(inner.sites[0]!.url).toBe(RESULTS_URL);
+  });
+});
+
+describe('@no-llm auditProjectionOf — the seam’s tool_finished output without a Pi session', () => {
+  /** What the seam records for `result`, by way of a real Pi end event. */
+  function seamOutput(result: YantraToolResult): unknown {
+    const [event] = mapPiEvent(
+      {
+        type: 'tool_execution_end',
+        toolCallId: 'call-1',
+        toolName: 'web_fetch',
+        result: toAgentToolResult(result),
+        isError: result.status !== 'ok',
+      } as AgentSessionEvent,
+      createDefaultPiEventMapContext(),
+    );
+    return (event as { output: unknown }).output;
+  }
+
+  const success: YantraToolResult = {
+    status: 'ok',
+    modelText: JSON.stringify({
+      url: RESULTS_URL,
+      title: 'Listings',
+      text: 'Contact jane.dealer@example.com or call the seller.',
+    }),
+    details: { bytes: 52, final_url: RESULTS_URL, captures: [] },
+  };
+  const failure: YantraToolResult = {
+    status: 'error',
+    modelText: JSON.stringify({
+      status: 'error',
+      error_code: 'SEARCH_BLOCKED',
+      message: 'The search provider showed a human-verification challenge.',
+      retryable: false,
+    }),
+    details: { provider: 'duckduckgo', cause: 'anomaly-challenge' },
+    error_code: 'SEARCH_BLOCKED',
+    retryable: false,
+  };
+  const rich: YantraToolResult = {
+    status: 'ok',
+    modelText: 'Screenshot captured.',
+    content: [
+      { kind: 'text', text: `Captured ${RESULTS_URL} with token sk-abcdefghijklmnopqrstu` },
+      {
+        kind: 'image',
+        mimeType: 'image/png',
+        base64: 'iVBORw0KGgo=',
+        artifact: {
+          path: 'captures/1.png',
+          sha256: 'a'.repeat(64),
+          mime_type: 'image/png',
+          width: 1,
+          height: 1,
+          bytes: 8,
+          scope: 'viewport',
+          marks: 0,
+          seq: 1,
+        } as CaptureMetadata,
+      },
+    ],
+    details: { captures: [{ ref: 'captures/1.png' }] },
+    confirmation_id: 'confirm-1',
+  };
+
+  it.each([
+    ['a success', success],
+    ['a failure', failure],
+    ['a rich-content result', rich],
+  ])('deep-equals the seam’s recorded output for %s', (_label, result) => {
+    expect(auditProjectionOf(result)).toEqual(seamOutput(result));
+  });
+
+  it('is sanitized, not a raw copy of the tool result', () => {
+    const projected = auditProjectionOf(rich) as { content: { type: string; text?: string }[] };
+    expect(JSON.stringify(projected)).not.toContain('sk-abcdefghijklmnopqrstu');
+    expect(projected.content[0]?.type).toBe('text');
   });
 });

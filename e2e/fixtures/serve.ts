@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
+import type { Server } from 'node:net';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,13 +16,23 @@ export async function serveFixtureSite(): Promise<FixtureServer> {
   const server = createServer((request, response) => {
     void serveRequest(request.url ?? '/', response);
   });
+  const port = await listen(server);
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    close: () => closeServer(server),
+  };
+}
+
+/**
+ * Bind a server to an ephemeral loopback port.
+ *
+ * @returns The bound port.
+ */
+export async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('fixture server did not bind');
-  return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
-    close: () => closeServer(server),
-  };
+  return address.port;
 }
 
 async function serveRequest(path: string, response: ServerResponse): Promise<void> {
@@ -39,7 +50,8 @@ async function serveRequest(path: string, response: ServerResponse): Promise<voi
   }
 }
 
-function closeServer(server: Server): Promise<void> {
+/** Close a server, resolving once every connection has ended. */
+export function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );

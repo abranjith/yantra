@@ -12,11 +12,19 @@ import {
   HybridContentFetcher,
   JsonlEventBus,
   createSelectedBrowserProvider,
+  type BrowserProvider,
   type BrowserRuntimeOptions,
   type BrowserRuntimeServices,
   type BrowserSelection,
+  type EthicsConfig,
+  type HttpFetcherOptions,
   type InstallOfferGateway,
+  type KeychainProvider,
   type Logger,
+  type ResolveSearchProviderOptions,
+  type SearchConfig,
+  type SearchProvider,
+  type SearchProviderError,
   LocalProfileStore,
   MarkdownReportBuilder,
   ModelSuppliedValues,
@@ -55,6 +63,7 @@ import {
   validateBrief,
   validateTemplatedReport,
   type FailureClass,
+  type Result,
   type TemplateManifest,
 } from '@yantra/protocol';
 
@@ -324,10 +333,88 @@ export interface AgenticRunEnvironment {
   readonly closeRuntimeLog?: () => Promise<void>;
 }
 
+/**
+ * The leaf dependencies the default run environment is composed from.
+ *
+ * A leaf is something the environment *uses* — a credential store, loaded
+ * configuration, a browser factory, a transport, a provider resolver. The
+ * composition built on top of them (the ethics gate, the hybrid fetcher, the
+ * browser controller, the shared launch counter, the publisher) is production
+ * code in every case, so an embedder that swaps a leaf still measures the real
+ * wiring. That is the point: a hand-built test environment keeps exercising
+ * whatever wiring it copied, while the composer moves on.
+ */
+export interface EnvironmentLeaves {
+  /** Model and search-provider credentials, and nested-workflow secrets. */
+  readonly keychain: KeychainProvider;
+  /** Robots, user agent, and rate limits for the run's ethics gate. */
+  readonly ethicsConfig: EthicsConfig;
+  /** Search breadth/depth and provider selection. */
+  readonly searchConfig: SearchConfig;
+  /** Host blocklist for the run's ethics gate, already loaded. */
+  readonly blocklist: BlocklistImpl;
+  /**
+   * Builds every browser provider in the run: the agent controller's, the one
+   * the fetch fallback and scraped search share, and each nested workflow's.
+   */
+  readonly createBrowserProvider: (options: BrowserRuntimeOptions) => BrowserProvider;
+  /** HTTP transport for `web_fetch`/`web_search` page reads; absent uses the default. */
+  readonly httpRequestFn?: NonNullable<HttpFetcherOptions['requestFn']>;
+  /** Resolves the search provider each `web_search` call uses. */
+  readonly resolveSearchProvider: (
+    options: ResolveSearchProviderOptions,
+  ) => Promise<Result<SearchProvider, SearchProviderError>>;
+}
+
+/**
+ * Today's production leaves, built only for the leaves `overrides` leaves out.
+ *
+ * Building a default can touch the machine (the OS keychain, `config.yaml`, the
+ * blocklist file), so an overridden leaf is never built at all — an embedder
+ * replacing the keychain never loads the native keychain module.
+ *
+ * @param overrides Leaves supplied by a test or embedding host.
+ * @returns A complete leaf set: each override as given, every other leaf as production builds it.
+ */
+export async function defaultEnvironmentLeaves(
+  overrides: Partial<EnvironmentLeaves> = {},
+): Promise<EnvironmentLeaves> {
+  const keychain = overrides.keychain ?? (await createKeychainProvider());
+  const ethicsConfig = overrides.ethicsConfig ?? (await loadEthicsConfig());
+  // Load the search config once for this run so the combined `web_search` tool's
+  // breadth (resultCap) and inline-fetch depth (fetchTop) come from config, not
+  // hardcoded constants. An invalid `search:` block fails loud here.
+  const searchConfig = overrides.searchConfig ?? (await loadSearchConfig());
+  let blocklist = overrides.blocklist;
+  if (blocklist === undefined) {
+    blocklist = new BlocklistImpl();
+    await blocklist.reload();
+  }
+  return {
+    keychain,
+    ethicsConfig,
+    searchConfig,
+    blocklist,
+    createBrowserProvider: overrides.createBrowserProvider ?? createSelectedBrowserProvider,
+    ...(overrides.httpRequestFn === undefined ? {} : { httpRequestFn: overrides.httpRequestFn }),
+    resolveSearchProvider: overrides.resolveSearchProvider ?? resolveSearchProvider,
+  };
+}
+
 /** Injectable boundaries for hermetic lifecycle/chaos tests. */
 export interface AgenticTaskDependencies {
   readonly runStore?: AgenticRunStore;
   readonly sanitizer?: PayloadSanitizer;
+  /**
+   * Test/embedding-only: replace leaf dependencies of the default environment
+   * (see {@link EnvironmentLeaves}), merged over today's production leaves.
+   *
+   * Applies only when `createEnvironment` is absent; with a custom environment
+   * it is ignored. It changes leaves only: no policy, budget, sanitizer,
+   * consent, or audit enforcement can be replaced through it, because those
+   * are composed by production code on top of whatever leaves it is given.
+   */
+  readonly environmentLeaves?: Partial<EnvironmentLeaves>;
   readonly createEnvironment?: (context: {
     readonly runId: string;
     readonly runDir: string;
@@ -464,7 +551,10 @@ export async function runAgenticTask(
   });
 
   try {
-    environment = await (dependencies.createEnvironment ?? createDefaultEnvironment)({
+    environment = await (
+      dependencies.createEnvironment ??
+      ((context) => createDefaultEnvironment(context, dependencies.environmentLeaves ?? {}))
+    )({
       runId: created.runId,
       runDir: created.runDir,
       taskId,
@@ -1288,21 +1378,25 @@ function mapWorkflowOutcome(
   }
 }
 
-async function createDefaultEnvironment(context: {
-  readonly runId: string;
-  readonly runDir: string;
-  readonly taskId: string;
-  readonly rankSink: RankSignalSink | null;
-  readonly browser?: BrowserRuntimeOptions;
-  readonly runHealth: RunHealthLedger;
-}): Promise<AgenticRunEnvironment> {
+async function createDefaultEnvironment(
+  context: {
+    readonly runId: string;
+    readonly runDir: string;
+    readonly taskId: string;
+    readonly rankSink: RankSignalSink | null;
+    readonly browser?: BrowserRuntimeOptions;
+    readonly runHealth: RunHealthLedger;
+  },
+  leafOverrides: Partial<EnvironmentLeaves>,
+): Promise<AgenticRunEnvironment> {
   // The run directory already exists by the time this runs, so the diagnostic
   // destination can be opened here rather than lazily. Every component below
   // receives this one logger: a second destination on the same file would
   // interleave two buffers into one append-only artifact.
   const runtimeLog = RunRuntimeLog.open({ runId: context.runId, runDir: context.runDir });
   try {
-    return await composeDefaultEnvironment(context, runtimeLog);
+    const leaves = await defaultEnvironmentLeaves(leafOverrides);
+    return composeDefaultEnvironment(context, runtimeLog, leaves);
   } catch (error) {
     // Partial construction still opened the destination, and nothing else holds
     // a reference to it — close it here or the handle outlives the run.
@@ -1311,7 +1405,7 @@ async function createDefaultEnvironment(context: {
   }
 }
 
-async function composeDefaultEnvironment(
+function composeDefaultEnvironment(
   context: {
     readonly runId: string;
     readonly runDir: string;
@@ -1321,16 +1415,10 @@ async function composeDefaultEnvironment(
     readonly runHealth: RunHealthLedger;
   },
   runtimeLog: RunRuntimeLog,
-): Promise<AgenticRunEnvironment> {
+  leaves: EnvironmentLeaves,
+): AgenticRunEnvironment {
   const logger = runtimeLog.logger;
-  const keychain = await createKeychainProvider();
-  const ethicsConfig = await loadEthicsConfig();
-  // Load the search config once for this run so the combined `web_search` tool's
-  // breadth (resultCap) and inline-fetch depth (fetchTop) come from config,
-  // not hardcoded constants. An invalid `search:` block fails loud here.
-  const searchConfig = await loadSearchConfig();
-  const blocklist = new BlocklistImpl();
-  await blocklist.reload();
+  const { keychain, ethicsConfig, searchConfig, blocklist } = leaves;
   const ethics = new EthicsGateImpl(
     blocklist,
     new RobotsCacheImpl(ethicsConfig.userAgent),
@@ -1347,7 +1435,7 @@ async function composeDefaultEnvironment(
   // the scraped-search transport, and the fetch fallback all share it, so one
   // pass-through counter sees every launch.
   const browserProvider = countingBrowserProvider(
-    createSelectedBrowserProvider({
+    leaves.createBrowserProvider({
       ...(context.browser ?? {}),
       logger,
       profileStore: new LocalProfileStore({ logger }),
@@ -1382,7 +1470,7 @@ async function composeDefaultEnvironment(
         // The typed resolution error is passed through untouched: `web_search`
         // classifies it (key missing vs. no provider vs. unknown name).
         resolveProvider: () =>
-          resolveSearchProvider({
+          leaves.resolveSearchProvider({
             env: process.env,
             config: searchConfig,
             deps: { keychain, browserProvider, ethicsGate: searchEthics, logger },
@@ -1396,7 +1484,10 @@ async function composeDefaultEnvironment(
         // refuses the bot UA (401/403) or returns a script-rendered shell that
         // Readability cannot extract (the EXTRACTION_EMPTY class of failures).
         fetcher: new HybridContentFetcher({
-          httpFetcher: new HttpFetcher({ maxBodyBytes: 5 * 1024 * 1024 }),
+          httpFetcher: new HttpFetcher({
+            maxBodyBytes: 5 * 1024 * 1024,
+            ...(leaves.httpRequestFn === undefined ? {} : { requestFn: leaves.httpRequestFn }),
+          }),
           browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
         }),
         extractor: new ReadabilityExtractor(),
@@ -1424,7 +1515,7 @@ async function composeDefaultEnvironment(
           // `synthesis` is omitted entirely (not merely `noLlm`), so the nested
           // run also writes no Brief of its own; the agent publishes the result.
           const nestedBrowserProvider = countingBrowserProvider(
-            createSelectedBrowserProvider({
+            leaves.createBrowserProvider({
               ...(context.browser ?? {}),
               installOfferGateway: null,
               logger,

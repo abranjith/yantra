@@ -16,6 +16,7 @@
     "security:static-check": "tsx scripts/ci-static-check.ts",
     "snapshots:update": "vitest run --update",
     "golden:update": "tsx e2e/golden-briefs/update.ts",
+    "eval:tasks": "tsx e2e/task-fidelity/eval.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",

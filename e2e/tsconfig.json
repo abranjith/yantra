@@ -13,5 +13,5 @@
     { "path": "../apps/cli" }
   ],
   "include": ["*.ts", "**/*.ts"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules", "task-fidelity/.out"]
 }
