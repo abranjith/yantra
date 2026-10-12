@@ -29,6 +29,7 @@ import {
 import {
   AgentBrowserController,
   DefaultSanitizer,
+  DocumentStore,
   LocalBrowserProvider,
   LocalProfileStore,
   ReadabilityExtractor,
@@ -334,6 +335,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
     urlProvenance: provenance,
     runHealth: new RunHealthLedger(),
+    documents: new DocumentStore(),
     confirmation: {
       gateway: {
         request: (request) =>

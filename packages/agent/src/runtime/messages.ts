@@ -248,6 +248,65 @@ export const AGENT_INTERACTION_MESSAGES = [
     ['provider'],
     'web_fetch',
   ),
+  // A scraped provider that challenged once is not asked again in this run
+  // (FEAT-050 breaker). The first challenge is reported under its own cause
+  // above; every later search is refused here with no provider call at all.
+  tool(
+    'SEARCH_BLOCKED',
+    'circuit-open',
+    (details) =>
+      `Web search is closed for the rest of this run: ${text(details.provider)} challenged an ` +
+      'earlier query, so Yantra stopped asking it. This search was not attempted. Use web_fetch ' +
+      'on a URL an earlier result already returned, or finish with result_publish and say that ' +
+      'web search was blocked.',
+    ['provider'],
+    'web_fetch',
+  ),
+  // Run document store (FEAT-050): a page is read once per run, under one
+  // evidence ID, and a read that cannot change is not attempted twice.
+  tool(
+    'WEB_READ',
+    'already-read',
+    (details) =>
+      `This page was already read earlier in this run; its content was returned then as ` +
+      `${text(details.source_id)} and was not fetched again. Use that earlier result, read a ` +
+      'different URL, or finish with result_publish.',
+    ['source_id'],
+    'result_publish',
+  ),
+  tool(
+    'WEB_READ',
+    'already-attempted',
+    (details) =>
+      `This URL was already attempted earlier in this run and failed (${text(details.code)}). ` +
+      'That failure cannot change within the run, so it was not fetched again. Do not request ' +
+      'it again: read a different URL from an earlier result, or finish with result_publish.',
+    ['code'],
+    'result_publish',
+  ),
+  tool(
+    'WEB_SEARCH',
+    'discovery',
+    () =>
+      'Discovery results: titles, URLs, and snippets only — no page was fetched and no ' +
+      'navigation was spent. Snippets are not page content. To read one, call web_fetch with ' +
+      'its URL exactly as listed.',
+    [],
+    'web_fetch',
+  ),
+  // A human-verification page (FEAT-050 G10, policy b). The run never solves,
+  // waits out, or retries a challenge, so the only moves are other evidence
+  // or publishing; the handoff detail makes an unpublished run a handoff.
+  tool(
+    'SITE_CHALLENGE',
+    'challenge',
+    (details) =>
+      `${text(details.host)} served a human-verification page instead of content. Yantra cannot ` +
+      'and will not pass it, and will not request this page again in this run. Use evidence ' +
+      'from your other reads, or finish with result_publish and say that this page was blocked.',
+    ['host'],
+    'result_publish',
+  ),
   // The run's own navigation/host budget ran out inside one `web_search`
   // (FEAT-048 G6). Reported once at the top of the result, never per site,
   // and worded so it can never be read as the sites refusing the run.

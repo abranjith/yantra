@@ -32,6 +32,12 @@ export const RunHealth = z
         providers: z
           .array(z.string().min(1))
           .describe('Distinct search providers used, in first-use order.'),
+        breaker_skipped: Count.optional().describe(
+          'Searches refused without a provider call because an earlier challenge opened the search breaker (FEAT-050).',
+        ),
+        peak_concurrency: Count.optional().describe(
+          'Most provider searches in flight at once (FEAT-050).',
+        ),
       })
       .describe('Web searches by outcome.'),
     fetches: z
@@ -47,6 +53,19 @@ export const RunHealth = z
           'Network fetches of a normalized URL already fetched earlier in the run.',
         ),
         failed_by_code: CountsByCode.describe('Failed `web_fetch` calls by stable error code.'),
+        cache_hits: Count.optional().describe(
+          'Reads answered from the run document store with no network fetch (FEAT-050).',
+        ),
+        memo_hits: Count.optional().describe(
+          'Reads answered from the remembered terminal failure of an earlier read (FEAT-050).',
+        ),
+        challenges: z
+          .object({
+            http: Count.describe('Human-verification pages served to the HTTP tier.'),
+            browser: Count.describe('Human-verification pages served to the browser render.'),
+          })
+          .optional()
+          .describe('Challenge pages seen, by tier (FEAT-050).'),
       })
       .describe('Network page fetches.'),
     source_failures: z
@@ -61,7 +80,15 @@ export const RunHealth = z
       })
       .describe('Per-site read failures inside multi-source tools, by stage.'),
     browser: z
-      .object({ launches: Count.describe('Successful browser process launches.') })
+      .object({
+        launches: Count.describe('Successful browser process launches.'),
+        pool_launches: Count.optional().describe(
+          "Launches of the run's shared background page pool (FEAT-050).",
+        ),
+        contexts: Count.optional().describe(
+          'Isolated browser contexts the page pool opened, one per background page (FEAT-050).',
+        ),
+      })
       .describe('Browser processes.'),
     budgets: z
       .object({

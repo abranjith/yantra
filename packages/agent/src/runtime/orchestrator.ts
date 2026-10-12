@@ -7,6 +7,7 @@ import {
   BrowserFallbackFetcher,
   DefaultOpaqueRefResolver,
   DefaultSanitizer,
+  DocumentStore,
   EthicsGateImpl,
   HttpFetcher,
   HybridContentFetcher,
@@ -588,6 +589,9 @@ export async function runAgenticTask(
     // handles round-trip, leaving `[redacted-*]` for untrusted page data only.
     const modelValues = new ModelSuppliedValues();
     const evidence = new EvidenceLedger(sanitizer);
+    // The one owner of evidence identity: every web read in this run goes
+    // through it, so a page is fetched once and keeps one `S<n>` ID.
+    const documents = new DocumentStore(() => now().toISOString());
     // Seeded from the run's trusted inputs only: hosts the user allowlisted and
     // URLs the user typed into the goal. Everything else must be earned by a
     // tool result, so a URL the model assembles has no way in.
@@ -645,6 +649,7 @@ export async function runAgenticTask(
       }),
       urlProvenance,
       runHealth,
+      documents,
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
       evidence,

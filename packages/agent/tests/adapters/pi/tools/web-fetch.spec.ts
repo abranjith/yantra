@@ -6,7 +6,9 @@ import {
   EthicsRefusedError,
   FetchError,
   HybridContentFetcher,
+  type ContentFetcher,
   type DomainRankSignal,
+  type FetchedDoc,
 } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -491,5 +493,332 @@ describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
       'url-policy:url-insecure',
     ]);
     expect(causes.filter((cause) => !declared(cause))).toEqual([]);
+  });
+});
+
+describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-fetch-store-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  /** A fetcher that counts calls and serves each URL as its own page. */
+  function countingFetcher(fail?: (url: string, call: number) => Error | null): {
+    readonly calls: string[];
+    readonly fetcher: ContentFetcher;
+  } {
+    const calls: string[] = [];
+    return {
+      calls,
+      fetcher: {
+        fetch: (url: string) => {
+          calls.push(url);
+          const error = fail?.(url, calls.length) ?? null;
+          return error === null
+            ? Promise.resolve(fetchedDoc({ url, finalUrl: url }))
+            : Promise.reject(error);
+        },
+      },
+    };
+  }
+
+  function parse(text: string): Record<string, unknown> {
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+
+  it('three reads of one URL make one fetch, charge one navigation, and repeat as already_read', async () => {
+    const counting = countingFetcher();
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Page body text.') },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const first = await tool.execute({ url: 'https://example.com/a' }, undefined);
+    const second = await tool.execute({ url: 'https://example.com/a' }, undefined);
+    const third = await tool.execute({ url: 'https://example.com/a#section' }, undefined);
+
+    expect(counting.calls).toHaveLength(1);
+    expect(services.budgets.snapshot().navigations).toBe(1);
+    expect(parse(first.modelText)).toMatchObject({ source_id: 'S1', text: 'Page body text.' });
+    const repeat = parse(second.modelText);
+    expect(second.status).toBe('ok');
+    expect(repeat).toMatchObject({ already_read: 'S1', source_id: 'S1', title: 'Fixture Title' });
+    expect(repeat).not.toHaveProperty('text');
+    expect(String(repeat.note)).toMatch(/already read earlier in this run/);
+    expect(parse(third.modelText)).toMatchObject({ already_read: 'S1' });
+    expect(services.runHealth.cacheHitCount()).toBe(2);
+    expect(services.runHealth.fetches()).toHaveLength(1);
+  });
+
+  it('records the page in the ledger once, under its evidence ID', async () => {
+    const counting = countingFetcher();
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    await tool.execute({ url: 'https://example.com/a' }, undefined);
+    await tool.execute({ url: 'https://example.com/a' }, undefined);
+
+    expect(services.evidence.entries()).toHaveLength(1);
+    expect(services.evidence.entries()[0]).toMatchObject({ sourceId: 'S1', tool: 'web_fetch' });
+    expect(services.documents.entries()).toMatchObject([
+      { sourceId: 'S1', firstTool: 'web_fetch', fetchMode: 'http', reads: 2 },
+    ]);
+  });
+
+  it('mints distinct, dense IDs for distinct pages', async () => {
+    const counting = countingFetcher();
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const a = await tool.execute({ url: 'https://example.com/a' }, undefined);
+    const b = await tool.execute({ url: 'https://example.com/b' }, undefined);
+
+    expect(parse(a.modelText).source_id).toBe('S1');
+    expect(parse(b.modelText).source_id).toBe('S2');
+  });
+
+  it('memoizes a 404: a re-call makes no fetch and returns the same code, marked already attempted', async () => {
+    const counting = countingFetcher(
+      (url) => new FetchError('HTTP 404', { url, kind: 'http-status', statusCode: 404 }),
+    );
+    const services = buildServices({ runDir, fetch: { fetcher: counting.fetcher } });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const first = await tool.execute({ url: 'https://example.com/missing' }, undefined);
+    const second = await tool.execute({ url: 'https://example.com/missing' }, undefined);
+
+    expect(counting.calls).toHaveLength(1);
+    expect(first.error_code).toBe('FETCH_HTTP_ERROR');
+    expect(second.error_code).toBe('FETCH_HTTP_ERROR');
+    expect(second.retryable).toBe(false);
+    expect(second.details).toMatchObject({ already_attempted: true });
+    expect(second.modelText).toMatch(/already attempted earlier in this run/);
+    expect(services.budgets.snapshot().navigations).toBe(1);
+    expect(services.runHealth.memoHitCount()).toBe(1);
+  });
+
+  it('does not memoize a timeout: a re-call fetches again', async () => {
+    const counting = countingFetcher((url, call) =>
+      call === 1 ? new FetchError('slow', { url, kind: 'timeout' }) : null,
+    );
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const first = await tool.execute({ url: 'https://example.com/slow' }, undefined);
+    const second = await tool.execute({ url: 'https://example.com/slow' }, undefined);
+
+    expect(counting.calls).toHaveLength(2);
+    expect(first.error_code).toBe('FETCH_TIMEOUT');
+    expect(second.status).toBe('ok');
+    expect(parse(second.modelText).source_id).toBe('S1');
+  });
+
+  it.each([
+    [500, 2],
+    [429, 2],
+    [408, 2],
+    [403, 1],
+  ])('HTTP %s across two calls makes %s fetch(es)', async (status, fetches) => {
+    const counting = countingFetcher(
+      (url) => new FetchError('x', { url, kind: 'http-status', statusCode: status }),
+    );
+    const services = buildServices({ runDir, fetch: { fetcher: counting.fetcher } });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    await tool.execute({ url: 'https://example.com/x' }, undefined);
+    await tool.execute({ url: 'https://example.com/x' }, undefined);
+
+    expect(counting.calls).toHaveLength(fetches);
+  });
+
+  it('memoizes a robots refusal but not a rate-limit refusal', async () => {
+    const refusal = (source: 'robots' | 'rate_limit') =>
+      new EthicsRefusedError(
+        { host: 'example.com', rule: 'r', reason: 'refused', source },
+        { taskId: 't', runId: 'r', stepId: 'web_fetch' },
+      );
+    for (const [source, checks] of [
+      ['robots', 1],
+      ['rate_limit', 2],
+    ] as const) {
+      let ethicsChecks = 0;
+      const services = buildServices({
+        runDir,
+        fetch: {
+          ethics: {
+            check: () => {
+              ethicsChecks += 1;
+              return Promise.reject(refusal(source));
+            },
+          },
+        },
+      });
+      const tool = wrapTool(webFetchSpec(services), services);
+
+      await tool.execute({ url: 'https://example.com/a' }, undefined);
+      const second = await tool.execute({ url: 'https://example.com/a' }, undefined);
+
+      expect({ source, checks: ethicsChecks }).toEqual({ source, checks });
+      expect(second.error_code).toBe('ETHICS_BLOCKED');
+      // An ethics refusal fetched nothing, so no navigation is charged.
+      expect(services.budgets.snapshot().navigations).toBe(0);
+    }
+  });
+
+  it('memoizes extraction-empty and refused content types', async () => {
+    const cases: readonly { readonly doc: FetchedDoc; readonly text: string | null }[] = [
+      { doc: fetchedDoc(), text: null },
+      { doc: fetchedDoc({ contentType: 'application/pdf' }), text: 'unused' },
+    ];
+    for (const { doc, text } of cases) {
+      let calls = 0;
+      const services = buildServices({
+        runDir,
+        fetch: {
+          fetcher: {
+            fetch: () => {
+              calls += 1;
+              return Promise.resolve(doc);
+            },
+          },
+          extractor: extractorReturning(text),
+        },
+      });
+      const tool = wrapTool(webFetchSpec(services), services);
+
+      await tool.execute({ url: 'https://example.com/a' }, undefined);
+      await tool.execute({ url: 'https://example.com/a' }, undefined);
+
+      expect(calls).toBe(1);
+    }
+  });
+
+  it('a budget refusal is never memoized, and a page already read stays readable', async () => {
+    const counting = countingFetcher();
+    const services = buildServices({
+      runDir,
+      limits: { maxNavigations: 1 },
+      fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+    await tool.execute({ url: 'https://example.com/a' }, undefined);
+
+    const refused = await tool.execute({ url: 'https://example.com/b' }, undefined);
+    const refusedAgain = await tool.execute({ url: 'https://example.com/b' }, undefined);
+    const repeatOfRead = await tool.execute({ url: 'https://example.com/a' }, undefined);
+
+    expect(refused.error_code).toBe('BUDGET_EXHAUSTED');
+    expect(refusedAgain.details).toBeNull();
+    // The store answers a page already read without a navigation.
+    expect(repeatOfRead.status).toBe('ok');
+    expect(parse(repeatOfRead.modelText)).toMatchObject({ already_read: 'S1' });
+    expect(counting.calls).toEqual(['https://example.com/a']);
+  });
+
+  it('a policy refusal never reaches the store, even for a page already recorded', async () => {
+    const services = buildServices({ runDir });
+    services.documents.observe('http://example.com/plain', {
+      title: null,
+      tool: 'browser_extract',
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const refused = await tool.execute({ url: 'http://example.com/plain' }, undefined);
+
+    expect(refused.error_code).toBe('URL_INSECURE');
+  });
+
+  it('a redirect target already read is answered from the store', async () => {
+    const calls: string[] = [];
+    const services = buildServices({
+      runDir,
+      fetch: {
+        fetcher: {
+          fetch: (url) => {
+            calls.push(url);
+            return Promise.resolve(fetchedDoc({ url, finalUrl: 'https://example.com/new' }));
+          },
+        },
+        extractor: extractorReturning('Body.'),
+      },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    await tool.execute({ url: 'https://example.com/old' }, undefined);
+    const landing = await tool.execute({ url: 'https://example.com/new' }, undefined);
+
+    expect(calls).toEqual(['https://example.com/old']);
+    expect(parse(landing.modelText)).toMatchObject({ already_read: 'S1' });
+  });
+
+  it('a repeat of a captured page carries the capture reference, not the text', async () => {
+    const big = 'x'.repeat(20 * 1024);
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning(big) },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const first = parse(
+      (await tool.execute({ url: 'https://example.com/a' }, undefined)).modelText,
+    );
+    const repeat = parse(
+      (await tool.execute({ url: 'https://example.com/a' }, undefined)).modelText,
+    );
+
+    expect(first).toMatchObject({ source_id: 'S1' });
+    expect(typeof first.capture_ref).toBe('string');
+    expect(repeat).toMatchObject({ already_read: 'S1', capture_ref: first.capture_ref });
+  });
+
+  it('two concurrent calls for one URL make one fetch and charge one navigation', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const services = buildServices({
+      runDir,
+      fetch: {
+        fetcher: {
+          fetch: async (url) => {
+            calls += 1;
+            await gate;
+            return fetchedDoc({ url, finalUrl: url });
+          },
+        },
+        extractor: extractorReturning('Body.'),
+      },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    const pending = [
+      tool.execute({ url: 'https://example.com/a' }, undefined),
+      tool.execute({ url: 'https://example.com/a' }, undefined),
+    ];
+    release();
+    const results = await Promise.all(pending);
+
+    expect(calls).toBe(1);
+    expect(services.budgets.snapshot().navigations).toBe(1);
+    expect(results.map((result) => parse(result.modelText).source_id)).toEqual(['S1', 'S1']);
+  });
+
+  it('declares already-attempted as a closed cause', () => {
+    expect(WEB_FETCH_FAILURE_CAUSES).toContain('already-attempted');
   });
 });

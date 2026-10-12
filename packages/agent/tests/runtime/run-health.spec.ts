@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   countingBrowserProvider,
   MAX_RUNTIME_NOTICES,
-  normalizeFetchUrl,
   RunHealthLedger,
 } from '../../src/runtime/run-health.js';
 
@@ -96,15 +95,57 @@ describe('@no-llm RunHealthLedger — recording', () => {
   });
 });
 
-describe('@no-llm normalizeFetchUrl', () => {
-  it('drops the fragment and default port and lowercases the host', () => {
-    expect(normalizeFetchUrl('https://EXAMPLE.com:443/Path?q=1#frag')).toBe(
-      'https://example.com/Path?q=1',
-    );
+describe('@no-llm RunHealthLedger — store-answered reads (FEAT-050)', () => {
+  it('counts repeats by the canonical page identity the document store uses', () => {
+    const ledger = new RunHealthLedger();
+
+    // Tracking parameters and a trailing slash name the same page.
+    ledger.recordFetch('https://cars.example/a/?utm_source=x', 'http');
+    ledger.recordFetch('https://cars.example/a', 'http');
+
+    expect(ledger.repeatFetches()).toBe(1);
   });
 
-  it('keeps an unparseable value verbatim', () => {
-    expect(normalizeFetchUrl('not a url')).toBe('not a url');
+  it('counts cache and memo hits separately from network fetches', () => {
+    const ledger = new RunHealthLedger();
+
+    ledger.recordFetch('https://cars.example/a', 'http');
+    ledger.recordCacheHit();
+    ledger.recordCacheHit();
+    ledger.recordMemoHit();
+
+    expect(ledger.fetches()).toHaveLength(1);
+    expect(ledger.cacheHitCount()).toBe(2);
+    expect(ledger.memoHitCount()).toBe(1);
+    const summary = ledger.summary({
+      runId: 'r',
+      snapshot: { navigations: 1, hosts: 1 },
+      limits: { maxNavigations: 30, maxHosts: 20 },
+      noticeCount: 0,
+    });
+    expect(summary.fetches).toMatchObject({ total: 1, cache_hits: 2, memo_hits: 1 });
+    expect(RunHealth.safeParse(summary).success).toBe(true);
+  });
+
+  it('does not count a memo replay as another failed page read in notices', () => {
+    const ledger = new RunHealthLedger();
+    const failure = {
+      tool: 'web_fetch',
+      status: 'error' as const,
+      code: 'FETCH_HTTP_ERROR',
+      host: 'cars.example',
+    };
+
+    ledger.recordToolOutcome({ ...failure, cause: 'http-4xx' });
+    ledger.recordToolOutcome({ ...failure, cause: 'already-attempted' });
+
+    expect(ledger.briefFacts().notices).toEqual([
+      {
+        kind: 'fetch_failed',
+        source: 'cars.example',
+        reason: '1 page read on cars.example failed: the server returned an HTTP error.',
+      },
+    ]);
   });
 });
 
@@ -401,6 +442,8 @@ describe('@no-llm RunHealthLedger — summary', () => {
         by_mode: { http: 2, browser: 1 },
         repeat_fetches: 1,
         failed_by_code: { FETCH_TIMEOUT: 1 },
+        cache_hits: 0,
+        memo_hits: 0,
       },
       source_failures: { fetch: 1, extract: 0, blocked: 0, budget: 3, policy: 1 },
       browser: { launches: 1 },

@@ -266,6 +266,7 @@ async function mapOutcome(
         fetchedAt: services.nowIso(),
         publishedAt: doc.publishedAt,
         tool: 'web_search',
+        sourceId: null,
       });
       const textBytes = Buffer.byteLength(doc.text, 'utf8');
       if (textBytes > threshold) {

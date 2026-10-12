@@ -14,7 +14,13 @@
  * kept only in normalized form, solely to count repeat fetches.
  */
 
-import type { BrowserProvider, BrowserSession, LaunchOptions, SourceFailure } from '@yantra/core';
+import {
+  canonicalUrl,
+  type BrowserProvider,
+  type BrowserSession,
+  type LaunchOptions,
+  type SourceFailure,
+} from '@yantra/core';
 import { RUN_HEALTH_SCHEMA_VERSION, type BriefNotice, type RunHealth } from '@yantra/protocol';
 
 import type { BudgetLimit, BudgetSnapshot } from './budget.js';
@@ -75,6 +81,8 @@ export class RunHealthLedger {
   private readonly exhaustions = new Map<BudgetLimit, BudgetExhaustionRecord>();
   private readonly providers: string[] = [];
   private launches = 0;
+  private cacheHits = 0;
+  private memoHits = 0;
   private publishedNotices = 0;
   /** Every budget limit that refused a call, in first-hit order. */
   private readonly exhaustedOrder: string[] = [];
@@ -96,13 +104,34 @@ export class RunHealthLedger {
   }
 
   /**
-   * Record one real network page fetch.
+   * Record one real network page fetch. Called only from inside a document
+   * store load, so it counts the network, never a read the store answered.
    *
-   * @param url The fetched URL; only its normalized form is kept.
+   * @param url The fetched URL; only its canonical form is kept.
    * @param mode Whether the HTTP tier or the browser served it.
    */
   public recordFetch(url: string, mode: 'http' | 'browser'): void {
-    this.fetchList.push({ normalizedUrl: normalizeFetchUrl(url), mode });
+    this.fetchList.push({ normalizedUrl: canonicalUrl(url), mode });
+  }
+
+  /** Count one read the run document store answered with no network fetch. */
+  public recordCacheHit(): void {
+    this.cacheHits += 1;
+  }
+
+  /** Count one read answered from an earlier read's remembered terminal failure. */
+  public recordMemoHit(): void {
+    this.memoHits += 1;
+  }
+
+  /** Reads answered from the document store so far. */
+  public cacheHitCount(): number {
+    return this.cacheHits;
+  }
+
+  /** Reads answered from the failure memo so far. */
+  public memoHitCount(): number {
+    return this.memoHits;
   }
 
   /**
@@ -167,7 +196,7 @@ export class RunHealthLedger {
     return [...this.providers];
   }
 
-  /** Network fetches of a normalized URL already fetched earlier in the run. */
+  /** Network fetches of a canonical URL already fetched earlier in the run. */
   public repeatFetches(): number {
     const seen = new Set<string>();
     let repeats = 0;
@@ -340,6 +369,8 @@ export class RunHealthLedger {
         by_mode: { http, browser: this.fetchList.length - http },
         repeat_fetches: this.repeatFetches(),
         failed_by_code: fetchFailures,
+        cache_hits: this.cacheHits,
+        memo_hits: this.memoHits,
       },
       source_failures: stages,
       browser: { launches: this.launches },
@@ -401,26 +432,6 @@ export function countingBrowserProvider(
     },
     detectChrome: () => provider.detectChrome(),
   };
-}
-
-/**
- * Normalize a URL for repeat-fetch counting: drop the fragment, lowercase the
- * host, drop the default port. FEAT-050 owns the canonical normalizer and
- * replaces this one; an unparseable input is kept verbatim.
- *
- * @param url Absolute URL as fetched.
- */
-export function normalizeFetchUrl(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    // swallow-ok: an unparseable URL is still countable as its own key.
-    return url;
-  }
-  parsed.hash = '';
-  // `URL` already lowercases the host and drops a scheme's default port.
-  return parsed.toString();
 }
 
 /** Most runtime-derived notices one document carries; the rest overflow into one. */
@@ -534,6 +545,9 @@ const FETCH_CODE_READS: Readonly<Record<string, Pick<ReadFailure, 'kind' | 'reas
 function readFailureFromFetch(outcome: ToolOutcomeRecord): ReadFailure | null {
   if (outcome.host === undefined || outcome.code === undefined) return null;
   if (outcome.code === 'BUDGET_EXHAUSTED') return null; // reported as budget exhaustion
+  // A replay of an earlier read's terminal failure fetched nothing: the first
+  // attempt already produced this notice.
+  if (outcome.cause === 'already-attempted') return null;
   if (outcome.code === 'ETHICS_BLOCKED') {
     const reason = outcome.cause?.replace(/^ethics-refused:/, '') ?? '';
     return {

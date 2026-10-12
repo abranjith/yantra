@@ -15,8 +15,12 @@ export class FetchError extends Error {
     message: string,
     public readonly context: {
       readonly url: string;
-      readonly kind: 'timeout' | 'http-status' | 'network' | 'too-large';
+      readonly kind: 'timeout' | 'http-status' | 'network' | 'too-large' | 'challenge';
       readonly statusCode?: number;
+      /** For `challenge`: which tier was served the human-verification page. */
+      readonly tier?: 'http' | 'browser';
+      /** For `challenge`: the documented marker that identified it. */
+      readonly marker?: string;
     },
   ) {
     super(message);

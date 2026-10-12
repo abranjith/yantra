@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DefaultSanitizer,
+  DocumentStore,
   INTERACTION_MESSAGES,
   ReadabilityExtractor,
   ScriptRegistry,
@@ -189,6 +190,7 @@ function buildServices(): RunServices {
     urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
     urlProvenance: provenance,
     runHealth: new RunHealthLedger(),
+    documents: new DocumentStore(),
     confirmation: {
       gateway: {
         request: (request) =>

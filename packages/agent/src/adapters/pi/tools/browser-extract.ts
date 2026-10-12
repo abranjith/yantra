@@ -179,6 +179,7 @@ function recordEvidence(
     fetchedAt: services.nowIso(),
     publishedAt: null,
     tool: 'browser_extract',
+    sourceId: null,
   });
 }
 

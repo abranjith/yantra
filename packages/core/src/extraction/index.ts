@@ -1,6 +1,7 @@
 export * from './ask-pipeline.js';
 export * from './cache-key.js';
 export * from './cache.js';
+export * from './document-store.js';
 export * from './ethics-adapter.js';
 export * from './fetcher.js';
 export * from './html-to-text.js';
@@ -13,4 +14,5 @@ export * from './search/registry.js';
 export * from './search/scrape-transport.js';
 export * from './source-processor.js';
 export * from './types.js';
+export * from './url-identity.js';
 export * from './web-research.js';

@@ -45,6 +45,14 @@
                 "minLength": 1
               },
               "description": "Distinct search providers used, in first-use order."
+            },
+            "breaker_skipped": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Searches refused without a provider call because an earlier challenge opened the search breaker (FEAT-050)."
+            },
+            "peak_concurrency": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Most provider searches in flight at once (FEAT-050)."
             }
           },
           "required": [
@@ -99,6 +107,35 @@
                 "minLength": 1
               },
               "description": "Failed `web_fetch` calls by stable error code."
+            },
+            "cache_hits": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Reads answered from the run document store with no network fetch (FEAT-050)."
+            },
+            "memo_hits": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Reads answered from the remembered terminal failure of an earlier read (FEAT-050)."
+            },
+            "challenges": {
+              "type": "object",
+              "properties": {
+                "http": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Human-verification pages served to the HTTP tier."
+                },
+                "browser": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Human-verification pages served to the browser render."
+                }
+              },
+              "required": [
+                "http",
+                "browser"
+              ],
+              "additionalProperties": false,
+              "description": "Challenge pages seen, by tier (FEAT-050)."
             }
           },
           "required": [
@@ -156,6 +193,14 @@
               "type": "integer",
               "minimum": 0,
               "description": "Successful browser process launches."
+            },
+            "pool_launches": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Launches of the run's shared background page pool (FEAT-050)."
+            },
+            "contexts": {
+              "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties",
+              "description": "Isolated browser contexts the page pool opened, one per background page (FEAT-050)."
             }
           },
           "required": [
