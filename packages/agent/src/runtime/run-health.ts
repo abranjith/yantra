@@ -14,7 +14,14 @@
  * kept only in normalized form, solely to count repeat fetches.
  */
 
-import type { BrowserProvider, BrowserSession, LaunchOptions, SourceFailure } from '@yantra/core';
+import {
+  canonicalUrl,
+  type BrowserProvider,
+  type BrowserSession,
+  type FetchTierEvent,
+  type LaunchOptions,
+  type SourceFailure,
+} from '@yantra/core';
 import { RUN_HEALTH_SCHEMA_VERSION, type BriefNotice, type RunHealth } from '@yantra/protocol';
 
 import type { BudgetLimit, BudgetSnapshot } from './budget.js';
@@ -75,6 +82,9 @@ export class RunHealthLedger {
   private readonly exhaustions = new Map<BudgetLimit, BudgetExhaustionRecord>();
   private readonly providers: string[] = [];
   private launches = 0;
+  private cacheHits = 0;
+  private memoHits = 0;
+  private readonly tierEvents: FetchTierEvent[] = [];
   private publishedNotices = 0;
   /** Every budget limit that refused a call, in first-hit order. */
   private readonly exhaustedOrder: string[] = [];
@@ -96,13 +106,47 @@ export class RunHealthLedger {
   }
 
   /**
-   * Record one real network page fetch.
+   * Record one real network page fetch. Called only from inside a document
+   * store load, so it counts the network, never a read the store answered.
    *
-   * @param url The fetched URL; only its normalized form is kept.
+   * @param url The fetched URL; only its canonical form is kept.
    * @param mode Whether the HTTP tier or the browser served it.
    */
   public recordFetch(url: string, mode: 'http' | 'browser'): void {
-    this.fetchList.push({ normalizedUrl: normalizeFetchUrl(url), mode });
+    this.fetchList.push({ normalizedUrl: canonicalUrl(url), mode });
+  }
+
+  /** Count one read the run document store answered with no network fetch. */
+  public recordCacheHit(): void {
+    this.cacheHits += 1;
+  }
+
+  /** Count one read answered from an earlier read's remembered terminal failure. */
+  public recordMemoHit(): void {
+    this.memoHits += 1;
+  }
+
+  /**
+   * Record one tier decision of the run's hybrid fetcher (FEAT-050): an
+   * escalation to the browser, or a challenge page at either tier. Hosts only.
+   */
+  public recordTierEvent(event: FetchTierEvent): void {
+    this.tierEvents.push(event);
+  }
+
+  /** Every tier event, in record order. */
+  public fetchTierEvents(): readonly FetchTierEvent[] {
+    return [...this.tierEvents];
+  }
+
+  /** Reads answered from the document store so far. */
+  public cacheHitCount(): number {
+    return this.cacheHits;
+  }
+
+  /** Reads answered from the failure memo so far. */
+  public memoHitCount(): number {
+    return this.memoHits;
   }
 
   /**
@@ -167,7 +211,7 @@ export class RunHealthLedger {
     return [...this.providers];
   }
 
-  /** Network fetches of a normalized URL already fetched earlier in the run. */
+  /** Network fetches of a canonical URL already fetched earlier in the run. */
   public repeatFetches(): number {
     const seen = new Set<string>();
     let repeats = 0;
@@ -199,7 +243,8 @@ export class RunHealthLedger {
    * phrase tables, counts, and hostnames — never from page or provider text —
    * so nothing untrusted enters the document through this path.
    *
-   * Order: search failures, budget exhaustion, per-source reads. At most
+   * Order: search failures, budget exhaustion, challenge pages, per-source
+   * reads. At most
    * {@link MAX_RUNTIME_NOTICES}; the overflow becomes one `other` notice that
    * points at the report's Run Health section.
    */
@@ -207,6 +252,7 @@ export class RunHealthLedger {
     const notices = [
       ...this.searchFailureNotices(),
       ...this.budgetNotices(),
+      ...this.challengeNotices(),
       ...this.readFailureNotices(),
     ];
     // The overflow replaces the tenth slot, so it always stands for at least two.
@@ -244,12 +290,25 @@ export class RunHealthLedger {
       // the one that was being asked.
       const provider =
         failures.find((failure) => failure.provider !== undefined)?.provider ?? this.providers[0];
+      // Searches the breaker refused were never sent (FEAT-050): they are
+      // named after the cause that opened it, not counted as more challenges.
+      const skipped = failures.filter((failure) => failure.cause === 'circuit-open').length;
+      const sent = failures.find((failure) => failure.cause !== 'circuit-open');
+      const lead =
+        sent === undefined
+          ? `${plural(skipped, 'later search', 'later searches')} ${skipped === 1 ? 'was' : 'were'} ` +
+            "not attempted after the provider's challenge"
+          : `${searchCausePhrase(sent.cause)}` +
+            (skipped === 0
+              ? ''
+              : `; ${plural(skipped, 'later search', 'later searches')} ` +
+                `${skipped === 1 ? 'was' : 'were'} not attempted after the provider's challenge`);
       return {
         kind: 'search_failed' as const,
         source: provider === undefined ? 'search' : `search:${provider}`,
         reason:
           `${failures.length} of ${plural(attempted.length, 'web search', 'web searches')} ` +
-          `failed: ${searchCausePhrase(failures[0]?.cause)} (${code}).`,
+          `failed: ${lead} (${code}).`,
       };
     });
   }
@@ -267,6 +326,51 @@ export class RunHealthLedger {
         reason:
           `Yantra's ${name} budget${ceiling === undefined ? '' : ` (${ceiling})`} was exhausted; ` +
           `${plural(skipped, 'further page read')} ${skipped === 1 ? 'was' : 'were'} not attempted.`,
+      });
+    }
+    return notices;
+  }
+
+  /**
+   * Challenge pages (FEAT-050, policy b). One `blocked` notice per host whose
+   * standard browser was served a challenge (the page was not read), and one
+   * `other` notice per host that challenged only the HTTP client and was then
+   * read in the browser — the disclosure the signed-off policy requires.
+   */
+  private challengeNotices(): BriefNotice[] {
+    const browserBlocked = new Map<string, number>();
+    const httpOnly = new Set<string>();
+    for (const event of this.tierEvents) {
+      if (event.kind !== 'challenge' || event.host.length === 0) continue;
+      if (event.tier === 'browser') {
+        browserBlocked.set(event.host, (browserBlocked.get(event.host) ?? 0) + 1);
+      } else {
+        httpOnly.add(event.host);
+      }
+    }
+    const renderedHosts = new Set(
+      this.fetchList
+        .filter((fetch) => fetch.mode === 'browser')
+        .map((fetch) => hostOfUrl(fetch.normalizedUrl)),
+    );
+    const notices: BriefNotice[] = [];
+    for (const [host, pages] of browserBlocked) {
+      notices.push({
+        kind: 'blocked',
+        source: host,
+        reason:
+          `${host} served a human-verification page to Yantra's standard browser; ` +
+          `${plural(pages, 'page')} ${pages === 1 ? 'was' : 'were'} not read.`,
+      });
+    }
+    for (const host of httpOnly) {
+      if (browserBlocked.has(host) || !renderedHosts.has(host)) continue;
+      notices.push({
+        kind: 'other',
+        source: host,
+        reason:
+          `${host} refused Yantra's HTTP client with a human-verification page; ` +
+          'the page was read once in the standard browser.',
       });
     }
     return notices;
@@ -309,6 +413,10 @@ export class RunHealthLedger {
     readonly snapshot: Pick<BudgetSnapshot, 'navigations' | 'hosts'>;
     readonly limits: { readonly maxNavigations: number; readonly maxHosts: number };
     readonly noticeCount: number;
+    /** The background page pool's final counters (FEAT-050), when the run had one. */
+    readonly pagePool?: { readonly launches: number; readonly contexts: number };
+    /** The run search service's final counters (FEAT-050). */
+    readonly search?: { readonly breakerSkipped: number; readonly peakConcurrency: number };
   }): RunHealth {
     const searches = this.attemptedSearches();
     const searchFailures = countByCode(searches.filter((outcome) => outcome.status !== 'ok'));
@@ -334,15 +442,32 @@ export class RunHealthLedger {
         ok: searches.filter((outcome) => outcome.status === 'ok').length,
         failed_by_code: searchFailures,
         providers: [...this.providers],
+        ...(input.search === undefined
+          ? {}
+          : {
+              breaker_skipped: input.search.breakerSkipped,
+              peak_concurrency: input.search.peakConcurrency,
+            }),
       },
       fetches: {
         total: this.fetchList.length,
         by_mode: { http, browser: this.fetchList.length - http },
         repeat_fetches: this.repeatFetches(),
         failed_by_code: fetchFailures,
+        cache_hits: this.cacheHits,
+        memo_hits: this.memoHits,
+        challenges: {
+          http: this.challengeCount('http'),
+          browser: this.challengeCount('browser'),
+        },
       },
       source_failures: stages,
-      browser: { launches: this.launches },
+      browser: {
+        launches: this.launches,
+        ...(input.pagePool === undefined
+          ? {}
+          : { pool_launches: input.pagePool.launches, contexts: input.pagePool.contexts }),
+      },
       budgets: {
         navigations_used: input.snapshot.navigations,
         navigations_limit: nonNegativeInt(input.limits.maxNavigations),
@@ -353,6 +478,11 @@ export class RunHealthLedger {
       tool_failures: { total: toolFailures.length, by_code: countByCode(toolFailures) },
       notices: Math.max(0, Math.floor(input.noticeCount)),
     };
+  }
+
+  private challengeCount(tier: 'http' | 'browser'): number {
+    return this.tierEvents.filter((event) => event.kind === 'challenge' && event.tier === tier)
+      .length;
   }
 
   private noteExhausted(limit: string): void {
@@ -401,26 +531,6 @@ export function countingBrowserProvider(
     },
     detectChrome: () => provider.detectChrome(),
   };
-}
-
-/**
- * Normalize a URL for repeat-fetch counting: drop the fragment, lowercase the
- * host, drop the default port. FEAT-050 owns the canonical normalizer and
- * replaces this one; an unparseable input is kept verbatim.
- *
- * @param url Absolute URL as fetched.
- */
-export function normalizeFetchUrl(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    // swallow-ok: an unparseable URL is still countable as its own key.
-    return url;
-  }
-  parsed.hash = '';
-  // `URL` already lowercases the host and drops a scheme's default port.
-  return parsed.toString();
 }
 
 /** Most runtime-derived notices one document carries; the rest overflow into one. */
@@ -496,6 +606,8 @@ function readFailureFromSource(record: SourceFailureRecord): ReadFailure | null 
     case 'policy':
       return { kind: 'other', host: record.host, reason: 'policy' };
     case 'blocked': {
+      // A challenge page is reported once, by host, from the tier events.
+      if (record.reason.startsWith('challenge page')) return null;
       const reason = record.reason.split(' - ')[0] ?? '';
       return {
         kind: 'blocked',
@@ -534,6 +646,11 @@ const FETCH_CODE_READS: Readonly<Record<string, Pick<ReadFailure, 'kind' | 'reas
 function readFailureFromFetch(outcome: ToolOutcomeRecord): ReadFailure | null {
   if (outcome.host === undefined || outcome.code === undefined) return null;
   if (outcome.code === 'BUDGET_EXHAUSTED') return null; // reported as budget exhaustion
+  // A replay of an earlier read's terminal failure fetched nothing: the first
+  // attempt already produced this notice.
+  if (outcome.cause === 'already-attempted') return null;
+  // A challenge page is reported once, by host, from the tier events.
+  if (outcome.code === 'SITE_CHALLENGE') return null;
   if (outcome.code === 'ETHICS_BLOCKED') {
     const reason = outcome.cause?.replace(/^ethics-refused:/, '') ?? '';
     return {
@@ -546,6 +663,16 @@ function readFailureFromFetch(outcome: ToolOutcomeRecord): ReadFailure | null {
     return { kind: 'other', host: outcome.host, reason: 'policy' };
   const mapped = FETCH_CODE_READS[outcome.code];
   return mapped === undefined ? null : { ...mapped, host: outcome.host };
+}
+
+/** The hostname of a canonical URL, or the empty string. */
+function hostOfUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    // swallow-ok: an unparseable recorded URL simply matches no host.
+    return '';
+  }
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {

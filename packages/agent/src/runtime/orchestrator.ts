@@ -7,6 +7,7 @@ import {
   BrowserFallbackFetcher,
   DefaultOpaqueRefResolver,
   DefaultSanitizer,
+  DocumentStore,
   EthicsGateImpl,
   HttpFetcher,
   HybridContentFetcher,
@@ -17,6 +18,7 @@ import {
   type BrowserRuntimeServices,
   type BrowserSelection,
   type EthicsConfig,
+  type FetchTierEvent,
   type HttpFetcherOptions,
   type InstallOfferGateway,
   type KeychainProvider,
@@ -27,6 +29,8 @@ import {
   type SearchProviderError,
   LocalProfileStore,
   MarkdownReportBuilder,
+  PagePool,
+  SearchService,
   ModelSuppliedValues,
   RateLimiterImpl,
   ReadabilityExtractor,
@@ -324,6 +328,13 @@ export interface AgenticRunEnvironment {
    */
   readonly runtimeLogger?: Logger;
   /**
+   * The run's shared background page pool (FEAT-050), when this environment
+   * composed one. Closed by the finalizer after the task browser and before
+   * `run-health.json` is written, which reads its counters. An injected test
+   * environment may have none.
+   */
+  readonly pagePool?: Pick<PagePool, 'close' | 'stats'>;
+  /**
    * Closes the runtime log this environment opened. Idempotent.
    *
    * The environment owns the destination because the environment opened it —
@@ -588,6 +599,9 @@ export async function runAgenticTask(
     // handles round-trip, leaving `[redacted-*]` for untrusted page data only.
     const modelValues = new ModelSuppliedValues();
     const evidence = new EvidenceLedger(sanitizer);
+    // The one owner of evidence identity: every web read in this run goes
+    // through it, so a page is fetched once and keeps one `S<n>` ID.
+    const documents = new DocumentStore(() => now().toISOString());
     // Seeded from the run's trusted inputs only: hosts the user allowlisted and
     // URLs the user typed into the goal. Everything else must be earned by a
     // tool result, so a URL the model assembles has no way in.
@@ -645,6 +659,7 @@ export async function runAgenticTask(
       }),
       urlProvenance,
       runHealth,
+      documents,
       confirmation: { gateway: confirmationBridge, store: null },
       actionPhase,
       evidence,
@@ -761,6 +776,9 @@ export async function runAgenticTask(
     unsubscribe?.();
     if (!startupFinalized) {
       await captureTeardown(() => environment?.browserController.teardown(), teardownErrors);
+      // The background page pool closes after the task browser and before
+      // run health is summarized, so its launch/context counts are final.
+      await captureTeardown(() => environment?.pagePool?.close(), teardownErrors);
       await captureTeardown(() => session?.close(), teardownErrors);
       await captureTeardown(() => recorder?.close(latestRunResult), teardownErrors);
 
@@ -789,6 +807,8 @@ export async function runAgenticTask(
         snapshot: budgetTracker?.snapshot() ?? { navigations: 0, hosts: 0 },
         limits: budgetsConfig,
         noticeCount: runHealth.publishedNoticeCount(),
+        ...(environment?.pagePool === undefined ? {} : { pagePool: environment.pagePool.stats() }),
+        ...(environment === undefined ? {} : { search: environment.domain.search.service.stats() }),
       });
       await captureTeardown(() => writeRunHealth(created.runDir, health), teardownErrors);
       await captureTeardown(() => {
@@ -1447,6 +1467,12 @@ function composeDefaultEnvironment(
     browserProvider,
     logger,
   });
+  // One headless browser for every SERP scrape and fetch fallback in the run,
+  // each in its own isolated context. It shares the counting provider, so its
+  // launches are in `browser.launches` too. The task controller above keeps
+  // its own browser: it may run headed for `do`, and background contexts must
+  // never see or disturb its page. At most two Chrome processes per run.
+  const pagePool = new PagePool({ provider: browserProvider, logger });
   const secretAudit = {
     appendSecretResolution: (entry: unknown) =>
       appendFile(join(context.runDir, 'secrets.jsonl'), `${JSON.stringify(entry)}\n`, 'utf8'),
@@ -1462,19 +1488,26 @@ function composeDefaultEnvironment(
 
   return {
     browserController,
+    pagePool,
     workflowStore,
     runtimeLogger: logger,
     closeRuntimeLog: () => runtimeLog.close(),
     domain: {
       search: {
-        // The typed resolution error is passed through untouched: `web_search`
+        // One search service per run (FEAT-050): the provider resolves once,
+        // so "selected search provider" is logged once, and every search
+        // passes the politeness gate and the challenge breaker. The typed
+        // resolution error is passed through untouched: `web_search`
         // classifies it (key missing vs. no provider vs. unknown name).
-        resolveProvider: () =>
-          leaves.resolveSearchProvider({
-            env: process.env,
-            config: searchConfig,
-            deps: { keychain, browserProvider, ethicsGate: searchEthics, logger },
-          }),
+        service: new SearchService({
+          resolve: () =>
+            leaves.resolveSearchProvider({
+              env: process.env,
+              config: searchConfig,
+              deps: { keychain, pages: pagePool, ethicsGate: searchEthics, logger },
+            }),
+          logger,
+        }),
         resultCap: 8,
         fetchTop: searchConfig.fetchTop,
       },
@@ -1488,7 +1521,9 @@ function composeDefaultEnvironment(
             maxBodyBytes: 5 * 1024 * 1024,
             ...(leaves.httpRequestFn === undefined ? {} : { requestFn: leaves.httpRequestFn }),
           }),
-          browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
+          browserFetcher: new BrowserFallbackFetcher({ pages: pagePool }),
+          // Every escalation and challenge is audited and counted (FEAT-050).
+          onTierEvent: (event) => recordFetchTierEvent(event, logger, context.runHealth),
         }),
         extractor: new ReadabilityExtractor(),
         ethics,
@@ -1684,6 +1719,61 @@ async function writeRunHealth(runDir: string, health: RunHealth): Promise<void> 
   const temp = `${target}.${process.pid}.tmp`;
   await writeFile(temp, `${JSON.stringify(validated, null, 2)}\n`, 'utf8');
   await rename(temp, target);
+}
+
+/** The `fetch_challenge` runtime-log projection: tier, marker, and host only. */
+interface FetchChallengeEvent {
+  readonly schema_version: 1;
+  readonly event: 'fetch_challenge';
+  readonly tier: 'http' | 'browser';
+  readonly marker: string;
+  readonly host: string;
+}
+
+/** The `fetch_escalated` runtime-log projection: why, and the host only. */
+interface FetchEscalatedEvent {
+  readonly schema_version: 1;
+  readonly event: 'fetch_escalated';
+  readonly reason: string;
+  readonly host: string;
+}
+
+/**
+ * Audit one hybrid-fetcher tier decision: a challenge is a `warn` (the site's
+ * bot detection refused a tier), an escalation an `info`. Neither line carries
+ * a URL path, query, or page text. Recording never changes the fetch, so a
+ * fault here is reported to the process and the fetch proceeds.
+ */
+function recordFetchTierEvent(
+  event: FetchTierEvent,
+  logger: Logger,
+  ledger: RunHealthLedger,
+): void {
+  try {
+    ledger.recordTierEvent(event);
+    if (event.kind === 'challenge') {
+      const line: FetchChallengeEvent = {
+        schema_version: 1,
+        event: 'fetch_challenge',
+        tier: event.tier,
+        marker: event.marker,
+        host: event.host,
+      };
+      logger.warn(toLogPayload(line), 'fetch challenge');
+    } else {
+      const line: FetchEscalatedEvent = {
+        schema_version: 1,
+        event: 'fetch_escalated',
+        reason: event.reason,
+        host: event.host,
+      };
+      logger.info(toLogPayload(line), 'fetch escalated');
+    }
+  } catch (error) {
+    process.emitWarning(
+      `fetch tier event recording failed (${error instanceof Error ? error.name : 'UnknownError'})`,
+    );
+  }
 }
 
 /** The `run_health` runtime-log projection: the summary, under a fixed event name. */

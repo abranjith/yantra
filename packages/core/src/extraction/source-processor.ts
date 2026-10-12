@@ -28,6 +28,12 @@ export interface ProcessedSource {
   readonly failure: SourceFailure | null;
   /** How the page was fetched, or null when no network fetch happened. */
   readonly fetchMode: 'http' | 'browser' | null;
+  /**
+   * The error behind a `fetch`-stage (or challenge `blocked`) failure, kept so
+   * a caller can classify it (a 404 cannot change within a run; a timeout
+   * can). Absent otherwise.
+   */
+  readonly cause?: unknown;
 }
 
 /** Injected stage dependencies shared by the pipeline callers. */
@@ -123,11 +129,28 @@ export async function processSource(
     if (error instanceof FetchError && error.context.kind === 'timeout') {
       opts.onTimeout?.();
     }
+    if (error instanceof FetchError && error.context.kind === 'challenge') {
+      // The site's own bot detection refused us in the standard browser
+      // (FEAT-050 policy b): the page is blocked, never extracted, and the
+      // `blocked` stage correctly records a negative signal about the site.
+      return {
+        rank: result.rank,
+        doc: null,
+        failure: sourceFailure(
+          result.url,
+          'blocked',
+          `challenge page (${error.context.marker ?? 'unknown'})`,
+        ),
+        fetchMode: 'browser',
+        cause: error,
+      };
+    }
     return {
       rank: result.rank,
       doc: null,
       failure: sourceFailure(result.url, 'fetch', buildFailureReason(error)),
       fetchMode: null,
+      cause: error,
     };
   }
 }
@@ -161,6 +184,9 @@ export function buildFailureReason(error: unknown): string {
     }
     if (error.context.kind === 'too-large') {
       return 'source payload exceeded the size limit';
+    }
+    if (error.context.kind === 'challenge') {
+      return `challenge page (${error.context.marker ?? 'unknown'})`;
     }
     return 'fetch failed';
   }

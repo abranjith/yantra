@@ -20,6 +20,7 @@ import {
   AgentBrowserController,
   DefaultOpaqueRefResolver,
   DefaultSanitizer,
+  DocumentStore,
   LocalBrowserProvider,
   LocalProfileStore,
   ReadabilityExtractor,
@@ -30,6 +31,7 @@ import {
 import type { ConfirmationRequest } from '@yantra/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { fixtureSearchService } from './fixtures/search-service.js';
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 
 const SECRET_CANARY = 'YANTRA-browser-secret-canary';
@@ -80,6 +82,7 @@ describe('@no-llm real Chrome browser tools', () => {
       urlPolicy: new UrlPolicy(budgets, { maxUrlLength: 2048, requireHttps: false }),
       urlProvenance: provenance,
       runHealth: new RunHealthLedger(),
+      documents: new DocumentStore(),
       confirmation: { gateway: grantingGateway(), store: null },
       actionPhase: new ActionPhase(),
       evidence: new EvidenceLedger(sanitizer),
@@ -90,7 +93,7 @@ describe('@no-llm real Chrome browser tools', () => {
       nowIso: () => new Date().toISOString(),
       domain: {
         search: {
-          resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
+          service: fixtureSearchService(),
           resultCap: 5,
           fetchTop: 3,
         },

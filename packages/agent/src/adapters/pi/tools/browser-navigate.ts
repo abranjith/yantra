@@ -41,6 +41,7 @@ export function browserNavigateSpec(
       'Navigate the run-scoped browser page to an absolute URL and return a fresh observation. It also returns delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming the navigation caused every change, and says complete: false with a reason wherever a bound stopped it being definite; a navigation to a new document reports document-replaced and no element counts, because a new page’s controls are not the old page’s. browser_observe is only needed for a read without acting. When an action reports popup_intercepted, that URL is where the site was sending you: navigate to it to continue. Do NOT use it to bypass robots, blocks, or host policy.',
     parameters: BrowserNavigateParams,
     sanitizationProfile: 'public',
+    budgetMeter: true,
     mutating: true,
     run: (params: Params, ctx): Promise<DomainResult> => runNavigate(params, ctx.services),
   };

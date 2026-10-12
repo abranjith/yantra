@@ -1,3 +1,4 @@
+import { launchPerUsePageSource, type PageSource } from '../../../src/browser/page-source.js';
 import type {
   BrowserProvider,
   BrowserSession,
@@ -75,6 +76,9 @@ class FakeSession implements BrowserSession {
   public async newPage(): Promise<Page> {
     return new FakePage(this.html);
   }
+  public async newIsolatedPage(): Promise<Page> {
+    return new FakePage(this.html);
+  }
   public async close(): Promise<void> {
     return;
   }
@@ -85,6 +89,8 @@ class FakeSession implements BrowserSession {
 
 export interface FakeBrowserProviderHandle {
   readonly provider: BrowserProvider;
+  /** One launch per use over {@link provider}, as the deterministic paths wire it. */
+  readonly pages: PageSource;
   /** Number of times `launch` was called. */
   launches(): number;
   /** The `extraArgs` passed to the most recent launch. */
@@ -115,6 +121,7 @@ export function fakeBrowserProvider(html: string): FakeBrowserProviderHandle {
 
   return {
     provider,
+    pages: launchPerUsePageSource(provider),
     launches: () => launchCount,
     lastExtraArgs: () => lastArgs,
     lastHeadless: () => lastHeadless,

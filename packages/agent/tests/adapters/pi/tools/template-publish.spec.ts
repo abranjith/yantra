@@ -68,6 +68,7 @@ describe('@no-llm templated result_publish', () => {
         fetchedAt: '2026-07-31T12:00:00.000Z',
         publishedAt: null,
         tool: 'web_fetch',
+        sourceId: 'S1',
       });
     }
     services = {

@@ -137,3 +137,116 @@ describe('@no-llm UrlPolicy property: allowed URLs never exceed the length cap',
     );
   });
 });
+
+describe('@no-llm UrlPolicy evaluate/reserve split (FEAT-050)', () => {
+  it('evaluate never charges the navigation or host budget', () => {
+    const { policy, budgets } = makePolicy();
+
+    for (let i = 0; i < 5; i += 1) {
+      expect(policy.evaluate(`https://example.com/${i}`).isOk).toBe(true);
+    }
+
+    expect(budgets.snapshot()).toMatchObject({ navigations: 0, hosts: 0 });
+  });
+
+  it('reserve charges one navigation per call and a host once', () => {
+    const { policy, budgets } = makePolicy();
+    const allowed = policy.evaluate('https://example.com/a');
+    if (!allowed.isOk) throw new Error('unreachable');
+
+    expect(policy.reserve(allowed.value).isOk).toBe(true);
+    expect(policy.reserve(allowed.value).isOk).toBe(true);
+
+    expect(budgets.snapshot()).toMatchObject({ navigations: 2, hosts: 1 });
+  });
+
+  it('evaluate still runs every non-budget check', () => {
+    const { policy } = makePolicy();
+
+    const refused = policy.evaluate('https://evil.example/x?k=sk-ABCDEFGHIJKLMNOPQRSTUVWX');
+
+    expect(refused.isOk).toBe(false);
+    if (!refused.isOk) expect(refused.error.code).toBe('URL_CREDENTIAL_SHAPE');
+  });
+
+  it('evaluate passes a URL that a spent budget would refuse, and reserve refuses it', () => {
+    const budgets = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, maxNavigations: 1 });
+    const policy = new UrlPolicy(budgets, DEFAULT_URL_POLICY_CONFIG);
+    expect(policy.check('https://a.com/1').isOk).toBe(true);
+
+    const evaluated = policy.evaluate('https://a.com/2');
+    expect(evaluated.isOk).toBe(true);
+    if (!evaluated.isOk) return;
+    const reserved = policy.reserve(evaluated.value);
+
+    expect(reserved.isOk).toBe(false);
+    if (!reserved.isOk) {
+      expect(reserved.error.code).toBe('BUDGET_EXHAUSTED');
+      expect(reserved.error.budgetLimit).toBe('navigations');
+    }
+  });
+
+  it('check equals evaluate then reserve, in outcome and in budget', () => {
+    const left = makePolicy();
+    const right = makePolicy();
+    const urls = ['https://a.com/1', 'https://b.com/2', 'http://c.com/', 'not a url'];
+
+    for (const url of urls) {
+      const checked = left.policy.check(url);
+      const evaluated = right.policy.evaluate(url);
+      const composed = evaluated.isOk ? right.policy.reserve(evaluated.value) : evaluated;
+      expect(composed.isOk).toBe(checked.isOk);
+      if (checked.isOk && composed.isOk) expect(composed.value).toEqual(checked.value);
+      if (!checked.isOk && !composed.isOk) expect(composed.error.code).toBe(checked.error.code);
+    }
+    expect(right.budgets.snapshot()).toEqual(left.budgets.snapshot());
+  });
+
+  it('keeps check’s audit trail unchanged: exactly one record per call', () => {
+    const { policy, records } = makePolicy();
+
+    policy.check('https://a.com/1');
+    policy.check('http://insecure.example/');
+
+    expect(records).toEqual([
+      { url: 'https://a.com/1', host: 'a.com', decision: 'allow' },
+      {
+        url: 'http://insecure.example/',
+        host: 'insecure.example',
+        decision: 'reject',
+        code: 'URL_INSECURE',
+      },
+    ]);
+  });
+
+  it('audits a budget refusal from check as one reject and no allow', () => {
+    const records: UrlAuditRecord[] = [];
+    const budgets = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, maxNavigations: 1 });
+    const policy = new UrlPolicy(budgets, DEFAULT_URL_POLICY_CONFIG, {
+      record: (entry) => records.push(entry),
+    });
+    policy.check('https://a.com/1');
+    records.length = 0;
+
+    policy.check('https://a.com/2');
+
+    expect(records).toEqual([
+      { url: 'https://a.com/2', host: 'a.com', decision: 'reject', code: 'BUDGET_EXHAUSTED' },
+    ]);
+  });
+
+  it('audits evaluate as an allow and a later budget refusal as a reject', () => {
+    const records: UrlAuditRecord[] = [];
+    const budgets = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, maxNavigations: 1 });
+    const policy = new UrlPolicy(budgets, DEFAULT_URL_POLICY_CONFIG, {
+      record: (entry) => records.push(entry),
+    });
+    policy.check('https://a.com/1');
+    records.length = 0;
+
+    const evaluated = policy.evaluate('https://a.com/2');
+    if (evaluated.isOk) policy.reserve(evaluated.value);
+
+    expect(records.map((record) => record.decision)).toEqual(['allow', 'reject']);
+  });
+});

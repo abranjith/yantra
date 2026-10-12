@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   countingBrowserProvider,
   MAX_RUNTIME_NOTICES,
-  normalizeFetchUrl,
   RunHealthLedger,
 } from '../../src/runtime/run-health.js';
 
@@ -96,15 +95,57 @@ describe('@no-llm RunHealthLedger — recording', () => {
   });
 });
 
-describe('@no-llm normalizeFetchUrl', () => {
-  it('drops the fragment and default port and lowercases the host', () => {
-    expect(normalizeFetchUrl('https://EXAMPLE.com:443/Path?q=1#frag')).toBe(
-      'https://example.com/Path?q=1',
-    );
+describe('@no-llm RunHealthLedger — store-answered reads (FEAT-050)', () => {
+  it('counts repeats by the canonical page identity the document store uses', () => {
+    const ledger = new RunHealthLedger();
+
+    // Tracking parameters and a trailing slash name the same page.
+    ledger.recordFetch('https://cars.example/a/?utm_source=x', 'http');
+    ledger.recordFetch('https://cars.example/a', 'http');
+
+    expect(ledger.repeatFetches()).toBe(1);
   });
 
-  it('keeps an unparseable value verbatim', () => {
-    expect(normalizeFetchUrl('not a url')).toBe('not a url');
+  it('counts cache and memo hits separately from network fetches', () => {
+    const ledger = new RunHealthLedger();
+
+    ledger.recordFetch('https://cars.example/a', 'http');
+    ledger.recordCacheHit();
+    ledger.recordCacheHit();
+    ledger.recordMemoHit();
+
+    expect(ledger.fetches()).toHaveLength(1);
+    expect(ledger.cacheHitCount()).toBe(2);
+    expect(ledger.memoHitCount()).toBe(1);
+    const summary = ledger.summary({
+      runId: 'r',
+      snapshot: { navigations: 1, hosts: 1 },
+      limits: { maxNavigations: 30, maxHosts: 20 },
+      noticeCount: 0,
+    });
+    expect(summary.fetches).toMatchObject({ total: 1, cache_hits: 2, memo_hits: 1 });
+    expect(RunHealth.safeParse(summary).success).toBe(true);
+  });
+
+  it('does not count a memo replay as another failed page read in notices', () => {
+    const ledger = new RunHealthLedger();
+    const failure = {
+      tool: 'web_fetch',
+      status: 'error' as const,
+      code: 'FETCH_HTTP_ERROR',
+      host: 'cars.example',
+    };
+
+    ledger.recordToolOutcome({ ...failure, cause: 'http-4xx' });
+    ledger.recordToolOutcome({ ...failure, cause: 'already-attempted' });
+
+    expect(ledger.briefFacts().notices).toEqual([
+      {
+        kind: 'fetch_failed',
+        source: 'cars.example',
+        reason: '1 page read on cars.example failed: the server returned an HTTP error.',
+      },
+    ]);
   });
 });
 
@@ -401,6 +442,9 @@ describe('@no-llm RunHealthLedger — summary', () => {
         by_mode: { http: 2, browser: 1 },
         repeat_fetches: 1,
         failed_by_code: { FETCH_TIMEOUT: 1 },
+        cache_hits: 0,
+        memo_hits: 0,
+        challenges: { http: 0, browser: 0 },
       },
       source_failures: { fetch: 1, extract: 0, blocked: 0, budget: 3, policy: 1 },
       browser: { launches: 1 },
@@ -460,6 +504,113 @@ describe('@no-llm RunHealthLedger — summary', () => {
 
     expect(JSON.stringify(summary)).not.toMatch(/CANARY|https?:|secret/);
     assertRuntimeEventIsSafe({ event: 'run_health', ...summary }, ['CANARY']);
+  });
+});
+
+describe('@no-llm RunHealthLedger — challenge pages (FEAT-050)', () => {
+  function challengedLedger(): RunHealthLedger {
+    const ledger = new RunHealthLedger();
+    // walled.example challenged both tiers twice; open.example challenged
+    // only the HTTP client and was then read in the browser.
+    for (let i = 0; i < 2; i += 1) {
+      ledger.recordTierEvent({
+        kind: 'challenge',
+        tier: 'http',
+        marker: 'data-sitekey',
+        host: 'walled.example',
+      });
+      ledger.recordTierEvent({
+        kind: 'escalated',
+        reason: 'http-challenge',
+        host: 'walled.example',
+      });
+      ledger.recordTierEvent({
+        kind: 'challenge',
+        tier: 'browser',
+        marker: 'data-sitekey',
+        host: 'walled.example',
+      });
+    }
+    ledger.recordTierEvent({
+      kind: 'challenge',
+      tier: 'http',
+      marker: 'verify-you-are-human',
+      host: 'open.example',
+    });
+    ledger.recordTierEvent({ kind: 'escalated', reason: 'http-challenge', host: 'open.example' });
+    ledger.recordFetch('https://open.example/page', 'browser');
+    return ledger;
+  }
+
+  it('derives one blocked notice per browser-challenged host and one disclosure per HTTP-only host', () => {
+    const ledger = challengedLedger();
+
+    expect(ledger.briefFacts().notices).toEqual([
+      {
+        kind: 'blocked',
+        source: 'walled.example',
+        reason:
+          "walled.example served a human-verification page to Yantra's standard browser; " +
+          '2 pages were not read.',
+      },
+      {
+        kind: 'other',
+        source: 'open.example',
+        reason:
+          "open.example refused Yantra's HTTP client with a human-verification page; the page " +
+          'was read once in the standard browser.',
+      },
+    ]);
+    for (const notice of ledger.briefFacts().notices) {
+      expect(BriefNotice.safeParse(notice).success).toBe(true);
+    }
+  });
+
+  it('does not claim a browser read for an HTTP-challenged host the browser never served', () => {
+    const ledger = new RunHealthLedger();
+    ledger.recordTierEvent({
+      kind: 'challenge',
+      tier: 'http',
+      marker: 'data-sitekey',
+      host: 'flaky.example',
+    });
+
+    expect(ledger.briefFacts().notices).toEqual([]);
+  });
+
+  it('reports a challenge once, not again as a per-source or web_fetch read failure', () => {
+    const ledger = challengedLedger();
+    ledger.recordSourceFailure({
+      tool: 'web_search',
+      host: 'walled.example',
+      stage: 'blocked',
+      reason: 'challenge page (data-sitekey)',
+    });
+    ledger.recordToolOutcome({
+      tool: 'web_fetch',
+      status: 'error',
+      code: 'SITE_CHALLENGE',
+      cause: 'challenge',
+      host: 'walled.example',
+    });
+
+    const blocked = ledger.briefFacts().notices.filter((notice) => notice.kind === 'blocked');
+    expect(blocked).toHaveLength(1);
+  });
+
+  it('counts challenges by tier in the summary, and the summary stays safe and valid', () => {
+    const summary = challengedLedger().summary({
+      runId: 'r',
+      snapshot: { navigations: 3, hosts: 2 },
+      limits: { maxNavigations: 30, maxHosts: 20 },
+      noticeCount: 2,
+      pagePool: { launches: 1, contexts: 3 },
+    });
+
+    expect(summary.fetches.challenges).toEqual({ http: 3, browser: 2 });
+    expect(summary.browser).toEqual({ launches: 0, pool_launches: 1, contexts: 3 });
+    expect(RunHealth.safeParse(summary).success).toBe(true);
+    assertRuntimeEventIsSafe({ event: 'run_health', ...summary }, []);
   });
 });
 

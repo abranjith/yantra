@@ -43,6 +43,7 @@ import {
 } from '../../src/runtime/orchestrator.js';
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -106,7 +107,7 @@ function baseDomain(
   const ethics: EthicsGate = { check: () => Promise.resolve() };
   return {
     search: {
-      resolveProvider: () => Promise.resolve({ isOk: true, value: searchProvider }),
+      service: searchServiceFor(searchProvider),
       resultCap: 5,
       fetchTop: 3,
     },

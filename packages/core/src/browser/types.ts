@@ -76,6 +76,14 @@ export interface BrowserSession {
   readonly chrome: ChromeInstall;
   readonly profilePath: string;
   newPage(): Promise<Page>;
+  /**
+   * Open a page in a fresh, isolated browser context: no cookies, storage, or
+   * cache shared with any other page. Closing the returned page closes its
+   * context. Used for background page work (FEAT-050's page pool).
+   *
+   * @throws {BrowserCrashedError} when the session is closed or has crashed.
+   */
+  newIsolatedPage(): Promise<Page>;
   close(): Promise<void>;
   on(event: BrowserSessionEvent, handler: (...args: unknown[]) => void): void;
 }

@@ -182,6 +182,15 @@ export class BudgetTracker {
   }
 
   /** Per-tool execution timeout (milliseconds). */
+  /**
+   * The navigation and distinct-host ceilings, for the budget meter every
+   * evidence result carries (FEAT-050). A read-only view: callers never
+   * reach into the tracker's private limits.
+   */
+  public limitsView(): { readonly maxNavigations: number; readonly maxHosts: number } {
+    return { maxNavigations: this.limits.maxNavigations, maxHosts: this.limits.maxHosts };
+  }
+
   public get perToolTimeoutMs(): number {
     return this.limits.perToolTimeoutMs;
   }

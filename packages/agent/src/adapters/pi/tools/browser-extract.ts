@@ -75,6 +75,7 @@ export function browserExtractSpec(
       'Extract readable content or the first table from the current page with a validated result shape. Call it after navigation/observation with kind:"content" (page title + readable text, also the default when kind is omitted) or kind:"table" (first table as headers/rows). Do NOT pass any other kind, arbitrary selectors, or ask for unsanitized page source.',
     parameters: BrowserExtractParams,
     sanitizationProfile: 'public',
+    budgetMeter: true,
     run: (params: Params, ctx): Promise<DomainResult> => runExtract(params, ctx.services),
   };
 }
@@ -125,10 +126,11 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
     extractionKind: kind,
     requires_confirmation: false,
   });
-  recordEvidence(kind, extracted, controller, services);
+  const sourceId = recordEvidence(kind, extracted, controller, services);
+  const identity = sourceId === null ? {} : { source_id: sourceId };
   const serialized = JSON.stringify(extracted);
   if (Buffer.byteLength(serialized, 'utf8') <= deps.captureThresholdBytes)
-    return { ok: true, model: extracted };
+    return { ok: true, model: { ...(extracted as Record<string, unknown>), ...identity } };
   const captureRef = `cap-${generateUlid()}`;
   const captureDir = join(services.runDir, 'captures');
   await mkdir(captureDir, { recursive: true });
@@ -138,7 +140,7 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
   });
   return {
     ok: true,
-    model: { capture_ref: captureRef, preview: previewExtraction(kind, extracted) },
+    model: { capture_ref: captureRef, preview: previewExtraction(kind, extracted), ...identity },
     details: { capture_ref: captureRef },
   };
 }
@@ -148,7 +150,7 @@ const EVIDENCE_EXCERPT_CHARS = 1_000;
 
 /**
  * Record a read page as ledger evidence, so `result_publish` attaches it as a
- * Brief source.
+ * Brief source, and return its run-wide evidence ID (FEAT-050).
  *
  * A browser-driven run reads its answer off pages it clicked through to; before
  * this, only `web_search`/`web_fetch` fed the ledger, so such a run published
@@ -160,17 +162,29 @@ const EVIDENCE_EXCERPT_CHARS = 1_000;
  * Best-effort by design — an unusable URL (no navigation yet, a `data:`/blank
  * page) is skipped rather than turned into a junk source, and never fails the
  * extraction the agent asked for.
+ *
+ * The ID comes from the run document store's `observe`, which never fetches:
+ * the page is already on screen. A page `web_fetch` or `web_search` read keeps
+ * the ID they minted. A `table` extraction only reports the ID of a page
+ * already recorded, so tables alone still never create a source. The result
+ * is never `already_read`: the live page may have changed since it was read.
+ *
+ * @returns The page's evidence ID, or null when none applies.
  */
 function recordEvidence(
   kind: ExtractionKind,
   extracted: unknown,
   controller: AgentBrowserController,
   services: RunServices,
-): void {
-  if (kind !== 'content') return;
+): string | null {
   const url = controller.url();
-  if (!/^https?:\/\//iu.test(url)) return;
+  if (!/^https?:\/\//iu.test(url)) return null;
+  if (kind !== 'content') return services.documents.lookup(url)?.sourceId ?? null;
   const { title, text } = extracted as { title: string; text: string };
+  const record = services.documents.observe(url, {
+    title: title.length > 0 ? title : null,
+    tool: 'browser_extract',
+  });
   services.evidence.add({
     url,
     finalUrl: null,
@@ -179,7 +193,9 @@ function recordEvidence(
     fetchedAt: services.nowIso(),
     publishedAt: null,
     tool: 'browser_extract',
+    sourceId: record.sourceId,
   });
+  return record.sourceId;
 }
 
 function validExtraction(kind: ExtractionKind, value: unknown): boolean {

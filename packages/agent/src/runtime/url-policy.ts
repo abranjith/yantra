@@ -13,6 +13,11 @@
  *   4. counted against the run's per-host / navigation budget (a new host both
  *      decrements the host budget and is audited in full).
  *
+ * Checks 1–3 ({@link UrlPolicy.evaluate}) and the budget charge
+ * ({@link UrlPolicy.reserve}) are separable (FEAT-050), so a read the run
+ * document store answers from memory passes policy without spending a
+ * navigation; {@link UrlPolicy.check} composes the two.
+ *
  * Every decision — allow or reject — is recorded in full so the audit trail
  * shows exactly which outbound URLs the agent attempted (plan §8.13). The policy
  * never throws; callers receive a typed {@link UrlPolicyRejection} and surface a
@@ -120,13 +125,57 @@ export class UrlPolicy {
   ) {}
 
   /**
-   * Evaluate one candidate outbound URL.
+   * Evaluate one candidate outbound URL and charge it to the run's budget.
+   * Exactly {@link evaluate} followed by {@link reserve}, with the same audit
+   * trail as before the split: one `allow` or one `reject` record per call.
+   * `browser_navigate` keeps calling this, because a navigation always
+   * reaches the network.
    *
    * @param rawUrl The URL the agent (or page content) asked to reach.
    * @returns `ok(allowed)` after the host budget is decremented, or
    *   `err(rejection)` with a stable code. Both outcomes are audited in full.
    */
   public check(rawUrl: string): Result<AllowedUrl, UrlPolicyRejection> {
+    const screened = this.screen(rawUrl);
+    if (!screened.isOk) return screened;
+    const reserved = this.charge(screened.value, rawUrl);
+    if (!reserved.isOk) return reserved;
+    this.auditSink?.record({ url: rawUrl, host: screened.value.host, decision: 'allow' });
+    return reserved;
+  }
+
+  /**
+   * Run every policy check except the budget, charging nothing (FEAT-050).
+   *
+   * A read the run document store can answer from memory must never spend a
+   * navigation, but it must still pass policy: a refused URL never reaches a
+   * cached answer. Callers evaluate first, consult the store, and
+   * {@link reserve} only when a real network fetch is about to happen.
+   *
+   * @param rawUrl The URL the agent (or page content) asked to reach.
+   * @returns `ok(allowed)` or `err(rejection)`; both are audited.
+   */
+  public evaluate(rawUrl: string): Result<AllowedUrl, UrlPolicyRejection> {
+    const screened = this.screen(rawUrl);
+    if (screened.isOk) {
+      this.auditSink?.record({ url: rawUrl, host: screened.value.host, decision: 'allow' });
+    }
+    return screened;
+  }
+
+  /**
+   * Charge one navigation (and a new host) for a URL {@link evaluate} allowed.
+   *
+   * @param allowed The evaluated URL.
+   * @returns `ok(allowed)`, or `err` with `BUDGET_EXHAUSTED` and the spent
+   *   `budgetLimit` (audited as a rejection).
+   */
+  public reserve(allowed: AllowedUrl): Result<AllowedUrl, UrlPolicyRejection> {
+    return this.charge(allowed, allowed.url);
+  }
+
+  /** Every check except the budget. Rejections are audited; an allow is not. */
+  private screen(rawUrl: string): Result<AllowedUrl, UrlPolicyRejection> {
     // Length is checked on the raw string first — an over-long URL is rejected
     // before we spend effort parsing it, and before any substring scan.
     if (rawUrl.length > this.config.maxUrlLength) {
@@ -187,13 +236,16 @@ export class UrlPolicy {
       });
     }
 
-    const reserved = this.budgets.reserveNavigation(host);
-    if (!reserved.isOk) {
-      return this.reject(rawUrl, host, budgetRejection(reserved.error));
-    }
-
-    this.auditSink?.record({ url: rawUrl, host, decision: 'allow' });
     return ok({ url: parsed.toString(), host });
+  }
+
+  /** Decrement the navigation/host budget; a refusal is audited under `auditUrl`. */
+  private charge(allowed: AllowedUrl, auditUrl: string): Result<AllowedUrl, UrlPolicyRejection> {
+    const reserved = this.budgets.reserveNavigation(allowed.host);
+    if (!reserved.isOk) {
+      return this.reject(auditUrl, allowed.host, budgetRejection(reserved.error));
+    }
+    return ok(allowed);
   }
 
   private reject(

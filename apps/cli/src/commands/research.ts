@@ -25,6 +25,7 @@ import {
   RobotsCacheImpl,
   createAskEthicsAdapter,
   createKeychainProvider,
+  launchPerUsePageSource,
   loadEthicsConfig,
   loadSearchConfig,
   resolveSearchProvider,
@@ -317,6 +318,10 @@ export async function createDefaultResearchLoop(
 
   const profileStore = new LocalProfileStore({ logger });
   const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
+  // One browser launch per SERP scrape or fetch fallback, as before FEAT-050:
+  // the deterministic loop keeps its own wiring and gains only the honest
+  // timeout the page source enforces.
+  const pages = launchPerUsePageSource(browserProvider);
 
   const ethicsConfig = await loadEthicsConfig();
   const blocklist = new BlocklistImpl();
@@ -347,7 +352,7 @@ export async function createDefaultResearchLoop(
     explicitProvider: invocation.searchProvider,
     env: process.env,
     config: searchConfig,
-    deps: { keychain, browserProvider, ethicsGate: askEthicsGate, logger },
+    deps: { keychain, pages, ethicsGate: askEthicsGate, logger },
   });
   if (!resolved.isOk) {
     throw resolved.error;
@@ -355,7 +360,7 @@ export async function createDefaultResearchLoop(
 
   const fetcher = new HybridContentFetcher({
     httpFetcher: new HttpFetcher(),
-    browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
+    browserFetcher: new BrowserFallbackFetcher({ pages }),
   });
   const rankSink = await createBestEffortRankSignalSink(logger);
 

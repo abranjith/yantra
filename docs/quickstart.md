@@ -51,7 +51,9 @@ node apps/cli/dist/bin.js init
 ```
 
 On a TTY, Yantra asks for an Anthropic, Ollama, or no-model setup; the credential
-source; model ID; data directory; and the existing sensitive-context grants.
+source; model ID; an optional search provider key (`tavily`, `brave`, or
+`skip`), stored in the OS keychain as `<provider>.api_key`; data directory; and
+the existing sensitive-context grants.
 Anthropic defaults to `claude-opus-4-7` with an
 `${env:ANTHROPIC_API_KEY}` reference. Ollama defaults to `llama3.1:8b` at
 `http://localhost:11434` and does not store a credential.
@@ -153,7 +155,9 @@ node apps/cli/dist/bin.js doctor
 ```
 
 Warnings, including a missing model credential, do not make offline or
-deterministic use unavailable.
+deterministic use unavailable. Without a search key, the `search.provider`
+check warns that runs will use a scraped provider and names the
+`yantra secret set` command that adds a key.
 
 The following command uses the keyless DuckDuckGo search path and local
 synthesis. It requires internet access, contacts public sites, and writes a run

@@ -53,6 +53,25 @@ export class ScrapeSearchError extends SearchProviderError {
 }
 
 /**
+ * Raised by the run's search service (FEAT-050) for every search after a
+ * provider challenged or rate-limited an earlier one: the breaker is open, so
+ * the provider is not asked again in this run. No provider call, no browser.
+ */
+export class SearchCircuitOpenError extends SearchProviderError {
+  public constructor(
+    provider: SearchProviderName,
+    public readonly openedBy: 'anomaly-challenge' | 'rate-limited',
+  ) {
+    super(
+      `Search through "${provider}" is closed for the rest of this run: the provider ` +
+        `${openedBy === 'rate-limited' ? 'rate-limited' : 'challenged'} an earlier query.`,
+      { provider, code: 'circuit-open' },
+    );
+    this.name = 'SearchCircuitOpenError';
+  }
+}
+
+/**
  * Raised when a provider is selected explicitly (via flag, env, or config) but
  * its required API key is missing from the keychain. Unlike the old
  * warn-and-fall-back behavior, explicit selection fails hard so misconfiguration

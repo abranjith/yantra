@@ -716,6 +716,7 @@ describe('@no-llm browser tools', () => {
         fetchedAt: expect.any(String),
         publishedAt: null,
         tool: 'browser_extract',
+        sourceId: 'S1',
       },
     ]);
   });
@@ -754,6 +755,104 @@ describe('@no-llm browser tools', () => {
 
     expect(result.status).toBe('ok');
     expect(services.evidence.isEmpty()).toBe(true);
+  });
+
+  it('gives a content extraction the page’s evidence ID, and the same ID on a second extract', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'Listing', text: 'Live prices.' });
+    const services = browserServices(controller);
+    const tool = wrapTool(browserExtractSpec(services), services);
+
+    const first = JSON.parse((await tool.execute({ kind: 'content' }, undefined)).modelText);
+    const second = JSON.parse((await tool.execute({ kind: 'content' }, undefined)).modelText);
+
+    expect(first).toMatchObject({ source_id: 'S1', text: 'Live prices.' });
+    // The live page may have changed, so a repeat extract still returns content.
+    expect(second).toMatchObject({ source_id: 'S1', text: 'Live prices.' });
+    expect(second).not.toHaveProperty('already_read');
+    expect(services.documents.stats()).toMatchObject({ networkLoads: 0, observed: 1 });
+    expect(services.evidence.entries()[0]?.sourceId).toBe('S1');
+  });
+
+  it('reuses the ID web_fetch minted for the same page', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'Page', text: 'Body.' });
+    const services = browserServices(controller);
+    await services.documents.read('https://example.com/page', () =>
+      Promise.resolve({
+        ok: true,
+        value: null,
+        meta: {
+          url: 'https://example.com/page',
+          finalUrl: null,
+          title: 'Page',
+          fetchMode: 'http',
+          tool: 'web_fetch',
+        },
+      }),
+    );
+    await services.documents.read('https://example.com/other', () =>
+      Promise.resolve({
+        ok: true,
+        value: null,
+        meta: {
+          url: 'https://example.com/other',
+          finalUrl: null,
+          title: null,
+          fetchMode: 'http',
+          tool: 'web_fetch',
+        },
+      }),
+    );
+    controller.url.mockReturnValue('https://example.com/other/');
+
+    const result = await wrapTool(browserExtractSpec(services), services).execute(
+      { kind: 'content' },
+      undefined,
+    );
+
+    expect(JSON.parse(result.modelText)).toMatchObject({ source_id: 'S2' });
+    expect(services.documents.stats().observed).toBe(0);
+  });
+
+  it('gives a table extraction an ID only when its page is already recorded', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ headers: ['Hotel'], rows: [['Motel 6']] });
+    const services = browserServices(controller);
+    const tool = wrapTool(browserExtractSpec(services), services);
+
+    const unrecorded = JSON.parse((await tool.execute({ kind: 'table' }, undefined)).modelText);
+    services.documents.observe('https://example.com/page', { title: 'P', tool: 'browser_extract' });
+    const recorded = JSON.parse((await tool.execute({ kind: 'table' }, undefined)).modelText);
+
+    expect(unrecorded).not.toHaveProperty('source_id');
+    expect(recorded).toMatchObject({ source_id: 'S1', headers: ['Hotel'] });
+    // Tables alone never create a source.
+    expect(services.evidence.isEmpty()).toBe(true);
+  });
+
+  it('mints no ID and no ledger entry for about:blank', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: '', text: 'body' });
+    controller.url.mockReturnValue('about:blank');
+    const services = browserServices(controller);
+
+    const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
+
+    expect(JSON.parse(result.modelText)).not.toHaveProperty('source_id');
+    expect(services.documents.entries()).toEqual([]);
+  });
+
+  it('carries the budget meter on an extract result', async () => {
+    const controller = fakeController();
+    controller.extract.mockResolvedValue({ title: 'T', text: 'x' });
+    const services = browserServices(controller);
+
+    const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
+
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      budget: { navigations: '0/30', hosts: '0/20' },
+    });
   });
 
   it('rejects a content extraction whose shape does not validate', async () => {

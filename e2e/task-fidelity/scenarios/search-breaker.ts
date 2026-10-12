@@ -22,7 +22,6 @@ const expectations: readonly Expectation[] = [
       providerCalls: run.searchCalls.length,
     }),
     target: equals({ laterCodes: ['SEARCH_BLOCKED', 'SEARCH_BLOCKED'], providerCalls: 1 }),
-    baseline: equals({ laterCodes: [null, null], providerCalls: 3 }),
     note: 'G4 / §11: a challenge trips the breaker; later searches return SEARCH_BLOCKED unasked.',
   },
   {

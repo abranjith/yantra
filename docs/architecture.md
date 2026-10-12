@@ -104,6 +104,9 @@ share one validation vocabulary.
   saved-workflow replay/resume;
 - search, HTTP/browser fallback fetching, Readability/Cheerio extraction, deterministic and LLM
   synthesis ports, multi-hop research, citation validation, and Brief rendering;
+- the run-scoped acquisition primitives an agentic run composes — `SearchService`, `DocumentStore`,
+  `PagePool` — together with the response classifier, the `canonicalUrl` page identity, and the
+  per-use `launchPerUsePageSource` that the deterministic pipelines use instead of the pool;
 - ethics, robots, rate limiting, sanitization, user-input masking, secret resolution, and security
   scope enforcement;
 - filesystem stores for workflows, run artifacts, profiles, report templates, and ask cache;
@@ -1121,7 +1124,7 @@ dropped rather than buffered or reopened, because a component logging later is l
 that no longer exists. `RunServices` exposes it as the provider-neutral core `Logger`, so
 middleware can write to it but cannot close it; the environment owns the close.
 
-Lifecycle order is load-bearing. Browser, session, and recorder teardown run while the destination
+Lifecycle order is load-bearing. Task-browser, page-pool, session, and recorder teardown run while the destination
 is still open so their terminal lines persist; the run's health summary is then computed, written
 to `run-health.json`, and logged as one `run_health` line, so its facts are final and its line
 still lands in the log; only then is the log closed; only then can the report builder observe
@@ -1168,8 +1171,10 @@ flowchart TD
   Mapper[Tool-boundary mappers such as mapSearchError] -->|operator-only diagnostic| Chokepoint
   Chokepoint --> Ledger[RunHealthLedger, one per run]
   Chokepoint -->|error or timeout| Warn[One warn tool_failure line]
-  ReadTools[web_search and web_fetch] -->|source failures, fetches, budget exhaustion| Ledger
+  ReadTools[web_search and web_fetch] -->|source failures, network loads, store hits, budget exhaustion| Ledger
+  Tiers[HybridContentFetcher onTierEvent] -->|escalations and challenge pages| Ledger
   Counter[countingBrowserProvider] -->|successful launches| Ledger
+  Acq[PagePool and SearchService stats] -->|read at teardown| Ledger
   Ledger -->|briefFacts at publish| Document[Brief or templated report notices and search_provider]
   Ledger -->|summary at teardown| HealthFile[run-health.json]
   Ledger -->|summary at teardown| HealthLine[One info run_health line]
@@ -1199,7 +1204,8 @@ browser-startup table: one ordered classification over the real exported core se
 each with a closed, exported cause vocabulary and a registered message template. Raw codes that
 embed text are normalized and never copied, and a results-page browser that will not start defers
 to `mapBrowserStartupError`. Provider resolution failures go through the same table, which is why
-`resolveProvider` passes the typed error through untouched.
+`SearchService.resolve()` passes the typed resolution error through untouched. The breaker adds one
+row: `SearchCircuitOpenError` maps to a non-retryable `SEARCH_BLOCKED` with cause `circuit-open`.
 
 **The read tools add the facts only they hold.** `web_search` records each per-site read failure,
 each real network fetch with whether the HTTP tier or a browser served it, and budget exhaustion
@@ -1211,10 +1217,20 @@ budget refusal is reported once at the top of the search result rather than per 
 
 **Browser launches are counted by decoration.** `countingBrowserProvider` wraps the run's single
 selected browser provider in a pass-through that delegates `launch` and `detectChrome` unchanged
-and counts each launch that succeeds. The agent browser controller, the scraped-search transport,
-and `BrowserFallbackFetcher` all share that one wrapped provider, so one decorator sees every launch
-in the run; a nested `workflow_run` builds its own provider and wraps it with the same counter into
-the same ledger.
+and counts each launch that succeeds. The agent browser controller and the run's `PagePool` — which
+serves every scraped-search results page and every `BrowserFallbackFetcher` render — share that one
+wrapped provider, so one decorator sees every launch in the run; a nested `workflow_run` builds its
+own provider and wraps it with the same counter into the same ledger.
+
+**Acquisition facts arrive from their owners.** `web_fetch` and `web_search` record a fetch only
+from inside the store's `load`, so `fetches` counts real network loads, and they record each read
+answered from the `DocumentStore` (`cache_hits`) or its failure memo (`memo_hits`). The hybrid
+fetcher's `onTierEvent` callback feeds every HTTP-to-browser escalation and every challenge page
+into the ledger, which derives `fetches.challenges` and the per-host challenge notices from them.
+At teardown the summary also receives `PagePool.stats()` (`browser.pool_launches`,
+`browser.contexts`) and `SearchService.stats()` (`searches.breaker_skipped`,
+`searches.peak_concurrency`); every one of these `RunHealth` fields is optional, so older run
+directories still validate.
 
 **Three readers, at three moments.**
 
@@ -1247,15 +1263,15 @@ inject hand-built graphs. Otherwise the default composer in
 produces the `EnvironmentLeaves` — the things the environment _uses_ — and `composeDefaultEnvironment`
 builds production wiring on top of them.
 
-| Leaf                    | Production default                              | What consumes it                                                                                                      |
-| ----------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `keychain`              | OS keychain provider                            | Model and search credentials, the opaque-ref secret resolver, nested workflows                                        |
-| `ethicsConfig`          | `loadEthicsConfig()`                            | Robots cache, rate limiter, and user agent of the run's ethics gate                                                   |
-| `searchConfig`          | `loadSearchConfig()`                            | `web_search` provider selection and inline-fetch depth                                                                |
-| `blocklist`             | `BlocklistImpl`, reloaded from disk             | The run's ethics gate                                                                                                 |
-| `createBrowserProvider` | `createSelectedBrowserProvider`                 | The agent controller's provider, the provider shared by fetch fallback and scraped search, and each nested workflow's |
-| `httpRequestFn`         | Absent, so `HttpFetcher` uses its own transport | The HTTP tier of the hybrid fetcher behind `web_fetch` and `web_search` page reads                                    |
-| `resolveSearchProvider` | Core `resolveSearchProvider`                    | Each `web_search` call's provider resolution                                                                          |
+| Leaf                    | Production default                              | What consumes it                                                                                              |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `keychain`              | OS keychain provider                            | Model and search credentials, the opaque-ref secret resolver, nested workflows                                |
+| `ethicsConfig`          | `loadEthicsConfig()`                            | Robots cache, rate limiter, and user agent of the run's ethics gate                                           |
+| `searchConfig`          | `loadSearchConfig()`                            | `web_search` provider selection and inline-fetch depth                                                        |
+| `blocklist`             | `BlocklistImpl`, reloaded from disk             | The run's ethics gate                                                                                         |
+| `createBrowserProvider` | `createSelectedBrowserProvider`                 | The run's one counted provider, shared by the agent controller and the `PagePool`, and each nested workflow's |
+| `httpRequestFn`         | Absent, so `HttpFetcher` uses its own transport | The HTTP tier of the hybrid fetcher behind `web_fetch` and `web_search` page reads                            |
+| `resolveSearchProvider` | Core `resolveSearchProvider`                    | The run's `SearchService`, which calls it once per run                                                        |
 
 `AgenticTaskDependencies.environmentLeaves?: Partial<EnvironmentLeaves>` lets a test or embedding
 host replace any subset of those leaves, merged over the production ones. An overridden leaf is never
@@ -1264,7 +1280,8 @@ native keychain module, and replacing the blocklist never reads the blocklist fi
 ignored entirely when `createEnvironment` is supplied.
 
 The seam replaces leaves only. Everything composed from them stays production code in every case:
-the ethics gate, the `HybridContentFetcher` with its HTTP-to-browser escalation, the
+the ethics gate, the `HybridContentFetcher` with its HTTP-to-browser escalation and response
+classifier, the `SearchService` with its gate and breaker, the `PagePool`, the
 `AgentBrowserController`, the `countingBrowserProvider` launch counter, the Brief publisher, the
 workflow store and nested `RunOrchestrator`, and the run's `runtime.jsonl` destination. The
 orchestrator-owned controls — URL policy, budgets, the payload sanitizer, consent, tool middleware,
@@ -1281,13 +1298,103 @@ flowchart LR
   Composer --> Ethics[Ethics gate]
   Composer --> Fetcher[Hybrid fetcher]
   Composer --> Browser[Counted provider and AgentBrowserController]
+  Composer --> Pool[PagePool]
+  Composer --> SearchSvc[SearchService]
   Composer --> Publisher[Publisher and nested workflow runner]
-  Orchestrator[runAgenticTask-owned controls<br/>URL policy, budgets, sanitizer,<br/>consent, middleware, audit] --> Run[Run service graph]
+  Orchestrator[runAgenticTask-owned controls<br/>URL policy, budgets, sanitizer,<br/>DocumentStore, consent, middleware, audit] --> Run[Run service graph]
   Ethics --> Run
   Fetcher --> Run
   Browser --> Run
+  Pool --> Run
+  SearchSvc --> Run
   Publisher --> Run
 ```
+
+#### Run-scoped acquisition services
+
+An agentic run owns everything it acquires from the web through three per-run core services, all
+of them reached through `RunServices`. A search goes `SearchService` → `DocumentStore` →
+`PagePool`; a fetch goes `DocumentStore` → `PagePool`.
+
+- **`SearchService`** (`packages/core/src/extraction/search/search-service.ts`), composed in
+  `composeDefaultEnvironment` and carried as `RunServices.domain.search.service`. It calls the
+  `resolveSearchProvider` leaf once and memoizes the result, failure included, so "selected search
+  provider" is logged once per run. `web_search` receives a gated facade with the provider's name.
+  The facade refuses with `SearchCircuitOpenError` once the breaker is open, and otherwise waits for
+  a slot under `SEARCH_POLITENESS` for the registry descriptor's `kind`: `scrape` is one search at
+  a time with 2 s between starts, `api` is two at a time with no spacing. An `anomaly-challenge`
+  scrape error or a `RateLimitError` opens the breaker and logs one `search_breaker_open` warning.
+  The original error is still rethrown, so the first call reports its true cause, and every later
+  call maps to `SEARCH_BLOCKED` with cause `circuit-open` without calling the provider.
+- **`DocumentStore`** (`packages/core/src/extraction/document-store.ts`), constructed by
+  `runAgenticTask()` next to the `EvidenceLedger` and required on `RunServices.documents`. It owns
+  evidence identity. Every `web_fetch` read and every `web_search` inline read goes through
+  `read(url, load)`. The store looks up the canonical requested URL and the canonical final URL,
+  then a memo of terminal failures, then loads already in flight (single-flight). It calls `load`
+  only when none of those answer. Each successful load mints a dense run-wide ID (`S1`, `S2`, …),
+  and `observe()` lets `browser_extract` mint or reuse an ID for a page the browser already shows,
+  with no fetch. The store holds no page text and does no I/O of its own.
+- **`PagePool`** (`packages/core/src/browser/page-pool.ts`), composed in
+  `composeDefaultEnvironment` from the run's counted browser provider and implementing
+  `PageSource`. It lazily launches one headless, ephemeral browser for every SERP scrape
+  (`ScrapeTransport`) and every `BrowserFallbackFetcher` render in the run. Each use gets its own
+  isolated browser context through `BrowserSession.newIsolatedPage()`. At most two pages are open
+  at once, waiters queue in FIFO order, and a crash allows one relaunch before
+  `PagePoolExhaustedError`. Each use's timeout and abort signal close that use's context. The
+  `AgentBrowserController` keeps its own browser, because it may run headed for `do` and its page
+  carries user-visible interaction state. Barring a pool relaunch after a crash, a run therefore
+  starts at most two Chrome processes. The
+  finalizer closes the pool after the task browser's teardown and before `run-health.json` is
+  written.
+
+Three supporting pieces keep the services consistent. `canonicalUrl`
+(`packages/core/src/extraction/url-identity.ts`) is the single "same page" identity: lowercased
+host, no fragment, tracking parameters stripped, one trailing slash and the default port removed.
+`packages/core/src/research/source-pool.ts` re-exports it as `normalizeUrl`. `UrlPolicy` is split into `evaluate`,
+which runs every check except the budget and audits the decision, and `reserve`, which charges the
+navigation and host. The read tools evaluate before the store and reserve only inside `load`, so a
+repeat read costs no navigation and a refused URL never reaches a cached answer. `browser_navigate`
+still calls `check()`, which is `evaluate` followed by `reserve`, because a navigation always
+reaches the network. `classifyResponse` (`packages/core/src/extraction/response-classifier.ts`)
+runs inside `HybridContentFetcher` before any extraction and labels each response `challenge`,
+`js-shell`, or `content`, using a documented list of generic challenge-widget markers and phrases.
+A challenge at the HTTP tier gets exactly one render in the standard browser. A challenge in the
+rendered page is terminal for that URL: the fetcher throws a `challenge` `FetchError`, which the
+store memoizes. `web_fetch` reports it as a non-retryable `SITE_CHALLENGE` handoff, and
+`web_search` reports a `blocked` site. Each tier event is written to `runtime.jsonl` as a
+`fetch_challenge` warning or a `fetch_escalated` info line, with the host only.
+
+```mermaid
+flowchart TD
+  Search[web_search] --> SearchSvc[SearchService<br/>resolve once, politeness gate, breaker]
+  SearchSvc --> Provider[Search provider]
+  Provider -->|scraped results page| Pool
+  Search -->|each top hit| Evaluate
+  Fetch[web_fetch] --> Evaluate[UrlPolicy.evaluate]
+  Evaluate --> Store[DocumentStore.read<br/>canonicalUrl, memo, single-flight]
+  Store -->|hit or memoized failure| Result[Result with source_id or already_read]
+  Store -->|load| Gate[Ethics, then UrlPolicy.reserve]
+  Gate --> Hybrid[HybridContentFetcher]
+  Hybrid --> Http[HTTP tier] --> Classify[classifyResponse]
+  Classify -->|content| Extract[Extraction]
+  Classify -->|challenge or js-shell: one render| Pool[PagePool<br/>one headless browser,<br/>isolated context per use]
+  Http -->|HTTP error or network failure| Pool
+  Pool --> Classify2[classifyResponse on render]
+  Classify2 -->|challenge| Blocked[Terminal blocked failure,<br/>memoized, never extracted]
+  Classify2 -->|content or js-shell| Extract
+  Extract --> Result
+  Extract2[browser_extract] -->|observe, no fetch| Store
+```
+
+The deterministic `ask --no-llm` and `research --no-llm` pipelines do not use these services. They
+keep their own search, fetch, and cache wiring. The CLI passes them
+`launchPerUsePageSource(browserProvider)`, which launches one browser per use, as before. They gain
+only what lives inside the shared core classes: the classifier in `HybridContentFetcher` and the
+honest timeout and abort in `BrowserFallbackFetcher`. `planSearchProvider` in
+`packages/core/src/extraction/search/registry.ts` is the pure selection step that
+`resolveSearchProvider` calls before creating a provider. `yantra doctor`'s `search.provider` check
+calls the same function, so diagnostics and runs share one selection grammar. The check launches no
+browser.
 
 ### Vision-assist boundary
 
@@ -1663,6 +1770,11 @@ are fetched and extracted through a shared per-source path guarded by ethics che
 synthesizer receives extracted documents and structured failures, validates citations, and writes
 the canonical Brief in JSON, Markdown, and inert HTML. `research` repeats the same core stages
 within explicit hop, source, time, and LLM-call budgets while persisting `research-state.json`.
+These pipelines keep their own search, fetch, and cache wiring and do not use the agentic run's
+acquisition services. Their browser fallback and scraped search take a
+`launchPerUsePageSource(browserProvider)`, which launches one headless browser per use and bounds
+it by the caller's timeout and abort signal. Fetched responses still pass the shared
+`HybridContentFetcher` classifier, so a challenge page is never extracted here either.
 
 ```mermaid
 sequenceDiagram
@@ -1703,8 +1815,11 @@ to its own operator-only `runtime.jsonl`, closed after teardown and before `repo
 the report can list the artifact by presence. Every tool outcome is recorded in the run's
 `RunHealthLedger` as it completes; publication attaches the ledger's runtime-derived notices and
 search provider, and teardown writes `run-health.json` and its `run_health` line before the log
-closes. A successful run ends with `result_publish` producing a protocol-valid Brief or templated
-report; plain assistant text alone is not the success contract.
+closes. Web reads go through the run's `SearchService`, `DocumentStore`, and `PagePool` (see
+"Run-scoped acquisition services"), so a page is fetched at most once and keeps one `S<n>` evidence
+ID. The pool closes after the task browser's teardown and before `run-health.json` is written. A
+successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
+plain assistant text alone is not the success contract.
 
 ```mermaid
 sequenceDiagram
@@ -1732,7 +1847,7 @@ sequenceDiagram
   end
   Pi->>Tools: result_publish
   Tools->>Run: validated Brief or document with runtime notices and search provider
-  Agent->>Run: tear down browser, session, and recorder, finalize trace
+  Agent->>Run: tear down task browser, page pool, session, and recorder, finalize trace
   Agent->>Run: write run-health.json, then log run_health
   Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock
   Agent-->>CLI: published, failed, handoff, or aborted outcome
@@ -2208,12 +2323,34 @@ update` is the only surface that contacts a version server, and only when a huma
   taken through one says nothing about shipped behavior. `environmentLeaves` therefore lets a
   harness swap only the things the environment uses — credentials, loaded configuration, the
   browser factory, the HTTP transport, and search-provider resolution — while the ethics gate,
-  hybrid fetcher, browser controller, launch counter, publisher, and every orchestrator-owned
+  hybrid fetcher, search service, page pool, browser controller, launch counter, publisher, and every orchestrator-owned
   control stay production-composed and unreachable through the seam. The same reasoning puts the
   audit projection behind `auditProjectionOf`, so a scripted driver cannot record a different
   `tool-calls.jsonl` than a real session. The costs are a public seam on `runAgenticTask()` that must
   stay leaf-shaped as the composer grows, and a deterministic tier whose pending-owner baselines
   must be retired by each owning feature rather than edited to pass.
+- **Web acquisition has one owner per run.** Without an owner, nothing could remember a page or
+  hold a gate. One recorded run built a search provider for each of its 22 searches and fetched one
+  results page seven times. It also started 48 Chrome processes, one per SERP scrape and one per
+  escalated fetch. So an agentic run now holds one `SearchService`, one `DocumentStore`, and one
+  `PagePool`. Evidence identity has a single owner: the store mints `S<n>` once per canonical URL,
+  and `web_search`, `web_fetch`, `browser_extract`, and the evidence ledger all show that ID. The
+  store memoizes only failures that cannot change within the run. The budget is charged only when
+  a real fetch happens, through the `UrlPolicy` `evaluate`/`reserve` split, and policy still runs
+  before the store. Politeness is structural: a scraped provider is serialized and spaced, and its
+  first challenge closes search for the rest of the run instead of retrying, rotating identity, or
+  silently switching providers. The background pool is separate from the task browser, because the
+  task browser may be headed and holds user-visible state. The cost is two Chrome processes where
+  one could do. The deterministic `--no-llm` pipelines keep their own per-use wiring. Whether they
+  should adopt these services is an open enhancement, not an oversight.
+- **A challenge page is classified, never extracted.** Every fetched response is classified before
+  extraction from generic widget markers and phrases, not from a site list. That makes "honor bot
+  detection" a decision instead of a side effect of a size heuristic. The user signed off on policy
+  (b): an HTTP-tier challenge gets one render in the standard browser, with no identity change,
+  solving, or retry, and a browser-tier challenge is terminal, audited at both tiers, and disclosed
+  in a notice. The classifier parses the DOM only when its cheap string scan finds a marker. A
+  third rule, a challenge phrase plus a widget at any size, catches padded interstitials, while
+  requiring both signals keeps a long article with a comment-form CAPTCHA out of it.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,
@@ -2237,9 +2374,13 @@ references.
 At runtime there are three process shapes:
 
 - a short-lived `yantra` CLI process that constructs dependencies for one command, optionally
-  launches a run-scoped Chrome child process and provider session, writes local artifacts, then
+  launches run-scoped Chrome child processes and a provider session, writes local artifacts, then
   closes owned handles, listeners, and CDP sessions, and waits for verified process-tree exit
-  before releasing any managed claim it holds;
+  before releasing any managed claim it holds. Barring a pool relaunch after a crash, an agentic
+  run starts at most two Chrome processes:
+  the task browser, when browser tools are used, and the headless background `PagePool`, when a
+  scrape or fetch fallback needs one. A nested `workflow_run` composes its own browser. Deterministic `ask`/`research --no-llm` still launch one
+  short-lived headless browser per scrape or fallback;
 - one short-lived Node helper child per managed browser operation, in one of two modes: during an
   explicitly consented install or replacement it resolves or downloads the accepted build and owns
   extraction under an exclusive mutation lease, and during `yantra browser update` it answers the

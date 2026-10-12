@@ -88,7 +88,7 @@ function depsFor(
 
   return {
     keychain,
-    browserProvider: fakeBrowserProvider(html).provider,
+    pages: fakeBrowserProvider(html).pages,
     ethicsGate: opts.gate ?? passGate,
     logger: silentLogger,
   };

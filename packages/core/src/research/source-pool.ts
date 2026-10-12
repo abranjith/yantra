@@ -21,6 +21,7 @@
  * insert sequences.
  */
 
+import { canonicalUrl as normalizeUrl } from '../extraction/url-identity.js';
 import { CLUSTER_SIMILARITY_THRESHOLD } from '../synthesis/clustering.js';
 import { cosineSimilarity, tfidfVectors } from '../synthesis/similarity.js';
 import type { SynthesisDoc, SynthesisInput, SourceFailure } from '../synthesis/types.js';
@@ -56,66 +57,12 @@ interface PoolEntry {
 }
 
 /**
- * Tracking / analytics query parameters stripped during URL normalization so
- * the same page linked with different campaign tags dedups to one source.
+ * Page identity for exact-duplicate rejection. The canonicalizer lives in
+ * `extraction/url-identity.ts` so this corpus and the agentic run's document
+ * store share one definition of "the same page"; the old name stays for the
+ * deterministic callers.
  */
-const TRACKING_PARAMS: ReadonlySet<string> = new Set([
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
-  'utm_id',
-  'gclid',
-  'fbclid',
-  'msclkid',
-  'mc_cid',
-  'mc_eid',
-  'igshid',
-  'ref',
-  'ref_src',
-  'ref_url',
-  'source',
-  'spm',
-  '_ga',
-]);
-
-/**
- * Normalizes a URL for exact-duplicate identity: lowercased host, no
- * fragment, tracking params stripped, and a trailing slash removed from a
- * non-root path. Unparseable URLs fall back to a trimmed lowercase string.
- *
- * @param raw - The URL to normalize.
- * @returns A stable identity string for duplicate detection.
- *
- * @example
- * normalizeUrl('https://A.com/x/?utm_source=n#frag'); // 'https://a.com/x'
- */
-export function normalizeUrl(raw: string): string {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return raw.trim().toLowerCase();
-  }
-
-  url.hash = '';
-  url.hostname = url.hostname.toLowerCase();
-
-  for (const param of [...url.searchParams.keys()]) {
-    if (TRACKING_PARAMS.has(param.toLowerCase())) {
-      url.searchParams.delete(param);
-    }
-  }
-
-  // Drop a trailing slash on non-root paths ('/a/' == '/a'), keep root '/'.
-  if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
-    url.pathname = url.pathname.replace(/\/+$/u, '');
-  }
-
-  const query = url.searchParams.toString();
-  return `${url.protocol}//${url.host}${url.pathname}${query ? `?${query}` : ''}`;
-}
+export { canonicalUrl as normalizeUrl } from '../extraction/url-identity.js';
 
 /**
  * The accumulating research corpus. Insertion is the only mutation; every

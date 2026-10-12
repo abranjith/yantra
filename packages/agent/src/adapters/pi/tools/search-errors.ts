@@ -26,6 +26,7 @@ import {
   NoSearchProviderAvailableError,
   RateLimitError,
   ScrapeSearchError,
+  SearchCircuitOpenError,
   SearchProviderError,
   SearchProviderKeyMissingError,
   TavilyAuthError,
@@ -53,6 +54,7 @@ export type SearchErrorCode =
 export const SEARCH_FAILURE_CAUSES = Object.freeze([
   'anomaly-challenge',
   'rate-limited',
+  'circuit-open',
   'empty-results',
   'timeout',
   'ethics-refused:<reason>',
@@ -167,6 +169,11 @@ function classify(error: unknown): Row {
     return search('SEARCH_FAILED', true, 'serp-fetch-failed');
   }
   if (error instanceof RateLimitError) return search('SEARCH_BLOCKED', false, 'rate-limited');
+  // The run's breaker (FEAT-050): an earlier search was challenged, so this
+  // one was never sent. Its own message says search is closed for the run.
+  if (error instanceof SearchCircuitOpenError) {
+    return search('SEARCH_BLOCKED', false, 'circuit-open');
+  }
   if (error instanceof SearchProviderKeyMissingError) {
     return search('SEARCH_PROVIDER_UNAVAILABLE', false, 'key-missing');
   }

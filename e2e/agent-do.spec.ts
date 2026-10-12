@@ -33,6 +33,7 @@ import { LocalRunStore } from '@yantra/core/workflow/replay';
 import { createBrief, type BriefSource, type ConfirmationRequest } from '@yantra/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { fixtureSearchService } from './fixtures/search-service.js';
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 
 type Scenario = (session: ScenarioSession) => Promise<void>;
@@ -220,11 +221,10 @@ function createEnvironment(
     browserController,
     domain: {
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: { name: 'duckduckgo', search: () => Promise.resolve(searchResults) },
-          }),
+        service: fixtureSearchService({
+          name: 'duckduckgo',
+          search: () => Promise.resolve(searchResults),
+        }),
         resultCap: 5,
         fetchTop: 3,
       },

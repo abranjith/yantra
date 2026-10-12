@@ -953,6 +953,10 @@ describe('@no-llm task-fidelity runner', () => {
 
   it('issues a parallel step concurrently: the two searches overlap in the call log', async () => {
     const result = await run({
+      // A keyed API provider: FEAT-050's politeness gate lets it take two
+      // searches at once, so the overlap measures the runner, not the gate.
+      // (A scraped provider is serialized; `search-concurrency` pins that.)
+      searchProviderName: 'tavily',
       script: [
         {
           kind: 'parallel',

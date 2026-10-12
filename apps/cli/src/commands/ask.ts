@@ -27,6 +27,7 @@ import {
   buildPersonalizationContext,
   createAskEthicsAdapter,
   createKeychainProvider,
+  launchPerUsePageSource,
   loadEthicsConfig,
   loadSearchConfig,
   preferenceValue,
@@ -358,6 +359,10 @@ export async function createDefaultAskPipeline(
   // The same seam every other launch-capable path uses; building it starts no
   // browser, so the lazy fetch fallback stays lazy.
   const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
+  // One browser launch per SERP scrape or fetch fallback, as before FEAT-050:
+  // the deterministic loop keeps its own wiring and gains only the honest
+  // timeout the page source enforces.
+  const pages = launchPerUsePageSource(browserProvider);
 
   const ethicsConfig = await loadEthicsConfig();
   const blocklist = new BlocklistImpl();
@@ -388,7 +393,7 @@ export async function createDefaultAskPipeline(
     explicitProvider: query.searchProvider,
     env: process.env,
     config: searchConfig,
-    deps: { keychain, browserProvider, ethicsGate: askEthicsGate, logger },
+    deps: { keychain, pages, ethicsGate: askEthicsGate, logger },
   });
   if (!resolved.isOk) {
     // Explicit-selection key-missing / exhausted-chain failures carry an
@@ -399,7 +404,7 @@ export async function createDefaultAskPipeline(
 
   const fetcher = new HybridContentFetcher({
     httpFetcher: new HttpFetcher(),
-    browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
+    browserFetcher: new BrowserFallbackFetcher({ pages }),
   });
   const rankSink = await createBestEffortRankSignalSink(logger);
 

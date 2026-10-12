@@ -14,10 +14,10 @@ import type {
   ConfirmationGateway,
   ConfirmationStore,
   ContentFetcher,
+  DocumentStore,
   EthicsGate,
   Extractor,
   PayloadSanitizer,
-  SearchProvider,
   SearchProviderName,
   SearchResult,
   AgentBrowserController,
@@ -26,6 +26,7 @@ import type {
   OpaqueRefResolver,
   RankSignalSink,
   ModelSuppliedValues,
+  SearchService,
   UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
@@ -54,18 +55,20 @@ export interface ConfirmationServices {
 }
 
 /**
- * `web_search` domain dependencies. The provider is resolved once at run setup
- * (respecting provider policy/keys); `resultCap` bounds normalized output.
+ * `web_search` domain dependencies. The provider is resolved once per run by
+ * the run's {@link SearchService} (respecting provider policy/keys);
+ * `resultCap` bounds normalized output.
  */
 export interface SearchToolDeps {
   /**
-   * Resolve the active search provider for this run. A failure carries the
-   * ORIGINAL typed error (`SearchProviderKeyMissingError`,
-   * `NoSearchProviderAvailableError`, …) so `web_search` can classify the
-   * cause; flattening it to a message is what made configuration failures read
-   * as retryable outages.
+   * The run's one search service (FEAT-050): it resolves the provider once and
+   * hands back a facade behind the politeness gate and the challenge breaker.
+   * A resolution failure carries the ORIGINAL typed error
+   * (`SearchProviderKeyMissingError`, `NoSearchProviderAvailableError`, …) so
+   * `web_search` can classify the cause; flattening it to a message is what
+   * made configuration failures read as retryable outages.
    */
-  readonly resolveProvider: () => Promise<Result<SearchProvider, Error>>;
+  readonly service: SearchService;
   /** Maximum search hits requested from the provider (search breadth). */
   readonly resultCap: number;
   /**
@@ -287,6 +290,12 @@ export interface EvidenceEntry {
   readonly publishedAt: string | null;
   /** The tool that consulted the source. */
   readonly tool: 'web_search' | 'web_fetch' | 'browser_extract';
+  /**
+   * The page's run-wide evidence ID (`S<n>`) from the run document store, or
+   * null when the read never reached the store. The same ID the tool result
+   * showed the model, so a later citation can name this entry exactly.
+   */
+  readonly sourceId: string | null;
 }
 
 /**
@@ -431,6 +440,14 @@ export interface RunServices {
    * run-health summary.
    */
   readonly runHealth: RunHealthLedger;
+  /**
+   * The run document store (FEAT-050): every web read goes through it, so a
+   * page is fetched at most once per run and keeps one evidence ID (`S<n>`).
+   * Required, not optional, for the same reason as `urlProvenance`: a
+   * construction site that forgot it would silently re-fetch every repeat
+   * read and mint no IDs.
+   */
+  readonly documents: DocumentStore;
   /** Confirmation gateway + persistence, or null when no connector is wired. */
   readonly confirmation: ConfirmationServices | null;
   /** Run-scoped action-phase latch (closed by `result_publish`). */

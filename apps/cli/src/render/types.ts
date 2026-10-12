@@ -124,6 +124,16 @@ export interface DoctorRenderResult {
     readonly alternatives: readonly string[];
     readonly remediation?: string;
   };
+  /**
+   * The search provider a run would use (FEAT-050), promoted out of the
+   * `search.provider` check like {@link browser}. Absent when the configured
+   * selection cannot resolve (that check then fails with the reason).
+   */
+  readonly search?: {
+    readonly provider: string;
+    readonly kind: 'api' | 'scrape';
+    readonly via: 'flag' | 'env' | 'config' | 'auto';
+  };
 }
 
 /**

@@ -365,6 +365,7 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
       fetchedAt: '2026-07-19T22:05:00.000Z',
       publishedAt: '2026-07-19T22:00:00.000Z',
       tool: 'web_search',
+      sourceId: 'S1',
     });
     services.evidence.add({
       url: 'https://stats.example.com/match',
@@ -374,6 +375,7 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
       fetchedAt: '2026-07-19T22:06:00.000Z',
       publishedAt: 'sometime yesterday',
       tool: 'web_fetch',
+      sourceId: 'S2',
     });
     return services;
   }
