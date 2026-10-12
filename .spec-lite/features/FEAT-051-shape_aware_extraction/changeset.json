@@ -200,6 +200,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/extraction/page/structured.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/extraction/readability.spec.ts",
       "status": "M",
       "role": "implement",
