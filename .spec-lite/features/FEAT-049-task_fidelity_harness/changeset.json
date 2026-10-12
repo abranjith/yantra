@@ -68,6 +68,11 @@
       "task": "TASK-005"
     },
     {
+      "path": "e2e/task-fidelity/baselines/2026-10-baseline.json",
+      "status": "U",
+      "role": "implement"
+    },
+    {
       "path": "e2e/task-fidelity/baselines/README.md",
       "status": "A",
       "role": "implement",
@@ -165,7 +170,7 @@
     },
     {
       "path": "e2e/task-fidelity/fixtures/tls.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },

@@ -20,5 +20,7 @@ packages/core/tests/report-template/fixtures/exec-brief-guidance.md
 # Task-fidelity harness output (scorecards, run directories); gitignored.
 e2e/task-fidelity/.out/
 
-# Task-fidelity goldens are byte-for-byte renderer/extractor output.
+# Task-fidelity goldens are byte-for-byte renderer/extractor output, and
+# baselines stay byte-identical to the `baseline.json` their eval run wrote.
 e2e/task-fidelity/golden/
+e2e/task-fidelity/baselines/*.json

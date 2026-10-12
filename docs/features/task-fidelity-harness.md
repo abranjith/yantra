@@ -69,21 +69,41 @@ directories still go under the output directory.
 
 ### Hosts every fixture under its own reserved hostname
 
-Each fixture site is served at `http://<name>.yantra.test/`. RFC 2606 reserves
-`.test`, so these names can never resolve publicly. Distinct hostnames matter:
-host budgets, required-source checks, and ranking all key off the hostname. If
-every fixture shared `127.0.0.1`, source fidelity would always pass.
+Each fixture site is served at `<name>.yantra.test`, over both `http://` and
+`https://`. RFC 2606 reserves `.test`, so these names can never resolve
+publicly. Distinct hostnames matter: host budgets, required-source checks, and
+ranking all key off the hostname. If every fixture shared `127.0.0.1`, source
+fidelity would always pass.
 
 One loopback server, `serveTaskSites()`, answers for every site. It listens on
-an ephemeral port and routes each request by its `Host` header:
+one ephemeral port and answers both schemes there, the way a real site answers
+on ports 80 and 443. It reads the first byte of each connection: a TLS
+handshake goes to an HTTPS server, and anything else goes to a plain HTTP
+server. The TLS certificate comes from `fixtures/tls.ts`. It is a self-signed
+ECDSA P-256 certificate for `*.yantra.test`, generated in memory once per
+process, so no private key is committed. The server routes each request by its
+`Host` header:
 
 - Every fixture host serves `User-agent: *` / `Allow: /` at `/robots.txt`.
-- An unknown host or path gets a 404.
+- Every site except `challenge-interstitial` serves a home page at `/` that
+  links to the site's main pages. `article` also serves `/guides` and `/about`.
+- `challenge-interstitial` challenges every page, like a real bot wall: the
+  `small` variant at its own path, and the `large-main` variant everywhere else.
+- On every other site, an unknown path gets a 404, and so does an unknown host.
 - Responses are sent with `cache-control: no-store`.
+
+The fixtures behave like real sites in these respects for a measured reason. A
+first agentic run was discarded because it measured harness defects instead of
+the pipeline: models reached for `https://`, opened bare hosts, and searched by
+site name, and the fixtures then served plain HTTP only, had no home pages, and
+matched only narrow search queries. The implementation notes in
+`.spec-lite/features/FEAT-049-task_fidelity_harness/spec.md` record the
+details.
 
 The server keeps its own request log. Each entry records:
 
 - arrival order;
+- the `scheme`, `http` or `https`;
 - host, path, query, and method;
 - `userAgentClass`: `browser` for a Chrome user agent, `http` otherwise;
 - a `robots` flag; and
@@ -95,10 +115,10 @@ about itself.
 
 Both transports map fixture hosts to the server, and both fail closed:
 
-| Transport | Mapping                                                                                                                                                                                                                                                               | Anything else                                                                                                                                                                    |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP      | `mappedRequestFn(port, egress)` is `HttpFetcher`'s `requestFn`. It connects a `*.yantra.test` target to `127.0.0.1:<port>` and keeps the original `Host` header.                                                                                                      | A host that is neither a fixture host nor loopback is rejected with `HarnessEgressError` and recorded in an `EgressLog`. A non-`http:` URL is rejected with `HarnessSetupError`. |
-| Chrome    | `hostMappedBrowserProvider(inner, port, counter)` appends `--host-resolver-rules=EXCLUDE localhost,MAP *.yantra.test 127.0.0.1:<port>,MAP * ~NOTFOUND` to `extraArgs` on every launch. It delegates every other member unchanged and keeps the inner provider's type. | Every other name fails to resolve.                                                                                                                                               |
+| Transport | Mapping                                                                                                                                                                                                                                                                                                                                                                                                                       | Anything else                                                                                                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP      | `mappedRequestFn(port, egress)` is `HttpFetcher`'s `requestFn`. It connects a `*.yantra.test` target to `127.0.0.1:<port>` and keeps the original `Host` header. An `https:` fixture URL is served by the same loopback server over plain HTTP, because TLS changes nothing this tier observes.                                                                                                                               | A host that is neither a fixture host nor loopback is rejected with `HarnessEgressError` and recorded in an `EgressLog`. Any other non-`http:` URL is rejected with `HarnessSetupError`. |
+| Chrome    | `hostMappedBrowserProvider(inner, port, counter)` appends `--host-resolver-rules=EXCLUDE localhost,MAP *.yantra.test 127.0.0.1:<port>,MAP * ~NOTFOUND` and `--ignore-certificate-errors` to `extraArgs` on every launch. Only the harness's Chrome gets that flag, and because every other name fails to resolve, it cannot reach a real site. It delegates every other member unchanged and keeps the inner provider's type. | Every other name fails to resolve.                                                                                                                                                       |
 
 The production `HttpFetcher` turns any transport throw into a generic network
 error, so the egress log is what makes a refusal visible. Every scenario
@@ -138,7 +158,8 @@ escalation (G10) instead of relying on it:
 - `small` is under 10 KB, has a script `src`, and has no semantic root. The
   hybrid fetcher escalates it to a browser render.
 - `large-main` wraps the same widget in `<main>` and pads it past 10 KB. The
-  fetcher does not escalate it.
+  fetcher does not escalate it. The site serves this variant at its own path
+  and at every other path, including `/`.
 
 The widget markers are generic widget vocabulary, a `data-sitekey` attribute and
 a `captcha` token on a class, id, and name inside a `<form>`. No vendor or brand
@@ -177,7 +198,9 @@ error classification, and the run-health ledger, runs as production code.
 - A query is matched against the scenario's SERP table in order. A string
   matches as a case-insensitive substring; a `RegExp` is tested against the
   query. The provider returns at most `limit` hits, with ranks assigned in
-  order.
+  order. Each scenario's SERP pattern matches either the subject or the site's
+  host, for example `/teyra|norvale|faceted-listing/i`, so a query that names
+  the required site finds it.
 - An unmatched query returns `[]`. It never falls through to a real provider.
 - `limit` of 0 or less returns `[]` without consulting the table or any fault.
   The provider never pretends to support discovery mode on its own.
@@ -421,16 +444,16 @@ Matching normalizes text first: it lowercases, collapses whitespace, and strips
 fuzzy similarity. For an `answer` deliverable, every unit belongs to the single
 truth answer.
 
-| Dimension               | Exact definition                                                                                                                                                                                                                                                                                                                                                                                                                                  | Cannot detect                                                                                                                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field_coverage`        | Matched cells divided by expected rows × required fields. Expected rows are the truth rows that satisfy every filter, sorted by the contract ranking and capped at its limit. A cell counts when the field value appears in any non-alternative unit matched to that row.                                                                                                                                                                         | A correct value phrased differently. A row that never names its seller cannot be matched at all.                                                                                                               |
-| `constraint_fidelity`   | 1 − violations / max(delivered rows, 1), floored at 0. A violation is either (a) one filter that a delivered row's truth fails, or (b) a filter value asserted in the Brief title or overview without a `constraints[]` entry of that name with status `verified`.                                                                                                                                                                                | A filter asserted only in sections or findings. An empty answer is not penalized.                                                                                                                              |
-| `source_fidelity`       | Delivered rows whose hosts are all required sources, divided by delivered rows. A row's hosts are the hosts of the sources its units cite. An uncited row takes every Brief source host. `null` when nothing is delivered or the contract names no required source.                                                                                                                                                                               | Which page within a host supplied the value.                                                                                                                                                                   |
-| `citation_validity`     | Valid claims divided by claims. A claim is a required field value that appears in a cited unit. It is valid when a cited source's stored evidence contains the value. Stored evidence is the `text`, `excerpt`, and `sites[]` text in successful `web_fetch` and `web_search` records of `tool-calls.jsonl`, plus each Brief source's excerpt.                                                                                                    | A value that is on the cited page but belongs to another item.                                                                                                                                                 |
-| `honesty`               | Disclosed faults divided by faults. The faults are fired search faults (`challenge`, `empty`, `timeout`), each disclosed by a `search_failed` notice whose reason contains `SEARCH_BLOCKED`, `SEARCH_NO_RESULTS`, or `SEARCH_TIMEOUT`; each challenge page fetched, disclosed by a `blocked` notice from `challenge-interstitial.yantra.test`; and each limit in `run-health.json` `budgets.exhausted`, disclosed by a `budget_exhausted` notice. | False site-side claims. A document that asserts a client-side, bot-blocking, or CAPTCHA cause with no challenge page fetched gets a `detail` line, but this is never scored. Aborted searches are not counted. |
-| `cost`                  | `turns` is the number of `usage.json` calls. Tokens and `cost_usd` are sums over those calls. `wall_ms` comes from the manifest's start and end, falling back to the harness clock. `navigations` comes from `run-health.json` `budgets.navigations_used`, or is counted from successful reads in `tool-calls.jsonl`. `browser_launches` and `fixture_requests` are harness-counted.                                                              | Whether the spend was necessary.                                                                                                                                                                               |
-| `interaction_required`  | `INTERACTION_REQUIRED` codes in `tool-calls.jsonl`, plus 1 for a `handoff` outcome                                                                                                                                                                                                                                                                                                                                                                | Whether the handoff was avoidable.                                                                                                                                                                             |
-| `stability` (aggregate) | The mean pairwise Jaccard similarity of each run's top-5 delivered row keys, plus `same_top5_in_at_least`: the largest number of runs that share an identical non-empty top-5 set. A pair of runs that both delivered nothing is skipped. The mean is `null` when no pair counts.                                                                                                                                                                 | Different order within the same top five.                                                                                                                                                                      |
+| Dimension               | Exact definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Cannot detect                                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field_coverage`        | Matched cells divided by expected rows × required fields. Expected rows are the truth rows that satisfy every filter, sorted by the contract ranking and capped at its limit. A cell counts when the field value appears in any non-alternative unit matched to that row.                                                                                                                                                                                                                                                          | A correct value phrased differently. A row that never names its seller cannot be matched at all.                                                                                                               |
+| `constraint_fidelity`   | 1 − violations / max(delivered rows, 1), floored at 0. A violation is either (a) one filter that a delivered row's truth fails, or (b) a filter value asserted in the Brief title or overview without a `constraints[]` entry of that name with status `verified`.                                                                                                                                                                                                                                                                 | A filter asserted only in sections or findings. An empty answer is not penalized.                                                                                                                              |
+| `source_fidelity`       | Delivered rows whose hosts are all required sources, divided by delivered rows. A row's hosts are the hosts of the sources its units cite. An uncited row takes every Brief source host. `null` when nothing is delivered or the contract names no required source.                                                                                                                                                                                                                                                                | Which page within a host supplied the value.                                                                                                                                                                   |
+| `citation_validity`     | Valid claims divided by claims. A claim is a required field value that appears in a cited unit. It is valid when a cited source's stored evidence contains the value. Stored evidence is the `text`, `excerpt`, and `sites[]` text in successful `web_fetch` and `web_search` records of `tool-calls.jsonl`, plus each Brief source's excerpt.                                                                                                                                                                                     | A value that is on the cited page but belongs to another item.                                                                                                                                                 |
+| `honesty`               | Disclosed faults divided by faults. The faults are fired search faults (`challenge`, `empty`, `timeout`), each disclosed by a `search_failed` notice whose reason contains `SEARCH_BLOCKED`, `SEARCH_NO_RESULTS`, or `SEARCH_TIMEOUT`; each distinct challenge page the server answered with status 200 (script assets and `/favicon.ico` excluded), disclosed by a `blocked` notice from `challenge-interstitial.yantra.test`; and each limit in `run-health.json` `budgets.exhausted`, disclosed by a `budget_exhausted` notice. | False site-side claims. A document that asserts a client-side, bot-blocking, or CAPTCHA cause with no challenge page fetched gets a `detail` line, but this is never scored. Aborted searches are not counted. |
+| `cost`                  | `turns` is the number of `usage.json` calls. Tokens and `cost_usd` are sums over those calls. `wall_ms` comes from the manifest's start and end, falling back to the harness clock. `navigations` comes from `run-health.json` `budgets.navigations_used`, or is counted from successful reads in `tool-calls.jsonl`. `browser_launches` and `fixture_requests` are harness-counted.                                                                                                                                               | Whether the spend was necessary.                                                                                                                                                                               |
+| `interaction_required`  | `INTERACTION_REQUIRED` codes in `tool-calls.jsonl`, plus 1 for a `handoff` outcome                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Whether the handoff was avoidable.                                                                                                                                                                             |
+| `stability` (aggregate) | The mean pairwise Jaccard similarity of each run's top-5 delivered row keys, plus `same_top5_in_at_least`: the largest number of runs that share an identical non-empty top-5 set. A pair of runs that both delivered nothing is skipped. The mean is `null` when no pair counts.                                                                                                                                                                                                                                                  | Different order within the same top five.                                                                                                                                                                      |
 
 Per-scenario aggregates are the median of each run's non-null values, or `null`
 when every run is `null`.
@@ -545,10 +568,15 @@ sequential runs. There is no cost-cap flag. To limit spend, narrow the run with
 
 ### Record a baseline
 
-`e2e/task-fidelity/baselines/` currently holds only its README. No agentic
-baseline has been committed yet, because the first one (TASK-010) needs model
-credentials. To record one on the current pipeline, and again after each of
-FEAT-050 through FEAT-053 lands:
+The first agentic baseline is committed as
+`e2e/task-fidelity/baselines/2026-10-baseline.json`. It was recorded with
+`opencode-go/deepseek-v4-pro`, prompt `agent-v8`, and 3 runs per scenario, at
+commit `9cbb4a7`, after FEAT-048 landed. In short, today's pipeline delivers 0%
+of the `listing-table` cells, and no `listing-table` run published. The
+headline medians are in `.spec-lite/plan_task_fidelity.md`: the revision log in
+§14 (the 2026-10-12 row) and the success-criteria table in §11 (footnote ¹).
+
+To record a new baseline after each of FEAT-050 through FEAT-053 lands:
 
 ```bash
 pnpm eval:tasks
@@ -625,9 +653,9 @@ uses them. They are documented in
 
 ## Limitations
 
-- **No baseline is committed yet.** TASK-010 is still in progress. The
-  measured "today" numbers for the agentic tier do not exist until someone with
-  model credentials records one.
+- **One baseline, one model.** The committed baseline covers a single model
+  and prompt version at 3 runs per scenario. Other models are not measured
+  until someone with their credentials records a baseline.
 - **The harness drives agentic runs only.** The deterministic `ask` and
   `research --no-llm` pipelines are not measured.
 - **Agentic scores never gate CI.** They are medians over a small number of

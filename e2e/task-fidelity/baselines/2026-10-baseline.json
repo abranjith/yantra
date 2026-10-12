@@ -1,0 +1,1274 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-12T01:33:15.390Z",
+  "git_sha": "9cbb4a7520d3064d6903f0e354473cb9403385ee",
+  "prompt_version": "agent-v8",
+  "model": {
+    "provider": "opencode-go",
+    "id": "deepseek-v4-pro",
+    "thinking": null
+  },
+  "runs_per_scenario": 3,
+  "scenarios": [
+    {
+      "id": "listing-table",
+      "runs": [
+        {
+          "run_id": "20261012T004602Z-research-6f2f6688",
+          "outcome_kind": "budget_exhausted",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "undisclosed: budget navigations exhausted"
+            ]
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 25360,
+            "output_tokens": 12252,
+            "cost_usd": 0.08827043200000001,
+            "wall_ms": 208456,
+            "navigations": 30,
+            "browser_launches": 6,
+            "fixture_requests": 35
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T004931Z-research-8597c03b",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 5,
+            "input_tokens": 2771,
+            "output_tokens": 1225,
+            "cost_usd": 0.009218172,
+            "wall_ms": 16969,
+            "navigations": 6,
+            "browser_launches": 4,
+            "fixture_requests": 9
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T004948Z-research-b8b16933",
+          "outcome_kind": "budget_exhausted",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "undisclosed: budget navigations exhausted"
+            ]
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 9280,
+            "output_tokens": 10231,
+            "cost_usd": 0.05335095199999999,
+            "wall_ms": 104617,
+            "navigations": 30,
+            "browser_launches": 4,
+            "fixture_requests": 33
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 0,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": 0,
+        "turns": 16,
+        "wall_ms": 104617,
+        "cost_usd": 0.053,
+        "navigations": 30,
+        "browser_launches": 4,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    },
+    {
+      "id": "listing-structured",
+      "runs": [
+        {
+          "run_id": "20261012T005132Z-research-25f44fc3",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 12,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-04: not delivered",
+              "itm-05: not delivered",
+              "itm-06: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 23536,
+            "output_tokens": 26277,
+            "cost_usd": 0.13388882400000002,
+            "wall_ms": 372150,
+            "navigations": 15,
+            "browser_launches": 4,
+            "fixture_requests": 18
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T005744Z-research-3080687e",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 12,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-04: not delivered",
+              "itm-05: not delivered",
+              "itm-06: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 9,
+            "input_tokens": 22245,
+            "output_tokens": 11675,
+            "cost_usd": 0.079806724,
+            "wall_ms": 186284,
+            "navigations": 14,
+            "browser_launches": 8,
+            "fixture_requests": 21
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T010051Z-research-507cbe94",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 12,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-04: not delivered",
+              "itm-05: not delivered",
+              "itm-06: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 13,
+            "input_tokens": 41770,
+            "output_tokens": 31426,
+            "cost_usd": 0.18412842399999998,
+            "wall_ms": 503364,
+            "navigations": 17,
+            "browser_launches": 4,
+            "fixture_requests": 20
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 0,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 13,
+        "wall_ms": 372150,
+        "cost_usd": 0.134,
+        "navigations": 15,
+        "browser_launches": 4,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    },
+    {
+      "id": "listing-client-rendered",
+      "runs": [
+        {
+          "run_id": "20261012T010914Z-research-134de4f7",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 12,
+            "denominator": 12,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 3,
+            "input_tokens": 3475,
+            "output_tokens": 858,
+            "cost_usd": 0.009062036,
+            "wall_ms": 440953,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T011635Z-research-ba11798a",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 12,
+            "denominator": 12,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 2,
+            "input_tokens": 1626,
+            "output_tokens": 1634,
+            "cost_usd": 0.008574952,
+            "wall_ms": 24820,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T011700Z-research-da08663a",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 12,
+            "denominator": 12,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 6,
+            "denominator": 6,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 2,
+            "input_tokens": 1269,
+            "output_tokens": 833,
+            "cost_usd": 0.005166291999999999,
+            "wall_ms": 14404,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 1,
+        "constraint_fidelity": 1,
+        "source_fidelity": 1,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 2,
+        "wall_ms": 24820,
+        "cost_usd": 0.009,
+        "navigations": 1,
+        "browser_launches": 1,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": 0.778,
+          "same_top5_in_at_least": 2
+        }
+      }
+    },
+    {
+      "id": "multi-table",
+      "runs": [
+        {
+          "run_id": "20261012T011714Z-research-d211396d",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 2,
+            "input_tokens": 2843,
+            "output_tokens": 434,
+            "cost_usd": 0.006492404,
+            "wall_ms": 5871,
+            "navigations": 1,
+            "browser_launches": 0,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T011720Z-research-e894c4f0",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 2,
+            "input_tokens": 2744,
+            "output_tokens": 365,
+            "cost_usd": 0.00608188,
+            "wall_ms": 4390,
+            "navigations": 1,
+            "browser_launches": 0,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T011725Z-research-5b0d7bde",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 2,
+            "input_tokens": 2747,
+            "output_tokens": 353,
+            "cost_usd": 0.00604534,
+            "wall_ms": 5157,
+            "navigations": 1,
+            "browser_launches": 0,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 1,
+        "constraint_fidelity": 1,
+        "source_fidelity": 1,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 2,
+        "wall_ms": 5157,
+        "cost_usd": 0.006,
+        "navigations": 1,
+        "browser_launches": 0,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": 1,
+          "same_top5_in_at_least": 3
+        }
+      }
+    },
+    {
+      "id": "challenge-required-source",
+      "runs": [
+        {
+          "run_id": "20261012T011730Z-research-95266ad7",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 16,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-06: not delivered",
+              "itm-08: not delivered",
+              "itm-09: not delivered",
+              "itm-10: not delivered",
+              "itm-13: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "asserts condition=new in the title or overview without a verified constraint",
+              "asserts trim=Summit in the title or overview without a verified constraint"
+            ]
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 3,
+            "detail": [
+              "undisclosed: challenge page challenge-interstitial.yantra.test/",
+              "undisclosed: challenge page challenge-interstitial.yantra.test/sitemap.xml",
+              "undisclosed: challenge page challenge-interstitial.yantra.test/large-main/results"
+            ]
+          },
+          "cost": {
+            "turns": 5,
+            "input_tokens": 43897,
+            "output_tokens": 24122,
+            "cost_usd": 0.160709532,
+            "wall_ms": 285109,
+            "navigations": 9,
+            "browser_launches": 0,
+            "fixture_requests": 8
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T012215Z-research-669a333b",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 16,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-06: not delivered",
+              "itm-08: not delivered",
+              "itm-09: not delivered",
+              "itm-10: not delivered",
+              "itm-13: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "asserts condition=new in the title or overview without a verified constraint",
+              "asserts trim=Summit in the title or overview without a verified constraint"
+            ]
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 2,
+            "detail": [
+              "undisclosed: challenge page challenge-interstitial.yantra.test/",
+              "undisclosed: challenge page challenge-interstitial.yantra.test/large-main/results"
+            ]
+          },
+          "cost": {
+            "turns": 3,
+            "input_tokens": 10157,
+            "output_tokens": 9538,
+            "cost_usd": 0.051143820000000006,
+            "wall_ms": 89599,
+            "navigations": 4,
+            "browser_launches": 0,
+            "fixture_requests": 4
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T012345Z-research-beddafb7",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 16,
+            "detail": [
+              "itm-01: not delivered",
+              "itm-02: not delivered",
+              "itm-03: not delivered",
+              "itm-06: not delivered",
+              "itm-08: not delivered",
+              "itm-09: not delivered",
+              "itm-10: not delivered",
+              "itm-13: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "asserts condition=new in the title or overview without a verified constraint",
+              "asserts trim=Summit in the title or overview without a verified constraint"
+            ]
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "undisclosed: challenge page challenge-interstitial.yantra.test/"
+            ]
+          },
+          "cost": {
+            "turns": 3,
+            "input_tokens": 7291,
+            "output_tokens": 3186,
+            "cost_usd": 0.023920244,
+            "wall_ms": 34245,
+            "navigations": 2,
+            "browser_launches": 0,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 0,
+        "constraint_fidelity": 0,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": 0,
+        "turns": 3,
+        "wall_ms": 89599,
+        "cost_usd": 0.051,
+        "navigations": 4,
+        "browser_launches": 0,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    },
+    {
+      "id": "article-question",
+      "runs": [
+        {
+          "run_id": "20261012T012419Z-research-b9bd5bce",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 2,
+            "detail": [
+              "article-answer: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 5,
+            "input_tokens": 2881,
+            "output_tokens": 2809,
+            "cost_usd": 0.014938596000000002,
+            "wall_ms": 34796,
+            "navigations": 9,
+            "browser_launches": 6,
+            "fixture_requests": 13
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T012454Z-research-bce6677e",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 2,
+            "denominator": 2,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 9,
+            "input_tokens": 7057,
+            "output_tokens": 3954,
+            "cost_usd": 0.026584763999999997,
+            "wall_ms": 53381,
+            "navigations": 12,
+            "browser_launches": 8,
+            "fixture_requests": 18
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T012547Z-research-434a886f",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": 1,
+            "numerator": 2,
+            "denominator": 2,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 4,
+            "input_tokens": 5727,
+            "output_tokens": 949,
+            "cost_usd": 0.013375148,
+            "wall_ms": 16847,
+            "navigations": 3,
+            "browser_launches": 1,
+            "fixture_requests": 4
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 1,
+        "constraint_fidelity": 1,
+        "source_fidelity": 1,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 5,
+        "wall_ms": 34796,
+        "cost_usd": 0.015,
+        "navigations": 9,
+        "browser_launches": 6,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": 0.333,
+          "same_top5_in_at_least": 2
+        }
+      }
+    },
+    {
+      "id": "listing-table+faults",
+      "runs": [
+        {
+          "run_id": "20261012T012604Z-research-09e6b49a",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "undisclosed: search call 3 (challenge)"
+            ]
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 25949,
+            "output_tokens": 14048,
+            "cost_usd": 0.095255836,
+            "wall_ms": 238990,
+            "navigations": 25,
+            "browser_launches": 7,
+            "fixture_requests": 31
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T013003Z-research-1b7cfb66",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 7,
+            "input_tokens": 3373,
+            "output_tokens": 3012,
+            "cost_usd": 0.016614332,
+            "wall_ms": 44182,
+            "navigations": 13,
+            "browser_launches": 9,
+            "fixture_requests": 21
+          },
+          "interaction_required": 0
+        },
+        {
+          "run_id": "20261012T013047Z-research-c992f341",
+          "outcome_kind": "failed",
+          "field_coverage": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 20,
+            "detail": [
+              "itm-08: not delivered",
+              "itm-03: not delivered",
+              "itm-13: not delivered",
+              "itm-01: not delivered",
+              "itm-10: not delivered"
+            ]
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": 0,
+            "numerator": 0,
+            "denominator": 1,
+            "detail": [
+              "undisclosed: search call 3 (challenge)"
+            ]
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 6316,
+            "output_tokens": 12790,
+            "cost_usd": 0.056646048000000004,
+            "wall_ms": 147568,
+            "navigations": 21,
+            "browser_launches": 7,
+            "fixture_requests": 27
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "field_coverage": 0,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": 0,
+        "turns": 11,
+        "wall_ms": 147568,
+        "cost_usd": 0.057,
+        "navigations": 21,
+        "browser_launches": 7,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    }
+  ],
+  "totals": {
+    "runs": 21,
+    "wall_ms": 2832521,
+    "cost_usd": 1.0493,
+    "navigations": 216,
+    "browser_launches": 71
+  }
+}
