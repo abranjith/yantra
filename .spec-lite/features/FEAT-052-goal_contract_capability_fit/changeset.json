@@ -21,7 +21,7 @@
     },
     {
       "path": "apps/cli/src/research-browse.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
