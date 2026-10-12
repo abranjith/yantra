@@ -7,7 +7,14 @@
  * misses the answer entirely.
  */
 
-import { escapeHtml, headerComment, htmlDocument, htmlPage, type RenderedPage } from './html.js';
+import {
+  escapeHtml,
+  headerComment,
+  homePage,
+  htmlDocument,
+  htmlPage,
+  type RenderedPage,
+} from './html.js';
 import { MAKE, MODEL } from './inventory.js';
 
 export const MULTI_TABLE_PATTERN =
@@ -18,7 +25,7 @@ export const MULTI_TABLE_PROVENANCE = { gaps: ['G2'] } as const;
 export const MULTI_TABLE_PATH = '/specifications';
 
 /** Every page the site serves, as `path?query`. */
-export const MULTI_TABLE_ROUTES: readonly string[] = Object.freeze([MULTI_TABLE_PATH]);
+export const MULTI_TABLE_ROUTES: readonly string[] = Object.freeze(['/', MULTI_TABLE_PATH]);
 
 /** The first table: unrelated to any question a scenario asks. */
 const SUMMARY_TABLE = {
@@ -59,7 +66,24 @@ export const MULTI_TABLE_ANSWER = Object.freeze({
  * @param _query URL search parameters (unused).
  */
 export function renderMultiTable(path: string, _query: URLSearchParams): RenderedPage | null {
-  return path === MULTI_TABLE_PATH ? htmlPage(specificationPage()) : null;
+  if (path === MULTI_TABLE_PATH) return htmlPage(specificationPage());
+  if (path === '/') {
+    return homePage({
+      header: header(),
+      title: `${MAKE} ${MODEL}`,
+      intro: 'Trims, capability, and showroom information.',
+      links: [{ href: MULTI_TABLE_PATH, text: 'Specifications' }],
+    });
+  }
+  return null;
+}
+
+function header(): string {
+  return headerComment(
+    'multi-table',
+    MULTI_TABLE_PATTERN,
+    `gaps ${MULTI_TABLE_PROVENANCE.gaps.join(', ')}`,
+  );
 }
 
 function table(input: {

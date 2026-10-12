@@ -7,16 +7,21 @@
  * that under-reports its own fetching is caught by a second witness.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
+import { createServer as createNetServer, type Socket } from 'node:net';
 
 import { closeServer, listen } from '../../fixtures/serve.js';
 
 import { originOf, siteForHost, type SiteName } from './sites.js';
+import { fixtureTlsIdentity } from './tls.js';
 
 /** One request the fixture server received. */
 export interface RequestLogEntry {
   /** 1-based arrival order. */
   readonly seq: number;
+  /** How the request arrived: plain HTTP or TLS. */
+  readonly scheme: 'http' | 'https';
   /** The `Host` header's hostname, lowercased, without a port. */
   readonly host: string;
   readonly path: string;
@@ -57,12 +62,32 @@ const ROBOTS_BODY = 'User-agent: *\nAllow: /\n';
 export async function serveTaskSites(): Promise<TaskSiteServer> {
   let log: RequestLogEntry[] = [];
   let seq = 0;
-  const server: Server = createServer((request, response) => {
-    const status = respond(request, response);
-    seq += 1;
-    log.push(entryOf(request, status, seq));
+  const handler =
+    (scheme: RequestLogEntry['scheme']) =>
+    (request: IncomingMessage, response: ServerResponse): void => {
+      const status = respond(request, response);
+      seq += 1;
+      log.push(entryOf(request, status, seq, scheme));
+    };
+  const plain = createServer(handler('http'));
+  const secure = createHttpsServer(fixtureTlsIdentity(), handler('https'));
+  // One port answers both schemes, as a real site's 80/443 pair would: Chrome's
+  // host-resolver rule maps a host to exactly one port, so the first byte of
+  // each connection decides — 0x16 opens a TLS handshake.
+  const sockets = new Set<Socket>();
+  const front = createNetServer((socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+    // A client that abandons a handshake is not a fixture failure.
+    socket.on('error', () => undefined);
+    socket.once('data', (chunk) => {
+      socket.pause();
+      socket.unshift(chunk);
+      (chunk[0] === TLS_HANDSHAKE ? secure : plain).emit('connection', socket);
+      process.nextTick(() => socket.resume());
+    });
   });
-  const port = await listen(server);
+  const port = await listen(front);
   return {
     port,
     origin: originOf,
@@ -74,11 +99,16 @@ export async function serveTaskSites(): Promise<TaskSiteServer> {
     close: async () => {
       // Chrome holds keep-alive connections open; close them so `close()`
       // resolves when the harness is done rather than when Chrome is.
-      server.closeAllConnections();
-      await closeServer(server);
+      plain.closeAllConnections();
+      secure.closeAllConnections();
+      for (const socket of sockets) socket.destroy();
+      await closeServer(front);
     },
   };
 }
+
+/** The first byte of a TLS ClientHello record. */
+const TLS_HANDSHAKE = 0x16;
 
 function respond(request: IncomingMessage, response: ServerResponse): number {
   const url = new URL(request.url ?? '/', 'http://fixture.invalid');
@@ -101,11 +131,17 @@ function send(response: ServerResponse, status: number, contentType: string, bod
   return status;
 }
 
-function entryOf(request: IncomingMessage, status: number, seq: number): RequestLogEntry {
+function entryOf(
+  request: IncomingMessage,
+  status: number,
+  seq: number,
+  scheme: RequestLogEntry['scheme'],
+): RequestLogEntry {
   const url = new URL(request.url ?? '/', 'http://fixture.invalid');
   const userAgent = request.headers['user-agent'] ?? '';
   return {
     seq,
+    scheme,
     host: (request.headers.host ?? '').toLowerCase().replace(/:\d+$/, ''),
     path: url.pathname,
     query: url.search.replace(/^\?/, ''),

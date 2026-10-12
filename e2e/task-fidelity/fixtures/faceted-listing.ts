@@ -17,6 +17,7 @@
 import {
   escapeHtml,
   headerComment,
+  homePage,
   htmlDocument,
   htmlPage,
   slugOf,
@@ -51,6 +52,7 @@ const DETAIL_PATH = /^\/vehicle\/(itm-\d{2})$/;
 
 /** Every page the site serves, as `path?query`: each listing page and each detail page. */
 export const FACETED_LISTING_ROUTES: readonly string[] = Object.freeze([
+  '/',
   RESULTS_PATH,
   `${RESULTS_PATH}?page=2`,
   `${RESULTS_PATH}?page=3`,
@@ -69,6 +71,17 @@ export const FACETED_LISTING_ROUTES: readonly string[] = Object.freeze([
  * @param query URL search parameters.
  */
 export function renderFacetedListing(path: string, query: URLSearchParams): RenderedPage | null {
+  if (path === '/') {
+    return homePage({
+      header: header(),
+      title: `${MAKE} ${MODEL} dealers`,
+      intro: 'Browse new and used listings from participating sellers.',
+      links: [
+        { href: RESULTS_PATH, text: 'Shop new' },
+        { href: `${RESULTS_PATH}?condition=used`, text: 'Shop used' },
+      ],
+    });
+  }
   if (path === RESULTS_PATH) return htmlPage(resultsPage(query));
   const detail = DETAIL_PATH.exec(path);
   if (detail !== null) {

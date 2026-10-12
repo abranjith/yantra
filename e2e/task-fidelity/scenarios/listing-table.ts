@@ -310,7 +310,7 @@ export const listingTable: Scenario = {
   userLocation: USER_LOCATION,
   serps: [
     {
-      match: 'teyra',
+      match: /teyra|norvale|faceted-listing/i,
       results: [
         { url: `${originOf('faceted-listing')}/new/results`, title: 'Norvale Teyra for sale' },
         { url: `${originOf('structured-listing')}/results`, title: 'Norvale Teyra inventory' },

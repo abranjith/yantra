@@ -27,7 +27,12 @@ export const articleQuestion: Scenario = {
     requiredSources: ['article.yantra.test'],
   },
   userLocation: null,
-  serps: [{ match: 'battery', results: [{ url: ARTICLE_URL, title: ARTICLE_TITLE }] }],
+  serps: [
+    {
+      match: /battery|backup|article\.yantra\.test/i,
+      results: [{ url: ARTICLE_URL, title: ARTICLE_TITLE }],
+    },
+  ],
   script: [
     fetchStep(ARTICLE_URL, 'article'),
     publishStep(

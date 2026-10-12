@@ -13,7 +13,14 @@ import {
   ARTICLE_SECTIONS,
   ARTICLE_TITLE,
 } from './article-corpus.js';
-import { escapeHtml, headerComment, htmlDocument, htmlPage, type RenderedPage } from './html.js';
+import {
+  escapeHtml,
+  headerComment,
+  homePage,
+  htmlDocument,
+  htmlPage,
+  type RenderedPage,
+} from './html.js';
 
 export const ARTICLE_PATTERN =
   'A single long-form article with a byline and a published date in structured data, inside site chrome.';
@@ -23,16 +30,54 @@ export const ARTICLE_PROVENANCE = { gaps: ['G2'] } as const;
 export const ARTICLE_PATH = '/guides/home-backup-battery-sizing';
 
 /** Every page the site serves, as `path?query`. */
-export const ARTICLE_ROUTES: readonly string[] = Object.freeze([ARTICLE_PATH]);
+export const ARTICLE_ROUTES: readonly string[] = Object.freeze([
+  '/',
+  '/guides',
+  '/about',
+  ARTICLE_PATH,
+]);
 
 /**
- * Render one `article` route, or null for an unknown path.
+ * Render one `article` route, or null for an unknown path: the article, plus
+ * the home, guide-index, and about pages its navigation links to.
  *
  * @param path URL pathname.
  * @param _query URL search parameters (unused).
  */
 export function renderArticle(path: string, _query: URLSearchParams): RenderedPage | null {
-  return path === ARTICLE_PATH ? htmlPage(articlePage()) : null;
+  if (path === ARTICLE_PATH) return htmlPage(articlePage());
+  const header = headerComment(
+    'article',
+    ARTICLE_PATTERN,
+    `gaps ${ARTICLE_PROVENANCE.gaps.join(', ')}`,
+  );
+  const guides = { href: '/guides', text: 'Guides' };
+  const article = { href: ARTICLE_PATH, text: ARTICLE_TITLE };
+  if (path === '/') {
+    return homePage({
+      header,
+      title: 'Home energy guides',
+      intro: 'Practical guides.',
+      links: [guides, article],
+    });
+  }
+  if (path === '/guides') {
+    return homePage({
+      header,
+      title: 'Guides',
+      intro: 'All guides, newest first.',
+      links: [article],
+    });
+  }
+  if (path === '/about') {
+    return homePage({
+      header,
+      title: 'About',
+      intro: 'Guides are written for general information and are not professional advice.',
+      links: [guides],
+    });
+  }
+  return null;
 }
 
 function articlePage(): string {

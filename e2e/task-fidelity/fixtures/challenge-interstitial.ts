@@ -41,13 +41,16 @@ export const ESCALATION_SIZE_BYTES = 10_000;
 
 /** Every resource the site serves, as `path?query`. */
 export const CHALLENGE_INTERSTITIAL_ROUTES: readonly string[] = Object.freeze([
+  '/',
   CHALLENGE_PATHS.small,
   CHALLENGE_PATHS['large-main'],
   WIDGET_SCRIPT_PATH,
 ]);
 
 /**
- * Render one `challenge-interstitial` route, or null for an unknown path.
+ * Render one `challenge-interstitial` route. Like a real bot wall, the site
+ * challenges every page: the small variant at its own path, and the
+ * `large-main` variant everywhere else.
  *
  * @param path URL pathname.
  * @param _query URL search parameters (unused: every query gets the challenge).
@@ -57,7 +60,6 @@ export function renderChallengeInterstitial(
   _query: URLSearchParams,
 ): RenderedPage | null {
   if (path === CHALLENGE_PATHS.small) return html(smallVariant());
-  if (path === CHALLENGE_PATHS['large-main']) return html(largeMainVariant());
   if (path === WIDGET_SCRIPT_PATH) {
     return {
       status: 200,
@@ -67,7 +69,7 @@ export function renderChallengeInterstitial(
         "document.documentElement.setAttribute('data-challenge-ready', 'true');\n",
     };
   }
-  return null;
+  return html(largeMainVariant());
 }
 
 function html(body: string): RenderedPage {

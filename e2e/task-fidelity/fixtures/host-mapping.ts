@@ -114,12 +114,17 @@ export function mappedRequestFn(port: number, egress?: EgressLog): HttpRequestFn
       egress?.record(hostname);
       return Promise.reject(new HarnessEgressError(hostname));
     }
-    if (url.protocol !== 'http:') {
+    const fixture = isFixtureHost(hostname);
+    // A fixture host answers both schemes, as a real site does. TLS changes
+    // nothing the HTTP tier observes, so an `https:` fixture URL is served by
+    // the same loopback server over plain HTTP. Off-fixture TLS stays refused.
+    if (url.protocol !== 'http:' && !(fixture && url.protocol === 'https:')) {
       return Promise.reject(
-        new HarnessSetupError(`Fixture hosts serve plain HTTP only; refused ${url.protocol} URL.`),
+        new HarnessSetupError(
+          `The fixture transport serves http(s) only; refused ${url.protocol}.`,
+        ),
       );
     }
-    const fixture = isFixtureHost(hostname);
     return new Promise((resolve, reject) => {
       const outgoing = httpRequest({
         host: fixture ? '127.0.0.1' : hostname,
@@ -195,7 +200,10 @@ export function hostMappedBrowserProvider<T extends BrowserProvider>(
   const launch = async (options: LaunchArgument): ReturnType<BrowserProvider['launch']> => {
     const session = await inner.launch({
       ...options,
-      extraArgs: [...(options.extraArgs ?? []), rules],
+      // The fixture server's certificate is a throwaway self-signed one for
+      // `*.yantra.test` (fixtures/tls.ts); every other name fails to resolve,
+      // so trusting it cannot reach a real site.
+      extraArgs: [...(options.extraArgs ?? []), rules, '--ignore-certificate-errors'],
     });
     counter.increment();
     return session;

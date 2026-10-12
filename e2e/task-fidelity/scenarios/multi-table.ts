@@ -54,7 +54,12 @@ export const multiTable: Scenario = {
     requiredSources: ['multi-table.yantra.test'],
   },
   userLocation: null,
-  serps: [{ match: 'towing', results: [{ url: PAGE_URL, title: 'Specifications' }] }],
+  serps: [
+    {
+      match: /towing|teyra|norvale|multi-table/i,
+      results: [{ url: PAGE_URL, title: 'Specifications' }],
+    },
+  ],
   script: [
     fetchStep(PAGE_URL, 'specifications'),
     publishStep('Norvale Teyra towing capacity', 'Read the specification tables; see sources.'),

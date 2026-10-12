@@ -71,7 +71,12 @@ export const listingStructured: Scenario = {
     limit: 6,
   },
   userLocation: USER_LOCATION,
-  serps: [{ match: 'teyra', results: [{ url: RESULTS_URL, title: 'Norvale Teyra inventory' }] }],
+  serps: [
+    {
+      match: /teyra|norvale|structured-listing/i,
+      results: [{ url: RESULTS_URL, title: 'Norvale Teyra inventory' }],
+    },
+  ],
   script: [
     fetchStep(RESULTS_URL, 'results'),
     publishStep('Norvale Teyra listings', 'Read the structured listing; see sources.'),

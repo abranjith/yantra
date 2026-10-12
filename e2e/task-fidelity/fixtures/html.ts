@@ -59,6 +59,42 @@ export function htmlDocument(input: {
   ].join('\n');
 }
 
+/**
+ * A site's home page: a heading, one sentence, and navigation links to the
+ * site's main pages — what a model lands on when it opens the bare host.
+ */
+export function homePage(input: {
+  readonly header: string;
+  readonly title: string;
+  readonly intro: string;
+  readonly links: readonly { readonly href: string; readonly text: string }[];
+}): RenderedPage {
+  return htmlPage(
+    htmlDocument({
+      header: input.header,
+      title: input.title,
+      body: [
+        '<header>',
+        '<nav aria-label="Site">',
+        ...input.links.map(
+          (link) => `<a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a>`,
+        ),
+        '</nav>',
+        '</header>',
+        '<main>',
+        `<h1>${escapeHtml(input.title)}</h1>`,
+        `<p>${escapeHtml(input.intro)}</p>`,
+        '<ul>',
+        ...input.links.map(
+          (link) => `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></li>`,
+        ),
+        '</ul>',
+        '</main>',
+      ].join('\n'),
+    }),
+  );
+}
+
 /** A 200 HTML response. */
 export function htmlPage(body: string): RenderedPage {
   return { status: 200, contentType: HTML_CONTENT_TYPE, body };

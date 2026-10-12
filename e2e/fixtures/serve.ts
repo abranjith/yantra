@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
+import type { Server } from 'node:net';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

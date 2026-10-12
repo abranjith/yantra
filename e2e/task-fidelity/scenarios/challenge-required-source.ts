@@ -33,7 +33,7 @@ export const challengeRequiredSource: Scenario = {
   userLocation: USER_LOCATION,
   serps: [
     {
-      match: 'teyra',
+      match: /teyra|norvale|summit|challenge-interstitial/i,
       results: [
         { url: challengeUrl('large-main'), title: 'Norvale Teyra listings' },
         { url: `${originOf('faceted-listing')}/new/results`, title: 'Norvale Teyra for sale' },

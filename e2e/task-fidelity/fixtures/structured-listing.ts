@@ -8,7 +8,14 @@
  * text sees no listing at all; the data is entirely in structured markup.
  */
 
-import { escapeHtml, headerComment, htmlDocument, htmlPage, type RenderedPage } from './html.js';
+import {
+  escapeHtml,
+  headerComment,
+  homePage,
+  htmlDocument,
+  htmlPage,
+  type RenderedPage,
+} from './html.js';
 import { INVENTORY, MAKE, MODEL, PAGE_SIZE, titleOf, type InventoryItem } from './inventory.js';
 
 export const STRUCTURED_LISTING_PATTERN =
@@ -21,6 +28,7 @@ const ORIGIN = 'http://structured-listing.yantra.test';
 
 /** Every page the site serves, as `path?query`. */
 export const STRUCTURED_LISTING_ROUTES: readonly string[] = Object.freeze([
+  '/',
   RESULTS_PATH,
   `${RESULTS_PATH}?page=2`,
   `${RESULTS_PATH}?page=3`,
@@ -34,6 +42,14 @@ export const STRUCTURED_LISTING_ROUTES: readonly string[] = Object.freeze([
  * @param query URL search parameters.
  */
 export function renderStructuredListing(path: string, query: URLSearchParams): RenderedPage | null {
+  if (path === '/') {
+    return homePage({
+      header: header(),
+      title: `${MAKE} ${MODEL} inventory`,
+      intro: 'Current inventory is published for partner applications.',
+      links: [{ href: RESULTS_PATH, text: 'Inventory' }],
+    });
+  }
   if (path === RESULTS_PATH) return htmlPage(resultsPage(query));
   const detail = DETAIL_PATH.exec(path);
   if (detail !== null) {

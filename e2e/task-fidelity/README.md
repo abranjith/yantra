@@ -13,6 +13,12 @@ Both call `runAgenticTask` and the production environment composer. Only leaf
 dependencies are swapped (`environmentLeaves`): the HTTP transport and browser are
 host-mapped to a loopback fixture server, and search resolves to a scripted provider.
 
+The fixtures behave like real sites where a model would notice the difference: every
+host answers both `http://` and `https://` (one port; TLS uses a throwaway self-signed
+certificate generated in memory, which only the harness's Chrome trusts), every site
+has a home page linking to its main pages, the challenge site challenges every page,
+and each scenario's search answers queries that name the subject or the site's host.
+
 ## Running
 
 ```sh

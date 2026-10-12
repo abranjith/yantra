@@ -76,7 +76,12 @@ export const listingClientRendered: Scenario = {
     limit: 6,
   },
   userLocation: USER_LOCATION,
-  serps: [{ match: 'teyra', results: [{ url: RESULTS_URL, title: 'Norvale Teyra listings' }] }],
+  serps: [
+    {
+      match: /teyra|norvale|client-rendered-listing/i,
+      results: [{ url: RESULTS_URL, title: 'Norvale Teyra listings' }],
+    },
+  ],
   script: [
     fetchStep(RESULTS_URL, 'results'),
     publishStep('Norvale Teyra listings', 'Read the rendered listing; see sources.'),

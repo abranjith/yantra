@@ -8,7 +8,13 @@
  * `inventory.ts`, so the HTML shell itself holds no truth value.
  */
 
-import { HTML_CONTENT_TYPE, headerComment, htmlDocument, type RenderedPage } from './html.js';
+import {
+  HTML_CONTENT_TYPE,
+  headerComment,
+  homePage,
+  htmlDocument,
+  type RenderedPage,
+} from './html.js';
 import {
   INVENTORY,
   MAKE,
@@ -28,6 +34,7 @@ const SCRIPT_PATH = '/assets/listing.js';
 
 /** Every resource the site serves, as `path?query`. */
 export const CLIENT_RENDERED_LISTING_ROUTES: readonly string[] = Object.freeze([
+  '/',
   RESULTS_PATH,
   `${RESULTS_PATH}?page=2`,
   SCRIPT_PATH,
@@ -43,6 +50,18 @@ export function renderClientRenderedListing(
   path: string,
   _query: URLSearchParams,
 ): RenderedPage | null {
+  if (path === '/') {
+    return homePage({
+      header: headerComment(
+        'client-rendered-listing',
+        CLIENT_RENDERED_LISTING_PATTERN,
+        provenanceText(),
+      ),
+      title: `${MAKE} ${MODEL} listings`,
+      intro: 'Browse current listings.',
+      links: [{ href: RESULTS_PATH, text: 'All listings' }],
+    });
+  }
   if (path === RESULTS_PATH) {
     return { status: 200, contentType: HTML_CONTENT_TYPE, body: shellPage() };
   }

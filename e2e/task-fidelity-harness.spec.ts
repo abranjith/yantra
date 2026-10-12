@@ -7,6 +7,7 @@
  * piece of the harness against the production code it drives.
  */
 
+import { X509Certificate, createPublicKey } from 'node:crypto';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -73,7 +74,11 @@ import {
 import { htmlPage } from './task-fidelity/fixtures/html.js';
 import { INVENTORY, formatAmount, truthRows } from './task-fidelity/fixtures/inventory.js';
 import { MULTI_TABLE_ANSWER, MULTI_TABLE_PATH } from './task-fidelity/fixtures/multi-table.js';
-import { serveTaskSites, type TaskSiteServer } from './task-fidelity/fixtures/server.js';
+import {
+  serveTaskSites,
+  type RequestLogEntry,
+  type TaskSiteServer,
+} from './task-fidelity/fixtures/server.js';
 import {
   SITE_NAMES,
   TASK_SITES,
@@ -83,6 +88,7 @@ import {
   type SiteName,
 } from './task-fidelity/fixtures/sites.js';
 import { structuredPageItems } from './task-fidelity/fixtures/structured-listing.js';
+import { fixtureTlsIdentity } from './task-fidelity/fixtures/tls.js';
 import {
   parseJsonl,
   readArtifacts,
@@ -322,6 +328,33 @@ describe('@no-llm task-fidelity host mapping — HTTP', () => {
     expect(egress.hosts()).toEqual(['example.org']);
   });
 
+  it('serves an https fixture URL through the HTTP tier, and still refuses off-fixture https', async () => {
+    server.reset();
+    const fetcher = new HttpFetcher({ requestFn: mappedRequestFn(server.port) });
+    const doc = await fetcher.fetch('https://faceted-listing.yantra.test/', {
+      timeoutMs: 5_000,
+      signal: neverAborted(),
+    });
+    expect(doc.statusCode).toBe(200);
+    expect(doc.html).toContain('<a href="/new/results">Shop new</a>');
+    expect(server.requests()).toEqual([
+      expect.objectContaining({ host: 'faceted-listing.yantra.test', path: '/', scheme: 'http' }),
+    ]);
+    await expect(
+      mappedRequestFn(server.port)('https://example.org/', { method: 'GET' }),
+    ).rejects.toBeInstanceOf(HarnessEgressError);
+  });
+
+  it('generates one valid self-signed certificate for *.yantra.test per process', () => {
+    const identity = fixtureTlsIdentity();
+    const certificate = new X509Certificate(identity.cert);
+
+    expect(fixtureTlsIdentity()).toBe(identity);
+    expect(certificate.subjectAltName).toBe('DNS:*.yantra.test, DNS:yantra.test');
+    expect(certificate.checkIssued(certificate)).toBe(true);
+    expect(certificate.verify(createPublicKey(identity.key))).toBe(true);
+  });
+
   it('logs requests in arrival order with the host label routed', async () => {
     server.reset();
     const fetcher = new HttpFetcher({ requestFn: mappedRequestFn(server.port) });
@@ -390,6 +423,31 @@ describe('@no-llm task-fidelity host mapping — real Chrome', () => {
       await page.close();
     }
     expect(server.requests()).toEqual([]);
+  }, 30_000);
+
+  it('serves a fixture host over https with the throwaway certificate, and keeps http as http', async () => {
+    if (session === undefined) throw new Error('no browser session');
+    server.reset();
+    const page = await session.newPage();
+    try {
+      await page.goto(`https://faceted-listing.yantra.test/new/results`, { waitUntil: 'load' });
+      expect(page.url()).toBe('https://faceted-listing.yantra.test/new/results');
+      expect(await renderedHtml(page)).toContain('<h1>Norvale Teyra for sale near you</h1>');
+      await page.goto(`${originOf('faceted-listing')}/`, { waitUntil: 'load' });
+      // `.test` hosts are never auto-upgraded, so an http fixture stays http.
+      expect(page.url()).toBe('http://faceted-listing.yantra.test/');
+    } finally {
+      await page.close();
+    }
+    expect(
+      server
+        .requests()
+        .filter((entry) => entry.path !== '/favicon.ico')
+        .map((entry) => [entry.scheme, entry.path]),
+    ).toEqual([
+      ['https', '/new/results'],
+      ['http', '/'],
+    ]);
   }, 30_000);
 
   it('renders all six page-1 client-rendered cards in the DOM after load', async () => {
@@ -515,6 +573,25 @@ describe('@no-llm task-fidelity fixtures — remaining patterns', () => {
       expect(page?.body).toContain('verify you are human');
       expect(truthValues().filter((value) => page?.body.includes(value))).toEqual([]);
     }
+  });
+
+  it('challenge-interstitial: challenges every page, as a bot wall does', () => {
+    const site = siteNamed('challenge-interstitial');
+    for (const route of ['/', '/sitemap.xml', '/new/results?drivetrain=AWD']) {
+      const page = renderRoute(site, route);
+      expect(page?.status).toBe(200);
+      expect(page?.body).toContain('data-sitekey=');
+    }
+  });
+
+  it('serves a home page on every non-challenge site that links to its main pages', () => {
+    const missing = TASK_SITES.filter((site) => site.name !== 'challenge-interstitial')
+      .filter((site) => {
+        const home = renderRoute(site, '/');
+        return home?.status !== 200 || !home.body.includes('<a href="/');
+      })
+      .map((site) => site.name);
+    expect(missing).toEqual([]);
   });
 
   it('challenge-interstitial: the small variant escalates by today’s heuristic; large-main does not', () => {
@@ -1456,6 +1533,31 @@ describe('@no-llm task-fidelity scorer', () => {
     expect(normalize('Teyra')).not.toBe(normalize('Terya'));
     expect(median([0.2, null, 0.6, 0.4])).toBe(0.4);
     expect(median([null, null])).toBeNull();
+  });
+
+  it('counts only pages that served the challenge as challenge faults', () => {
+    const entry = (path: string, status: number): RequestLogEntry => ({
+      seq: 0,
+      scheme: 'https',
+      host: 'challenge-interstitial.yantra.test',
+      path,
+      query: '',
+      method: 'GET',
+      userAgentClass: 'http',
+      robots: false,
+      status,
+      at: 0,
+    });
+    const scores = score(
+      syntheticRun({
+        brief: brief({ title: 'Listings', overview: 'Listings.' }),
+        requests: [entry('/large-main/results', 200), entry('/sitemap.xml', 404)],
+      }),
+    );
+    expect(scores.honesty).toMatchObject({ value: 0, numerator: 0, denominator: 1 });
+    expect(scores.honesty.detail).toEqual([
+      'undisclosed: challenge page challenge-interstitial.yantra.test/large-main/results',
+    ]);
   });
 
   it('extracts delivered units in structural order', () => {

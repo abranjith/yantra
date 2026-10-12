@@ -27,7 +27,7 @@
     },
     {
       "path": "docs/features/task-fidelity-harness.md",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -164,6 +164,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "e2e/task-fidelity/fixtures/tls.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "e2e/task-fidelity/golden/article.txt",
       "status": "A",
       "role": "implement",
@@ -177,7 +183,7 @@
     },
     {
       "path": "e2e/task-fidelity/README.md",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
