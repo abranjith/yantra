@@ -279,7 +279,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/extraction-integration.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
