@@ -26,6 +26,7 @@ import {
   type ExtractedArticle,
   type FetchedDoc,
   type LoadOutcome,
+  type PageAnalysis,
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
@@ -38,9 +39,12 @@ import {
 } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 import type { AllowedUrl, UrlPolicyRejection } from '../../../runtime/url-policy.js';
+import { provenanceDetails } from '../../../runtime/url-provenance.js';
 
 import { mapBrowserStartupError } from './browser-startup-errors.js';
 import { writeCapture } from './capture.js';
+import { offerableUrl, recordDiscovered } from './page-payload.js';
+import { recordProvenanceRefusal } from './provenance-refusals.js';
 
 /**
  * The closed `web_fetch` failure-cause vocabulary (operator-only diagnostics).
@@ -49,6 +53,7 @@ import { writeCapture } from './capture.js';
  * the outbound URL policy's stable codes.
  */
 export const WEB_FETCH_FAILURE_CAUSES = Object.freeze([
+  'unattested-url',
   'url-policy:<code>',
   'budget:<limit>',
   'ethics-refused:<reason>',
@@ -88,8 +93,9 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
     name: 'web_fetch',
     label: 'Web Fetch',
     description:
-      'Fetch ONE specific public URL you already have (a direct link, or a link discovered ' +
-      'inside previously fetched content) and return its readable article text (title + body). ' +
+      'Fetch ONE specific public URL you already have (from search results, the goal, or a ' +
+      "link in links[] or records[] of a page you already read) and return the page's shape " +
+      'and content, plus the links it offers. A URL no result attested is refused. ' +
       'Do NOT use it to explore a topic — web_search already returns page content for a query. ' +
       'Do NOT use it to bypass a paywall/login, to reach a blocked or non-public host, or to ' +
       'download non-text content (PDFs, images, binaries). Every fetched page is recorded as ' +
@@ -98,8 +104,15 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
     sanitizationProfile: 'public',
     budgetMeter: true,
     evidenceGathering: true,
-    run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
-      runWebFetch(params, ctx.services, ctx.signal),
+    run: async (params: WebFetchParamsType, ctx): Promise<DomainResult> => {
+      // Provenance gates every fetch (FEAT-051, closes TODO 208): a URL no
+      // search result, page read, or goal attested is refused before policy,
+      // the store, or any budget is touched — exactly as browser_navigate does.
+      const explanation = ctx.services.urlProvenance.explain(params.url);
+      if (explanation === null) return unattested(params.url, ctx.services);
+      const result = await runWebFetch(params, ctx.services, ctx.signal);
+      return withProvenance(result, provenanceDetails(explanation));
+    },
   };
 }
 
@@ -172,6 +185,7 @@ async function runWebFetch(
 interface FetchedPage {
   readonly doc: FetchedDoc;
   readonly article: ExtractedArticle;
+  readonly page: PageAnalysis;
 }
 
 /**
@@ -281,7 +295,7 @@ async function loadPage(
   // article: index/hub pages, media-only pages, and script-rendered shells all
   // extract to nothing. The message steers the agent toward a usable next step
   // instead of retrying the same URL.
-  const article = await deps.extractor.extract(doc);
+  const { article, page } = await deps.extractor.extractPage(doc);
   if (article === null || article.contentText.trim().length === 0) {
     recordFailure(services, allowed.url, 'extract_failed');
     return failed(
@@ -304,7 +318,7 @@ async function loadPage(
 
   return {
     ok: true,
-    value: { doc, article },
+    value: { doc, article, page },
     meta: {
       url: allowed.url,
       finalUrl: doc.finalUrl,
@@ -328,8 +342,16 @@ async function publishPage(
   // A successfully fetched page is an attested URL, so the model may navigate
   // to it later. Recorded only on success — a URL that could not be fetched and
   // read attests nothing, which keeps a failed guess from earning navigation.
-  services.urlProvenance.record(article.url);
-  services.urlProvenance.record(doc.finalUrl);
+  services.urlProvenance.record(article.url, FETCH_ORIGIN);
+  services.urlProvenance.record(doc.finalUrl, FETCH_ORIGIN);
+
+  // The links the page offers, each offered only when it reaches the model
+  // byte-identical, and recorded as discovered from this source (G3).
+  const offered = page.page.links
+    .filter((link) => offerableUrl(link.url, services))
+    .map((link) => ({ text: link.text, url: link.url, kind: link.kind }));
+  recordDiscovered(services, record.sourceId, { links: offered });
+  const shape = { shape: page.page.shape, links: offered };
 
   // The fetched page becomes ledger evidence: result_publish attaches these
   // as the Brief's sources, so the model never re-types URLs.
@@ -359,6 +381,7 @@ async function publishPage(
         capture_ref: captureRef,
         length_chars: article.lengthChars,
         note: 'Full content stored as a capture; the excerpt is shown here.',
+        ...shape,
       },
       details: { capture_ref: captureRef, bytes: textBytes, source_id: record.sourceId },
       diagnostic: { host, fetch_mode: doc.fetchMode },
@@ -374,10 +397,44 @@ async function publishPage(
       byline: article.byline,
       published_at: article.publishedAt,
       text: article.contentText,
+      ...shape,
     },
     details: { bytes: textBytes, final_url: doc.finalUrl, source_id: record.sourceId },
     diagnostic: { host, fetch_mode: doc.fetchMode },
   };
+}
+
+/** URLs a fetched page itself attests: its requested and final URL. */
+const FETCH_ORIGIN = { kind: 'tool', tool: 'web_fetch' } as const;
+
+/**
+ * A URL no evidence attested, refused before anything is spent. The repeat
+ * counter is shared with `browser_navigate`, so the "repeated" wording follows
+ * the URL across both tools.
+ */
+function unattested(url: string, services: RunServices): DomainFailure {
+  const count = recordProvenanceRefusal(services, url);
+  return withHost(
+    {
+      ok: false,
+      errorCode: 'URL_NOT_FROM_EVIDENCE',
+      message: renderAgentMessage('tool', 'URL_NOT_FROM_EVIDENCE', 'unattested-fetch-url', {
+        repeated: count >= 2,
+      }),
+      retryable: true,
+      details: { provenance: provenanceDetails(null) },
+    },
+    'unattested-url',
+    domainFromUrl(url),
+  );
+}
+
+/** Attach the audit-only provenance detail to a result, success or failure. */
+function withProvenance(
+  result: DomainResult,
+  provenance: Readonly<Record<string, string>>,
+): DomainResult {
+  return { ...result, details: { ...asDetailsRecord(result.details), provenance } };
 }
 
 /**

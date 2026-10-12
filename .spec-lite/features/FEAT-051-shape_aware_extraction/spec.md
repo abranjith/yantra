@@ -690,7 +690,7 @@ Named constants, each in the module that uses it with a one-line rationale:
 - [x] TASK-002: Collection records and facet lists, including the G2 regression
 - [x] TASK-003: Schema.org structured data (JSON-LD and microdata) as untrusted, bounded data
 - [x] TASK-004: All tables, detail fields, and shape arbitration
-- [ ] TASK-005: Discovered-link provenance, with `web_fetch` gated on it (closes TODO line 208)
+- [x] TASK-005: Discovered-link provenance, with `web_fetch` gated on it (closes TODO line 208)
 - [ ] TASK-006: `web_fetch` returns the full shape-aware view, with stable record anchors
 - [ ] TASK-007: `web_search` sites carry a shape summary, and the full view is one store read away
 - [ ] TASK-008: `browser_extract` reads the live page through the same analyzer (closes TODO line 214)

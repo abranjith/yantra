@@ -320,7 +320,7 @@ describe('@no-llm FEAT-050 integrated contract — run-scoped acquisition', () =
 
     const outcome = await runAgenticTask(
       {
-        goal: 'Survey the acquisition fixture site and report what could be read',
+        goal: `Survey the acquisition fixture site, including ${READ_TWICE} and ${CHALLENGED}, and report what could be read`,
         profile: COMMAND_TASK_PROFILES.research,
         model: { provider: 'fixture', id: 'fixture-model' },
         auth: { mode: 'managed' },

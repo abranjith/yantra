@@ -12,8 +12,9 @@ import {
   type ContentFetcher,
   type DomainRankSignal,
   type EthicsGate,
-  type Extractor,
+  type ExtractedArticle,
   type FetchedDoc,
+  type PageExtractor,
   type SearchProvider,
   type SearchResult,
 } from '@yantra/core';
@@ -28,6 +29,8 @@ import {
   buildServices,
   recordingRuntimeLogger,
   searchServiceFor,
+  articlePageAnalysis,
+  attestedHosts,
 } from './test-support.js';
 
 const CANARY = 'sk-SEARCHCANARYabcdefghijklmnop';
@@ -72,25 +75,31 @@ function keyedFetcher(): ContentFetcher {
 }
 
 /** An extractor returning per-URL body text (or null for `empty` hosts). */
-function textExtractor(body: (url: string) => string | null): Extractor {
+function textExtractor(body: (url: string) => string | null): PageExtractor {
+  const articleOf = (d: FetchedDoc): ExtractedArticle | null => {
+    const text = body(d.finalUrl);
+    return text === null
+      ? null
+      : {
+          url: d.finalUrl,
+          title: `Title ${d.finalUrl}`,
+          byline: null,
+          publishedAt: '2026-01-01T00:00:00.000Z',
+          siteName: null,
+          contentText: text,
+          contentHtml: `<p>${text}</p>`,
+          excerpt: `excerpt ${d.finalUrl}`,
+          lengthChars: text.length,
+        };
+  };
   return {
-    extract: (d) => {
-      const text = body(d.finalUrl);
-      return Promise.resolve(
-        text === null
-          ? null
-          : {
-              url: d.finalUrl,
-              title: `Title ${d.finalUrl}`,
-              byline: null,
-              publishedAt: '2026-01-01T00:00:00.000Z',
-              siteName: null,
-              contentText: text,
-              contentHtml: `<p>${text}</p>`,
-              excerpt: `excerpt ${d.finalUrl}`,
-              lengthChars: text.length,
-            },
-      );
+    extract: (d) => Promise.resolve(articleOf(d)),
+    extractPage: (d) => {
+      const article = articleOf(d);
+      return Promise.resolve({
+        article,
+        page: articlePageAnalysis(article?.contentText ?? null, d.fetchMode),
+      });
     },
   };
 }
@@ -558,6 +567,8 @@ describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G
   ) {
     return buildServices({
       runDir,
+      // The suite also web_fetches search hosts directly; attest them as the user would.
+      urlProvenance: attestedHosts('x.example', 'y.example', 'z.example', 'a.example', 'b.example'),
       ...(options.limits ? { limits: options.limits } : {}),
       domain: { rank: { record: (signal) => options.signals?.push(signal) } },
       search: {
@@ -738,6 +749,8 @@ describe('@no-llm web_search — reads through the run document store (FEAT-050)
   ) {
     return buildServices({
       runDir,
+      // The suite also web_fetches search hosts directly; attest them as the user would.
+      urlProvenance: attestedHosts('x.example', 'y.example', 'z.example'),
       ...(options.limits ? { limits: options.limits } : {}),
       domain: { rank: { record: (signal) => options.signals?.push(signal) } },
       search: {

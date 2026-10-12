@@ -172,8 +172,8 @@ function services(
   overrides: Partial<BrowserToolDeps> = {},
 ): RunServices {
   const provenance = new UrlProvenance();
-  provenance.record(PAGE);
-  provenance.record(`${PAGE}next`);
+  provenance.record(PAGE, { kind: 'tool', tool: 'test' });
+  provenance.record(`${PAGE}next`, { kind: 'tool', tool: 'test' });
   return buildServices({
     urlProvenance: provenance,
     runHealth: new RunHealthLedger(),

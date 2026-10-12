@@ -111,6 +111,9 @@ export function webSearchSpec(_services: RunServices): ToolWrapperSpec<typeof We
   };
 }
 
+/** Every URL a search result shows is attested by this tool. */
+const SEARCH_ORIGIN = { kind: 'tool', tool: 'web_search' } as const;
+
 async function runWebSearch(
   params: WebSearchParamsType,
   services: RunServices,
@@ -172,7 +175,7 @@ function discover(
 ): DomainResult {
   const results = hits.map((hit) => ({ url: hit.url, title: hit.title, snippet: hit.snippet }));
   for (const hit of hits) {
-    services.urlProvenance.record(hit.url);
+    services.urlProvenance.record(hit.url, SEARCH_ORIGIN);
     recordSearchResult(hit.url, services);
   }
   return {
@@ -462,7 +465,7 @@ async function mapReads(
         excerpt: doc.excerpt ?? doc.text.slice(0, 1000),
       };
       // A search hit is an attested URL: the model may navigate to it later.
-      services.urlProvenance.record(doc.url);
+      services.urlProvenance.record(doc.url, SEARCH_ORIGIN);
       // Every fetched site becomes ledger evidence: result_publish attaches
       // these as the Brief's sources, so the model never re-types URLs.
       services.evidence.add({
@@ -513,7 +516,7 @@ async function mapReads(
   }));
   // The unfetched tail is shown to the model as "more results", so those URLs
   // are equally attested — the model is invited to follow them.
-  for (const hit of moreResults) services.urlProvenance.record(hit.url);
+  for (const hit of moreResults) services.urlProvenance.record(hit.url, SEARCH_ORIGIN);
 
   return {
     ok: true,

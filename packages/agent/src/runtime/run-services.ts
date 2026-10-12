@@ -16,7 +16,7 @@ import type {
   ContentFetcher,
   DocumentStore,
   EthicsGate,
-  Extractor,
+  PageExtractor,
   PayloadSanitizer,
   SearchProviderName,
   SearchResult,
@@ -84,8 +84,11 @@ export interface SearchToolDeps {
 export interface FetchToolDeps {
   /** HTTP-first content fetcher with timeout + size guards. */
   readonly fetcher: ContentFetcher;
-  /** Readability-based article extractor. */
-  readonly extractor: Extractor;
+  /**
+   * Readability-based extractor that also reads a page's shape (FEAT-051):
+   * `web_fetch` uses `extractPage`, the search hit pipeline its article half.
+   */
+  readonly extractor: PageExtractor;
   /** Ethics gate (robots/blocklist/rate limit) checked before every fetch. */
   readonly ethics: EthicsGate;
   /** Allowed response content-type prefixes (e.g. `text/html`, `text/plain`). */

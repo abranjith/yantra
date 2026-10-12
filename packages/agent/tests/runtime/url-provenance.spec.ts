@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UrlProvenance } from '../../src/runtime/url-provenance.js';
+import { UrlProvenance, extractUrls, provenanceDetails } from '../../src/runtime/url-provenance.js';
 
 /** The fabricated deep link from run 20260803T033803Z-do-f1d9f01b. */
 const FABRICATED =
@@ -9,21 +9,21 @@ const FABRICATED =
 describe('@no-llm UrlProvenance matching', () => {
   it('matches a recorded URL exactly', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/a/b');
+    provenance.record('https://example.com/a/b', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://example.com/a/b')).toBe(true);
   });
 
   it('does not match a URL that was never recorded', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/a');
+    provenance.record('https://example.com/a', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://example.com/b')).toBe(false);
   });
 
   it('matches the bare origin of any recorded URL', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/deep/page?q=1');
+    provenance.record('https://example.com/deep/page?q=1', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://example.com/')).toBe(true);
     expect(provenance.has('https://example.com')).toBe(true);
@@ -31,14 +31,14 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('does not match the origin of a host it never saw', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/a');
+    provenance.record('https://example.com/a', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://other.com/')).toBe(false);
   });
 
   it('treats one trailing slash on a non-root path as insignificant', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://www.kayak.com/hotels/');
+    provenance.record('https://www.kayak.com/hotels/', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://www.kayak.com/hotels')).toBe(true);
     expect(provenance.has('https://www.kayak.com/hotels/')).toBe(true);
@@ -46,7 +46,7 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('ignores the fragment', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://example.com/page#section-2');
+    provenance.record('https://example.com/page#section-2', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://example.com/page')).toBe(true);
     expect(provenance.has('https://example.com/page#other')).toBe(true);
@@ -54,7 +54,10 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('allows query-value variants and key subsets on an attested origin + path', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06&d2=2026-08-07');
+    provenance.record(
+      'https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06&d2=2026-08-07',
+      { kind: 'tool', tool: 'test' },
+    );
 
     expect(
       provenance.has('https://x.test/Hotel-Search?destination=Frisco&d1=2026-08-06&d2=2026-08-08'),
@@ -72,15 +75,15 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('does not grant a parameter name after recording a query-less URL', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://x.test/a');
+    provenance.record('https://x.test/a', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://x.test/a?q=1')).toBe(false);
   });
 
   it('accumulates known parameter names across records', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://x.test/a?a=1');
-    provenance.record('https://x.test/a?b=2');
+    provenance.record('https://x.test/a?a=1', { kind: 'tool', tool: 'test' });
+    provenance.record('https://x.test/a?b=2', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://x.test/a?a=9&b=9')).toBe(true);
     expect(provenance.has('https://x.test/a?a=9&c=9')).toBe(false);
@@ -88,14 +91,14 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('normalizes trailing slashes in origin + path query buckets', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://x.test/hotels/?x=1');
+    provenance.record('https://x.test/hotels/?x=1', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://x.test/hotels?x=2')).toBe(true);
   });
 
   it('matches the host case-insensitively but the path case-sensitively', () => {
     const provenance = new UrlProvenance();
-    provenance.record('https://Example.COM/Path');
+    provenance.record('https://Example.COM/Path', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('https://example.com/Path')).toBe(true);
     expect(provenance.has('HTTPS://EXAMPLE.COM/Path')).toBe(true);
@@ -104,7 +107,7 @@ describe('@no-llm UrlProvenance matching', () => {
 
   it('distinguishes ports and schemes', () => {
     const provenance = new UrlProvenance();
-    provenance.record('http://localhost:8080/a');
+    provenance.record('http://localhost:8080/a', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has('http://localhost:8080/a')).toBe(true);
     expect(provenance.has('http://localhost:9090/a')).toBe(false);
@@ -124,7 +127,7 @@ describe('@no-llm UrlProvenance matching', () => {
     // The logged sequence: the run legitimately reached the hotels index, then
     // assembled a deep link with a made-up city id that served a different city.
     const provenance = new UrlProvenance();
-    provenance.record('https://www.kayak.com/hotels/');
+    provenance.record('https://www.kayak.com/hotels/', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has(FABRICATED)).toBe(false);
   });
@@ -160,7 +163,7 @@ describe('@no-llm UrlProvenance seeding', () => {
     // never allowlisted — that case is unchanged.
     const provenance = new UrlProvenance();
     provenance.seed({ allowedHosts: ['example.com'] });
-    provenance.record('https://www.kayak.com/hotels/');
+    provenance.record('https://www.kayak.com/hotels/', { kind: 'tool', tool: 'test' });
 
     expect(provenance.has(FABRICATED)).toBe(false);
   });
@@ -214,5 +217,128 @@ describe('@no-llm UrlProvenance seeding', () => {
     provenance.seed({});
 
     expect(provenance.size).toBe(0);
+  });
+});
+
+describe('@no-llm UrlProvenance origins and explain (FEAT-051)', () => {
+  const TOOL = { kind: 'tool', tool: 'web_search' } as const;
+  const DISCOVERED = { kind: 'discovered', sourceId: 'S3', linkKind: 'facet' } as const;
+
+  it('keeps the first origin recorded for a normalized URL', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://shop.test/list/', TOOL);
+    provenance.record('https://shop.test/list', DISCOVERED);
+
+    expect(provenance.explain('https://shop.test/list')).toEqual({ match: 'exact', origin: TOOL });
+  });
+
+  it('names the granting origin for an origin-root match', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://shop.test/a/b', DISCOVERED);
+    provenance.record('https://shop.test/c', TOOL);
+
+    expect(provenance.explain('https://shop.test/')).toEqual({
+      match: 'origin-root',
+      origin: DISCOVERED,
+    });
+  });
+
+  it('names the granting origin for a query-variant match', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://shop.test/list?page=2', DISCOVERED);
+
+    expect(provenance.explain('https://shop.test/list?page=7')).toEqual({
+      match: 'query-variant',
+      origin: DISCOVERED,
+    });
+  });
+
+  it('reports goal and allow-host origins from the seed', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ allowedHosts: ['owned.test'], goal: 'read https://news.test/story' });
+
+    expect(provenance.explain('https://news.test/story')).toEqual({
+      match: 'exact',
+      origin: { kind: 'goal' },
+    });
+    expect(provenance.explain('https://owned.test/any/path')).toEqual({
+      match: 'allowed-host',
+      origin: { kind: 'allow-host' },
+    });
+  });
+
+  it('agrees with has() on every case of the existing matching table', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ allowedHosts: ['localhost:3000'] });
+    for (const url of [
+      'https://example.com/a/b',
+      'https://example.com/deep/page?q=1',
+      'https://x.test/a?a=1',
+      'https://x.test/a?b=2',
+      'https://x.test/hotels/?x=1',
+      'https://Example.COM/Path',
+      'http://localhost:8080/a',
+      'https://example.com/page#section-2',
+    ]) {
+      provenance.record(url, TOOL);
+    }
+    const candidates = [
+      'https://example.com/a/b/',
+      'https://example.com/a/c',
+      'https://example.com/',
+      'https://example.com',
+      'https://example.com/deep/page?q=2',
+      'https://example.com/deep/page?r=1',
+      'https://x.test/a?a=9&b=8',
+      'https://x.test/a?c=1',
+      'https://x.test/hotels?x=2',
+      'https://example.com/Path',
+      'https://example.com/path',
+      'http://localhost:8080/a',
+      'http://localhost:9999/x',
+      'https://example.com/page',
+      'https://other.test/',
+      'not a url',
+    ];
+    for (const candidate of candidates) {
+      expect({ candidate, explained: provenance.explain(candidate) !== null }).toEqual({
+        candidate,
+        explained: provenance.has(candidate),
+      });
+    }
+  });
+
+  it('explains nothing for an unattested or unparseable URL', () => {
+    const provenance = new UrlProvenance();
+    provenance.record('https://shop.test/a', TOOL);
+
+    expect(provenance.explain('https://shop.test/b')).toBeNull();
+    expect(provenance.explain('::')).toBeNull();
+  });
+
+  it('projects explanations into audit details without page text', () => {
+    expect(provenanceDetails(null)).toEqual({ match: 'none', kind: 'none' });
+    expect(provenanceDetails({ match: 'exact', origin: DISCOVERED })).toEqual({
+      match: 'exact',
+      kind: 'discovered',
+      via: 'S3',
+      link_kind: 'facet',
+    });
+    expect(provenanceDetails({ match: 'query-variant', origin: TOOL })).toEqual({
+      match: 'query-variant',
+      kind: 'tool',
+      tool: 'web_search',
+    });
+    expect(provenanceDetails({ match: 'exact', origin: { kind: 'goal' } })).toEqual({
+      match: 'exact',
+      kind: 'goal',
+    });
+  });
+
+  it('extracts URLs from free text with the goal grammar', () => {
+    expect(extractUrls('see https://a.test/x, and (https://b.test/y).')).toEqual([
+      'https://a.test/x',
+      'https://b.test/y',
+    ]);
   });
 });

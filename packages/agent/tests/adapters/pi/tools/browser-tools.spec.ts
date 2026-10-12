@@ -277,6 +277,45 @@ describe('@no-llm browser tools', () => {
       expect(controller.navigate).not.toHaveBeenCalled();
     });
 
+    it('navigates to a discovered link and names its source in the audit (FEAT-051)', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://shop.test/item/7', title: 'Item' });
+      const provenance = new UrlProvenance();
+      provenance.record('https://shop.test/item/7', {
+        kind: 'discovered',
+        sourceId: 'S1',
+        linkKind: 'record',
+      });
+      const services = browserServices(controller, {}, provenance);
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://shop.test/item/7' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+      expect((result.details as { provenance?: unknown }).provenance).toEqual({
+        match: 'exact',
+        kind: 'discovered',
+        via: 'S1',
+        link_kind: 'record',
+      });
+    });
+
+    it('records the unattested refusal in the audit details', async () => {
+      const controller = fakeController();
+      const services = browserServices(controller, {}, seeded('https://example.com/'));
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://example.com/guessed/path' },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+      expect(result.details).toEqual({ provenance: { match: 'none', kind: 'none' } });
+      expect(result.modelText).toContain('links[] or records[]');
+    });
+
     it('allows the recorded page without its trailing slash', async () => {
       const controller = fakeController();
       controller.navigate.mockResolvedValue({ url: 'https://www.kayak.com/hotels', title: 'H' });
@@ -1049,7 +1088,7 @@ describe('@no-llm browser tools', () => {
 /** A provenance record pre-loaded with URLs a tool result would have produced. */
 function seeded(...urls: readonly string[]): UrlProvenance {
   const provenance = new UrlProvenance();
-  for (const url of urls) provenance.record(url);
+  for (const url of urls) provenance.record(url, { kind: 'tool', tool: 'test' });
   return provenance;
 }
 

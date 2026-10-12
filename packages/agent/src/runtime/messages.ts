@@ -1,5 +1,12 @@
 import { DanglingInteractionMessageError, type MessageTemplate } from '@yantra/core';
 
+/**
+ * The one "repeated refusal" sentence, shared by every provenance refusal so a
+ * model alternating tools on one guessed URL reads the same warning.
+ */
+const REFUSED_AGAIN =
+  ' This same normalized URL has already been refused in this run. Repeating this URL will keep failing.';
+
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
@@ -322,14 +329,28 @@ export const AGENT_INTERACTION_MESSAGES = [
     ['limit', 'skipped'],
     'result_publish',
   ),
+  // Provenance refusals (FEAT-FP-007, FEAT-051). Both tools refuse a URL no
+  // evidence attested, name the same engineered moves — a link from a read
+  // page's links[]/records[], or web_search (whose limit: 0 lists URLs without
+  // fetching) — and share one "repeated" sentence and one refusal counter.
   tool(
     'URL_NOT_FROM_EVIDENCE',
     'unattested-url',
     (details) =>
-      'This URL introduces a path or parameter name that no search result or visited page attested. You may vary query values on an already-visited URL, but may not invent a new path, parameter name, or identifier. Use web_search or click through from an observed page to attest anything else.' +
+      'This URL introduces a path or parameter name that no search result, page read, or visited page attested. You may vary query values on an already-visited URL, but may not invent a new path, parameter name, or identifier. Use a link from links[] or records[] of a page you already read, run web_search, or click through from an observed page.' +
       (details.repeated === true
-        ? " This same normalized URL has already been refused. Submit the page's form with browser_click on its submit/search control, or reach the target by clicking a search result. Repeating this URL will keep failing."
+        ? " Submit the page's form with browser_click on its submit/search control, or reach the target by clicking a search result." +
+          REFUSED_AGAIN
         : ''),
+    ['repeated'],
+    'web_search',
+  ),
+  tool(
+    'URL_NOT_FROM_EVIDENCE',
+    'unattested-fetch-url',
+    (details) =>
+      'This URL came from no search result, no page read in this run, and not the goal, so it was not fetched and nothing was spent. Use a URL from search results, or a link from links[] or records[] of a page you already read. To locate a page, run web_search (limit: 0 lists URLs without fetching anything).' +
+      (details.repeated === true ? REFUSED_AGAIN : ''),
     ['repeated'],
     'web_search',
   ),

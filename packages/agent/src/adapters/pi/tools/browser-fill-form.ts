@@ -197,7 +197,7 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
   }
 
   const metadata = drainFillMetadata(controller, sink);
-  recordActionProvenance(services, metadata);
+  recordActionProvenance(services, metadata, 'browser_fill_form');
   // Followed before the final read, so an adopted tab is the page the batch's
   // observation and delta describe.
   const followed = await followSiteOpenedTab(services, controller, metadata);

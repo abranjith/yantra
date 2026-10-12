@@ -239,8 +239,11 @@ describe('@no-llm startup failures at the browser-backed tool boundaries', () =>
 
   /** `web_fetch` with a fetcher that fails the way the browser fallback does. */
   async function throughWebFetch(error: unknown) {
+    const provenance = new UrlProvenance();
+    provenance.seed({ allowedHosts: ['canary.example.com'] });
     const services = buildServices({
       runDir,
+      urlProvenance: provenance,
       fetch: {
         fetcher: {
           fetch: () => Promise.reject(error),

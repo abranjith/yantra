@@ -2,8 +2,13 @@ import { EthicsRefusedError } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
 import { renderAgentMessage } from '../../../runtime/messages.js';
-import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
+import {
+  asDetailsRecord,
+  type DomainResult,
+  type ToolWrapperSpec,
+} from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+import { provenanceDetails } from '../../../runtime/url-provenance.js';
 
 import {
   browserController,
@@ -15,6 +20,7 @@ import {
   recordActionProvenance,
 } from './browser-common.js';
 import { mapBrowserStartupError } from './browser-startup-errors.js';
+import { recordProvenanceRefusal } from './provenance-refusals.js';
 
 const BrowserNavigateParams = Type.Object(
   {
@@ -27,8 +33,6 @@ const BrowserNavigateParams = Type.Object(
   { additionalProperties: false },
 );
 type Params = Static<typeof BrowserNavigateParams>;
-
-const refusalCounts = new WeakMap<RunServices, Map<string, number>>();
 
 /** Build the policy-checked single-page navigation tool. */
 export function browserNavigateSpec(
@@ -51,8 +55,9 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
   // Provenance is checked BEFORE the URL policy: `check` reserves navigation
   // and host budget, and a refused guess must not consume the budget a
   // legitimate navigation still needs.
-  if (!services.urlProvenance.has(params.url)) {
-    const count = recordRefusal(services, params.url);
+  const explanation = services.urlProvenance.explain(params.url);
+  if (explanation === null) {
+    const count = recordProvenanceRefusal(services, params.url);
     return {
       ok: false,
       errorCode: 'URL_NOT_FROM_EVIDENCE',
@@ -60,8 +65,11 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       message: renderAgentMessage('tool', 'URL_NOT_FROM_EVIDENCE', 'unattested-url', {
         repeated: count >= 2,
       }),
+      details: { provenance: provenanceDetails(null) },
     };
   }
+  // Audit-only: how this URL was attested, so a discovered chain is visible hop by hop.
+  const provenance = provenanceDetails(explanation);
   const allowed = services.urlPolicy.check(params.url);
   if (!allowed.isOk)
     return {
@@ -69,6 +77,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       errorCode: allowed.error.code,
       message: allowed.error.message,
       retryable: allowed.error.retryable,
+      details: { provenance },
     };
   const deps = services.domain.browser;
   const controller = browserController(services);
@@ -97,7 +106,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
           reason: error.ethicsContext.reason,
         }),
         retryable: false,
-        details: { host: allowed.value.host, handoff: true },
+        details: { host: allowed.value.host, handoff: true, provenance },
       };
     }
     throw error;
@@ -111,10 +120,12 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     result = await controller.navigate(allowed.value.url);
   } catch (error) {
     const startup = mapBrowserStartupError(error);
-    if (startup !== null) return startup;
+    if (startup !== null) {
+      return { ...startup, details: { ...asDetailsRecord(startup.details), provenance } };
+    }
     throw error;
   }
-  recordActionProvenance(services, result);
+  recordActionProvenance(services, result, 'browser_navigate');
   services.trace?.append({
     kind: 'navigate',
     host: allowed.value.host,
@@ -133,31 +144,6 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
       ...(observation ? { observation: modelObservation(observation) } : {}),
       ...(delta ? { delta: modelDelta(delta) } : {}),
     },
-    details: { final_url: result.url, ...deltaDetails(observation, delta) },
+    details: { final_url: result.url, provenance, ...deltaDetails(observation, delta) },
   };
-}
-
-function recordRefusal(services: RunServices, value: string): number {
-  let perRun = refusalCounts.get(services);
-  if (!perRun) {
-    perRun = new Map();
-    refusalCounts.set(services, perRun);
-  }
-  const normalized = normalizeRefusedUrl(value);
-  const count = (perRun.get(normalized) ?? 0) + 1;
-  perRun.set(normalized, count);
-  return count;
-}
-
-function normalizeRefusedUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    url.hash = '';
-    url.hostname = url.hostname.toLowerCase();
-    url.searchParams.sort();
-    return url.toString();
-  } catch {
-    // swallow-ok: URL parse helper; an unparseable value is compared as text
-    return value.trim();
-  }
 }

@@ -158,7 +158,7 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
   // either, and the URLs the page produced are still evidence the run reached
   // organically.
   const metadata = drainFillMetadata(controller, sink);
-  recordActionProvenance(services, metadata);
+  recordActionProvenance(services, metadata, 'browser_fill_element');
   if (isDomainFailure(applied)) return applied;
   // Followed *before* the post-action read, so when a tab is adopted the
   // observation and the delta describe the page the fill actually produced.

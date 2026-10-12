@@ -61,6 +61,7 @@ import type { RunServices } from '../../src/runtime/run-services.js';
 import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 const PAGE_URL = 'http://leaf.example.test/article';
+const SECOND_URL = 'http://leaf.example.test/second';
 const ARTICLE_HTML =
   '<!doctype html><html><head><title>Leaf article</title></head><body><main><article>' +
   '<h1>Leaf article</h1>' +
@@ -283,7 +284,7 @@ describe('@no-llm environment leaves', () => {
     let driver: ScriptedProvider | undefined;
     const outcome = await runAgenticTask(
       {
-        goal: 'Read the leaf article and report it',
+        goal: `Read the leaf articles at ${PAGE_URL} and ${SECOND_URL} and report them`,
         profile: COMMAND_TASK_PROFILES[input.profile ?? 'do'],
         model: { provider: 'fixture', id: 'fixture-model' },
         auth: { mode: 'managed' },
@@ -504,7 +505,7 @@ describe('@no-llm environment leaves', () => {
         { tool: 'web_search', params: { query: 'two', limit: 0 } },
         { tool: 'web_search', params: { query: 'three', limit: 0 } },
         { tool: 'web_fetch', params: { url: PAGE_URL } },
-        { tool: 'web_fetch', params: { url: 'http://leaf.example.test/second' } },
+        { tool: 'web_fetch', params: { url: SECOND_URL } },
         { tool: 'browser_navigate', params: { url: PAGE_URL } },
       ],
       holder,

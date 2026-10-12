@@ -976,18 +976,39 @@ function sanitizeAndBound(
   profile: SanitizationProfile,
   services: RunServices,
 ): BoundedText {
-  // Mask user-input values BEFORE the profile sanitizer: a page that echoes a
-  // resolved value comes back as the stable `{{user:...}}` token the model
-  // already knows (and never as the raw value, even under a bypass profile).
-  const masked = maskUserInputDeep(payload, services.userInput);
-  const preserve = services.modelValues?.list() ?? [];
-  const sanitized = services.sanitizer.sanitize(masked, profile, undefined, { preserve });
+  const sanitized = modelVisibleText(payload, profile, services);
   const capped = truncateToBytes(sanitized.text, services.budgets.maxBytesPerResult);
   return {
     text: capped.text,
     bytes: Buffer.byteLength(capped.text, 'utf8'),
     truncated: sanitized.truncated || capped.truncated,
   };
+}
+
+/**
+ * The model-visible transform of a payload, without the per-result byte bound:
+ * user-input values masked to `{{user:...}}` tokens, then the profile
+ * sanitizer with this run's model-supplied values preserved. It is the one
+ * transform {@link sanitizeAndBound} applies, exported so a tool can ask
+ * whether a value would reach the model unchanged (FEAT-051 `offerableUrl`).
+ *
+ * @param payload - Any tool payload value.
+ * @param profile - The tool's sanitization profile.
+ * @param services - The run services (user-input vault, model values, sanitizer).
+ * @returns The sanitized text and whether the profile itself truncated it.
+ */
+export function modelVisibleText(
+  payload: unknown,
+  profile: SanitizationProfile,
+  services: Pick<RunServices, 'userInput' | 'modelValues' | 'sanitizer'>,
+): { readonly text: string; readonly truncated: boolean } {
+  // Mask user-input values BEFORE the profile sanitizer: a page that echoes a
+  // resolved value comes back as the stable `{{user:...}}` token the model
+  // already knows (and never as the raw value, even under a bypass profile).
+  const masked = maskUserInputDeep(payload, services.userInput);
+  const preserve = services.modelValues?.list() ?? [];
+  const sanitized = services.sanitizer.sanitize(masked, profile, undefined, { preserve });
+  return { text: sanitized.text, truncated: sanitized.truncated };
 }
 
 /**
