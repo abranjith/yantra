@@ -15,8 +15,9 @@ import type { SourceFailure, SynthesisDoc } from '../synthesis/types.js';
 
 import type { AskEthicsGate } from './ethics-adapter.js';
 import { FetchError, type ContentFetcher } from './fetcher.js';
+import type { PageAnalysis, PageExtraction } from './page/types.js';
 import type { Extractor } from './readability.js';
-import type { SearchResult } from './types.js';
+import type { FetchedDoc, SearchResult } from './types.js';
 
 /** The outcome of processing one search hit: exactly one of doc/failure is set. */
 export interface ProcessedSource {
@@ -34,6 +35,11 @@ export interface ProcessedSource {
    * can). Absent otherwise.
    */
   readonly cause?: unknown;
+  /**
+   * The shape-aware analysis (FEAT-051), present only when the caller passed
+   * {@link ProcessSourceOptions.extractPage} and the page was read.
+   */
+  readonly page?: PageAnalysis;
 }
 
 /** Injected stage dependencies shared by the pipeline callers. */
@@ -56,6 +62,15 @@ export interface ProcessSourceOptions {
   readonly onFetchedHtml?: (url: string, html: string) => Promise<void>;
   /** Called once when a fetch times out (so the caller can emit a retry event). */
   readonly onTimeout?: () => void;
+  /**
+   * A shape-aware read (FEAT-051). With it, a page with no article but with
+   * page parts (records, tables, fields, structured data, or links) succeeds,
+   * with `doc.text` set to the page's readable text, and the analysis rides on
+   * {@link ProcessedSource.page}. Without it, extraction is article-only and
+   * byte-identical to before, so the deterministic `ask` and `research`
+   * pipelines are unchanged.
+   */
+  readonly extractPage?: (doc: FetchedDoc) => Promise<PageExtraction>;
 }
 
 /**
@@ -101,6 +116,29 @@ export async function processSource(
 
     if (opts.onFetchedHtml) {
       await opts.onFetchedHtml(result.url, fetched.html);
+    }
+
+    if (opts.extractPage !== undefined) {
+      const { article, page } = await opts.extractPage(fetched);
+      if (page.shape === null) {
+        return {
+          rank: result.rank,
+          doc: null,
+          failure: sourceFailure(result.url, 'extract', 'could not extract readable content'),
+          fetchMode: fetched.fetchMode,
+        };
+      }
+      const doc: SynthesisDoc = {
+        url: result.url,
+        finalUrl: fetched.finalUrl !== result.url ? fetched.finalUrl : null,
+        host: safeHost(fetched.finalUrl || result.url),
+        title: article?.title ?? null,
+        fetchedAt: fetched.fetchedAt,
+        publishedAt: article?.publishedAt ?? null,
+        text: article?.contentText ?? page.readableText,
+        excerpt: article?.excerpt ?? null,
+      };
+      return { rank: result.rank, doc, failure: null, fetchMode: fetched.fetchMode, page };
     }
 
     const article = await deps.extractor.extract(fetched);

@@ -1,5 +1,12 @@
 import { DanglingInteractionMessageError, type MessageTemplate } from '@yantra/core';
 
+/**
+ * The one "repeated refusal" sentence, shared by every provenance refusal so a
+ * model alternating tools on one guessed URL reads the same warning.
+ */
+const REFUSED_AGAIN =
+  ' This same normalized URL has already been refused in this run. Repeating this URL will keep failing.';
+
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
@@ -294,6 +301,133 @@ export const AGENT_INTERACTION_MESSAGES = [
     [],
     'web_fetch',
   ),
+  // Shape-aware page reads (FEAT-051). Each coverage phrase states one bound
+  // that dropped data and names an engineered way to the rest, or says plainly
+  // that there is none; only a pagination link is a real way to more records.
+  tool(
+    'PAGE_COVERAGE',
+    'records-beyond-limit',
+    (details) =>
+      `${text(details.count)} records beyond the first 25 were not shown` +
+      (details.pagination === true
+        ? '; pagination links are in links[], and web_fetch of one reads the next page.'
+        : '; no tool lists the rest of this page.'),
+    ['count', 'pagination'],
+    'web_fetch',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'record-text-cut',
+    (details) =>
+      `${text(details.count)} record(s) were cut to 400 characters at a segment boundary; no tool returns the rest of their text.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'links-beyond-limit',
+    (details) =>
+      `${text(details.count)} links beyond the first 40 were not shown; no tool lists them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'tables-beyond-limit',
+    (details) =>
+      `${text(details.count)} tables beyond the first 10 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-rows-beyond-limit',
+    (details) =>
+      `Table ${text(details.table)}: ${text(details.count)} rows beyond the first 50 were not shown; no tool reads them.`,
+    ['count', 'table'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-columns-beyond-limit',
+    (details) =>
+      `Table ${text(details.table)}: columns beyond the first 20 were not shown; no tool reads them.`,
+    ['table'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-beyond-limit',
+    (details) =>
+      `${text(details.count)} structured entities beyond the first 25 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-blocks-skipped',
+    (details) =>
+      `Structured-data blocks totaling ${text(details.count)} bytes exceeded the read limit and were skipped; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'fields-beyond-limit',
+    (details) =>
+      `${text(details.count)} label/value fields beyond the first 60 were not shown; no tool reads them.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'snapshot-truncated',
+    () =>
+      'The page was larger than the read limit, so content past the cut was not analyzed; no tool reads it.',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'text-excerpted',
+    () =>
+      'The full text did not fit this result: a 1,000-character excerpt is shown, and the full text is stored with this run as capture_ref; no tool reads it back.',
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'links-trimmed',
+    (details) =>
+      `${text(details.count)} links were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'structured-trimmed',
+    (details) =>
+      `${text(details.count)} structured entities were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'table-rows-trimmed',
+    (details) =>
+      `${text(details.count)} table rows were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'PAGE_COVERAGE',
+    'records-trimmed',
+    (details) =>
+      `${text(details.count)} records were trimmed to fit this result; the full analysis is stored with this run, and no tool reads it back.`,
+    ['count'],
+  ),
+  tool(
+    'EXTRACTION_EMPTY',
+    'nothing-readable',
+    (details) =>
+      `Nothing readable was found on the page: looked for ${text(details.looked_for)}, and found none. ` +
+      'It is not worth fetching again. Use a different URL from search results or from links[] of a page you already read.',
+    ['looked_for'],
+    'web_fetch',
+  ),
+  tool(
+    'WEB_READ',
+    'page-summary',
+    () =>
+      "This is a summary of the page. web_fetch of this URL returns its full records, links, and tables from this run's store, with no new fetch and no navigation spent.",
+    [],
+    'web_fetch',
+  ),
   // A human-verification page (FEAT-050 G10, policy b). The run never solves,
   // waits out, or retries a challenge, so the only moves are other evidence
   // or publishing; the handoff detail makes an unpublished run a handoff.
@@ -322,14 +456,28 @@ export const AGENT_INTERACTION_MESSAGES = [
     ['limit', 'skipped'],
     'result_publish',
   ),
+  // Provenance refusals (FEAT-FP-007, FEAT-051). Both tools refuse a URL no
+  // evidence attested, name the same engineered moves — a link from a read
+  // page's links[]/records[], or web_search (whose limit: 0 lists URLs without
+  // fetching) — and share one "repeated" sentence and one refusal counter.
   tool(
     'URL_NOT_FROM_EVIDENCE',
     'unattested-url',
     (details) =>
-      'This URL introduces a path or parameter name that no search result or visited page attested. You may vary query values on an already-visited URL, but may not invent a new path, parameter name, or identifier. Use web_search or click through from an observed page to attest anything else.' +
+      'This URL introduces a path or parameter name that no search result, page read, or visited page attested. You may vary query values on an already-visited URL, but may not invent a new path, parameter name, or identifier. Use a link from links[] or records[] of a page you already read, run web_search, or click through from an observed page.' +
       (details.repeated === true
-        ? " This same normalized URL has already been refused. Submit the page's form with browser_click on its submit/search control, or reach the target by clicking a search result. Repeating this URL will keep failing."
+        ? " Submit the page's form with browser_click on its submit/search control, or reach the target by clicking a search result." +
+          REFUSED_AGAIN
         : ''),
+    ['repeated'],
+    'web_search',
+  ),
+  tool(
+    'URL_NOT_FROM_EVIDENCE',
+    'unattested-fetch-url',
+    (details) =>
+      'This URL came from no search result, no page read in this run, and not the goal, so it was not fetched and nothing was spent. Use a URL from search results, or a link from links[] or records[] of a page you already read. To locate a page, run web_search (limit: 0 lists URLs without fetching anything).' +
+      (details.repeated === true ? REFUSED_AGAIN : ''),
     ['repeated'],
     'web_search',
   ),
@@ -367,8 +515,25 @@ export const AGENT_INTERACTION_MESSAGES = [
     'INVALID_INPUT',
     'extraction-kind',
     (details) =>
-      `"${text(details.kind).slice(0, 40)}" is not a supported extraction kind. Retry with kind:"content" for the page title and readable text, or kind:"table" for the first table.`,
+      `"${text(details.kind).slice(0, 40)}" is not a supported extraction kind. Retry with ` +
+      'kind:"content" for the title and readable text, "records" for repeated listing or ' +
+      'result items, "links" for pagination, facet, and detail links, "structured" for ' +
+      'schema.org data, "tables" for every table, or "table" with index:n for one table.',
     ['kind'],
+    'browser_extract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'table-index',
+    (details) => {
+      const count = Number(details.count);
+      return count === 0
+        ? 'The page has no tables, so there is no table to read. Use kind:"content" for its text or kind:"records" for repeated items.'
+        : `The page has ${text(details.count)} tables (index 0 to ${count - 1}); index ${text(details.index)} is out of range. ` +
+            'Retry kind:"table" with an index in that range, or kind:"tables" for all of them.';
+    },
+    ['count', 'index'],
+    'browser_extract',
   ),
   middleware('INVALID_INPUT', 'schema-validation', passThrough, ['message']),
   middleware(

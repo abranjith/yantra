@@ -160,12 +160,14 @@ describe('@no-llm real Chrome browser tools', () => {
     };
     expect(submitPayload.observation?.digest).toContain('Submitted');
 
+    // FEAT-051: tables are read from a live snapshot through the core analyzer.
     const extraction = await call('browser_extract', { kind: 'table' });
-    const payload = JSON.parse(extraction.modelText) as { capture_ref: string; preview: unknown };
-    expect(payload.capture_ref).toMatch(/^cap-/);
-    expect(
-      await readFile(join(runDir, 'captures', `${payload.capture_ref}.json`), 'utf8'),
-    ).toContain('accepted');
+    const payload = JSON.parse(extraction.modelText) as {
+      tables?: { index: number }[];
+      source_id?: string;
+    };
+    expect(payload.tables?.[0]?.index).toBe(0);
+    expect(JSON.stringify(payload.tables)).toContain('accepted');
   });
 
   it('surfaces disabled actionability and follows both popup mechanisms', async () => {

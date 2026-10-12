@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   BrowserActionabilityError,
   EthicsRefusedError,
+  ReadabilityExtractor,
   StaleElementRefError,
   type AgentBrowserController,
 } from '@yantra/core';
@@ -16,11 +17,13 @@ import { browserExtractSpec } from '../../../../src/adapters/pi/tools/browser-ex
 import { browserFillElementSpec } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-observe.js';
+import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps, RunServices } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
+import { listingHtml, multiTableHtml } from './page-fixtures.js';
 import { assertToolContract, buildServices } from './test-support.js';
 
 describe('@no-llm browser tools', () => {
@@ -275,6 +278,45 @@ describe('@no-llm browser tools', () => {
 
       expect(result.error_code).toBe('URL_NOT_FROM_EVIDENCE');
       expect(controller.navigate).not.toHaveBeenCalled();
+    });
+
+    it('navigates to a discovered link and names its source in the audit (FEAT-051)', async () => {
+      const controller = fakeController();
+      controller.navigate.mockResolvedValue({ url: 'https://shop.test/item/7', title: 'Item' });
+      const provenance = new UrlProvenance();
+      provenance.record('https://shop.test/item/7', {
+        kind: 'discovered',
+        sourceId: 'S1',
+        linkKind: 'record',
+      });
+      const services = browserServices(controller, {}, provenance);
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://shop.test/item/7' },
+        undefined,
+      );
+
+      expect(result.status).toBe('ok');
+      expect((result.details as { provenance?: unknown }).provenance).toEqual({
+        match: 'exact',
+        kind: 'discovered',
+        via: 'S1',
+        link_kind: 'record',
+      });
+    });
+
+    it('records the unattested refusal in the audit details', async () => {
+      const controller = fakeController();
+      const services = browserServices(controller, {}, seeded('https://example.com/'));
+
+      const result = await wrapTool(browserNavigateSpec(services), services).execute(
+        { url: 'https://example.com/guessed/path' },
+        undefined,
+      );
+
+      expect(result.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+      expect(result.details).toEqual({ provenance: { match: 'none', kind: 'none' } });
+      expect(result.modelText).toContain('links[] or records[]');
     });
 
     it('allows the recorded page without its trailing slash', async () => {
@@ -564,22 +606,18 @@ describe('@no-llm browser tools', () => {
     expect(controller.click).not.toHaveBeenCalled();
   });
 
-  it('extracts tables and stores oversized results as a capture reference', async () => {
+  it('reads every table from a page snapshot through the core analyzer (FEAT-051)', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({
-      headers: ['A'],
-      rows: Array.from({ length: 30 }, () => ['long value']),
-    });
-    const services = browserServices(controller, { captureThresholdBytes: 32 });
+    controller.snapshot.mockResolvedValue(snapshotOf(multiTableHtml()));
+    const services = browserServices(controller);
     const result = await wrapTool(browserExtractSpec(services), services).execute(
-      { kind: 'table' },
+      { kind: 'tables' },
       undefined,
     );
     expect(result.status).toBe('ok');
-    const parsed = JSON.parse(result.modelText) as { capture_ref: string };
-    expect(
-      await readFile(join(runDir, 'captures', `${parsed.capture_ref}.json`), 'utf8'),
-    ).toContain('long value');
+    const parsed = JSON.parse(result.modelText) as { tables: { index: number }[] };
+    expect(parsed.tables.map((table) => table.index)).toEqual([0, 1]);
+    expect(controller.extract).not.toHaveBeenCalled();
   });
 
   // The Pi SDK compiles the same TypeBox schema and rejects the call BEFORE the
@@ -612,22 +650,34 @@ describe('@no-llm browser tools', () => {
     ['  readable content ', 'content'],
     ['page-content', 'content'],
     ['content', 'content'],
-    ['tables', 'table'],
-    ['table', 'table'],
-  ])('resolves kind "%s" to the %s extraction', async (requested, expected) => {
+    ['tables', 'tables'],
+    ['table', 'tables'],
+    ['first_table', 'tables'],
+    ['listings', 'records'],
+    ['items', 'records'],
+    ['results', 'records'],
+    ['records', 'records'],
+    ['urls', 'links'],
+    ['links', 'links'],
+    ['json_ld', 'structured'],
+    ['schema', 'structured'],
+  ])('resolves kind "%s" to the %s extraction', async (requested, part) => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue(
-      expected === 'content'
-        ? { title: 'T', text: 'body text' }
-        : { headers: ['A'], rows: [['1']] },
-    );
+    controller.extract.mockResolvedValue({ title: 'T', text: 'body text' });
+    controller.snapshot.mockResolvedValue(snapshotOf(listingWithTablesHtml()));
     const services = browserServices(controller);
     const result = await wrapTool(browserExtractSpec(services), services).execute(
       { kind: requested },
       undefined,
     );
     expect(result.status).toBe('ok');
-    expect(controller.extract).toHaveBeenCalledWith(expected);
+    if (part === 'content') {
+      expect(controller.extract).toHaveBeenCalledWith('content');
+      expect(controller.snapshot).not.toHaveBeenCalled();
+    } else {
+      expect(controller.snapshot).toHaveBeenCalledOnce();
+      expect(JSON.parse(result.modelText)).toHaveProperty(part);
+    }
   });
 
   it('refuses an unsupported kind with a retryable message naming the valid kinds', async () => {
@@ -640,8 +690,9 @@ describe('@no-llm browser tools', () => {
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('INVALID_INPUT');
     expect(result.retryable).toBe(true);
-    expect(result.modelText).toContain('kind:\\"content\\"');
-    expect(result.modelText).toContain('kind:\\"table\\"');
+    for (const kind of ['content', 'records', 'links', 'structured', 'tables', 'table']) {
+      expect(result.modelText).toContain(`\\"${kind}\\"`);
+    }
     // The refusal is an input decision: no extraction was attempted.
     expect(controller.extract).not.toHaveBeenCalled();
   });
@@ -815,20 +866,19 @@ describe('@no-llm browser tools', () => {
     expect(services.documents.stats().observed).toBe(0);
   });
 
-  it('gives a table extraction an ID only when its page is already recorded', async () => {
+  it('records a table read as evidence with an ID (FEAT-051 supersedes the FEAT-050 table rule)', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ headers: ['Hotel'], rows: [['Motel 6']] });
+    controller.snapshot.mockResolvedValue(snapshotOf(multiTableHtml()));
     const services = browserServices(controller);
-    const tool = wrapTool(browserExtractSpec(services), services);
 
-    const unrecorded = JSON.parse((await tool.execute({ kind: 'table' }, undefined)).modelText);
-    services.documents.observe('https://example.com/page', { title: 'P', tool: 'browser_extract' });
-    const recorded = JSON.parse((await tool.execute({ kind: 'table' }, undefined)).modelText);
+    const result = JSON.parse(
+      (await wrapTool(browserExtractSpec(services), services).execute({ kind: 'table' }, undefined))
+        .modelText,
+    ) as { source_id?: string; tables?: unknown[] };
 
-    expect(unrecorded).not.toHaveProperty('source_id');
-    expect(recorded).toMatchObject({ source_id: 'S1', headers: ['Hotel'] });
-    // Tables alone never create a source.
-    expect(services.evidence.isEmpty()).toBe(true);
+    expect(result.source_id).toBe('S1');
+    expect(result.tables).toHaveLength(1);
+    expect(services.evidence.entries().map((entry) => entry.sourceId)).toEqual(['S1']);
   });
 
   it('mints no ID and no ledger entry for about:blank', async () => {
@@ -1032,6 +1082,7 @@ describe('@no-llm browser tools', () => {
     return buildServices({
       runDir,
       urlProvenance,
+      fetch: { extractor: new ReadabilityExtractor() },
       domain: {
         browser: {
           controller: controller as unknown as AgentBrowserController,
@@ -1049,7 +1100,7 @@ describe('@no-llm browser tools', () => {
 /** A provenance record pre-loaded with URLs a tool result would have produced. */
 function seeded(...urls: readonly string[]): UrlProvenance {
   const provenance = new UrlProvenance();
-  for (const url of urls) provenance.record(url);
+  for (const url of urls) provenance.record(url, { kind: 'tool', tool: 'test' });
   return provenance;
 }
 
@@ -1065,6 +1116,7 @@ function fakeController() {
     click: vi.fn().mockResolvedValue(landed),
     fill: vi.fn(),
     extract: vi.fn(),
+    snapshot: vi.fn().mockResolvedValue(snapshotOf('<html><body><p>Page.</p></body></html>')),
     // Nothing to follow by default; the tab-follow tests supply their own.
     adoptPopup: vi.fn().mockResolvedValue(null),
     url: vi.fn().mockReturnValue('https://example.com/page'),
@@ -1079,3 +1131,235 @@ function fakeController() {
     beginToolCall: vi.fn(),
   };
 }
+
+/** A page snapshot as the controller would serialize it. */
+function snapshotOf(html: string, url = 'https://example.com/page') {
+  return { url, title: 'Page', html, visibleText: '', truncated: false };
+}
+
+/** A listing whose page also holds a table and schema.org data, so every kind has a part. */
+function listingWithTablesHtml(): string {
+  return listingHtml().replace(
+    '</main>',
+    '<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>' +
+      '<script type="application/ld+json">{"@type":"Product","name":"P","url":"https://example.com/p"}</script></main>',
+  );
+}
+
+describe('@no-llm browser_extract — shape-aware kinds (FEAT-051)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-extract-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  function services(
+    controller: ReturnType<typeof fakeController>,
+    trace?: AgentTrace,
+  ): RunServices {
+    return buildServices({
+      runDir,
+      urlProvenance: seeded('https://example.com/'),
+      ...(trace === undefined ? {} : { trace }),
+      fetch: { extractor: new ReadabilityExtractor() },
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: { check: () => Promise.resolve() },
+          secretResolver: null,
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 16 * 1024,
+        },
+      },
+    });
+  }
+
+  async function extract(
+    run: RunServices,
+    params: Record<string, unknown>,
+  ): Promise<{
+    status: string;
+    error_code?: string;
+    model: Record<string, unknown>;
+    details: unknown;
+  }> {
+    const result = await wrapTool(browserExtractSpec(run), run).execute(params, undefined);
+    return {
+      status: result.status,
+      ...(result.error_code === undefined ? {} : { error_code: result.error_code }),
+      model: JSON.parse(result.modelText) as Record<string, unknown>,
+      details: result.details,
+    };
+  }
+
+  it('returns anchored records from a listing and records the page as evidence', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(listingHtml()));
+    const run = services(controller);
+
+    const { model } = await extract(run, { kind: 'records' });
+
+    expect((model.records as { id: string }[]).map((record) => record.id)).toEqual([
+      'S1#r1',
+      'S1#r2',
+      'S1#r3',
+      'S1#r4',
+      'S1#r5',
+      'S1#r6',
+    ]);
+    expect(model.links).toBeUndefined();
+    expect(run.evidence.entries()).toHaveLength(1);
+  });
+
+  it('returns one table by index, and refuses an index past the last table', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(multiTableHtml()));
+    const run = services(controller);
+
+    const second = await extract(run, { kind: 'table', index: 1 });
+    const missing = await extract(run, { kind: 'table', index: 5 });
+
+    const [table] = second.model.tables as { index: number; rows: string[][] }[];
+    expect(table?.index).toBe(1);
+    expect(table?.rows).toContainEqual(['Summit', 'AWD', '4,500 lb']);
+    expect(missing.error_code).toBe('INVALID_INPUT');
+    expect(missing.details).toEqual({ count: 2 });
+    expect(JSON.stringify(missing.model)).toContain('The page has 2 tables (index 0 to 1)');
+  });
+
+  it('says a page has no tables when asked for one', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(
+      snapshotOf('<html><body><p>No tables.</p></body></html>'),
+    );
+    const missing = await extract(services(controller), { kind: 'table', index: 0 });
+    expect(JSON.stringify(missing.model)).toContain('has no tables');
+  });
+
+  it('returns structured entities', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(listingWithTablesHtml()));
+    const { model } = await extract(services(controller), { kind: 'structured' });
+    expect(model.structured).toEqual([
+      { type: 'Product', from: 'json-ld', props: { name: 'P', url: 'https://example.com/p' } },
+    ]);
+  });
+
+  it('returns links with record links included, attests them, and records no evidence', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(
+      snapshotOf(listingHtml(), 'https://example.com/new/results'),
+    );
+    const run = services(controller);
+
+    const { model } = await extract(run, { kind: 'links' });
+    const links = model.links as { kind: string; url: string }[];
+
+    expect(links.filter((link) => link.kind === 'record')).toHaveLength(6);
+    expect(links[0]?.kind).toBe('pagination');
+    expect(run.evidence.isEmpty()).toBe(true);
+    expect(run.urlProvenance.explain('https://example.com/vehicle/itm-01')?.origin).toEqual({
+      kind: 'discovered',
+      sourceId: 'S1',
+      linkKind: 'record',
+    });
+  });
+
+  it('refuses a challenge page with a handoff, no evidence, and no provenance', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(
+      snapshotOf(
+        '<html><head><title>Verify you are human</title></head><body><form>' +
+          '<div class="g-recaptcha" data-sitekey="k"></div><a href="/next">next</a></form></body></html>',
+        'https://example.com/walled',
+      ),
+    );
+    const run = services(controller);
+
+    const result = await extract(run, { kind: 'records' });
+
+    expect(result.error_code).toBe('SITE_CHALLENGE');
+    expect(result.details).toMatchObject({ handoff: true, tier: 'browser' });
+    expect(run.evidence.isEmpty()).toBe(true);
+    expect(run.urlProvenance.has('https://example.com/next')).toBe(false);
+    expect(run.documents.entries()).toEqual([]);
+  });
+
+  it('keeps record anchors stable when a card is inserted at the top', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(listingHtml()));
+    const run = services(controller);
+    const first = (await extract(run, { kind: 'records' })).model.records as {
+      id: string;
+      url: string;
+    }[];
+
+    const inserted = listingHtml().replace(
+      '<ol>',
+      '<ol><li><h3><a href="/vehicle/itm-99">New 2026 Teyra Summit 99</a></h3>' +
+        '<p><a href="/dealer/9">Late Arrival Motors</a></p><p>1.0 mi away</p></li>',
+    );
+    controller.snapshot.mockResolvedValue(snapshotOf(inserted));
+    const second = (await extract(run, { kind: 'records' })).model.records as {
+      id: string;
+      url: string;
+    }[];
+
+    const idOf = (records: { id: string; url: string }[], url: string): string | undefined =>
+      records.find((record) => record.url === url)?.id;
+    for (const record of first) expect(idOf(second, record.url)).toBe(record.id);
+    expect(idOf(second, 'https://example.com/vehicle/itm-99')).toBe('S1#r7');
+  });
+
+  it('reads the same records as web_fetch from the same HTML (one grammar)', async () => {
+    const controller = fakeController();
+    const url = 'https://example.com/new/results';
+    controller.snapshot.mockResolvedValue(snapshotOf(listingHtml(), url));
+    const live = (await extract(services(controller), { kind: 'records' })).model.records;
+
+    const fetchRun = buildServices({
+      runDir,
+      urlProvenance: seeded(url),
+      fetch: {
+        fetcher: {
+          fetch: () =>
+            Promise.resolve({
+              url,
+              finalUrl: url,
+              fetchedAt: 'x',
+              contentType: 'text/html',
+              html: listingHtml(),
+              statusCode: 200,
+              fetchMode: 'browser' as const,
+              elapsedMs: 0,
+            }),
+        },
+        extractor: new ReadabilityExtractor(),
+      },
+    });
+    const fetched = JSON.parse(
+      (await wrapTool(webFetchSpec(fetchRun), fetchRun).execute({ url }, undefined)).modelText,
+    ) as { records: unknown };
+
+    expect(live).toEqual(fetched.records);
+  });
+
+  it('records the replayable read in the trace: only table index 0 promotes as a table', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(multiTableHtml()));
+    const trace = new AgentTrace();
+    const run = services(controller, trace);
+
+    await extract(run, { kind: 'table', index: 0 });
+    await extract(run, { kind: 'table', index: 1 });
+    await extract(run, { kind: 'records' });
+
+    expect(
+      trace.steps().map((step) => (step.kind === 'extract' ? step.extractionKind : step.kind)),
+    ).toEqual(['table', 'content', 'content']);
+  });
+});

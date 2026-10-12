@@ -15,6 +15,20 @@ export interface ChromeInstall {
   readonly source: 'system' | 'managed';
 }
 
+/**
+ * A live page serialized for the core page analyzer (FEAT-051). `html` is
+ * `document.documentElement.outerHTML`, capped at the HTTP fetcher's body
+ * limit; `truncated` is true when the cap cut it.
+ */
+export interface PageSnapshot {
+  readonly url: string;
+  readonly title: string;
+  readonly html: string;
+  /** The body's rendered `innerText`. */
+  readonly visibleText: string;
+  readonly truncated: boolean;
+}
+
 /** How a Chrome profile directory is resolved. */
 export type ProfileSpec =
   | { readonly kind: 'workflow'; readonly workflowName: string }

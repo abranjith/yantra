@@ -23,9 +23,10 @@ import {
   safeRecordRankSignal,
   type DocumentRecord,
   type DomainRankReason,
-  type ExtractedArticle,
   type FetchedDoc,
   type LoadOutcome,
+  type PageAnalysis,
+  type PageExtraction,
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
@@ -38,9 +39,11 @@ import {
 } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 import type { AllowedUrl, UrlPolicyRejection } from '../../../runtime/url-policy.js';
+import { provenanceDetails } from '../../../runtime/url-provenance.js';
 
 import { mapBrowserStartupError } from './browser-startup-errors.js';
-import { writeCapture } from './capture.js';
+import { evidenceExcerpt, fullViewBudget, projectPage, recordDiscovered } from './page-payload.js';
+import { recordProvenanceRefusal } from './provenance-refusals.js';
 
 /**
  * The closed `web_fetch` failure-cause vocabulary (operator-only diagnostics).
@@ -49,6 +52,7 @@ import { writeCapture } from './capture.js';
  * the outbound URL policy's stable codes.
  */
 export const WEB_FETCH_FAILURE_CAUSES = Object.freeze([
+  'unattested-url',
   'url-policy:<code>',
   'budget:<limit>',
   'ethics-refused:<reason>',
@@ -88,8 +92,9 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
     name: 'web_fetch',
     label: 'Web Fetch',
     description:
-      'Fetch ONE specific public URL you already have (a direct link, or a link discovered ' +
-      'inside previously fetched content) and return its readable article text (title + body). ' +
+      'Fetch ONE specific public URL you already have (from search results, the goal, or a ' +
+      "link in links[] or records[] of a page you already read) and return the page's shape " +
+      'and content, plus the links it offers. A URL no result attested is refused. ' +
       'Do NOT use it to explore a topic — web_search already returns page content for a query. ' +
       'Do NOT use it to bypass a paywall/login, to reach a blocked or non-public host, or to ' +
       'download non-text content (PDFs, images, binaries). Every fetched page is recorded as ' +
@@ -98,8 +103,18 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
     sanitizationProfile: 'public',
     budgetMeter: true,
     evidenceGathering: true,
-    run: (params: WebFetchParamsType, ctx): Promise<DomainResult> =>
-      runWebFetch(params, ctx.services, ctx.signal),
+    run: async (params: WebFetchParamsType, ctx): Promise<DomainResult> => {
+      // Provenance gates every fetch (FEAT-051, closes TODO 208): a URL no
+      // search result, page read, or goal attested is refused before policy,
+      // the store, or any budget is touched — exactly as browser_navigate does.
+      const explanation = ctx.services.urlProvenance.explain(params.url);
+      if (explanation === null) return unattested(params.url, ctx.services);
+      const result = await runWebFetch(params, ctx.services, ctx.signal);
+      if (result.ok && explanation.origin.kind === 'discovered') {
+        ctx.services.runHealth.recordDiscoveredFollow();
+      }
+      return withProvenance(result, provenanceDetails(explanation));
+    },
   };
 }
 
@@ -127,6 +142,11 @@ async function runWebFetch(
     case 'hit': {
       services.runHealth.recordCacheHit();
       const { record } = read;
+      // A page web_search showed only as a summary: the full view is one store
+      // read away — no network load, no navigation charged, no evidence re-add.
+      if (record.page !== null && record.page.delivered === 'summary') {
+        return storeServedFullView(record, record.page, services, host);
+      }
       return {
         ok: true,
         model: {
@@ -171,7 +191,7 @@ async function runWebFetch(
 /** What a successful `web_fetch` load hands back to the store's caller. */
 interface FetchedPage {
   readonly doc: FetchedDoc;
-  readonly article: ExtractedArticle;
+  readonly extraction: PageExtraction;
 }
 
 /**
@@ -277,12 +297,12 @@ async function loadPage(
     );
   }
 
-  // Readability extraction. An empty result usually means the URL is not an
-  // article: index/hub pages, media-only pages, and script-rendered shells all
-  // extract to nothing. The message steers the agent toward a usable next step
-  // instead of retrying the same URL.
-  const article = await deps.extractor.extract(doc);
-  if (article === null || article.contentText.trim().length === 0) {
+  // Shape-aware extraction on one parse (FEAT-051). Only a page with no
+  // article and no page parts at all — no records, tables, fields, structured
+  // data, or followable links — is empty; the message says what was looked
+  // for, and the failure stays terminal.
+  const extraction = await deps.extractor.extractPage(doc);
+  if (extraction.page.shape === null) {
     recordFailure(services, allowed.url, 'extract_failed');
     return failed(
       new UnreadableContentError('extraction-empty'),
@@ -290,9 +310,9 @@ async function loadPage(
         {
           ok: false,
           errorCode: 'EXTRACTION_EMPTY',
-          message:
-            'No readable article content could be extracted from the page. It is likely an ' +
-            'index/hub, media-only, or script-rendered page; fetch a specific article URL instead.',
+          message: renderAgentMessage('tool', 'EXTRACTION_EMPTY', 'nothing-readable', {
+            looked_for: lookedFor(extraction.page),
+          }),
           retryable: false,
           details: { final_url: doc.finalUrl, fetch_mode: doc.fetchMode },
         },
@@ -304,11 +324,11 @@ async function loadPage(
 
   return {
     ok: true,
-    value: { doc, article },
+    value: { doc, extraction },
     meta: {
       url: allowed.url,
       finalUrl: doc.finalUrl,
-      title: article.title,
+      title: extraction.article?.title ?? null,
       fetchMode: doc.fetchMode,
       tool: 'web_fetch',
     },
@@ -322,62 +342,146 @@ async function publishPage(
   services: RunServices,
   host: string,
 ): Promise<DomainResult> {
-  const { doc, article } = page;
-  const deps = services.domain.fetch;
+  const { doc, extraction } = page;
+  const { article } = extraction;
 
   // A successfully fetched page is an attested URL, so the model may navigate
   // to it later. Recorded only on success — a URL that could not be fetched and
   // read attests nothing, which keeps a failed guess from earning navigation.
-  services.urlProvenance.record(article.url);
-  services.urlProvenance.record(doc.finalUrl);
+  services.urlProvenance.record(doc.url, FETCH_ORIGIN);
+  services.urlProvenance.record(doc.finalUrl, FETCH_ORIGIN);
+
+  const stored = services.documents.attachPage(record.sourceId, extraction.page, {
+    delivered: 'full',
+    article: article === null ? null : { byline: article.byline, publishedAt: article.publishedAt },
+  });
+  if (stored === null) throw new Error(`document store lost ${record.sourceId}`);
+  const projection = await projectPage(
+    { sourceId: record.sourceId, url: doc.finalUrl, title: article?.title ?? null, page: stored },
+    'full',
+    fullViewBudget(services.budgets.maxBytesPerResult),
+    services,
+  );
+  // Every URL the view shows becomes navigable, attributed to this source (G3).
+  recordDiscovered(services, record.sourceId, projection.model);
+  if (extraction.page.shape !== null) {
+    services.runHealth.recordPage(extraction.page.shape, projection.stats);
+  }
+  if (projection.textCaptureRef !== null) {
+    services.documents.attachCapture(record.sourceId, projection.textCaptureRef);
+  }
 
   // The fetched page becomes ledger evidence: result_publish attaches these
   // as the Brief's sources, so the model never re-types URLs.
   services.evidence.add({
-    url: article.url,
-    finalUrl: doc.finalUrl === article.url ? null : doc.finalUrl,
-    title: article.title,
-    excerpt: article.excerpt ?? article.contentText.slice(0, 1000),
+    url: doc.finalUrl,
+    finalUrl: doc.finalUrl === doc.url ? null : doc.finalUrl,
+    title: article?.title ?? null,
+    excerpt: evidenceExcerpt(extraction.page, article?.excerpt ?? null),
     fetchedAt: services.nowIso(),
-    publishedAt: article.publishedAt,
+    publishedAt: article?.publishedAt ?? null,
     tool: 'web_fetch',
     sourceId: record.sourceId,
   });
 
-  // Large content → capture reference instead of an inline dump.
-  const textBytes = Buffer.byteLength(article.contentText, 'utf8');
-  if (textBytes > deps.captureThresholdBytes) {
-    const captureRef = await writeCapture(services.runDir, article.contentText);
-    services.documents.attachCapture(record.sourceId, captureRef);
-    return {
-      ok: true,
-      model: {
-        source_id: record.sourceId,
-        url: article.url,
-        title: article.title,
-        excerpt: article.excerpt ?? article.contentText.slice(0, 1000),
-        capture_ref: captureRef,
-        length_chars: article.lengthChars,
-        note: 'Full content stored as a capture; the excerpt is shown here.',
-      },
-      details: { capture_ref: captureRef, bytes: textBytes, source_id: record.sourceId },
-      diagnostic: { host, fetch_mode: doc.fetchMode },
-    };
-  }
-
   return {
     ok: true,
-    model: {
+    model: projection.model,
+    details: {
+      bytes: Buffer.byteLength(extraction.page.readableText, 'utf8'),
+      final_url: doc.finalUrl,
       source_id: record.sourceId,
-      url: article.url,
-      title: article.title,
-      byline: article.byline,
-      published_at: article.publishedAt,
-      text: article.contentText,
+      shape: extraction.page.shape,
+      ...captureDetails(projection),
     },
-    details: { bytes: textBytes, final_url: doc.finalUrl, source_id: record.sourceId },
     diagnostic: { host, fetch_mode: doc.fetchMode },
   };
+}
+
+/**
+ * The full view of a page `web_search` showed only as a summary, served from
+ * the run's store: no network load, no navigation charged, no evidence re-add,
+ * and no rank signal. Marked delivered, so a later read is `already_read`.
+ */
+async function storeServedFullView(
+  record: DocumentRecord,
+  page: NonNullable<DocumentRecord['page']>,
+  services: RunServices,
+  host: string,
+): Promise<DomainResult> {
+  const projection = await projectPage(
+    { sourceId: record.sourceId, url: record.finalUrl ?? record.url, title: record.title, page },
+    'full',
+    fullViewBudget(services.budgets.maxBytesPerResult),
+    services,
+  );
+  recordDiscovered(services, record.sourceId, projection.model);
+  services.documents.markDelivered(record.sourceId, 'full');
+  if (page.analysis.shape !== null) {
+    services.runHealth.recordPage(page.analysis.shape, projection.stats);
+  }
+  return {
+    ok: true,
+    model: { ...projection.model, from_store: true },
+    details: {
+      source_id: record.sourceId,
+      from_store: true,
+      shape: page.analysis.shape,
+      ...captureDetails(projection),
+    },
+    diagnostic: { host },
+  };
+}
+
+/** The phrase listing what an empty read looked for. */
+function lookedFor(page: PageAnalysis): string {
+  return page.coverage.not_found.map((phrase) => phrase.replace(/^no /u, '')).join(', ');
+}
+
+/** Capture references a projection wrote, for the audit. */
+function captureDetails(projection: {
+  readonly textCaptureRef: string | null;
+  readonly analysisCaptureRef: string | null;
+}): Record<string, string> {
+  return {
+    ...(projection.textCaptureRef === null ? {} : { capture_ref: projection.textCaptureRef }),
+    ...(projection.analysisCaptureRef === null
+      ? {}
+      : { analysis_capture_ref: projection.analysisCaptureRef }),
+  };
+}
+
+/** URLs a fetched page itself attests: its requested and final URL. */
+const FETCH_ORIGIN = { kind: 'tool', tool: 'web_fetch' } as const;
+
+/**
+ * A URL no evidence attested, refused before anything is spent. The repeat
+ * counter is shared with `browser_navigate`, so the "repeated" wording follows
+ * the URL across both tools.
+ */
+function unattested(url: string, services: RunServices): DomainFailure {
+  const count = recordProvenanceRefusal(services, url);
+  return withHost(
+    {
+      ok: false,
+      errorCode: 'URL_NOT_FROM_EVIDENCE',
+      message: renderAgentMessage('tool', 'URL_NOT_FROM_EVIDENCE', 'unattested-fetch-url', {
+        repeated: count >= 2,
+      }),
+      retryable: true,
+      details: { provenance: provenanceDetails(null) },
+    },
+    'unattested-url',
+    domainFromUrl(url),
+  );
+}
+
+/** Attach the audit-only provenance detail to a result, success or failure. */
+function withProvenance(
+  result: DomainResult,
+  provenance: Readonly<Record<string, string>>,
+): DomainResult {
+  return { ...result, details: { ...asDetailsRecord(result.details), provenance } };
 }
 
 /**

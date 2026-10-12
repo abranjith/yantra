@@ -12,7 +12,6 @@ import {
   type AgentBrowserController,
   type ContentFetcher,
   type EthicsGate,
-  type Extractor,
   type SearchProvider,
 } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
@@ -38,7 +37,7 @@ import {
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
-import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
+import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -122,7 +121,7 @@ function buildEnvironment(teardown: ReturnType<typeof vi.fn>): AgenticRunEnviron
     search: () => Promise.resolve([]),
   };
   const fetcher: ContentFetcher = { fetch: () => Promise.reject(new Error('unused')) };
-  const extractor: Extractor = { extract: () => Promise.resolve(null) };
+  const extractor = extractorReturning(null);
   const ethics: EthicsGate = { check: () => Promise.resolve() };
   return {
     browserController: { teardown } as unknown as Pick<AgentBrowserController, 'teardown'>,

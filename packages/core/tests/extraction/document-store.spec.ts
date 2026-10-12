@@ -8,6 +8,7 @@ import {
   type LoadOutcome,
 } from '../../src/extraction/document-store.js';
 import { FetchError } from '../../src/extraction/fetcher.js';
+import type { PageAnalysis } from '../../src/extraction/page/types.js';
 
 const BASE = { taskId: 't', runId: 'r', stepId: 's' };
 
@@ -369,5 +370,121 @@ describe('@no-llm extraction/document-store isTerminalFetchFailure', () => {
     expect(isTerminalFetchFailure(new Error('x'))).toBe(false);
     expect(isTerminalFetchFailure(null)).toBe(false);
     expect(isTerminalFetchFailure('BUDGET_EXHAUSTED')).toBe(false);
+  });
+});
+
+/** A minimal analysis holding records with the given keys, in order. */
+function analysisWith(keys: readonly string[]): PageAnalysis {
+  return {
+    shape: 'collection',
+    records: keys.map((key) => ({
+      key,
+      title: `Title ${key}`,
+      url: key.startsWith('https://') ? key : null,
+      segments: [`segment ${key}`],
+      fields: [],
+      numbers: [],
+      links: [],
+    })),
+    structured: [],
+    tables: [],
+    fields: [],
+    links: [],
+    recordLinkCount: keys.length,
+    readableText: '',
+    coverage: { shape_basis: 'collection: test', fetch_mode: 'http', not_found: [], omitted: [] },
+  };
+}
+
+const CARDS = [1, 2, 3, 4, 5, 6].map((n) => `https://shop.test/item/${n}`);
+
+describe('@no-llm extraction/document-store pages and anchors (FEAT-051)', () => {
+  async function storeWithS1(): Promise<DocumentStore> {
+    const store = new DocumentStore(() => '2026-10-12T00:00:00.000Z');
+    await store.read('https://shop.test/list', okLoader('https://shop.test/list').load);
+    return store;
+  }
+
+  it('assigns anchors 1..n in record order on first attach', async () => {
+    const store = await storeWithS1();
+    const page = store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null });
+
+    expect([...(page?.anchors.values() ?? [])]).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(store.get('S1')?.page?.delivered).toBe('full');
+  });
+
+  it("keeps each key's anchor when records reorder, and gives a new key max + 1", async () => {
+    const store = await storeWithS1();
+    store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null });
+    const fresh = 'https://shop.test/item/new';
+    const reordered = [fresh, ...[...CARDS].reverse()];
+
+    const page = store.attachPage('S1', analysisWith(reordered), {
+      delivered: 'full',
+      article: null,
+    });
+
+    expect(page?.anchors.get(fresh)).toBe(7);
+    expect(CARDS.map((key) => page?.anchors.get(key))).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('never reassigns an anchor of a record that disappeared', async () => {
+    const store = await storeWithS1();
+    store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null });
+    store.attachPage('S1', analysisWith(CARDS.slice(1)), { delivered: 'full', article: null });
+    const page = store.attachPage('S1', analysisWith(['https://shop.test/item/later']), {
+      delivered: 'full',
+      article: null,
+    });
+
+    expect(page?.anchors.get('https://shop.test/item/later')).toBe(7);
+    expect(store.resolveAnchor('S1#r1')).toBeNull();
+  });
+
+  it('resolves an anchor to its source and record', async () => {
+    const store = await storeWithS1();
+    store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null });
+
+    const resolved = store.resolveAnchor('S1#r3');
+
+    expect(resolved?.sourceId).toBe('S1');
+    expect(resolved?.record.key).toBe('https://shop.test/item/3');
+  });
+
+  it.each(['S9#r1', 'S1#r99', 'S1r3', 'S1#r0', 's1#r1', '', 'S1#r1x'])(
+    'resolves %j to null',
+    async (id) => {
+      const store = await storeWithS1();
+      store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null });
+      expect(store.resolveAnchor(id)).toBeNull();
+    },
+  );
+
+  it('resolves nothing for a source with no page attached', async () => {
+    const store = await storeWithS1();
+    expect(store.get('S1')?.page).toBeNull();
+    expect(store.resolveAnchor('S1#r1')).toBeNull();
+  });
+
+  it('attaches nothing to an unknown source', () => {
+    const store = new DocumentStore();
+    expect(
+      store.attachPage('S1', analysisWith(CARDS), { delivered: 'full', article: null }),
+    ).toBeNull();
+  });
+
+  it('marks a summary as fully delivered, keeping the anchors', async () => {
+    const store = await storeWithS1();
+    store.attachPage('S1', analysisWith(CARDS), {
+      delivered: 'summary',
+      article: { byline: 'B', publishedAt: null },
+    });
+
+    store.markDelivered('S1', 'full');
+
+    const page = store.get('S1')?.page;
+    expect(page?.delivered).toBe('full');
+    expect(page?.anchors.get(CARDS[0] ?? '')).toBe(1);
+    expect(page?.article).toEqual({ byline: 'B', publishedAt: null });
   });
 });

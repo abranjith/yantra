@@ -14,6 +14,7 @@
  * kept only in normalized form, solely to count repeat fetches.
  */
 
+import type { PageShape } from '@yantra/core';
 import {
   canonicalUrl,
   type BrowserProvider,
@@ -86,10 +87,57 @@ export class RunHealthLedger {
   private memoHits = 0;
   private readonly tierEvents: FetchTierEvent[] = [];
   private publishedNotices = 0;
+  private readonly pagesByShape = new Map<PageShape, number>();
+  private recordsShown = 0;
+  private linksOffered = 0;
+  private linksWithheld = 0;
+  private discoveredFollows = 0;
   /** Every budget limit that refused a call, in first-hit order. */
   private readonly exhaustedOrder: string[] = [];
 
   /** Record one terminal tool outcome (the middleware's chokepoint calls this). */
+  /**
+   * Count one shape-aware page view returned to the model (FEAT-051): its
+   * shape, the records it showed, and the links it offered or withheld.
+   *
+   * @param shape The page's shape.
+   * @param stats What the projected view showed.
+   */
+  public recordPage(
+    shape: PageShape,
+    stats: {
+      readonly recordsShown: number;
+      readonly linksOffered: number;
+      readonly linksWithheld: number;
+    },
+  ): void {
+    this.pagesByShape.set(shape, (this.pagesByShape.get(shape) ?? 0) + 1);
+    this.recordsShown += stats.recordsShown;
+    this.linksOffered += stats.linksOffered;
+    this.linksWithheld += stats.linksWithheld;
+  }
+
+  /**
+   * Count one successful `web_fetch` or `browser_navigate` to a URL a read
+   * page offered (plan §11, "turns spent seeking unreachable URLs", measured
+   * from the side that now succeeds).
+   */
+  public recordDiscoveredFollow(): void {
+    this.discoveredFollows += 1;
+  }
+
+  /** The extraction counters, or undefined when no shape-aware read happened. */
+  private extractionSummary(): RunHealth['extraction'] {
+    if (this.pagesByShape.size === 0 && this.discoveredFollows === 0) return undefined;
+    return {
+      pages_by_shape: Object.fromEntries(this.pagesByShape),
+      records_shown: this.recordsShown,
+      links_offered: this.linksOffered,
+      links_withheld: this.linksWithheld,
+      discovered_follows: this.discoveredFollows,
+    };
+  }
+
   public recordToolOutcome(record: ToolOutcomeRecord): void {
     this.outcomes.push(record);
     if (record.code === 'BUDGET_EXHAUSTED' && record.budgetLimit !== undefined) {
@@ -434,6 +482,7 @@ export class RunHealthLedger {
     for (const failure of this.sourceFailureList) stages[failure.stage] += 1;
     for (const record of this.exhaustions.values()) stages.budget += record.skippedReads;
     const http = this.fetchList.filter((fetch) => fetch.mode === 'http').length;
+    const extraction = this.extractionSummary();
     return {
       schema_version: RUN_HEALTH_SCHEMA_VERSION,
       run_id: input.runId,
@@ -477,6 +526,7 @@ export class RunHealthLedger {
       },
       tool_failures: { total: toolFailures.length, by_code: countByCode(toolFailures) },
       notices: Math.max(0, Math.floor(input.noticeCount)),
+      ...(extraction === undefined ? {} : { extraction }),
     };
   }
 

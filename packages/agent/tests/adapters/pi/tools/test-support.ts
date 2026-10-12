@@ -7,9 +7,11 @@
 import type {
   ContentFetcher,
   EthicsGate,
-  Extractor,
+  ExtractedArticle,
   FetchedDoc,
   Logger,
+  PageAnalysis,
+  PageExtractor,
   SearchProvider,
 } from '@yantra/core';
 import {
@@ -74,6 +76,18 @@ export interface BuildServicesOptions {
    * the middleware writes to `runtime.jsonl`.
    */
   readonly runtimeLogger?: Logger;
+}
+
+/**
+ * Run-scoped provenance that attests every URL on the given hosts, as
+ * `--allow-host` does. For suites whose subject is not provenance itself:
+ * since FEAT-051 `web_fetch` refuses an unattested URL, so a suite about
+ * fetch plumbing must say where its URLs are attested from.
+ */
+export function attestedHosts(...hosts: readonly string[]): UrlProvenance {
+  const provenance = new UrlProvenance();
+  provenance.seed({ allowedHosts: hosts });
+  return provenance;
 }
 
 /** Build a RunServices with sensible fakes and overridable domain deps. */
@@ -207,30 +221,65 @@ function throwingFetcher(): ContentFetcher {
   };
 }
 
-/** An extractor returning caller-supplied text (or null). */
-export function extractorReturning(text: string | null): Extractor {
+/**
+ * An extractor returning caller-supplied text (or null). Its shape-aware read
+ * reports an `article` page holding that text and no other parts, so a suite
+ * about tool plumbing sees today's article payload.
+ */
+export function extractorReturning(text: string | null): PageExtractor {
+  const articleOf = (doc: FetchedDoc): ExtractedArticle | null =>
+    text === null
+      ? null
+      : {
+          url: doc.finalUrl,
+          title: 'Fixture Title',
+          byline: null,
+          publishedAt: null,
+          siteName: null,
+          contentText: text,
+          contentHtml: `<p>${text}</p>`,
+          excerpt: text.slice(0, 100),
+          lengthChars: text.length,
+        };
   return {
-    extract: (doc) =>
-      Promise.resolve(
-        text === null
-          ? null
-          : {
-              url: doc.finalUrl,
-              title: 'Fixture Title',
-              byline: null,
-              publishedAt: null,
-              siteName: null,
-              contentText: text,
-              contentHtml: `<p>${text}</p>`,
-              excerpt: text.slice(0, 100),
-              lengthChars: text.length,
-            },
-      ),
+    extract: (doc) => Promise.resolve(articleOf(doc)),
+    extractPage: (doc) => {
+      const article = articleOf(doc);
+      return Promise.resolve({
+        article,
+        page: articlePageAnalysis(article?.contentText ?? null, doc.fetchMode),
+      });
+    },
   };
 }
 
-function nullExtractor(): Extractor {
-  return { extract: () => Promise.resolve(null) };
+/** A page analysis with only article text (or nothing at all when `text` is null). */
+export function articlePageAnalysis(
+  text: string | null,
+  fetchMode: 'http' | 'browser' = 'http',
+): PageAnalysis {
+  const hasText = text !== null && text.trim().length > 0;
+  return {
+    shape: hasText ? 'article' : null,
+    records: [],
+    structured: [],
+    tables: [],
+    fields: [],
+    links: [],
+    recordLinkCount: 0,
+    readableText: text ?? '',
+    coverage: {
+      shape_basis: hasText ? 'article: fixture text' : 'empty: fixture page',
+      fetch_mode: fetchMode,
+      ...(hasText ? { text: { chars: text.length, shown: text.length } } : {}),
+      not_found: hasText ? [] : ['no readable article'],
+      omitted: [],
+    },
+  };
+}
+
+function nullExtractor(): PageExtractor {
+  return extractorReturning(null);
 }
 
 /** An ethics gate that allows everything. */

@@ -47,6 +47,7 @@ import type { RunServices } from '../../../runtime/run-services.js';
 import type { AllowedUrl } from '../../../runtime/url-policy.js';
 
 import { writeCapture } from './capture.js';
+import { evidenceExcerpt, projectPage, recordDiscovered, summaryBudget } from './page-payload.js';
 import { mapSearchError } from './search-errors.js';
 
 /** Absolute ceiling on the number of sites fetched+returned to the model. */
@@ -97,7 +98,9 @@ export function webSearchSpec(_services: RunServices): ToolWrapperSpec<typeof We
     description:
       'Search the public web and return the top results WITH their extracted page content and ' +
       'references — evidence in one call, not just links. With limit 0 it only discovers: ' +
-      'titles, URLs, and snippets, with no page fetched. Refine the user’s intent into a ' +
+      'titles, URLs, and snippets, with no page fetched. Each fetched site shows its shape and ' +
+      'a summary; web_fetch of a site URL returns its full records, links, and tables without ' +
+      'a new fetch. Refine the user’s intent into a ' +
       'focused search query before calling. Every fetched site is also recorded as a source ' +
       'for your published result automatically. Do NOT call it repeatedly for the same intent, ' +
       'and do NOT use it for authenticated, private, or logged-in data; use web_fetch only for ' +
@@ -110,6 +113,9 @@ export function webSearchSpec(_services: RunServices): ToolWrapperSpec<typeof We
       runWebSearch(params, ctx.services, ctx.signal),
   };
 }
+
+/** Every URL a search result shows is attested by this tool. */
+const SEARCH_ORIGIN = { kind: 'tool', tool: 'web_search' } as const;
 
 async function runWebSearch(
   params: WebSearchParamsType,
@@ -172,7 +178,7 @@ function discover(
 ): DomainResult {
   const results = hits.map((hit) => ({ url: hit.url, title: hit.title, snippet: hit.snippet }));
   for (const hit of hits) {
-    services.urlProvenance.record(hit.url);
+    services.urlProvenance.record(hit.url, SEARCH_ORIGIN);
     recordSearchResult(hit.url, services);
   }
   return {
@@ -246,7 +252,8 @@ async function readHit(
       const processed = await processSource(
         { ethicsGate: gate, fetcher: fetchDeps.fetcher, extractor: fetchDeps.extractor },
         hit,
-        opts,
+        // Shape-aware (FEAT-051): a listing with no article still reads.
+        { ...opts, extractPage: (doc) => fetchDeps.extractor.extractPage(doc) },
       );
       // A real network fetch happened whenever a fetch mode is known,
       // including a page that was fetched but could not be extracted.
@@ -425,6 +432,10 @@ async function mapReads(
   services: RunServices,
 ): Promise<DomainResult> {
   const threshold = services.domain.fetch.captureThresholdBytes;
+  const fetchedSites = reads.filter(
+    (read) => read.kind === 'processed' && read.processed.doc !== null && read.record !== null,
+  ).length;
+  const perSiteBudget = summaryBudget(services.budgets.maxBytesPerResult, fetchedSites);
   const sites: unknown[] = [];
   const failures: { url: string; stage: string; reason: string }[] = [];
   const skippedByLimit = new Map<BudgetLimitName, number>();
@@ -454,35 +465,71 @@ async function mapReads(
     if (processed.doc !== null && read.kind === 'processed' && read.record !== null) {
       const { record } = read;
       const doc = processed.doc;
-      const base = {
-        source_id: record.sourceId,
-        url: doc.url,
-        title: doc.title,
-        published_at: doc.publishedAt,
-        excerpt: doc.excerpt ?? doc.text.slice(0, 1000),
-      };
+      const page = processed.page;
       // A search hit is an attested URL: the model may navigate to it later.
-      services.urlProvenance.record(doc.url);
+      services.urlProvenance.record(doc.url, SEARCH_ORIGIN);
       // Every fetched site becomes ledger evidence: result_publish attaches
       // these as the Brief's sources, so the model never re-types URLs.
       services.evidence.add({
         url: doc.url,
         finalUrl: null,
         title: doc.title,
-        excerpt: base.excerpt,
+        excerpt:
+          page === undefined
+            ? (doc.excerpt ?? doc.text.slice(0, 1000))
+            : evidenceExcerpt(page, doc.excerpt),
         fetchedAt: services.nowIso(),
         publishedAt: doc.publishedAt,
         tool: 'web_search',
         sourceId: record.sourceId,
       });
+      // An article site keeps today's payload (its text is the content, so it
+      // counts as delivered in full); any other shape is a summary whose full
+      // view one web_fetch serves from the store (FEAT-051).
+      const isArticle = page === undefined || page.shape === 'article';
+      const stored =
+        page === undefined
+          ? null
+          : services.documents.attachPage(record.sourceId, page, {
+              delivered: isArticle ? 'full' : 'summary',
+              article: { byline: null, publishedAt: doc.publishedAt },
+            });
+      const summary =
+        stored === null
+          ? null
+          : await projectPage(
+              { sourceId: record.sourceId, url: doc.url, title: doc.title, page: stored },
+              'summary',
+              perSiteBudget,
+              services,
+            );
+      if (summary !== null && page !== undefined && page.shape !== null) {
+        services.runHealth.recordPage(page.shape, summary.stats);
+      }
+      if (!isArticle && summary !== null) {
+        recordDiscovered(services, record.sourceId, summary.model);
+        sites.push({ ...summary.model, published_at: doc.publishedAt });
+        continue;
+      }
+      const base = {
+        source_id: record.sourceId,
+        url: doc.url,
+        title: doc.title,
+        ...(page === undefined ? {} : { shape: page.shape }),
+        published_at: doc.publishedAt,
+        excerpt: doc.excerpt ?? doc.text.slice(0, 1000),
+      };
+      const coverage = summary === null ? {} : { coverage: summary.model.coverage };
       const textBytes = Buffer.byteLength(doc.text, 'utf8');
       if (textBytes > threshold) {
         const captureRef = await writeCapture(services.runDir, doc.text);
         services.documents.attachCapture(record.sourceId, captureRef);
         captureCount += 1;
-        sites.push({ ...base, capture_ref: captureRef });
+        recordDiscovered(services, record.sourceId, { excerpt: base.excerpt });
+        sites.push({ ...base, capture_ref: captureRef, ...coverage });
       } else {
-        sites.push({ ...base, text: doc.text });
+        recordDiscovered(services, record.sourceId, { excerpt: base.excerpt, text: doc.text });
+        sites.push({ ...base, text: doc.text, ...coverage });
       }
       continue;
     }
@@ -513,7 +560,7 @@ async function mapReads(
   }));
   // The unfetched tail is shown to the model as "more results", so those URLs
   // are equally attested — the model is invited to follow them.
-  for (const hit of moreResults) services.urlProvenance.record(hit.url);
+  for (const hit of moreResults) services.urlProvenance.record(hit.url, SEARCH_ORIGIN);
 
   return {
     ok: true,

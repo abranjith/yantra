@@ -18,7 +18,13 @@ import {
 } from '../../../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
 
-import { buildServices, extractorReturning, fetchedDoc, fetcherReturning } from './test-support.js';
+import {
+  attestedHosts,
+  buildServices,
+  extractorReturning,
+  fetchedDoc,
+  fetcherReturning,
+} from './test-support.js';
 
 function validBrief(): unknown {
   return createBrief({
@@ -137,6 +143,7 @@ describe('@no-llm result_publish tool', () => {
   it('closes the action phase: mutating tools rejected, read tools still allowed', async () => {
     const services = buildServices({
       runDir,
+      urlProvenance: attestedHosts('example.com'),
       publish: createBriefPublisher(runDir),
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),

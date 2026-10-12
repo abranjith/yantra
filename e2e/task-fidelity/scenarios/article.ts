@@ -46,7 +46,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-051',
     measure: (run) => fieldOf(resultLabelled(run, 'article'), 'shape'),
     target: equals('article'),
-    baseline: equals(null),
     note: 'G2: an article page states its own shape.',
   },
 ];

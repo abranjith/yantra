@@ -27,7 +27,45 @@
  * Query values may vary once an origin + path and every parameter name have
  * been attested; new paths and new parameter names remain refused, because
  * those are the places a fabricated identifier can hide.
+ *
+ * Since FEAT-051 every recording carries its {@link ProvenanceOrigin}, and
+ * {@link UrlProvenance.explain} reports which rule admitted a URL and which
+ * recording granted it, so the audit can reconstruct a chain of discovered
+ * links hop by hop.
  */
+
+import type { LinkKind } from '@yantra/core';
+
+/**
+ * How a URL earned its attestation (FEAT-051). The first origin recorded for a
+ * normalized URL wins, so the audit always names the earliest attestation.
+ *
+ * - `goal`: the user wrote the URL in the goal.
+ * - `allow-host`: the user allowlisted the host (`--allow-host`).
+ * - `tool`: a tool result produced it (a search result, a fetched page, a
+ *   browser action's landing URL).
+ * - `discovered`: a page this run read offered it — as a link, a record, a
+ *   structured property, or a URL written in its text. `sourceId` names that
+ *   page, so every hop of a discovered chain is visible in the audit.
+ */
+export type ProvenanceOrigin =
+  | { readonly kind: 'goal' }
+  | { readonly kind: 'allow-host' }
+  | { readonly kind: 'tool'; readonly tool: string }
+  | {
+      readonly kind: 'discovered';
+      readonly sourceId: string;
+      readonly linkKind: LinkKind | 'text' | 'structured';
+    };
+
+/** Which rule admitted a URL. */
+export type ProvenanceMatch = 'exact' | 'origin-root' | 'query-variant' | 'allowed-host';
+
+/** Why a URL is attested: the matching rule and the origin of the recording that granted it. */
+export interface ProvenanceExplanation {
+  readonly match: ProvenanceMatch;
+  readonly origin: ProvenanceOrigin;
+}
 
 /**
  * Append-only set of URLs this run may navigate to.
@@ -36,50 +74,80 @@
  * goal), then extended by every tool that returns a URL.
  */
 export class UrlProvenance {
-  /** Normalized URLs seen this run. */
-  private readonly urls = new Set<string>();
-  /** Normalized origin roots (`https://host/`) of every recorded URL. */
-  private readonly origins = new Set<string>();
+  /** Normalized URLs seen this run, each with the origin that first recorded it. */
+  private readonly urls = new Map<string, ProvenanceOrigin>();
+  /** Normalized origin roots (`https://host/`) of every recorded URL, with the first origin. */
+  private readonly origins = new Map<string, ProvenanceOrigin>();
   /** Query parameter names attested for each normalized origin + path. */
   private readonly queryKeysByOriginPath = new Map<string, Set<string>>();
+  /** The first origin recorded for each normalized origin + path. */
+  private readonly originByOriginPath = new Map<string, ProvenanceOrigin>();
   /** Hostnames the user explicitly allowlisted; see {@link allowHost}. */
   private readonly allowedHosts = new Set<string>();
 
   /**
-   * Records a URL a tool produced. Unparseable input is ignored rather than
-   * thrown: provenance is a permission record, and a malformed string simply
-   * grants nothing.
+   * Records a URL and how it was attested. Unparseable input is ignored rather
+   * than thrown: provenance is a permission record, and a malformed string
+   * simply grants nothing. The first origin for a normalized URL wins.
    *
    * @param url - The URL as the tool reported it.
+   * @param origin - How the URL was attested.
    */
-  public record(url: string): void {
+  public record(url: string, origin: ProvenanceOrigin): void {
     const parsed = parse(url);
     if (parsed === null) return;
-    this.urls.add(parsed.normalized);
-    this.origins.add(parsed.origin);
+    if (!this.urls.has(parsed.normalized)) this.urls.set(parsed.normalized, origin);
+    if (!this.origins.has(parsed.origin)) this.origins.set(parsed.origin, origin);
+    if (!this.originByOriginPath.has(parsed.originPath)) {
+      this.originByOriginPath.set(parsed.originPath, origin);
+    }
     const keys = this.queryKeysByOriginPath.get(parsed.originPath) ?? new Set<string>();
     for (const key of parsed.queryKeys) keys.add(key);
     this.queryKeysByOriginPath.set(parsed.originPath, keys);
   }
 
   /**
-   * Whether this run may navigate to `url`.
+   * Why this run may navigate to `url`, or null when it may not.
    *
-   * True on a normalized exact match, or when the candidate is the bare origin
-   * of any recorded URL — backing out to a site's root is always reachable by
-   * clicking its logo, so refusing it would be a false positive with no safety
-   * value.
+   * Admits, in order: a user-allowlisted host; a normalized exact match; the
+   * bare origin of any recorded URL (backing out to a site's root is always
+   * reachable by clicking its logo, so refusing it would be a false positive
+   * with no safety value); and a recorded origin + path whose every query
+   * parameter name was attested, values free to vary. For a non-exact match the
+   * origin is the one recorded first for that origin root or path.
+   *
+   * @param url - The candidate navigation target.
+   */
+  public explain(url: string): ProvenanceExplanation | null {
+    const parsed = parse(url);
+    if (parsed === null) return null;
+    if (this.allowedHosts.has(parsed.hostname)) {
+      return { match: 'allowed-host', origin: { kind: 'allow-host' } };
+    }
+    const exact = this.urls.get(parsed.normalized);
+    if (exact !== undefined) return { match: 'exact', origin: exact };
+    const root = parsed.isOriginRoot ? this.origins.get(parsed.origin) : undefined;
+    if (root !== undefined) return { match: 'origin-root', origin: root };
+    const knownKeys = this.queryKeysByOriginPath.get(parsed.originPath);
+    const granting = this.originByOriginPath.get(parsed.originPath);
+    if (
+      knownKeys !== undefined &&
+      granting !== undefined &&
+      parsed.queryKeys.every((key) => knownKeys.has(key))
+    ) {
+      return { match: 'query-variant', origin: granting };
+    }
+    return null;
+  }
+
+  /**
+   * Whether this run may navigate to `url`: exactly {@link explain} returning
+   * an explanation, so the decision and its explanation cannot diverge.
    *
    * @param url - The candidate navigation target.
    */
   public has(url: string): boolean {
-    const parsed = parse(url);
-    if (parsed === null) return false;
-    if (this.allowedHosts.has(parsed.hostname)) return true;
-    if (this.urls.has(parsed.normalized)) return true;
-    if (parsed.isOriginRoot && this.origins.has(parsed.origin)) return true;
-    const knownKeys = this.queryKeysByOriginPath.get(parsed.originPath);
-    return knownKeys !== undefined && parsed.queryKeys.every((key) => knownKeys.has(key));
+    return this.explain(url) !== null;
   }
 
   /**
@@ -120,7 +188,30 @@ export class UrlProvenance {
    */
   public seed(input: { readonly allowedHosts?: readonly string[]; readonly goal?: string }): void {
     for (const host of input.allowedHosts ?? []) this.allowHost(host);
-    for (const url of extractUrls(input.goal ?? '')) this.record(url);
+    for (const url of extractUrls(input.goal ?? '')) this.record(url, { kind: 'goal' });
+  }
+}
+
+/**
+ * The audit projection of an explanation (`details.provenance` on `web_fetch`
+ * and `browser_navigate`): the match rule, the origin kind, and — for a
+ * discovered URL — the containing source and link kind. Never page text.
+ *
+ * @param explanation - The explanation, or null for an unattested URL.
+ */
+export function provenanceDetails(
+  explanation: ProvenanceExplanation | null,
+): Readonly<Record<string, string>> {
+  if (explanation === null) return { match: 'none', kind: 'none' };
+  const { match, origin } = explanation;
+  switch (origin.kind) {
+    case 'discovered':
+      return { match, kind: origin.kind, via: origin.sourceId, link_kind: origin.linkKind };
+    case 'tool':
+      return { match, kind: origin.kind, tool: origin.tool };
+    case 'goal':
+    case 'allow-host':
+      return { match, kind: origin.kind };
   }
 }
 
@@ -170,8 +261,13 @@ function parse(url: string): ParsedUrl | null {
 /** Matches absolute http(s) URLs in free text, stopping at trailing punctuation. */
 const URL_IN_TEXT = /https?:\/\/[^\s<>"'`]+/giu;
 
-/** Extracts absolute URLs from free text (the user's own goal). */
-function extractUrls(text: string): string[] {
+/**
+ * Extracts absolute URLs from free text: the user's goal, and the URLs a page
+ * read shows the model in its returned text (one grammar for both).
+ *
+ * @param text - Free text.
+ */
+export function extractUrls(text: string): string[] {
   return (text.match(URL_IN_TEXT) ?? []).map((match) =>
     // Trailing sentence punctuation is not part of the URL.
     match.replace(/[.,;:!?)\]}]+$/u, ''),

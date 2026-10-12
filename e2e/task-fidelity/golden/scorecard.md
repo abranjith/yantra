@@ -18,10 +18,10 @@ Scores are medians across runs; `—` means not measured (a zero denominator). S
 
 | Scenario | Turns | Wall (s) | Cost (USD) | Navigations | Browser launches | Interaction required |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| listing-table | 8 | 0.0 | 0.0000 | 1 | 0 | 0 |
+| listing-table | 8 | 0.0 | 0.0000 | 5 | 0 | 0 |
 | multi-table | 2 | 0.0 | 0.0000 | 1 | 0 | 0 |
 
-Totals: 4 runs, 0.0 s, $0.0000, 4 navigations, 0 browser launches.
+Totals: 4 runs, 0.0 s, $0.0000, 12 navigations, 0 browser launches.
 
 ## Per-run detail
 

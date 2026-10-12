@@ -30,7 +30,6 @@ const expectations: readonly Expectation[] = [
       requests: documentRequests(run).length,
     }),
     target: equals({ status: 'error', errorCode: 'URL_NOT_FROM_EVIDENCE', requests: 0 }),
-    baseline: equals({ status: 'ok', errorCode: null, requests: 1 }),
     note: 'TODO line 208: a URL no evidence offered is refused before any request.',
   },
 ];

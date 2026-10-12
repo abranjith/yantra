@@ -1,0 +1,78 @@
+<!-- page fixture "multi-table": a specification page whose first table is an unrelated summary and whose second table holds the answer. Provenance: FEAT-051 TODO line 214 / FEAT-049 multi-table (an extractor reading only the first table misses the answer). -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Water heater specifications</title>
+  </head>
+  <body>
+    <main>
+      <h1>Water heater specifications</h1>
+      <p>Showroom hours are listed first; capacity ratings follow.</p>
+      <table>
+        <caption>
+          Showroom hours
+        </caption>
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Opens</th>
+            <th>Closes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Weekdays</td>
+            <td>8:00</td>
+            <td>18:00</td>
+          </tr>
+          <tr>
+            <td>Saturday</td>
+            <td>9:00</td>
+            <td>16:00</td>
+          </tr>
+          <tr>
+            <td>Sunday</td>
+            <td>Closed</td>
+            <td>Closed</td>
+          </tr>
+        </tbody>
+      </table>
+      <h2>Capacity</h2>
+      <table>
+        <caption>
+          First-hour rating by tank size
+        </caption>
+        <thead>
+          <tr>
+            <th>Tank</th>
+            <th>Fuel</th>
+            <th>First-hour rating</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>40 gal</td>
+            <td>Gas</td>
+            <td>72 gal</td>
+          </tr>
+          <tr>
+            <td>50 gal</td>
+            <td>Gas</td>
+            <td>84 gal</td>
+          </tr>
+          <tr>
+            <td>50 gal</td>
+            <td>Electric</td>
+            <td>63 gal</td>
+          </tr>
+          <tr>
+            <td>80 gal</td>
+            <td>Heat pump</td>
+            <td>87 gal</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>

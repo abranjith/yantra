@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AskEthicsDecision, AskEthicsGate } from '../../src/extraction/ethics-adapter.js';
 import { FetchError, type ContentFetcher } from '../../src/extraction/fetcher.js';
-import type { Extractor } from '../../src/extraction/readability.js';
+import { ReadabilityExtractor, type Extractor } from '../../src/extraction/readability.js';
 import { processSource } from '../../src/extraction/source-processor.js';
 import type { FetchedDoc, SearchResult } from '../../src/extraction/types.js';
 
@@ -188,5 +188,101 @@ describe('@no-llm processSource — failure stages and fetch mode', () => {
     expect(processed.fetchMode).toBe('browser');
     expect(processed.cause).toBe(challenge);
     expect(extract).not.toHaveBeenCalled();
+  });
+});
+
+describe('@no-llm extraction/source-processor shape-aware option (FEAT-051)', () => {
+  /** Search-result cards with no prose: an article extractor finds nothing worth keeping. */
+  const LISTING =
+    '<html><body><ol>' +
+    [1, 2, 3, 4]
+      .map(
+        (n) =>
+          `<li><h3><a href="/item/${n}">Result item ${n}</a></h3><p><a href="/seller/${n}">Seller ${n}</a></p></li>`,
+      )
+      .join('') +
+    '</ol></body></html>';
+
+  function listingFetcher(): ContentFetcher {
+    return { fetch: () => Promise.resolve({ ...doc('http'), html: LISTING }) };
+  }
+
+  it('without the option, a page with no article fails at extract exactly as before', async () => {
+    const processed = await processSource(
+      { ethicsGate: gate({ ok: true }), fetcher: listingFetcher(), extractor: empty },
+      HIT,
+      OPTS,
+    );
+
+    expect(processed.failure).toEqual({
+      url: HIT.url,
+      host: 'site.example',
+      stage: 'extract',
+      reason: 'could not extract a readable article',
+    });
+    expect(processed).not.toHaveProperty('page');
+  });
+
+  it('with the option, a page with page parts succeeds and carries the analysis', async () => {
+    const extractor = new ReadabilityExtractor();
+    const processed = await processSource(
+      { ethicsGate: gate({ ok: true }), fetcher: listingFetcher(), extractor: empty },
+      HIT,
+      { ...OPTS, extractPage: (fetched) => extractor.extractPage(fetched) },
+    );
+
+    expect(processed.failure).toBeNull();
+    expect(processed.page?.shape).toBe('collection');
+    expect(processed.page?.records).toHaveLength(4);
+    expect(processed.doc?.text).toBe(processed.page?.readableText);
+  });
+
+  it('with the option, a page with nothing at all still fails at extract', async () => {
+    const processed = await processSource(
+      {
+        ethicsGate: gate({ ok: true }),
+        fetcher: {
+          fetch: () => Promise.resolve({ ...doc('http'), html: '<html><body></body></html>' }),
+        },
+        extractor: empty,
+      },
+      HIT,
+      { ...OPTS, extractPage: (fetched) => new ReadabilityExtractor().extractPage(fetched) },
+    );
+
+    expect(processed.failure?.stage).toBe('extract');
+    expect(processed.failure?.reason).toBe('could not extract readable content');
+    expect(processed).not.toHaveProperty('page');
+  });
+
+  it('with the option, an article keeps its article fields', async () => {
+    const processed = await processSource(
+      {
+        ethicsGate: gate({ ok: true }),
+        fetcher: { fetch: () => Promise.resolve(doc('http')) },
+        extractor: article,
+      },
+      HIT,
+      {
+        ...OPTS,
+        extractPage: async (fetched) => ({
+          article: await article.extract(fetched),
+          page: {
+            shape: 'article',
+            records: [],
+            structured: [],
+            tables: [],
+            fields: [],
+            links: [],
+            recordLinkCount: 0,
+            readableText: 'body',
+            coverage: { shape_basis: 'article: x', fetch_mode: 'http', not_found: [], omitted: [] },
+          },
+        }),
+      },
+    );
+
+    expect(processed.doc).toMatchObject({ title: 'Page', text: 'body', excerpt: 'body' });
+    expect(processed.page?.shape).toBe('article');
   });
 });

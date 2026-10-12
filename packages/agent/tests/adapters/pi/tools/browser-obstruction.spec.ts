@@ -81,7 +81,7 @@ function servicesFor(
   userInput?: UserInputVault,
 ): RunServices {
   const provenance = new UrlProvenance();
-  provenance.record('https://example.com/');
+  provenance.record('https://example.com/', { kind: 'tool', tool: 'test' });
   return buildServices({
     urlProvenance: provenance,
     runHealth: new RunHealthLedger(),

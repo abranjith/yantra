@@ -26,3 +26,20 @@ describe('@no-llm runtime log safety / closed cause tokens', () => {
     );
   });
 });
+
+describe('@no-llm runtime log safety / counts under a forbidden key name (FEAT-051)', () => {
+  it('accepts a count keyed by a closed page shape named detail', () => {
+    expect(() =>
+      assertRuntimeEventIsSafe({
+        event: 'run_health',
+        extraction: { pages_by_shape: { detail: 2, collection: 1 } },
+      }),
+    ).not.toThrow();
+  });
+
+  it('still rejects text, objects, and non-finite values under a forbidden key', () => {
+    expect(() => assertRuntimeEventIsSafe({ detail: 'missing selector' })).toThrow(/detail/);
+    expect(() => assertRuntimeEventIsSafe({ detail: { text: 'x' } })).toThrow(/detail/);
+    expect(() => assertRuntimeEventIsSafe({ url: Number.NaN })).toThrow(/url/);
+  });
+});

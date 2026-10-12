@@ -1,0 +1,14 @@
+{
+  "url": "https://news.example/article",
+  "article": {
+    "url": "https://news.example/article",
+    "title": "AI News Roundup",
+    "byline": null,
+    "publishedAt": "2026-05-10T12:00:00.000Z",
+    "siteName": null,
+    "contentText": "Artificial intelligence companies announced several major partnerships this week.\n\nResearchers from Open University demonstrated a new model that improves factual\nconsistency.\n\nRegulators in multiple regions also proposed updated guidance for safety testing.\n\nMarket analysts expect enterprise adoption to accelerate through the next quarter.",
+    "contentHtml": "<div id=\"readability-page-1\" class=\"page\"><div>\n      <article>\n        \n        <p>Artificial intelligence companies announced several major partnerships this week.</p>\n        <p>\n          Researchers from Open University demonstrated a new model that improves factual\n          consistency.\n        </p>\n        <p>Regulators in multiple regions also proposed updated guidance for safety testing.</p>\n        <p>Market analysts expect enterprise adoption to accelerate through the next quarter.</p>\n      </article>\n    </div></div>",
+    "excerpt": "Artificial intelligence companies announced several major partnerships this week.",
+    "lengthChars": 342
+  }
+}

@@ -64,6 +64,13 @@ const isClosedCause = (key: string, value: unknown): boolean =>
   CLOSED_CAUSE_TOKEN.test(value) &&
   !value.includes('//');
 
+/**
+ * A count is legal under any key: a finite number cannot hold a message, a
+ * path, or a URL. FEAT-051's `run_health.extraction.pages_by_shape` counts
+ * pages per closed page shape, one of which is named `detail`.
+ */
+const isCount = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
+
 function walk(value: unknown, keys: string[], strings: string[]): void {
   if (typeof value === 'string') {
     strings.push(value);
@@ -76,7 +83,7 @@ function walk(value: unknown, keys: string[], strings: string[]): void {
   if (value !== null && typeof value === 'object') {
     for (const [key, entry] of Object.entries(value)) {
       // A closed cause token is legal; its key is not reported as forbidden.
-      if (!isClosedCause(key, entry)) keys.push(key);
+      if (!isClosedCause(key, entry) && !isCount(entry)) keys.push(key);
       walk(entry, keys, strings);
     }
   }

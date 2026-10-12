@@ -28,6 +28,13 @@ export class FetchError extends Error {
   }
 }
 
+/**
+ * The most body bytes one read takes. Shared by the HTTP fetcher and the live
+ * page snapshot, so a browser read can never hand the analyzer more than a
+ * fetched read could.
+ */
+export const DEFAULT_MAX_BODY_BYTES = 5 * 1024 * 1024;
+
 export interface HttpFetcherOptions {
   readonly requestFn?: typeof request;
   readonly maxBodyBytes?: number;
@@ -42,7 +49,7 @@ export class HttpFetcher implements ContentFetcher {
 
   public constructor(options: HttpFetcherOptions = {}) {
     this.requestFn = options.requestFn ?? request;
-    this.maxBodyBytes = options.maxBodyBytes ?? 5 * 1024 * 1024;
+    this.maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   }
 
   public async fetch(

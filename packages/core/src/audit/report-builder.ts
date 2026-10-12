@@ -281,8 +281,26 @@ function renderRunHealth(read: RunHealthRead): string[] {
     `Tool failures: ${health.tool_failures.total}` +
       `${health.tool_failures.total === 0 ? '' : ` (${codeList(health.tool_failures.by_code)})`}`,
     `Notices: ${health.notices}`,
+    ...(health.extraction === undefined ? [] : [extractionLine(health.extraction)]),
     '',
   ];
+}
+
+/**
+ * One line summarizing shape-aware extraction (FEAT-051): pages by shape,
+ * records shown, and links offered, withheld, and followed. Counts and page
+ * shapes only — never a URL or page text.
+ */
+function extractionLine(extraction: NonNullable<RunHealth['extraction']>): string {
+  const shapes = Object.entries(extraction.pages_by_shape)
+    .filter(([, count]) => count !== undefined && count > 0)
+    .map(([shape, count]) => `${shape} ${count ?? 0}`)
+    .join(', ');
+  return (
+    `Extraction: pages ${shapes.length === 0 ? 'none' : shapes} - records shown ${extraction.records_shown}` +
+    ` - links offered ${extraction.links_offered}, withheld ${extraction.links_withheld}, ` +
+    `followed ${extraction.discovered_follows}`
+  );
 }
 
 /** `CODE n, CODE n` in descending count, then code order. */

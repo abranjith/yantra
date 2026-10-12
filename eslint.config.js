@@ -22,7 +22,7 @@ const PI_SDK_BOUNDARY_MESSAGE =
  * one list instead of a copy that would drift from it.
  */
 export const SITE_TOKEN_SOURCE =
-  'expedia|kayak|priceline|orbitz|skyscanner|booking[.]com|trip[.]com|google flights|google travel';
+  'expedia|kayak|priceline|orbitz|skyscanner|booking[.]com|trip[.]com|google flights|google travel|autotrader';
 const SITE_SPECIFIC_LOGIC_MESSAGE =
   'Website-specific logic is forbidden: automation must work from generic structural signals ' +
   '(ARIA roles, accessible names, widget shape, observed DOM state), never from a named site. ' +

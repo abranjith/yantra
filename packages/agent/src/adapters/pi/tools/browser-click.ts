@@ -164,7 +164,7 @@ export function browserClickSpec(
       // opening a popup this policy closes and reports. Either way the page
       // produced it, so it is attested. Attesting BEFORE following the tab is
       // what lets the follow re-check it like any other navigation target.
-      recordActionProvenance(ctx.services, clicked);
+      recordActionProvenance(ctx.services, clicked, 'browser_click');
       const result = await followSiteOpenedTab(ctx.services, controller, clicked);
       ctx.services.trace?.append({
         kind: 'click',

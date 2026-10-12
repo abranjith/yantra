@@ -23,7 +23,6 @@ import {
   type AgentBrowserController,
   type ContentFetcher,
   type EthicsGate,
-  type Extractor,
   type Logger,
   type ReportBuilder,
   type SearchProvider,
@@ -43,7 +42,7 @@ import {
 } from '../../src/runtime/orchestrator.js';
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
-import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
+import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -103,7 +102,7 @@ function baseDomain(
   fetcher?: ContentFetcher,
 ): AgenticRunEnvironment['domain'] {
   const searchProvider: SearchProvider = { name: 'duckduckgo', search: () => Promise.resolve([]) };
-  const extractor: Extractor = { extract: () => Promise.resolve(null) };
+  const extractor = extractorReturning(null);
   const ethics: EthicsGate = { check: () => Promise.resolve() };
   return {
     search: {

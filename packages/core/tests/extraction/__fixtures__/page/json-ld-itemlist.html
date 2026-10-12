@@ -1,0 +1,122 @@
+<!-- page fixture "json-ld-itemlist": a collection that exists only as a schema.org JSON-LD ItemList of Product entities with nested Offers naming a seller, behind a thin visible shell; plus one non-allowlisted BreadcrumbList. Provenance: FEAT-051 G2 / FEAT-049 structured-listing. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Canoe paddles</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "Paddles",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "item": {
+              "@type": "Product",
+              "name": "Touring paddle 220",
+              "url": "https://shop.test/p/1",
+              "color": "Sunset Orange",
+              "offers": {
+                "@type": "Offer",
+                "price": 129,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Riverbend Paddle Co" }
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "item": {
+              "@type": "Product",
+              "name": "Touring paddle 230",
+              "url": "https://shop.test/p/2",
+              "color": "Lake Blue",
+              "offers": {
+                "@type": "Offer",
+                "price": 134,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Riverbend Paddle Co" }
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "item": {
+              "@type": "Product",
+              "name": "Carbon paddle 215",
+              "url": "https://shop.test/p/3",
+              "color": "Graphite",
+              "offers": {
+                "@type": "Offer",
+                "price": 289,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Northshore Outfitters" }
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "item": {
+              "@type": "Product",
+              "name": "Kids paddle 190",
+              "url": "https://shop.test/p/4",
+              "color": "Lime",
+              "offers": {
+                "@type": "Offer",
+                "price": 49,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Northshore Outfitters" }
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "item": {
+              "@type": "Product",
+              "name": "Whitewater paddle 197",
+              "url": "https://shop.test/p/5",
+              "color": "Signal Red",
+              "offers": {
+                "@type": "Offer",
+                "price": 159,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Cascade Watersports" }
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 6,
+            "item": {
+              "@type": "Product",
+              "name": "Breakdown paddle 230",
+              "url": "https://shop.test/p/6",
+              "color": "Olive",
+              "offers": {
+                "@type": "Offer",
+                "price": 99,
+                "priceCurrency": "USD",
+                "seller": { "@type": "Organization", "name": "Cascade Watersports" }
+              }
+            }
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      { "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [] }
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Canoe paddles</h1>
+      <p>Inventory is published for partner applications.</p>
+    </main>
+  </body>
+</html>

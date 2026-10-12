@@ -426,16 +426,18 @@ export function recordActionProvenance(
     readonly popup_intercepted?: string | undefined;
     readonly popup_followable?: string | undefined;
   },
+  tool: string,
 ): void {
-  services.urlProvenance.record(result.url);
+  const origin = { kind: 'tool', tool } as const;
+  services.urlProvenance.record(result.url, origin);
   if (result.popup_intercepted !== undefined) {
-    services.urlProvenance.record(result.popup_intercepted);
+    services.urlProvenance.record(result.popup_intercepted, origin);
   }
   // A held-open popup reports its *live* address, which is where it settled
   // after any redirect the site ran inside it. That is the URL the follow check
   // below re-validates, so it is the URL that has to be attested.
   if (result.popup_followable !== undefined) {
-    services.urlProvenance.record(result.popup_followable);
+    services.urlProvenance.record(result.popup_followable, origin);
   }
 }
 
@@ -488,7 +490,7 @@ export async function followSiteOpenedTab(
   }
   const adopted = await controller.adoptPopup();
   if (!adopted) return result;
-  recordActionProvenance(services, adopted);
+  recordActionProvenance(services, adopted, 'browser_follow_new_tab');
   return adopted;
 }
 
