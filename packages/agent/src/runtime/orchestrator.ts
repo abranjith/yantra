@@ -30,6 +30,7 @@ import {
   LocalProfileStore,
   MarkdownReportBuilder,
   PagePool,
+  SearchService,
   ModelSuppliedValues,
   RateLimiterImpl,
   ReadabilityExtractor,
@@ -807,6 +808,7 @@ export async function runAgenticTask(
         limits: budgetsConfig,
         noticeCount: runHealth.publishedNoticeCount(),
         ...(environment?.pagePool === undefined ? {} : { pagePool: environment.pagePool.stats() }),
+        ...(environment === undefined ? {} : { search: environment.domain.search.service.stats() }),
       });
       await captureTeardown(() => writeRunHealth(created.runDir, health), teardownErrors);
       await captureTeardown(() => {
@@ -1492,14 +1494,20 @@ function composeDefaultEnvironment(
     closeRuntimeLog: () => runtimeLog.close(),
     domain: {
       search: {
-        // The typed resolution error is passed through untouched: `web_search`
+        // One search service per run (FEAT-050): the provider resolves once,
+        // so "selected search provider" is logged once, and every search
+        // passes the politeness gate and the challenge breaker. The typed
+        // resolution error is passed through untouched: `web_search`
         // classifies it (key missing vs. no provider vs. unknown name).
-        resolveProvider: () =>
-          leaves.resolveSearchProvider({
-            env: process.env,
-            config: searchConfig,
-            deps: { keychain, pages: pagePool, ethicsGate: searchEthics, logger },
-          }),
+        service: new SearchService({
+          resolve: () =>
+            leaves.resolveSearchProvider({
+              env: process.env,
+              config: searchConfig,
+              deps: { keychain, pages: pagePool, ethicsGate: searchEthics, logger },
+            }),
+          logger,
+        }),
         resultCap: 8,
         fetchTop: searchConfig.fetchTop,
       },

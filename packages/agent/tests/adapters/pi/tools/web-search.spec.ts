@@ -6,7 +6,9 @@ import {
   EthicsRefusedError,
   FetchError,
   NoSearchProviderAvailableError,
+  SEARCH_PROVIDER_REGISTRY,
   ScrapeSearchError,
+  type PageSource,
   type ContentFetcher,
   type DomainRankSignal,
   type EthicsGate,
@@ -21,7 +23,12 @@ import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { webSearchSpec } from '../../../../src/adapters/pi/tools/web-search.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 
-import { buildServices, allowingEthics } from './test-support.js';
+import {
+  allowingEthics,
+  buildServices,
+  recordingRuntimeLogger,
+  searchServiceFor,
+} from './test-support.js';
 
 const CANARY = 'sk-SEARCHCANARYabcdefghijklmnop';
 
@@ -117,7 +124,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 3,
       },
@@ -192,7 +199,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 2,
       },
@@ -217,11 +224,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: providerReturning([hit({ url: 'https://big.com/' })]),
-          }),
+        service: searchServiceFor(providerReturning([hit({ url: 'https://big.com/' })])),
         resultCap: 3,
         fetchTop: 3,
       },
@@ -261,7 +264,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 4,
       },
@@ -295,7 +298,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 2,
       },
@@ -341,7 +344,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 2,
       },
@@ -367,8 +370,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () =>
-          Promise.resolve({ isOk: false, error: new NoSearchProviderAvailableError(['tavily']) }),
+        service: searchServiceFor(new NoSearchProviderAvailableError(['tavily'])),
         resultCap: 5,
         fetchTop: 3,
       },
@@ -387,11 +389,10 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: { name: 'duckduckgo', search: () => Promise.reject(new Error('boom')) },
-          }),
+        service: searchServiceFor({
+          name: 'duckduckgo',
+          search: () => Promise.reject(new Error('boom')),
+        }),
         resultCap: 5,
         fetchTop: 3,
       },
@@ -414,11 +415,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: { name: 'duckduckgo', search: () => Promise.reject(challenge) },
-          }),
+        service: searchServiceFor({ name: 'duckduckgo', search: () => Promise.reject(challenge) }),
         resultCap: 5,
         fetchTop: 3,
       },
@@ -437,11 +434,7 @@ describe('@no-llm web_search combined tool', () => {
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: providerReturning([hit({ url: 'https://c.com/' })]),
-          }),
+        service: searchServiceFor(providerReturning([hit({ url: 'https://c.com/' })])),
         resultCap: 3,
         fetchTop: 3,
       },
@@ -468,11 +461,7 @@ describe('@no-llm web_search combined tool', () => {
       runDir,
       limits: { maxBytesPerResult: 4 * 1024 },
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: providerReturning([hit({ url: 'https://b.com/' })]),
-          }),
+        service: searchServiceFor(providerReturning([hit({ url: 'https://b.com/' })])),
         resultCap: 3,
         fetchTop: 3,
       },
@@ -504,7 +493,7 @@ describe('@no-llm web_search combined tool', () => {
       runDir,
       domain: { rank: { record: (signal) => signals.push(signal) } },
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 4,
         fetchTop: 3,
       },
@@ -541,11 +530,7 @@ describe('@no-llm web_search combined tool', () => {
         },
       },
       search: {
-        resolveProvider: () =>
-          Promise.resolve({
-            isOk: true,
-            value: providerReturning([hit({ url: 'https://ok.com/' })]),
-          }),
+        service: searchServiceFor(providerReturning([hit({ url: 'https://ok.com/' })])),
       },
       fetch: {
         fetcher: keyedFetcher(),
@@ -576,7 +561,7 @@ describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G
       ...(options.limits ? { limits: options.limits } : {}),
       domain: { rank: { record: (signal) => options.signals?.push(signal) } },
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 5,
       },
@@ -701,7 +686,7 @@ describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G
     const services = buildServices({
       runDir,
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: providerReturning(hits) }),
+        service: searchServiceFor(providerReturning(hits)),
         resultCap: 5,
         fetchTop: 2,
       },
@@ -756,8 +741,7 @@ describe('@no-llm web_search — reads through the run document store (FEAT-050)
       ...(options.limits ? { limits: options.limits } : {}),
       domain: { rank: { record: (signal) => options.signals?.push(signal) } },
       search: {
-        resolveProvider: () =>
-          Promise.resolve({ isOk: true, value: options.provider ?? providerReturning(hits) }),
+        service: searchServiceFor(options.provider ?? providerReturning(hits)),
         resultCap: 8,
         fetchTop: options.fetchTop ?? 3,
       },
@@ -1010,5 +994,73 @@ describe('@no-llm web_search — reads through the run document store (FEAT-050)
 
     expect(negative.error_code).toBe('INVALID_INPUT');
     expect(webSearchSpec(services).description).toMatch(/limit 0/);
+  });
+});
+
+describe('@no-llm web_search — the run search breaker (FEAT-050)', () => {
+  const CHALLENGE_SERP =
+    '<html><body><form id="challenge-form" action="//duckduckgo.com/anomaly.js"></form></body></html>';
+
+  it('after a challenge, later searches return SEARCH_BLOCKED circuit-open with no browser use', async () => {
+    let pageUses = 0;
+    const pages: PageSource = {
+      withPage: (fn) => {
+        pageUses += 1;
+        return fn({
+          goto: () => Promise.resolve(null),
+          evaluate: <T>() => Promise.resolve(CHALLENGE_SERP as unknown as T),
+          close: () => Promise.resolve(),
+          url: () => 'https://html.duckduckgo.com/html/',
+          on: () => undefined,
+        });
+      },
+    };
+    const scraped = SEARCH_PROVIDER_REGISTRY.duckduckgo.create({
+      keychain: {
+        get: () => Promise.resolve(null),
+        set: () => Promise.resolve(),
+        delete: () => Promise.resolve(false),
+        list: () => Promise.resolve([]),
+        isAvailable: () => Promise.resolve(true),
+      },
+      pages,
+      ethicsGate: { checkUrl: () => Promise.resolve({ ok: true }) },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      },
+    });
+    const runtimeLogger = recordingRuntimeLogger();
+    const services = buildServices({
+      runDir,
+      runtimeLogger,
+      search: { service: searchServiceFor(scraped), resultCap: 5, fetchTop: 3 },
+    });
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    const first = await tool.execute({ query: 'a' }, undefined);
+    const second = await tool.execute({ query: 'b' }, undefined);
+    const third = await tool.execute({ query: 'c' }, undefined);
+
+    expect(first.error_code).toBe('SEARCH_BLOCKED');
+    expect(first.details).toMatchObject({ cause: 'anomaly-challenge' });
+    for (const later of [second, third]) {
+      expect(later.error_code).toBe('SEARCH_BLOCKED');
+      expect(later.retryable).toBe(false);
+      expect(later.details).toMatchObject({ cause: 'circuit-open' });
+      expect(later.modelText).toMatch(/closed for the rest of this run/);
+    }
+    // Only the first search reached the provider's browser page.
+    expect(pageUses).toBe(1);
+    const warns = runtimeLogger.lines.filter(
+      (line) => line.event === 'tool_failure' && line.tool === 'web_search',
+    );
+    expect(warns.map((line) => line.cause)).toEqual([
+      'anomaly-challenge',
+      'circuit-open',
+      'circuit-open',
+    ]);
   });
 });

@@ -67,6 +67,7 @@ import { runAgenticTask, type AgenticRunEnvironment } from '../../src/runtime/or
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { RunServices } from '../../src/runtime/run-services.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 /**
  * Planted in every field the run could leak from: a launch argument, helper
@@ -454,7 +455,7 @@ describe('@no-llm agentic run browser observability contract', () => {
         closeRuntimeLog: () => runtimeLog.close(),
         domain: {
           search: {
-            resolveProvider: () => Promise.resolve({ isOk: true, value: search }),
+            service: searchServiceFor(search),
             resultCap: 5,
             fetchTop: 3,
           },

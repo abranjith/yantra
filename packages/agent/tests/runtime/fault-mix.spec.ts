@@ -52,6 +52,7 @@ import { runAgenticTask, type AgenticRunEnvironment } from '../../src/runtime/or
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { RunServices } from '../../src/runtime/run-services.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 const CANARIES = {
   apiKey: 'sk-FAULTMIXcanaryABCDEFGHIJKLMN',
@@ -77,16 +78,18 @@ function hit(url: string, rank: number): SearchResult {
 }
 
 /**
- * Search call N (1-based): 2, 4, and 5 hit an anti-bot challenge, 6 returns
- * nothing, and the rest return hits. The navigation budget (5) is spent by the
- * time call 7's three hits are read, so two of them are skipped.
+ * Provider call N (1-based): 2 returns nothing, 5 hits an anti-bot challenge,
+ * and 1, 3, and 4 return hits. The navigation budget (5) is spent by the time
+ * call 4's three hits are read, so two of them are skipped. The challenge opens
+ * the run's search breaker (FEAT-050), so the script's 6th and 7th searches
+ * are refused as `circuit-open` without reaching this provider at all.
  */
-function scriptedSearchProvider(): SearchProvider {
+function scriptedSearchProvider(): SearchProvider & { readonly calls: () => number } {
   let call = 0;
   const results: Readonly<Record<number, readonly SearchResult[]>> = {
     1: [hit('https://alpha.example/listing/1', 1), hit('https://beta.example/listing/1', 2)],
     3: [hit('https://gamma.example/listing/1', 1), hit('https://delta.example/listing/1', 2)],
-    7: [
+    4: [
       hit('https://epsilon.example/listing/1', 1),
       hit('https://zeta.example/listing/1', 2),
       hit('https://eta.example/listing/1', 3),
@@ -94,9 +97,10 @@ function scriptedSearchProvider(): SearchProvider {
   };
   return {
     name: 'duckduckgo',
+    calls: () => call,
     search: () => {
       call += 1;
-      if (call === 2 || call === 4 || call === 5) {
+      if (call === 5) {
         return Promise.reject(
           new ScrapeSearchError('DuckDuckGo served an anti-bot challenge.', {
             provider: 'duckduckgo',
@@ -105,7 +109,7 @@ function scriptedSearchProvider(): SearchProvider {
           }),
         );
       }
-      if (call === 6) {
+      if (call === 2) {
         return Promise.reject(
           new ScrapeSearchError('DuckDuckGo search did not return result rows.', {
             provider: 'duckduckgo',
@@ -264,6 +268,8 @@ interface FinishedRun {
   readonly outcome: AgenticTaskOutcome;
   readonly runDir: string;
   readonly signals: readonly DomainRankSignal[];
+  /** Searches that actually reached the scripted provider. */
+  readonly providerCalls: number;
 }
 
 async function runScenario(): Promise<FinishedRun> {
@@ -271,8 +277,8 @@ async function runScenario(): Promise<FinishedRun> {
   tempDirs.push(root);
   const signals: DomainRankSignal[] = [];
   const ethics: EthicsGate = { check: () => Promise.resolve() };
-  // One instance for the run: `resolveProvider` is called per search, and the
-  // script's call counter must span all of them.
+  // One instance for the run, behind the run's one search service, so the
+  // script's call counter counts every search that reached the provider.
   const searchProvider = scriptedSearchProvider();
 
   const outcome = await runAgenticTask(
@@ -296,7 +302,7 @@ async function runScenario(): Promise<FinishedRun> {
           closeRuntimeLog: () => runtimeLog.close(),
           domain: {
             search: {
-              resolveProvider: () => Promise.resolve({ isOk: true, value: searchProvider }),
+              service: searchServiceFor(searchProvider, { logger: runtimeLog.logger }),
               resultCap: 5,
               fetchTop: 3,
             },
@@ -322,7 +328,7 @@ async function runScenario(): Promise<FinishedRun> {
       createProvider: (services) => new ScriptedSessionProvider(services),
     },
   );
-  return { outcome, runDir: outcome.runDir, signals };
+  return { outcome, runDir: outcome.runDir, signals, providerCalls: searchProvider.calls() };
 }
 
 async function readText(runDir: string, name: string): Promise<string> {
@@ -349,7 +355,7 @@ async function everyArtifact(dir: string): Promise<{ path: string; text: string 
 
 describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () => {
   it('produces a run whose every artifact tells the truth about it', async () => {
-    const { outcome, runDir, signals } = await runScenario();
+    const { outcome, runDir, signals, providerCalls } = await runScenario();
 
     expect(outcome.kind).toBe('published');
 
@@ -368,11 +374,15 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
     const runtime = parseRuntimeLog(await readText(runDir, 'runtime.jsonl'));
     const failures = runtimeEventsNamed(runtime, 'tool_failure');
     expect(failures.map((line) => `${line.code}:${line.cause}`)).toEqual([
-      'SEARCH_BLOCKED:anomaly-challenge',
-      'SEARCH_BLOCKED:anomaly-challenge',
-      'SEARCH_BLOCKED:anomaly-challenge',
       'SEARCH_NO_RESULTS:empty-results',
+      'SEARCH_BLOCKED:anomaly-challenge',
+      'SEARCH_BLOCKED:circuit-open',
+      'SEARCH_BLOCKED:circuit-open',
     ]);
+    // FEAT-050: the challenge opened the breaker; the last two searches were
+    // never sent, and the breaker's opening is logged once.
+    expect(providerCalls).toBe(5);
+    expect(runtimeEventsNamed(runtime, 'search_breaker_open')).toHaveLength(1);
     for (const line of failures) {
       expect(line).toMatchObject({ level: 40, tool: 'web_search', provider: 'duckduckgo' });
     }
@@ -388,13 +398,14 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
       {
         kind: 'search_failed',
         source: 'search:duckduckgo',
-        reason:
-          '3 of 7 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).',
+        reason: '1 of 7 web searches failed: the provider returned no results (SEARCH_NO_RESULTS).',
       },
       {
         kind: 'search_failed',
         source: 'search:duckduckgo',
-        reason: '1 of 7 web searches failed: the provider returned no results (SEARCH_NO_RESULTS).',
+        reason:
+          '3 of 7 web searches failed: the provider served an anti-bot challenge; 2 later ' +
+          "searches were not attempted after the provider's challenge (SEARCH_BLOCKED).",
       },
       {
         kind: 'budget_exhausted',
@@ -421,6 +432,8 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
         ok: 3,
         failed_by_code: { SEARCH_BLOCKED: 3, SEARCH_NO_RESULTS: 1 },
         providers: ['duckduckgo'],
+        breaker_skipped: 2,
+        peak_concurrency: 1,
       },
       fetches: { total: 5, by_mode: { http: 5, browser: 0 }, repeat_fetches: 0 },
       source_failures: { fetch: 0, extract: 0, blocked: 0, budget: 2, policy: 0 },

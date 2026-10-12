@@ -290,12 +290,25 @@ export class RunHealthLedger {
       // the one that was being asked.
       const provider =
         failures.find((failure) => failure.provider !== undefined)?.provider ?? this.providers[0];
+      // Searches the breaker refused were never sent (FEAT-050): they are
+      // named after the cause that opened it, not counted as more challenges.
+      const skipped = failures.filter((failure) => failure.cause === 'circuit-open').length;
+      const sent = failures.find((failure) => failure.cause !== 'circuit-open');
+      const lead =
+        sent === undefined
+          ? `${plural(skipped, 'later search', 'later searches')} ${skipped === 1 ? 'was' : 'were'} ` +
+            "not attempted after the provider's challenge"
+          : `${searchCausePhrase(sent.cause)}` +
+            (skipped === 0
+              ? ''
+              : `; ${plural(skipped, 'later search', 'later searches')} ` +
+                `${skipped === 1 ? 'was' : 'were'} not attempted after the provider's challenge`);
       return {
         kind: 'search_failed' as const,
         source: provider === undefined ? 'search' : `search:${provider}`,
         reason:
           `${failures.length} of ${plural(attempted.length, 'web search', 'web searches')} ` +
-          `failed: ${searchCausePhrase(failures[0]?.cause)} (${code}).`,
+          `failed: ${lead} (${code}).`,
       };
     });
   }
@@ -402,6 +415,8 @@ export class RunHealthLedger {
     readonly noticeCount: number;
     /** The background page pool's final counters (FEAT-050), when the run had one. */
     readonly pagePool?: { readonly launches: number; readonly contexts: number };
+    /** The run search service's final counters (FEAT-050). */
+    readonly search?: { readonly breakerSkipped: number; readonly peakConcurrency: number };
   }): RunHealth {
     const searches = this.attemptedSearches();
     const searchFailures = countByCode(searches.filter((outcome) => outcome.status !== 'ok'));
@@ -427,6 +442,12 @@ export class RunHealthLedger {
         ok: searches.filter((outcome) => outcome.status === 'ok').length,
         failed_by_code: searchFailures,
         providers: [...this.providers],
+        ...(input.search === undefined
+          ? {}
+          : {
+              breaker_skipped: input.search.breakerSkipped,
+              peak_concurrency: input.search.peakConcurrency,
+            }),
       },
       fetches: {
         total: this.fetchList.length,

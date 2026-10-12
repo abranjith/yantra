@@ -37,6 +37,7 @@ import {
 } from '@yantra/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { fixtureSearchService } from './fixtures/search-service.js';
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 import {
   AGENT_GAUNTLET,
@@ -363,7 +364,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     nowIso: () => new Date().toISOString(),
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
+        service: fixtureSearchService(),
         resultCap: 5,
         fetchTop: 3,
       },

@@ -12,9 +12,15 @@ import type {
   Logger,
   SearchProvider,
 } from '@yantra/core';
-import { DefaultSanitizer, DocumentStore, type UserInputVault } from '@yantra/core';
+import {
+  DefaultSanitizer,
+  DocumentStore,
+  SearchService,
+  type SearchProviderError,
+  type UserInputVault,
+} from '@yantra/core';
 import { ScriptRegistry } from '@yantra/core';
-import type { TemplateManifest } from '@yantra/protocol';
+import { err, ok, type TemplateManifest } from '@yantra/protocol';
 import type { TObject } from 'typebox';
 import { expect } from 'vitest';
 
@@ -76,7 +82,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
   const runDir = options.runDir ?? '/tmp/run-fixture';
 
   const search: SearchToolDeps = {
-    resolveProvider: () => Promise.resolve({ isOk: true, value: emptySearchProvider() }),
+    service: searchServiceFor(emptySearchProvider()),
     resultCap: 5,
     fetchTop: 3,
     ...options.search,
@@ -150,6 +156,32 @@ export function recordingRuntimeLogger(): Logger & {
     warn: at('warn'),
     error: at('error'),
     debug: at('debug'),
+  };
+}
+
+/**
+ * The run's search service over one provider (or one resolution failure), as
+ * production wires it — gate, breaker, and memoized resolution included — with
+ * the politeness wait made instant so unit suites do not sleep. Politeness
+ * timing itself is pinned in core's `search-service.spec.ts`.
+ */
+export function searchServiceFor(
+  provider: SearchProvider | SearchProviderError,
+  options: { readonly logger?: Logger } = {},
+): SearchService {
+  return new SearchService({
+    resolve: () => Promise.resolve(provider instanceof Error ? err(provider) : ok(provider)),
+    logger: options.logger ?? silentLogger(),
+    sleep: () => Promise.resolve(),
+  });
+}
+
+function silentLogger(): Logger {
+  return {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
   };
 }
 

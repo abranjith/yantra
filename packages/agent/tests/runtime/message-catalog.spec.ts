@@ -10,6 +10,7 @@ import {
   INTERACTION_MESSAGES,
   ReadabilityExtractor,
   ScriptRegistry,
+  UnknownSearchProviderError,
 } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
@@ -26,6 +27,7 @@ import {
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../src/runtime/url-provenance.js';
 import { resolveVisionAvailability } from '../../src/runtime/vision.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 describe('@no-llm agent interaction message catalog', () => {
   it('renders every template, requires declared details, and is globally distinct', () => {
@@ -212,7 +214,7 @@ function buildServices(): RunServices {
     nowIso: () => new Date().toISOString(),
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
+        service: searchServiceFor(new UnknownSearchProviderError('unused')),
         resultCap: 5,
         fetchTop: 3,
       },

@@ -13,6 +13,7 @@ export * from './search/credential.js';
 export * from './search/errors.js';
 export * from './search/registry.js';
 export * from './search/scrape-transport.js';
+export * from './search/search-service.js';
 export * from './source-processor.js';
 export * from './types.js';
 export * from './url-identity.js';

@@ -18,7 +18,6 @@ import type {
   EthicsGate,
   Extractor,
   PayloadSanitizer,
-  SearchProvider,
   SearchProviderName,
   SearchResult,
   AgentBrowserController,
@@ -27,6 +26,7 @@ import type {
   OpaqueRefResolver,
   RankSignalSink,
   ModelSuppliedValues,
+  SearchService,
   UserInputVault,
   WorkflowCatalogEntry,
 } from '@yantra/core';
@@ -55,18 +55,20 @@ export interface ConfirmationServices {
 }
 
 /**
- * `web_search` domain dependencies. The provider is resolved once at run setup
- * (respecting provider policy/keys); `resultCap` bounds normalized output.
+ * `web_search` domain dependencies. The provider is resolved once per run by
+ * the run's {@link SearchService} (respecting provider policy/keys);
+ * `resultCap` bounds normalized output.
  */
 export interface SearchToolDeps {
   /**
-   * Resolve the active search provider for this run. A failure carries the
-   * ORIGINAL typed error (`SearchProviderKeyMissingError`,
-   * `NoSearchProviderAvailableError`, …) so `web_search` can classify the
-   * cause; flattening it to a message is what made configuration failures read
-   * as retryable outages.
+   * The run's one search service (FEAT-050): it resolves the provider once and
+   * hands back a facade behind the politeness gate and the challenge breaker.
+   * A resolution failure carries the ORIGINAL typed error
+   * (`SearchProviderKeyMissingError`, `NoSearchProviderAvailableError`, …) so
+   * `web_search` can classify the cause; flattening it to a message is what
+   * made configuration failures read as retryable outages.
    */
-  readonly resolveProvider: () => Promise<Result<SearchProvider, Error>>;
+  readonly service: SearchService;
   /** Maximum search hits requested from the provider (search breadth). */
   readonly resultCap: number;
   /**

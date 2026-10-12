@@ -551,7 +551,7 @@ If an equivalent helper already exists, extend it rather than adding a parallel 
 - [x] TASK-003: Every evidence result shows its ID and the run's budget meter
 - [x] TASK-004: One shared headless browser (`PagePool`) for SERP scrapes and fetch fallbacks
 - [x] TASK-005: Classify every response before extraction, and treat challenge pages as blocked (policy b)
-- [ ] TASK-006: One search service per run, with a politeness gate and a challenge breaker
+- [x] TASK-006: One search service per run, with a politeness gate and a challenge breaker
 - [ ] TASK-007: `yantra doctor` search-provider check and the `init` key offer
 - [ ] TASK-008: Pin the integrated contract, and flip FEAT-050 live in the harness
 

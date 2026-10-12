@@ -3,6 +3,7 @@ import {
   NoSearchProviderAvailableError,
   RateLimitError,
   ScrapeSearchError,
+  SearchCircuitOpenError,
   SearchProviderError,
   SearchProviderKeyMissingError,
   TavilyAuthError,
@@ -49,6 +50,14 @@ const ROWS: readonly Row[] = [
     retryable: false,
     cause: 'rate-limited',
     provider: 'brave',
+  },
+  {
+    name: 'run breaker open (FEAT-050)',
+    error: new SearchCircuitOpenError('duckduckgo', 'anomaly-challenge'),
+    code: 'SEARCH_BLOCKED',
+    retryable: false,
+    cause: 'circuit-open',
+    provider: 'duckduckgo',
   },
   {
     name: 'empty results',

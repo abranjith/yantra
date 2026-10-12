@@ -57,6 +57,7 @@ import {
 import { createBrief, type BriefSource, type ConfirmationRequest } from '@yantra/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { fixtureSearchService } from './fixtures/search-service.js';
 import { serveFixtureSite, type FixtureServer } from './fixtures/serve.js';
 
 type Scenario = (session: ScenarioSession) => Promise<void>;
@@ -211,7 +212,7 @@ function bridgeEnvironment(input: {
     workflowStore: input.workflowStore,
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: false, error: new Error('unused') }),
+        service: fixtureSearchService(),
         resultCap: 5,
         fetchTop: 3,
       },

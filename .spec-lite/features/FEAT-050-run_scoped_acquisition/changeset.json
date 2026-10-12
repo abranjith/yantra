@@ -20,6 +20,24 @@
       "task": "TASK-001"
     },
     {
+      "path": "e2e/agent-do.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/agent-workflow-bridge.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/fixtures/search-service.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "e2e/widget-gauntlet.spec.ts",
       "status": "M",
       "role": "implement",
@@ -36,6 +54,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/search-errors.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/web-fetch.ts",
@@ -110,6 +134,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/search-errors.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/template-publish.spec.ts",
       "status": "M",
       "role": "implement",
@@ -140,6 +170,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
       "status": "M",
       "role": "implement",
@@ -152,10 +188,22 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/runtime/run-health.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-log-lifecycle.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/runtime/runtime-observability.spec.ts",
@@ -219,9 +267,15 @@
     },
     {
       "path": "packages/core/src/extraction/response-classifier.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/extraction/search/errors.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/extraction/search/registry.ts",
@@ -234,6 +288,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/extraction/search/search-service.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/extraction/source-processor.ts",
@@ -285,7 +345,7 @@
     },
     {
       "path": "packages/core/tests/extraction/response-classifier.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -324,6 +384,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/extraction/search/search-service.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/extraction/source-processor.spec.ts",

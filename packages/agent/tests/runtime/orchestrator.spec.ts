@@ -38,6 +38,7 @@ import {
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -127,7 +128,7 @@ function buildEnvironment(teardown: ReturnType<typeof vi.fn>): AgenticRunEnviron
     browserController: { teardown } as unknown as Pick<AgentBrowserController, 'teardown'>,
     domain: {
       search: {
-        resolveProvider: () => Promise.resolve({ isOk: true, value: searchProvider }),
+        service: searchServiceFor(searchProvider),
         resultCap: 5,
         fetchTop: 3,
       },

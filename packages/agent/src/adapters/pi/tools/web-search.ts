@@ -122,7 +122,8 @@ async function runWebSearch(
   // still be offered as "more results".
   const fetchTop = Math.min(params.limit ?? deps.fetchTop, deps.fetchTop, HARD_FETCH_CAP);
 
-  const resolved = await deps.resolveProvider();
+  // The run's one provider, behind its politeness gate and challenge breaker.
+  const resolved = await deps.service.resolve();
   if (!resolved.isOk) {
     // A resolution failure is configuration (missing key, no usable provider),
     // never a transient outage: classified through the same table as a search

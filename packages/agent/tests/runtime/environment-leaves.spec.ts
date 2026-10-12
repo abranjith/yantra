@@ -58,6 +58,7 @@ import {
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
 import type { RunServices } from '../../src/runtime/run-services.js';
+import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 const PAGE_URL = 'http://leaf.example.test/article';
 const ARTICLE_HTML =
@@ -524,6 +525,55 @@ describe('@no-llm environment leaves', () => {
     ]);
   }, 60_000);
 
+  it('resolves the search provider once per run: 22 searches, one "selected search provider"', async () => {
+    // The leaf logs exactly as the production resolver does on success; the
+    // run's search service must call it once, however many searches run.
+    const provider: SearchProvider = {
+      name: 'tavily',
+      search: () =>
+        Promise.resolve([
+          {
+            url: PAGE_URL,
+            title: 'Leaf',
+            snippet: null,
+            source: 'tavily',
+            rank: 1,
+            publishedAt: null,
+          },
+        ]),
+    };
+    const resolver = vi.fn(
+      (options: {
+        readonly deps: { readonly logger: { info: (o: object, m: string) => void } };
+      }) => {
+        options.deps.logger.info({ provider: 'tavily', via: 'auto' }, 'selected search provider');
+        return Promise.resolve(ok(provider));
+      },
+    );
+
+    const { outcome } = await run({
+      leaves: hermeticLeaves({
+        resolveSearchProvider: resolver as unknown as EnvironmentLeaves['resolveSearchProvider'],
+      }),
+      plan: Array.from({ length: 22 }, (_, i) => ({
+        tool: 'web_search',
+        params: { query: `query ${i}`, limit: 0 },
+      })),
+      profile: 'research',
+    });
+
+    expect(resolver).toHaveBeenCalledTimes(1);
+    const runtime = (await readFile(join(outcome.runDir, 'runtime.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(runtime.filter((line) => line.msg === 'selected search provider')).toHaveLength(1);
+    const health = JSON.parse(await readFile(join(outcome.runDir, 'run-health.json'), 'utf8')) as {
+      readonly searches: Record<string, unknown>;
+    };
+    expect(health.searches).toMatchObject({ total: 22, ok: 22, breaker_skipped: 0 });
+  }, 60_000);
+
   it('audits a challenge at both tiers and discloses it in the Brief, never as a source', async () => {
     const CHALLENGE_HTML =
       '<html><head><title>One moment</title></head><body><form action="/v">' +
@@ -616,10 +666,7 @@ describe('@no-llm environment leaves', () => {
       } as unknown as AgenticRunEnvironment['browserController'],
       domain: {
         search: {
-          resolveProvider: () =>
-            Promise.resolve(
-              ok<SearchProvider>({ name: 'duckduckgo', search: () => Promise.resolve([]) }),
-            ),
+          service: searchServiceFor({ name: 'duckduckgo', search: () => Promise.resolve([]) }),
           resultCap: 5,
           fetchTop: 1,
         },

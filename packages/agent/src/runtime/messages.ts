@@ -256,9 +256,9 @@ export const AGENT_INTERACTION_MESSAGES = [
     'circuit-open',
     (details) =>
       `Web search is closed for the rest of this run: ${text(details.provider)} challenged an ` +
-      'earlier query, so Yantra stopped asking it. This search was not attempted. Use web_fetch ' +
-      'on a URL an earlier result already returned, or finish with result_publish and say that ' +
-      'web search was blocked.',
+      'earlier query, so Yantra stopped asking it and this search was not attempted. Do not ' +
+      'search again. Use web_fetch on a URL an earlier result already returned, or finish with ' +
+      'result_publish and say that web search was blocked.',
     ['provider'],
     'web_fetch',
   ),
