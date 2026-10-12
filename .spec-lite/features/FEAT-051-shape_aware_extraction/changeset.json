@@ -188,6 +188,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/extraction/page/records.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/core/tests/extraction/page/structural-only.spec.ts",
       "status": "A",
       "role": "implement",
