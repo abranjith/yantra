@@ -56,6 +56,54 @@
       "task": "TASK-007"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/browser-resolution-and-lifecycle.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "e2e/agent-browser.spec.ts",
       "status": "M",
       "role": "implement",
@@ -78,6 +126,60 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "e2e/task-fidelity-harness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/challenge-large-main.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/challenge-small.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/repeat-read.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/search-breaker.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/search-concurrency.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "e2e/widget-gauntlet.spec.ts",
@@ -204,6 +306,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/acquisition-integration.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/agent/tests/runtime/environment-leaves.spec.ts",
@@ -465,8 +573,10 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-050-run_scoped_acquisition/changeset.json",
     ".spec-lite/features/FEAT-050-run_scoped_acquisition/spec.md",
+    ".spec-lite/memory.md",
     ".spec-lite/plan_task_fidelity.md"
   ],
   "baseline": {

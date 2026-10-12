@@ -39,6 +39,16 @@ given. Supplying `--provider` also selects that provider's model/storage
 defaults instead of running the wizard. On a TTY, a new profile can still ask
 the sensitive-context questions unless `--yes` or `--json` is present.
 
+The wizard also offers an optional **Search provider key (optional)** step with
+the choices `tavily`, `brave`, and `skip`. A key entered there goes into the OS
+keychain as `<provider>.api_key` (for example `tavily.api_key`), and init
+reports which provider web search will use. Without a key, agentic runs search
+through a scraped provider, which Yantra paces and stops at its first challenge.
+If the keychain is unavailable, init still succeeds and prints the
+`yantra secret set <provider>.api_key` command to run later. The `init --json`
+object includes `searchKey`: `skipped`, `stored`, or `manual`. Because `--json`
+never runs the wizard, it reports `skipped`.
+
 Initialization writes `<home>/config.yaml` and creates `<home>/profile.yaml`
 when needed. If config already exists, an ordinary run reports
 `already-initialized` and leaves it unchanged. `--reset` moves the existing
@@ -426,6 +436,26 @@ Agentic research uses the shared duration, token, tool-timeout, and retry
 budgets. Read [Research](features/research.md) for the two algorithms and their
 different source/citation guarantees.
 
+Agentic `research` and `do` runs share acquisition rules that can show up in
+their output and audit:
+
+- `web_search` with `limit: 0` only lists titles, URLs, and snippets. The agent
+  then reads selected URLs with `web_fetch`.
+- Each page is read at most once per run and keeps one evidence ID (`S1`, `S2`,
+  …). A repeat read returns `already_read` with that ID and fetches nothing.
+- The run paces a scraped search provider (`duckduckgo`, `google`) at one query
+  at a time. After the provider's first challenge or rate-limit refusal, the run
+  sends no more searches; later searches return `SEARCH_BLOCKED` with cause
+  `circuit-open`. A keyed provider avoids this pacing; see the `search.provider`
+  check in [Diagnostics and run inspection](#diagnostics-and-run-inspection).
+- Yantra does not extract a human-verification page. `web_fetch` reports
+  `SITE_CHALLENGE`, and a run that ends without a result is handed back to you.
+  The result carries a `blocked` notice for that host.
+
+See [Agentic tasks](features/agentic-tasks.md#what-it-does) for result shapes and
+failure codes, and [Challenge pages](features/safety-and-privacy.md#challenge-pages)
+for the challenge policy.
+
 ### Agentic browser tasks
 
 The following forms require configured model access. Browser tasks also require
@@ -699,6 +729,19 @@ when written. `--refresh` re-probes the cached environment checks only; the
 agent and configuration checks always run fresh. Under `--no-llm` (or
 `LLM_PROVIDER=none`) the three `agent.*` checks report that the deterministic
 path was selected, naming which layer selected it, and no credential is probed.
+
+The `search.provider` check reports which web-search provider an agentic run
+would use. It applies the same selection rules as a run, but it does not build
+the provider or start a browser. The check is `ok` for a keyed API provider
+(`tavily`, `brave`). It **warns** for a scraped provider, such as `duckduckgo`
+chosen by `auto` when no key is available, and gives the fix hint
+``Run `yantra secret set tavily.api_key` or `yantra secret set brave.api_key` to use a keyed provider.``
+It **fails** (exit `3`) when the selection cannot resolve, for example when
+`search.provider` names `tavily` but no `tavily.api_key` is available. With
+`--json`, a resolvable selection also appears as a top-level
+`search: { provider, kind, via }` block, where `kind` is `api` or `scrape` and
+`via` is `flag`, `env`, `config`, or `auto`. The block is absent when the check
+fails.
 
 `doctor --agent-smoke` opens a live, potentially billable provider session and
 requires credentials; it has no deterministic fallback, and combining it with

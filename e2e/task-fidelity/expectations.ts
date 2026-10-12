@@ -36,7 +36,6 @@ export type Owner = (typeof OWNERS)[number];
  * never by editing the expectation.
  */
 export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>([
-  'FEAT-050',
   'FEAT-051',
   'FEAT-052',
   'FEAT-053',

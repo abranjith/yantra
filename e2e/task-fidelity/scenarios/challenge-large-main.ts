@@ -25,7 +25,6 @@ export const challengeLargeMain = challengeScenario('large-main', [
     owner: 'FEAT-050',
     measure: (run) => outcomeOf(resultLabelled(run, 'challenge')),
     target: equals({ status: 'error', errorCode: 'SITE_CHALLENGE' }),
-    baseline: equals({ status: 'ok', errorCode: null }),
     note: 'G10: a 200 challenge page with a `<main>` over 10 KB is read as a challenge.',
   },
   {
@@ -36,7 +35,6 @@ export const challengeLargeMain = challengeScenario('large-main', [
         .filter((notice) => notice.source === HOST)
         .map((notice) => notice.kind),
     target: includesAll(['blocked']),
-    baseline: equals([]),
     note: 'G10: the Brief discloses the challenge as `blocked`.',
   },
   {
@@ -44,7 +42,6 @@ export const challengeLargeMain = challengeScenario('large-main', [
     owner: 'FEAT-050',
     measure: (run) => sourceUrlsOf(run).includes(URL),
     target: equals(false),
-    baseline: equals(true),
     note: 'G10: the challenge page is never published as a source.',
   },
   {
@@ -55,7 +52,6 @@ export const challengeLargeMain = challengeScenario('large-main', [
       return fieldOf(read, 'text') !== null || fieldOf(read, 'excerpt') !== null;
     },
     target: equals(false),
-    baseline: equals(true),
     note: 'G10: the challenge boilerplate never reaches the agent as content.',
   },
   {
@@ -63,7 +59,6 @@ export const challengeLargeMain = challengeScenario('large-main', [
     owner: 'FEAT-050',
     measure: (run) => requestsFor(run, URL),
     target: equals(2),
-    baseline: equals(1),
     note: 'Policy (b): an HTTP-tier challenge gets exactly one standard-browser render.',
   },
 ]);

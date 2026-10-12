@@ -26,7 +26,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-050',
     measure: (run) => requestsFor(run, RESULTS_URL),
     target: equals(1),
-    baseline: equals(3),
     note: 'G5 / §11 "navigations spent re-reading a page": 0.',
   },
   {
@@ -37,7 +36,6 @@ const expectations: readonly Expectation[] = [
         .slice(1)
         .map((result) => fieldOf(result, 'already_read')),
     target: equals(['S1', 'S1']),
-    baseline: equals([null, null]),
     note: 'G5: a repeat read returns `{already_read: "S1"}` without fetching.',
   },
   {

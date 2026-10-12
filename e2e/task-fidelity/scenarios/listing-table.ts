@@ -137,7 +137,6 @@ const expectations: readonly Expectation[] = [
       return { ...outcomeOf(discover), requests: requestsDuring(run, discover) };
     },
     target: equals({ status: 'ok', errorCode: null, requests: 0 }),
-    baseline: equals({ status: 'error', errorCode: 'INVALID_INPUT', requests: 0 }),
     note: 'G5: `web_search {limit: 0}` discovers URLs, charging no navigation and fetching no page.',
   },
   {
@@ -145,7 +144,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-050',
     measure: (run) => maxRequestsPerUrl(run),
     target: equals(1),
-    baseline: equals(2),
     note: 'G5 / §11 "network fetches per URL per run": the results page is fetched once.',
   },
   {

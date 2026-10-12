@@ -147,6 +147,45 @@ Startup re-reads the executable after the check and before the launch. If the bi
 the check was running, the evidence describes a different file, so Yantra re-resolves and re-verifies
 against the build that is actually there.
 
+### Shares one background browser per agentic run
+
+An agentic run needs a browser for two kinds of background work that nobody sees: rendering a
+scraped search provider's results page, and rendering a page Yantra's HTTP client could not read.
+All of that work in one run shares a single background browser, a page pool, instead of starting
+a Chrome process for each page.
+
+- **Launched lazily.** The pool starts nothing until the first background page is needed, so a run
+  that never scrapes a results page or falls back to the browser never launches it. It launches the
+  run's selected browser through the same resolution and compatibility path as any other launch,
+  headless and with an ephemeral profile. Concurrent first requests share one launch, and a launch
+  failure is the same typed startup failure any launch reports.
+- **Isolated per use.** Each background page gets its own fresh browser context, closed as soon as
+  that page's work ends. No cookie, storage, or cache entry from one background read is visible to
+  the next.
+- **Bounded.** At most two background pages are open at once. Further requests wait in arrival order,
+  and a request cancelled while waiting leaves the queue without taking a page.
+- **Honest about time.** Each use honors its caller's timeout and cancellation. On either, the
+  page's context is closed, which stops the page work in flight, and the caller gets a timeout or the
+  cancellation instead of waiting for the page to go idle.
+- **Relaunched once.** If the pool's browser crashes or disconnects, the next request relaunches it,
+  once per run. A second loss fails background page work for the rest of the run with a typed error
+  rather than launching again.
+- **Closed in order.** At teardown the pool closes after the task browser and before
+  `run-health.json` is written, so the run's health summary records its final counts
+  (`browser.pool_launches` and `browser.contexts`; see
+  [Run Health](diagnostics-and-audit.md#run-healthjson)).
+
+The task browser that `browser_navigate` and the other browser tools drive stays separate from the
+pool. It may run headed for `yantra do`, and its page holds the interaction state you can see, which
+background contexts must neither read nor disturb. An agentic run therefore starts at most two Chrome
+processes, the pool's and the task browser's, apart from a relaunch after a crash and the
+short-lived session a compatibility check uses when no valid evidence is cached. Each background
+launch is still counted in the run's `browser.launches`.
+
+The deterministic `ask --no-llm` and `research --no-llm` pipelines do not use the pool. They keep one
+headless browser launch per scraped results page or fallback render, closed when that page's work
+ends, and now honor the same timeout and cancellation.
+
 ### Leaves nothing behind
 
 A startup that fails at any step undoes exactly what it acquired:

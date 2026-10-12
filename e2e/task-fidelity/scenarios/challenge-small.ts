@@ -25,7 +25,6 @@ export const challengeSmall = challengeScenario('small', [
     owner: 'FEAT-050',
     measure: (run) => outcomeOf(resultLabelled(run, 'challenge')),
     target: equals({ status: 'error', errorCode: 'SITE_CHALLENGE' }),
-    baseline: equals({ status: 'error', errorCode: 'EXTRACTION_EMPTY' }),
     note: 'G10: the read is classified as a challenge, not as an empty article.',
   },
   {
@@ -36,7 +35,6 @@ export const challengeSmall = challengeScenario('small', [
         .filter((notice) => notice.source === HOST)
         .map((notice) => notice.kind),
     target: includesAll(['blocked']),
-    baseline: equals(['extract_failed']),
     note: 'G10: the Brief discloses the challenge as `blocked`.',
   },
   {

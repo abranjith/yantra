@@ -113,9 +113,34 @@ The model receives a command-specific tool catalog. Application sessions contain
 
 Outbound URL checks enforce absolute HTTP(S) URLs, HTTPS by default, a 2048-character limit, credential-shape scanning, optional `--allow-host` restrictions, and run-wide navigation/host budgets. `browser_navigate` adds URL provenance: a user-supplied URL or host, search/fetch result, visited page, redirect, or intercepted popup must attest the origin, path, and query-parameter names. Query values may vary on an attested path, but new paths, parameter names, or identifiers are refused with `URL_NOT_FROM_EVIDENCE`.
 
-The web ethics gate honors robots rules, blocklists, and rate limits. Bot walls and CAPTCHAs produce a refusal or handoff; there is no ignore or evasion flag. `web_fetch` accepts only HTML or plain text and enforces streamed body-size limits. Browser popups are closed and surfaced for a later policy-checked navigation; JavaScript prompts are dismissed rather than silently accepted.
+The web ethics gate honors robots rules, blocklists, and rate limits. Bot walls and CAPTCHAs produce a refusal or handoff; there is no ignore or evasion flag; see [Challenge pages](#challenge-pages). `web_fetch` accepts only HTML or plain text and enforces streamed body-size limits. Browser popups are closed and surfaced for a later policy-checked navigation; JavaScript prompts are dismissed rather than silently accepted.
 
-Agent browser profiles are fresh and ephemeral by default. They are removed on normal completion, abort, or browser teardown. Persistent logged-in agent profiles are not part of this surface.
+An agentic run also honors a scraped search provider's rate limiting. It asks a scraped provider one query at a time, each started at least 2 seconds after the previous one, and after that provider's first anti-bot challenge or rate-limit refusal it asks it nothing more for the rest of the run: later searches return `SEARCH_BLOCKED` with cause `circuit-open` without contacting the provider. Nothing rotates the user agent, proxies the request, or changes the browser's fingerprint to get past a refusal, and the run does not switch to another provider.
+
+Agent browser profiles are fresh and ephemeral by default. They are removed on normal completion, abort, or browser teardown. Persistent logged-in agent profiles are not part of this surface. The background pages an agentic run uses for scraped search results and fetch fallbacks each get their own isolated browser context, closed when that read ends. No cookie, storage, or cache entry from one background read is visible to the next, and none of them shares state with the task browser's page.
+
+### Challenge pages
+
+Yantra classifies every response it fetches before anything extracts it, so a human-verification page is never read as content and never becomes a source. This applies to agentic `web_fetch` and `web_search` reads and to the deterministic `ask --no-llm` and `research --no-llm` pipelines, which share the same fetcher.
+
+Classification uses a short, documented list of generic challenge-widget markers. Every entry is a standard component that human-verification widgets render with, or a phrase their interstitials show. No site, host, or brand appears in it.
+
+- Widget markers: a `data-sitekey` attribute; a `g-recaptcha`, `h-captcha`, or `cf-turnstile` class or id; and a `captcha` token in the `id`, `class`, or `name` of a `<form>` or of an element inside one.
+- Phrases, matched in the page's `<title>` or first `<h1>`: "verify you are human", "are you a robot", "unusual traffic", "checking your browser", "press and hold", and "complete the security check".
+
+The check is a single lowercase text scan of the HTML already fetched, and the page is parsed only when that scan finds one of those tokens. A response that is not HTML is never a challenge. A parsed page is a challenge when any of these holds, where visible text excludes `script`, `style`, `noscript`, and `template` content:
+
+1. a widget marker is present and the visible text is under 1,500 characters;
+2. a phrase is in the `<title>` or first `<h1>` and the visible text is under 3,000 characters;
+3. a phrase is in the `<title>` or first `<h1>` and a widget marker is present, at any size.
+
+The size limits keep a long article that embeds a comment-form CAPTCHA, or an article about CAPTCHAs, from being treated as a challenge. Rule 3 requires both independent signals together, which is how an interstitial padded with help text is still recognized.
+
+What happens next is the policy the user signed off on for this feature (policy b):
+
+- When Yantra's HTTP client, which identifies itself as `YantraBot`, receives a challenge page, the URL is rendered **once** in the standard headless browser. Nothing about that browser's identity is changed, and there is no solving, waiting for the challenge to clear, or retry.
+- A challenge page in that render, or in any browser render a fetch escalated to, is terminal for the URL. The page is never extracted. Agentic `web_fetch` returns the non-retryable `SITE_CHALLENGE` with `handoff: true`, so a run that publishes nothing ends as a user handoff, and the run never requests that URL again. A `web_search` hit, or a deterministic source, becomes a `blocked` failure with reason `challenge page (<marker>)`.
+- In an agentic run, both tiers are audited in `runtime.jsonl`: a `fetch_challenge` warning names the tier, the marker ID, and the bare host, and a `fetch_escalated` line records the single render. The published document discloses both outcomes: a `blocked` notice for each host whose browser render was a challenge, and an `other` notice for each host that challenged only the HTTP client before its page was read in the browser.
 
 ### Context grants and local personalization
 
@@ -140,9 +165,9 @@ Each run has a local directory under `<yantra-data-dir>/runs/<run-id>/`. Dependi
 | `agent/<session>.jsonl`                              | Raw provider-session format containing the model-visible conversation and model responses; sensitive local material |
 | `report.md`, `brief.*`, `events.jsonl`, `usage.json` | Human report, published result, lifecycle, and usage data                                                           |
 
-Runtime-derived Brief notices carry no untrusted text. Notices that Yantra attaches to a published result for search failures, exhausted budgets, and per-source read failures are built only from fixed phrase tables, counts, stable error codes, and bare hostnames. They never include page text or provider text. A per-source failure reason that is not one of the known stable phrases, which could contain a URL, is replaced by a stable phrase such as `fetch failed`. The same ledger produces `run-health.json` and the report's Run Health section, which are described in [Run Health](diagnostics-and-audit.md#run-health).
+Runtime-derived Brief notices carry no untrusted text. Notices that Yantra attaches to a published result for search failures, exhausted budgets, challenge pages, and per-source read failures are built only from fixed phrase tables, counts, stable error codes, and bare hostnames. They never include page text or provider text. A per-source failure reason that is not one of the known stable phrases, which could contain a URL, is replaced by a stable phrase such as `fetch failed`. The same ledger produces `run-health.json` and the report's Run Health section, which are described in [Run Health](diagnostics-and-audit.md#run-health).
 
-Operator diagnostics in the runtime log carry closed fields only. A `tool_failure` line has a tool name, error code, cause, provider name, bare hostname, and budget limit. A `run_health` line holds the run-health summary. A `cause` is accepted only as a closed token: no whitespace, at most 80 characters from `A–Z`, `a–z`, `0–9`, `_`, `.`, `:`, and `-`. Any other cause is dropped, and a token derived from the error code is used instead. A host that is not hostname-shaped is dropped. The runtime-log safety assertions in `@yantra/test-helpers` reject a `cause` that is not such a token or that contains `//`.
+Operator diagnostics in the runtime log carry closed fields only. A `tool_failure` line has a tool name, error code, cause, provider name, bare hostname, and budget limit. A `fetch_challenge` line has the tier, a closed marker ID, and a bare hostname; a `fetch_escalated` line has the escalation reason and a bare hostname; a `search_breaker_open` line has the provider name and a closed cause. A `run_health` line holds the run-health summary. A `cause` is accepted only as a closed token: no whitespace, at most 80 characters from `A–Z`, `a–z`, `0–9`, `_`, `.`, `:`, and `-`. Any other cause is dropped, and a token derived from the error code is used instead. A host that is not hostname-shaped is dropped. The runtime-log safety assertions in `@yantra/test-helpers` reject a `cause` that is not such a token or that contains `//`.
 
 `yantra audit <run-id>` is read-only. It renders the structured manifest, tool-call, confirmation, secret-reference, event, and usage projections; it does not parse the raw provider session. An incomplete start record is shown as incomplete rather than treated as success.
 
@@ -249,6 +274,8 @@ See [Saved Workflows](saved-workflows.md) for workflow syntax and replay behavio
 | `URL_NOT_FROM_EVIDENCE`                                                     | Browser navigation introduced unattested path or parameter structure                         |
 | `URL_CREDENTIAL_SHAPE` / `URL_HOST_NOT_ALLOWED`                             | Outbound URL was refused by policy                                                           |
 | `ETHICS_BLOCKED`                                                            | Robots, blocklist, or rate-limit policy refused the fetch or action                          |
+| `SITE_CHALLENGE`                                                            | The page was a human-verification challenge in the standard browser; it was not read         |
+| `SEARCH_BLOCKED` with cause `circuit-open`                                  | The search provider challenged or rate-limited an earlier query, so this search was not sent |
 
 Expected failures are returned to the model as bounded, structured, retry-classified results. Unexpected exceptions are genericized in model-visible output.
 
@@ -275,6 +302,7 @@ The focused verification for this document passed 249 tests across 19 files, plu
 - Echo masking for values under eight characters is boundary-aware; an under-three-character value embedded inside a larger token may reappear in returned page text. Marked ingress remains protected, but avoid very short protected values when possible.
 - `read-only-data` deliberately bypasses PII stripping so a model can reason over real values. Use it only when that disclosure is intended; its protection is static action restriction, not secrecy from the model provider.
 - Buffer clearing is best-effort. V8 can intern or copy JavaScript strings, so Yantra does not claim guaranteed memory zeroing.
+- Challenge detection covers only the documented generic markers and phrases. A human-verification page that shows none of them is not recognized and is treated as ordinary content. A page that returns HTTP 200 with "not found" text is not a challenge either.
 - `web_fetch` is URL-policy and ethics checked but is not currently URL-provenance gated. Do not treat browser provenance as a universal rule for every network path.
 - Heuristic confirmation covers named protected clicks, stored-secret fills, and explicitly flagged workflow steps. It cannot infer every consequential action from arbitrary site wording. Mark critical workflow actions with `requires_confirmation`.
 - Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` operates only on a request that was actually parked, and recording a grant is separate from resuming or polling the run.

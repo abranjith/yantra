@@ -41,7 +41,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-050',
     measure: (run) => run.searchPeakConcurrency,
     target: equals(1),
-    baseline: equals(2),
     note: 'G4: the politeness gate serializes a scraped provider.',
   },
   {
@@ -49,7 +48,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-050',
     measure: (run) => run.searchCalls.filter((call) => call.outcome === 'challenge').length,
     target: equals(0),
-    baseline: equals(1),
     note: '§11 "concurrency-induced search failures": 0.',
   },
   {
