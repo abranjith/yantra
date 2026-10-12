@@ -31,6 +31,7 @@ import {
   ReadabilityExtractor,
   ScriptRegistry,
   DRIVER_COMPATIBILITY,
+  launchPerUsePageSource,
   type AgentBrowserController,
   type BrowserRuntimeServices,
   type CapabilityId,
@@ -242,20 +243,24 @@ function browserFixture(options: {
 }): BrowserFixture {
   let probeLaunches = 0;
   let taskLaunches = 0;
+  const fakePage = () =>
+    Promise.resolve({
+      goto: () =>
+        options.pageFault
+          ? Promise.reject(options.pageFault)
+          : Promise.resolve({ status: () => 200 }),
+      evaluate: () => Promise.resolve(`<html><body><p>${CANARIES.pageText}</p></body></html>`),
+      url: () => TASK_URL,
+      close: () => Promise.resolve(),
+    });
   const fakeBrowser = () => ({
     version: () => Promise.resolve(`HeadlessChrome/${BROWSER_VERSION}`),
     on: vi.fn(),
     pages: () => Promise.resolve([]),
-    newPage: () =>
-      Promise.resolve({
-        goto: () =>
-          options.pageFault
-            ? Promise.reject(options.pageFault)
-            : Promise.resolve({ status: () => 200 }),
-        evaluate: () => Promise.resolve(`<html><body><p>${CANARIES.pageText}</p></body></html>`),
-        url: () => TASK_URL,
-        close: () => Promise.resolve(),
-      }),
+    newPage: fakePage,
+    // The run's background page pool opens isolated contexts (FEAT-050).
+    createBrowserContext: () =>
+      Promise.resolve({ newPage: fakePage, close: () => Promise.resolve() }),
     close: () => Promise.resolve(),
   });
   const owned = (ownership: unknown) => {
@@ -456,7 +461,9 @@ describe('@no-llm agentic run browser observability contract', () => {
           fetch: {
             fetcher: new HybridContentFetcher({
               httpFetcher,
-              browserFetcher: new BrowserFallbackFetcher({ browserProvider: provider }),
+              browserFetcher: new BrowserFallbackFetcher({
+                pages: launchPerUsePageSource(provider),
+              }),
             }),
             extractor: new ReadabilityExtractor(),
             ethics,

@@ -41,6 +41,17 @@ export * from './paths.js';
 export * from './profile-store.js';
 export * from './overlay-dismiss.js';
 export * from './page-settle.js';
+export * from './page-pool.js';
+// The deadline race stays module-private: every page source shares it, and no
+// caller outside the module needs it.
+export {
+  PageAbortedError,
+  PageTimeoutError,
+  abortError,
+  launchPerUsePageSource,
+  type PageSource,
+  type PageUseOptions,
+} from './page-source.js';
 export * from './provider.js';
 export * from './session.js';
 export * from './sensitive-screen-latch.js';

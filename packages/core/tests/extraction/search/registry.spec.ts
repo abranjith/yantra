@@ -16,7 +16,7 @@ import { fakeBrowserProvider, keychainWith, passGate, silentLogger } from './hel
 function deps(entries: Record<string, string> = {}): SearchProviderDeps {
   return {
     keychain: keychainWith(entries),
-    browserProvider: fakeBrowserProvider('<html></html>').provider,
+    pages: fakeBrowserProvider('<html></html>').pages,
     ethicsGate: passGate,
     logger: silentLogger,
   };

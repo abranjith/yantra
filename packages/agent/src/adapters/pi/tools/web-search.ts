@@ -201,7 +201,7 @@ type HitRead =
   /** The run's own URL policy refused the hit before the store was asked. */
   | { readonly kind: 'refused'; readonly processed: ProcessedSource }
   /** The run's own budget refused the read; reported once at the top level. */
-  | { readonly kind: 'budget'; readonly limit: BudgetLimitName };
+  | { readonly kind: 'budget'; readonly url: string; readonly limit: BudgetLimitName };
 
 /** What a failed hit load hands the store: the outcome and the gate decision behind it. */
 interface HitFailure {
@@ -288,6 +288,7 @@ async function readHit(
       if (processed.failure?.stage === 'budget') {
         return {
           kind: 'budget',
+          url: hit.url,
           limit: !decision.ok && decision.reason === 'budget' ? decision.limit : 'navigations',
         };
       }
@@ -381,7 +382,8 @@ function recordSearchResult(url: string, services: RunServices): void {
 /**
  * Record every hit the provider returned once, plus a negative observation for
  * a failure this call actually observed. A page already read adds nothing (it
- * was observed when it was read), and a replayed memo is not a new observation.
+ * was observed when it was read), a replayed memo is not a new observation, and
+ * a hit the run's own budget skipped still counts as a search result.
  */
 function recordReadRanks(
   reads: readonly HitRead[],
@@ -389,7 +391,13 @@ function recordReadRanks(
   services: RunServices,
 ): void {
   for (const read of reads) {
-    if (read.kind === 'already-read' || read.kind === 'budget') continue;
+    if (read.kind === 'already-read') continue;
+    if (read.kind === 'budget') {
+      // The provider did return it; only the run's own limit kept it unread,
+      // which is never negative evidence about the domain.
+      recordSearchResult(read.url, services);
+      continue;
+    }
     const { processed } = read;
     const url = processed.doc?.url ?? processed.failure?.url;
     if (url === undefined) continue;

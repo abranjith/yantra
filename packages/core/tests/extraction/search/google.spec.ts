@@ -15,7 +15,7 @@ function fixture(name: string): string {
 
 function providerFor(html: string, gate = passGate): GoogleSearchProvider {
   const transport = new ScrapeTransport({
-    browserProvider: fakeBrowserProvider(html).provider,
+    pages: fakeBrowserProvider(html).pages,
     ethicsGate: gate,
     logger: silentLogger,
   });

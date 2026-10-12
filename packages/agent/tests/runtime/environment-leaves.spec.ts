@@ -10,6 +10,7 @@
  * results and its artifacts.
  */
 
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -190,6 +191,7 @@ function fakeBrowser(attribute: () => string): {
     id: 'fake-session',
     profilePath: '',
     newPage: () => Promise.resolve(page),
+    newIsolatedPage: () => Promise.resolve(page),
     close: () => Promise.resolve(),
     on: () => undefined,
   } as unknown as BrowserSession;
@@ -227,6 +229,14 @@ function httpResponse(status: number, html: string): unknown {
     headers: { 'content-type': 'text/html; charset=utf-8' },
     body: Readable.from([Buffer.from(html, 'utf8')]),
   };
+}
+
+/** True when any run directory under `runsRoot` already holds `run-health.json`. */
+function runHealthExists(runsRoot: string): boolean {
+  if (!existsSync(runsRoot)) return false;
+  return readdirSync(runsRoot, { recursive: true, encoding: 'utf8' }).some((entry) =>
+    entry.endsWith('run-health.json'),
+  );
 }
 
 function hermeticLeaves(overrides: Partial<EnvironmentLeaves> = {}): Partial<EnvironmentLeaves> {
@@ -360,14 +370,18 @@ describe('@no-llm environment leaves', () => {
     expect(outcome.kind).toBe('published');
     expect(resolver).toHaveBeenCalledTimes(1);
     expect(searched).toEqual(['leaf article']);
-    // One read inline from the search, one from web_fetch.
-    expect(requested).toEqual([PAGE_URL, PAGE_URL]);
+    // One read, inline from the search: the run document store answers the
+    // later web_fetch of the same page without a second request (FEAT-050).
+    expect(requested).toEqual([PAGE_URL]);
     expect(driver.results.map((result) => [result.tool, result.status])).toEqual([
       ['web_search', 'ok'],
       ['web_fetch', 'ok'],
       ['result_publish', 'ok'],
     ]);
-    expect(driver.results[1]?.modelText).toContain('served by the injected HTTP transport');
+    expect(driver.results[0]?.modelText).toContain('served by the injected HTTP transport');
+    expect(JSON.parse(driver.results[1]?.modelText ?? '{}')).toMatchObject({
+      already_read: 'S1',
+    });
   });
 
   it('gives the resolver the run’s own deps, with the run’s search config', async () => {
@@ -388,12 +402,7 @@ describe('@no-llm environment leaves', () => {
       { readonly config: unknown; readonly deps: Record<string, unknown> },
     ];
     expect(options.config).toBe(searchConfig);
-    expect(Object.keys(options.deps).sort()).toEqual([
-      'browserProvider',
-      'ethicsGate',
-      'keychain',
-      'logger',
-    ]);
+    expect(Object.keys(options.deps).sort()).toEqual(['ethicsGate', 'keychain', 'logger', 'pages']);
   });
 
   it('uses one createBrowserProvider for the controller, the fetch fallback, and the scrape transport', async () => {
@@ -422,14 +431,97 @@ describe('@no-llm environment leaves', () => {
     });
 
     expect(createBrowserProvider).toHaveBeenCalledTimes(1);
-    expect(new Set(browser.launches)).toEqual(
-      new Set(['web_fetch', 'web_search', 'browser_navigate']),
-    );
+    // Two processes, not three (FEAT-050): the fetch fallback launched the
+    // run's page pool, the SERP scrape reused it in its own context, and the
+    // task browser launched separately for browser_navigate.
+    expect(browser.launches).toEqual(['web_fetch', 'browser_navigate']);
     const health = JSON.parse(
       await readFile(join(result.outcome.runDir, 'run-health.json'), 'utf8'),
-    ) as { readonly browser: { readonly launches: number } };
-    expect(health.browser.launches).toBe(browser.launches.length);
+    ) as {
+      readonly browser: {
+        readonly launches: number;
+        readonly pool_launches?: number;
+        readonly contexts?: number;
+      };
+    };
+    expect(health.browser).toEqual({ launches: 2, pool_launches: 1, contexts: 2 });
   });
+
+  it('shares one page pool across scraped searches and escalated fetches, and closes it before run health', async () => {
+    const holder: { driver?: ScriptedProvider } = {};
+    const closes: { readonly tool: string; readonly runHealthWritten: boolean }[] = [];
+    const launchedBy: string[] = [];
+    let contexts = 0;
+    const page = (): { goto: (url: string) => Promise<unknown>; [key: string]: unknown } => {
+      let at = 'about:blank';
+      return {
+        goto: (url: string) => {
+          at = url;
+          return Promise.resolve({ status: () => 200 });
+        },
+        evaluate: () => Promise.resolve(ARTICLE_HTML),
+        url: () => at,
+        close: () => Promise.resolve(),
+        on: () => undefined,
+      };
+    };
+    const provider: BrowserProvider = {
+      launch: () => {
+        const tool = holder.driver?.current ?? '';
+        launchedBy.push(tool);
+        return Promise.resolve({
+          id: `session-${launchedBy.length}`,
+          profilePath: '',
+          newPage: () => Promise.resolve(page()),
+          newIsolatedPage: () => {
+            contexts += 1;
+            return Promise.resolve(page());
+          },
+          close: () => {
+            closes.push({ tool, runHealthWritten: runHealthExists(join(root, 'runs')) });
+            return Promise.resolve();
+          },
+          on: () => undefined,
+        } as unknown as BrowserSession);
+      },
+      detectChrome: () => Promise.resolve(null),
+    };
+    // HTTP refuses the bot user agent, so every page read escalates to a render.
+    const httpRequestFn = vi.fn(() =>
+      Promise.resolve(httpResponse(403, 'forbidden')),
+    ) as unknown as NonNullable<EnvironmentLeaves['httpRequestFn']>;
+
+    const result = await run({
+      leaves: hermeticLeaves({
+        createBrowserProvider: () => provider,
+        httpRequestFn,
+        searchConfig: { ...DEFAULT_SEARCH_CONFIG, provider: 'duckduckgo' },
+      }),
+      plan: [
+        { tool: 'web_search', params: { query: 'one', limit: 0 } },
+        { tool: 'web_search', params: { query: 'two', limit: 0 } },
+        { tool: 'web_search', params: { query: 'three', limit: 0 } },
+        { tool: 'web_fetch', params: { url: PAGE_URL } },
+        { tool: 'web_fetch', params: { url: 'http://leaf.example.test/second' } },
+        { tool: 'browser_navigate', params: { url: PAGE_URL } },
+      ],
+      holder,
+    });
+
+    // One pool process for five background pages; one task browser.
+    expect(launchedBy).toEqual(['web_search', 'browser_navigate']);
+    expect(contexts).toBe(5);
+    const health = JSON.parse(
+      await readFile(join(result.outcome.runDir, 'run-health.json'), 'utf8'),
+    ) as { readonly browser: Record<string, number> };
+    expect(health.browser).toEqual({ launches: 2, pool_launches: 1, contexts: 5 });
+    // Finalizer order: task browser teardown, then the pool, both before
+    // run-health.json exists.
+    expect(closes).toEqual([
+      { tool: 'browser_navigate', runHealthWritten: false },
+      { tool: 'web_search', runHealthWritten: false },
+    ]);
+  }, 60_000);
 
   it('ignores environmentLeaves entirely when createEnvironment is supplied', async () => {
     const untouchable = (): never => {

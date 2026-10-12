@@ -53,6 +53,8 @@ interface Fixture {
   readonly shutdowns: () => number;
   readonly cleaned: string[];
   readonly newPageCalls: () => number;
+  /** Isolated contexts opened, and how many times each was closed. */
+  readonly contexts: { closes: number }[];
   onCleanup(hook: () => void): void;
 }
 
@@ -64,12 +66,14 @@ function makeFixture(
     cleanupError?: Error;
     installation?: ResolvedBrowserInstallation;
     onShutdown?: () => void;
+    contextPageError?: Error;
   } = {},
 ): Fixture {
   const child = new FakeChild();
   let shutdowns = 0;
   let newPageCalls = 0;
   const cleaned: string[] = [];
+  const contexts: { closes: number }[] = [];
 
   const browserEvents = new EventEmitter();
   const browser = Object.assign(browserEvents, {
@@ -79,6 +83,20 @@ function makeFixture(
       return Promise.resolve({ url: () => 'about:blank', on: vi.fn() });
     },
     close: () => Promise.resolve(),
+    createBrowserContext: () => {
+      const context = { closes: 0 };
+      contexts.push(context);
+      return Promise.resolve({
+        newPage: () =>
+          opts.contextPageError
+            ? Promise.reject(opts.contextPageError)
+            : Promise.resolve({ url: () => 'about:blank', on: vi.fn(), close: vi.fn() }),
+        close: () => {
+          context.closes += 1;
+          return Promise.resolve();
+        },
+      });
+    },
   });
 
   const launched: OwnedBrowserProcess = {
@@ -131,6 +149,7 @@ function makeFixture(
     shutdowns: () => shutdowns,
     cleaned,
     newPageCalls: () => newPageCalls,
+    contexts,
     onCleanup: (hook: () => void) => cleanupHooks.push(hook),
   };
 }
@@ -195,6 +214,47 @@ describe('@no-llm LocalBrowserSession newPage', () => {
     fixture.child.exit(1);
 
     await expect(fixture.session.newPage()).rejects.toBeInstanceOf(BrowserCrashedError);
+  });
+});
+
+describe('@no-llm LocalBrowserSession newIsolatedPage (FEAT-050)', () => {
+  it('opens a fresh browser context per page and never reuses the initial tab', async () => {
+    const fixture = makeFixture({ pages: [{ url: () => 'about:blank' }] });
+
+    await fixture.session.newIsolatedPage();
+    await fixture.session.newIsolatedPage();
+
+    expect(fixture.contexts).toHaveLength(2);
+    expect(fixture.newPageCalls()).toBe(0);
+  });
+
+  it('closing the page closes its whole context, once', async () => {
+    const fixture = makeFixture();
+    const page = await fixture.session.newIsolatedPage();
+
+    await page.close();
+    await page.close();
+
+    expect(fixture.contexts[0]?.closes).toBe(1);
+  });
+
+  it('closes the context when its page cannot be opened', async () => {
+    const fixture = makeFixture({ contextPageError: new Error('target closed') });
+
+    await expect(fixture.session.newIsolatedPage()).rejects.toThrow('target closed');
+
+    expect(fixture.contexts[0]?.closes).toBe(1);
+  });
+
+  it('refuses after close and after a crash, as newPage does', async () => {
+    const closed = makeFixture();
+    await closed.session.close();
+    const crashed = makeFixture();
+    crashed.child.exit(1);
+
+    await expect(closed.session.newIsolatedPage()).rejects.toBeInstanceOf(BrowserCrashedError);
+    await expect(crashed.session.newIsolatedPage()).rejects.toBeInstanceOf(BrowserCrashedError);
+    expect(closed.contexts).toHaveLength(0);
   });
 });
 

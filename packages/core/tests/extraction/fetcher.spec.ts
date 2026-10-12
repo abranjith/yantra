@@ -7,6 +7,8 @@ import {
 } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { PagePool } from '../../src/browser/page-pool.js';
+import { launchPerUsePageSource } from '../../src/browser/page-source.js';
 import type {
   BrowserProvider,
   BrowserSession,
@@ -57,6 +59,9 @@ class FakeSession implements BrowserSession {
   public readonly profilePath = '/tmp/fake-profile';
 
   public async newPage(): Promise<Page> {
+    return new FakePage(this.status);
+  }
+  public async newIsolatedPage(): Promise<Page> {
     return new FakePage(this.status);
   }
   public async close(): Promise<void> {
@@ -174,7 +179,9 @@ describe('@no-llm extraction/fetcher', () => {
 
     const hybrid = new HybridContentFetcher({
       httpFetcher: new HttpFetcher(),
-      browserFetcher: new BrowserFallbackFetcher({ browserProvider: fakeBrowserProvider }),
+      browserFetcher: new BrowserFallbackFetcher({
+        pages: launchPerUsePageSource(fakeBrowserProvider),
+      }),
     });
 
     const doc = await hybrid.fetch('https://example.com/spa', {
@@ -190,7 +197,9 @@ describe('@no-llm extraction/fetcher', () => {
     // Regression: Chrome renders "This page isn't working / HTTP ERROR 400" for
     // an error response, that interstitial extracts as readable prose, and the
     // hardcoded 200 published it as a Brief source excerpt.
-    const fetcher = new BrowserFallbackFetcher({ browserProvider: providerWithStatus(400) });
+    const fetcher = new BrowserFallbackFetcher({
+      pages: launchPerUsePageSource(providerWithStatus(400)),
+    });
 
     await expect(
       fetcher.fetch('https://example.com/ad-redirect', {
@@ -208,9 +217,11 @@ describe('@no-llm extraction/fetcher', () => {
   it('closes the browser session when a navigation status is rejected', async () => {
     let closed = false;
     const fetcher = new BrowserFallbackFetcher({
-      browserProvider: providerWithStatus(503, () => {
-        closed = true;
-      }),
+      pages: launchPerUsePageSource(
+        providerWithStatus(503, () => {
+          closed = true;
+        }),
+      ),
     });
 
     await fetcher
@@ -224,7 +235,9 @@ describe('@no-llm extraction/fetcher', () => {
   });
 
   it('reports the real status for a successful browser navigation', async () => {
-    const fetcher = new BrowserFallbackFetcher({ browserProvider: providerWithStatus(204) });
+    const fetcher = new BrowserFallbackFetcher({
+      pages: launchPerUsePageSource(providerWithStatus(204)),
+    });
 
     const doc = await fetcher.fetch('https://example.com/ok', {
       timeoutMs: 8_000,
@@ -236,7 +249,9 @@ describe('@no-llm extraction/fetcher', () => {
   });
 
   it('keeps the 200 default when the page facade reports no response', async () => {
-    const fetcher = new BrowserFallbackFetcher({ browserProvider: fakeBrowserProvider });
+    const fetcher = new BrowserFallbackFetcher({
+      pages: launchPerUsePageSource(fakeBrowserProvider),
+    });
 
     const doc = await fetcher.fetch('https://example.com/spa', {
       timeoutMs: 8_000,
@@ -256,7 +271,9 @@ describe('@no-llm extraction/fetcher', () => {
 
     const hybrid = new HybridContentFetcher({
       httpFetcher: new HttpFetcher(),
-      browserFetcher: new BrowserFallbackFetcher({ browserProvider: providerWithStatus(400) }),
+      browserFetcher: new BrowserFallbackFetcher({
+        pages: launchPerUsePageSource(providerWithStatus(400)),
+      }),
     });
 
     await expect(
@@ -267,5 +284,85 @@ describe('@no-llm extraction/fetcher', () => {
     ).rejects.toSatisfy(
       (error: unknown) => error instanceof FetchError && error.context.kind === 'http-status',
     );
+  });
+});
+
+describe('@no-llm extraction/fetcher browser fallback honors its deadline (FEAT-050)', () => {
+  /** A provider whose page navigation never settles; records page closes. */
+  function hangingProvider(): {
+    readonly provider: BrowserProvider;
+    readonly closes: () => number;
+  } {
+    let closes = 0;
+    const page: Page = {
+      goto: () => new Promise<unknown>(() => undefined),
+      evaluate: <T>() => Promise.resolve('' as T),
+      close: () => {
+        closes += 1;
+        return Promise.resolve();
+      },
+      url: () => 'https://example.com/hang',
+      on: () => undefined,
+    };
+    const session: BrowserSession = {
+      id: 'hang',
+      chrome: {
+        path: '/fake/chrome',
+        version: '124.0.0.0',
+        majorVersion: 124,
+        channel: 'stable',
+        source: 'system',
+      },
+      profilePath: '/tmp/fake',
+      newPage: () => Promise.resolve(page),
+      newIsolatedPage: () => Promise.resolve(page),
+      close: () => Promise.resolve(),
+      on: () => undefined,
+    };
+    return {
+      provider: {
+        launch: () => Promise.resolve(session),
+        detectChrome: () => Promise.resolve(null),
+      },
+      closes: () => closes,
+    };
+  }
+
+  it('rejects with a timeout FetchError within timeoutMs when goto never resolves', async () => {
+    // Regression: the fallback took `_opts` and ignored it, waiting for
+    // `networkidle2` for as long as the page took.
+    const hanging = hangingProvider();
+    const fetcher = new BrowserFallbackFetcher({ pages: launchPerUsePageSource(hanging.provider) });
+    const started = Date.now();
+
+    const error = await fetcher
+      .fetch('https://example.com/hang', { timeoutMs: 50, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(FetchError);
+    expect((error as FetchError).context).toMatchObject({
+      kind: 'timeout',
+      url: 'https://example.com/hang',
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(hanging.closes()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects with the abort reason when the signal aborts mid-render', async () => {
+    const hanging = hangingProvider();
+    const pool = new PagePool({ provider: hanging.provider });
+    const fetcher = new BrowserFallbackFetcher({ pages: pool });
+    const controller = new AbortController();
+    const reason = new Error('run aborted');
+
+    const pending = fetcher.fetch('https://example.com/hang', {
+      timeoutMs: 60_000,
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(reason), 10);
+
+    await expect(pending).rejects.toBe(reason);
+    expect(pool.stats().timeouts).toBe(0);
+    await pool.close();
   });
 });

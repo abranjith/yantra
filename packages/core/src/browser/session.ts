@@ -184,6 +184,44 @@ export class LocalBrowserSession implements BrowserSession {
    * @throws {BrowserCrashedError} if the session has already crashed
    */
   async newPage(): Promise<Page> {
+    this.assertUsable();
+
+    const existing = typeof this.browser.pages === 'function' ? await this.browser.pages() : [];
+    const reusable =
+      !this.primaryPageClaimed && existing.length === 1 && existing[0]?.url() === 'about:blank';
+    const puppeteerPage = reusable ? existing[0]! : await this.browser.newPage();
+    this.primaryPageClaimed = true;
+    this.emit('page-created');
+    return wrapPage(puppeteerPage, () => this.emit('page-closed'));
+  }
+
+  /**
+   * Opens a page in a fresh Puppeteer browser context, isolated from every
+   * other page in this browser. The facade's `close()` closes the whole
+   * context (idempotently), so nothing the page stored outlives it.
+   * @throws {BrowserCrashedError} if the session is closed or has crashed
+   */
+  async newIsolatedPage(): Promise<Page> {
+    this.assertUsable();
+    const context = await this.browser.createBrowserContext();
+    let closing: Promise<void> | null = null;
+    const closeContext = (): Promise<void> => {
+      closing ??= context.close();
+      return closing;
+    };
+    try {
+      const puppeteerPage = await context.newPage();
+      this.emit('page-created');
+      return { ...wrapPage(puppeteerPage, () => this.emit('page-closed')), close: closeContext };
+    } catch (error) {
+      // swallow-ok: the page never opened; the open failure is what the caller needs.
+      await closeContext().catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** Throws when the session can no longer open pages. */
+  private assertUsable(): void {
     if (this.closed || this.crashed) {
       throw new BrowserCrashedError({
         sessionId: this.id,
@@ -194,14 +232,6 @@ export class LocalBrowserSession implements BrowserSession {
           : 'Session is closed — cannot open new page',
       });
     }
-
-    const existing = typeof this.browser.pages === 'function' ? await this.browser.pages() : [];
-    const reusable =
-      !this.primaryPageClaimed && existing.length === 1 && existing[0]?.url() === 'about:blank';
-    const puppeteerPage = reusable ? existing[0]! : await this.browser.newPage();
-    this.primaryPageClaimed = true;
-    this.emit('page-created');
-    return wrapPage(puppeteerPage, () => this.emit('page-closed'));
   }
 
   /**

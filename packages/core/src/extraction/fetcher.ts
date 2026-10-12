@@ -1,6 +1,6 @@
 import { request } from 'undici';
 
-import type { BrowserProvider } from '../browser/types.js';
+import { PageTimeoutError, type PageSource } from '../browser/page-source.js';
 
 import type { FetchedDoc } from './types.js';
 
@@ -112,7 +112,11 @@ export class HttpFetcher implements ContentFetcher {
 }
 
 export interface BrowserFallbackFetcherOptions {
-  readonly browserProvider: BrowserProvider;
+  /**
+   * Where the render gets its page: the run's shared page pool in an agentic
+   * run, or `launchPerUsePageSource(provider)` for the deterministic paths.
+   */
+  readonly pages: PageSource;
 }
 
 /**
@@ -125,51 +129,60 @@ export interface BrowserFallbackFetcherOptions {
  * problem continues, contact the site owner.") as a source excerpt. The status
  * rule here is deliberately identical to {@link HttpFetcher}'s: one fetch
  * contract, two transports.
+ *
+ * The render honors the caller's `timeoutMs` and `signal` (FEAT-050): it used
+ * to ignore both and wait for `networkidle2` however long that took. A render
+ * past its deadline rejects with a `timeout` {@link FetchError} and its page is
+ * closed; an aborted render rejects with the signal's reason.
  */
 export class BrowserFallbackFetcher implements ContentFetcher {
-  private readonly browserProvider: BrowserProvider;
+  private readonly pages: PageSource;
 
   public constructor(options: BrowserFallbackFetcherOptions) {
-    this.browserProvider = options.browserProvider;
+    this.pages = options.pages;
   }
 
   public async fetch(
     url: string,
-    _opts: { timeoutMs: number; signal: AbortSignal },
+    opts: { timeoutMs: number; signal: AbortSignal },
   ): Promise<FetchedDoc> {
     const startedAt = Date.now();
-    const session = await this.browserProvider.launch({
-      profile: { kind: 'ephemeral' },
-      headless: true,
-    });
-
     try {
-      const page = await session.newPage();
-      const response = await page.goto(url, { waitUntil: 'networkidle2' });
-      const statusCode = navigationStatus(response);
-      if (statusCode !== null && statusCode >= 400) {
-        throw new FetchError(`HTTP ${statusCode} while rendering content.`, {
+      return await this.pages.withPage(
+        async (page) => {
+          const response = await page.goto(url, { waitUntil: 'networkidle2' });
+          const statusCode = navigationStatus(response);
+          if (statusCode !== null && statusCode >= 400) {
+            throw new FetchError(`HTTP ${statusCode} while rendering content.`, {
+              url,
+              kind: 'http-status',
+              statusCode,
+            });
+          }
+          const html = await page.evaluate(() => document.documentElement?.outerHTML ?? '');
+          return {
+            url,
+            finalUrl: page.url(),
+            fetchedAt: new Date().toISOString(),
+            contentType: 'text/html',
+            html,
+            // A page facade that reports no response (data: URLs, same-document
+            // navigation, test fakes) is reported as it always was.
+            statusCode: statusCode ?? 200,
+            fetchMode: 'browser' as const,
+            elapsedMs: Date.now() - startedAt,
+          };
+        },
+        { timeoutMs: opts.timeoutMs, signal: opts.signal },
+      );
+    } catch (error) {
+      if (error instanceof PageTimeoutError) {
+        throw new FetchError(`Browser render timed out after ${opts.timeoutMs}ms.`, {
           url,
-          kind: 'http-status',
-          statusCode,
+          kind: 'timeout',
         });
       }
-      const html = await page.evaluate(() => document.documentElement?.outerHTML ?? '');
-
-      return {
-        url,
-        finalUrl: page.url(),
-        fetchedAt: new Date().toISOString(),
-        contentType: 'text/html',
-        html,
-        // A page facade that reports no response (data: URLs, same-document
-        // navigation, test fakes) is reported as it always was.
-        statusCode: statusCode ?? 200,
-        fetchMode: 'browser',
-        elapsedMs: Date.now() - startedAt,
-      };
-    } finally {
-      await session.close();
+      throw error;
     }
   }
 }

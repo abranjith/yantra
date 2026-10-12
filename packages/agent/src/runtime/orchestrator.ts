@@ -28,6 +28,7 @@ import {
   type SearchProviderError,
   LocalProfileStore,
   MarkdownReportBuilder,
+  PagePool,
   ModelSuppliedValues,
   RateLimiterImpl,
   ReadabilityExtractor,
@@ -324,6 +325,13 @@ export interface AgenticRunEnvironment {
    * the run must behave identically without it.
    */
   readonly runtimeLogger?: Logger;
+  /**
+   * The run's shared background page pool (FEAT-050), when this environment
+   * composed one. Closed by the finalizer after the task browser and before
+   * `run-health.json` is written, which reads its counters. An injected test
+   * environment may have none.
+   */
+  readonly pagePool?: Pick<PagePool, 'close' | 'stats'>;
   /**
    * Closes the runtime log this environment opened. Idempotent.
    *
@@ -766,6 +774,9 @@ export async function runAgenticTask(
     unsubscribe?.();
     if (!startupFinalized) {
       await captureTeardown(() => environment?.browserController.teardown(), teardownErrors);
+      // The background page pool closes after the task browser and before
+      // run health is summarized, so its launch/context counts are final.
+      await captureTeardown(() => environment?.pagePool?.close(), teardownErrors);
       await captureTeardown(() => session?.close(), teardownErrors);
       await captureTeardown(() => recorder?.close(latestRunResult), teardownErrors);
 
@@ -794,6 +805,7 @@ export async function runAgenticTask(
         snapshot: budgetTracker?.snapshot() ?? { navigations: 0, hosts: 0 },
         limits: budgetsConfig,
         noticeCount: runHealth.publishedNoticeCount(),
+        ...(environment?.pagePool === undefined ? {} : { pagePool: environment.pagePool.stats() }),
       });
       await captureTeardown(() => writeRunHealth(created.runDir, health), teardownErrors);
       await captureTeardown(() => {
@@ -1452,6 +1464,12 @@ function composeDefaultEnvironment(
     browserProvider,
     logger,
   });
+  // One headless browser for every SERP scrape and fetch fallback in the run,
+  // each in its own isolated context. It shares the counting provider, so its
+  // launches are in `browser.launches` too. The task controller above keeps
+  // its own browser: it may run headed for `do`, and background contexts must
+  // never see or disturb its page. At most two Chrome processes per run.
+  const pagePool = new PagePool({ provider: browserProvider, logger });
   const secretAudit = {
     appendSecretResolution: (entry: unknown) =>
       appendFile(join(context.runDir, 'secrets.jsonl'), `${JSON.stringify(entry)}\n`, 'utf8'),
@@ -1467,6 +1485,7 @@ function composeDefaultEnvironment(
 
   return {
     browserController,
+    pagePool,
     workflowStore,
     runtimeLogger: logger,
     closeRuntimeLog: () => runtimeLog.close(),
@@ -1478,7 +1497,7 @@ function composeDefaultEnvironment(
           leaves.resolveSearchProvider({
             env: process.env,
             config: searchConfig,
-            deps: { keychain, browserProvider, ethicsGate: searchEthics, logger },
+            deps: { keychain, pages: pagePool, ethicsGate: searchEthics, logger },
           }),
         resultCap: 8,
         fetchTop: searchConfig.fetchTop,
@@ -1493,7 +1512,7 @@ function composeDefaultEnvironment(
             maxBodyBytes: 5 * 1024 * 1024,
             ...(leaves.httpRequestFn === undefined ? {} : { requestFn: leaves.httpRequestFn }),
           }),
-          browserFetcher: new BrowserFallbackFetcher({ browserProvider }),
+          browserFetcher: new BrowserFallbackFetcher({ pages: pagePool }),
         }),
         extractor: new ReadabilityExtractor(),
         ethics,

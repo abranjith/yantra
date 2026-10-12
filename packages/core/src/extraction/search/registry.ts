@@ -1,7 +1,8 @@
 import type { Result } from '@yantra/protocol';
 import { err, ok } from '@yantra/protocol';
 
-import type { BrowserProvider, Logger } from '../../browser/types.js';
+import type { PageSource } from '../../browser/page-source.js';
+import type { Logger } from '../../browser/types.js';
 import { YANTRA_KEYCHAIN_SERVICE, type KeychainProvider } from '../../secrets/keychain.js';
 import type { SearchProviderName, SearchResult } from '../types.js';
 
@@ -37,11 +38,12 @@ export type SearchProviderSelection = SearchProviderName | 'auto';
 /**
  * Runtime dependencies handed to a descriptor's `create` factory. API providers
  * use `keychain`; scraped providers compose the {@link ScrapeTransport} from
- * `browserProvider` + `ethicsGate` + `logger`.
+ * `pages` + `ethicsGate` + `logger`.
  */
 export interface SearchProviderDeps {
   readonly keychain: KeychainProvider;
-  readonly browserProvider: BrowserProvider;
+  /** Where SERP renders get a page: the run's pool, or one launch per use. */
+  readonly pages: PageSource;
   readonly ethicsGate: SearchEthicsGate;
   readonly logger: Logger;
   /** Keychain service name; defaults to `yantra`. */
@@ -66,7 +68,7 @@ export interface SearchProviderDescriptor {
 
 function scrapeTransport(deps: SearchProviderDeps): ScrapeTransport {
   return new ScrapeTransport({
-    browserProvider: deps.browserProvider,
+    pages: deps.pages,
     ethicsGate: deps.ethicsGate,
     logger: deps.logger,
   });

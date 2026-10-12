@@ -338,6 +338,8 @@ export class RunHealthLedger {
     readonly snapshot: Pick<BudgetSnapshot, 'navigations' | 'hosts'>;
     readonly limits: { readonly maxNavigations: number; readonly maxHosts: number };
     readonly noticeCount: number;
+    /** The background page pool's final counters (FEAT-050), when the run had one. */
+    readonly pagePool?: { readonly launches: number; readonly contexts: number };
   }): RunHealth {
     const searches = this.attemptedSearches();
     const searchFailures = countByCode(searches.filter((outcome) => outcome.status !== 'ok'));
@@ -373,7 +375,12 @@ export class RunHealthLedger {
         memo_hits: this.memoHits,
       },
       source_failures: stages,
-      browser: { launches: this.launches },
+      browser: {
+        launches: this.launches,
+        ...(input.pagePool === undefined
+          ? {}
+          : { pool_launches: input.pagePool.launches, contexts: input.pagePool.contexts }),
+      },
       budgets: {
         navigations_used: input.snapshot.navigations,
         navigations_limit: nonNegativeInt(input.limits.maxNavigations),
