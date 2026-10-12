@@ -4,8 +4,15 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { runAgentDiagnostics, type AgentSmokeOptions } from '@yantra/agent';
+import {
+  DEFAULT_SEARCH_CONFIG,
+  SEARCH_PROVIDER_REGISTRY,
+  resetPathCache,
+  type KeychainProvider,
+  type SearchConfig,
+} from '@yantra/core';
 import { CommanderError } from 'commander';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeDoctorCommand, type DoctorRuntime } from '../../src/commands/doctor.js';
 
@@ -100,6 +107,7 @@ describe('doctor agent checks', () => {
       'ethics.robots',
       'search.tavily.api-key',
       'search.brave.api-key',
+      'search.provider',
     ]);
     expect(report.overall).toBe('warn');
     expect(stderr.read()).toBe('');
@@ -695,5 +703,123 @@ describe('doctor --agent-smoke output modes', () => {
     expect(emitted.outcome).toBe('failed');
     expect(emitted.statusToolInvoked).toBe(false);
     expect(stderr.read()).toContain('Agent smoke FAILED');
+  });
+});
+
+describe('doctor search-provider check (FEAT-050)', () => {
+  let previousHome: string | undefined;
+
+  beforeEach(async () => {
+    const home = await mkdtemp(join(tmpdir(), 'yantra-doctor-search-'));
+    temporaryDirectories.push(home);
+    previousHome = process.env.YANTRA_HOME;
+    process.env.YANTRA_HOME = home;
+    resetPathCache();
+  });
+
+  afterEach(() => {
+    if (previousHome === undefined) delete process.env.YANTRA_HOME;
+    else process.env.YANTRA_HOME = previousHome;
+    resetPathCache();
+  });
+
+  function memoryKeychain(entries: Record<string, string>): KeychainProvider {
+    return {
+      get: (_service, account) => Promise.resolve(entries[account] ?? null),
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(false),
+      list: () => Promise.resolve([]),
+      isAvailable: () => Promise.resolve(true),
+    };
+  }
+
+  interface SearchReport {
+    readonly overall: string;
+    readonly checks: readonly {
+      readonly id: string;
+      readonly status: string;
+      readonly summary: string;
+      readonly remediation?: string;
+    }[];
+    readonly search?: unknown;
+  }
+
+  async function doctorJson(options: {
+    readonly keys?: Record<string, string>;
+    readonly config?: Partial<SearchConfig>;
+    readonly env?: NodeJS.ProcessEnv;
+  }): Promise<{ readonly report: SearchReport; readonly check: SearchReport['checks'][number] }> {
+    const stdout = capture();
+    const command = makeDoctorCommand({
+      env: options.env ?? {},
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      isTty: false,
+      coreDoctor: () =>
+        Promise.resolve({
+          generatedAt: '2026-10-11T00:00:00.000Z',
+          cachedFrom: null,
+          overall: 'ok',
+          checks: [],
+        }),
+      agentDiagnostics: () => Promise.resolve([]),
+      loadPreferences: () => Promise.resolve(new Map()),
+      keychain: () => Promise.resolve(memoryKeychain(options.keys ?? {})),
+      searchConfig: () => Promise.resolve({ ...DEFAULT_SEARCH_CONFIG, ...options.config }),
+    });
+    await command.parseAsync(['--json'], { from: 'user' }).catch((error: unknown) => {
+      if (!(error instanceof CommanderError)) throw error;
+    });
+    const report = JSON.parse(stdout.read()) as SearchReport;
+    const check = report.checks.find((entry) => entry.id === 'search.provider');
+    if (check === undefined) throw new Error('search.provider check missing');
+    return { report, check };
+  }
+
+  it('warns with the exact keyed-provider fix hint when only a scraped provider is available', async () => {
+    const { report, check } = await doctorJson({});
+
+    expect(check.status).toBe('warn');
+    expect(check.summary).toMatch(/duckduckgo, a scraped provider/);
+    expect(check.remediation).toBe(
+      'Run `yantra secret set tavily.api_key` or `yantra secret set brave.api_key` to use a keyed provider.',
+    );
+    expect(report.search).toEqual({ provider: 'duckduckgo', kind: 'scrape', via: 'auto' });
+  });
+
+  it('is ok when a Tavily key is stored', async () => {
+    const { report, check } = await doctorJson({ keys: { 'tavily.api_key': 'tvly-key' } });
+
+    expect(check.status).toBe('ok');
+    expect(check.remediation).toBeUndefined();
+    expect(report.search).toEqual({ provider: 'tavily', kind: 'api', via: 'auto' });
+  });
+
+  it('fails when the configured keyed provider has no key, naming the typed reason', async () => {
+    const { report, check } = await doctorJson({ config: { provider: 'brave' } });
+
+    expect(check.status).toBe('fail');
+    expect(check.summary).toContain('brave.api_key');
+    expect(report.overall).toBe('fail');
+    expect(report).not.toHaveProperty('search');
+  });
+
+  it('reports where the selection came from', async () => {
+    const { report } = await doctorJson({
+      env: { SEARCH_PROVIDER: 'brave' },
+      keys: { 'brave.api_key': 'k' },
+    });
+
+    expect(report.search).toEqual({ provider: 'brave', kind: 'api', via: 'env' });
+  });
+
+  it('plans the provider without building one, so no browser can start', async () => {
+    const create = vi.spyOn(SEARCH_PROVIDER_REGISTRY.duckduckgo, 'create');
+    try {
+      await doctorJson({});
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      create.mockRestore();
+    }
   });
 });

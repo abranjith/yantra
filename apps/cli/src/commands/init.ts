@@ -102,7 +102,7 @@ export function makeInitCommand(deps: InitDeps = {}): Command {
 
         if (options.json)
           process.stdout.write(
-            `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'written', configPath: target, provider: answers.provider })}\n`,
+            `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'written', configPath: target, provider: answers.provider, searchKey: answers.searchKey.status })}\n`,
           );
         else {
           process.stdout.write(`Wrote ${target}\n`);
@@ -114,6 +114,14 @@ export function makeInitCommand(deps: InitDeps = {}): Command {
                 : 'Location sharing: off. Change it with `yantra prefs set context.location true`.\n',
             );
           }
+          if (answers.searchKey.status === 'stored')
+            process.stdout.write(
+              `Stored ${answers.searchKey.provider}.api_key in the OS keychain; web search will use ${answers.searchKey.provider}.\n`,
+            );
+          else if (answers.searchKey.status === 'manual')
+            process.stdout.write(
+              `The OS keychain is unavailable, so the search key was not stored. Store it later with \`${answers.searchKey.command}\`.\n`,
+            );
           process.stdout.write('Next: yantra model list; yantra secret list; yantra config path\n');
         }
         process.exit(0);
@@ -134,6 +142,7 @@ function defaultsFor(provider: InitWizardAnswers['provider']): InitWizardAnswers
       baseUrl: null,
       apiKey: { kind: 'env', name: 'ANTHROPIC_API_KEY' },
       dataDir: null,
+      searchKey: { status: 'skipped' },
     };
   if (provider === 'ollama')
     return {
@@ -142,8 +151,16 @@ function defaultsFor(provider: InitWizardAnswers['provider']): InitWizardAnswers
       baseUrl: 'http://localhost:11434',
       apiKey: null,
       dataDir: null,
+      searchKey: { status: 'skipped' },
     };
-  return { provider: 'none', modelId: null, baseUrl: null, apiKey: null, dataDir: null };
+  return {
+    provider: 'none',
+    modelId: null,
+    baseUrl: null,
+    apiKey: null,
+    dataDir: null,
+    searchKey: { status: 'skipped' },
+  };
 }
 
 function buildConfig(answers: InitWizardAnswers): YantraConfig {

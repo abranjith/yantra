@@ -7,6 +7,9 @@
  *   - `providers.anthropic.api-key` — present in env or keychain.
  *   - `providers.ollama.reachable` — localhost-only HEAD probe with 1s timeout.
  *   - `search.tavily.api-key` / `search.brave.api-key` — keychain presence (warn-only).
+ *   - `search.provider` — the provider a run would actually use (FEAT-050):
+ *     ok for a keyed API provider, warn for a scraped one, error when the
+ *     configured selection cannot resolve. Planned, never built: no browser.
  *   - `filesystem.disk-space` — warn under 500 MB free in the data dir.
  *
  * The probe is non-destructive; `--fix` is intentionally not implemented in
@@ -46,7 +49,11 @@ import {
   dataDir,
   doctor as runCoreDoctor,
   loadConfig,
+  loadSearchConfig,
+  planSearchProvider,
   resolveSearchCredential,
+  searchKeyProbe,
+  type KeychainProvider,
   runsRoot,
   storageDirSources,
 } from '@yantra/core';
@@ -99,6 +106,10 @@ export interface DoctorRuntime {
   readonly loadPreferences: typeof loadEffectivePreferences;
   readonly smoke: typeof runAgentSmoke;
   readonly runsRoot: typeof runsRoot;
+  /** The OS keychain the credential and search-provider checks read. */
+  readonly keychain: () => Promise<KeychainProvider>;
+  /** The loaded `search:` configuration the provider check plans from. */
+  readonly searchConfig: typeof loadSearchConfig;
 }
 
 const CHECK_TITLES: Record<string, string> = {
@@ -118,6 +129,7 @@ const CHECK_TITLES: Record<string, string> = {
   'ethics.robots': 'Robots policy',
   'search.tavily.api-key': 'Tavily API key',
   'search.brave.api-key': 'Brave API key',
+  'search.provider': 'Search provider',
 };
 
 export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
@@ -189,7 +201,7 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
             ...options,
             ...(deterministic === null ? {} : { noLlm: deterministic }),
           }),
-          runConfigurationChecks(resolved.env),
+          runConfigurationChecks(resolved),
         ]);
         const checks = [...report.checks, ...agentChecks, ...configChecks];
 
@@ -210,6 +222,7 @@ export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
           platform: process.platform,
           nodeVersion: process.versions.node,
           ...browserProvenance(report.checks),
+          ...searchProvenance(configChecks),
         };
 
         connector.renderResult({ kind: 'doctor', result }, renderOpts);
@@ -301,13 +314,38 @@ function browserProvenance(
   };
 }
 
+/**
+ * Promotes the search-provider selection out of its check, as the browser
+ * block is, so `--json` consumers read `{ provider, kind, via }` directly.
+ * Absent when the selection could not be planned.
+ */
+function searchProvenance(
+  checks: readonly ConfigurationDoctorCheck[],
+): Pick<DoctorRenderResult, 'search'> {
+  const check = checks.find((entry) => entry.id === 'search.provider');
+  const { provider, kind, via } = check?.details ?? {};
+  if (
+    typeof provider !== 'string' ||
+    (kind !== 'api' && kind !== 'scrape') ||
+    (via !== 'flag' && via !== 'env' && via !== 'config' && via !== 'auto')
+  ) {
+    return {};
+  }
+  return { search: { provider, kind, via } };
+}
+
+/** The fix hint for a run that will search through a scraped provider. */
+export const SCRAPED_SEARCH_FIX_HINT =
+  'Run `yantra secret set tavily.api_key` or `yantra secret set brave.api_key` to use a keyed provider.';
+
 interface ConfigurationDoctorCheck {
   readonly id:
     | 'config.valid'
     | 'paths.resolved'
     | 'ethics.robots'
     | 'search.tavily.api-key'
-    | 'search.brave.api-key';
+    | 'search.brave.api-key'
+    | 'search.provider';
   readonly status: 'ok' | 'warn' | 'error';
   readonly message: string;
   readonly details: Readonly<Record<string, unknown>>;
@@ -315,8 +353,9 @@ interface ConfigurationDoctorCheck {
 }
 
 async function runConfigurationChecks(
-  env: NodeJS.ProcessEnv,
+  runtime: DoctorRuntime,
 ): Promise<readonly ConfigurationDoctorCheck[]> {
+  const env = runtime.env;
   const loaded = await loadConfig();
   if (!loaded.isOk) {
     return [
@@ -360,10 +399,11 @@ async function runConfigurationChecks(
     },
   ];
 
-  let keychain;
+  let keychain: KeychainProvider | null;
   try {
-    keychain = await createKeychainProvider();
+    keychain = await runtime.keychain();
   } catch {
+    // swallow-ok: an unreachable keychain reads as "no key"; keychain.reachable reports it.
     keychain = null;
   }
   for (const provider of ['tavily', 'brave'] as const) {
@@ -390,7 +430,54 @@ async function runConfigurationChecks(
           : null,
     });
   }
+  checks.push(await searchProviderCheck(runtime, keychain));
   return checks;
+}
+
+/**
+ * Which search provider a run would use, planned by the same grammar runs use
+ * and never built, so no browser starts (FEAT-050, subsumes TODO line 121).
+ */
+async function searchProviderCheck(
+  runtime: DoctorRuntime,
+  keychain: KeychainProvider | null,
+): Promise<ConfigurationDoctorCheck> {
+  const plan = await planSearchProvider({
+    env: runtime.env,
+    config: await runtime.searchConfig(),
+    hasKey:
+      keychain === null
+        ? () => Promise.resolve(false)
+        : searchKeyProbe(keychain, { env: runtime.env }),
+  });
+  if (plan instanceof Error) {
+    return {
+      id: 'search.provider',
+      status: 'error',
+      message: plan.message,
+      details: { code: plan.context.code ?? 'unknown' },
+      fixHint: null,
+    };
+  }
+  const details = { provider: plan.name, kind: plan.kind, via: plan.via };
+  if (plan.kind === 'api') {
+    return {
+      id: 'search.provider',
+      status: 'ok',
+      message: `Searches will use ${plan.name}, a keyed API provider (selected via ${plan.via}).`,
+      details,
+      fixHint: null,
+    };
+  }
+  return {
+    id: 'search.provider',
+    status: 'warn',
+    message:
+      `Searches will use ${plan.name}, a scraped provider, which Yantra serializes and stops at ` +
+      'the first challenge, so results may be limited.',
+    details,
+    fixHint: SCRAPED_SEARCH_FIX_HINT,
+  };
 }
 
 /**
@@ -548,6 +635,8 @@ function doctorRuntime(runtime?: Partial<DoctorRuntime>): DoctorRuntime {
     loadPreferences: runtime?.loadPreferences ?? loadEffectivePreferences,
     smoke: runtime?.smoke ?? runAgentSmoke,
     runsRoot: runtime?.runsRoot ?? runsRoot,
+    keychain: runtime?.keychain ?? createKeychainProvider,
+    searchConfig: runtime?.searchConfig ?? loadSearchConfig,
   };
 }
 

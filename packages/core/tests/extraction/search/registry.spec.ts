@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   NoSearchProviderAvailableError,
@@ -6,7 +6,9 @@ import {
 } from '../../../src/extraction/search/errors.js';
 import {
   DEFAULT_SEARCH_CONFIG,
+  planSearchProvider,
   resolveSearchProvider,
+  searchKeyProbe,
   type SearchConfig,
   type SearchProviderDeps,
 } from '../../../src/extraction/search/registry.js';
@@ -184,5 +186,105 @@ describe('@no-llm extraction/search/resolveSearchProvider', () => {
       // No keys, default chain → duckduckgo.
       expect(result.value.name).toBe('duckduckgo');
     }
+  });
+});
+
+describe('@no-llm extraction/search/planSearchProvider (FEAT-050)', () => {
+  interface Case {
+    readonly name: string;
+    readonly explicitProvider?: 'tavily' | 'brave' | 'duckduckgo' | 'google' | 'auto' | null;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly config?: SearchConfig;
+    readonly keys: Record<string, string>;
+  }
+  const CASES: readonly Case[] = [
+    {
+      name: 'explicit keyed, key present',
+      explicitProvider: 'tavily',
+      keys: { 'tavily.api_key': 'k' },
+    },
+    { name: 'explicit keyed, key missing', explicitProvider: 'brave', keys: {} },
+    { name: 'explicit scrape', explicitProvider: 'duckduckgo', keys: {} },
+    {
+      name: 'explicit auto falls through',
+      explicitProvider: 'auto',
+      keys: { 'brave.api_key': 'k' },
+    },
+    { name: 'auto prefers tavily', keys: { 'tavily.api_key': 'k', 'brave.api_key': 'k' } },
+    { name: 'auto skips to brave', keys: { 'brave.api_key': 'k' } },
+    { name: 'auto lands on duckduckgo', keys: {} },
+    {
+      name: 'auto all-api chain, no keys',
+      config: { ...DEFAULT_SEARCH_CONFIG, fallbackChain: ['tavily', 'brave'] },
+      keys: {},
+    },
+    { name: 'auto empty chain', config: { ...DEFAULT_SEARCH_CONFIG, fallbackChain: [] }, keys: {} },
+    { name: 'env over config', env: { SEARCH_PROVIDER: 'google' }, keys: {} },
+    {
+      name: 'config over auto',
+      config: { ...DEFAULT_SEARCH_CONFIG, provider: 'duckduckgo' },
+      keys: { 'tavily.api_key': 'k' },
+    },
+    {
+      name: 'flag over env and config',
+      explicitProvider: 'duckduckgo',
+      env: { SEARCH_PROVIDER: 'google' },
+      config: { ...DEFAULT_SEARCH_CONFIG, provider: 'brave' },
+      keys: {},
+    },
+  ];
+
+  it.each(CASES)('agrees with resolveSearchProvider: $name', async (testCase) => {
+    const selection = {
+      ...(testCase.explicitProvider === undefined
+        ? {}
+        : { explicitProvider: testCase.explicitProvider }),
+      env: testCase.env ?? {},
+      ...(testCase.config === undefined ? {} : { config: testCase.config }),
+    };
+    const keychain = keychainWith(testCase.keys);
+
+    const plan = await planSearchProvider({ ...selection, hasKey: searchKeyProbe(keychain) });
+    const resolved = await resolveSearchProvider({
+      ...selection,
+      deps: { ...deps(testCase.keys), keychain },
+    });
+
+    if (plan instanceof Error) {
+      expect(resolved.isOk).toBe(false);
+      if (!resolved.isOk) expect(resolved.error.constructor).toBe(plan.constructor);
+    } else {
+      expect(resolved.isOk && resolved.value.name).toBe(plan.name);
+    }
+  });
+
+  it('reports the kind and where the selection came from', async () => {
+    expect(await planSearchProvider({ env: {}, hasKey: () => Promise.resolve(false) })).toEqual({
+      name: 'duckduckgo',
+      kind: 'scrape',
+      via: 'auto',
+    });
+    expect(
+      await planSearchProvider({
+        env: { SEARCH_PROVIDER: 'tavily' },
+        hasKey: () => Promise.resolve(true),
+      }),
+    ).toEqual({ name: 'tavily', kind: 'api', via: 'env' });
+  });
+
+  it('plans without creating a provider or logging a selection', async () => {
+    const info = vi.fn();
+
+    await planSearchProvider({ env: {}, hasKey: () => Promise.resolve(false) });
+    await resolveSearchProvider({
+      env: {},
+      deps: { ...deps(), logger: { ...silentLogger, info } },
+    });
+
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith(
+      { provider: 'duckduckgo', via: 'auto' },
+      'selected search provider',
+    );
   });
 });

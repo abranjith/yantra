@@ -167,36 +167,53 @@ export interface ResolveSearchProviderOptions {
 }
 
 /** Where a resolved provider selection came from — logged for observability. */
-type ResolutionVia = 'flag' | 'env' | 'config' | 'auto';
+export type SearchResolutionVia = 'flag' | 'env' | 'config' | 'auto';
+
+/** The provider a run would use, without building it. */
+export interface SearchProviderPlan {
+  readonly name: SearchProviderName;
+  readonly kind: 'api' | 'scrape';
+  readonly via: SearchResolutionVia;
+}
+
+/** Inputs to {@link planSearchProvider}: the selection sources and a key probe. */
+export interface PlanSearchProviderOptions {
+  /** Explicit selection from a CLI flag (highest precedence). */
+  readonly explicitProvider?: SearchProviderSelection | null;
+  /** Process env; `SEARCH_PROVIDER` is the second precedence source. */
+  readonly env?: NodeJS.ProcessEnv;
+  /** Loaded search config; defaults to {@link DEFAULT_SEARCH_CONFIG}. */
+  readonly config?: SearchConfig;
+  /** Whether the keychain (or env reference) holds a key for an account. */
+  readonly hasKey: (account: string) => Promise<boolean>;
+}
 
 /**
- * Resolves a concrete {@link SearchProvider} from the registry using the
- * precedence **explicit flag > `SEARCH_PROVIDER` env > `config.search.provider`
- * > `auto`**.
+ * The one selection grammar (FEAT-050): which provider a run would use, by
+ * the precedence **explicit flag > `SEARCH_PROVIDER` env >
+ * `config.search.provider` > `auto`**, without creating it.
  *
- * - **Explicit** selection (flag/env/config naming a concrete provider) fails
- *   hard with {@link SearchProviderKeyMissingError} when its API key is absent —
- *   misconfiguration is surfaced, not silently downgraded.
+ * {@link resolveSearchProvider} plans and then creates; `yantra doctor` only
+ * plans. One function owns "which provider?" so the two can never disagree
+ * (memory → a grammar duplicated across layers is a silent divergence).
+ *
+ * - **Explicit** selection fails with {@link SearchProviderKeyMissingError}
+ *   when its API key is absent — misconfiguration is surfaced, not downgraded.
  * - **`auto`** walks `config.fallbackChain`, skipping API providers whose keys
- *   are missing. Key-free scraped providers always resolve, so a chain ending in
- *   `duckduckgo` never fails; an all-API chain with no keys yields
+ *   are missing; an all-API chain with no keys yields
  *   {@link NoSearchProviderAvailableError}.
  *
- * @returns `ok(provider)` on success, or `err(SearchProviderError)` describing
- *   what to configure.
+ * @returns The plan, or the typed error describing what to configure.
  */
-export async function resolveSearchProvider(
-  options: ResolveSearchProviderOptions,
-): Promise<Result<SearchProvider, SearchProviderError>> {
+export async function planSearchProvider(
+  options: PlanSearchProviderOptions,
+): Promise<SearchProviderPlan | SearchProviderError> {
   const config = options.config ?? DEFAULT_SEARCH_CONFIG;
-  const deps = options.deps;
-  const logger = deps.logger;
-
   const flag = concreteSelection(options.explicitProvider);
   const envSel = concreteSelection(parseProviderFromEnv(options.env?.SEARCH_PROVIDER));
   const configSel = concreteSelection(config.provider);
 
-  const explicit: { name: SearchProviderName; via: ResolutionVia } | null = flag
+  const explicit: { name: SearchProviderName; via: SearchResolutionVia } | null = flag
     ? { name: flag, via: 'flag' }
     : envSel
       ? { name: envSel, via: 'env' }
@@ -205,59 +222,48 @@ export async function resolveSearchProvider(
         : null;
 
   if (explicit) {
-    return resolveExplicit(explicit.name, explicit.via, deps, logger);
-  }
-
-  return resolveAuto(config.fallbackChain, deps, logger);
-}
-
-/** Resolves an explicitly named provider, failing hard on a missing key. */
-async function resolveExplicit(
-  name: SearchProviderName,
-  via: ResolutionVia,
-  deps: SearchProviderDeps,
-  logger: Logger,
-): Promise<Result<SearchProvider, SearchProviderError>> {
-  const descriptor = SEARCH_PROVIDER_REGISTRY[name];
-  if (!descriptor) {
-    return err(new UnknownSearchProviderError(name));
-  }
-
-  if (descriptor.requiresKey) {
-    const present = await hasKey(deps, descriptor.requiresKey);
-    if (!present) {
-      return err(new SearchProviderKeyMissingError(name, descriptor.requiresKey));
+    const descriptor = SEARCH_PROVIDER_REGISTRY[explicit.name];
+    if (!descriptor) return new UnknownSearchProviderError(explicit.name);
+    if (descriptor.requiresKey && !(await options.hasKey(descriptor.requiresKey))) {
+      return new SearchProviderKeyMissingError(explicit.name, descriptor.requiresKey);
     }
+    return { name: explicit.name, kind: descriptor.kind, via: explicit.via };
   }
 
-  logger.info({ provider: name, via }, 'selected search provider');
-  return ok(descriptor.create(deps));
-}
-
-/** Walks the fallback chain, skipping key-missing API providers. */
-async function resolveAuto(
-  chain: readonly SearchProviderName[],
-  deps: SearchProviderDeps,
-  logger: Logger,
-): Promise<Result<SearchProvider, SearchProviderError>> {
-  for (const name of chain) {
+  for (const name of config.fallbackChain) {
     const descriptor = SEARCH_PROVIDER_REGISTRY[name];
-    if (!descriptor) {
-      continue;
-    }
-
-    if (descriptor.requiresKey === null) {
-      logger.info({ provider: name, via: 'auto' }, 'selected search provider');
-      return ok(descriptor.create(deps));
-    }
-
-    if (await hasKey(deps, descriptor.requiresKey)) {
-      logger.info({ provider: name, via: 'auto' }, 'selected search provider');
-      return ok(descriptor.create(deps));
+    if (!descriptor) continue;
+    if (descriptor.requiresKey === null || (await options.hasKey(descriptor.requiresKey))) {
+      return { name, kind: descriptor.kind, via: 'auto' };
     }
   }
+  return new NoSearchProviderAvailableError(config.fallbackChain);
+}
 
-  return err(new NoSearchProviderAvailableError(chain));
+/**
+ * Resolves a concrete {@link SearchProvider} from the registry: the
+ * {@link planSearchProvider} selection, then the chosen descriptor's factory.
+ * Logs "selected search provider" once per successful resolution — a run
+ * resolves through its one `SearchService`, so once per run.
+ *
+ * @returns `ok(provider)` on success, or `err(SearchProviderError)` describing
+ *   what to configure.
+ */
+export async function resolveSearchProvider(
+  options: ResolveSearchProviderOptions,
+): Promise<Result<SearchProvider, SearchProviderError>> {
+  const deps = options.deps;
+  const plan = await planSearchProvider({
+    ...(options.explicitProvider === undefined
+      ? {}
+      : { explicitProvider: options.explicitProvider }),
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.config === undefined ? {} : { config: options.config }),
+    hasKey: (account) => hasKey(deps, account),
+  });
+  if (plan instanceof Error) return err(plan);
+  deps.logger.info({ provider: plan.name, via: plan.via }, 'selected search provider');
+  return ok(SEARCH_PROVIDER_REGISTRY[plan.name].create(deps));
 }
 
 /** Narrows a selection to a concrete provider name, or `null` for `auto`/unset. */
@@ -279,21 +285,36 @@ export function parseProviderFromEnv(raw: string | undefined): SearchProviderSel
   return null;
 }
 
-async function hasKey(deps: SearchProviderDeps, account: string): Promise<boolean> {
-  const provider = account.startsWith('tavily.')
-    ? 'tavily'
-    : account.startsWith('brave.')
-      ? 'brave'
-      : null;
-  if (provider) {
-    return (
-      (await resolveSearchCredential(
-        provider,
-        deps.keychain,
-        deps.keychainService ?? YANTRA_KEYCHAIN_SERVICE,
-      )) !== null
-    );
-  }
-  const value = await deps.keychain.get(deps.keychainService ?? YANTRA_KEYCHAIN_SERVICE, account);
-  return typeof value === 'string' && value.length > 0;
+/**
+ * Whether a search provider's key is available, exactly as a run checks it:
+ * a configured `search.<provider>.api_key` reference (keychain or `${env:…}`)
+ * first, then the keychain account itself. `yantra doctor` and
+ * {@link resolveSearchProvider} share this probe so they cannot disagree.
+ *
+ * @param keychain The OS keychain provider.
+ * @param options Keychain service (default `yantra`) and the env references read.
+ */
+export function searchKeyProbe(
+  keychain: KeychainProvider,
+  options: { readonly keychainService?: string; readonly env?: NodeJS.ProcessEnv } = {},
+): (account: string) => Promise<boolean> {
+  const service = options.keychainService ?? YANTRA_KEYCHAIN_SERVICE;
+  return async (account) => {
+    const provider = account.startsWith('tavily.')
+      ? 'tavily'
+      : account.startsWith('brave.')
+        ? 'brave'
+        : null;
+    if (provider) {
+      return (await resolveSearchCredential(provider, keychain, service, options.env)) !== null;
+    }
+    const value = await keychain.get(service, account);
+    return typeof value === 'string' && value.length > 0;
+  };
+}
+
+function hasKey(deps: SearchProviderDeps, account: string): Promise<boolean> {
+  return searchKeyProbe(deps.keychain, {
+    ...(deps.keychainService === undefined ? {} : { keychainService: deps.keychainService }),
+  })(account);
 }

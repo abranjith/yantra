@@ -19,6 +19,7 @@ const DEFAULT_WIZARD: InitWizardAnswers = {
   baseUrl: null,
   apiKey: null,
   dataDir: null,
+  searchKey: { status: 'skipped' },
 };
 
 describe('@no-llm collectContextGrants', () => {
@@ -263,6 +264,7 @@ describe('@no-llm yantra init context questionnaire', () => {
         baseUrl: null,
         apiKey: null,
         dataDir: null,
+        searchKey: { status: 'skipped' },
       }),
     });
     const loaded = await loadConfig();
@@ -287,6 +289,37 @@ describe('@no-llm yantra init context questionnaire', () => {
     const loaded = await loadConfig();
     expect(loaded.isOk && loaded.value.paths.data_dir).toBe(customData);
     expect((await stat(customData)).isDirectory()).toBe(true);
+  });
+
+  it('prints the secret-set command when the search key could not be stored, and exits 0', async () => {
+    const code = await runInit([], {
+      isTty: true,
+      wizard: async () => ({
+        ...DEFAULT_WIZARD,
+        searchKey: {
+          status: 'manual',
+          provider: 'tavily',
+          command: 'yantra secret set tavily.api_key',
+        },
+      }),
+    });
+
+    expect(code).toBe(0);
+    const printed = stdoutSpy.mock.calls.map((call) => String(call[0])).join('');
+    expect(printed).toContain('`yantra secret set tavily.api_key`');
+  });
+
+  it('confirms a stored search key and reports it under --json-free output', async () => {
+    await runInit([], {
+      isTty: true,
+      wizard: async () => ({
+        ...DEFAULT_WIZARD,
+        searchKey: { status: 'stored', provider: 'brave' },
+      }),
+    });
+
+    const printed = stdoutSpy.mock.calls.map((call) => String(call[0])).join('');
+    expect(printed).toContain('Stored brave.api_key in the OS keychain');
   });
 
   it('backs up an existing config on reset and never invokes the wizard off-TTY', async () => {
