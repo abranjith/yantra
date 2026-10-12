@@ -349,3 +349,19 @@ describe('@no-llm yantra do goal echo (FEAT-048)', () => {
     expect(result.stderr).not.toContain('goal: "');
   });
 });
+
+describe('@no-llm yantra do has no browse control (FEAT-052)', () => {
+  it('rejects --no-browse as an unknown option and opens no session', async () => {
+    const result = await invoke(['do', 'goal', '--no-browse'], outcome('published'));
+
+    expect(result.exitCode).toBe(1);
+    expect(result.request).toBeUndefined();
+  });
+
+  it('keeps the full interactive browser catalog', async () => {
+    const result = await invoke(['do', 'goal'], outcome('published'));
+
+    expect(result.request.profile?.toolNames).toContain('browser_click');
+    expect(result.request.profile?.toolNames).toContain('browser_navigate');
+  });
+});

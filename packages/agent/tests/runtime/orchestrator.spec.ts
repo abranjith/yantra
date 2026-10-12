@@ -25,7 +25,7 @@ import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDefaultPiEventMapContext } from '../../src/adapters/pi/event-map.js';
-import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
+import { createBriefPublisher, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
 import {
@@ -36,6 +36,7 @@ import {
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
+import { resolveCommandTaskProfile } from '../../src/runtime/profiles.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
 import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
@@ -242,6 +243,46 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     );
 
     expect(order).toEqual(['capability', 'provider']);
+  });
+
+  it('registers browser_screenshot in research only under the screenshot grant (FEAT-052)', async () => {
+    // Research now browses read-only by default, so the existing explicit
+    // `context.screenshots` grant can reach it; `--no-screenshots` still wins.
+    const catalogFor = async (screenshotsSuppressed: boolean): Promise<string[]> => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-research-vision-'));
+      tempDirs.push(root);
+      const profile = resolveCommandTaskProfile('research');
+      const base = buildEnvironment(vi.fn(() => Promise.resolve()));
+      const environment: AgenticRunEnvironment = {
+        ...base,
+        domain: { ...base.domain, browser: {} as NonNullable<typeof base.domain.browser> },
+      };
+      let names: string[] = [];
+      await runAgenticTask(
+        {
+          goal: 'Complete the fixture task',
+          profile,
+          model: { provider: 'fixture', id: 'vision-model' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: true, screenshots: true }, userLocation: null },
+          screenshotsSuppressed,
+        },
+        {
+          runStore: new LocalRunStore(root),
+          createEnvironment: () => Promise.resolve(environment),
+          resolveModelImageInput: () => true,
+          createProvider: (services) => {
+            names = yantraToolCatalog(services, profile).map((tool) => tool.name);
+            return new FakeAgentProvider({ runResult: completed });
+          },
+        },
+      );
+      return names;
+    };
+
+    expect(await catalogFor(false)).toContain('browser_screenshot');
+    expect(await catalogFor(true)).not.toContain('browser_screenshot');
   });
 
   it('rejects malformed markers before creating any run state', async () => {

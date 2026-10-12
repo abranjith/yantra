@@ -458,7 +458,7 @@ async function runAgenticAsk(
       suppressPublishedOutcome: true,
     },
   );
-  const profile = resolveCommandTaskProfile('ask', runtime.env);
+  const profile = resolveCommandTaskProfile('ask');
   const outcome = await runtime.runTask(
     {
       goal: question,

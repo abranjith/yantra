@@ -54,11 +54,14 @@ export {
 } from './orchestrator.js';
 export {
   COMMAND_TASK_PROFILES,
+  browserCapabilityOf,
   promptAddendumFor,
   resolveCommandTaskProfile,
   type AgenticCommand,
   type BriefKind,
+  type BrowserCapability,
   type CommandTaskProfile,
+  type CommandTaskProfileOptions,
   type WorkflowToolMode,
   type YantraToolName,
 } from './profiles.js';

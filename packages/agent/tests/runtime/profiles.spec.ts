@@ -8,10 +8,14 @@ import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
 import {
   COMMAND_TASK_PROFILES,
+  browserCapabilityOf,
   promptAddendumFor,
   resolveCommandTaskProfile,
 } from '../../src/runtime/profiles.js';
 import { buildServices } from '../adapters/pi/tools/test-support.js';
+
+const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'];
+const BROWSE = ['browser_navigate', 'browser_observe', 'browser_extract'];
 
 describe('@no-llm command task profiles', () => {
   it('registers exactly the declared least-privilege catalog for each command', () => {
@@ -33,30 +37,69 @@ describe('@no-llm command task profiles', () => {
     expect(new Set([ask, research, task]).size).toBe(3);
   });
 
-  it('exposes no per-command budgets and ignores legacy budget environment variables', () => {
-    const configured = resolveCommandTaskProfile('ask', {
-      YANTRA_AGENT_ASK_MAX_TOOL_CALLS: '9',
-    });
+  it('exposes no per-command budgets on any resolved profile', () => {
+    const configured = resolveCommandTaskProfile('ask');
 
     for (const profile of [...Object.values(COMMAND_TASK_PROFILES), configured]) {
       expect(profile).not.toHaveProperty('budgets');
     }
   });
 
-  it('keeps do equivalent to the full FEAT-026 catalog and enables research browsing only explicitly', () => {
+  it('keeps do equivalent to the full FEAT-026 catalog', () => {
     const full = yantraToolCatalog(buildServices()).map((tool) => tool.name);
     const task = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map(
       (tool) => tool.name,
     );
-    const research = resolveCommandTaskProfile('research', { YANTRA_AGENT_RESEARCH_BROWSE: '1' });
-
     expect(task).toEqual(full);
-    expect(research.toolNames).toContain('browser_navigate');
-    expect(research.toolNames).not.toContain('browser_click');
-    expect(research.toolNames).not.toContain('browser_fill_element');
-    // browser_fill_form mutates the page, so opt-in research browsing (a
-    // read-only mode) must not gain it either.
-    expect(research.toolNames).not.toContain('browser_fill_form');
+  });
+
+  it('gives research the read-only browse tools by default and none with browse: false', () => {
+    const browse = resolveCommandTaskProfile('research');
+    const explicit = resolveCommandTaskProfile('research', { browse: true });
+    const noBrowse = resolveCommandTaskProfile('research', { browse: false });
+
+    expect([...browse.toolNames].sort()).toEqual([...READ_TOOLS, 'workflow_run', ...BROWSE].sort());
+    expect(explicit.toolNames).toEqual(browse.toolNames);
+    expect([...noBrowse.toolNames].sort()).toEqual([...READ_TOOLS, 'workflow_run'].sort());
+    for (const variant of [browse, noBrowse]) {
+      // Research browsing is a read-only mode: nothing that clicks or fills.
+      for (const mutating of ['browser_click', 'browser_fill_element', 'browser_fill_form']) {
+        expect(variant.toolNames).not.toContain(mutating);
+      }
+    }
+    for (const tool of BROWSE) expect(noBrowse.toolNames).not.toContain(tool);
+  });
+
+  it('ignores browse for ask and do', () => {
+    expect(resolveCommandTaskProfile('ask', { browse: true }).toolNames).toEqual(
+      COMMAND_TASK_PROFILES.ask.toolNames,
+    );
+    expect(resolveCommandTaskProfile('do', { browse: false }).toolNames).toEqual(
+      COMMAND_TASK_PROFILES.do.toolNames,
+    );
+  });
+
+  it('derives the browser capability from catalog names alone', () => {
+    expect(browserCapabilityOf(resolveCommandTaskProfile('ask').toolNames)).toBe('none');
+    expect(browserCapabilityOf(resolveCommandTaskProfile('research').toolNames)).toBe('read');
+    expect(
+      browserCapabilityOf(resolveCommandTaskProfile('research', { browse: false }).toolNames),
+    ).toBe('none');
+    expect(browserCapabilityOf(resolveCommandTaskProfile('do').toolNames)).toBe('interact');
+    expect(browserCapabilityOf([])).toBe('none');
+    expect(browserCapabilityOf(['browser_screenshot'])).toBe('read');
+    expect(browserCapabilityOf(['browser_fill_form'])).toBe('interact');
+    expect(browserCapabilityOf(['web_search', 'browser_click'])).toBe('interact');
+  });
+
+  it('gives the two research catalogs distinct, stable hashes', () => {
+    const hashOf = (browse: boolean): string =>
+      hashToolCatalog(
+        yantraToolCatalog(buildServices(), resolveCommandTaskProfile('research', { browse })),
+      );
+    expect(hashOf(true)).toBe(hashOf(true));
+    expect(hashOf(false)).toBe(hashOf(false));
+    expect(hashOf(true)).not.toBe(hashOf(false));
   });
 
   it('gives the unified fill tools to do only', () => {

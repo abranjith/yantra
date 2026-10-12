@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import type { AgenticTaskRequest } from '@yantra/agent';
 import {
   UserInputMarkerError,
+  type EffectivePreferences,
   type ResearchLoop,
   type ResearchOptions,
   type ResearchRunResult,
@@ -17,6 +18,7 @@ import {
   type ResearchInvocation,
   type ResearchRuntime,
 } from '../../src/commands/research.js';
+import { resolveResearchBrowse } from '../../src/research-browse.js';
 
 const resolveAvailable: ResearchRuntime['resolveAgent'] = (command, options, env, prefs) =>
   resolveAgentInvocation(command, options, env, prefs, {
@@ -269,5 +271,126 @@ describe('@no-llm cli/research goal echo (FEAT-048)', () => {
     expect(h.stderr.value()).toContain('goal: "top 5 hybrid SUVs to buy now for under ,000"\n');
     expect(h.stdout.value()).not.toContain('goal: "');
     expect(() => JSON.parse(h.stdout.value()) as unknown).not.toThrow();
+  });
+});
+
+/** An effective-preference view holding exactly the given user values. */
+function prefsOf(values: Readonly<Record<string, unknown>>): EffectivePreferences {
+  return new Map(
+    Object.entries(values).map(([key, value]) => [
+      key,
+      { key, value, source: 'user', approved: true, provenance: 'profile.yaml' } as const,
+    ]),
+  );
+}
+
+const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'];
+
+describe('@no-llm cli/research read-only browsing (FEAT-052)', () => {
+  const browseHarness = (prefs: EffectivePreferences) =>
+    harness({ resolveDefaults: () => Promise.resolve(prefs) });
+
+  it('gives an agentic run the read-only browser when no preference is stored', async () => {
+    const h = browseHarness(prefsOf({}));
+    await h.program.parseAsync(['research', 'topic'], { from: 'user' }).catch(() => undefined);
+
+    const tools = h.agentRequest()?.profile?.toolNames ?? [];
+    for (const tool of BROWSE_TOOLS) expect(tools).toContain(tool);
+    expect(tools).not.toContain('browser_click');
+    expect(h.stderr.value()).toMatch(/model=\S+ browse=on\n/u);
+  });
+
+  it('honors agent.research_browse=false from the stored preference', async () => {
+    const h = browseHarness(prefsOf({ 'agent.research_browse': false }));
+    await h.program.parseAsync(['research', 'topic'], { from: 'user' }).catch(() => undefined);
+
+    const tools = h.agentRequest()?.profile?.toolNames ?? [];
+    for (const tool of BROWSE_TOOLS) expect(tools).not.toContain(tool);
+    expect(h.stderr.value()).toMatch(/ browse=off\n/u);
+  });
+
+  it('lets --no-browse override a stored true for one run', async () => {
+    const h = browseHarness(prefsOf({ 'agent.research_browse': true }));
+    await h.program
+      .parseAsync(['research', 'topic', '--no-browse'], { from: 'user' })
+      .catch(() => undefined);
+
+    const tools = h.agentRequest()?.profile?.toolNames ?? [];
+    for (const tool of BROWSE_TOOLS) expect(tools).not.toContain(tool);
+    expect(h.stderr.value()).toMatch(/ browse=off\n/u);
+    expect(h.stderr.value()).not.toContain('--no-browse has no effect');
+  });
+
+  it('treats a non-boolean stored value as unset', async () => {
+    const h = browseHarness(prefsOf({ 'agent.research_browse': 'no' }));
+    await h.program.parseAsync(['research', 'topic'], { from: 'user' }).catch(() => undefined);
+
+    expect(h.agentRequest()?.profile?.toolNames).toContain('browser_navigate');
+  });
+
+  it('warns once and still runs deterministically for --no-llm --no-browse', async () => {
+    const h = browseHarness(prefsOf({}));
+    await h.program.parseAsync(['research', 'topic', '--no-llm', '--no-browse'], {
+      from: 'user',
+    });
+
+    const warnings = h.stderr
+      .value()
+      .split('\n')
+      .filter((line) => line.includes('--no-browse'));
+    expect(warnings).toEqual([
+      'warning: --no-browse has no effect on deterministic research, which never opens a browsing session',
+    ]);
+    expect(h.options()?.noLlm).toBe(true);
+    expect(h.agentRequest()).toBeUndefined();
+    // The deterministic preamble never reports a browse mode.
+    expect(h.stderr.value()).not.toContain('browse=');
+  });
+
+  it('warns without failing when --no-browse meets missing credentials', async () => {
+    const h = harness({
+      resolveDefaults: () => Promise.resolve(prefsOf({})),
+      resolveAgent: (command, options, env, prefs) =>
+        resolveAgentInvocation(command, options, env, prefs, {
+          probeCredential: () => Promise.resolve({ available: false, authSource: 'unavailable' }),
+        }),
+    });
+    await h.program.parseAsync(['research', 'topic', '--no-browse'], { from: 'user' });
+
+    expect(h.options()?.noLlm).toBe(true);
+    expect(h.stderr.value()).toContain('--no-browse has no effect on deterministic research');
+  });
+
+  it('keeps --json stdout unchanged by the flag', async () => {
+    const plain = browseHarness(prefsOf({}));
+    await plain.program.parseAsync(['research', 'topic', '--json', '--no-llm'], { from: 'user' });
+    const flagged = browseHarness(prefsOf({}));
+    await flagged.program.parseAsync(['research', 'topic', '--json', '--no-llm', '--no-browse'], {
+      from: 'user',
+    });
+
+    expect(flagged.stdout.value()).toBe(plain.stdout.value());
+    expect(flagged.stdout.value()).not.toContain('--no-browse');
+  });
+});
+
+describe('@no-llm resolveResearchBrowse precedence', () => {
+  it('orders flag > preference > default', () => {
+    expect(
+      resolveResearchBrowse({ browse: false }, prefsOf({ 'agent.research_browse': true })),
+    ).toEqual({ enabled: false, source: 'flag' });
+    // Commander's implicit `true` for an absent lone negation is not a choice.
+    expect(
+      resolveResearchBrowse({ browse: true }, prefsOf({ 'agent.research_browse': false })),
+    ).toEqual({ enabled: false, source: 'preference' });
+    expect(resolveResearchBrowse({}, prefsOf({ 'agent.research_browse': true }))).toEqual({
+      enabled: true,
+      source: 'preference',
+    });
+    expect(resolveResearchBrowse({}, prefsOf({}))).toEqual({ enabled: true, source: 'default' });
+    expect(resolveResearchBrowse({}, prefsOf({ 'agent.research_browse': 1 }))).toEqual({
+      enabled: true,
+      source: 'default',
+    });
   });
 });

@@ -159,7 +159,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     // workflow mode, budgets, task-Brief addendum) instead of relying on the
     // runtime's implicit default. This also honors the documented
     // `YANTRA_AGENT_DO_*` budget env overrides, matching the `ask` path.
-    const profile = resolveCommandTaskProfile('do', runtime.env);
+    const profile = resolveCommandTaskProfile('do');
     const outcome = await runtime.runTask(
       {
         goal,

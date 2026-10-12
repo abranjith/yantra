@@ -38,7 +38,12 @@ const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'] a
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
 // Browser fill tools mutate the page, so they belong here beside
 // `browser_click` and deliberately NOT in BROWSE_TOOLS — that set
-// is `research`'s opt-in *read-only* browse mode.
+// is `research`'s *read-only* browse mode (on unless the user turns it off).
+const INTERACT_TOOLS: ReadonlySet<string> = new Set([
+  'browser_click',
+  'browser_fill_element',
+  'browser_fill_form',
+]);
 const ALL_TOOLS = [
   ...READ_TOOLS,
   'workflow_run',
@@ -149,6 +154,31 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
 };
 
 /**
+ * What a catalog lets the model do with a live browser. `read` is navigate,
+ * observe, and extract; `interact` adds any tool that clicks or fills.
+ */
+export type BrowserCapability = 'none' | 'read' | 'interact';
+
+/**
+ * Derives a catalog's browser capability from its tool names alone, so the
+ * per-run prompt can never claim a capability the session was not given.
+ */
+export function browserCapabilityOf(toolNames: readonly string[]): BrowserCapability {
+  if (toolNames.some((name) => INTERACT_TOOLS.has(name))) return 'interact';
+  if (toolNames.some((name) => name.startsWith('browser_'))) return 'read';
+  return 'none';
+}
+
+/** Per-run choices a caller makes when resolving a command profile. */
+export interface CommandTaskProfileOptions {
+  /**
+   * Whether `research` gets the read-only browser tools. Read only for
+   * `research`; `ask` never browses and `do` always does. Defaults to `true`.
+   */
+  readonly browse?: boolean;
+}
+
+/**
  * Resolve the per-run completion addendum for the active output contract.
  *
  * The stored profile strings remain the compatibility-locked Brief prompts.
@@ -180,16 +210,18 @@ export function promptAddendumFor(
 /**
  * Returns a configured profile. Budgets are resolved once by the shared CLI
  * agent-option surface; profiles retain only capabilities and prompt behavior.
- * Research browsing is explicitly opt-in via `YANTRA_AGENT_RESEARCH_BROWSE=1`.
+ *
+ * `research` browses read-only (navigate, observe, extract — never click or
+ * fill) unless `options.browse` is `false`. The CLI resolves that value from
+ * `--no-browse` and the stored `agent.research_browse` preference; nothing in
+ * the environment can change a catalog.
  */
 export function resolveCommandTaskProfile(
   command: AgenticCommand,
-  env: NodeJS.ProcessEnv = process.env,
+  options: CommandTaskProfileOptions = {},
 ): CommandTaskProfile {
   const base = COMMAND_TASK_PROFILES[command];
-  const browseEnabled =
-    command === 'research' &&
-    (env.YANTRA_AGENT_RESEARCH_BROWSE === '1' || env.YANTRA_AGENT_RESEARCH_BROWSE === 'true');
+  const browseEnabled = command === 'research' && options.browse !== false;
 
   return {
     ...base,

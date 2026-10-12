@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { resolveCommandTaskProfile } from '../../src/runtime/profiles.js';
+
 import { forbiddenAgentSymbols, forbiddenPaths } from './forbidden.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -50,5 +52,41 @@ describe('@no-llm FEAT-029 legacy removal boundaries', () => {
     );
 
     expect(references).toEqual([]);
+  });
+});
+
+describe('@no-llm FEAT-052 research browsing has no environment switch', () => {
+  // The retired switch. This file is the one place allowed to name it.
+  const retired = 'YANTRA_AGENT_RESEARCH_BROWSE';
+  const self = fileURLToPath(import.meta.url);
+
+  it('names the retired switch nowhere in source, tests, or docs', () => {
+    const files = ['packages', 'apps', 'e2e', 'docs'].flatMap((root) =>
+      collectSourceFiles(resolve(repoRoot, root)),
+    );
+    const references = files
+      .filter((file) => resolve(file) !== resolve(self))
+      .filter((file) => readFileSync(file, 'utf8').includes(retired))
+      .map((file) => relative(repoRoot, file).replace(/\\/g, '/'));
+
+    expect(references).toEqual([]);
+  });
+
+  it('cannot change a research catalog through the environment', () => {
+    const previous = process.env[retired];
+    try {
+      for (const value of ['0', '1', 'true', 'false']) {
+        process.env[retired] = value;
+        expect(resolveCommandTaskProfile('research', { browse: true }).toolNames).toContain(
+          'browser_navigate',
+        );
+        expect(resolveCommandTaskProfile('research', { browse: false }).toolNames).not.toContain(
+          'browser_navigate',
+        );
+      }
+    } finally {
+      if (previous === undefined) delete process.env[retired];
+      else process.env[retired] = previous;
+    }
   });
 });

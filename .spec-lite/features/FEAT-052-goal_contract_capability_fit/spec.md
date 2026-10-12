@@ -517,8 +517,8 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Research browses read-only by default, governed by `agent.research_browse`
-- [ ] TASK-002: `research --no-browse` overrides the preference for one run, and the preamble says which applied
+- [x] TASK-001: Research browses read-only by default, governed by `agent.research_browse`
+- [x] TASK-002: `research --no-browse` overrides the preference for one run, and the preamble says which applied
 - [ ] TASK-003: The `task_contract` tool: validate, normalize, record, and persist `contract.json`
 - [ ] TASK-004: Show the user what the run understood: attended echo, report section
 - [ ] TASK-005: A `research`/`do` run that never declares a contract says so in its Brief

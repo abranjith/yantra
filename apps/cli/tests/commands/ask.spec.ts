@@ -271,3 +271,21 @@ describe('@no-llm cli/ask goal echo (FEAT-048)', () => {
     expect(() => JSON.parse(h.stdout.value()) as unknown).not.toThrow();
   });
 });
+
+describe('@no-llm cli/ask has no browse control (FEAT-052)', () => {
+  it('rejects --no-browse as an unknown option and opens no session', async () => {
+    const h = harness();
+    await expect(
+      h.program.parseAsync(['ask', 'today ai news', '--no-browse'], { from: 'user' }),
+    ).rejects.toMatchObject({ code: 'commander.unknownOption' });
+    expect(h.agentRequest()).toBeUndefined();
+  });
+
+  it('runs ask with no browser tool', async () => {
+    const h = harness();
+    await h.program.parseAsync(['ask', 'today ai news'], { from: 'user' }).catch(() => undefined);
+    expect(h.agentRequest()?.profile?.toolNames.some((name) => name.startsWith('browser_'))).toBe(
+      false,
+    );
+  });
+});
