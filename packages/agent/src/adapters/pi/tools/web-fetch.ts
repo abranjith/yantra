@@ -42,7 +42,7 @@ import type { AllowedUrl, UrlPolicyRejection } from '../../../runtime/url-policy
 import { provenanceDetails } from '../../../runtime/url-provenance.js';
 
 import { mapBrowserStartupError } from './browser-startup-errors.js';
-import { fullViewBudget, projectPage, recordDiscovered } from './page-payload.js';
+import { evidenceExcerpt, fullViewBudget, projectPage, recordDiscovered } from './page-payload.js';
 import { recordProvenanceRefusal } from './provenance-refusals.js';
 
 /**
@@ -371,7 +371,7 @@ async function publishPage(
     url: doc.finalUrl,
     finalUrl: doc.finalUrl === doc.url ? null : doc.finalUrl,
     title: article?.title ?? null,
-    excerpt: evidenceExcerpt(extraction),
+    excerpt: evidenceExcerpt(extraction.page, article?.excerpt ?? null),
     fetchedAt: services.nowIso(),
     publishedAt: article?.publishedAt ?? null,
     tool: 'web_fetch',
@@ -422,53 +422,6 @@ async function storeServedFullView(
     },
     diagnostic: { host },
   };
-}
-
-/** Characters of page content offered as the ledger excerpt (the ledger bounds it further). */
-const EVIDENCE_EXCERPT_CHARS = 1_000;
-
-/**
- * The ledger excerpt for a page, by shape: an article's own excerpt as before;
- * a collection's first three records; a detail page's first fields; a table
- * page's first table; an index page's readable text. Shared by every tool
- * that reads a page through the analyzer.
- *
- * @param extraction - The page's article and analysis.
- */
-export function evidenceExcerpt(extraction: PageExtraction): string {
-  const { article, page } = extraction;
-  let excerpt: string;
-  switch (page.shape) {
-    case 'collection':
-      excerpt =
-        page.records.length > 0
-          ? page.records
-              .slice(0, 3)
-              .map((entry) => [entry.title ?? '', ...entry.segments].filter(Boolean).join(' · '))
-              .join('\n')
-          : page.readableText;
-      break;
-    case 'detail':
-      excerpt =
-        page.fields.length > 0
-          ? page.fields.map((field) => `${field.label}: ${field.value}`).join('\n')
-          : page.readableText;
-      break;
-    case 'table': {
-      const [first] = page.tables;
-      excerpt =
-        first === undefined
-          ? page.readableText
-          : [first.headers, ...first.rows].map((row) => row.join(' | ')).join('\n');
-      break;
-    }
-    case 'article':
-      excerpt = article?.excerpt ?? page.readableText;
-      break;
-    default:
-      excerpt = page.readableText;
-  }
-  return excerpt.slice(0, EVIDENCE_EXCERPT_CHARS);
 }
 
 /** The phrase listing what an empty read looked for. */

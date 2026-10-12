@@ -105,13 +105,13 @@
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/page-fixtures.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/page-payload.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -150,6 +150,24 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-log-lifecycle.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/agent/tests/runtime/url-provenance.spec.ts",
@@ -240,6 +258,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/source-processor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/tests/extraction/__fixtures__/goldens/article.json",
@@ -396,6 +420,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/source-processor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     }
   ],
   "excluded": [

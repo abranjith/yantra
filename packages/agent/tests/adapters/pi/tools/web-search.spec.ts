@@ -6,6 +6,7 @@ import {
   EthicsRefusedError,
   FetchError,
   NoSearchProviderAvailableError,
+  ReadabilityExtractor,
   SEARCH_PROVIDER_REGISTRY,
   ScrapeSearchError,
   type PageSource,
@@ -24,6 +25,7 @@ import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { webSearchSpec } from '../../../../src/adapters/pi/tools/web-search.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 
+import { articleHtml, listingHtml } from './page-fixtures.js';
 import {
   allowingEthics,
   buildServices,
@@ -1075,5 +1077,169 @@ describe('@no-llm web_search — the run search breaker (FEAT-050)', () => {
       'circuit-open',
       'circuit-open',
     ]);
+  });
+});
+
+describe('@no-llm web_search — shape summaries (FEAT-051)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-web-search-shape-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const LISTING = 'https://cars.test/new/results';
+  const ARTICLE = 'https://news.test/battery-guide';
+
+  function shapeServices(pages: Readonly<Record<string, string>>, hits: readonly SearchResult[]) {
+    const calls: string[] = [];
+    const services = buildServices({
+      runDir,
+      search: { service: searchServiceFor(providerReturning(hits)), resultCap: 8, fetchTop: 5 },
+      fetch: {
+        fetcher: {
+          fetch: (url) => {
+            calls.push(url);
+            const html = pages[url] ?? '';
+            return Promise.resolve({ ...doc(url), html });
+          },
+        },
+        extractor: new ReadabilityExtractor(),
+        ethics: allowingEthics(),
+        allowedContentTypes: ['text/html'],
+        maxContentBytes: 1024 * 1024,
+        captureThresholdBytes: 16 * 1024,
+      },
+    });
+    return {
+      services,
+      calls,
+      search: wrapTool(webSearchSpec(services), services),
+      fetch: wrapTool(webFetchSpec(services), services),
+    };
+  }
+
+  const twoHits = [
+    hit({ url: LISTING, title: 'Teyra for sale', rank: 1 }),
+    hit({ url: ARTICLE, title: 'Sizing a backup battery', rank: 2 }),
+  ];
+
+  it('summarizes a listing site and keeps an article site as today, plus shape and coverage', async () => {
+    const { search } = shapeServices(
+      { [LISTING]: listingHtml(), [ARTICLE]: articleHtml() },
+      twoHits,
+    );
+
+    const payload = JSON.parse((await search.execute({ query: 'teyra' }, undefined)).modelText) as {
+      sites: Record<string, unknown>[];
+    };
+    const [listing, article] = payload.sites;
+
+    expect(listing?.shape).toBe('collection');
+    expect((listing?.records as unknown[]).length).toBeLessThanOrEqual(5);
+    expect(
+      (listing?.links as { kind: string }[]).every(
+        (link) => link.kind === 'pagination' || link.kind === 'facet',
+      ),
+    ).toBe(true);
+    expect(listing?.note).toMatch(/web_fetch of this URL returns its full records/u);
+    expect(listing?.text).toBeUndefined();
+
+    expect(Object.keys(article ?? {}).sort()).toEqual(
+      ['source_id', 'url', 'title', 'shape', 'published_at', 'excerpt', 'text', 'coverage'].sort(),
+    );
+    expect(article?.shape).toBe('article');
+    const extracted = await new ReadabilityExtractor().extract({
+      ...doc(ARTICLE),
+      html: articleHtml(),
+    });
+    expect(article?.text).toBe(extracted?.contentText);
+  });
+
+  it('serves the full listing from the store on the next web_fetch, then already_read', async () => {
+    const { services, calls, search, fetch } = shapeServices(
+      { [LISTING]: listingHtml(), [ARTICLE]: articleHtml() },
+      twoHits,
+    );
+    await search.execute({ query: 'teyra' }, undefined);
+    const navigations = services.budgets.snapshot().navigations;
+
+    const full = JSON.parse((await fetch.execute({ url: LISTING }, undefined)).modelText) as {
+      from_store?: boolean;
+      records: { id: string }[];
+    };
+    const third = JSON.parse((await fetch.execute({ url: LISTING }, undefined)).modelText) as {
+      already_read?: string;
+    };
+
+    expect(full.from_store).toBe(true);
+    expect(full.records.map((record) => record.id)).toEqual([
+      'S1#r1',
+      'S1#r2',
+      'S1#r3',
+      'S1#r4',
+      'S1#r5',
+      'S1#r6',
+    ]);
+    expect(calls.filter((url) => url === LISTING)).toHaveLength(1);
+    expect(services.budgets.snapshot().navigations).toBe(navigations);
+    expect(third.already_read).toBe('S1');
+  });
+
+  it('an article site counts as delivered in full: web_fetch says already_read', async () => {
+    const { fetch, search } = shapeServices(
+      { [LISTING]: listingHtml(), [ARTICLE]: articleHtml() },
+      twoHits,
+    );
+    await search.execute({ query: 'teyra' }, undefined);
+
+    const again = JSON.parse((await fetch.execute({ url: ARTICLE }, undefined)).modelText) as {
+      already_read?: string;
+    };
+
+    expect(again.already_read).toBe('S2');
+  });
+
+  it('attests summary links, and links the summary trimmed only once the full view shows them', async () => {
+    const { services, search, fetch } = shapeServices(
+      { [LISTING]: listingHtml(), [ARTICLE]: articleHtml() },
+      twoHits,
+    );
+    // Card 6's seller: its record is beyond the summary's five.
+    const seller = 'https://cars.test/dealer/6';
+    const facet = 'https://cars.test/new/results?drivetrain=AWD';
+
+    await search.execute({ query: 'teyra' }, undefined);
+    expect(services.urlProvenance.explain(facet)?.origin).toEqual({
+      kind: 'discovered',
+      sourceId: 'S1',
+      linkKind: 'facet',
+    });
+    expect(services.urlProvenance.explain(seller)).toBeNull();
+
+    await fetch.execute({ url: LISTING }, undefined);
+    expect(services.urlProvenance.explain(seller)?.origin).toEqual({
+      kind: 'discovered',
+      sourceId: 'S1',
+      linkKind: 'content',
+    });
+  });
+
+  it('holds the per-site budget across five sites with no middleware truncation', async () => {
+    const urls = [1, 2, 3, 4, 5].map((n) => `https://cars${n}.test/new/results`);
+    const pages = Object.fromEntries(urls.map((url) => [url, listingHtml()]));
+    const { search } = shapeServices(
+      pages,
+      urls.map((url, index) => hit({ url, rank: index + 1 })),
+    );
+
+    const result = await search.execute({ query: 'teyra' }, undefined);
+    const payload = JSON.parse(result.modelText) as { sites: unknown[] };
+
+    expect(payload.sites).toHaveLength(5);
+    expect(Buffer.byteLength(result.modelText, 'utf8')).toBeLessThan(24 * 1024);
   });
 });

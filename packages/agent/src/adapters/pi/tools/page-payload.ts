@@ -19,6 +19,7 @@
 import type {
   LinkKind,
   Omission,
+  PageAnalysis,
   PageCoverage,
   PageField,
   PageRecord,
@@ -116,6 +117,53 @@ export function recordDiscovered(
     for (const url of extractUrls(text ?? '')) record(url, 'text');
   }
   return recorded;
+}
+
+/** Characters of page content offered as the ledger excerpt (the ledger bounds it further). */
+const EVIDENCE_EXCERPT_CHARS = 1_000;
+
+/**
+ * The ledger excerpt for a page, by shape: an article's own excerpt as before;
+ * a collection's first three records; a detail page's first fields; a table
+ * page's first table; an index page's readable text. One rule for every tool
+ * that reads a page through the analyzer.
+ *
+ * @param page - The page analysis.
+ * @param articleExcerpt - Readability's excerpt, when the page has an article.
+ */
+export function evidenceExcerpt(page: PageAnalysis, articleExcerpt: string | null): string {
+  let excerpt: string;
+  switch (page.shape) {
+    case 'collection':
+      excerpt =
+        page.records.length > 0
+          ? page.records
+              .slice(0, 3)
+              .map((entry) => [entry.title ?? '', ...entry.segments].filter(Boolean).join(' · '))
+              .join('\n')
+          : page.readableText;
+      break;
+    case 'detail':
+      excerpt =
+        page.fields.length > 0
+          ? page.fields.map((field) => `${field.label}: ${field.value}`).join('\n')
+          : page.readableText;
+      break;
+    case 'table': {
+      const [first] = page.tables;
+      excerpt =
+        first === undefined
+          ? page.readableText
+          : [first.headers, ...first.rows].map((row) => row.join(' | ')).join('\n');
+      break;
+    }
+    case 'article':
+      excerpt = articleExcerpt ?? page.readableText;
+      break;
+    default:
+      excerpt = page.readableText;
+  }
+  return excerpt.slice(0, EVIDENCE_EXCERPT_CHARS);
 }
 
 /** Which view of a page to project. */

@@ -21,8 +21,9 @@ import {
   type ContentFetcher,
   type DomainRankSignal,
   type EthicsGate,
-  type Extractor,
+  type ExtractedArticle,
   type FetchedDoc,
+  type PageExtractor,
   type SearchProvider,
   type SearchResult,
 } from '@yantra/core';
@@ -52,7 +53,7 @@ import { runAgenticTask, type AgenticRunEnvironment } from '../../src/runtime/or
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { RunServices } from '../../src/runtime/run-services.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
-import { searchServiceFor } from '../adapters/pi/tools/test-support.js';
+import { articlePageAnalysis, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 const CANARIES = {
   apiKey: 'sk-FAULTMIXcanaryABCDEFGHIJKLMN',
@@ -138,22 +139,29 @@ const localFetcher: ContentFetcher = {
 };
 
 /** Page text ends a URL right before a JSON-escaped quote and carries canaries. */
-const localExtractor: Extractor = {
-  extract: (doc) =>
-    Promise.resolve({
-      url: doc.finalUrl,
-      title: `Listing at ${new URL(doc.finalUrl).hostname}`,
-      byline: null,
-      publishedAt: null,
-      siteName: null,
-      contentText:
-        `New 2026 listing near you, see ${doc.finalUrl}/dallas-tx/ for more. ` +
-        `Contact ${CANARIES.email} (api ${CANARIES.apiKey}).`,
-      contentHtml: '<p>listing</p>',
-      excerpt: `Listing excerpt for ${new URL(doc.finalUrl).hostname}`,
-      lengthChars: 120,
-    }),
+const localExtractor: PageExtractor = {
+  extract: (doc) => Promise.resolve(localArticle(doc)),
+  extractPage: (doc) => {
+    const article = localArticle(doc);
+    return Promise.resolve({ article, page: articlePageAnalysis(article.contentText) });
+  },
 };
+
+function localArticle(doc: FetchedDoc): ExtractedArticle {
+  return {
+    url: doc.finalUrl,
+    title: `Listing at ${new URL(doc.finalUrl).hostname}`,
+    byline: null,
+    publishedAt: null,
+    siteName: null,
+    contentText:
+      `New 2026 listing near you, see ${doc.finalUrl}/dallas-tx/ for more. ` +
+      `Contact ${CANARIES.email} (api ${CANARIES.apiKey}).`,
+    contentHtml: '<p>listing</p>',
+    excerpt: `Listing excerpt for ${new URL(doc.finalUrl).hostname}`,
+    lengthChars: 120,
+  };
+}
 
 interface Step {
   readonly tool: string;
