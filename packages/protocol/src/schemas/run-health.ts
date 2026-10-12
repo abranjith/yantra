@@ -6,7 +6,8 @@ import { z } from 'zod';
  * source failures by stage, browser launches, budget consumption, tool
  * failures, and the runtime-derived notices it attached to its document.
  *
- * Every field is a count, a closed code, a budget name, or a provider name.
+ * Every field is a count, a closed code, a budget name, a page shape, or a
+ * provider name.
  * No message, URL, or page text ever appears here. The artifact is optional
  * for every reader: runs written before it existed have no file.
  */
@@ -110,6 +111,31 @@ export const RunHealth = z
     notices: Count.describe(
       'Runtime-derived notices attached to the published document; 0 when nothing was published.',
     ),
+    extraction: z
+      .object({
+        pages_by_shape: z
+          .object({
+            article: Count.optional(),
+            collection: Count.optional(),
+            table: Count.optional(),
+            detail: Count.optional(),
+            index: Count.optional(),
+          })
+          .strict()
+          .describe('Shape-aware page reads returned to the model, by page shape.'),
+        records_shown: Count.describe('Collection records shown to the model.'),
+        links_offered: Count.describe(
+          'Links offered to the model (byte-identical after sanitizing).',
+        ),
+        links_withheld: Count.describe(
+          'Links withheld because the model-visible transform would have altered them.',
+        ),
+        discovered_follows: Count.describe(
+          'Successful web_fetch and browser_navigate calls to a URL a read page offered.',
+        ),
+      })
+      .optional()
+      .describe('Shape-aware extraction (FEAT-051): pages by shape, records, and links.'),
   })
   .superRefine((health, ctx) => {
     const failed = Object.values(health.searches.failed_by_code).reduce((sum, n) => sum + n, 0);

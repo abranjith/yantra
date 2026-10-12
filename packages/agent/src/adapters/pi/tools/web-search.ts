@@ -503,6 +503,9 @@ async function mapReads(
               perSiteBudget,
               services,
             );
+      if (summary !== null && page !== undefined && page.shape !== null) {
+        services.runHealth.recordPage(page.shape, summary.stats);
+      }
       if (!isArticle && summary !== null) {
         recordDiscovered(services, record.sourceId, summary.model);
         sites.push({ ...summary.model, published_at: doc.publishedAt });

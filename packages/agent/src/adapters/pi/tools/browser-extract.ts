@@ -307,6 +307,7 @@ async function extractPart(
     new Set([PART_OF[resolved.kind]]),
   );
   if (record !== null) recordDiscovered(services, record.sourceId, projection.model);
+  if (page.shape !== null) services.runHealth.recordPage(page.shape, projection.stats);
 
   // Every kind but links is evidence: the page was read for its content.
   if (record !== null && resolved.kind !== 'links') {

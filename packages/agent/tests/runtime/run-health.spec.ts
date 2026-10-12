@@ -1,13 +1,27 @@
-import type { BrowserProvider, BrowserSession, ChromeInstall } from '@yantra/core';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  ReadabilityExtractor,
+  type BrowserProvider,
+  type BrowserSession,
+  type ChromeInstall,
+} from '@yantra/core';
 import { BriefNotice, RunHealth } from '@yantra/protocol';
 import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { describe, expect, it, vi } from 'vitest';
 
+import { webFetchSpec } from '../../src/adapters/pi/tools/web-fetch.js';
+import { wrapTool } from '../../src/runtime/middleware.js';
 import {
   countingBrowserProvider,
   MAX_RUNTIME_NOTICES,
   RunHealthLedger,
 } from '../../src/runtime/run-health.js';
+import { UrlProvenance } from '../../src/runtime/url-provenance.js';
+import { articleHtml, listingHtml } from '../adapters/pi/tools/page-fixtures.js';
+import { buildServices, fetchedDoc } from '../adapters/pi/tools/test-support.js';
 
 describe('@no-llm RunHealthLedger — recording', () => {
   it('keeps tool outcomes in completion order', () => {
@@ -665,5 +679,61 @@ describe('@no-llm countingBrowserProvider', () => {
     await expect(counted.detectChrome()).resolves.toBe(install);
     const members: readonly (keyof BrowserProvider)[] = ['launch', 'detectChrome'];
     for (const member of members) expect(typeof counted[member]).toBe('function');
+  });
+});
+
+describe('@no-llm RunHealthLedger — extraction (FEAT-051)', () => {
+  const summarize = (ledger: RunHealthLedger) =>
+    ledger.summary({
+      runId: 'run-x',
+      snapshot: { navigations: 2, hosts: 1 },
+      limits: { maxNavigations: 30, maxHosts: 20 },
+      noticeCount: 0,
+    });
+
+  it('omits the block when no shape-aware read happened', () => {
+    expect(summarize(new RunHealthLedger())).not.toHaveProperty('extraction');
+  });
+
+  it('counts a listing read and a discovered follow to an article', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-run-health-extraction-'));
+    try {
+      const listing = 'https://cars.test/new/results';
+      const detail = 'https://cars.test/vehicle/itm-01';
+      const pages: Record<string, string> = { [listing]: listingHtml(), [detail]: articleHtml() };
+      const ledger = new RunHealthLedger();
+      const provenance = new UrlProvenance();
+      provenance.seed({ goal: `read ${listing}` });
+      const services = buildServices({
+        runDir,
+        runHealth: ledger,
+        urlProvenance: provenance,
+        fetch: {
+          fetcher: {
+            fetch: (url) =>
+              Promise.resolve(fetchedDoc({ url, finalUrl: url, html: pages[url] ?? '' })),
+          },
+          extractor: new ReadabilityExtractor(),
+        },
+      });
+      const tool = wrapTool(webFetchSpec(services), services);
+
+      await tool.execute({ url: listing }, undefined);
+      await tool.execute({ url: detail }, undefined);
+
+      const summary = summarize(ledger);
+      expect(summary.extraction).toMatchObject({
+        pages_by_shape: { collection: 1, article: 1 },
+        records_shown: 6,
+        discovered_follows: 1,
+        links_withheld: 0,
+      });
+      expect(summary.extraction?.links_offered).toBeGreaterThan(0);
+      expect(RunHealth.safeParse(summary).success).toBe(true);
+      expect(JSON.stringify(summary.extraction)).not.toMatch(/https?:|Teyra|Lakeside/u);
+      assertRuntimeEventIsSafe({ event: 'run_health', ...summary }, ['Lakeside']);
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
   });
 });

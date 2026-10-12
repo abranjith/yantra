@@ -71,6 +71,37 @@ describe('@no-llm RunHealth schema', () => {
     expect(RunHealth.safeParse(later).success).toBe(true);
   });
 
+  it('accepts a summary with the FEAT-051 extraction block, and one without it', () => {
+    const extraction = {
+      pages_by_shape: { collection: 1, article: 2 },
+      records_shown: 6,
+      links_offered: 14,
+      links_withheld: 1,
+      discovered_follows: 3,
+    };
+    const parsed = RunHealth.parse(JSON.parse(JSON.stringify(health({ extraction }))));
+
+    expect(parsed.extraction).toEqual(extraction);
+    // A run directory written before FEAT-051 has no block and still validates.
+    expect(RunHealth.safeParse(health()).success).toBe(true);
+    expect(health()).not.toHaveProperty('extraction');
+  });
+
+  it('rejects an unknown page shape and a negative extraction count', () => {
+    const base = {
+      pages_by_shape: {},
+      records_shown: 0,
+      links_offered: 0,
+      links_withheld: 0,
+      discovered_follows: 0,
+    };
+    const unknownShape = { ...base, pages_by_shape: { challenge: 1 } };
+    const negative = { ...base, links_offered: -1 };
+
+    expect(RunHealth.safeParse({ ...health(), extraction: unknownShape }).success).toBe(false);
+    expect(RunHealth.safeParse({ ...health(), extraction: negative }).success).toBe(false);
+  });
+
   it('is registered for JSON Schema emission', () => {
     expect(JSON_SCHEMA_ARTIFACTS['run-health.json']?.name).toBe('RunHealth');
   });

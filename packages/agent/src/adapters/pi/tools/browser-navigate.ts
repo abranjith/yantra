@@ -126,6 +126,7 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
     throw error;
   }
   recordActionProvenance(services, result, 'browser_navigate');
+  if (explanation.origin.kind === 'discovered') services.runHealth.recordDiscoveredFollow();
   services.trace?.append({
     kind: 'navigate',
     host: allowed.value.host,

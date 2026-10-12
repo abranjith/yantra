@@ -110,6 +110,9 @@ export function webFetchSpec(_services: RunServices): ToolWrapperSpec<typeof Web
       const explanation = ctx.services.urlProvenance.explain(params.url);
       if (explanation === null) return unattested(params.url, ctx.services);
       const result = await runWebFetch(params, ctx.services, ctx.signal);
+      if (result.ok && explanation.origin.kind === 'discovered') {
+        ctx.services.runHealth.recordDiscoveredFollow();
+      }
       return withProvenance(result, provenanceDetails(explanation));
     },
   };
@@ -361,6 +364,9 @@ async function publishPage(
   );
   // Every URL the view shows becomes navigable, attributed to this source (G3).
   recordDiscovered(services, record.sourceId, projection.model);
+  if (extraction.page.shape !== null) {
+    services.runHealth.recordPage(extraction.page.shape, projection.stats);
+  }
   if (projection.textCaptureRef !== null) {
     services.documents.attachCapture(record.sourceId, projection.textCaptureRef);
   }
@@ -411,6 +417,9 @@ async function storeServedFullView(
   );
   recordDiscovered(services, record.sourceId, projection.model);
   services.documents.markDelivered(record.sourceId, 'full');
+  if (page.analysis.shape !== null) {
+    services.runHealth.recordPage(page.analysis.shape, projection.stats);
+  }
   return {
     ok: true,
     model: { ...projection.model, from_store: true },

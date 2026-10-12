@@ -1416,6 +1416,7 @@ An agentic run's own health summary (run-health.json): searches, fetches, source
 | budgets         | Run budget consumption.                                                                   |
 | tool_failures   | Tool failures across every tool.                                                          |
 | notices         | Runtime-derived notices attached to the published document; 0 when nothing was published. |
+| extraction      | Shape-aware extraction (FEAT-051): pages by shape, records, and links.                    |
 
 Example:
 
@@ -1429,7 +1430,8 @@ Example:
   "browser": "<browser>",
   "budgets": "<budgets>",
   "tool_failures": "<tool_failures>",
-  "notices": "<notices>"
+  "notices": "<notices>",
+  "extraction": "<extraction>"
 }
 ```
 

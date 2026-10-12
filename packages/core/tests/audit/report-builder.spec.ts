@@ -378,6 +378,32 @@ describe('@no-llm report builder — agentic runs', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
+  it('renders the FEAT-051 extraction line with counts only', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-extraction-'));
+    await writeAgenticRun(runDir, []);
+    const health = {
+      ...RUN_HEALTH,
+      extraction: {
+        pages_by_shape: { collection: 1, article: 2, detail: 0 },
+        records_shown: 6,
+        links_offered: 14,
+        links_withheld: 1,
+        discovered_follows: 3,
+      },
+    };
+    await writeFile(join(runDir, 'run-health.json'), JSON.stringify(health), 'utf8');
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain(
+      'Notices: 5\nExtraction: pages article 2, collection 1 - records shown 6 - links offered 14, withheld 1, followed 3\n',
+    );
+    const line = markdown.split('\n').find((entry) => entry.startsWith('Extraction:')) ?? '';
+    expect(line).not.toMatch(/https?:|\/\//u);
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
   it('renders an old run without run-health.json byte-identically to before', async () => {
     const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-no-run-health-'));
     await writeAgenticRun(runDir, []);

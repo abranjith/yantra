@@ -281,6 +281,62 @@
           "type": "integer",
           "minimum": 0,
           "description": "Runtime-derived notices attached to the published document; 0 when nothing was published."
+        },
+        "extraction": {
+          "type": "object",
+          "properties": {
+            "pages_by_shape": {
+              "type": "object",
+              "properties": {
+                "article": {
+                  "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                },
+                "collection": {
+                  "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                },
+                "table": {
+                  "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                },
+                "detail": {
+                  "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                },
+                "index": {
+                  "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                }
+              },
+              "additionalProperties": false,
+              "description": "Shape-aware page reads returned to the model, by page shape."
+            },
+            "records_shown": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Collection records shown to the model."
+            },
+            "links_offered": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Links offered to the model (byte-identical after sanitizing)."
+            },
+            "links_withheld": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Links withheld because the model-visible transform would have altered them."
+            },
+            "discovered_follows": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Successful web_fetch and browser_navigate calls to a URL a read page offered."
+            }
+          },
+          "required": [
+            "pages_by_shape",
+            "records_shown",
+            "links_offered",
+            "links_withheld",
+            "discovered_follows"
+          ],
+          "additionalProperties": false,
+          "description": "Shape-aware extraction (FEAT-051): pages by shape, records, and links."
         }
       },
       "required": [
