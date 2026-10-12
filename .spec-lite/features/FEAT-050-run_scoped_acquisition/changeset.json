@@ -309,7 +309,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/acquisition-integration.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
