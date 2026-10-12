@@ -366,6 +366,8 @@ If an equivalent helper already exists, extend it rather than adding a parallel 
 
       The size limits stop a long article with an embedded comment-form CAPTCHA from becoming a challenge.
 
+      > **DEVIATION (implementation, 2026-10-11):** a third rule was added — a challenge phrase in `<title>` or the first `<h1>` **and** a widget marker present, at any size. FEAT-049's `challenge-large-main` fixture pads the interstitial with ~12 KB of _visible_ help text, so rules 1–2 alone classify it as `content`, contradicting this spec's own G10 acceptance (the padded `<main>` variant must be a challenge). Requiring both independent signals keeps the two false-positive guards intact: the long article with a comment-form CAPTCHA has no challenge phrase in its heading, and an article _about_ CAPTCHAs has no widget.
+
     - **Otherwise.** Return `js-shell` when the response is HTML under 10 KB with a script `src` and no `<article>`/`<main>`. This is today's escalation rule moved verbatim. In every other case return `content`.
 
   - **`CHALLENGE_MARKERS`**, a short documented list with one header comment justifying it under memory's "never write website-specific logic". These are standard, cross-site challenge-**widget** components, in the same category as ARIA roles. They are not a site list, and no host or brand appears:
@@ -548,7 +550,7 @@ If an equivalent helper already exists, extend it rather than adding a parallel 
 - [x] TASK-002: `web_search` reads through the store, plus `limit: 0` discovery
 - [x] TASK-003: Every evidence result shows its ID and the run's budget meter
 - [x] TASK-004: One shared headless browser (`PagePool`) for SERP scrapes and fetch fallbacks
-- [ ] TASK-005: Classify every response before extraction, and treat challenge pages as blocked (policy b)
+- [x] TASK-005: Classify every response before extraction, and treat challenge pages as blocked (policy b)
 - [ ] TASK-006: One search service per run, with a politeness gate and a challenge breaker
 - [ ] TASK-007: `yantra doctor` search-provider check and the `init` key offer
 - [ ] TASK-008: Pin the integrated contract, and flip FEAT-050 live in the harness

@@ -34,6 +34,7 @@ import {
 } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
 import { generateUlid, ok, type ConfirmationRequest } from '@yantra/protocol';
+import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -522,6 +523,78 @@ describe('@no-llm environment leaves', () => {
       { tool: 'web_search', runHealthWritten: false },
     ]);
   }, 60_000);
+
+  it('audits a challenge at both tiers and discloses it in the Brief, never as a source', async () => {
+    const CHALLENGE_HTML =
+      '<html><head><title>One moment</title></head><body><form action="/v">' +
+      '<h1>Please verify you are human</h1><div data-sitekey="k"></div></form></body></html>';
+    const challengeBrowser: BrowserProvider = {
+      launch: () => {
+        const page = {
+          goto: () => Promise.resolve({ status: () => 200 }),
+          evaluate: () => Promise.resolve(CHALLENGE_HTML),
+          url: () => PAGE_URL,
+          close: () => Promise.resolve(),
+          on: () => undefined,
+        };
+        return Promise.resolve({
+          id: 'challenge-session',
+          profilePath: '',
+          newPage: () => Promise.resolve(page),
+          newIsolatedPage: () => Promise.resolve(page),
+          close: () => Promise.resolve(),
+          on: () => undefined,
+        } as unknown as BrowserSession);
+      },
+      detectChrome: () => Promise.resolve(null),
+    };
+    const httpRequestFn = vi.fn(() =>
+      Promise.resolve(httpResponse(200, CHALLENGE_HTML)),
+    ) as unknown as NonNullable<EnvironmentLeaves['httpRequestFn']>;
+
+    const { outcome, driver } = await run({
+      leaves: hermeticLeaves({ createBrowserProvider: () => challengeBrowser, httpRequestFn }),
+      plan: [
+        { tool: 'web_fetch', params: { url: PAGE_URL } },
+        { tool: 'web_fetch', params: { url: PAGE_URL } },
+      ],
+      profile: 'research',
+    });
+
+    expect(driver.results.slice(0, 2).map((result) => result.status)).toEqual(['error', 'error']);
+    expect(driver.results[0]?.modelText).toContain('SITE_CHALLENGE');
+    // One HTTP request and one render, then the memo: never a third read.
+    expect(httpRequestFn).toHaveBeenCalledTimes(1);
+    const runtime = (await readFile(join(outcome.runDir, 'runtime.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const challenges = runtime.filter((line) => line.event === 'fetch_challenge');
+    expect(challenges.map((line) => [line.level, line.tier, line.marker, line.host])).toEqual([
+      [40, 'http', 'data-sitekey', 'leaf.example.test'],
+      [40, 'browser', 'data-sitekey', 'leaf.example.test'],
+    ]);
+    const escalated = runtime.filter((line) => line.event === 'fetch_escalated');
+    expect(escalated.map((line) => [line.level, line.reason, line.host])).toEqual([
+      [30, 'http-challenge', 'leaf.example.test'],
+    ]);
+    for (const line of [...challenges, ...escalated]) {
+      expect(JSON.stringify(line)).not.toContain('/article');
+      assertRuntimeEventIsSafe(line, []);
+    }
+    const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
+      readonly sources: readonly unknown[];
+      readonly notices: readonly { kind: string; source: string }[];
+    };
+    expect(brief.sources).toEqual([]);
+    expect(brief.notices).toContainEqual(
+      expect.objectContaining({ kind: 'blocked', source: 'leaf.example.test' }),
+    );
+    const health = JSON.parse(await readFile(join(outcome.runDir, 'run-health.json'), 'utf8')) as {
+      readonly fetches: { readonly challenges: unknown; readonly memo_hits: number };
+    };
+    expect(health.fetches).toMatchObject({ challenges: { http: 1, browser: 1 }, memo_hits: 1 });
+  });
 
   it('ignores environmentLeaves entirely when createEnvironment is supplied', async () => {
     const untouchable = (): never => {

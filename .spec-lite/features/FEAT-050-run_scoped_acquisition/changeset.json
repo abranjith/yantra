@@ -218,6 +218,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/extraction/response-classifier.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/extraction/search/registry.ts",
       "status": "M",
       "role": "implement",
@@ -278,6 +284,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/tests/extraction/response-classifier.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/tests/extraction/search/contract.spec.ts",
       "status": "M",
       "role": "implement",
@@ -312,6 +324,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/extraction/source-processor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/extraction/url-identity.spec.ts",

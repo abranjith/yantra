@@ -61,6 +61,7 @@ export const WEB_FETCH_FAILURE_CAUSES = Object.freeze([
   'content-type-refused',
   'extraction-empty',
   'already-attempted',
+  'challenge',
 ] as const);
 
 const WebFetchParams = Type.Object(
@@ -232,6 +233,14 @@ async function loadPage(
       signal,
     });
   } catch (error) {
+    if (error instanceof FetchError && error.context.kind === 'challenge') {
+      // The site's bot detection refused the standard browser too (policy b):
+      // terminal for this URL, never extracted, and the run hands off if it
+      // publishes nothing. A `blocked` rank signal is correct: the site
+      // refused us. Memoized (terminal), so a re-call costs no fetch.
+      recordFailure(services, allowed.url, 'blocked');
+      return failed(error, siteChallenge(host, error.context.tier ?? 'browser'));
+    }
     if (error instanceof FetchError) {
       recordFailure(services, allowed.url, 'fetch_failed');
       const mapped = mapFetchError(error);
@@ -369,6 +378,24 @@ async function publishPage(
     details: { bytes: textBytes, final_url: doc.finalUrl, source_id: record.sourceId },
     diagnostic: { host, fetch_mode: doc.fetchMode },
   };
+}
+
+/**
+ * A human-verification page as a stable tool failure. `handoff: true` makes a
+ * run that publishes nothing end as a handoff to the user, not a failure.
+ */
+function siteChallenge(host: string, tier: 'http' | 'browser'): DomainFailure {
+  return withHost(
+    {
+      ok: false,
+      errorCode: 'SITE_CHALLENGE',
+      message: renderAgentMessage('tool', 'SITE_CHALLENGE', 'challenge', { host }),
+      retryable: false,
+      details: { host, tier, handoff: true },
+    },
+    'challenge',
+    host,
+  );
 }
 
 /** A URL-policy refusal (including a spent budget) as a stable tool failure. */

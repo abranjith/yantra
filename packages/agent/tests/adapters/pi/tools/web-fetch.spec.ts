@@ -822,3 +822,88 @@ describe('@no-llm web_fetch — run document store (FEAT-050)', () => {
     expect(WEB_FETCH_FAILURE_CAUSES).toContain('already-attempted');
   });
 });
+
+describe('@no-llm web_fetch — challenge pages (FEAT-050, policy b)', () => {
+  let runDir: string;
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-fetch-challenge-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  const CHALLENGE_HTML =
+    '<html><head><title>One moment</title></head><body><form action="/v">' +
+    '<div data-sitekey="k"></div><button>Go</button></form></body></html>';
+
+  /** The production hybrid fetcher over two in-memory tiers that both serve a challenge. */
+  function challengedFetcher(): { readonly fetcher: ContentFetcher; readonly calls: () => number } {
+    let calls = 0;
+    const tier = (mode: 'http' | 'browser'): ContentFetcher => ({
+      fetch: (url) => {
+        calls += 1;
+        return Promise.resolve(
+          fetchedDoc({ url, finalUrl: url, html: CHALLENGE_HTML, fetchMode: mode }),
+        );
+      },
+    });
+    return {
+      fetcher: new HybridContentFetcher({
+        httpFetcher: tier('http'),
+        browserFetcher: tier('browser'),
+      }),
+      calls: () => calls,
+    };
+  }
+
+  it('returns SITE_CHALLENGE with a handoff, records no evidence, and attests nothing', async () => {
+    const challenged = challengedFetcher();
+    const signals: DomainRankSignal[] = [];
+    const services = buildServices({
+      runDir,
+      fetch: { fetcher: challenged.fetcher, extractor: extractorReturning('never read') },
+      domain: { rank: { record: (signal) => signals.push(signal) } },
+    });
+
+    const result = await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://site.example/list' },
+      undefined,
+    );
+
+    expect(result.error_code).toBe('SITE_CHALLENGE');
+    expect(result.retryable).toBe(false);
+    expect(result.details).toEqual({ host: 'site.example', tier: 'browser', handoff: true });
+    expect(result.modelText).toMatch(/human-verification page/);
+    expect(result.modelText).toContain('result_publish');
+    expect(services.evidence.isEmpty()).toBe(true);
+    expect(services.urlProvenance.has('https://site.example/list')).toBe(false);
+    expect(services.documents.entries()).toEqual([]);
+    expect(signals).toEqual([{ domain: 'site.example', delta: -1, reason: 'blocked' }]);
+    expect(services.runHealth.toolOutcomes()[0]).toMatchObject({
+      code: 'SITE_CHALLENGE',
+      cause: 'challenge',
+      host: 'site.example',
+    });
+  });
+
+  it('never fetches a challenged URL again in the run', async () => {
+    const challenged = challengedFetcher();
+    const services = buildServices({ runDir, fetch: { fetcher: challenged.fetcher } });
+    const tool = wrapTool(webFetchSpec(services), services);
+
+    await tool.execute({ url: 'https://site.example/list' }, undefined);
+    const fetchesAfterFirst = challenged.calls();
+    const second = await tool.execute({ url: 'https://site.example/list' }, undefined);
+
+    // Policy b: one HTTP request plus one browser render, and nothing more.
+    expect(fetchesAfterFirst).toBe(2);
+    expect(challenged.calls()).toBe(2);
+    expect(second.error_code).toBe('SITE_CHALLENGE');
+    expect(second.details).toMatchObject({ already_attempted: true, handoff: true });
+  });
+
+  it('declares challenge as a closed cause', () => {
+    expect(WEB_FETCH_FAILURE_CAUSES).toContain('challenge');
+  });
+});

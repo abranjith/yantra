@@ -18,6 +18,7 @@ import {
   canonicalUrl,
   type BrowserProvider,
   type BrowserSession,
+  type FetchTierEvent,
   type LaunchOptions,
   type SourceFailure,
 } from '@yantra/core';
@@ -83,6 +84,7 @@ export class RunHealthLedger {
   private launches = 0;
   private cacheHits = 0;
   private memoHits = 0;
+  private readonly tierEvents: FetchTierEvent[] = [];
   private publishedNotices = 0;
   /** Every budget limit that refused a call, in first-hit order. */
   private readonly exhaustedOrder: string[] = [];
@@ -122,6 +124,19 @@ export class RunHealthLedger {
   /** Count one read answered from an earlier read's remembered terminal failure. */
   public recordMemoHit(): void {
     this.memoHits += 1;
+  }
+
+  /**
+   * Record one tier decision of the run's hybrid fetcher (FEAT-050): an
+   * escalation to the browser, or a challenge page at either tier. Hosts only.
+   */
+  public recordTierEvent(event: FetchTierEvent): void {
+    this.tierEvents.push(event);
+  }
+
+  /** Every tier event, in record order. */
+  public fetchTierEvents(): readonly FetchTierEvent[] {
+    return [...this.tierEvents];
   }
 
   /** Reads answered from the document store so far. */
@@ -228,7 +243,8 @@ export class RunHealthLedger {
    * phrase tables, counts, and hostnames — never from page or provider text —
    * so nothing untrusted enters the document through this path.
    *
-   * Order: search failures, budget exhaustion, per-source reads. At most
+   * Order: search failures, budget exhaustion, challenge pages, per-source
+   * reads. At most
    * {@link MAX_RUNTIME_NOTICES}; the overflow becomes one `other` notice that
    * points at the report's Run Health section.
    */
@@ -236,6 +252,7 @@ export class RunHealthLedger {
     const notices = [
       ...this.searchFailureNotices(),
       ...this.budgetNotices(),
+      ...this.challengeNotices(),
       ...this.readFailureNotices(),
     ];
     // The overflow replaces the tenth slot, so it always stands for at least two.
@@ -296,6 +313,51 @@ export class RunHealthLedger {
         reason:
           `Yantra's ${name} budget${ceiling === undefined ? '' : ` (${ceiling})`} was exhausted; ` +
           `${plural(skipped, 'further page read')} ${skipped === 1 ? 'was' : 'were'} not attempted.`,
+      });
+    }
+    return notices;
+  }
+
+  /**
+   * Challenge pages (FEAT-050, policy b). One `blocked` notice per host whose
+   * standard browser was served a challenge (the page was not read), and one
+   * `other` notice per host that challenged only the HTTP client and was then
+   * read in the browser — the disclosure the signed-off policy requires.
+   */
+  private challengeNotices(): BriefNotice[] {
+    const browserBlocked = new Map<string, number>();
+    const httpOnly = new Set<string>();
+    for (const event of this.tierEvents) {
+      if (event.kind !== 'challenge' || event.host.length === 0) continue;
+      if (event.tier === 'browser') {
+        browserBlocked.set(event.host, (browserBlocked.get(event.host) ?? 0) + 1);
+      } else {
+        httpOnly.add(event.host);
+      }
+    }
+    const renderedHosts = new Set(
+      this.fetchList
+        .filter((fetch) => fetch.mode === 'browser')
+        .map((fetch) => hostOfUrl(fetch.normalizedUrl)),
+    );
+    const notices: BriefNotice[] = [];
+    for (const [host, pages] of browserBlocked) {
+      notices.push({
+        kind: 'blocked',
+        source: host,
+        reason:
+          `${host} served a human-verification page to Yantra's standard browser; ` +
+          `${plural(pages, 'page')} ${pages === 1 ? 'was' : 'were'} not read.`,
+      });
+    }
+    for (const host of httpOnly) {
+      if (browserBlocked.has(host) || !renderedHosts.has(host)) continue;
+      notices.push({
+        kind: 'other',
+        source: host,
+        reason:
+          `${host} refused Yantra's HTTP client with a human-verification page; ` +
+          'the page was read once in the standard browser.',
       });
     }
     return notices;
@@ -373,6 +435,10 @@ export class RunHealthLedger {
         failed_by_code: fetchFailures,
         cache_hits: this.cacheHits,
         memo_hits: this.memoHits,
+        challenges: {
+          http: this.challengeCount('http'),
+          browser: this.challengeCount('browser'),
+        },
       },
       source_failures: stages,
       browser: {
@@ -391,6 +457,11 @@ export class RunHealthLedger {
       tool_failures: { total: toolFailures.length, by_code: countByCode(toolFailures) },
       notices: Math.max(0, Math.floor(input.noticeCount)),
     };
+  }
+
+  private challengeCount(tier: 'http' | 'browser'): number {
+    return this.tierEvents.filter((event) => event.kind === 'challenge' && event.tier === tier)
+      .length;
   }
 
   private noteExhausted(limit: string): void {
@@ -514,6 +585,8 @@ function readFailureFromSource(record: SourceFailureRecord): ReadFailure | null 
     case 'policy':
       return { kind: 'other', host: record.host, reason: 'policy' };
     case 'blocked': {
+      // A challenge page is reported once, by host, from the tier events.
+      if (record.reason.startsWith('challenge page')) return null;
       const reason = record.reason.split(' - ')[0] ?? '';
       return {
         kind: 'blocked',
@@ -555,6 +628,8 @@ function readFailureFromFetch(outcome: ToolOutcomeRecord): ReadFailure | null {
   // A replay of an earlier read's terminal failure fetched nothing: the first
   // attempt already produced this notice.
   if (outcome.cause === 'already-attempted') return null;
+  // A challenge page is reported once, by host, from the tier events.
+  if (outcome.code === 'SITE_CHALLENGE') return null;
   if (outcome.code === 'ETHICS_BLOCKED') {
     const reason = outcome.cause?.replace(/^ethics-refused:/, '') ?? '';
     return {
@@ -567,6 +642,16 @@ function readFailureFromFetch(outcome: ToolOutcomeRecord): ReadFailure | null {
     return { kind: 'other', host: outcome.host, reason: 'policy' };
   const mapped = FETCH_CODE_READS[outcome.code];
   return mapped === undefined ? null : { ...mapped, host: outcome.host };
+}
+
+/** The hostname of a canonical URL, or the empty string. */
+function hostOfUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    // swallow-ok: an unparseable recorded URL simply matches no host.
+    return '';
+  }
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {

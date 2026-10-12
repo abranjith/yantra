@@ -2,6 +2,7 @@ import { request } from 'undici';
 
 import { PageTimeoutError, type PageSource } from '../browser/page-source.js';
 
+import { classifyResponse, type ChallengeMarker } from './response-classifier.js';
 import type { FetchedDoc } from './types.js';
 
 export interface ContentFetcher {
@@ -20,7 +21,7 @@ export class FetchError extends Error {
       /** For `challenge`: which tier was served the human-verification page. */
       readonly tier?: 'http' | 'browser';
       /** For `challenge`: the documented marker that identified it. */
-      readonly marker?: string;
+      readonly marker?: ChallengeMarker;
     },
   ) {
     super(message);
@@ -204,54 +205,108 @@ function navigationStatus(response: unknown): number | null {
   return typeof code === 'number' && Number.isFinite(code) ? code : null;
 }
 
+/**
+ * One tier decision inside {@link HybridContentFetcher}, for the run's audit
+ * and health ledger. Carries a bare hostname only — never a path, query, or
+ * page text.
+ */
+export type FetchTierEvent =
+  | {
+      readonly kind: 'escalated';
+      readonly reason: 'js-shell' | 'http-error' | 'http-challenge';
+      readonly host: string;
+    }
+  | {
+      readonly kind: 'challenge';
+      readonly tier: 'http' | 'browser';
+      readonly marker: ChallengeMarker;
+      readonly host: string;
+    };
+
 export interface HybridContentFetcherOptions {
   readonly httpFetcher: ContentFetcher;
   readonly browserFetcher: ContentFetcher;
+  /** Receives every escalation and challenge, in order. Must not throw. */
+  readonly onTierEvent?: (event: FetchTierEvent) => void;
 }
 
 /**
- * Hybrid fetcher that escalates to browser mode for likely JS-heavy pages.
+ * HTTP first, escalating to one browser render when the HTTP tier cannot
+ * serve readable content — and classifying every response before anything
+ * extracts it (FEAT-050, G10):
+ *
+ * 1. HTTP fetch, then {@link classifyResponse}.
+ * 2. `challenge` → one browser render. This is policy (b), signed off by the
+ *    user on 2026-10-10 (plan_task_fidelity §12 item 4): the honest
+ *    `YantraBot` client was refused, and the product's normal browser may look
+ *    once — no spoofing, solving, waiting, or retry.
+ * 3. `js-shell` → one render, as before.
+ * 4. HTTP error or network failure → one render, as before.
+ * 5. The rendered document is classified too. A browser-tier `challenge` is
+ *    terminal: a `challenge` {@link FetchError}, never content.
+ * 6. A rendered `js-shell` is returned as content: a second render would not
+ *    help, and extraction reports what it found.
+ *
+ * The browser path never retries, never waits for a challenge to clear, and
+ * changes nothing about the browser's identity (plan §6).
  */
 export class HybridContentFetcher implements ContentFetcher {
   private readonly httpFetcher: ContentFetcher;
   private readonly browserFetcher: ContentFetcher;
+  private readonly onTierEvent: (event: FetchTierEvent) => void;
 
   public constructor(options: HybridContentFetcherOptions) {
     this.httpFetcher = options.httpFetcher;
     this.browserFetcher = options.browserFetcher;
+    this.onTierEvent = options.onTierEvent ?? (() => undefined);
   }
 
   public async fetch(
     url: string,
     opts: { timeoutMs: number; signal: AbortSignal },
   ): Promise<FetchedDoc> {
+    const host = hostOf(url);
+    let reason: 'js-shell' | 'http-error' | 'http-challenge';
     try {
       const doc = await this.httpFetcher.fetch(url, opts);
-      if (shouldEscalateToBrowser(doc)) {
-        return this.browserFetcher.fetch(url, opts);
+      const verdict = classifyResponse(doc);
+      if (verdict.kind === 'content') return doc;
+      if (verdict.kind === 'challenge') {
+        this.onTierEvent({ kind: 'challenge', tier: 'http', marker: verdict.marker, host });
+        reason = 'http-challenge';
+      } else {
+        reason = 'js-shell';
       }
-
-      return doc;
     } catch {
-      return this.browserFetcher.fetch(url, opts);
+      // swallow-ok: any HTTP-tier failure escalates to the one browser render,
+      // whose own outcome (or error) is what the caller receives.
+      reason = 'http-error';
     }
+
+    this.onTierEvent({ kind: 'escalated', reason, host });
+    const rendered = await this.browserFetcher.fetch(url, opts);
+    const verdict = classifyResponse(rendered);
+    if (verdict.kind === 'challenge') {
+      this.onTierEvent({ kind: 'challenge', tier: 'browser', marker: verdict.marker, host });
+      throw new FetchError('The page served a human-verification challenge.', {
+        url,
+        kind: 'challenge',
+        tier: 'browser',
+        marker: verdict.marker,
+      });
+    }
+    return rendered;
   }
 }
 
-function shouldEscalateToBrowser(doc: FetchedDoc): boolean {
-  const contentType = (doc.contentType ?? '').toLowerCase();
-  if (!contentType.includes('text/html')) {
-    return false;
+/** Bare hostname for tier events; an unparseable URL yields an empty host. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    // swallow-ok: tier events tolerate an unknown host.
+    return '';
   }
-
-  if (doc.html.length >= 10_000) {
-    return false;
-  }
-
-  const lower = doc.html.toLowerCase();
-  const hasScriptSrc = lower.includes('<script') && lower.includes('src=');
-  const hasSemanticRoot = lower.includes('<article') || lower.includes('<main');
-  return hasScriptSrc && !hasSemanticRoot;
 }
 
 function firstHeader(value: string | string[] | undefined): string | null {

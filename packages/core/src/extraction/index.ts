@@ -7,6 +7,7 @@ export * from './fetcher.js';
 export * from './html-to-text.js';
 export * from './live-page.js';
 export * from './readability.js';
+export * from './response-classifier.js';
 export * from './search/config.js';
 export * from './search/credential.js';
 export * from './search/errors.js';

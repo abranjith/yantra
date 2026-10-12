@@ -155,5 +155,38 @@ describe('@no-llm processSource — failure stages and fetch mode', () => {
     expect(processed.failure?.reason).toBe('fetch timed out');
     expect(processed.fetchMode).toBeNull();
     expect(onTimeout).toHaveBeenCalledOnce();
+    expect(processed.cause).toBeInstanceOf(FetchError);
+  });
+
+  it('maps a browser-tier challenge to stage blocked and never extracts it (FEAT-050)', async () => {
+    const extract = vi.fn(article.extract);
+    const challenge = new FetchError('challenge', {
+      url: HIT.url,
+      kind: 'challenge',
+      tier: 'browser',
+      marker: 'data-sitekey',
+    });
+
+    const processed = await processSource(
+      {
+        ethicsGate: gate({ ok: true }),
+        fetcher: { fetch: () => Promise.reject(challenge) },
+        extractor: { extract },
+      },
+      HIT,
+      OPTS,
+    );
+
+    expect(processed.doc).toBeNull();
+    expect(processed.failure).toEqual({
+      url: HIT.url,
+      host: 'site.example',
+      stage: 'blocked',
+      reason: 'challenge page (data-sitekey)',
+    });
+    // The challenge was served by a real browser render.
+    expect(processed.fetchMode).toBe('browser');
+    expect(processed.cause).toBe(challenge);
+    expect(extract).not.toHaveBeenCalled();
   });
 });
