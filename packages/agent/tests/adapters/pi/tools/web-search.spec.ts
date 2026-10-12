@@ -17,6 +17,7 @@ import {
 } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import { webSearchSpec } from '../../../../src/adapters/pi/tools/web-search.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 
@@ -89,8 +90,9 @@ function textExtractor(body: (url: string) => string | null): Extractor {
 
 interface SitePayload {
   readonly sites: {
-    n: number;
+    source_id: string;
     url: string;
+    already_read?: boolean;
     excerpt?: string;
     text?: string;
     capture_ref?: string;
@@ -108,7 +110,7 @@ afterEach(async () => {
 });
 
 describe('@no-llm web_search combined tool', () => {
-  it('returns fetched sites with n numbering plus a more_results tail', async () => {
+  it('returns fetched sites under run-wide source IDs plus a more_results tail', async () => {
     const hits = Array.from({ length: 5 }, (_, i) =>
       hit({ url: `https://e${i}.com/`, rank: i + 1 }),
     );
@@ -134,7 +136,8 @@ describe('@no-llm web_search combined tool', () => {
 
     expect(result.status).toBe('ok');
     const payload = JSON.parse(result.modelText) as SitePayload;
-    expect(payload.sites.map((s) => s.n)).toEqual([1, 2, 3]);
+    expect(payload.sites.map((s) => s.source_id)).toEqual(['S1', 'S2', 'S3']);
+    expect(payload.sites.some((s) => 'n' in s)).toBe(false);
     expect(payload.sites.map((s) => s.url)).toEqual([
       'https://e0.com/',
       'https://e1.com/',
@@ -277,7 +280,8 @@ describe('@no-llm web_search combined tool', () => {
 
     const payload = JSON.parse(result.modelText) as SitePayload;
     expect(payload.sites.map((s) => s.url)).toEqual(['https://ok1.com/', 'https://ok2.com/']);
-    expect(payload.sites.map((s) => s.n)).toEqual([1, 2]);
+    // Failures never mint, so the IDs stay dense.
+    expect(payload.sites.map((s) => s.source_id)).toEqual(['S1', 'S2']);
     const stages = payload.failures.map((f) => f.stage).sort();
     expect(stages).toEqual(['extract', 'fetch']);
   });
@@ -718,5 +722,292 @@ describe("@no-llm web_search — the run's own budget and URL policy (FEAT-048 G
     expect(services.runHealth.toolOutcomes()).toMatchObject([
       { tool: 'web_search', status: 'ok', provider: 'duckduckgo' },
     ]);
+  });
+});
+
+describe('@no-llm web_search — reads through the run document store (FEAT-050)', () => {
+  /** A fetcher that records every network fetch it makes. */
+  function countingFetcher(): { readonly calls: string[]; readonly fetcher: ContentFetcher } {
+    const calls: string[] = [];
+    return {
+      calls,
+      fetcher: {
+        fetch: (url) => {
+          calls.push(url);
+          return Promise.resolve(doc(url));
+        },
+      },
+    };
+  }
+
+  function storeServices(
+    hits: readonly SearchResult[],
+    options: {
+      readonly fetcher?: ContentFetcher;
+      readonly signals?: DomainRankSignal[];
+      readonly fetchTop?: number;
+      readonly limits?: NonNullable<Parameters<typeof buildServices>[0]>['limits'];
+      readonly provider?: SearchProvider;
+    } = {},
+  ) {
+    return buildServices({
+      runDir,
+      ...(options.limits ? { limits: options.limits } : {}),
+      domain: { rank: { record: (signal) => options.signals?.push(signal) } },
+      search: {
+        resolveProvider: () =>
+          Promise.resolve({ isOk: true, value: options.provider ?? providerReturning(hits) }),
+        resultCap: 8,
+        fetchTop: options.fetchTop ?? 3,
+      },
+      fetch: {
+        fetcher: options.fetcher ?? keyedFetcher(),
+        extractor: textExtractor((url) => `body ${url}`),
+        ethics: allowingEthics(),
+        allowedContentTypes: ['text/html'],
+        maxContentBytes: 1024 * 1024,
+        captureThresholdBytes: 16 * 1024,
+      },
+    });
+  }
+
+  const sixHits = Array.from({ length: 6 }, (_, i) =>
+    hit({ url: `https://d${i}.example/`, title: `Hit ${i}`, snippet: `snip ${i}`, rank: i + 1 }),
+  );
+
+  interface DiscoveryPayload {
+    readonly query: string;
+    readonly mode: string;
+    readonly results: { url: string; title: string | null; snippet: string | null }[];
+    readonly note: string;
+  }
+
+  it('limit 0 discovers: no fetch, no navigation, every URL attested and observed', async () => {
+    const counting = countingFetcher();
+    const signals: DomainRankSignal[] = [];
+    const services = storeServices(sixHits, { fetcher: counting.fetcher, signals });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'listing', limit: 0 },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(counting.calls).toEqual([]);
+    expect(services.budgets.snapshot()).toMatchObject({ navigations: 0, hosts: 0 });
+    const payload = JSON.parse(result.modelText) as DiscoveryPayload & Record<string, unknown>;
+    expect(payload.mode).toBe('discovery');
+    expect(payload.results).toHaveLength(6);
+    expect(payload.results[0]).toEqual({
+      url: 'https://d0.example/',
+      title: 'Hit 0',
+      snippet: 'snip 0',
+    });
+    expect(payload).not.toHaveProperty('sites');
+    expect(payload).not.toHaveProperty('failures');
+    expect(payload.note).toMatch(/web_fetch/);
+    for (const entry of sixHits) expect(services.urlProvenance.has(entry.url)).toBe(true);
+    expect(signals).toHaveLength(6);
+    expect(signals.every((signal) => signal.reason === 'search_result')).toBe(true);
+    // Discovery mints nothing and records no evidence: no page was read.
+    expect(services.documents.entries()).toEqual([]);
+    expect(services.evidence.isEmpty()).toBe(true);
+    expect(services.runHealth.fetches()).toEqual([]);
+  });
+
+  it('limit 0 still reports a provider failure through the typed table', async () => {
+    const services = storeServices([], {
+      provider: {
+        name: 'duckduckgo',
+        search: () =>
+          Promise.reject(
+            new ScrapeSearchError('x', { provider: 'duckduckgo', code: 'empty-results' }),
+          ),
+      },
+    });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x', limit: 0 },
+      undefined,
+    );
+
+    expect(result.error_code).toBe('SEARCH_NO_RESULTS');
+  });
+
+  it('a web_fetch of a hit a search already read is answered as already_read', async () => {
+    const counting = countingFetcher();
+    const hits = sixHits.slice(0, 3);
+    const services = storeServices(hits, { fetcher: counting.fetcher });
+
+    await wrapTool(webSearchSpec(services), services).execute({ query: 'a' }, undefined);
+    const fetched = await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://d1.example/' },
+      undefined,
+    );
+
+    expect(JSON.parse(fetched.modelText)).toMatchObject({ already_read: 'S2' });
+    expect(counting.calls).toHaveLength(3);
+  });
+
+  it('a search hit already read by web_fetch is returned as already_read with its ID', async () => {
+    const counting = countingFetcher();
+    const hits = [
+      hit({ url: 'https://x.example/', rank: 1 }),
+      hit({ url: 'https://y.example/', rank: 2 }),
+      hit({ url: 'https://z.example/', rank: 3 }),
+    ];
+    const signals: DomainRankSignal[] = [];
+    const services = storeServices(hits, { fetcher: counting.fetcher, signals });
+    await wrapTool(webFetchSpec(services), services).execute(
+      { url: 'https://x.example/' },
+      undefined,
+    );
+    signals.length = 0;
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'q' },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as SitePayload;
+    expect(payload.sites[0]).toEqual({
+      source_id: 'S1',
+      url: 'https://x.example/',
+      title: 'Title https://x.example/',
+      already_read: true,
+    });
+    expect(payload.sites.slice(1).map((site) => site.source_id)).toEqual(['S2', 'S3']);
+    expect(payload.sites.slice(1).every((site) => typeof site.text === 'string')).toBe(true);
+    expect(counting.calls).toHaveLength(3);
+    // No evidence re-add and no rank delta for the page already read.
+    expect(services.evidence.entries().map((entry) => entry.sourceId)).toEqual(['S1', 'S2', 'S3']);
+    expect(signals.map((signal) => signal.domain)).not.toContain('x.example');
+    expect(services.runHealth.cacheHitCount()).toBe(1);
+  });
+
+  it('two concurrent searches sharing a hit fetch it once', async () => {
+    const counting = countingFetcher();
+    const shared = hit({ url: 'https://shared.example/', rank: 1 });
+    const services = storeServices([shared], { fetcher: counting.fetcher });
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    const [left, right] = await Promise.all([
+      tool.execute({ query: 'a' }, undefined),
+      tool.execute({ query: 'b' }, undefined),
+    ]);
+
+    expect(counting.calls).toEqual(['https://shared.example/']);
+    expect(services.budgets.snapshot().navigations).toBe(1);
+    const sites = [left, right].map(
+      (result) => (JSON.parse(result!.modelText) as SitePayload).sites[0],
+    );
+    expect(sites.map((site) => site?.source_id)).toEqual(['S1', 'S1']);
+    expect(sites.filter((site) => site?.already_read === true)).toHaveLength(1);
+    expect(services.evidence.entries()).toHaveLength(1);
+  });
+
+  it('every fetched site carries a distinct source_id and no per-call n', async () => {
+    const services = storeServices(sixHits, { fetchTop: 5 });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'q', limit: 5 },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as SitePayload;
+    const ids = payload.sites.map((site) => site.source_id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(5);
+    expect(payload.sites.some((site) => 'n' in site)).toBe(false);
+    expect(
+      services.evidence
+        .entries()
+        .map((entry) => entry.sourceId)
+        .sort(),
+    ).toEqual([...ids].sort());
+  });
+
+  it('a second search repeats a terminally failed hit from the memo, without a fetch or a new penalty', async () => {
+    const calls: string[] = [];
+    const missing = hit({ url: 'https://gone.example/', rank: 1 });
+    const signals: DomainRankSignal[] = [];
+    const services = storeServices([missing], {
+      signals,
+      fetcher: {
+        fetch: (url) => {
+          calls.push(url);
+          return Promise.reject(
+            new FetchError('404', { url, kind: 'http-status', statusCode: 404 }),
+          );
+        },
+      },
+    });
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    await tool.execute({ query: 'a' }, undefined);
+    const second = await tool.execute({ query: 'b' }, undefined);
+
+    expect(calls).toHaveLength(1);
+    const payload = JSON.parse(second.modelText) as SitePayload;
+    expect(payload.failures).toEqual([
+      { url: 'https://gone.example/', stage: 'fetch', reason: 'source returned HTTP 404' },
+    ]);
+    expect(signals.filter((signal) => signal.delta < 0)).toHaveLength(1);
+    expect(services.runHealth.sourceFailures()).toHaveLength(1);
+    expect(services.runHealth.memoHitCount()).toBe(1);
+  });
+
+  it('a timed-out hit is fetched again by a later search', async () => {
+    const counting: string[] = [];
+    let call = 0;
+    const services = storeServices([hit({ url: 'https://flaky.example/', rank: 1 })], {
+      fetcher: {
+        fetch: (url) => {
+          counting.push(url);
+          call += 1;
+          return call === 1
+            ? Promise.reject(new FetchError('slow', { url, kind: 'timeout' }))
+            : Promise.resolve(doc(url));
+        },
+      },
+    });
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    await tool.execute({ query: 'a' }, undefined);
+    const second = await tool.execute({ query: 'b' }, undefined);
+
+    expect(counting).toHaveLength(2);
+    expect((JSON.parse(second.modelText) as SitePayload).sites[0]?.source_id).toBe('S1');
+  });
+
+  it('keeps FEAT-048 budget reporting with the store in the path', async () => {
+    const signals: DomainRankSignal[] = [];
+    const services = storeServices(sixHits.slice(0, 3), {
+      limits: { maxNavigations: 1 },
+      signals,
+    });
+
+    const result = await wrapTool(webSearchSpec(services), services).execute(
+      { query: 'x' },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as SitePayload & {
+      budget?: { exhausted: string; skipped_reads: number };
+    };
+    expect(payload.sites).toHaveLength(1);
+    expect(payload.budget).toMatchObject({ exhausted: 'navigations', skipped_reads: 2 });
+    expect(payload.failures).toEqual([]);
+    expect(signals.some((signal) => signal.reason === 'blocked')).toBe(false);
+  });
+
+  it('accepts limit 0 in its schema and still rejects a negative limit', async () => {
+    const services = storeServices(sixHits);
+    const tool = wrapTool(webSearchSpec(services), services);
+
+    const negative = await tool.execute({ query: 'x', limit: -1 }, undefined);
+
+    expect(negative.error_code).toBe('INVALID_INPUT');
+    expect(webSearchSpec(services).description).toMatch(/limit 0/);
   });
 });

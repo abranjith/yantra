@@ -544,8 +544,8 @@ If an equivalent helper already exists, extend it rather than adding a parallel 
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Run document store with stable evidence IDs: `web_fetch` reads a page once
-- [ ] TASK-002: `web_search` reads through the store, plus `limit: 0` discovery
+- [x] TASK-001: Run document store with stable evidence IDs: `web_fetch` reads a page once
+- [x] TASK-002: `web_search` reads through the store, plus `limit: 0` discovery
 - [ ] TASK-003: Every evidence result shows its ID and the run's budget meter
 - [ ] TASK-004: One shared headless browser (`PagePool`) for SERP scrapes and fetch fallbacks
 - [ ] TASK-005: Classify every response before extraction, and treat challenge pages as blocked (policy b)

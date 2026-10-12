@@ -15,4 +15,3 @@ export * from './search/scrape-transport.js';
 export * from './source-processor.js';
 export * from './types.js';
 export * from './url-identity.js';
-export * from './web-research.js';

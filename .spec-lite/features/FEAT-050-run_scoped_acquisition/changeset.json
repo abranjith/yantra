@@ -92,6 +92,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/web-search.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
       "status": "M",
       "role": "implement",
@@ -111,7 +117,7 @@
     },
     {
       "path": "packages/core/src/extraction/document-store.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -128,10 +134,22 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/extraction/source-processor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/core/src/extraction/url-identity.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/web-research.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/core/src/research/source-pool.ts",
@@ -141,15 +159,21 @@
     },
     {
       "path": "packages/core/tests/extraction/document-store.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "packages/core/tests/extraction/url-identity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/web-research.spec.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-health.json",
@@ -166,6 +190,7 @@
   ],
   "excluded": [
     ".spec-lite/features/FEAT-050-run_scoped_acquisition/changeset.json",
+    ".spec-lite/features/FEAT-050-run_scoped_acquisition/spec.md",
     ".spec-lite/plan_task_fidelity.md"
   ],
   "baseline": {

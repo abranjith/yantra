@@ -28,6 +28,11 @@ export interface ProcessedSource {
   readonly failure: SourceFailure | null;
   /** How the page was fetched, or null when no network fetch happened. */
   readonly fetchMode: 'http' | 'browser' | null;
+  /**
+   * The error behind a `fetch`-stage failure, kept so a caller can classify
+   * it (a 404 cannot change within a run; a timeout can). Absent otherwise.
+   */
+  readonly cause?: unknown;
 }
 
 /** Injected stage dependencies shared by the pipeline callers. */
@@ -128,6 +133,7 @@ export async function processSource(
       doc: null,
       failure: sourceFailure(result.url, 'fetch', buildFailureReason(error)),
       fetchMode: null,
+      cause: error,
     };
   }
 }
