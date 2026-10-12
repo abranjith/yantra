@@ -47,7 +47,7 @@ import {
   type CommandTaskProfile,
 } from '../../src/runtime/profiles.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
-import { renderContractEcho } from '../../src/runtime/task-contract.js';
+import { MISSING_CONTRACT_REASON, renderContractEcho } from '../../src/runtime/task-contract.js';
 import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
@@ -666,7 +666,12 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       synthesis: 'llm',
       deterministic_fallback_used: true,
     });
-    expect(brief.notices).toMatchObject([{ source: 'runtime', kind: 'other' }]);
+    // A `do` run that declared no task contract also carries that notice,
+    // after the assembly notice (FEAT-052).
+    expect(brief.notices).toMatchObject([
+      { source: 'runtime', kind: 'other' },
+      { source: 'task-contract', kind: 'other' },
+    ]);
   });
 
   it('keeps AGENT_COMPLETION_MISSING when there is no draft answer to assemble', async () => {
@@ -1829,5 +1834,87 @@ describe('@no-llm runAgenticTask task contract echo (FEAT-052)', () => {
     expect(lines.filter((line) => line.tool === 'task_contract').map((line) => line.phase)).toEqual(
       ['start', 'end'],
     );
+  });
+});
+
+interface PublishedNotice {
+  readonly kind: string;
+  readonly source: string;
+  readonly reason: string;
+}
+
+async function briefNotices(outcome: AgenticTaskOutcome): Promise<PublishedNotice[]> {
+  const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
+    notices: PublishedNotice[];
+  };
+  return brief.notices;
+}
+
+/** Seeds one runtime-derived notice, as a failed search would. */
+function recordFailedSearch(services: RunServices): void {
+  services.runHealth.recordToolOutcome({
+    tool: 'web_search',
+    status: 'error',
+    code: 'SEARCH_NO_RESULTS',
+    cause: 'empty-results',
+    provider: 'duckduckgo',
+  });
+}
+
+describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
+  it('gives an undeclared research run exactly one task-contract notice, first', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [PUBLISH_CALL],
+      beforeCalls: recordFailedSearch,
+    });
+
+    expect(outcome.kind).toBe('published');
+    const notices = await briefNotices(outcome);
+    expect(notices.filter((notice) => notice.source === 'task-contract')).toEqual([
+      { kind: 'other', source: 'task-contract', reason: MISSING_CONTRACT_REASON },
+    ]);
+    expect(notices.map((notice) => notice.source)).toEqual(['task-contract', 'search:duckduckgo']);
+  });
+
+  it('gives an undeclared do run the notice too', async () => {
+    const { outcome } = await scriptedRun({ command: 'do', calls: [PUBLISH_CALL] });
+
+    expect((await briefNotices(outcome)).map((notice) => notice.source)).toEqual(['task-contract']);
+  });
+
+  it('gives a declared run no task-contract notice', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    expect((await briefNotices(outcome)).some((notice) => notice.source === 'task-contract')).toBe(
+      false,
+    );
+  });
+
+  it('never gives an ask run the notice', async () => {
+    const { outcome } = await scriptedRun({ command: 'ask', calls: [PUBLISH_CALL] });
+
+    expect(outcome.kind).toBe('published');
+    expect((await briefNotices(outcome)).some((notice) => notice.source === 'task-contract')).toBe(
+      false,
+    );
+  });
+
+  it('keeps the assembly notice first, then the contract notice, on a runtime-assembled Brief', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [],
+      draft: 'Two dealers list new SUVs.\nBoth are in stock.',
+      beforeCalls: (services) => {
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A'));
+      },
+    });
+
+    expect(outcome.kind).toBe('published');
+    const sources = (await briefNotices(outcome)).map((notice) => notice.source);
+    expect(sources.slice(0, 2)).toEqual(['runtime', 'task-contract']);
   });
 });

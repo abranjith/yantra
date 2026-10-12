@@ -383,6 +383,30 @@ describe('@no-llm RunHealthLedger — runtime-derived Brief facts', () => {
     });
   });
 
+  it('puts leading notices first and still caps at ten with one overflow (FEAT-052)', () => {
+    const ledger = new RunHealthLedger();
+    for (let i = 0; i < 10; i += 1) {
+      ledger.recordSourceFailure({
+        tool: 'web_search',
+        host: `h${i}.example`,
+        stage: 'fetch',
+        reason: 'fetch failed',
+      });
+    }
+    const leading = { kind: 'other' as const, source: 'task-contract', reason: 'No contract.' };
+
+    const { notices } = ledger.briefFacts([leading]);
+
+    expect(notices).toHaveLength(MAX_RUNTIME_NOTICES);
+    expect(notices[0]).toEqual(leading);
+    expect(notices[9]).toEqual({
+      kind: 'other',
+      source: 'runtime',
+      reason: '2 more run notices are summarized in report.md under Run Health.',
+    });
+    expect(ledger.briefFacts().notices[0]).not.toEqual(leading);
+  });
+
   it('records the published notice count as given', () => {
     const ledger = new RunHealthLedger();
 

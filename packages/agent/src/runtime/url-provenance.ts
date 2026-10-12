@@ -180,15 +180,30 @@ export class UrlProvenance {
   }
 
   /**
-   * Seeds the trusted inputs for a run: the hosts the user allowlisted and the
-   * URLs the user wrote in the goal. Both are trusted because the user supplied
-   * them; everything else must be earned from a tool result.
+   * Seeds the trusted inputs for a run: the hosts the user allowlisted, the
+   * URLs the user wrote in the goal, and the origin roots of hostnames the
+   * user wrote bare ("Use example.com"). All are trusted because the user
+   * supplied them; everything else must be earned from a tool result.
+   *
+   * A bare hostname attests only `https://<host>/` and `http://<host>/` — no
+   * path and no `www.` variant. That is the same statement a typed URL makes,
+   * at the one place every site is reachable from (FEAT-052). A false positive
+   * such as `node.js` grants a root navigation that simply fails, and the URL
+   * policy, ethics gate, and host budget still apply.
+   *
+   * Only the user's raw goal is read here. A model-declared task contract's
+   * `required_sources` is never a seed: model text attests nothing.
    *
    * @param input - Allowed hosts and the raw (unsanitized) goal text.
    */
   public seed(input: { readonly allowedHosts?: readonly string[]; readonly goal?: string }): void {
     for (const host of input.allowedHosts ?? []) this.allowHost(host);
-    for (const url of extractUrls(input.goal ?? '')) this.record(url, { kind: 'goal' });
+    const goal = input.goal ?? '';
+    for (const url of extractUrls(goal)) this.record(url, { kind: 'goal' });
+    for (const host of extractBareHosts(goal)) {
+      this.record(`https://${host}/`, { kind: 'goal' });
+      this.record(`http://${host}/`, { kind: 'goal' });
+    }
   }
 }
 
@@ -272,4 +287,25 @@ export function extractUrls(text: string): string[] {
     // Trailing sentence punctuation is not part of the URL.
     match.replace(/[.,;:!?)\]}]+$/u, ''),
   );
+}
+
+/**
+ * A hostname written without a scheme. The lookbehind refuses a token glued
+ * to a word, `@` (so an email address attests nothing), `.`, `/`, or `-`; the
+ * lookahead refuses one that continues into a word, `@`, or `-`.
+ */
+const BARE_HOST_IN_TEXT =
+  /(?<![\w@./-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(?![\w@-])/giu;
+
+/**
+ * Extracts lowercased hostnames the text names without a scheme, ignoring any
+ * that are part of an absolute URL (those are attested by
+ * {@link extractUrls} exactly as written).
+ *
+ * @param text - Free text (the user's goal).
+ */
+export function extractBareHosts(text: string): string[] {
+  const withoutUrls = text.replace(URL_IN_TEXT, ' ');
+  const hosts = (withoutUrls.match(BARE_HOST_IN_TEXT) ?? []).map((host) => host.toLowerCase());
+  return [...new Set(hosts)];
 }

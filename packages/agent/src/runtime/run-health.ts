@@ -291,13 +291,15 @@ export class RunHealthLedger {
    * phrase tables, counts, and hostnames — never from page or provider text —
    * so nothing untrusted enters the document through this path.
    *
-   * Order: search failures, budget exhaustion, challenge pages, per-source
-   * reads. At most
+   * Order: `leading` (whole-run notices the caller owns, such as the
+   * missing-contract notice), then search failures, budget exhaustion,
+   * challenge pages, per-source reads. At most
    * {@link MAX_RUNTIME_NOTICES}; the overflow becomes one `other` notice that
    * points at the report's Run Health section.
    */
-  public briefFacts(): RuntimeBriefFacts {
+  public briefFacts(leading: readonly BriefNotice[] = []): RuntimeBriefFacts {
     const notices = [
+      ...leading,
       ...this.searchFailureNotices(),
       ...this.budgetNotices(),
       ...this.challengeNotices(),

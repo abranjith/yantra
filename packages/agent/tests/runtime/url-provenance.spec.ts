@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { UrlProvenance, extractUrls, provenanceDetails } from '../../src/runtime/url-provenance.js';
+import {
+  UrlProvenance,
+  extractBareHosts,
+  extractUrls,
+  provenanceDetails,
+} from '../../src/runtime/url-provenance.js';
 
 /** The fabricated deep link from run 20260803T033803Z-do-f1d9f01b. */
 const FABRICATED =
@@ -340,5 +345,69 @@ describe('@no-llm UrlProvenance origins and explain (FEAT-051)', () => {
       'https://a.test/x',
       'https://b.test/y',
     ]);
+  });
+});
+
+describe('@no-llm UrlProvenance bare-host goal seeding (FEAT-052)', () => {
+  it('attests only the https and http roots of a hostname written bare', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: 'List dealer prices. Use example-listings.test' });
+
+    expect(provenance.has('https://example-listings.test/')).toBe(true);
+    expect(provenance.has('http://example-listings.test/')).toBe(true);
+    expect(provenance.has('https://example-listings.test/new-cars')).toBe(false);
+    expect(provenance.has('https://example-listings.test/?q=suv')).toBe(false);
+    expect(provenance.has('https://www.example-listings.test/')).toBe(false);
+    expect(provenance.has('https://cars.example-listings.test/')).toBe(false);
+  });
+
+  it('explains a bare-host root as goal-attested', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: 'use Example-Listings.test.' });
+
+    expect(provenance.explain('https://example-listings.test/')).toEqual({
+      match: 'exact',
+      origin: { kind: 'goal' },
+    });
+  });
+
+  it('attests nothing from an email address', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: 'email alice@example.com the results' });
+
+    expect(provenance.size).toBe(0);
+    expect(provenance.has('https://example.com/')).toBe(false);
+  });
+
+  it('keeps a typed URL exact and adds the root of a bare host beside it', () => {
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: 'compare https://a.test/x and b.test' });
+
+    expect(provenance.has('https://a.test/x')).toBe(true);
+    expect(provenance.has('https://b.test/')).toBe(true);
+    expect(provenance.has('https://b.test/x')).toBe(false);
+    // The URL's own host is not re-seeded as a bare host from inside the URL.
+    expect(extractBareHosts('compare https://a.test/x and b.test')).toEqual(['b.test']);
+  });
+
+  it('grants nothing from a model-declared required source', () => {
+    // The contract is model-authored; only the user's goal is a seed.
+    const provenance = new UrlProvenance();
+    provenance.seed({ goal: 'find SUV listings' });
+
+    expect(provenance.has('https://other.test/')).toBe(false);
+  });
+
+  it.each([
+    ['e.g. cheap cars', []],
+    ['version 3.5 or v1.2', []],
+    ['site example.com/path', ['example.com']],
+    ['(shop.example.test), then', ['shop.example.test']],
+    ['a.test a.test A.TEST', ['a.test']],
+    ['user@mail.example.com', []],
+    ['-dash.example.com', []],
+    ['node.js tutorials', ['node.js']],
+  ])('extracts bare hosts from %j', (text, expected) => {
+    expect(extractBareHosts(text)).toEqual(expected);
   });
 });

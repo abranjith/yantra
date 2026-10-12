@@ -521,8 +521,8 @@ If an equivalent helper or test location already exists, extend it instead of cr
 - [x] TASK-002: `research --no-browse` overrides the preference for one run, and the preamble says which applied
 - [x] TASK-003: The `task_contract` tool: validate, normalize, record, and persist `contract.json`
 - [x] TASK-004: Show the user what the run understood: attended echo, report section
-- [ ] TASK-005: A `research`/`do` run that never declares a contract says so in its Brief
-- [ ] TASK-006: A site the user names by bare hostname is reachable at its root
+- [x] TASK-005: A `research`/`do` run that never declares a contract says so in its Brief
+- [x] TASK-006: A site the user names by bare hostname is reachable at its root
 - [ ] TASK-007: The repeated-failure breaker counts per tool, so other tools cannot reset it
 - [ ] TASK-008: Prompt alignment `agent-v9`: capability-true scope, source fidelity, and no conflicting advice
 - [ ] TASK-009: Pin FEAT-052 in the task-fidelity harness and flip it live

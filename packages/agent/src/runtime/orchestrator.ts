@@ -78,6 +78,7 @@ import {
   createTemplatedReportPublisher,
   createYantraTools,
   evidenceToSourceRecords,
+  runtimeFactsFor,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
 import { AgentStartupError, AgentSessionStartFailedError } from '../errors.js';
@@ -1101,7 +1102,7 @@ async function maybeAssembleUnpublishedResult(
   // resolve them for the published Brief — the artifact is the user's own
   // deliverable and must carry the real values (same contract as tool params).
   const overview = services.userInput?.resolve(draft) ?? draft;
-  const runtimeFacts = services.runHealth.briefFacts();
+  const runtimeFacts = runtimeFactsFor(services);
   const published = await services.domain.publish.publish(
     {
       title: assembledTitle(overview),

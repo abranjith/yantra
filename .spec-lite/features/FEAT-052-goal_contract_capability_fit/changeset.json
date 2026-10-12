@@ -86,6 +86,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/result-publish.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
       "status": "A",
       "role": "implement",
@@ -122,6 +128,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/runtime/run-health.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/src/runtime/run-services.ts",
       "status": "M",
       "role": "implement",
@@ -134,6 +146,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/src/runtime/url-provenance.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
       "status": "M",
       "role": "implement",
@@ -144,6 +162,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/template-publish.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
@@ -182,10 +206,22 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/tests/runtime/run-health.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/runtime/task-contract.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/url-provenance.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/audit/report-builder.ts",
