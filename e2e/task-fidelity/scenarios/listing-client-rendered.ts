@@ -51,7 +51,6 @@ const expectations: readonly Expectation[] = [
       return PAGE_ONE_SELLERS.filter((seller) => text.includes(seller)).length;
     },
     target: equals(6),
-    baseline: equals(null),
     note: 'G2: the rendered collection yields records holding all 6 sellers.',
   },
   {

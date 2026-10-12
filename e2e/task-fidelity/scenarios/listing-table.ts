@@ -154,7 +154,6 @@ const expectations: readonly Expectation[] = [
       records: resultsRecords(run)?.length ?? null,
     }),
     target: equals({ shape: 'collection', records: 6 }),
-    baseline: equals({ shape: null, records: null }),
     note: 'G2: the results page reads as a collection of its 6 cards.',
   },
   {
@@ -177,7 +176,6 @@ const expectations: readonly Expectation[] = [
       }).length;
     },
     target: equals(6),
-    baseline: equals(null),
     note: 'G2: each record carries title, price, seller, distance, and its link.',
   },
   {
@@ -190,7 +188,6 @@ const expectations: readonly Expectation[] = [
       return records.some((record) => JSON.stringify(record).includes(seller));
     },
     target: equals(true),
-    baseline: equals(null),
     note: 'G2 regression card: a plain-text price with linked title and seller keeps the seller.',
   },
   {
@@ -206,7 +203,6 @@ const expectations: readonly Expectation[] = [
           ).length;
     },
     target: atLeast(1),
-    baseline: equals(null),
     note: 'G3: the drivetrain facet is offered as a `facet` link.',
   },
   {
@@ -224,7 +220,6 @@ const expectations: readonly Expectation[] = [
         );
       }).length,
     target: equals(DETAIL_COUNT),
-    baseline: equals(0),
     note: 'G3: the top detail pages are reachable and return their colors.',
   },
   {
@@ -232,7 +227,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-051',
     measure: (run) => run.unreachable,
     target: equals([]),
-    baseline: equals(['awd-facet', 'detail-1', 'detail-2', 'detail-3']),
     note: 'G3 / §11 "turns spent seeking unreachable URLs": every move in the trace is offered.',
   },
   {

@@ -695,6 +695,6 @@ Named constants, each in the module that uses it with a one-line rationale:
 - [x] TASK-007: `web_search` sites carry a shape summary, and the full view is one store read away
 - [x] TASK-008: `browser_extract` reads the live page through the same analyzer (closes TODO line 214)
 - [x] TASK-009: Run health and observability for extraction
-- [ ] TASK-010: Pin the integrated contract, and flip FEAT-051 live in the harness
+- [x] TASK-010: Pin the integrated contract, and flip FEAT-051 live in the harness
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

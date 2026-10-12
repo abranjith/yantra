@@ -41,7 +41,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-051',
     measure: structuredPrices,
     target: equals(PAGE_ONE.map((entry) => entry.price).sort((left, right) => left - right)),
-    baseline: equals(null),
     note: 'G2: the 6 Product/Offer entities carry the truth prices.',
   },
   {

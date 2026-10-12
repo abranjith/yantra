@@ -2,10 +2,118 @@
   "vcs": "git",
   "files": [
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/agent-do.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/article.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/hand-assembled-url.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-client-rendered.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-structured.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/multi-table.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
@@ -168,6 +276,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/runtime/extraction-integration.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
@@ -516,11 +630,25 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/test-helpers/src/runtime-log-safety.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/test-helpers/tests/runtime-log-safety.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-051-shape_aware_extraction/changeset.json",
     ".spec-lite/features/FEAT-051-shape_aware_extraction/spec.md",
+    ".spec-lite/memory.md",
     ".spec-lite/plan_task_fidelity.md"
   ],
   "baseline": {

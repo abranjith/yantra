@@ -443,6 +443,16 @@ their output and audit:
   then reads selected URLs with `web_fetch`.
 - Each page is read at most once per run and keeps one evidence ID (`S1`, `S2`,
   …). A repeat read returns `already_read` with that ID and fetches nothing.
+- Each page read reports its `shape` (`article`, `collection`, `table`,
+  `detail`, or `index`) and returns that shape's data: `records` with IDs such
+  as `S3#r5`, `tables`, `fields`, schema.org `structured` data, or `text`, plus
+  the `links` the page offers.
+- `web_fetch` refuses a URL that no search result, page read, or goal supplied
+  with `URL_NOT_FROM_EVIDENCE`, before anything is fetched. Links a read page
+  offers can be followed.
+- `web_search` returns a non-article site as a summary. A later `web_fetch` of
+  that URL returns the full view from the run's store with `from_store: true`
+  and fetches nothing.
 - The run paces a scraped search provider (`duckduckgo`, `google`) at one query
   at a time. After the provider's first challenge or rate-limit refusal, the run
   sends no more searches; later searches return `SEARCH_BLOCKED` with cause
@@ -453,8 +463,10 @@ their output and audit:
   The result carries a `blocked` notice for that host.
 
 See [Agentic tasks](features/agentic-tasks.md#what-it-does) for result shapes and
-failure codes, and [Challenge pages](features/safety-and-privacy.md#challenge-pages)
-for the challenge policy.
+failure codes, [Discovered-link provenance](features/safety-and-privacy.md#discovered-link-provenance)
+for which URLs can be followed, and
+[Challenge pages](features/safety-and-privacy.md#challenge-pages) for the
+challenge policy.
 
 ### Agentic browser tasks
 

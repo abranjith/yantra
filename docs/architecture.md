@@ -102,8 +102,9 @@ share one validation vocabulary.
   engine;
 - finite plan execution, confirmation gateways, checkpoints, captures, output evaluation, and
   saved-workflow replay/resume;
-- search, HTTP/browser fallback fetching, Readability/Cheerio extraction, deterministic and LLM
-  synthesis ports, multi-hop research, citation validation, and Brief rendering;
+- search, HTTP/browser fallback fetching, Readability/Cheerio extraction and the shape-aware page
+  analyzer under `src/extraction/page/`, deterministic and LLM synthesis ports, multi-hop research,
+  citation validation, and Brief rendering;
 - the run-scoped acquisition primitives an agentic run composes — `SearchService`, `DocumentStore`,
   `PagePool` — together with the response classifier, the `canonicalUrl` page identity, and the
   per-use `launchPerUsePageSource` that the deterministic pipelines use instead of the pool;
@@ -1051,6 +1052,70 @@ flowchart TD
   Audit --> Cost[summarizeDeltaCost]
 ```
 
+#### Shape-aware page extraction
+
+`ReadabilityExtractor` (`packages/core/src/extraction/readability.ts`) has two entry points over one
+shared private `readArticle`. `extract(doc)` is article-only and runs no analysis, so the
+deterministic `ask`/`research` pipelines and the live-page text helpers read exactly what they read
+before. `extractPage(doc)`, the `PageExtractor` method the agentic read tools use, returns a
+`PageExtraction` — `{ article, page }` — where `page` is a `PageAnalysis` naming the page's `shape`
+(`article`, `collection`, `table`, `detail`, or `index`) and carrying what that kind of page holds:
+up to 25 `records`, up to 10 `tables`, page-level label/value `fields`, schema.org `structured`
+entities, up to 40 `links`, the `readableText`, and a `coverage` statement.
+
+The read costs no extra HTML parse. `extractPage` parses once through the injectable `parseHtml`
+seam. `analyzePage` (`page/analyze.ts`) then reads that untouched tree — before Readability's
+pre-clean deletes the `nav`, `aside`, `form`, and `script` elements where pagination, facets, and
+JSON-LD live — through a `PageIndex` (`page/dom.ts`) built by one pre-order walk, and never mutates
+it. Next the identical pre-clean, JSDOM document, and Readability pass run on the same parse, so
+the article half is byte-identical to `extract()`. When Readability finds no article, the fallback
+text is serialized from the same pre-cleaned parse. `completeAnalysis` folds Readability's verdict in
+and decides the shape. `readability.spec.ts` counts parses and DOM constructions through the
+`parseHtml` and `createDocument` seams and pins exactly one of each on both entry points.
+
+The analyzer is a set of single-purpose modules under `packages/core/src/extraction/page/`:
+
+| Module          | Reads                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `links.ts`      | Every followable link: absolute http(s) only, deduplicated by `canonicalUrl`, classified `pagination`, `facet`, `record`, `content`, or `navigation` (inside a landmark), and ranked by kind, same-site first |
+| `records.ts`    | Repeated sibling records, found by a structural signature (tag plus descendant tags), and facet lists, whose links become `facet` links and never records                                                     |
+| `structured.ts` | JSON-LD (`JSON.parse`d, never evaluated) and microdata entities of an allowlisted schema.org `@type`, bounded by bytes, depth, and property count; other types are counted as ignored                         |
+| `tables.ts`     | Every `<table>` at its document-order index, classified `data`, `key-value`, or `layout`                                                                                                                      |
+| `fields.ts`     | Page-level label/value pairs for detail pages                                                                                                                                                                 |
+| `shape.ts`      | Shape arbitration                                                                                                                                                                                             |
+
+Arbitration (`classifyShape`) gives each qualifying reading a mass — the visible text it explains —
+and the largest wins, ties breaking `collection` > `table` > `detail` > `article`. A collection
+weighs its records' text (or, failing that, a structured `ItemList`'s entities); a table weighs its
+data-table cells; a detail page weighs its fields, each floored at `FIELD_FACT_CHARS` (60), plus a
+single main structured entity. The article reading weighs only its prose that no other part already
+returns, counted as letter/digit runs and discounted by `ARTICLE_MASS_WEIGHT` (0.5), because
+Readability run on a listing keeps card fragments. With no qualifying reading, a sub-threshold
+table reads as `table`, sub-threshold fields or entities as `detail`, and a page that still offers
+followable links as `index`; a page with none of these has a `null` shape, which callers report as
+`EXTRACTION_EMPTY`. `coverage.shape_basis` is the one sentence naming the winner and runner-up with
+both masses. The rest of `coverage` reports found/shown counts per part, fixed `not_found` phrases,
+and `omitted` entries. Core emits each omission as data (`{ id, count, … }`), and the agent renders
+it through its registered message catalog, because core cannot import that catalog.
+
+Analysis is structural only. No module under `extraction/page/` reads a `class` or `id` attribute,
+names a host, or branches on a site token. `packages/core/tests/extraction/page/structural-only.spec.ts`
+enforces this: it prints each module through the TypeScript compiler with comments removed, then
+scans the code and string literals for class/id reads, hostname-shaped literals, and the
+`eslint.config.js` site-token list.
+
+Live pages take the same path. `AgentBrowserController.snapshot()` serializes the page's
+`outerHTML`, title, rendered `innerText`, and URL in one `evaluate`. It caps the HTML at the HTTP
+fetcher's body limit and sets `truncated` when the cap cut it. `analyzeLivePage`
+(`packages/core/src/extraction/live-page.ts`) wraps the snapshot as a browser-mode `FetchedDoc` and
+calls `extractPage`, reporting a truncated snapshot as an omission. A table, record, or link
+therefore means the same thing whether it was fetched or read from the browser. The controller's
+`extract()` is narrowed to `'content'` (block-structured `innerText`); it has no in-page table
+reader. `processSource` (`packages/core/src/extraction/source-processor.ts`) takes an optional
+`extractPage`. With it, a page with no article but with page parts succeeds with `doc.text` set to
+the readable text, and the analysis rides on `ProcessedSource.page`. Only `web_search` passes it;
+without it, `processSource` stays article-only.
+
 ### `packages/agent`
 
 `@yantra/agent` owns live model-driven execution. `runAgenticTask()` creates the auditable run,
@@ -1172,6 +1237,7 @@ flowchart TD
   Chokepoint --> Ledger[RunHealthLedger, one per run]
   Chokepoint -->|error or timeout| Warn[One warn tool_failure line]
   ReadTools[web_search and web_fetch] -->|source failures, network loads, store hits, budget exhaustion| Ledger
+  PageViews[web_fetch, web_search, browser_extract, browser_navigate] -->|pages by shape, records, links, discovered follows| Ledger
   Tiers[HybridContentFetcher onTierEvent] -->|escalations and challenge pages| Ledger
   Counter[countingBrowserProvider] -->|successful launches| Ledger
   Acq[PagePool and SearchService stats] -->|read at teardown| Ledger
@@ -1213,7 +1279,12 @@ with the reads it skipped; `web_fetch` records its successful fetches and its bu
 navigation or host budget refusal inside a search is stage `budget`, and any other URL-policy
 refusal is stage `policy`. Both are the run's own limits rather than evidence about a site, so
 `rankReasonForFailureStage` returns `null` for them and neither produces a domain-rank signal. A
-budget refusal is reported once at the top of the search result rather than per site.
+budget refusal is reported once at the top of the search result rather than per site. Every
+shape-aware page view returned to the model — a `web_fetch` full view, fetched or served from the
+store, a `web_search` site, or a `browser_extract` part — passes `recordPage` with its shape and the
+projection's own counts of records shown and links offered or withheld. Each successful `web_fetch`
+or `browser_navigate` whose URL `UrlProvenance.explain` attributes to a `discovered` origin passes
+`recordDiscoveredFollow`.
 
 **Browser launches are counted by decoration.** `countingBrowserProvider` wraps the run's single
 selected browser provider in a pass-through that delegates `launch` and `detectChrome` unchanged
@@ -1333,7 +1404,11 @@ of them reached through `RunServices`. A search goes `SearchService` → `Docume
   then a memo of terminal failures, then loads already in flight (single-flight). It calls `load`
   only when none of those answer. Each successful load mints a dense run-wide ID (`S1`, `S2`, …),
   and `observe()` lets `browser_extract` mint or reuse an ID for a page the browser already shows,
-  with no fetch. The store holds no page text and does no I/O of its own.
+  with no fetch. `attachPage(sourceId, analysis, …)` stores a source's latest `PageAnalysis` as its
+  `StoredPage`, together with record anchors and whether the model has seen the `full` view or only
+  a `summary`. A record whose key already has an anchor keeps it, and a new key gets the next
+  number, so re-reading a live page never renumbers a record `S<n>#r<k>` that was already shown.
+  `resolveAnchor` maps such an ID back to its source and record. The store does no I/O of its own.
 - **`PagePool`** (`packages/core/src/browser/page-pool.ts`), composed in
   `composeDefaultEnvironment` from the run's counted browser provider and implementing
   `PageSource`. It lazily launches one headless, ephemeral browser for every SERP scrape
@@ -1370,31 +1445,104 @@ flowchart TD
   SearchSvc --> Provider[Search provider]
   Provider -->|scraped results page| Pool
   Search -->|each top hit| Evaluate
-  Fetch[web_fetch] --> Evaluate[UrlPolicy.evaluate]
+  Fetch[web_fetch] --> Explain[UrlProvenance.explain]
+  Explain -->|unattested| Refused[URL_NOT_FROM_EVIDENCE,<br/>nothing spent]
+  Explain -->|attested| Evaluate[UrlPolicy.evaluate]
   Evaluate --> Store[DocumentStore.read<br/>canonicalUrl, memo, single-flight]
-  Store -->|hit or memoized failure| Result[Result with source_id or already_read]
+  Store -->|hit on a summary-only page| Project
+  Store -->|other hit or memoized failure| Result[Result with source_id or already_read]
   Store -->|load| Gate[Ethics, then UrlPolicy.reserve]
   Gate --> Hybrid[HybridContentFetcher]
   Hybrid --> Http[HTTP tier] --> Classify[classifyResponse]
-  Classify -->|content| Extract[Extraction]
+  Classify -->|content| Extract[extractPage<br/>one parse, shape arbitration]
   Classify -->|challenge or js-shell: one render| Pool[PagePool<br/>one headless browser,<br/>isolated context per use]
   Http -->|HTTP error or network failure| Pool
   Pool --> Classify2[classifyResponse on render]
   Classify2 -->|challenge| Blocked[Terminal blocked failure,<br/>memoized, never extracted]
   Classify2 -->|content or js-shell| Extract
-  Extract --> Result
-  Extract2[browser_extract] -->|observe, no fetch| Store
+  Extract --> Attach[DocumentStore.attachPage<br/>stable record anchors]
+  Extract2[browser_extract] -->|snapshot, challenge check,<br/>analyzeLivePage| Observe[DocumentStore.observe, no fetch]
+  Observe --> Attach
+  Attach --> Project[projectPage<br/>full or summary view within a byte budget]
+  Project --> Discovered[recordDiscovered<br/>shown, offerable URLs into UrlProvenance]
+  Project --> Result
 ```
 
 The deterministic `ask --no-llm` and `research --no-llm` pipelines do not use these services. They
 keep their own search, fetch, and cache wiring. The CLI passes them
 `launchPerUsePageSource(browserProvider)`, which launches one browser per use, as before. They gain
 only what lives inside the shared core classes: the classifier in `HybridContentFetcher` and the
-honest timeout and abort in `BrowserFallbackFetcher`. `planSearchProvider` in
+honest timeout and abort in `BrowserFallbackFetcher`. They extract through the article-only
+`extract()`, never `extractPage`, so shape-aware analysis does not change their output. `planSearchProvider` in
 `packages/core/src/extraction/search/registry.ts` is the pure selection step that
 `resolveSearchProvider` calls before creating a provider. `yantra doctor`'s `search.provider` check
 calls the same function, so diagnostics and runs share one selection grammar. The check launches no
 browser.
+
+#### Shape-aware page views and discovered links
+
+`packages/agent/src/adapters/pi/tools/page-payload.ts` turns a `StoredPage` into what the model
+reads, and records the URLs that view attests. `projectPage` builds one of two views:
+
+- **`full`** (`web_fetch`, `browser_extract`): `source_id`, `url`, `title`, and `shape`, then the
+  shape's primary part (`records` for a collection, `tables` for a table, `fields` for a detail
+  page, `text` for an article, `links` for an index), then the remaining parts in the fixed order
+  `fields`, `tables`, `structured`, `records`, `links`, `text`, and finally `coverage`. Each record
+  carries its store anchor as `id` (`S<n>#r<k>`). Its budget is 90% of `maxBytesPerResult`.
+- **`summary`** (`web_search` sites): at most 5 records, at most 10 `pagination`/`facet` links,
+  the excerpt, `coverage`, and the registered `page-summary` note saying that `web_fetch` of the URL
+  returns the full view from the store. Its budget is 80% of `maxBytesPerResult` divided by the
+  number of fetched sites.
+
+A view that does not fit is degraded deterministically. Text becomes a 1,000-character `excerpt`
+with a `capture_ref`, links shrink to 20 and then 10, and then structured entities, table rows, and
+records are dropped from the end one at a time. Each trim is stated in `coverage.omitted`, and the
+whole analysis is written once as a capture whenever anything was trimmed. The middleware's hard
+byte cap stays as the last resort.
+
+The read tools differ only in where the page comes from:
+
+- `web_fetch` calls `extractPage` inside the store's `load`. A `null` shape is a terminal
+  `EXTRACTION_EMPTY` whose message says what was looked for. Otherwise the page is attached as
+  `full` and projected. On a store hit whose page the model saw only as a search `summary`, it
+  projects the full view from the store with `from_store: true` and marks the page `full`. That
+  read loads nothing, reserves no navigation, and adds no evidence. Any later hit returns
+  `already_read`.
+- `web_search` passes `extractPage` to `processSource`. A site whose shape is `article` keeps its
+  text or capture payload, now with `shape` and `coverage`, and is stored as `full`. Any other shape
+  is stored as `summary` and returned as the summary view.
+- `browser_extract` reads `content` as the controller's rendered title and block-structured text.
+  `records`, `links`, `structured`, `tables`, and `table` with an `index` are read from
+  `snapshot()`. The snapshot is classified first: a challenge is a non-retryable `SITE_CHALLENGE`
+  handoff and is never analyzed. Otherwise it goes through `analyzeLivePage`, an http(s) page is
+  `observe`d and attached as `full`, and the full view is restricted to the requested part. An
+  out-of-range table index is `INVALID_INPUT` with the table count. Every kind except `links`
+  records the page as evidence.
+
+Links become navigable because a page offered them. `UrlProvenance.record(url, origin)`
+(`packages/agent/src/runtime/url-provenance.ts`) requires a `ProvenanceOrigin`: `goal`,
+`allow-host`, `tool` (naming the tool), or `discovered` (naming the containing `sourceId` and the
+link kind, `text`, or `structured`). The first origin recorded for a normalized URL wins.
+`explain(url)` returns the matching rule (`exact`, `origin-root`, `query-variant`, or
+`allowed-host`) and the origin that granted it, or `null`. `has()` is defined as
+`explain(url) !== null`, so the two cannot disagree. `recordDiscovered` walks the payload the model
+will actually read — offered links, record URLs and their secondary links, absolute http(s)
+structured properties, and URLs written in returned text — and records each one as `discovered`.
+A link a bound trimmed is therefore not attested until a later view shows it.
+
+A URL is offered only when it survives the model-visible transform unchanged. `offerableUrl`
+serializes the URL as a JSON string and runs it through `modelVisibleText`, exported from
+`packages/agent/src/runtime/middleware.ts`. That is the user-input mask followed by the `public`
+sanitizer, the same transform `sanitizeAndBound` applies before byte-capping. A URL that comes out
+changed is withheld (`url: null`), counted in `coverage.links.withheld`, and never recorded, so the
+URL the model copies is exactly the URL that was attested.
+
+`web_fetch` is gated on provenance exactly as `browser_navigate` is. `explain` runs before URL
+policy, the store, or any budget. An unattested URL is refused with `URL_NOT_FROM_EVIDENCE`, and
+both tools share one repeat-refusal counter. Both attach an audit-only `details.provenance` to every
+result, success or failure: the match rule and origin kind, the tool for a `tool` origin, and for a
+`discovered` origin the `via` source ID and `link_kind`. A chain of discovered hops can therefore be
+reconstructed from `tool-calls.jsonl`, each hop naming the source that offered it.
 
 ### Vision-assist boundary
 
@@ -1817,7 +1965,9 @@ the report can list the artifact by presence. Every tool outcome is recorded in 
 search provider, and teardown writes `run-health.json` and its `run_health` line before the log
 closes. Web reads go through the run's `SearchService`, `DocumentStore`, and `PagePool` (see
 "Run-scoped acquisition services"), so a page is fetched at most once and keeps one `S<n>` evidence
-ID. The pool closes after the task browser's teardown and before `run-health.json` is written. A
+ID. Each read returns a shape-aware view of the page. The URLs that view shows become attested,
+attributed to the page that offered them, and `web_fetch` and `browser_navigate` refuse any URL
+nothing attested (see "Shape-aware page views and discovered links"). The pool closes after the task browser's teardown and before `run-health.json` is written. A
 successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
 plain assistant text alone is not the success contract.
 
@@ -2006,9 +2156,21 @@ schema enforces `total = ok + failed`), network fetches by mode with repeat fetc
 already-fetched normalized URL, per-site failures by stage (`fetch`, `extract`, `blocked`,
 `budget`, `policy`), browser launches, navigation and host usage against their limits with the
 exhausted limits named, tool failures by code, and the number of runtime-derived notices attached
-to the published document. A run has zero or one such file and zero or one `run_health` line; a
+to the published document. An optional `extraction` block adds shape-aware read counts:
+`pages_by_shape`, `records_shown`, `links_offered`, `links_withheld`, and `discovered_follows`. It
+is present only when a shape-aware view was returned or a discovered link was followed, and
+`schema_version` stays 1. A run has zero or one such file and zero or one `run_health` line; a
 startup failure before the environment exists writes neither. Every reader treats the file as
 optional, so older run directories validate and render unchanged.
+
+Shape-aware extraction adds no table and no artifact type. `PageAnalysis`, each source's
+`StoredPage` and its record-anchor map, and every `ProvenanceOrigin` are run-local memory held by
+the `DocumentStore` and `UrlProvenance`. A record anchor `S<n>#r<k>` is unique within its source,
+starts at 1, and is never reassigned within the run. What persists rides existing artifacts. A
+trimmed view's full analysis and an excerpted page's text are ordinary run captures. The analysis
+is referenced as `analysis_capture_ref` in the `web_fetch` and `browser_extract` result details,
+and the text as the view's `capture_ref` beside its excerpt. Each `web_fetch` and
+`browser_navigate` record in `tool-calls.jsonl` carries its `details.provenance`.
 
 Browser management adds no table and no migration either; its model is filesystem state under the
 managed root plus one cache. `<data>/browsers/ready.json` is the entire selection model for
@@ -2351,6 +2513,30 @@ update` is the only surface that contacts a version server, and only when a huma
   in a notice. The classifier parses the DOM only when its cheap string scan finds a marker. A
   third rule, a challenge phrase plus a widget at any size, catches padded interstitials, while
   requiring both signals keeps a long article with a comment-form CAPTCHA out of it.
+- **Read a page for its shape, on the parse it already has.** An article extractor discards exactly
+  what a listing is made of. Its pre-clean removes the `nav`, `aside`, and `form` elements that hold
+  pagination and facets, and Readability drops link-dense repeated blocks, which is where a
+  collection keeps its records. One recorded run fetched a results page and got back facet labels
+  and bare prices with every card's title and seller gone. So the agentic read tools now ask what
+  kind of page this is and return what that kind holds. The analysis reads the extractor's own
+  parse before the pre-clean and never mutates it, so it costs no HTML parse, and `extract()`
+  stays article-only and byte-identical for the deterministic pipelines. Shape is decided by which
+  reading explains the most visible text, and `coverage` states the basis, what was dropped, and
+  what was looked for and absent, so the agent can report a missing field instead of inventing a
+  cause. Detection is structural only: no class, id, host, or site token, enforced by a boundary
+  test. The costs are tuned mass constants (the article discount, the per-field floor), which the
+  fixture corpus pins, and a larger model payload that a deterministic degradation ladder keeps
+  inside the result budget.
+- **A link is navigable because a page offered it, exactly as shown.** A read that returns no links
+  leaves pagination, facets, and detail pages unreachable, and a fetch that accepts any URL
+  launders a hand-assembled one. Every URL a view shows is recorded as `discovered` from the source
+  that offered it, and `web_fetch` refuses an unattested URL exactly as `browser_navigate` does.
+  Offering is tied to the model-visible transform: a URL the sanitizer would change is withheld
+  rather than offered, so the model can never copy a URL that differs from the one recorded. Only
+  what the model was shown is attested, so a bound that trims a link also withholds its authority.
+  The first origin wins and is written to the audit on every fetch and navigation, which makes a
+  discovered chain reconstructable hop by hop. The cost is a required origin at every `record` call
+  site and a sanitizer pass per offered URL.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

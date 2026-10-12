@@ -29,7 +29,6 @@ const expectations: readonly Expectation[] = [
       return tables.findIndex((table) => JSON.stringify(table).includes(MULTI_TABLE_ANSWER.cell));
     },
     target: equals(MULTI_TABLE_ANSWER.tableIndex),
-    baseline: equals(null),
     note: 'TODO line 214: `tables[1]` holds the answer cell.',
   },
   {

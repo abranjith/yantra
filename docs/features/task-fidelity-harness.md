@@ -314,8 +314,9 @@ The matchers are small, typed, and printable: `equals`, `atLeast`, `atMost`,
 `includesAll`, `excludesAll`, `matchesShape`, `everyLine`, `count`, and
 `satisfies`. Every failure message includes the measured value.
 
-`PENDING_OWNERS` is the one switch. It currently holds `FEAT-050`, `FEAT-051`,
-`FEAT-052`, and `FEAT-053`. `FEAT-048` has landed, so its targets already gate.
+`PENDING_OWNERS` is the one switch. It currently holds `FEAT-052` and
+`FEAT-053`. `FEAT-048`, `FEAT-050`, and `FEAT-051` have landed, so their targets
+already gate.
 
 | Owner               | What the test asserts                                                                                                                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -357,7 +358,7 @@ Every scenario also carries four cross-cutting expectations:
 | `listing-structured`      | Fetch the JSON-LD listing, then publish                                                                                                                                                                           | `current` 1 (no price in visible text); FEAT-051 1 (six `Product`/`Offer` entities with truth prices)                                                                                                      |
 | `listing-client-rendered` | Fetch the script-rendered listing, then publish                                                                                                                                                                   | `current` 3 (at most one browser launch, all six sellers in the read, one HTTP read and then one browser render); FEAT-051 1                                                                               |
 | `challenge-small`         | Fetch the small interstitial, then publish                                                                                                                                                                        | `current` 3 (never a source, never extracted, HTTP read plus exactly one render); FEAT-050 2 (`SITE_CHALLENGE` failure and a `blocked` notice)                                                             |
-| `challenge-large-main`    | Fetch the large interstitial, then publish                                                                                                                                                                        | FEAT-050 5. The baseline pins G10: today the page reads `ok`, becomes a source, and gets no browser render.                                                                                                |
+| `challenge-large-main`    | Fetch the large interstitial, then publish                                                                                                                                                                        | FEAT-050 5 (G10: read as a challenge, disclosed as `blocked`, never a source, never content, and exactly one standard-browser render)                                                                      |
 | `article`                 | Fetch the article, then publish                                                                                                                                                                                   | `current` 1 (the extracted `text` is byte-identical to `golden/article.txt`); FEAT-051 1 (`shape: 'article'`)                                                                                              |
 | `multi-table`             | Fetch the specification page, then publish                                                                                                                                                                        | `current` 1 (the answer cell reaches the agent); FEAT-051 1 (`tables[1]` holds it)                                                                                                                         |
 | `search-concurrency`      | A parallel pair of `web_search` calls under `challenge-on-concurrency`, then publish                                                                                                                              | `current` 1 (both calls reach the provider); FEAT-048 1 (`SEARCH_BLOCKED`, one warn line, one notice); FEAT-050 2 (peak concurrency 1, no challenges)                                                      |
@@ -365,7 +366,7 @@ Every scenario also carries four cross-cutting expectations:
 | `search-empty-timeout`    | A search that comes back empty, then one that times out, then publish                                                                                                                                             | FEAT-048 3 (`SEARCH_NO_RESULTS` and `SEARCH_TIMEOUT`, distinct model text, two `search_failed` notices)                                                                                                    |
 | `budget-exhaustion`       | `maxNavigations: 2` and a 3-hit search over four fixture hits, then publish                                                                                                                                       | FEAT-048 4 (top-level `budget.exhausted: 'navigations'`, no per-site `blocked` stage, no `blocked` rank signal, one `budget_exhausted` notice from `runtime`)                                              |
 | `repeat-read`             | Fetch the same results URL three times, then publish                                                                                                                                                              | FEAT-048 1 (`run-health.json` `repeat_fetches` equals the server-counted repeats); FEAT-050 2 (one network read, and repeats answer `already_read: "S1"`)                                                  |
-| `hand-assembled-url`      | Fetch a valid detail URL that no result ever offered, then publish                                                                                                                                                | FEAT-051 1 (refused as `URL_NOT_FROM_EVIDENCE` with zero requests; the baseline pins that it is accepted and fetched today)                                                                                |
+| `hand-assembled-url`      | Fetch a valid detail URL that no result ever offered, then publish                                                                                                                                                | FEAT-051 1 (refused as `URL_NOT_FROM_EVIDENCE` with zero requests)                                                                                                                                         |
 
 With the cross-cutting four, the catalogue holds 103 expectations:
 
@@ -378,12 +379,12 @@ With the cross-cutting four, the catalogue holds 103 expectations:
 | `FEAT-052` |            1 |
 | `FEAT-053` |            3 |
 
-The 29 expectations owned by `FEAT-050` through `FEAT-053` each carry a pinned
-baseline.
+The 4 expectations owned by the pending `FEAT-052` and `FEAT-053` each carry a
+pinned baseline. The landed owners carry none.
 
-`listing-table`'s baseline for `no-unreachable-moves` is the exact list
-`awd-facet`, `detail-1`, `detail-2`, `detail-3`. This is gap G3 measured: the
-moves the tools do not offer yet.
+`listing-table`'s `no-unreachable-moves` target is an empty `unreachable` list:
+the AWD facet link and every detail link the script follows are offered by an
+earlier result's `links[]` or `records[]`. This is gap G3 measured.
 
 The catalogue census in `e2e/task-fidelity-harness.spec.ts` checks the
 following:
@@ -482,8 +483,9 @@ example `npx vitest run task-fidelity-harness -t "scorer"`.
 
 ### Land an owning feature
 
-When `FEAT-050` through `FEAT-053` delivers its capability, its final task
-flips the ratchet:
+When a pending owner (`FEAT-052` or `FEAT-053`) delivers its capability, its
+final task flips the ratchet, as `FEAT-048`, `FEAT-050`, and `FEAT-051` already
+have:
 
 1. Remove the owner from `PENDING_OWNERS` in
    `e2e/task-fidelity/expectations.ts`.

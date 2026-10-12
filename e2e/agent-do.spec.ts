@@ -346,15 +346,17 @@ describe('@no-llm yantra do release scenarios', () => {
         await session.call('web_search', { query: 'fixture hostile snippet' });
         await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/hostile.html` });
         await session.call('browser_observe', {});
+        // A URL that only appears in page or snippet text attests nothing (FEAT-051): it is
+        // refused before host policy, the store, or any budget is reached.
         const blocked = await session.call('web_fetch', { url: 'https://foreign.invalid/steal' });
-        expect(blocked.error_code).toBe('URL_HOST_NOT_ALLOWED');
+        expect(blocked.error_code).toBe('URL_NOT_FROM_EVIDENCE');
         await publish(session, [source(1, `${fixtureSite.baseUrl}/hostile.html`)]);
       },
     });
 
     expect(result.outcome.kind).toBe('published');
     expect(result.toolCalls.some((entry) => entry.tool === 'browser_click')).toBe(false);
-    expect(result.toolCalls.some((entry) => entry.error_code === 'URL_HOST_NOT_ALLOWED')).toBe(
+    expect(result.toolCalls.some((entry) => entry.error_code === 'URL_NOT_FROM_EVIDENCE')).toBe(
       true,
     );
   }, 30_000);
