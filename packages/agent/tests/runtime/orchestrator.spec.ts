@@ -202,6 +202,18 @@ function event(type: AgentEvent['type'], fields: Record<string, unknown> = {}): 
   return { type, at: '2026-07-14T12:00:00.000Z', ...fields } as AgentEvent;
 }
 
+/**
+ * A `tool_finished` seam event: `'ok'` and `'denied'` are statuses; anything
+ * else is the error code of a failure.
+ */
+function finished(callId: string, tool: string, outcome: string): AgentEvent {
+  const output =
+    outcome === 'ok' || outcome === 'denied'
+      ? { status: outcome }
+      : { status: 'error', error_code: outcome };
+  return event('tool_finished', { callId, tool, output, isError: outcome !== 'ok' });
+}
+
 /** A ledger entry as the web tools would record it during a run. */
 function evidenceEntry(url: string, title: string): EvidenceEntry {
   return {
@@ -1345,35 +1357,120 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.abortCount).toBe(0);
   });
 
-  it('does not trip the breaker when a success interrupts the failure streak', async () => {
-    const fail = (id: string): AgentEvent =>
-      event('tool_finished', {
-        callId: id,
-        tool: 'browser_click',
-        output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
-        isError: true,
-      });
-    const ok = (id: string): AgentEvent =>
-      event('tool_finished', {
-        callId: id,
-        tool: 'browser_observe',
-        output: { status: 'ok' },
-        isError: false,
-      });
+  it('trips on an observe-ok / click-fails loop: other tools never reset a streak (FEAT-052)', async () => {
+    // Characterization replaced: with one global streak, each browser_observe
+    // success reset the count, so this exact loop — the one the breaker
+    // exists for — never tripped. Streaks are now counted per tool.
     const provider = new FakeAgentProvider({
-      // Two failures, a success (resets the streak), then two more: with two
-      // retries allowed, neither streak reaches the third failing attempt.
-      eventsByRun: [[fail('a'), fail('b'), ok('d'), fail('e'), fail('f')], []],
+      eventsByRun: [
+        [1, 2, 3, 4].flatMap((n) => [
+          finished(`o${n}`, 'browser_observe', 'ok'),
+          finished(`c${n}`, 'browser_click', 'X'),
+        ]),
+        [],
+      ],
       runResult: completed,
     });
 
-    const result = await fixture({ provider, budgets: { toolRetries: 2 } });
+    const result = await fixture({ provider, budgets: { toolRetries: 3 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toContain('browser_click');
+    expect(message).toContain('X');
+    expect(provider.sessions[0]?.runPrompts).toHaveLength(1);
+  });
+
+  it('resets a streak when the same tool succeeds', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'web_search', 'SEARCH_TIMEOUT'),
+          finished('b', 'web_search', 'ok'),
+          finished('c', 'web_search', 'SEARCH_TIMEOUT'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
 
     expect(result.outcome).toMatchObject({
       kind: 'failed',
       error: { code: 'AGENT_COMPLETION_MISSING' },
     });
-    expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+  });
+
+  it('keeps two interleaved failing tools on separate streaks', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a1', 'browser_click', 'X'),
+          finished('b1', 'web_fetch', 'FETCH_TIMEOUT'),
+          finished('a2', 'browser_click', 'X'),
+          finished('b2', 'web_fetch', 'FETCH_TIMEOUT'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 3 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(provider.sessions[0]?.abortCount).toBe(0);
+  });
+
+  it('restarts a tool streak when its error code changes', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'browser_click', 'X'),
+          finished('b', 'browser_click', 'Y'),
+          finished('c', 'browser_click', 'X'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+  });
+
+  it('ignores denied results, which neither count nor reset', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'browser_click', 'X'),
+          finished('d', 'browser_click', 'denied'),
+          finished('b', 'browser_click', 'X'),
+        ],
+      ],
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+  });
+
+  it('trips on the first failure when toolRetries is 0', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[finished('a', 'browser_observe', 'ok'), finished('b', 'browser_click', 'X')]],
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 0 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+    expect(provider.sessions[0]?.abortCount).toBe(1);
   });
 
   it('reads status from a seam-projected web_search success whose text ends a URL at an escaped quote', async () => {

@@ -900,10 +900,12 @@ function createExecutionState(input: {
   let handoff: { blocker: string; safestNextAction: string } | undefined;
   let abortPromise: Promise<void> | undefined;
   let lastResponseText = '';
-  // Stuck-loop breaker: the key of the current run of identical tool failures,
-  // its consecutive count, and the captured detail once the limit trips.
-  let failureStreakKey: string | undefined;
-  let failureStreakCount = 0;
+  // Stuck-loop breaker: per tool, the key of its current run of identical
+  // failures and their count, plus the captured detail once the limit trips.
+  // Counted per tool because parallel and interleaved calls complete in
+  // arbitrary order: with one global streak, any other tool's success reset
+  // it, so an observe-ok / click-fails loop never tripped (FEAT-052).
+  const failureStreaks = new Map<string, { key: string; count: number }>();
   let repeatedFailure: { tool: string; errorCode: string } | undefined;
 
   const interrupt = (reason: string): void => {
@@ -922,24 +924,22 @@ function createExecutionState(input: {
   if (input.request.signal?.aborted) onUserAbort();
   else input.request.signal?.addEventListener('abort', onUserAbort, { once: true });
 
-  // Update the consecutive-identical-failure streak and trip the breaker once it
-  // reaches the limit. A successful call resets the streak (forward progress);
-  // a different failure key restarts the count. Denied/aborted results are
-  // ignored — they are not the impossible-retry pattern this guards against.
+  // Update this tool's identical-failure streak and trip the breaker once it
+  // reaches the limit. A success of the same tool resets its streak (forward
+  // progress); a different failure key restarts the count. Other tools'
+  // outcomes never touch it. Denied/aborted results are ignored — they are not
+  // the impossible-retry pattern this guards against.
   const trackFailureStreak = (tool: string, metadata: ReturnType<typeof toolMetadata>): void => {
     if (metadata.status === 'ok') {
-      failureStreakKey = undefined;
-      failureStreakCount = 0;
+      failureStreaks.delete(tool);
       return;
     }
     if (metadata.status !== 'error') return;
     const key = `${tool}:${metadata.errorCode ?? metadata.summary}`;
-    if (key === failureStreakKey) failureStreakCount += 1;
-    else {
-      failureStreakKey = key;
-      failureStreakCount = 1;
-    }
-    if (failureStreakCount >= input.budgets.toolRetries + 1 && repeatedFailure === undefined) {
+    const previous = failureStreaks.get(tool);
+    const streak = { key, count: previous?.key === key ? previous.count + 1 : 1 };
+    failureStreaks.set(tool, streak);
+    if (streak.count >= input.budgets.toolRetries + 1 && repeatedFailure === undefined) {
       // At the default 3m × (3 retries + first attempt), repeated timeouts land
       // exactly on the 80% wind-down. Let the non-fatal soft deadline win so
       // the next exploration call is refused and the session can publish.
