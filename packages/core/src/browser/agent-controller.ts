@@ -6,7 +6,12 @@ import type { Dialog, ElementHandle, KeyInput, Page as PuppeteerPage } from 'pup
 import { collectComposedInteractables } from '../discovery/composed-handles.js';
 import type { RawInteractable } from '../discovery/interactable-scan.js';
 import { buildAgentPageSnapshot, ensureLocatorRuntime } from '../discovery/observe.js';
-import { ReadabilityExtractor, type Extractor } from '../extraction/index.js';
+import {
+  DEFAULT_MAX_BODY_BYTES,
+  ReadabilityExtractor,
+  normalizeExtractedText,
+  type Extractor,
+} from '../extraction/index.js';
 import { assertReceivable } from '../interaction/capabilities.js';
 import { renderInteractionMessage } from '../interaction/messages.js';
 import {
@@ -57,7 +62,7 @@ import {
   withSetOfMarksCapture,
   type SetOfMarksMark,
 } from './set-of-marks.js';
-import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
+import type { BrowserProvider, BrowserSession, Logger, Page, PageSnapshot } from './types.js';
 
 // Note: page settling (navigation watching, redirect chains, network quiet)
 // and its error classifiers moved to `page-settle.ts` so that deterministic
@@ -1134,27 +1139,55 @@ export class AgentBrowserController implements WidgetPort {
   }
 
   /** Extract readable page content or the first table as typed rows. */
-  public async extract(kind: 'content' | 'table'): Promise<unknown> {
+  /**
+   * The page title and its rendered text, block structure kept: `innerText`
+   * already separates blocks with newlines, and the shared extraction
+   * normalization cleans it exactly as article text is cleaned. Tables,
+   * records, links, and structured data are read from a {@link snapshot}
+   * through the core page analyzer instead (one grammar for every read path).
+   */
+  public async extract(_kind: 'content'): Promise<{ title: string; text: string }> {
     this.assertLaunched();
     await this.awaitReadable();
-    if (kind === 'content') {
-      return this.page!.evaluate(() => ({
+    const raw = await this.page!.evaluate(() => ({
+      title: document.title,
+      text: document.body?.innerText ?? '',
+    }));
+    return { title: raw.title, text: normalizeExtractedText(raw.text) };
+  }
+
+  /**
+   * Serialize the live page for the core analyzer (FEAT-051), in one
+   * `evaluate`: the document's `outerHTML`, title, rendered text, and URL. The
+   * HTML is capped at the HTTP fetcher's body limit, so a live read can never
+   * hand the analyzer more than a fetched read could; `truncated` says when
+   * the cap cut it.
+   */
+  public async snapshot(): Promise<PageSnapshot> {
+    this.assertLaunched();
+    await this.awaitReadable();
+    const cap = DEFAULT_MAX_BODY_BYTES;
+    const raw = await this.page!.evaluate((limit: number) => {
+      const html = document.documentElement.outerHTML;
+      return {
+        url: location.href,
         title: document.title,
-        text: (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim(),
-      }));
-    }
-    return this.page!.evaluate(() => {
-      const table = document.querySelector('table');
-      if (!table) return { headers: [], rows: [] };
-      const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
-        Array.from(row.querySelectorAll('th,td')).map((cell) =>
-          (cell.textContent ?? '').replace(/\s+/g, ' ').trim(),
-        ),
-      );
-      const first = rows[0] ?? [];
-      const hasHeaders = table.querySelector('thead, tr th') !== null;
-      return { headers: hasHeaders ? first : [], rows: hasHeaders ? rows.slice(1) : rows };
-    });
+        // Characters never outnumber UTF-8 bytes, so this slice keeps at
+        // least the capped prefix; the byte cut happens on the Node side.
+        html: html.length > limit ? html.slice(0, limit) : html,
+        length: html.length,
+        visibleText: document.body?.innerText ?? '',
+      };
+    }, cap);
+    const bytes = Buffer.from(raw.html, 'utf8');
+    const cut = bytes.length > cap || raw.length > raw.html.length;
+    return {
+      url: raw.url,
+      title: raw.title,
+      html: bytes.length > cap ? truncateUtf8(bytes, cap) : raw.html,
+      visibleText: raw.visibleText,
+      truncated: cut,
+    };
   }
 
   /** Live page URL, or `''` before the first navigation. */
@@ -1749,4 +1782,12 @@ function pngDimensions(bytes: Uint8Array): { readonly width: number; readonly he
   const height = view.readUInt32BE(20);
   if (width <= 0 || height <= 0) throw new Error('Chrome returned invalid PNG dimensions.');
   return { width, height };
+}
+
+/** Cut UTF-8 bytes to at most `max`, backing off to a character boundary. */
+function truncateUtf8(bytes: Buffer, max: number): string {
+  let end = max;
+  // Continuation bytes are 0b10xxxxxx; never split a character.
+  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString('utf8');
 }

@@ -171,7 +171,8 @@ export type PageView = 'full' | 'summary';
 
 /** The page to project and its identity. */
 export interface ProjectPageInput {
-  readonly sourceId: string;
+  /** The page's evidence ID; null for a live page that is not a source (no http(s) URL). */
+  readonly sourceId: string | null;
   readonly url: string;
   readonly title: string | null;
   readonly page: StoredPage;
@@ -266,7 +267,11 @@ export async function projectPage(
   };
 
   const allRecords = analysis.records.map((record) =>
-    recordWire(record, `${input.sourceId}#r${anchors.get(record.key) ?? 0}`, offer),
+    recordWire(
+      record,
+      input.sourceId === null ? null : `${input.sourceId}#r${anchors.get(record.key) ?? 0}`,
+      offer,
+    ),
   );
   const allLinks = analysis.links.map((link) => ({
     text: link.text,
@@ -324,7 +329,7 @@ export async function projectPage(
       fields: want('fields') ? fields : {},
     };
     const model: Record<string, unknown> = {
-      source_id: input.sourceId,
+      ...(input.sourceId === null ? {} : { source_id: input.sourceId }),
       url: input.url,
       title: input.title,
       shape: analysis.shape,
@@ -415,10 +420,14 @@ export async function projectPage(
 /** A record's wire form; empty members are omitted and a repeated field label gets ` (2)`. */
 function recordWire(
   record: PageRecord,
-  id: string,
+  id: string | null,
   offer: (url: string | null) => string | null,
 ): Record<string, unknown> {
-  const wire: Record<string, unknown> = { id, title: record.title, url: offer(record.url) };
+  const wire: Record<string, unknown> = {
+    ...(id === null ? {} : { id }),
+    title: record.title,
+    url: offer(record.url),
+  };
   if (record.segments.length > 0) wire.text = [...record.segments];
   if (record.fields.length > 0) wire.fields = fieldRecord(record.fields);
   if (record.numbers.length > 0) {

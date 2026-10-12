@@ -20,8 +20,11 @@
  * digest is a fact the caller can report, a thrown error is not.
  */
 
+import type { PageSnapshot } from '../browser/types.js';
+
 import { normalizeExtractedText } from './html-to-text.js';
-import type { Extractor } from './readability.js';
+import type { PageExtraction } from './page/types.js';
+import type { Extractor, PageExtractor } from './readability.js';
 import type { ExtractedArticle, FetchedDoc } from './types.js';
 
 /** Injected stage dependency — the same {@link Extractor} the fetch path uses. */
@@ -106,6 +109,27 @@ export async function extractLivePageText(
     return readable;
   }
   return normalizeExtractedText(source.visibleText ?? '');
+}
+
+/**
+ * Reads a live page's shape through the same analyzer `web_fetch` uses
+ * (FEAT-051): the no-fetch sibling of a shape-aware fetch. The snapshot is
+ * wrapped as a browser-mode {@link FetchedDoc} and handed to `extractPage`,
+ * so records, links, tables, and structured data from a live page follow
+ * exactly one grammar. A snapshot cut at the byte cap is reported in
+ * coverage.
+ *
+ * @param deps - The shape-aware extractor.
+ * @param snapshot - The serialized live page.
+ * @returns The article (null when there is none) and the page analysis.
+ */
+export async function analyzeLivePage(
+  deps: { readonly extractor: PageExtractor },
+  snapshot: PageSnapshot,
+): Promise<PageExtraction> {
+  return deps.extractor.extractPage(toFetchedDoc({ url: snapshot.url, html: snapshot.html }), {
+    truncated: snapshot.truncated,
+  });
 }
 
 /**

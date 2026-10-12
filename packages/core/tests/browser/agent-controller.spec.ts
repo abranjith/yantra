@@ -280,6 +280,16 @@ describe('@no-llm AgentBrowserController', () => {
           </script>`);
         return;
       }
+      if (path === '/two-tables') {
+        // FEAT-051: a page whose answer is in its second table.
+        response.end(`<!doctype html><title>Specs</title><main>
+          <p>First paragraph of prose.</p>
+          <p>Second paragraph of prose.</p>
+          <table><tr><th>Day</th><th>Opens</th></tr><tr><td>Mon</td><td>9:00</td></tr></table>
+          <table><tr><th>Trim</th><th>Towing</th></tr><tr><td>Summit</td><td>4,500 lb</td></tr></table>
+          </main>`);
+        return;
+      }
       if (path === '/tall') {
         response.end(`<!doctype html><title>Tall</title>
           <div style="height:3000px"></div>
@@ -1131,6 +1141,42 @@ describe('@no-llm AgentBrowserController', () => {
 
     await controller.teardown();
   }, 240_000);
+
+  it('snapshots the live page in one evaluate, with every table in its HTML (FEAT-051)', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'snapshot-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/two-tables`);
+
+    const snapshot = await controller.snapshot();
+
+    expect(snapshot.url).toBe(`${baseUrl}/two-tables`);
+    expect(snapshot.title).toBe('Specs');
+    expect(snapshot.truncated).toBe(false);
+    expect(snapshot.html.match(/<table>/gu)).toHaveLength(2);
+    expect(snapshot.html).toContain('4,500 lb');
+    expect(snapshot.visibleText).toContain('Second paragraph of prose.');
+    await controller.teardown();
+  }, 45_000);
+
+  it('keeps paragraph breaks in content text (FEAT-051)', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'content-blocks-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    await controller.navigate(`${baseUrl}/two-tables`);
+
+    const content = await controller.extract('content');
+
+    expect(content.title).toBe('Specs');
+    expect(content.text).toMatch(/First paragraph of prose\.\n+Second paragraph of prose\./u);
+    await controller.teardown();
+  }, 45_000);
 
   it('selects dropdown options by label or value and rejects unknown options', async () => {
     const tracked = trackingProvider();

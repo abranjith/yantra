@@ -14,6 +14,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/browser-extract.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
       "status": "M",
       "role": "implement",
@@ -176,10 +182,28 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/browser/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/extraction/document-store.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/extraction/fetcher.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/extraction/html-to-text.ts",
@@ -192,6 +216,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/extraction/live-page.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/extraction/page/analyze.ts",
@@ -264,6 +294,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/extraction/__fixtures__/goldens/article.json",
@@ -360,6 +396,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/extraction/live-page.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/extraction/page/analyze.spec.ts",

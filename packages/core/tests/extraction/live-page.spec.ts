@@ -7,7 +7,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { extractLivePageArticle, extractLivePageText } from '../../src/extraction/live-page.js';
+import {
+  analyzeLivePage,
+  extractLivePageArticle,
+  extractLivePageText,
+} from '../../src/extraction/live-page.js';
 import { ReadabilityExtractor, type Extractor } from '../../src/extraction/readability.js';
 import type { ExtractedArticle, FetchedDoc } from '../../src/extraction/types.js';
 
@@ -161,3 +165,52 @@ describe('@no-llm extraction/live-page', () => {
 function extractorless(): { readonly extractor: Extractor } {
   return { extractor: extractorReturning(null) };
 }
+
+describe('@no-llm extraction/live-page analyzeLivePage (FEAT-051)', () => {
+  const extractor = new ReadabilityExtractor();
+  const TWO_TABLES =
+    '<html><head><title>Specs</title></head><body><main><h1>Specs</h1>' +
+    '<table><tr><th>Day</th><th>Opens</th></tr><tr><td>Mon</td><td>9:00</td></tr><tr><td>Tue</td><td>9:00</td></tr><tr><td>Wed</td><td>9:00</td></tr></table>' +
+    '<table><tr><th>Trim</th><th>Towing</th></tr><tr><td>Base</td><td>1,500 lb</td></tr><tr><td>Ridge</td><td>3,500 lb</td></tr><tr><td>Summit</td><td>4,500 lb</td></tr></table>' +
+    '</main></body></html>';
+
+  it('reads a snapshot through the same analyzer as a fetch, in browser mode', async () => {
+    const snapshot = {
+      url: 'https://specs.test/page',
+      title: 'Specs',
+      html: TWO_TABLES,
+      visibleText: '',
+      truncated: false,
+    };
+    const live = await analyzeLivePage({ extractor }, snapshot);
+    const fetched = await extractor.extractPage({
+      url: snapshot.url,
+      finalUrl: snapshot.url,
+      fetchedAt: 'x',
+      contentType: 'text/html',
+      html: TWO_TABLES,
+      statusCode: 200,
+      fetchMode: 'browser',
+      elapsedMs: 0,
+    });
+
+    expect(live.page.tables).toHaveLength(2);
+    expect(live.page.tables[1]?.rows).toContainEqual(['Summit', '4,500 lb']);
+    expect(live.page.coverage.fetch_mode).toBe('browser');
+    expect(live.page).toEqual(fetched.page);
+  });
+
+  it('reports a snapshot cut at the byte cap in coverage', async () => {
+    const live = await analyzeLivePage(
+      { extractor },
+      {
+        url: 'https://specs.test/page',
+        title: 'Specs',
+        html: TWO_TABLES,
+        visibleText: '',
+        truncated: true,
+      },
+    );
+    expect(live.page.coverage.omitted).toContainEqual({ id: 'snapshot-truncated', count: 1 });
+  });
+});

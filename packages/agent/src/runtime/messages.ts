@@ -515,8 +515,25 @@ export const AGENT_INTERACTION_MESSAGES = [
     'INVALID_INPUT',
     'extraction-kind',
     (details) =>
-      `"${text(details.kind).slice(0, 40)}" is not a supported extraction kind. Retry with kind:"content" for the page title and readable text, or kind:"table" for the first table.`,
+      `"${text(details.kind).slice(0, 40)}" is not a supported extraction kind. Retry with ` +
+      'kind:"content" for the title and readable text, "records" for repeated listing or ' +
+      'result items, "links" for pagination, facet, and detail links, "structured" for ' +
+      'schema.org data, "tables" for every table, or "table" with index:n for one table.',
     ['kind'],
+    'browser_extract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'table-index',
+    (details) => {
+      const count = Number(details.count);
+      return count === 0
+        ? 'The page has no tables, so there is no table to read. Use kind:"content" for its text or kind:"records" for repeated items.'
+        : `The page has ${text(details.count)} tables (index 0 to ${count - 1}); index ${text(details.index)} is out of range. ` +
+            'Retry kind:"table" with an index in that range, or kind:"tables" for all of them.';
+    },
+    ['count', 'index'],
+    'browser_extract',
   ),
   middleware('INVALID_INPUT', 'schema-validation', passThrough, ['message']),
   middleware(

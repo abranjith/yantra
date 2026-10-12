@@ -1,7 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { AgentBrowserController } from '@yantra/core';
+import {
+  analyzeLivePage,
+  classifyResponse,
+  type AgentBrowserController,
+  type PageAnalysis,
+  type PageLink,
+} from '@yantra/core';
 import { generateUlid } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
@@ -10,9 +16,21 @@ import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import { browserController, browserFailure, isDomainFailure } from './browser-common.js';
+import {
+  evidenceExcerpt,
+  fullViewBudget,
+  projectPage,
+  recordDiscovered,
+  type ProjectPageInput,
+} from './page-payload.js';
 
-/** The two extractions the controller supports. */
-type ExtractionKind = 'content' | 'table';
+/**
+ * What `browser_extract` can read from the live page (FEAT-051). `content` is
+ * the rendered title and text; every other kind is read from a snapshot of the
+ * page through the same core analyzer `web_fetch` uses, so a record, link, or
+ * table means the same thing on both paths.
+ */
+type ExtractionKind = 'content' | 'records' | 'links' | 'structured' | 'tables' | 'table';
 
 /**
  * Canonical kinds plus the near-miss words models actually emit.
@@ -34,8 +52,18 @@ const EXTRACTION_KINDS: Readonly<Record<string, ExtractionKind>> = {
   readable: 'content',
   readable_content: 'content',
   page_content: 'content',
+  records: 'records',
+  listings: 'records',
+  items: 'records',
+  results: 'records',
+  links: 'links',
+  urls: 'links',
+  structured: 'structured',
+  json_ld: 'structured',
+  jsonld: 'structured',
+  schema: 'structured',
+  tables: 'tables',
   table: 'table',
-  tables: 'table',
   first_table: 'table',
 };
 
@@ -45,8 +73,17 @@ const BrowserExtractParams = Type.Object(
       Type.String({
         maxLength: 64,
         description:
-          'What to extract: "content" for the page title plus readable text (the default), ' +
-          'or "table" for the first table as headers/rows. Omit it to get "content".',
+          'What to read from the current page: "content" (title + readable text, the default), ' +
+          '"records" (repeated listing/result items), "links" (pagination, facet, and detail ' +
+          'links), "structured" (schema.org data), "tables" (every table), or "table" with ' +
+          '"index" (one table by its 0-based position).',
+      }),
+    ),
+    index: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        maximum: 1000,
+        description: 'With kind "table": which table, counting from 0 in page order.',
       }),
     ),
   },
@@ -54,14 +91,26 @@ const BrowserExtractParams = Type.Object(
 );
 type Params = Static<typeof BrowserExtractParams>;
 
+/** The resolved request: a kind, and for `table` the index (0 for `first_table`). */
+interface ResolvedKind {
+  readonly kind: ExtractionKind;
+  readonly index: number;
+}
+
+/** A request for a part of the analyzed page (every kind but `content`). */
+interface PartRequest extends ResolvedKind {
+  readonly kind: Exclude<ExtractionKind, 'content'>;
+}
+
 /** Resolve a model-supplied kind to a canonical one; null when unsupported. */
-function resolveKind(raw: string | undefined): ExtractionKind | null {
-  if (raw === undefined) return 'content';
+function resolveKind(raw: string | undefined, index: number | undefined): ResolvedKind | null {
+  if (raw === undefined) return { kind: 'content', index: 0 };
   const normalized = raw
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
-  return EXTRACTION_KINDS[normalized] ?? null;
+  const kind = EXTRACTION_KINDS[normalized];
+  return kind === undefined ? null : { kind, index: index ?? 0 };
 }
 
 /** Build the typed current-page extraction tool. */
@@ -72,7 +121,12 @@ export function browserExtractSpec(
     name: 'browser_extract',
     label: 'Browser Extract',
     description:
-      'Extract readable content or the first table from the current page with a validated result shape. Call it after navigation/observation with kind:"content" (page title + readable text, also the default when kind is omitted) or kind:"table" (first table as headers/rows). Do NOT pass any other kind, arbitrary selectors, or ask for unsanitized page source.',
+      'Read the current page with a validated result shape. kind:"content" (the default) returns ' +
+      'the title and readable text; kind:"records" returns repeated listing or result items; ' +
+      'kind:"links" returns the pagination, facet, and detail links the page offers; ' +
+      'kind:"structured" returns schema.org data; kind:"tables" returns every table, and ' +
+      'kind:"table" with index:n returns one. Every kind except links records the page as a ' +
+      'source. Do NOT pass arbitrary selectors or ask for unsanitized page source.',
     parameters: BrowserExtractParams,
     sanitizationProfile: 'public',
     budgetMeter: true,
@@ -83,8 +137,8 @@ export function browserExtractSpec(
 async function runExtract(params: Params, services: RunServices): Promise<DomainResult> {
   // Input first: an unsupported kind is the model's mistake to correct, and it
   // must be reported the same way whether or not a browser is configured.
-  const kind = resolveKind(params.kind);
-  if (kind === null)
+  const resolved = resolveKind(params.kind, params.index);
+  if (resolved === null)
     return {
       ok: false,
       errorCode: 'INVALID_INPUT',
@@ -104,33 +158,43 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
           message: renderAgentMessage('tool', 'BROWSER_UNAVAILABLE', 'services-missing'),
           retryable: false,
         };
+  if (resolved.kind === 'content') return extractContent(controller, services);
+  return extractPart({ kind: resolved.kind, index: resolved.index }, controller, services);
+}
+
+/** `content`: the rendered title and block-structured text. */
+async function extractContent(
+  controller: AgentBrowserController,
+  services: RunServices,
+): Promise<DomainResult> {
+  const deps = services.domain.browser;
   const host = controller.host();
   let extracted: unknown;
   try {
-    extracted = await controller.extract(kind);
+    extracted = await controller.extract('content');
   } catch (error) {
     return browserFailure(error);
   }
-  if (!validExtraction(kind, extracted))
+  if (!validContent(extracted))
     return {
       ok: false,
       errorCode: 'EXTRACTION_SCHEMA_INVALID',
       message: renderAgentMessage('tool', 'EXTRACTION_SCHEMA_INVALID', 'invalid-extraction', {
-        kind,
+        kind: 'content',
       }),
       retryable: true,
     };
   services.trace?.append({
     kind: 'extract',
     host,
-    extractionKind: kind,
+    extractionKind: 'content',
     requires_confirmation: false,
   });
-  const sourceId = recordEvidence(kind, extracted, controller, services);
+  const sourceId = recordContentEvidence(extracted, controller, services);
   const identity = sourceId === null ? {} : { source_id: sourceId };
   const serialized = JSON.stringify(extracted);
-  if (Buffer.byteLength(serialized, 'utf8') <= deps.captureThresholdBytes)
-    return { ok: true, model: { ...(extracted as Record<string, unknown>), ...identity } };
+  if (deps === null || Buffer.byteLength(serialized, 'utf8') <= deps.captureThresholdBytes)
+    return { ok: true, model: { ...extracted, ...identity } };
   const captureRef = `cap-${generateUlid()}`;
   const captureDir = join(services.runDir, 'captures');
   await mkdir(captureDir, { recursive: true });
@@ -140,47 +204,208 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
   });
   return {
     ok: true,
-    model: { capture_ref: captureRef, preview: previewExtraction(kind, extracted), ...identity },
+    model: {
+      capture_ref: captureRef,
+      preview: { title: extracted.title, text: extracted.text.slice(0, EVIDENCE_EXCERPT_CHARS) },
+      ...identity,
+    },
     details: { capture_ref: captureRef },
   };
 }
 
-/** Bytes of extracted page text offered as the ledger excerpt (it bounds it further). */
+/**
+ * Every other kind: snapshot → challenge check → the core analyzer → the
+ * run's document store → the requested part of the full view.
+ */
+async function extractPart(
+  resolved: PartRequest,
+  controller: AgentBrowserController,
+  services: RunServices,
+): Promise<DomainResult> {
+  const host = controller.host();
+  let snapshot;
+  try {
+    snapshot = await controller.snapshot();
+  } catch (error) {
+    return browserFailure(error);
+  }
+
+  // A challenge page is never extracted, on any path (memory: a challenge seen
+  // in the browser is terminal for that URL — no evidence, a handoff).
+  const classified = classifyResponse({ html: snapshot.html, contentType: 'text/html' });
+  if (classified.kind === 'challenge') {
+    return {
+      ok: false,
+      errorCode: 'SITE_CHALLENGE',
+      message: renderAgentMessage('tool', 'SITE_CHALLENGE', 'challenge', { host }),
+      retryable: false,
+      details: { host, tier: 'browser', handoff: true, marker: classified.marker },
+    };
+  }
+
+  const extraction = await analyzeLivePage(
+    { extractor: services.domain.fetch.extractor },
+    snapshot,
+  );
+  const page = extraction.page;
+
+  if (resolved.kind === 'table' && resolved.index >= page.tables.length) {
+    return {
+      ok: false,
+      errorCode: 'INVALID_INPUT',
+      message: renderAgentMessage('tool', 'INVALID_INPUT', 'table-index', {
+        count: page.tables.length,
+        index: resolved.index,
+      }),
+      retryable: true,
+      details: { count: page.tables.length },
+    };
+  }
+
+  services.trace?.append({
+    kind: 'extract',
+    host,
+    extractionKind: replayableKind(resolved),
+    requires_confirmation: false,
+  });
+
+  // The live page is a source when it has an http(s) URL. The store keeps its
+  // anchors, so re-reading the page never renumbers a record already cited.
+  const isWebPage = /^https?:\/\//iu.test(snapshot.url);
+  const record = isWebPage
+    ? services.documents.observe(snapshot.url, {
+        title: snapshot.title.length > 0 ? snapshot.title : null,
+        tool: 'browser_extract',
+      })
+    : null;
+  const article =
+    extraction.article === null
+      ? null
+      : { byline: extraction.article.byline, publishedAt: extraction.article.publishedAt };
+  const stored =
+    record === null
+      ? null
+      : services.documents.attachPage(record.sourceId, page, { delivered: 'full', article });
+
+  const view = viewFor(resolved, page);
+  const input: ProjectPageInput = {
+    sourceId: record?.sourceId ?? null,
+    url: snapshot.url,
+    title: snapshot.title.length > 0 ? snapshot.title : null,
+    page: {
+      analysis: view,
+      anchors: stored?.anchors ?? new Map(page.records.map((entry, at) => [entry.key, at + 1])),
+      article,
+      delivered: 'full',
+    },
+  };
+  const projection = await projectPage(
+    input,
+    'full',
+    fullViewBudget(services.budgets.maxBytesPerResult),
+    services,
+    new Set([PART_OF[resolved.kind]]),
+  );
+  if (record !== null) recordDiscovered(services, record.sourceId, projection.model);
+
+  // Every kind but links is evidence: the page was read for its content.
+  if (record !== null && resolved.kind !== 'links') {
+    services.evidence.add({
+      url: snapshot.url,
+      finalUrl: null,
+      title: snapshot.title.length > 0 ? snapshot.title : null,
+      excerpt: evidenceExcerpt(page, extraction.article?.excerpt ?? null),
+      fetchedAt: services.nowIso(),
+      publishedAt: extraction.article?.publishedAt ?? null,
+      tool: 'browser_extract',
+      sourceId: record.sourceId,
+    });
+  }
+  return {
+    ok: true,
+    model: projection.model,
+    details: {
+      kind: resolved.kind,
+      shape: page.shape,
+      ...(record === null ? {} : { source_id: record.sourceId }),
+      ...(projection.analysisCaptureRef === null
+        ? {}
+        : { analysis_capture_ref: projection.analysisCaptureRef }),
+    },
+  };
+}
+
+/**
+ * The read a promoted workflow can replay for this request. Replay reads
+ * readable content or the first table, so only `table` at index 0 promotes
+ * as a table; every other kind promotes as the page's readable content (which
+ * holds its text, cards, and tables), never as the wrong table.
+ */
+function replayableKind(resolved: PartRequest): 'content' | 'table' {
+  return resolved.kind === 'table' && resolved.index === 0 ? 'table' : 'content';
+}
+
+/** The view part each kind returns. */
+const PART_OF: Readonly<
+  Record<Exclude<ExtractionKind, 'content'>, 'records' | 'links' | 'structured' | 'tables'>
+> = {
+  records: 'records',
+  links: 'links',
+  structured: 'structured',
+  tables: 'tables',
+  table: 'tables',
+};
+
+/**
+ * The analysis a kind projects. `links` carries record links too, kind
+ * `record`, because no records accompany it; `table` carries the one table.
+ */
+function viewFor(resolved: PartRequest, page: PageAnalysis): PageAnalysis {
+  if (resolved.kind === 'table') {
+    const table = page.tables[resolved.index];
+    return { ...page, tables: table === undefined ? [] : [table] };
+  }
+  if (resolved.kind !== 'links') return page;
+  const recordLinks: PageLink[] = page.records
+    .filter((entry): entry is typeof entry & { url: string } => entry.url !== null)
+    .map((entry) => ({ text: entry.title ?? '', url: entry.url, kind: 'record', sameSite: true }));
+  const leading = page.links.filter((link) => link.kind === 'pagination' || link.kind === 'facet');
+  const trailing = page.links.filter((link) => link.kind !== 'pagination' && link.kind !== 'facet');
+  return { ...page, links: [...leading, ...recordLinks, ...trailing].slice(0, MAX_EXTRACT_LINKS) };
+}
+
+/** Links a `links` read returns, record links included (the page-link bound). */
+const MAX_EXTRACT_LINKS = 40;
+
+/** Characters of page text offered as the ledger excerpt (it bounds it further). */
 const EVIDENCE_EXCERPT_CHARS = 1_000;
 
 /**
- * Record a read page as ledger evidence, so `result_publish` attaches it as a
- * Brief source, and return its run-wide evidence ID (FEAT-050).
+ * Record a `content` read as ledger evidence, so `result_publish` attaches it
+ * as a Brief source, and return its run-wide evidence ID (FEAT-050).
  *
  * A browser-driven run reads its answer off pages it clicked through to; before
  * this, only `web_search`/`web_fetch` fed the ledger, so such a run published
  * the search hop (or nothing) as its sources while every fact came from the
- * extracted page. Only `content` extractions qualify: a `table` extraction
- * carries no page title or prose to excerpt, and the page it came from is
- * recorded when the agent reads its content.
+ * extracted page.
  *
  * Best-effort by design — an unusable URL (no navigation yet, a `data:`/blank
  * page) is skipped rather than turned into a junk source, and never fails the
- * extraction the agent asked for.
- *
- * The ID comes from the run document store's `observe`, which never fetches:
- * the page is already on screen. A page `web_fetch` or `web_search` read keeps
- * the ID they minted. A `table` extraction only reports the ID of a page
- * already recorded, so tables alone still never create a source. The result
- * is never `already_read`: the live page may have changed since it was read.
+ * extraction the agent asked for. The ID comes from the run document store's
+ * `observe`, which never fetches: the page is already on screen. A page
+ * `web_fetch` or `web_search` read keeps the ID they minted. The result is
+ * never `already_read`: the live page may have changed since it was read.
  *
  * @returns The page's evidence ID, or null when none applies.
  */
-function recordEvidence(
-  kind: ExtractionKind,
-  extracted: unknown,
+function recordContentEvidence(
+  extracted: { readonly title: string; readonly text: string },
   controller: AgentBrowserController,
   services: RunServices,
 ): string | null {
   const url = controller.url();
   if (!/^https?:\/\//iu.test(url)) return null;
-  if (kind !== 'content') return services.documents.lookup(url)?.sourceId ?? null;
-  const { title, text } = extracted as { title: string; text: string };
+  const { title, text } = extracted;
   const record = services.documents.observe(url, {
     title: title.length > 0 ? title : null,
     tool: 'browser_extract',
@@ -198,22 +423,8 @@ function recordEvidence(
   return record.sourceId;
 }
 
-function validExtraction(kind: ExtractionKind, value: unknown): boolean {
+function validContent(value: unknown): value is { title: string; text: string } {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
-  if (kind === 'content')
-    return typeof record.title === 'string' && typeof record.text === 'string';
-  return (
-    Array.isArray(record.headers) &&
-    record.headers.every((cell) => typeof cell === 'string') &&
-    Array.isArray(record.rows) &&
-    record.rows.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === 'string'))
-  );
-}
-
-function previewExtraction(kind: ExtractionKind, value: unknown): unknown {
-  const record = value as { title?: string; text?: string; headers?: unknown[]; rows?: unknown[] };
-  return kind === 'content'
-    ? { title: record.title, text: record.text?.slice(0, 1_000) }
-    : { headers: record.headers, rows: record.rows?.slice(0, 5) };
+  return typeof record.title === 'string' && typeof record.text === 'string';
 }
