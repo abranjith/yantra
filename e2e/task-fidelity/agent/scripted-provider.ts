@@ -114,6 +114,8 @@ export interface ScriptReport {
   readonly turns: number;
   /** The tool catalog the run's profile gave the agent, sorted by name. */
   readonly registeredTools: readonly string[];
+  /** The first prompt the run sent: the per-run user prompt. Null before the run. */
+  readonly prompt: string | null;
 }
 
 /** Zero-cost usage for a scripted turn, so turn accounting runs its real path. */
@@ -126,6 +128,7 @@ export class ScriptedAgentProvider implements AgentProvider {
   private readonly skippedSteps: string[] = [];
   private turnCount = 0;
   private catalog: readonly string[] = [];
+  private firstPrompt: string | null = null;
 
   /**
    * @param services The run's services (from `createProvider`).
@@ -146,6 +149,7 @@ export class ScriptedAgentProvider implements AgentProvider {
       skipped: [...this.skippedSteps],
       turns: this.turnCount,
       registeredTools: this.catalog,
+      prompt: this.firstPrompt,
     };
   }
 
@@ -233,11 +237,12 @@ export class ScriptedAgentProvider implements AgentProvider {
       },
       abort: () => Promise.resolve(),
       close: () => Promise.resolve(),
-      run: async (): Promise<AgentRunResult> => {
+      run: async (prompt: string): Promise<AgentRunResult> => {
         // Only the first prompt plays the script. A later prompt is the
         // completion nudge: the script must publish on its own, and an
         // unpublished script stays unpublished — that is a measurement too.
         if (prompts++ > 0) return { outcome: 'completed', stopReason: 'stop', usage: { turns: 0 } };
+        this.firstPrompt = prompt;
         for (const step of this.script) {
           await execute(step);
           this.turnCount += 1;

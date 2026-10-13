@@ -28,6 +28,7 @@ import { browserObserveSpec } from './browser-observe.js';
 import { browserScreenshotSpec } from './browser-screenshot.js';
 import { resultPublishSpec } from './result-publish.js';
 import { scriptRunSpec } from './script-run.js';
+import { taskContractSpec } from './task-contract.js';
 import { webFetchSpec } from './web-fetch.js';
 import { webSearchSpec } from './web-search.js';
 import { workflowRunSpec } from './workflow-run.js';
@@ -36,6 +37,7 @@ export {
   createBriefPublisher,
   createTemplatedReportPublisher,
   evidenceToSourceRecords,
+  runtimeFactsFor,
   type BriefPublisherContext,
   type TemplatedReportPublisherContext,
 } from './result-publish.js';
@@ -52,6 +54,7 @@ export { browserFillFormSpec } from './browser-fill-form.js';
 export { browserNavigateSpec } from './browser-navigate.js';
 export { browserObserveSpec } from './browser-observe.js';
 export { browserScreenshotSpec } from './browser-screenshot.js';
+export { taskContractSpec } from './task-contract.js';
 export { workflowRunSpec } from './workflow-run.js';
 
 /**
@@ -83,6 +86,7 @@ export function buildYantraWrappedTools(
     wrapTool(scriptRunSpec(toolServices), toolServices),
     wrapTool(workflowRunSpec(toolServices), toolServices),
     wrapTool(resultPublishSpec(toolServices), toolServices),
+    wrapTool(taskContractSpec(toolServices), toolServices),
   ];
 
   const allowed = profile ? new Set<YantraToolName>(profile.toolNames) : null;

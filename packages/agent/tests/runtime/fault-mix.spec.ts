@@ -53,6 +53,7 @@ import { runAgenticTask, type AgenticRunEnvironment } from '../../src/runtime/or
 import type { AgenticTaskOutcome } from '../../src/runtime/outcome.js';
 import type { RunServices } from '../../src/runtime/run-services.js';
 import { RunRuntimeLog } from '../../src/runtime/runtime-log.js';
+import { MISSING_CONTRACT_REASON } from '../../src/runtime/task-contract.js';
 import { articlePageAnalysis, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 
 const CANARIES = {
@@ -403,6 +404,8 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
     if (!brief.isOk) return;
     expect(brief.value.metadata.search_provider).toBe('duckduckgo');
     expect(brief.value.notices).toEqual([
+      // The run declared no task contract, which leads the runtime facts (FEAT-052).
+      { kind: 'other', source: 'task-contract', reason: MISSING_CONTRACT_REASON },
       {
         kind: 'search_failed',
         source: 'search:duckduckgo',
@@ -447,7 +450,7 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
       source_failures: { fetch: 0, extract: 0, blocked: 0, budget: 2, policy: 0 },
       budgets: { navigations_used: 5, navigations_limit: 5, exhausted: ['navigations'] },
       tool_failures: { total: 4 },
-      notices: 3,
+      notices: 4,
     });
     expect(await readText(runDir, 'report.md')).toContain('## Run Health');
 

@@ -53,9 +53,11 @@ follows the composer when a later feature rewires it.
 Each run also has these fixed settings:
 
 - The command profile comes from
-  `resolveCommandTaskProfile(scenario.command, {})`, which is given an empty
-  environment. A developer's `YANTRA_AGENT_RESEARCH_BROWSE` therefore cannot
-  change a measurement.
+  `resolveCommandTaskProfile(scenario.command, { browse: scenario.browse ?? true })`.
+  The catalog is decided by the scenario alone: a `research` scenario gets the
+  read-only browser tools, as the product default does, unless it sets
+  `browse: false`. Nothing in the environment can change the catalog, so a
+  developer's shell cannot change a measurement.
 - The location grant is on, and screenshots are off.
 - `urlPolicyConfig` allows plain HTTP (`requireHttps: false`).
 - A silent, non-interactive connector denies every confirmation request.
@@ -275,7 +277,7 @@ object is everything an expectation or score may read:
 
 - `outcome` and `runDir`.
 - `artifacts`: `manifest.json`, `brief.json`, `document.json`, `usage.json`,
-  `run-health.json`, `report.md`, plus `tool-calls.jsonl`, `events.jsonl`, and
+  `run-health.json`, `contract.json`, `report.md`, plus `tool-calls.jsonl`, `events.jsonl`, and
   `runtime.jsonl`. Artifacts are read tolerantly:
   - An absent file is `null`, never a throw.
   - A JSON file that does not parse is `null` and is named in
@@ -284,6 +286,10 @@ object is everything an expectation or score may read:
     reported.
 - `toolResults`, `unreachable`, `skipped`, and `registeredTools`. These come
   from the scripted agent, so they are empty in agentic mode.
+- `prompt`: the per-run user prompt the scripted agent received, or `null` in
+  agentic mode.
+- `progress`: every progress event the run sent its connector, in order, such
+  as `contract_declared`.
 - `requests`, `searchCalls`, `searchPeakConcurrency`, `browserLaunches`,
   `rankSignals`, and `egress`: the harness's own independent counts.
 - `canaryHits`: every run file whose bytes contain a planted canary, from a
@@ -314,8 +320,8 @@ The matchers are small, typed, and printable: `equals`, `atLeast`, `atMost`,
 `includesAll`, `excludesAll`, `matchesShape`, `everyLine`, `count`, and
 `satisfies`. Every failure message includes the measured value.
 
-`PENDING_OWNERS` is the one switch. It currently holds `FEAT-052` and
-`FEAT-053`. `FEAT-048`, `FEAT-050`, and `FEAT-051` have landed, so their targets
+`PENDING_OWNERS` is the one switch. It currently holds only `FEAT-053`.
+`FEAT-048`, `FEAT-050`, `FEAT-051`, and `FEAT-052` have landed, so their targets
 already gate.
 
 | Owner               | What the test asserts                                                                                                                                                                                     |
@@ -336,7 +342,7 @@ The ledger census, `expectationCensus`, fails the catalogue in these cases:
 - a pending owner with no baseline anywhere in the catalogue; or
 - a scenario with no `current` expectation, which would make it all-baseline.
 
-### Runs a 13-scenario deterministic tier
+### Runs an 18-scenario deterministic tier
 
 `e2e/task-fidelity.spec.ts` runs every scenario whose tiers include
 `deterministic`. Each scenario runs once in a `beforeAll` with a 90-second
@@ -352,35 +358,40 @@ Every scenario also carries four cross-cutting expectations:
 | `no-egress`            | `current`  | The HTTP egress log is empty                                                       |
 | `run-health-validates` | `FEAT-048` | `run-health.json` is present and validates against the protocol `RunHealth` schema |
 
-| Scenario                  | Script                                                                                                                                                                                                            | Scenario-specific expectations by owner                                                                                                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listing-table`           | `web_search {limit: 0}`, then a `limit: 1` search if discovery failed, then fetch the results URL from the SERP, follow the AWD facet link from `links[]`, fetch three detail links from `records[]`, and publish | `current` 1 (the results page is reachable from search evidence alone); FEAT-050 2; FEAT-051 6; FEAT-052 1 (`research` registers browsing); FEAT-053 3, including the scorer oracle `field_coverage ≥ 0.9` |
-| `listing-structured`      | Fetch the JSON-LD listing, then publish                                                                                                                                                                           | `current` 1 (no price in visible text); FEAT-051 1 (six `Product`/`Offer` entities with truth prices)                                                                                                      |
-| `listing-client-rendered` | Fetch the script-rendered listing, then publish                                                                                                                                                                   | `current` 3 (at most one browser launch, all six sellers in the read, one HTTP read and then one browser render); FEAT-051 1                                                                               |
-| `challenge-small`         | Fetch the small interstitial, then publish                                                                                                                                                                        | `current` 3 (never a source, never extracted, HTTP read plus exactly one render); FEAT-050 2 (`SITE_CHALLENGE` failure and a `blocked` notice)                                                             |
-| `challenge-large-main`    | Fetch the large interstitial, then publish                                                                                                                                                                        | FEAT-050 5 (G10: read as a challenge, disclosed as `blocked`, never a source, never content, and exactly one standard-browser render)                                                                      |
-| `article`                 | Fetch the article, then publish                                                                                                                                                                                   | `current` 1 (the extracted `text` is byte-identical to `golden/article.txt`); FEAT-051 1 (`shape: 'article'`)                                                                                              |
-| `multi-table`             | Fetch the specification page, then publish                                                                                                                                                                        | `current` 1 (the answer cell reaches the agent); FEAT-051 1 (`tables[1]` holds it)                                                                                                                         |
-| `search-concurrency`      | A parallel pair of `web_search` calls under `challenge-on-concurrency`, then publish                                                                                                                              | `current` 1 (both calls reach the provider); FEAT-048 1 (`SEARCH_BLOCKED`, one warn line, one notice); FEAT-050 2 (peak concurrency 1, no challenges)                                                      |
-| `search-breaker`          | Three searches with a challenge on call 1, then publish                                                                                                                                                           | `current` 1 (no browser launch); FEAT-048 1 (`SEARCH_BLOCKED`); FEAT-050 1 (later calls return `SEARCH_BLOCKED` with one provider call in total)                                                           |
-| `search-empty-timeout`    | A search that comes back empty, then one that times out, then publish                                                                                                                                             | FEAT-048 3 (`SEARCH_NO_RESULTS` and `SEARCH_TIMEOUT`, distinct model text, two `search_failed` notices)                                                                                                    |
-| `budget-exhaustion`       | `maxNavigations: 2` and a 3-hit search over four fixture hits, then publish                                                                                                                                       | FEAT-048 4 (top-level `budget.exhausted: 'navigations'`, no per-site `blocked` stage, no `blocked` rank signal, one `budget_exhausted` notice from `runtime`)                                              |
-| `repeat-read`             | Fetch the same results URL three times, then publish                                                                                                                                                              | FEAT-048 1 (`run-health.json` `repeat_fetches` equals the server-counted repeats); FEAT-050 2 (one network read, and repeats answer `already_read: "S1"`)                                                  |
-| `hand-assembled-url`      | Fetch a valid detail URL that no result ever offered, then publish                                                                                                                                                | FEAT-051 1 (refused as `URL_NOT_FROM_EVIDENCE` with zero requests)                                                                                                                                         |
+| Scenario                  | Script                                                                                                                                                                                                            | Scenario-specific expectations by owner                                                                                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listing-table`           | `web_search {limit: 0}`, then a `limit: 1` search if discovery failed, then fetch the results URL from the SERP, follow the AWD facet link from `links[]`, fetch three detail links from `records[]`, and publish | `current` 1 (the results page is reachable from search evidence alone); FEAT-050 2; FEAT-051 6; FEAT-052 1 (`research` registers read-only browsing by default); FEAT-053 3, including the scorer oracle `field_coverage ≥ 0.9`              |
+| `listing-structured`      | Fetch the JSON-LD listing, then publish                                                                                                                                                                           | `current` 1 (no price in visible text); FEAT-051 1 (six `Product`/`Offer` entities with truth prices)                                                                                                                                        |
+| `listing-client-rendered` | Fetch the script-rendered listing, then publish                                                                                                                                                                   | `current` 3 (at most one browser launch, all six sellers in the read, one HTTP read and then one browser render); FEAT-051 1                                                                                                                 |
+| `challenge-small`         | Fetch the small interstitial, then publish                                                                                                                                                                        | `current` 3 (never a source, never extracted, HTTP read plus exactly one render); FEAT-050 2 (`SITE_CHALLENGE` failure and a `blocked` notice)                                                                                               |
+| `challenge-large-main`    | Fetch the large interstitial, then publish                                                                                                                                                                        | FEAT-050 5 (G10: read as a challenge, disclosed as `blocked`, never a source, never content, and exactly one standard-browser render)                                                                                                        |
+| `article`                 | Fetch the article, then publish                                                                                                                                                                                   | `current` 1 (the extracted `text` is byte-identical to `golden/article.txt`); FEAT-051 1 (`shape: 'article'`)                                                                                                                                |
+| `multi-table`             | Fetch the specification page, then publish                                                                                                                                                                        | `current` 1 (the answer cell reaches the agent); FEAT-051 1 (`tables[1]` holds it)                                                                                                                                                           |
+| `search-concurrency`      | A parallel pair of `web_search` calls under `challenge-on-concurrency`, then publish                                                                                                                              | `current` 1 (both calls reach the provider); FEAT-048 1 (`SEARCH_BLOCKED`, one warn line, one notice); FEAT-050 2 (peak concurrency 1, no challenges)                                                                                        |
+| `search-breaker`          | Three searches with a challenge on call 1, then publish                                                                                                                                                           | `current` 1 (no browser launch); FEAT-048 1 (`SEARCH_BLOCKED`); FEAT-050 1 (later calls return `SEARCH_BLOCKED` with one provider call in total)                                                                                             |
+| `search-empty-timeout`    | A search that comes back empty, then one that times out, then publish                                                                                                                                             | FEAT-048 3 (`SEARCH_NO_RESULTS` and `SEARCH_TIMEOUT`, distinct model text, two `search_failed` notices)                                                                                                                                      |
+| `budget-exhaustion`       | `maxNavigations: 2` and a 3-hit search over four fixture hits, then publish                                                                                                                                       | FEAT-048 4 (top-level `budget.exhausted: 'navigations'`, no per-site `blocked` stage, no `blocked` rank signal, one `budget_exhausted` notice from `runtime`)                                                                                |
+| `repeat-read`             | Fetch the same results URL three times, then publish                                                                                                                                                              | FEAT-048 1 (`run-health.json` `repeat_fetches` equals the server-counted repeats); FEAT-050 2 (one network read, and repeats answer `already_read: "S1"`)                                                                                    |
+| `hand-assembled-url`      | Fetch a valid detail URL that no result ever offered, then publish                                                                                                                                                | FEAT-051 1 (refused as `URL_NOT_FROM_EVIDENCE` with zero requests)                                                                                                                                                                           |
+| `contract-declared`       | A parallel `task_contract` (a table with four fields, one filter, and a URL-shaped required source) and `web_search {limit: 0}`, then fetch the results URL from the SERP, then publish                           | `current` 1 (every move offered); FEAT-052 5 (`contract.json` validates and holds the normalized contract, one `task_contract` start/end pair, 3 turns so the contract costs none, no `task-contract` notice, one `contract_declared` event) |
+| `contract-missing`        | Fetch the results URL the goal names, then publish, with no contract                                                                                                                                              | `current` 1 (published); FEAT-052 2 (exactly one `task-contract` notice, no `contract.json`)                                                                                                                                                 |
+| `contract-invalid`        | `task_contract` with `deliverable: table` and no fields, then publish                                                                                                                                             | `current` 1 (published); FEAT-052 3 (`INVALID_INPUT` with cause `contract-table-fields`, no `contract.json`, the missing-contract notice)                                                                                                    |
+| `research-browse`         | The goal names `faceted-listing.yantra.test` bare: `browser_navigate` to its root, `browser_extract {kind: links}`, navigate to the offered "Shop new" link, `browser_extract {kind: records}`, then publish      | `current` 1 (every move offered, published); FEAT-052 5 (browse tools and `task_contract` registered, no click or fill tool, the root navigation succeeds with provenance `goal`, at least one record, the read-only scope line)             |
+| `research-no-browse`      | `browse: false`; `browser_navigate` to the root, then publish                                                                                                                                                     | `current` 1 (no browser launch); FEAT-052 3 (the call is unreachable as an unregistered tool, no `browser_*` tool in the catalog, the "no live browser" scope line)                                                                          |
 
-With the cross-cutting four, the catalogue holds 103 expectations:
+With the cross-cutting four, the catalogue holds 146 expectations:
 
 | Owner      | Expectations |
 | ---------- | -----------: |
-| `current`  |           38 |
-| `FEAT-048` |           36 |
+| `current`  |           53 |
+| `FEAT-048` |           46 |
 | `FEAT-050` |           14 |
 | `FEAT-051` |           11 |
-| `FEAT-052` |            1 |
+| `FEAT-052` |           19 |
 | `FEAT-053` |            3 |
 
-The 4 expectations owned by the pending `FEAT-052` and `FEAT-053` each carry a
-pinned baseline. The landed owners carry none.
+The 3 expectations owned by the pending `FEAT-053` each carry a pinned
+baseline. The landed owners carry none.
 
 `listing-table`'s `no-unreachable-moves` target is an empty `unreachable` list:
 the AWD facet link and every detail link the script follows are offered by an
@@ -483,9 +494,9 @@ example `npx vitest run task-fidelity-harness -t "scorer"`.
 
 ### Land an owning feature
 
-When a pending owner (`FEAT-052` or `FEAT-053`) delivers its capability, its
-final task flips the ratchet, as `FEAT-048`, `FEAT-050`, and `FEAT-051` already
-have:
+When the pending owner (`FEAT-053`) delivers its capability, its final task
+flips the ratchet, as `FEAT-048`, `FEAT-050`, `FEAT-051`, and `FEAT-052`
+already have:
 
 1. Remove the owner from `PENDING_OWNERS` in
    `e2e/task-fidelity/expectations.ts`.
@@ -602,6 +613,9 @@ these fields:
 - `userLocation`;
 - the scripted `serps`;
 - optional `faults`, `searchProviderName`, and `budgets`;
+- optional `browse`: whether a `research` run gets the read-only browser, as
+  the `agent.research_browse` preference or `--no-browse` would decide it.
+  It defaults to `true`, the product default;
 - the deterministic `script` and `expectations`;
 - its `tiers`; and
 - a `truth()` function that returns the truth rows.

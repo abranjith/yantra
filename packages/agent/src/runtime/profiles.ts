@@ -16,7 +16,8 @@ export type YantraToolName =
   | 'browser_fill_element'
   | 'browser_fill_form'
   | 'browser_extract'
-  | 'browser_screenshot';
+  | 'browser_screenshot'
+  | 'task_contract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
 export type WorkflowToolMode = 'none' | 'list' | 'run';
@@ -35,13 +36,48 @@ export interface CommandTaskProfile {
 }
 
 const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'] as const;
+
+// Source fidelity (FEAT-052): a source the goal names is where the answer
+// comes from. Shared verbatim by every addendum that carries it.
+const REQUIRED_SOURCE =
+  'When the goal names a site or source, that source is required: read the answer from it, ' +
+  'and present any other source only as a clearly labeled alternative, never merged into the ' +
+  'answer.';
+const DECLARE_CONTRACT = 'Call task_contract in the same turn as your first search or fetch.';
+
+/**
+ * The research addendum. `browse` adds the one sentence naming the live
+ * browser tools, so a run without them is never told about them.
+ */
+function researchAddendum(browse: boolean): string {
+  return (
+    `${REQUIRED_SOURCE} Otherwise use independent sources and cover material gaps. ` +
+    `${DECLARE_CONTRACT} To find a page, use web_search (limit: 0 lists URLs without reading ` +
+    'them). When a page lists items, follow its records[] and links[] to the pages you need ' +
+    '(pagination, filters, details) rather than searching for them. ' +
+    (browse
+      ? 'Use browser_navigate and browser_extract for a page that needs a live browser. '
+      : '') +
+    'Finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
+    '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
+    'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
+    'web_search returns fetched source content, not just links — follow specific leads with ' +
+    'web_fetch.'
+  );
+}
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
 // Browser fill tools mutate the page, so they belong here beside
 // `browser_click` and deliberately NOT in BROWSE_TOOLS — that set
-// is `research`'s opt-in *read-only* browse mode.
+// is `research`'s *read-only* browse mode (on unless the user turns it off).
+const INTERACT_TOOLS: ReadonlySet<string> = new Set([
+  'browser_click',
+  'browser_fill_element',
+  'browser_fill_form',
+]);
 const ALL_TOOLS = [
   ...READ_TOOLS,
   'workflow_run',
+  'task_contract',
   ...BROWSE_TOOLS,
   'browser_click',
   'browser_fill_element',
@@ -65,15 +101,11 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
   },
   research: {
     command: 'research',
-    toolNames: [...READ_TOOLS, 'workflow_run'],
+    toolNames: [...READ_TOOLS, 'workflow_run', 'task_contract'],
     workflowToolMode: 'run',
-    promptAddendum:
-      'Research broadly before publishing: use independent sources and cover material gaps, ' +
-      'then finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
-      '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
-      'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
-      'web_search returns fetched source content, not just links — follow specific leads with ' +
-      'web_fetch.',
+    // The stable default is the no-browse catalog; `resolveCommandTaskProfile`
+    // swaps in the browse addendum together with the browse tools.
+    promptAddendum: researchAddendum(false),
     briefKind: 'research',
   },
   do: {
@@ -83,7 +115,8 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      'Brief. When a form needs more than one field set, fill it with a single ' +
+      `Brief. ${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ` +
+      'When a form needs more than one field set, fill it with a single ' +
       'browser_fill_form listing every field — one call for the whole search form (destination, ' +
       'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +
       'field to set, or for a stored secret. Filling fields one at a time is what makes a search ' +
@@ -149,6 +182,31 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
 };
 
 /**
+ * What a catalog lets the model do with a live browser. `read` is navigate,
+ * observe, and extract; `interact` adds any tool that clicks or fills.
+ */
+export type BrowserCapability = 'none' | 'read' | 'interact';
+
+/**
+ * Derives a catalog's browser capability from its tool names alone, so the
+ * per-run prompt can never claim a capability the session was not given.
+ */
+export function browserCapabilityOf(toolNames: readonly string[]): BrowserCapability {
+  if (toolNames.some((name) => INTERACT_TOOLS.has(name))) return 'interact';
+  if (toolNames.some((name) => name.startsWith('browser_'))) return 'read';
+  return 'none';
+}
+
+/** Per-run choices a caller makes when resolving a command profile. */
+export interface CommandTaskProfileOptions {
+  /**
+   * Whether `research` gets the read-only browser tools. Read only for
+   * `research`; `ask` never browses and `do` always does. Defaults to `true`.
+   */
+  readonly browse?: boolean;
+}
+
+/**
  * Resolve the per-run completion addendum for the active output contract.
  *
  * The stored profile strings remain the compatibility-locked Brief prompts.
@@ -168,7 +226,7 @@ export function promptAddendumFor(
     profile.command === 'ask'
       ? 'Answer the question directly from the fetched evidence.'
       : profile.command === 'research'
-        ? 'Research broadly, use independent sources, and cover material gaps before publishing.'
+        ? `${REQUIRED_SOURCE} Otherwise use independent sources and cover material gaps before publishing.`
         : 'Complete the requested task safely and verify the outcome.';
   return (
     `${researchDirection} Finish by calling result_publish with a report object containing ` +
@@ -180,19 +238,22 @@ export function promptAddendumFor(
 /**
  * Returns a configured profile. Budgets are resolved once by the shared CLI
  * agent-option surface; profiles retain only capabilities and prompt behavior.
- * Research browsing is explicitly opt-in via `YANTRA_AGENT_RESEARCH_BROWSE=1`.
+ *
+ * `research` browses read-only (navigate, observe, extract — never click or
+ * fill) unless `options.browse` is `false`. The CLI resolves that value from
+ * `--no-browse` and the stored `agent.research_browse` preference; nothing in
+ * the environment can change a catalog.
  */
 export function resolveCommandTaskProfile(
   command: AgenticCommand,
-  env: NodeJS.ProcessEnv = process.env,
+  options: CommandTaskProfileOptions = {},
 ): CommandTaskProfile {
   const base = COMMAND_TASK_PROFILES[command];
-  const browseEnabled =
-    command === 'research' &&
-    (env.YANTRA_AGENT_RESEARCH_BROWSE === '1' || env.YANTRA_AGENT_RESEARCH_BROWSE === 'true');
+  const browseEnabled = command === 'research' && options.browse !== false;
 
   return {
     ...base,
     toolNames: browseEnabled ? [...base.toolNames, ...BROWSE_TOOLS] : [...base.toolNames],
+    ...(browseEnabled ? { promptAddendum: researchAddendum(true) } : {}),
   };
 }

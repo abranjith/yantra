@@ -17,6 +17,16 @@ export type AgentProgressEvent =
       readonly status: 'ok' | 'error' | 'denied' | 'aborted';
       readonly durationMs: number | null;
       readonly at: string;
+    }
+  | {
+      /**
+       * A `task_contract` declaration succeeded (FEAT-052). `summary` is the
+       * one-line echo of the normalized, sanitized contract.
+       */
+      readonly type: 'contract_declared';
+      readonly revision: number;
+      readonly summary: string;
+      readonly at: string;
     };
 
 /** IO surface consumed by the agentic runtime (CLI today, other connectors later). */

@@ -25,7 +25,12 @@ import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDefaultPiEventMapContext } from '../../src/adapters/pi/event-map.js';
-import { createBriefPublisher } from '../../src/adapters/pi/tools/index.js';
+import {
+  auditProjectionOf,
+  buildYantraWrappedTools,
+  createBriefPublisher,
+  yantraToolCatalog,
+} from '../../src/adapters/pi/tools/index.js';
 import type { AgentEvent, AgentProvider, AgentRunResult } from '../../src/provider/index.js';
 import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/connector.js';
 import {
@@ -36,7 +41,13 @@ import {
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
+import {
+  resolveCommandTaskProfile,
+  type AgenticCommand,
+  type CommandTaskProfile,
+} from '../../src/runtime/profiles.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
+import { MISSING_CONTRACT_REASON, renderContractEcho } from '../../src/runtime/task-contract.js';
 import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
@@ -191,6 +202,18 @@ function event(type: AgentEvent['type'], fields: Record<string, unknown> = {}): 
   return { type, at: '2026-07-14T12:00:00.000Z', ...fields } as AgentEvent;
 }
 
+/**
+ * A `tool_finished` seam event: `'ok'` and `'denied'` are statuses; anything
+ * else is the error code of a failure.
+ */
+function finished(callId: string, tool: string, outcome: string): AgentEvent {
+  const output =
+    outcome === 'ok' || outcome === 'denied'
+      ? { status: outcome }
+      : { status: 'error', error_code: outcome };
+  return event('tool_finished', { callId, tool, output, isError: outcome !== 'ok' });
+}
+
 /** A ledger entry as the web tools would record it during a run. */
 function evidenceEntry(url: string, title: string): EvidenceEntry {
   return {
@@ -242,6 +265,46 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     );
 
     expect(order).toEqual(['capability', 'provider']);
+  });
+
+  it('registers browser_screenshot in research only under the screenshot grant (FEAT-052)', async () => {
+    // Research now browses read-only by default, so the existing explicit
+    // `context.screenshots` grant can reach it; `--no-screenshots` still wins.
+    const catalogFor = async (screenshotsSuppressed: boolean): Promise<string[]> => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-research-vision-'));
+      tempDirs.push(root);
+      const profile = resolveCommandTaskProfile('research');
+      const base = buildEnvironment(vi.fn(() => Promise.resolve()));
+      const environment: AgenticRunEnvironment = {
+        ...base,
+        domain: { ...base.domain, browser: {} as NonNullable<typeof base.domain.browser> },
+      };
+      let names: string[] = [];
+      await runAgenticTask(
+        {
+          goal: 'Complete the fixture task',
+          profile,
+          model: { provider: 'fixture', id: 'vision-model' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: true, screenshots: true }, userLocation: null },
+          screenshotsSuppressed,
+        },
+        {
+          runStore: new LocalRunStore(root),
+          createEnvironment: () => Promise.resolve(environment),
+          resolveModelImageInput: () => true,
+          createProvider: (services) => {
+            names = yantraToolCatalog(services, profile).map((tool) => tool.name);
+            return new FakeAgentProvider({ runResult: completed });
+          },
+        },
+      );
+      return names;
+    };
+
+    expect(await catalogFor(false)).toContain('browser_screenshot');
+    expect(await catalogFor(true)).not.toContain('browser_screenshot');
   });
 
   it('rejects malformed markers before creating any run state', async () => {
@@ -615,7 +678,12 @@ describe('@no-llm runAgenticTask lifecycle', () => {
       synthesis: 'llm',
       deterministic_fallback_used: true,
     });
-    expect(brief.notices).toMatchObject([{ source: 'runtime', kind: 'other' }]);
+    // A `do` run that declared no task contract also carries that notice,
+    // after the assembly notice (FEAT-052).
+    expect(brief.notices).toMatchObject([
+      { source: 'runtime', kind: 'other' },
+      { source: 'task-contract', kind: 'other' },
+    ]);
   });
 
   it('keeps AGENT_COMPLETION_MISSING when there is no draft answer to assemble', async () => {
@@ -1289,35 +1357,120 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(provider.sessions[0]?.abortCount).toBe(0);
   });
 
-  it('does not trip the breaker when a success interrupts the failure streak', async () => {
-    const fail = (id: string): AgentEvent =>
-      event('tool_finished', {
-        callId: id,
-        tool: 'browser_click',
-        output: { status: 'error', error_code: 'TOOL_EXECUTION_FAILED' },
-        isError: true,
-      });
-    const ok = (id: string): AgentEvent =>
-      event('tool_finished', {
-        callId: id,
-        tool: 'browser_observe',
-        output: { status: 'ok' },
-        isError: false,
-      });
+  it('trips on an observe-ok / click-fails loop: other tools never reset a streak (FEAT-052)', async () => {
+    // Characterization replaced: with one global streak, each browser_observe
+    // success reset the count, so this exact loop — the one the breaker
+    // exists for — never tripped. Streaks are now counted per tool.
     const provider = new FakeAgentProvider({
-      // Two failures, a success (resets the streak), then two more: with two
-      // retries allowed, neither streak reaches the third failing attempt.
-      eventsByRun: [[fail('a'), fail('b'), ok('d'), fail('e'), fail('f')], []],
+      eventsByRun: [
+        [1, 2, 3, 4].flatMap((n) => [
+          finished(`o${n}`, 'browser_observe', 'ok'),
+          finished(`c${n}`, 'browser_click', 'X'),
+        ]),
+        [],
+      ],
       runResult: completed,
     });
 
-    const result = await fixture({ provider, budgets: { toolRetries: 2 } });
+    const result = await fixture({ provider, budgets: { toolRetries: 3 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+    const message = result.outcome.kind === 'failed' ? result.outcome.error.message : '';
+    expect(message).toContain('browser_click');
+    expect(message).toContain('X');
+    expect(provider.sessions[0]?.runPrompts).toHaveLength(1);
+  });
+
+  it('resets a streak when the same tool succeeds', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'web_search', 'SEARCH_TIMEOUT'),
+          finished('b', 'web_search', 'ok'),
+          finished('c', 'web_search', 'SEARCH_TIMEOUT'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
 
     expect(result.outcome).toMatchObject({
       kind: 'failed',
       error: { code: 'AGENT_COMPLETION_MISSING' },
     });
-    expect(provider.sessions[0]?.runPrompts).toHaveLength(2);
+  });
+
+  it('keeps two interleaved failing tools on separate streaks', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a1', 'browser_click', 'X'),
+          finished('b1', 'web_fetch', 'FETCH_TIMEOUT'),
+          finished('a2', 'browser_click', 'X'),
+          finished('b2', 'web_fetch', 'FETCH_TIMEOUT'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 3 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+    expect(provider.sessions[0]?.abortCount).toBe(0);
+  });
+
+  it('restarts a tool streak when its error code changes', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'browser_click', 'X'),
+          finished('b', 'browser_click', 'Y'),
+          finished('c', 'browser_click', 'X'),
+        ],
+        [],
+      ],
+      runResult: completed,
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
+
+    expect(result.outcome).toMatchObject({
+      kind: 'failed',
+      error: { code: 'AGENT_COMPLETION_MISSING' },
+    });
+  });
+
+  it('ignores denied results, which neither count nor reset', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [
+        [
+          finished('a', 'browser_click', 'X'),
+          finished('d', 'browser_click', 'denied'),
+          finished('b', 'browser_click', 'X'),
+        ],
+      ],
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 1 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+  });
+
+  it('trips on the first failure when toolRetries is 0', async () => {
+    const provider = new FakeAgentProvider({
+      eventsByRun: [[finished('a', 'browser_observe', 'ok'), finished('b', 'browser_click', 'X')]],
+    });
+
+    const result = await fixture({ provider, budgets: { toolRetries: 0 } });
+
+    expect(result.outcome).toMatchObject({ kind: 'failed', error: { code: 'AGENT_TOOL_FAILED' } });
+    expect(provider.sessions[0]?.abortCount).toBe(1);
   });
 
   it('reads status from a seam-projected web_search success whose text ends a URL at an escaped quote', async () => {
@@ -1607,5 +1760,258 @@ describe('@no-llm runAgenticTask run-health finalization (FEAT-048)', () => {
 
     expect(outcome.kind).toBe('failed');
     await expect(access(join(outcome.runDir, 'run-health.json'))).rejects.toThrow();
+  });
+});
+
+/** One tool call the scripted provider executes through the run's real wrapped tools. */
+interface ScriptedCall {
+  readonly tool: string;
+  readonly params: unknown;
+}
+
+/**
+ * Runs one agentic task whose provider executes `calls` against the run's own
+ * wrapped tools (so stores, files, and middleware are real) and emits the
+ * seam events a Pi session would, in order. Run 0 executes the calls; the
+ * completion-nudge run, if any, does nothing.
+ */
+async function scriptedRun(options: {
+  readonly command: AgenticCommand;
+  readonly calls: readonly ScriptedCall[];
+  readonly draft?: string;
+  readonly beforeCalls?: (services: RunServices) => void;
+}): Promise<{
+  readonly outcome: AgenticTaskOutcome;
+  readonly connector: RecordingConnector;
+  readonly services: RunServices;
+}> {
+  const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-contract-'));
+  tempDirs.push(root);
+  const connector = new RecordingConnector();
+  const profile: CommandTaskProfile = resolveCommandTaskProfile(options.command, { browse: false });
+  const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+  let services: RunServices | undefined;
+  const provider = new FakeAgentProvider({
+    onRun: async (_prompt, runIndex, session) => {
+      if (runIndex !== 0 || services === undefined) return;
+      options.beforeCalls?.(services);
+      const tools = buildYantraWrappedTools(services, profile);
+      for (const [index, call] of options.calls.entries()) {
+        const tool = tools.find((entry) => entry.name === call.tool);
+        if (tool === undefined) throw new Error(`tool ${call.tool} is not in the catalog`);
+        const callId = `c${index}`;
+        session.emit(event('tool_started', { callId, tool: call.tool, input: call.params }));
+        const result = await tool.execute(call.params, undefined);
+        session.emit(
+          event('tool_finished', {
+            callId,
+            tool: call.tool,
+            output: auditProjectionOf(result),
+            isError: result.status !== 'ok',
+          }),
+        );
+      }
+      if (options.draft !== undefined) {
+        session.emit(event('assistant_text', { text: options.draft }));
+      }
+    },
+  });
+  const outcome = await runAgenticTask(
+    {
+      goal: 'List new SUV listings from example-listings.test with dealer and price',
+      profile,
+      model: { provider: 'fixture', id: 'fixture-model' },
+      auth: { mode: 'managed' },
+      connector,
+    },
+    {
+      runStore: new LocalRunStore(root),
+      sanitizer: new DefaultSanitizer(),
+      createEnvironment: (context) =>
+        Promise.resolve({
+          ...environment,
+          domain: {
+            ...environment.domain,
+            publish: createBriefPublisher(context.runDir, {
+              taskId: context.taskId,
+              runId: context.runId,
+            }),
+          },
+        }),
+      createProvider: (runServices) => {
+        services = runServices;
+        return provider;
+      },
+    },
+  );
+  if (services === undefined) throw new Error('provider was never created');
+  return { outcome, connector, services };
+}
+
+const CONTRACT_CALL: ScriptedCall = {
+  tool: 'task_contract',
+  params: {
+    deliverable: 'table',
+    subject: 'new SUV listings',
+    required_fields: ['dealer', 'price'],
+    filters: [{ name: 'condition', value: 'new' }],
+    required_sources: ['example-listings.test'],
+  },
+};
+
+const PUBLISH_CALL: ScriptedCall = {
+  tool: 'result_publish',
+  params: { brief: { title: 'SUV listings', overview: 'Two dealers list new SUVs.' } },
+};
+
+function contractEvents(connector: RecordingConnector): AgentProgressEvent[] {
+  return connector.events.filter((entry) => entry.type === 'contract_declared');
+}
+
+describe('@no-llm runAgenticTask task contract echo (FEAT-052)', () => {
+  it('emits exactly one contract_declared event per successful declaration', async () => {
+    const { connector, services } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    const declared = contractEvents(connector);
+    expect(declared).toHaveLength(1);
+    const current = services.contract.current();
+    if (current === null) throw new Error('no contract recorded');
+    expect(declared[0]).toMatchObject({
+      type: 'contract_declared',
+      revision: 1,
+      summary: renderContractEcho(current),
+    });
+  });
+
+  it('emits revisions 1 and 2 for two declarations', async () => {
+    const revised: ScriptedCall = {
+      tool: 'task_contract',
+      params: { ...(CONTRACT_CALL.params as Record<string, unknown>), limit: 5 },
+    };
+    const { connector } = await scriptedRun({
+      command: 'do',
+      calls: [CONTRACT_CALL, revised, PUBLISH_CALL],
+    });
+
+    const declared = contractEvents(connector);
+    expect(declared.map((entry) => (entry as { revision: number }).revision)).toEqual([1, 2]);
+    expect((declared[1] as { summary: string }).summary).toMatch(/top 5$/u);
+  });
+
+  it('emits nothing for a failed declaration', async () => {
+    const { connector, services } = await scriptedRun({
+      command: 'research',
+      calls: [
+        { tool: 'task_contract', params: { deliverable: 'table', subject: 'x' } },
+        PUBLISH_CALL,
+      ],
+    });
+
+    expect(contractEvents(connector)).toEqual([]);
+    expect(services.contract.current()).toBeNull();
+  });
+
+  it('records one tool-calls.jsonl start/end pair and contract.json for a declaration', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    const record = JSON.parse(await readFile(join(outcome.runDir, 'contract.json'), 'utf8')) as {
+      revisions: unknown[];
+    };
+    expect(record.revisions).toHaveLength(1);
+    const lines = (await readFile(join(outcome.runDir, 'tool-calls.jsonl'), 'utf8'))
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as { tool: string; phase: string });
+    expect(lines.filter((line) => line.tool === 'task_contract').map((line) => line.phase)).toEqual(
+      ['start', 'end'],
+    );
+  });
+});
+
+interface PublishedNotice {
+  readonly kind: string;
+  readonly source: string;
+  readonly reason: string;
+}
+
+async function briefNotices(outcome: AgenticTaskOutcome): Promise<PublishedNotice[]> {
+  const brief = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8')) as {
+    notices: PublishedNotice[];
+  };
+  return brief.notices;
+}
+
+/** Seeds one runtime-derived notice, as a failed search would. */
+function recordFailedSearch(services: RunServices): void {
+  services.runHealth.recordToolOutcome({
+    tool: 'web_search',
+    status: 'error',
+    code: 'SEARCH_NO_RESULTS',
+    cause: 'empty-results',
+    provider: 'duckduckgo',
+  });
+}
+
+describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
+  it('gives an undeclared research run exactly one task-contract notice, first', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [PUBLISH_CALL],
+      beforeCalls: recordFailedSearch,
+    });
+
+    expect(outcome.kind).toBe('published');
+    const notices = await briefNotices(outcome);
+    expect(notices.filter((notice) => notice.source === 'task-contract')).toEqual([
+      { kind: 'other', source: 'task-contract', reason: MISSING_CONTRACT_REASON },
+    ]);
+    expect(notices.map((notice) => notice.source)).toEqual(['task-contract', 'search:duckduckgo']);
+  });
+
+  it('gives an undeclared do run the notice too', async () => {
+    const { outcome } = await scriptedRun({ command: 'do', calls: [PUBLISH_CALL] });
+
+    expect((await briefNotices(outcome)).map((notice) => notice.source)).toEqual(['task-contract']);
+  });
+
+  it('gives a declared run no task-contract notice', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+    });
+
+    expect((await briefNotices(outcome)).some((notice) => notice.source === 'task-contract')).toBe(
+      false,
+    );
+  });
+
+  it('never gives an ask run the notice', async () => {
+    const { outcome } = await scriptedRun({ command: 'ask', calls: [PUBLISH_CALL] });
+
+    expect(outcome.kind).toBe('published');
+    expect((await briefNotices(outcome)).some((notice) => notice.source === 'task-contract')).toBe(
+      false,
+    );
+  });
+
+  it('keeps the assembly notice first, then the contract notice, on a runtime-assembled Brief', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [],
+      draft: 'Two dealers list new SUVs.\nBoth are in stock.',
+      beforeCalls: (services) => {
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A'));
+      },
+    });
+
+    expect(outcome.kind).toBe('published');
+    const sources = (await briefNotices(outcome)).map((notice) => notice.source);
+    expect(sources.slice(0, 2)).toEqual(['runtime', 'task-contract']);
   });
 });

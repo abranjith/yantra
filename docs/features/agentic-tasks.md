@@ -10,6 +10,20 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
+The system prompt is versioned as `agent-v9` (recorded as `prompt_version` in `manifest.json`). Beyond the scope rules above, it tells the agent:
+
+- **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
+- **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
+- **Following an offered link is progress.** The agent may try at most one materially different fallback (for example, other sites than the goal names), but following a link or listing that a result already offered is progress on the direct approach, not a fallback.
+
+The per-run prompt's scope line is derived from the run's actual tool catalog, so it never claims a capability the session lacks:
+
+- No browser tool (`research --no-browse`): "Scope: web search and page reading only; this run has no live browser."
+- Read-only browser tools only (`research`): "Scope: web search, page reading, and read-only browsing (navigate, observe, extract); this run cannot click or fill forms — if the goal needs that, report it and name `yantra do` as the next step."
+- Any click or fill tool (`do`): "Scope: browser and web work only."
+
+The `do` completion criteria also carry the required-source rule (when the goal names a site or source, read the answer from it and present any other source only as a clearly labeled alternative, never merged into the answer) and ask the agent to call `task_contract` in the same turn as its first search or fetch. The `research` guidance is described in [Research](research.md#agentic-research).
+
 The `do` profile exposes these capabilities:
 
 | Capability                         | Current behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -19,6 +33,7 @@ The `do` profile exposes these capabilities:
 | Browser actions                    | Clicks observed controls and fills text, autocomplete suggestions, native choices, toggles, ISO dates, and date ranges. Multi-field forms are filled together and verified before the agent submits them separately.                                                                                                                                                                                                                                             |
 | Page extraction                    | Extracts the live page's readable content, records, links, schema.org structured data, every table, or one table by index, through the same analyzer `web_fetch` uses. Large results become run-local capture references instead of being placed fully in model context.                                                                                                                                                                                         |
 | Saved workflows                    | Lists and runs a matching saved workflow through the deterministic executor. The nested workflow gets its own run directory and opens no second model session.                                                                                                                                                                                                                                                                                                   |
+| Task contract                      | Records what the goal requires (deliverable, fields, filters, required sites) as `contract.json` and echoes it to the user. Optional; see [Task contract](#task-contract).                                                                                                                                                                                                                                                                                       |
 | Data transformations               | Runs only the built-in, allowlisted transformations `table_normalize`, `dedupe_lines`, and `json_pick`; it cannot execute arbitrary code or shell commands.                                                                                                                                                                                                                                                                                                      |
 | Publication                        | Publishes exactly one validated Brief, or one report shaped by a selected template. Pages consulted through search, fetch, or any browser extraction except `links` become the engine-owned source list.                                                                                                                                                                                                                                                         |
 
@@ -232,6 +247,8 @@ For example, a goal that asks for the colors of the top vehicles in a filtered l
 
 **Searches are paced, and stop after the provider's first challenge.** A run resolves its search provider once. A scraped provider (`google`, `duckduckgo`) is asked one query at a time, each started at least 2 seconds after the previous one started; a keyed API provider (`brave`, `tavily`) takes two queries at once with no spacing. Additional searches wait their turn, and a search cancelled while waiting is never sent. The first anti-bot challenge or rate-limit refusal is reported as `SEARCH_BLOCKED` with its own cause and closes search for the rest of the run. Every later `web_search`, including one already waiting its turn, returns `SEARCH_BLOCKED` with cause `circuit-open` at once, without asking the provider or starting a browser. Its message says search is closed for the rest of the run and offers `web_fetch` of a URL an earlier result returned, or `result_publish`. Yantra does not switch to another provider.
 
+**The search result says when another search is useful.** A `web_search` result's `note` reads: "These sites are recorded as your sources automatically, each under its source_id. Publish with result_publish when the evidence answers the goal. Search again only for a different part of the goal or to locate a source the goal requires — do not re-run a search you already ran, and do not re-type URLs." It adds "To go deeper into a site above, follow its links[] or records[]." only when at least one returned site carries links or records. A `limit: 0` discovery result's note is the discovery note (titles, URLs, and snippets only; call `web_fetch` with a URL exactly as listed to read it) followed by the same "Search again only…" sentence.
+
 **A human-verification page is never read as content.** Every response a `web_fetch` or a `web_search` inline read receives is classified before extraction. When Yantra's HTTP client gets a challenge page, the URL is rendered once in the standard headless browser, with no retry and no change to the browser's identity. When that render, or any render the fetch escalated to, is also a challenge page, the read fails:
 
 - `web_fetch` returns `SITE_CHALLENGE` with `retryable: false` and `details: {host, tier, handoff: true}`. The message says the host served a human-verification page, that Yantra cannot and will not pass it and will not request the page again in this run, and to use evidence from other reads or finish with `result_publish` saying the page was blocked.
@@ -240,6 +257,50 @@ For example, a goal that asks for the colors of the top vehicles in a filtered l
 The page is never extracted, never becomes a source, and is not fetched again in the run. A run that ends without publishing after a `SITE_CHALLENGE` is a user handoff. See [Challenge pages](safety-and-privacy.md#challenge-pages) for the markers and the signed-off policy.
 
 The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. Without both, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
+
+**The repeated-failure breaker counts identical failures per tool.** `--tool-retries <n>` (default 3) is not a retry count: Yantra never retries a tool call on the agent's behalf. It bounds identical failures of one tool. When the same tool fails with the same error `n + 1` times with no success of that tool in between, the run stops as a repeated tool failure. A success of that tool resets its count, a different error code restarts it at 1, and other tools' outcomes never touch it, so an alternating "observe succeeds, click fails" loop still trips the breaker. Denied and aborted calls are not counted, and a `TOOL_TIMEOUT` that lands after the 80% wind-down has begun does not trip it, so the agent can still publish. The per-run prompt states the rule as "repeated identical failures: a tool failing with the same error N times without succeeding in between stops the run", where N is `n + 1`.
+
+### Task contract
+
+`research` and `do` register a `task_contract` tool; `ask` does not. The agent uses it to record what the user's goal requires before it gathers evidence:
+
+| Field              | Meaning                                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deliverable`      | `table` (rows with the same fields each), `answer`, or `report`.                                                                                               |
+| `subject`          | What the rows or the answer are about (1–200 characters).                                                                                                      |
+| `required_fields`  | Every field the goal asks for (up to 12). Required, and non-empty, for a `table`.                                                                              |
+| `filters`          | Every condition the goal states, as `{name, value}` pairs (up to 12).                                                                                          |
+| `required_sources` | Every site the goal names, as a hostname (up to 5). Each entry is normalized: lowercased, with scheme, path, port, trailing dot, and a leading `www.` removed. |
+| `ranking`          | Optional `{field, direction}` (`asc` or `desc`). For a table, `field` must be one of `required_fields`.                                                        |
+| `limit`            | Optional number of results the goal asks for (1–50).                                                                                                           |
+| `notes`            | Optional free text (up to 500 characters) for anything the fields cannot express, such as a site named without its address.                                    |
+
+Declaring a contract is optional: it fetches nothing, grants nothing, and no other tool requires it. The guidance asks the agent to call it in the same turn as its first search or fetch, so it costs no extra turn, and to call it again with the full corrected contract only if a later result shows the goal was misread. Every string is passed through the run's sanitizer (`public` profile), marked user values are masked back to their placeholders, and control characters are stripped before the contract is stored, written, echoed, or logged. Names are compared ignoring case.
+
+A call fails, and nothing is recorded, in these cases:
+
+| Code                      | Cause                    | When                                                                                         |
+| ------------------------- | ------------------------ | -------------------------------------------------------------------------------------------- |
+| `INVALID_INPUT`           | `contract-source-host`   | A `required_sources` entry is not a site address; the message names it and suggests `notes`. |
+| `INVALID_INPUT`           | `contract-duplicate`     | A field, filter name, or source appears twice.                                               |
+| `INVALID_INPUT`           | `contract-table-fields`  | A `table` contract has no `required_fields`.                                                 |
+| `INVALID_INPUT`           | `contract-ranking-field` | A table's `ranking.field` is not one of its `required_fields`.                               |
+| `CONTRACT_REVISION_LIMIT` | `revisions`              | Three revisions were already declared. Not retryable.                                        |
+| `ACTION_PHASE_CLOSED`     | `published`              | The result was already published. Not retryable.                                             |
+
+Only the first problem is reported, so each failing call gets one cause-specific message. `INVALID_INPUT` is retryable with the corrected full contract.
+
+A successful call returns `{revision, contract, note}` with the normalized contract, rewrites `<run-dir>/contract.json` with every revision so far (at most 3; the last is current), and writes one `contract_declared` line to `runtime.jsonl` (see [Run artifacts](diagnostics-and-audit.md#run-artifacts)). In a text-mode run the CLI then prints what the run understood to stderr, beside the goal echo, so a misreading is visible in the first seconds:
+
+```text
+understood: table of new SUV listings — fields: seller, price, exterior color, interior color; filters: drivetrain=AWD; sources: example.com
+```
+
+A later revision prints `understood (revised): …`. The summary is built only from the normalized contract, omits empty parts, has no newlines or control characters, and is at most 400 characters. `--json` instead emits the event as an `agent_progress` record with `type: "contract_declared"`, `revision`, `summary`, and `at`, so stdout stays machine-readable.
+
+A `research` or `do` run that publishes without ever declaring a contract, including one whose only declaration failed, carries one Brief notice with kind `other` and source `task-contract`, reading exactly: "No task contract was declared, so the deliverable, required fields, filters, and required sources were not recorded for this run." It leads the runtime-derived notices described under [Inputs and Outputs](#inputs-and-outputs). An `ask` run never carries it.
+
+The contract records what the run understood. It is not checked against the published result, and its `required_sources` never make a URL navigable (see [Safety and privacy](safety-and-privacy.md#discovered-link-provenance)).
 
 ## How to Use It
 
@@ -303,7 +364,7 @@ yantra do "check the public status page" --json
 | `--max-duration <duration>`    | Set the hard wall-clock duration for the whole run.                                                                                                   |
 | `--max-tokens <n>`             | Set the cumulative provider-token ceiling.                                                                                                            |
 | `--tool-timeout <duration>`    | Set the timeout for one tool attempt.                                                                                                                 |
-| `--tool-retries <n>`           | Set retries after an identical tool/error failure.                                                                                                    |
+| `--tool-retries <n>`           | Bound identical failures of one tool: the run stops when one tool fails with the same error `n + 1` times without succeeding in between.              |
 | `--confirm-timeout <duration>` | Set the maximum live consent wait.                                                                                                                    |
 | `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                             |
 | `--save-as <name>`             | After successful publication, attempt to promote the browser trace to a saved workflow. Promotion failure does not change the successful run outcome. |
@@ -321,7 +382,7 @@ Use `@{value}` or a supported tagged marker such as `@password{value}` whenever 
 
 A location-dependent goal such as "hotels near me" requires a configured, granted user location. When none is available, Yantra creates an auditable run but stops before opening a provider session, launching Chrome, or spending tokens. The handoff explains whether to set `locale.city`, re-enable `context.location`, or name the location directly. Yantra does not infer a location from timezone or locale.
 
-During a human-readable run, stdout contains bounded assistant progress, compact tool status lines, and the published artifact path and run id. Raw tool parameters and results are not streamed. `--json` emits independently parseable NDJSON records and never opens an interactive consent prompt.
+During a human-readable run, stdout contains bounded assistant progress, compact tool status lines, and the published artifact path and run id; the `understood:` contract echo goes to stderr. Raw tool parameters and results are not streamed. `--json` emits independently parseable NDJSON records and never opens an interactive consent prompt.
 
 A normal successful run writes a validated task Brief:
 
@@ -334,6 +395,7 @@ A normal successful run writes a validated task Brief:
   confirmations.jsonl       # when confirmation activity exists
   runtime.jsonl             # when the run built a runtime environment
   usage.json
+  contract.json             # when a task contract was declared
   captures/                 # when extracted content exceeds inline limits
   trace.json
   brief.json
@@ -352,6 +414,7 @@ Template mode writes `document.json`, `document.md`, and `document.html` in plac
 
 | Kind                                                 | Source              | When                                                                                                                                                                                                                      |
 | ---------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `other`                                              | `task-contract`     | A `research` or `do` run that never declared a task contract. See [Task contract](#task-contract).                                                                                                                        |
 | `search_failed`                                      | `search:<provider>` | One per failure code among the searches the run attempted, for example `2 of 3 web searches failed: the provider served an anti-bot challenge (SEARCH_BLOCKED).` The source is `search` when no provider was resolved.    |
 | `budget_exhausted`                                   | `runtime`           | One per spent navigation or distinct-host limit, quoting the ceiling and how many page reads were not attempted.                                                                                                          |
 | `blocked`                                            | the hostname        | One per host whose page was a challenge in the standard browser, for example `example.com served a human-verification page to Yantra's standard browser; 1 page was not read.`                                            |
@@ -375,7 +438,7 @@ Startup and runtime errors use stable codes such as `AGENT_MODEL_NOT_FOUND`, `AG
 
 ## Configuration and Permissions
 
-Model settings resolve in this order: explicit flag, `YANTRA_AGENT_*` environment variable, `profile.yaml` `agent.*` preference, then the pinned default. Current defaults are Anthropic with `claude-haiku-4-5`, a 15-minute hard deadline, a 2,000,000-token ceiling, three-minute tool and confirmation timeouts, and three retries after an identical tool failure. At 80% of the run duration, non-terminal exploration stops so the agent can publish gathered evidence.
+Model settings resolve in this order: explicit flag, `YANTRA_AGENT_*` environment variable, `profile.yaml` `agent.*` preference, then the pinned default. Current defaults are Anthropic with `claude-haiku-4-5`, a 15-minute hard deadline, a 2,000,000-token ceiling, three-minute tool and confirmation timeouts, and a `--tool-retries` value of 3 (the run stops when one tool fails with the same error four times without succeeding in between). At 80% of the run duration, non-terminal exploration stops so the agent can publish gathered evidence.
 
 Additional enforced defaults bound one model-visible tool result to 24 KB, cumulative model-visible tool output to 512 KB, browser navigations to 30, and distinct outbound hosts to 20. Publication remains available after the soft wind-down or cumulative-byte limit, but not after the hard deadline. Tool-call counts are recorded for audit and are not a cap.
 

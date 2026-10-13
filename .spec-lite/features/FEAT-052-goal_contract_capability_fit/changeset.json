@@ -1,0 +1,460 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/connector-io.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/render/goal-echo.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/research-browse.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/ask.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/do.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/research.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/connector-io.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/profiles-and-history.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/vision-assist.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/task-fidelity-harness.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/agent/scripted-provider.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/runner.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenario.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/common.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-declared.ts",
+      "status": "A",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-invalid.ts",
+      "status": "A",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-missing.ts",
+      "status": "A",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/index.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/research-browse.ts",
+      "status": "A",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/research-no-browse.ts",
+      "status": "A",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/score/synthetic-runs.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/result-publish.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/web-search.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/connector.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/prompt.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-health.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/task-contract.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/url-provenance.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/task-contract.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/template-publish.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/web-search.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/boundaries/forbidden.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/prompt.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-health.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-recorder.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/task-contract.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/url-provenance.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/profile/profile-file.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/task-contract.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/schemas/agent-manifest.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/protocol/src/schemas/task-contract.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/tests/agent-manifest.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/protocol/tests/task-contract.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-052-goal_contract_capability_fit/changeset.json",
+    ".spec-lite/features/FEAT-052-goal_contract_capability_fit/spec.md",
+    ".spec-lite/plan_task_fidelity.md"
+  ],
+  "baseline": {
+    "sha": "011b0b6d4f572aa42a6000a1291ef8518bc42bbf",
+    "capturedAt": "2026-10-12T21:40:10.233Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-052-goal-contract-capability-fit@011b0b6d4f572aa42a6000a1291ef8518bc42bbf"
+  },
+  "featureId": "FEAT-052"
+}

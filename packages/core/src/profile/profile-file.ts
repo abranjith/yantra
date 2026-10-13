@@ -85,6 +85,9 @@ export const profileSchema = z
         tool_timeout: agentDurationSchema.default('3m'),
         tool_retries: z.number().int().nonnegative().default(3),
         confirm_timeout: agentDurationSchema.default('3m'),
+        // `research` browses read-only (navigate, observe, extract) unless the
+        // user turns it off; `--no-browse` overrides it for a single run.
+        research_browse: z.boolean().default(true),
       })
       .default({}),
   })
@@ -119,6 +122,7 @@ export const KNOWN_PREFERENCE_KEYS = [
   'agent.tool_timeout',
   'agent.tool_retries',
   'agent.confirm_timeout',
+  'agent.research_browse',
 ] as const;
 
 export type PreferenceKey = (typeof KNOWN_PREFERENCE_KEYS)[number];
@@ -201,6 +205,7 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['agent.tool_timeout', profile.agent.tool_timeout],
     ['agent.tool_retries', profile.agent.tool_retries],
     ['agent.confirm_timeout', profile.agent.confirm_timeout],
+    ['agent.research_browse', profile.agent.research_browse],
   ]);
 }
 
@@ -225,6 +230,7 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'agent.tool_timeout': agentDurationSchema,
   'agent.tool_retries': z.number().int().nonnegative(),
   'agent.confirm_timeout': agentDurationSchema,
+  'agent.research_browse': z.boolean(),
 };
 
 /**
@@ -258,7 +264,8 @@ function coerceRawValue(key: PreferenceKey, rawValue: string): unknown {
   if (
     key === 'personalization.enabled' ||
     key === 'context.location' ||
-    key === 'context.screenshots'
+    key === 'context.screenshots' ||
+    key === 'agent.research_browse'
   ) {
     if (rawValue === 'true') return true;
     if (rawValue === 'false') return false;

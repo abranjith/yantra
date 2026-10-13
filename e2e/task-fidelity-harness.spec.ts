@@ -996,19 +996,21 @@ describe('@no-llm task-fidelity runner', () => {
     expect(result.requests).toEqual([]);
   }, 60_000);
 
-  it('leaves the developer’s home untouched, and ignores YANTRA_AGENT_RESEARCH_BROWSE', async () => {
+  it('leaves the developer’s home untouched, and takes the catalog from the scenario alone', async () => {
     const developerHome = await mkdtemp(join(tmpdir(), 'yantra-developer-home-'));
     await writeFile(join(developerHome, 'canary.yaml'), 'untouched: true\n', 'utf8');
     const previousHome = process.env.YANTRA_HOME;
-    const previousBrowse = process.env.YANTRA_AGENT_RESEARCH_BROWSE;
     process.env.YANTRA_HOME = developerHome;
-    process.env.YANTRA_AGENT_RESEARCH_BROWSE = '1';
     try {
+      // Browsing is on by default, so only the scenario's `browse: false` can
+      // remove the browser tools; nothing in the environment can (FEAT-052).
       const result = await run({
+        browse: false,
         script: [{ kind: 'call', tool: 'browser_navigate', params: { url: article } }, publishStep],
       });
 
       expect(result.unreachable).toEqual(['browser_navigate (tool not registered)']);
+      expect(result.registeredTools.some((name) => name.startsWith('browser_'))).toBe(false);
       expect(result.browserLaunches).toBe(0);
       expect(process.env.YANTRA_HOME).toBe(developerHome);
       expect(await readdir(developerHome)).toEqual(['canary.yaml']);
@@ -1016,11 +1018,19 @@ describe('@no-llm task-fidelity runner', () => {
     } finally {
       if (previousHome === undefined) delete process.env.YANTRA_HOME;
       else process.env.YANTRA_HOME = previousHome;
-      if (previousBrowse === undefined) delete process.env.YANTRA_AGENT_RESEARCH_BROWSE;
-      else process.env.YANTRA_AGENT_RESEARCH_BROWSE = previousBrowse;
       resetPathCache();
       await rm(developerHome, { recursive: true, force: true });
     }
+  }, 60_000);
+
+  it('gives a research scenario the read-only browser by default', async () => {
+    const result = await run({ script: [publishStep] });
+
+    expect(result.registeredTools).toEqual(
+      expect.arrayContaining(['browser_extract', 'browser_navigate', 'browser_observe']),
+    );
+    expect(result.registeredTools).not.toContain('browser_click');
+    expect(result.prompt).toContain('Scope: web search, page reading, and read-only browsing');
   }, 60_000);
 
   it('reads a missing artifact as null and reports unparseable JSONL lines by number', async () => {

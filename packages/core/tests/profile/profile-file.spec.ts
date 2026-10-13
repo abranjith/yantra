@@ -36,6 +36,7 @@ describe('@no-llm profile-file schema', () => {
       tool_timeout: '3m',
       tool_retries: 3,
       confirm_timeout: '3m',
+      research_browse: true,
     });
   });
 
@@ -57,6 +58,7 @@ describe('@no-llm profile-file schema', () => {
       'agent.tool_timeout': '3m',
       'agent.tool_retries': 3,
       'agent.confirm_timeout': '3m',
+      'agent.research_browse': true,
     });
   });
 });
@@ -123,6 +125,28 @@ describe('@no-llm profile-file load/save', () => {
     const result = await loadProfile(path);
     expect(result.isOk).toBe(false);
     if (!result.isOk) expect(result.error).toContain('agent.max_duration');
+  });
+
+  it('loads a profile written before agent.research_browse existed with browsing on', async () => {
+    const path = join(dir, 'profile.yaml');
+    await writeFile(path, 'agent:\n  tool_retries: 2\n', 'utf8');
+    const result = await loadProfile(path);
+    expect(result.isOk).toBe(true);
+    if (result.isOk) expect(result.value.agent.research_browse).toBe(true);
+  });
+
+  it('round-trips agent.research_browse: false and rejects a non-boolean value', async () => {
+    const path = join(dir, 'profile.yaml');
+    const profile = defaultProfile();
+    await saveProfile({ ...profile, agent: { ...profile.agent, research_browse: false } }, path);
+    const reloaded = await loadProfile(path);
+    expect(reloaded.isOk).toBe(true);
+    if (reloaded.isOk) expect(reloaded.value.agent.research_browse).toBe(false);
+
+    await writeFile(path, 'agent:\n  research_browse: maybe\n', 'utf8');
+    const invalid = await loadProfile(path);
+    expect(invalid.isOk).toBe(false);
+    if (!invalid.isOk) expect(invalid.error).toContain('agent.research_browse');
   });
 
   it('rejects unknown top-level keys (strict schema)', async () => {
@@ -299,5 +323,17 @@ describe('@no-llm validatePreference', () => {
     expect(validatePreference('agent.max_tokens', '0').isOk).toBe(false);
     expect(validatePreference('agent.tool_retries', '0').isOk).toBe(true);
     expect(validatePreference('agent.tool_retries', '-1').isOk).toBe(false);
+  });
+
+  it('coerces agent.research_browse to a boolean and rejects anything else', () => {
+    const off = validatePreference('agent.research_browse', 'false');
+    expect(off.isOk).toBe(true);
+    if (off.isOk) expect(off.value).toBe(false);
+    const on = validatePreference('agent.research_browse', 'true');
+    expect(on.isOk).toBe(true);
+    if (on.isOk) expect(on.value).toBe(true);
+    expect(validatePreference('agent.research_browse', 'maybe').isOk).toBe(false);
+    expect(validatePreference('agent.research_browse', '').isOk).toBe(false);
+    expect(validatePreference('agent.research_browse', 'FALSE').isOk).toBe(false);
   });
 });

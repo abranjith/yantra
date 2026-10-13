@@ -157,7 +157,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   const paramsRecord = asRecord(params) ?? {};
   // The run's own facts (search failures, budget exhaustion, read failures,
   // provider), computed once at publish time and attached by the publisher.
-  const runtimeFacts = services.runHealth.briefFacts();
+  const runtimeFacts = runtimeFactsFor(services);
   if (services.template !== null) {
     const result = await services.domain.publish.publish(paramsRecord.report, { runtimeFacts });
     if (!result.isOk) {
@@ -243,6 +243,18 @@ function findingText(entry: unknown): string {
   if (typeof entry === 'string') return entry.trim();
   const text = asRecord(entry)?.text;
   return typeof text === 'string' ? text.trim() : '';
+}
+
+/**
+ * The run's own facts for one published document: the single assembly point
+ * shared by the tool path and the runtime-assembled fallback. Whole-run
+ * notices the run owns (a `research`/`do` run that never declared a task
+ * contract) lead, ahead of the runtime-derived ones, before the notice cap.
+ */
+export function runtimeFactsFor(
+  services: Pick<RunServices, 'runHealth' | 'contract'>,
+): PublishRuntimeFacts {
+  return services.runHealth.briefFacts(services.contract.notices());
 }
 
 /**

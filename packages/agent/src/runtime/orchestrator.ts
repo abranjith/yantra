@@ -78,6 +78,7 @@ import {
   createTemplatedReportPublisher,
   createYantraTools,
   evidenceToSourceRecords,
+  runtimeFactsFor,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
 import { AgentStartupError, AgentSessionStartFailedError } from '../errors.js';
@@ -97,7 +98,12 @@ import type { AgentTaskConnector } from './connector.js';
 import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
-import { COMMAND_TASK_PROFILES, promptAddendumFor, type CommandTaskProfile } from './profiles.js';
+import {
+  COMMAND_TASK_PROFILES,
+  browserCapabilityOf,
+  promptAddendumFor,
+  type CommandTaskProfile,
+} from './profiles.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
 import { countingBrowserProvider, RunHealthLedger } from './run-health.js';
 import { RunRecorder } from './run-recorder.js';
@@ -111,6 +117,7 @@ import {
   type WorkflowRunToolOutcome,
 } from './run-services.js';
 import { RunRuntimeLog } from './runtime-log.js';
+import { TaskContractStore, renderContractEcho } from './task-contract.js';
 import { AgentTrace } from './trace.js';
 import { UrlPolicy } from './url-policy.js';
 import type { UrlPolicyConfig } from './url-policy.js';
@@ -639,6 +646,14 @@ export async function runAgenticTask(
       suppressedByFlag: request.screenshotsSuppressed === true,
       zeroLlm: false,
     });
+    // The run's declared contract (FEAT-052). `research` and `do` are expected
+    // to declare one; `ask` has no contract tool and never carries the notice.
+    const contract = new TaskContractStore({
+      runId: created.runId,
+      runDir: created.runDir,
+      command: profile.command,
+      required: profile.command === 'research' || profile.command === 'do',
+    });
     const services: RunServices = {
       runId: created.runId,
       runDir: created.runDir,
@@ -671,6 +686,7 @@ export async function runAgenticTask(
       domain,
       workflowToolMode: profile.workflowToolMode,
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
+      contract,
     };
     const tools = createYantraTools(services, profile);
     const provider =
@@ -698,6 +714,7 @@ export async function runAgenticTask(
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(redacted.profileContext ? { profileContext: redacted.profileContext } : {}),
         attended: request.interactive === true,
+        browserCapability: browserCapabilityOf(profile.toolNames),
         promptAddendum: promptAddendumFor(profile, services.template),
       },
       userInput,
@@ -731,6 +748,7 @@ export async function runAgenticTask(
       budgetTracker: runBudget,
       runId: created.runId,
       runDir: created.runDir,
+      contract,
     });
     executionState = state;
     unsubscribe = session.subscribe((event) => state.onEvent(event));
@@ -875,8 +893,11 @@ function createExecutionState(input: {
   readonly budgetTracker: BudgetTracker;
   readonly runId: string;
   readonly runDir: string;
+  /** The run's contract store; each new revision is echoed once to the connector. */
+  readonly contract: TaskContractStore;
 }): ExecutionState {
   const starts = new Map<string, number>();
+  let echoedRevisions = 0;
   let providerTokens = 0;
   let published = false;
   let budgetReason: string | undefined;
@@ -885,10 +906,12 @@ function createExecutionState(input: {
   let handoff: { blocker: string; safestNextAction: string } | undefined;
   let abortPromise: Promise<void> | undefined;
   let lastResponseText = '';
-  // Stuck-loop breaker: the key of the current run of identical tool failures,
-  // its consecutive count, and the captured detail once the limit trips.
-  let failureStreakKey: string | undefined;
-  let failureStreakCount = 0;
+  // Stuck-loop breaker: per tool, the key of its current run of identical
+  // failures and their count, plus the captured detail once the limit trips.
+  // Counted per tool because parallel and interleaved calls complete in
+  // arbitrary order: with one global streak, any other tool's success reset
+  // it, so an observe-ok / click-fails loop never tripped (FEAT-052).
+  const failureStreaks = new Map<string, { key: string; count: number }>();
   let repeatedFailure: { tool: string; errorCode: string } | undefined;
 
   const interrupt = (reason: string): void => {
@@ -907,24 +930,22 @@ function createExecutionState(input: {
   if (input.request.signal?.aborted) onUserAbort();
   else input.request.signal?.addEventListener('abort', onUserAbort, { once: true });
 
-  // Update the consecutive-identical-failure streak and trip the breaker once it
-  // reaches the limit. A successful call resets the streak (forward progress);
-  // a different failure key restarts the count. Denied/aborted results are
-  // ignored — they are not the impossible-retry pattern this guards against.
+  // Update this tool's identical-failure streak and trip the breaker once it
+  // reaches the limit. A success of the same tool resets its streak (forward
+  // progress); a different failure key restarts the count. Other tools'
+  // outcomes never touch it. Denied/aborted results are ignored — they are not
+  // the impossible-retry pattern this guards against.
   const trackFailureStreak = (tool: string, metadata: ReturnType<typeof toolMetadata>): void => {
     if (metadata.status === 'ok') {
-      failureStreakKey = undefined;
-      failureStreakCount = 0;
+      failureStreaks.delete(tool);
       return;
     }
     if (metadata.status !== 'error') return;
     const key = `${tool}:${metadata.errorCode ?? metadata.summary}`;
-    if (key === failureStreakKey) failureStreakCount += 1;
-    else {
-      failureStreakKey = key;
-      failureStreakCount = 1;
-    }
-    if (failureStreakCount >= input.budgets.toolRetries + 1 && repeatedFailure === undefined) {
+    const previous = failureStreaks.get(tool);
+    const streak = { key, count: previous?.key === key ? previous.count + 1 : 1 };
+    failureStreaks.set(tool, streak);
+    if (streak.count >= input.budgets.toolRetries + 1 && repeatedFailure === undefined) {
       // At the default 3m × (3 retries + first attempt), repeated timeouts land
       // exactly on the 80% wind-down. Let the non-fatal soft deadline win so
       // the next exploration call is refused and the session can publish.
@@ -970,6 +991,21 @@ function createExecutionState(input: {
           at: event.at,
         });
         if (event.tool === 'result_publish' && metadata.status === 'ok') published = true;
+        if (event.tool === 'task_contract' && metadata.status === 'ok') {
+          // Parallel declarations can finish before either event arrives, so
+          // echo every revision not yet shown, each exactly once.
+          while (echoedRevisions < input.contract.revisionCount()) {
+            echoedRevisions += 1;
+            const body = input.contract.revisionAt(echoedRevisions);
+            if (body === null) break;
+            input.connector.emitAgentEvent({
+              type: 'contract_declared',
+              revision: echoedRevisions,
+              summary: renderContractEcho(body),
+              at: event.at,
+            });
+          }
+        }
         if (metadata.errorCode === 'BUDGET_EXHAUSTED' && isRunFatalBudget(metadata.budgetLimit))
           interrupt('tool-budget');
         if (metadata.handoff) {
@@ -1072,7 +1108,7 @@ async function maybeAssembleUnpublishedResult(
   // resolve them for the published Brief — the artifact is the user's own
   // deliverable and must carry the real values (same contract as tool params).
   const overview = services.userInput?.resolve(draft) ?? draft;
-  const runtimeFacts = services.runHealth.briefFacts();
+  const runtimeFacts = runtimeFactsFor(services);
   const published = await services.domain.publish.publish(
     {
       title: assembledTitle(overview),

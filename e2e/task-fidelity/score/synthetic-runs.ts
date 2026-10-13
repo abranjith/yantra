@@ -131,6 +131,7 @@ export function syntheticRun(input: {
     usage: input.usage ?? null,
     report: null,
     runHealth: input.runHealth ?? null,
+    contract: null,
     unparseableJson: [],
   };
   return {
@@ -147,6 +148,8 @@ export function syntheticRun(input: {
     unreachable: [],
     skipped: [],
     registeredTools: [],
+    prompt: null,
+    progress: [],
     requests: input.requests ?? [],
     searchCalls: input.searchCalls ?? [],
     searchPeakConcurrency: 0,

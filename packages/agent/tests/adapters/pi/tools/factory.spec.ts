@@ -25,6 +25,7 @@ describe('@no-llm createYantraTools factory', () => {
       'browser_observe',
       'result_publish',
       'script_run',
+      'task_contract',
       'web_fetch',
       'web_search',
       'workflow_run',
@@ -149,5 +150,10 @@ describe('@no-llm tool contract harness — every registered tool', () => {
 
   it('result_publish satisfies the wrapper contract', async () => {
     await assertToolContract(resultPublishSpec(services), { brief: {}, extra: true });
+  });
+
+  it('task_contract satisfies the wrapper contract', async () => {
+    const { taskContractSpec } = await import('../../../../src/adapters/pi/tools/task-contract.js');
+    await assertToolContract(taskContractSpec(services), { deliverable: 'list', subject: 'x' });
   });
 });

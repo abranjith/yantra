@@ -41,6 +41,7 @@ import type {
 import type { BudgetTracker } from './budget.js';
 import type { WorkflowToolMode } from './profiles.js';
 import type { RunHealthLedger } from './run-health.js';
+import type { TaskContractStore } from './task-contract.js';
 import type { AgentTrace } from './trace.js';
 import type { UrlPolicy } from './url-policy.js';
 import type { UrlProvenance } from './url-provenance.js';
@@ -485,6 +486,12 @@ export interface RunServices {
    * logger", never "buffer until one appears".
    */
   readonly runtimeLogger?: Logger;
+  /**
+   * The run's declared task contract (FEAT-052). Required, not optional, for
+   * the same reason as `urlProvenance`: a construction site that forgot it
+   * would silently drop the missing-contract notice.
+   */
+  readonly contract: TaskContractStore;
 }
 
 export type { SearchProviderName, SearchResult };

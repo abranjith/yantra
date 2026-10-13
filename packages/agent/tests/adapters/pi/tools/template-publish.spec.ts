@@ -11,6 +11,10 @@ import {
 } from '../../../../src/adapters/pi/tools/result-publish.js';
 import type { BudgetLimits } from '../../../../src/runtime/budget.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
+import {
+  MISSING_CONTRACT_REASON,
+  TaskContractStore,
+} from '../../../../src/runtime/task-contract.js';
 
 import { buildServices } from './test-support.js';
 
@@ -56,9 +60,13 @@ describe('@no-llm templated result_publish', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
-  function setup(withEvidence = true, limits: Partial<BudgetLimits> = {}) {
+  function setup(
+    withEvidence = true,
+    limits: Partial<BudgetLimits> = {},
+    contract?: TaskContractStore,
+  ) {
     const template = manifest();
-    let services = buildServices({ runDir, template, limits });
+    let services = buildServices({ runDir, template, limits, ...(contract ? { contract } : {}) });
     if (withEvidence) {
       services.evidence.add({
         url: 'https://example.com/evidence',
@@ -206,5 +214,35 @@ describe('@no-llm templated result_publish', () => {
     expect(stored.metadata.search_provider).toBe('duckduckgo');
     expect(stored.notices).toMatchObject([{ kind: 'search_failed', source: 'search:duckduckgo' }]);
     expect(services.runHealth.publishedNoticeCount()).toBe(1);
+  });
+
+  it('carries the missing-contract notice ahead of runtime notices (FEAT-052)', async () => {
+    const contract = new TaskContractStore({
+      runId: 'run',
+      runDir,
+      command: 'research',
+      required: true,
+    });
+    const { services, tool } = setup(true, {}, contract);
+    services.runHealth.recordToolOutcome({
+      tool: 'web_search',
+      status: 'error',
+      code: 'SEARCH_NO_RESULTS',
+      cause: 'empty-results',
+      provider: 'duckduckgo',
+    });
+
+    const result = await tool.execute(validReport(), undefined);
+
+    expect(result.status).toBe('ok');
+    const stored = JSON.parse(await readFile(join(runDir, 'document.json'), 'utf8')) as {
+      notices: { kind: string; source: string; reason: string }[];
+    };
+    expect(stored.notices.map((notice) => notice.source)).toEqual([
+      'task-contract',
+      'search:duckduckgo',
+    ]);
+    expect(stored.notices[0]?.reason).toBe(MISSING_CONTRACT_REASON);
+    expect(services.runHealth.publishedNoticeCount()).toBe(2);
   });
 });

@@ -395,12 +395,13 @@ behavior, the JSON payloads, and the guarantees.
 
 ## Choose an execution mode
 
-| Goal                            | Command                   | Model behavior                                                                                                 |
-| ------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Answer one focused web question | `yantra ask <query>`      | Agentic when credentials are available; `--no-llm` is deterministic                                            |
-| Investigate a broad topic       | `yantra research <topic>` | Agentic when credentials are available; `--no-llm` is bounded multi-hop research                               |
-| Browse or act on a website      | `yantra do <goal>`        | Requires a model; no deterministic `do` executor exists                                                        |
-| Replay a saved workflow         | `yantra run <name>`       | Steps are always deterministic; an optional model may only write the final Brief when the workflow declares it |
+| Goal                                   | Command                   | Model behavior                                                                                                                 |
+| -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Answer one focused web question        | `yantra ask <query>`      | Agentic when credentials are available; `--no-llm` is deterministic                                                            |
+| Investigate a broad topic              | `yantra research <topic>` | Agentic when credentials are available; `--no-llm` is bounded multi-hop research                                               |
+| Read pages or listings on a named site | `yantra research <topic>` | Agentic research browses read-only (navigate, observe, extract; never click or fill); `--no-browse` turns that off for one run |
+| Act on a website (click, fill, submit) | `yantra do <goal>`        | Requires a model; no deterministic `do` executor exists                                                                        |
+| Replay a saved workflow                | `yantra run <name>`       | Steps are always deterministic; an optional model may only write the final Brief when the workflow declares it                 |
 
 ### Ask
 
@@ -428,13 +429,37 @@ cache behavior, evidence semantics, and limitations.
 yantra research "state of grid-scale battery storage in 2026"
 yantra research "long-duration storage technologies" --no-llm --depth 3
 yantra research "right-to-repair laws" --no-llm --max-sources 12 --per-query-limit 4 --pipeline-timeout 90s
+yantra research "current listings on example.com under 40 dollars" --no-browse
 ```
 
 `--depth`, `--max-sources`, `--per-query-limit`, `--fetch-timeout`,
 `--pipeline-timeout`, and `--max-llm-calls` govern only deterministic research.
-Agentic research uses the shared duration, token, tool-timeout, and retry
-budgets. Read [Research](features/research.md) for the two algorithms and their
+Agentic research uses the shared duration, token, tool-timeout, and
+identical-failure (`--tool-retries`) budgets. Read [Research](features/research.md) for the two algorithms and their
 different source/citation guarantees.
+
+Agentic research can open a read-only browser to read pages and listings on a
+site: it navigates, observes, and extracts, but never clicks, fills, or
+submits. Use `do` to act on a site. The stored preference
+`agent.research_browse` (default `true`) sets whether research browses:
+
+```console
+yantra prefs set agent.research_browse false
+```
+
+`--no-browse` turns the browser off for one run without changing the
+preference. It exists only on `research`; `ask` and `do` reject it as an
+unknown option.
+
+The agentic `research:` settings line on stderr ends with `browse=on` or
+`browse=off` after `model=…`. Deterministic research (`--no-llm`, or no
+credential resolved) never opens a browsing session, so its settings line has
+no `model=` or `browse=` field. An explicit `--no-browse` there prints this
+warning to stderr and the run continues:
+
+```text
+warning: --no-browse has no effect on deterministic research, which never opens a browsing session
+```
 
 Agentic `research` and `do` runs share acquisition rules that can show up in
 their output and audit:
@@ -552,6 +577,19 @@ goal: "under 0"
 Use single quotes (`'under $40'`) or escape the dollar sign (`"under \$40"`) to
 pass it literally. Yantra does not guess at shell expansion; the goal line only
 makes it visible so you can rerun with the intended text.
+
+Agentic `research` and `do` runs also show what the agent understood the task
+to be. When the agent declares its task contract, stderr gets one line:
+
+```text
+understood: <contract summary>
+```
+
+A later revision of the contract prints `understood (revised): <contract summary>`.
+Control characters in the summary are removed. With `--json`, the declaration
+arrives on stdout as an `agent_progress` record (event type
+`contract_declared`) instead of the stderr line. `ask` and deterministic runs
+never print it.
 
 ## Saved workflows
 
@@ -820,10 +858,15 @@ surface:
 | `--max-duration <duration>`    | Whole agent run deadline                     | `15m`              |
 | `--max-tokens <n>`             | Cumulative provider-token ceiling            | `2000000`          |
 | `--tool-timeout <duration>`    | One tool-attempt timeout                     | `3m`               |
-| `--tool-retries <n>`           | Retries after an identical failure           | `3`                |
+| `--tool-retries <n>`           | Identical-failure limit per tool (see below) | `3`                |
 | `--confirm-timeout <duration>` | Live consent wait                            | `3m`               |
 | `--no-llm`                     | Force a deterministic path where one exists  | model enabled      |
 | `--no-screenshots`             | Suppress vision assist for this run          | grant unchanged    |
+
+`--tool-retries` is not a retry count. It bounds identical failures of one
+tool: the run stops when a tool fails with the same error `n + 1` times without
+succeeding in between. A success of that tool resets its count, a different
+error restarts it, and other tools' results do not affect it.
 
 `ask`, `research`, `do`, `run`, `resume`, and `browser check` additionally share
 the browser-selection group:

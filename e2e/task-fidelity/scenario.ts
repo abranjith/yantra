@@ -63,6 +63,12 @@ export interface Scenario {
   /** The search provider's name; defaults to `duckduckgo`. */
   readonly searchProviderName?: SearchProviderName;
   readonly budgets?: Partial<AgentBudgetConfig>;
+  /**
+   * Whether a `research` run gets the read-only browser, as the stored
+   * `agent.research_browse` preference or `--no-browse` would decide it.
+   * Defaults to `true`, the product default (FEAT-052).
+   */
+  readonly browse?: boolean;
   /** The deterministic tier's script. */
   readonly script: readonly ScriptStep[];
   /** The deterministic tier's expectations. */

@@ -446,4 +446,103 @@ describe('@no-llm report builder — agentic runs', () => {
 
     await rm(runDir, { recursive: true, force: true });
   });
+
+  const CONTRACT = {
+    schema_version: 1,
+    run_id: 'agentic-run',
+    command: 'research',
+    revisions: [
+      {
+        revision: 1,
+        declared_at: '2026-10-12T12:00:00.000Z',
+        contract: {
+          deliverable: 'table',
+          subject: 'new SUV listings',
+          required_fields: ['dealer', 'price'],
+          filters: [{ name: 'drivetrain', value: 'AWD' }],
+          required_sources: ['example-listings.test'],
+          ranking: null,
+          limit: null,
+          notes: null,
+        },
+      },
+      {
+        revision: 2,
+        declared_at: '2026-10-12T12:00:09.000Z',
+        contract: {
+          deliverable: 'table',
+          subject: 'new SUV listings',
+          required_fields: ['dealer', 'price', 'color'],
+          filters: [
+            { name: 'drivetrain', value: 'AWD' },
+            { name: 'condition', value: 'new' },
+          ],
+          required_sources: ['example-listings.test'],
+          ranking: { field: 'price', direction: 'asc' },
+          limit: 10,
+          notes: 'dealer listings only',
+        },
+      },
+    ],
+  };
+
+  it('renders the current Task Contract and its revision count (FEAT-052)', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-contract-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(join(runDir, 'contract.json'), JSON.stringify(CONTRACT), 'utf8');
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain(
+      [
+        '## Task Contract',
+        'Deliverable: table - new SUV listings',
+        'Required fields: dealer, price, color',
+        'Filters: drivetrain=AWD, condition=new',
+        'Required sources: example-listings.test',
+        'Ranking: price asc',
+        'Limit: 10',
+        'Notes: dealer listings only',
+        'Revisions: 2',
+        '',
+      ].join('\n'),
+    );
+    expect(markdown.indexOf('## Tool Calls')).toBeLessThan(markdown.indexOf('## Task Contract'));
+    expect(markdown).toContain('- contract.json');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('renders one line for an invalid contract.json and never throws', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-bad-contract-'));
+    await writeAgenticRun(runDir, []);
+    await writeFile(
+      join(runDir, 'contract.json'),
+      JSON.stringify({ ...CONTRACT, revisions: [] }),
+      'utf8',
+    );
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain('Task Contract: contract.json present but invalid');
+    expect(markdown).not.toContain('## Task Contract');
+
+    await writeFile(join(runDir, 'contract.json'), 'not json', 'utf8');
+    const garbage = await new MarkdownReportBuilder().build(runDir, 'completed');
+    expect(garbage).toContain('Task Contract: contract.json present but invalid');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  it('renders no Task Contract section when the run declared none', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-no-contract-'));
+    await writeAgenticRun(runDir, []);
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).not.toContain('Task Contract');
+    expect(markdown).not.toContain('contract.json');
+
+    await rm(runDir, { recursive: true, force: true });
+  });
 });

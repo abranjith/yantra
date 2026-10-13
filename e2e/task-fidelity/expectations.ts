@@ -35,7 +35,7 @@ export type Owner = (typeof OWNERS)[number];
  * deterministic tier. A target that then fails is fixed in the owner's code,
  * never by editing the expectation.
  */
-export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>(['FEAT-052', 'FEAT-053']);
+export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>(['FEAT-053']);
 
 /** The verdict of one matcher on one measured value. */
 export interface MatchResult {

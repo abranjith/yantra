@@ -535,6 +535,56 @@ export const AGENT_INTERACTION_MESSAGES = [
     ['count', 'index'],
     'browser_extract',
   ),
+  // `task_contract` (FEAT-052). Each cause names the one entry at fault and
+  // the correction; re-calling the tool with the full contract is the move.
+  tool(
+    'INVALID_INPUT',
+    'contract-source-host',
+    (details) =>
+      `"${text(details.entry).slice(0, 80)}" in required_sources is not a site address. Write ` +
+      'the site as a hostname such as example.com, or move it to notes, then call ' +
+      'task_contract again with the full contract.',
+    ['entry'],
+    'task_contract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'contract-duplicate',
+    (details) =>
+      `"${text(details.name).slice(0, 80)}" appears twice (names are compared ignoring case). ` +
+      'List each field, filter, and source once, then call task_contract again with the full ' +
+      'contract.',
+    ['name'],
+    'task_contract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'contract-table-fields',
+    () =>
+      'A table contract needs the fields each row must carry. Add them to required_fields, or ' +
+      'use deliverable "answer" or "report", then call task_contract again with the full contract.',
+    [],
+    'task_contract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'contract-ranking-field',
+    (details) =>
+      `The ranking orders by "${text(details.field).slice(0, 60)}", which is not one of ` +
+      'required_fields. Add it to required_fields or rank by a listed field, then call ' +
+      'task_contract again with the full contract.',
+    ['field'],
+    'task_contract',
+  ),
+  tool(
+    'CONTRACT_REVISION_LIMIT',
+    'revisions',
+    () =>
+      'The contract is fixed at revision 3. Continue with the evidence the goal needs and ' +
+      'publish; state any misreading in the result.',
+    [],
+    'result_publish',
+  ),
   middleware('INVALID_INPUT', 'schema-validation', passThrough, ['message']),
   middleware(
     'TOOL_TIMEOUT',

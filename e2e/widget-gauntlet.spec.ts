@@ -18,6 +18,7 @@ import {
   DEFAULT_BUDGET_LIMITS,
   EvidenceLedger,
   EvidencePhase,
+  TaskContractStore,
   UrlPolicy,
   RunHealthLedger,
   UrlProvenance,
@@ -352,6 +353,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     actionPhase: new ActionPhase(),
     evidence: new EvidenceLedger(sanitizer),
     evidencePhase: new EvidencePhase(),
+    contract: new TaskContractStore({ runId: 'run', runDir: '.', command: 'do', required: false }),
     trace: null,
     abortSignal: new AbortController().signal,
     // The fill engine's stability bounds use this injected clock. Advancing it

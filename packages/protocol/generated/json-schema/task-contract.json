@@ -1,0 +1,202 @@
+{
+  "$ref": "#/definitions/TaskContractRecord",
+  "definitions": {
+    "TaskContractRecord": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Task-contract schema version."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "research",
+            "do"
+          ],
+          "description": "The agentic command that declared the contract."
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based revision number."
+              },
+              "declared_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO-8601 time the revision was declared."
+              },
+              "contract": {
+                "type": "object",
+                "properties": {
+                  "deliverable": {
+                    "type": "string",
+                    "enum": [
+                      "table",
+                      "answer",
+                      "report"
+                    ],
+                    "description": "What the run delivers: rows of fields, a direct answer, or a prose report."
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "What the rows or the answer are about."
+                  },
+                  "required_fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    "maxItems": 12,
+                    "description": "Fields each row or answer must carry, unique case-insensitively. Non-empty for a table."
+                  },
+                  "filters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60,
+                          "description": "The condition the results must meet, such as \"condition\"."
+                        },
+                        "value": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "description": "The required value, such as \"new\"."
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One condition the goal states."
+                    },
+                    "maxItems": 12,
+                    "description": "Every condition the goal states, with names unique case-insensitively."
+                  },
+                  "required_sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$",
+                      "maxLength": 253
+                    },
+                    "maxItems": 5,
+                    "description": "Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique."
+                  },
+                  "ranking": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 60,
+                            "description": "The field results are ordered by."
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ],
+                            "description": "Ascending or descending order."
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "direction"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How results are ordered, when the goal asks for an order."
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How many results the goal asks for, when it says."
+                  },
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Anything the structure cannot express, such as a site named without its address."
+                  }
+                },
+                "required": [
+                  "deliverable",
+                  "subject",
+                  "required_fields",
+                  "filters",
+                  "required_sources",
+                  "ranking",
+                  "limit",
+                  "notes"
+                ],
+                "additionalProperties": false,
+                "description": "A normalized task contract: the deliverable, required fields, filters, and required sources a run declared for the user's goal."
+              }
+            },
+            "required": [
+              "revision",
+              "declared_at",
+              "contract"
+            ],
+            "additionalProperties": false,
+            "description": "One declaration of the contract."
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "description": "Declarations in order; the last one is the current contract."
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "command",
+        "revisions"
+      ],
+      "additionalProperties": false,
+      "description": "The task contract an agentic research/do run declared (contract.json): every revision in declaration order, the last being current. Sanitized, model-authored, and never a source of authority."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

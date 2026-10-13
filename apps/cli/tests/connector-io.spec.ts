@@ -300,3 +300,71 @@ describe('@no-llm cli/connector-io', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 });
+
+describe('@no-llm cli/connector-io task-contract echo (FEAT-052)', () => {
+  const declared = (revision: number, summary: string): AgentProgressEvent => ({
+    type: 'contract_declared',
+    revision,
+    summary,
+    at: '2026-10-12T12:00:00.000Z',
+  });
+
+  function textConnector(): {
+    readonly connector: CLIConnectorIO;
+    readonly stdout: ReturnType<typeof capture>;
+    readonly stderr: ReturnType<typeof capture>;
+  } {
+    const stdout = capture();
+    const stderr = capture();
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      renderOpts: { ...makeOpts(stdout.stream, false), errStream: stderr.stream },
+      interactive: true,
+    });
+    return { connector, stdout, stderr };
+  }
+
+  it('writes the understood line to stderr and nothing to stdout', () => {
+    const { connector, stdout, stderr } = textConnector();
+
+    connector.emitAgentEvent(declared(1, 'table of SUV listings — fields: dealer, price'));
+
+    expect(stderr.value()).toBe('understood: table of SUV listings — fields: dealer, price\n');
+    expect(stdout.value()).toBe('');
+  });
+
+  it('marks a later revision as revised', () => {
+    const { connector, stderr } = textConnector();
+
+    connector.emitAgentEvent(declared(1, 'answer of x'));
+    connector.emitAgentEvent(declared(2, 'answer of y'));
+
+    expect(stderr.value()).toBe('understood: answer of x\nunderstood (revised): answer of y\n');
+  });
+
+  it('strips terminal escape sequences from the summary', () => {
+    const { connector, stderr } = textConnector();
+
+    connector.emitAgentEvent(declared(1, 'table of \u001b[31mred\u001b[0m cars\nnext'));
+
+    expect(stderr.value()).not.toContain('\u001b');
+    expect(stderr.value().split('\n')).toHaveLength(2);
+    expect(stderr.value()).toMatch(/^understood: table of \s?\[31mred \[0m cars next\n$/u);
+  });
+
+  it('emits one agent_progress JSON line in JSON mode', () => {
+    const stdout = capture();
+    const connector = new CLIConnectorIO(new JSONRenderer(), {
+      renderOpts: makeOpts(stdout.stream, true),
+      interactive: false,
+    });
+
+    connector.emitAgentEvent(declared(1, 'answer of x'));
+
+    const lines = stdout.value().trim().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? '')).toMatchObject({
+      kind: 'agent_progress',
+      event: { type: 'contract_declared', revision: 1, summary: 'answer of x' },
+    });
+  });
+});

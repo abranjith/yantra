@@ -21,6 +21,15 @@ export const GOAL_ECHO_MAX_CHARS = 200;
 const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F]/gu;
 
 /**
+ * Removes C0/C1 control characters (so no escape sequence reaches the
+ * terminal) and collapses whitespace to single spaces. Shared by every stderr
+ * echo line: the goal echo and the task-contract echo.
+ */
+export function stripControlCharacters(text: string): string {
+  return text.replace(CONTROL_CHARS_RE, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+/**
  * Render the goal-echo line.
  *
  * 1. Credential-shaped and marked values print as their placeholders
@@ -47,7 +56,7 @@ export function renderGoalEcho(goal: string): string {
     }
     throw error;
   }
-  const cleaned = redacted.replace(CONTROL_CHARS_RE, ' ').replace(/\s+/gu, ' ').trim();
+  const cleaned = stripControlCharacters(redacted);
   const chars = [...cleaned];
   const bounded =
     chars.length <= GOAL_ECHO_MAX_CHARS

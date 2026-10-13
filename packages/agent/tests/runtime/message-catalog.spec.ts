@@ -24,6 +24,7 @@ import {
   EvidencePhase,
   type RunServices,
 } from '../../src/runtime/run-services.js';
+import { TaskContractStore } from '../../src/runtime/task-contract.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
 import { UrlProvenance } from '../../src/runtime/url-provenance.js';
 import { resolveVisionAvailability } from '../../src/runtime/vision.js';
@@ -92,6 +93,7 @@ describe('@no-llm agent interaction message catalog', () => {
       'browser_observe',
       'result_publish',
       'script_run',
+      'task_contract',
       'web_fetch',
       'web_search',
       'workflow_run',
@@ -208,6 +210,7 @@ function buildServices(): RunServices {
     actionPhase: new ActionPhase(),
     evidence: new EvidenceLedger(sanitizer),
     evidencePhase: new EvidencePhase(),
+    contract: new TaskContractStore({ runId: 'run', runDir: '.', command: 'do', required: false }),
     trace: null,
     abortSignal: new AbortController().signal,
     now: () => Date.now(),

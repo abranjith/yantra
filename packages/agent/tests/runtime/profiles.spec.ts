@@ -8,10 +8,14 @@ import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
 import {
   COMMAND_TASK_PROFILES,
+  browserCapabilityOf,
   promptAddendumFor,
   resolveCommandTaskProfile,
 } from '../../src/runtime/profiles.js';
 import { buildServices } from '../adapters/pi/tools/test-support.js';
+
+const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'];
+const BROWSE = ['browser_navigate', 'browser_observe', 'browser_extract'];
 
 describe('@no-llm command task profiles', () => {
   it('registers exactly the declared least-privilege catalog for each command', () => {
@@ -33,30 +37,85 @@ describe('@no-llm command task profiles', () => {
     expect(new Set([ask, research, task]).size).toBe(3);
   });
 
-  it('exposes no per-command budgets and ignores legacy budget environment variables', () => {
-    const configured = resolveCommandTaskProfile('ask', {
-      YANTRA_AGENT_ASK_MAX_TOOL_CALLS: '9',
-    });
+  it('exposes no per-command budgets on any resolved profile', () => {
+    const configured = resolveCommandTaskProfile('ask');
 
     for (const profile of [...Object.values(COMMAND_TASK_PROFILES), configured]) {
       expect(profile).not.toHaveProperty('budgets');
     }
   });
 
-  it('keeps do equivalent to the full FEAT-026 catalog and enables research browsing only explicitly', () => {
+  it('keeps do equivalent to the full FEAT-026 catalog', () => {
     const full = yantraToolCatalog(buildServices()).map((tool) => tool.name);
     const task = yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.do).map(
       (tool) => tool.name,
     );
-    const research = resolveCommandTaskProfile('research', { YANTRA_AGENT_RESEARCH_BROWSE: '1' });
-
     expect(task).toEqual(full);
-    expect(research.toolNames).toContain('browser_navigate');
-    expect(research.toolNames).not.toContain('browser_click');
-    expect(research.toolNames).not.toContain('browser_fill_element');
-    // browser_fill_form mutates the page, so opt-in research browsing (a
-    // read-only mode) must not gain it either.
-    expect(research.toolNames).not.toContain('browser_fill_form');
+  });
+
+  it('gives research the read-only browse tools by default and none with browse: false', () => {
+    const browse = resolveCommandTaskProfile('research');
+    const explicit = resolveCommandTaskProfile('research', { browse: true });
+    const noBrowse = resolveCommandTaskProfile('research', { browse: false });
+
+    expect([...browse.toolNames].sort()).toEqual(
+      [...READ_TOOLS, 'workflow_run', 'task_contract', ...BROWSE].sort(),
+    );
+    expect(explicit.toolNames).toEqual(browse.toolNames);
+    expect([...noBrowse.toolNames].sort()).toEqual(
+      [...READ_TOOLS, 'workflow_run', 'task_contract'].sort(),
+    );
+    for (const variant of [browse, noBrowse]) {
+      // Research browsing is a read-only mode: nothing that clicks or fills.
+      for (const mutating of ['browser_click', 'browser_fill_element', 'browser_fill_form']) {
+        expect(variant.toolNames).not.toContain(mutating);
+      }
+    }
+    for (const tool of BROWSE) expect(noBrowse.toolNames).not.toContain(tool);
+  });
+
+  it('ignores browse for ask and do', () => {
+    expect(resolveCommandTaskProfile('ask', { browse: true }).toolNames).toEqual(
+      COMMAND_TASK_PROFILES.ask.toolNames,
+    );
+    expect(resolveCommandTaskProfile('do', { browse: false }).toolNames).toEqual(
+      COMMAND_TASK_PROFILES.do.toolNames,
+    );
+  });
+
+  it('gives task_contract to research (both variants) and do, never ask', () => {
+    expect(resolveCommandTaskProfile('research').toolNames).toContain('task_contract');
+    expect(resolveCommandTaskProfile('research', { browse: false }).toolNames).toContain(
+      'task_contract',
+    );
+    expect(resolveCommandTaskProfile('do').toolNames).toContain('task_contract');
+    expect(resolveCommandTaskProfile('ask').toolNames).not.toContain('task_contract');
+    expect(
+      yantraToolCatalog(buildServices(), COMMAND_TASK_PROFILES.ask).map((tool) => tool.name),
+    ).not.toContain('task_contract');
+  });
+
+  it('derives the browser capability from catalog names alone', () => {
+    expect(browserCapabilityOf(resolveCommandTaskProfile('ask').toolNames)).toBe('none');
+    expect(browserCapabilityOf(resolveCommandTaskProfile('research').toolNames)).toBe('read');
+    expect(
+      browserCapabilityOf(resolveCommandTaskProfile('research', { browse: false }).toolNames),
+    ).toBe('none');
+    expect(browserCapabilityOf(resolveCommandTaskProfile('do').toolNames)).toBe('interact');
+    expect(browserCapabilityOf([])).toBe('none');
+    expect(browserCapabilityOf(['browser_screenshot'])).toBe('read');
+    expect(browserCapabilityOf(['browser_fill_form'])).toBe('interact');
+    expect(browserCapabilityOf(['web_search', 'browser_click'])).toBe('interact');
+  });
+
+  it('gives the two research catalogs distinct, stable hashes', () => {
+    const hashOf = (browse: boolean): string =>
+      hashToolCatalog(
+        yantraToolCatalog(buildServices(), resolveCommandTaskProfile('research', { browse })),
+      );
+    expect(hashOf(true)).toBe(hashOf(true));
+    expect(hashOf(false)).toBe(hashOf(false));
+    expect(hashOf(true)).not.toBe(hashOf(false));
   });
 
   it('gives the unified fill tools to do only', () => {
@@ -251,13 +310,80 @@ describe('@no-llm command task profiles', () => {
     expect(byName.get('browser_click')).toMatch(/resolved_by/);
   });
 
-  it('keeps ask and research addenda byte-identical while do guidance changes', () => {
+  it('keeps ask byte-identical; research and do carry the contract and required-source guidance', () => {
     const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
     expect(digest(COMMAND_TASK_PROFILES.ask.promptAddendum)).toBe(
       'ee8fe1634fd2a09ad7c9c78ffb3da050121a74648082e62d16649adb0b85f40b',
     );
-    expect(digest(COMMAND_TASK_PROFILES.research.promptAddendum)).toBe(
-      'a2b284bef5c60dc165f2211ea1f984e1794440d4a956d907a2676817694ebe6c',
+    const requiredSource =
+      'When the goal names a site or source, that source is required: read the answer from it, ' +
+      'and present any other source only as a clearly labeled alternative, never merged into the ' +
+      'answer.';
+    for (const profile of [
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+      resolveCommandTaskProfile('do'),
+    ]) {
+      expect(profile.promptAddendum).toContain(requiredSource);
+      expect(profile.promptAddendum).toContain(
+        'Call task_contract in the same turn as your first search or fetch.',
+      );
+    }
+    expect(COMMAND_TASK_PROFILES.ask.promptAddendum).not.toMatch(/task_contract|required:/u);
+    // `do` keeps its single-site rule.
+    expect(COMMAND_TASK_PROFILES.do.promptAddendum).toContain(
+      'Do not switch to web_search for data the goal asked you to read from a specific site.',
+    );
+  });
+
+  it('tells research how to find and traverse pages (FEAT-050/051 moves)', () => {
+    const research = resolveCommandTaskProfile('research').promptAddendum;
+    expect(research).toContain('web_search (limit: 0 lists URLs without reading them)');
+    expect(research).toContain('follow its records[] and links[] to the pages you need');
+    expect(research).toContain(
+      'Use browser_navigate and browser_extract for a page that needs a live browser.',
+    );
+    expect(research).toContain('result_publish with {"brief"');
+  });
+
+  it('never tells a no-browse research run about browser tools', () => {
+    const noBrowse = resolveCommandTaskProfile('research', { browse: false });
+    expect(noBrowse.promptAddendum).not.toMatch(/browser_/u);
+    expect(noBrowse.promptAddendum).toBe(COMMAND_TASK_PROFILES.research.promptAddendum);
+    expect(resolveCommandTaskProfile('research').promptAddendum).not.toBe(noBrowse.promptAddendum);
+  });
+
+  it('names in every addendum only tools that profile actually has', () => {
+    const toolName =
+      /\b(?:web_search|web_fetch|script_run|result_publish|workflow_run|task_contract|browser_[a-z_]+)\b/gu;
+    for (const profile of [
+      resolveCommandTaskProfile('ask'),
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+      resolveCommandTaskProfile('do'),
+    ]) {
+      const named = new Set(profile.promptAddendum.match(toolName) ?? []);
+      for (const name of named) expect(profile.toolNames).toContain(name);
+    }
+  });
+
+  it('never says "independent sources" without the required-source qualifier', () => {
+    const parsed = parseTemplate('# {{ title | text }}\n\n{{ sources }}');
+    if (!parsed.isOk) throw new Error('fixture template did not parse');
+    const texts = [
+      ...[
+        resolveCommandTaskProfile('ask'),
+        resolveCommandTaskProfile('research'),
+        resolveCommandTaskProfile('research', { browse: false }),
+        resolveCommandTaskProfile('do'),
+      ].flatMap((profile) => [profile.promptAddendum, promptAddendumFor(profile, parsed.value)]),
+    ];
+    for (const text of texts) {
+      if (!/independent sources/u.test(text)) continue;
+      expect(text).toMatch(/that source is required[^]*Otherwise use independent sources/u);
+    }
+    expect(promptAddendumFor(resolveCommandTaskProfile('research'), parsed.value)).toMatch(
+      /Otherwise use independent sources/u,
     );
   });
 

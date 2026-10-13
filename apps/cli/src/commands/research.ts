@@ -64,6 +64,12 @@ import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
+import {
+  addNoBrowseOption,
+  resolveResearchBrowse,
+  type NoBrowseOption,
+  type ResearchBrowseResolution,
+} from '../research-browse.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
 import {
   TEMPLATE_LLM_GUARD,
@@ -78,7 +84,7 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-interface ResearchCommandOptions extends AgentOptions, BrowserSelectionOptions {
+interface ResearchCommandOptions extends AgentOptions, BrowserSelectionOptions, NoBrowseOption {
   readonly json?: boolean;
   readonly llm?: boolean;
   readonly color?: boolean;
@@ -136,7 +142,9 @@ export function registerResearchCommand(
   // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
   // `--auth-secret`), identical to `ask` and `do`. These bind the LLM provider;
   // `--search-provider` below is the unrelated web-search backend.
-  addBrowserSelectionOptions(addAgentOptions(researchCommand))
+  // `--no-browse` is registered here only: `ask` never browses and `do`
+  // always does, so on either it would be a dead control.
+  addNoBrowseOption(addBrowserSelectionOptions(addAgentOptions(researchCommand)))
     .addOption(new Option('--json', 'shorthand for --format json').default(false))
     .addOption(
       new Option('--depth <hops>', 'number of research hops (1-3)')
@@ -221,6 +229,14 @@ export function registerResearchCommand(
           'warning: --detail and --length do not affect template-defined report structure\n',
         );
       }
+      const browse = resolveResearchBrowse(options, effective);
+      // A scripted `--no-browse` must keep working when credentials go
+      // missing, so the deterministic path warns and continues.
+      if (agent.mode === 'no-llm' && options.browse === false) {
+        resolvedRuntime.stderr.write(
+          'warning: --no-browse has no effect on deterministic research, which never opens a browsing session\n',
+        );
+      }
 
       // Resolved before the try so a bad --provider/--model is a validation
       // failure (exit 1) rather than being reclassified as an execution failure
@@ -230,7 +246,9 @@ export function registerResearchCommand(
         `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
           `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
           `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
-          (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
+          (agent.mode === 'no-llm'
+            ? ''
+            : ` model=${agent.model.provider}/${agent.model.id} browse=${browse.enabled ? 'on' : 'off'}`) +
           '\n',
       );
       // The goal exactly as received, so a shell-rewritten argument is visible.
@@ -250,6 +268,7 @@ export function registerResearchCommand(
             agent,
             resolveAmbientContext(effective),
             browserSelection,
+            browse,
           );
           return;
         }
@@ -404,6 +423,7 @@ async function runAgenticResearch(
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
   ambient: ResolvedAmbientContext,
   browserSelection: BrowserSelection | undefined,
+  browse: ResearchBrowseResolution,
 ): Promise<void> {
   const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
@@ -425,7 +445,7 @@ async function runAgenticResearch(
       suppressPublishedOutcome: true,
     },
   );
-  const profile = resolveCommandTaskProfile('research', runtime.env);
+  const profile = resolveCommandTaskProfile('research', { browse: browse.enabled });
   const outcome = await runtime.runTask(
     {
       goal: topic,

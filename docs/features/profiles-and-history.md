@@ -40,6 +40,9 @@ The profile currently affects commands in these ways:
   `--search-provider` options resolve from `defaults.*`.
 - Agentic `ask`, `research`, and `do` resolve their shared provider/model and
   runtime options from `agent.*`, and all three receive ambient context.
+- Agentic `research` reads `agent.research_browse` (default `true`) to decide
+  whether it gets the read-only browser tools; `research --no-browse` turns
+  them off for one run.
 - `run` and `resume` use `agent.*` when selecting optional model-written replay
   synthesis. They do not receive the agentic ambient block.
 - `research` presentation/search options and `do` task behavior do not consume
@@ -47,7 +50,10 @@ The profile currently affects commands in these ways:
 
 Personal preferences do not grant tools or weaken command safety. The fixed
 least-privilege command profiles still decide which web, browser, workflow, and
-publication tools `ask`, `research`, and `do` may use.
+publication tools `ask`, `research`, and `do` may use. The one catalog choice a
+preference makes is `agent.research_browse`, which selects between research's
+read-only browsing catalog and the same catalog without browser tools; neither
+can click or fill.
 
 See [Usage](../usage.md) for the shared agent option
 flags, environment variables, duration syntax, and pinned defaults.
@@ -190,6 +196,7 @@ yantra prefs set personalization.interests "browser automation,local AI"
 yantra prefs set personalization.favorite_retailers "Target,Best Buy"
 yantra prefs set personalization.enabled false
 yantra prefs set context.location false
+yantra prefs set agent.research_browse false
 
 yantra prefs approve personalization.interests
 ```
@@ -291,6 +298,7 @@ run manifests.
 | `agent.max_duration`, `agent.tool_timeout`, `agent.confirm_timeout` | Positive duration: integer with optional `ms`, `s`, `m`, or `h` suffix              |
 | `agent.max_tokens`                                                  | Positive integer                                                                    |
 | `agent.tool_retries`                                                | Non-negative integer                                                                |
+| `agent.research_browse`                                             | Boolean, default `true`; whether agentic `research` gets read-only browsing         |
 
 ### Human and JSON output
 
@@ -371,6 +379,14 @@ explicit command flag
   > environment variable
   > effective preference (using the three profile layers above)
   > pinned agent default
+```
+
+`agent.research_browse` has no environment layer:
+
+```text
+research --no-browse
+  > effective preference (using the three profile layers above)
+  > pinned default true
 ```
 
 `--no-llm` or `LLM_PROVIDER=none` is resolved before unused model settings are

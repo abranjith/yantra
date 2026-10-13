@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import {
   RunHealth,
+  TaskContractRecord,
+  type TaskContractBody,
   type TaskEvent,
   type ToolAuditEntryType,
   type UsageLedger,
@@ -56,6 +58,7 @@ export class MarkdownReportBuilder implements ReportBuilder {
           // report that read it would make an optional artifact load-bearing.
           hasRuntimeLog: await fileExists(join(runDir, 'runtime.jsonl')),
           runHealth: await readRunHealth(join(runDir, 'run-health.json')),
+          contract: await readTaskContract(join(runDir, 'contract.json')),
           ...(failure ? { failure } : {}),
         })
       : renderReport({
@@ -118,6 +121,8 @@ function renderAgenticReport(input: {
   readonly hasRuntimeLog: boolean;
   /** `run-health.json`, when the run wrote one (absent on older runs). */
   readonly runHealth: RunHealthRead;
+  /** `contract.json`, when the run declared a task contract (FEAT-052). */
+  readonly contract: TaskContractRead;
   readonly failure?: FailureContext;
 }): string {
   const lines: string[] = [];
@@ -172,6 +177,7 @@ function renderAgenticReport(input: {
   }
   lines.push('');
 
+  lines.push(...renderTaskContract(input.contract));
   lines.push(...renderRunHealth(input.runHealth));
 
   lines.push('## Captures');
@@ -221,12 +227,64 @@ function renderAgenticReport(input: {
   // this artifact existed stays exactly as valid as it was.
   if (input.hasRuntimeLog) lines.push('- runtime.jsonl');
   if (input.runHealth.kind !== 'absent') lines.push('- run-health.json');
+  if (input.contract.kind !== 'absent') lines.push('- contract.json');
   const sessionFile = stringOr(agent.session_file, '');
   if (sessionFile.length > 0) {
     lines.push(`- ${sessionFile}`);
   }
 
   return lines.join('\n');
+}
+
+/** What reading `contract.json` found. */
+type TaskContractRead =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'valid'; readonly value: TaskContractRecord };
+
+/**
+ * Read `contract.json` with the protocol schema. Optional for every reader:
+ * `ask` runs, runs that never declared a contract, and older runs have none.
+ */
+async function readTaskContract(path: string): Promise<TaskContractRead> {
+  if (!(await fileExists(path))) return { kind: 'absent' };
+  const parsed = TaskContractRecord.safeParse(await readJson<unknown>(path));
+  return parsed.success ? { kind: 'valid', value: parsed.data } : { kind: 'invalid' };
+}
+
+/**
+ * The "Task Contract" section: what the run declared the goal requires. The
+ * contract was sanitized before it was written; absent renders nothing, and an
+ * unreadable file renders one line rather than failing the report.
+ */
+function renderTaskContract(read: TaskContractRead): string[] {
+  if (read.kind === 'absent') return [];
+  if (read.kind === 'invalid') return ['Task Contract: contract.json present but invalid', ''];
+  const revisions = read.value.revisions;
+  const current = revisions[revisions.length - 1];
+  if (current === undefined) return ['Task Contract: contract.json present but invalid', ''];
+  return [
+    '## Task Contract',
+    ...contractLines(current.contract),
+    `Revisions: ${revisions.length}`,
+    '',
+  ];
+}
+
+function contractLines(contract: TaskContractBody): string[] {
+  const listOrNone = (values: readonly string[]): string =>
+    values.length === 0 ? 'none' : values.join(', ');
+  return [
+    `Deliverable: ${contract.deliverable} - ${contract.subject}`,
+    `Required fields: ${listOrNone(contract.required_fields)}`,
+    `Filters: ${listOrNone(contract.filters.map((filter) => `${filter.name}=${filter.value}`))}`,
+    `Required sources: ${listOrNone(contract.required_sources)}`,
+    ...(contract.ranking === null
+      ? []
+      : [`Ranking: ${contract.ranking.field} ${contract.ranking.direction}`]),
+    ...(contract.limit === null ? [] : [`Limit: ${contract.limit}`]),
+    ...(contract.notes === null ? [] : [`Notes: ${contract.notes}`]),
+  ];
 }
 
 /** What reading `run-health.json` found. */
