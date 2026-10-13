@@ -153,6 +153,7 @@ export function deliveredUnits(run: Pick<ScenarioRun, 'artifacts'>): readonly De
   for (const section of asArray(brief.sections)) {
     const record = asRecord(section);
     if (record === null) continue;
+    if (record.kind === 'alternatives') continue;
     const body = typeof record.body_md === 'string' ? record.body_md : '';
     const alternative = record.kind === 'alternatives';
     const lines = body

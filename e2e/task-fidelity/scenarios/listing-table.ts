@@ -9,7 +9,7 @@
  * `unreachable` list pins exactly which moves the tools did not offer (G3).
  */
 
-import type { ScriptContext, ScriptStep } from '../agent/scripted-provider.js';
+import type { OfferedRecord, ScriptContext, ScriptStep } from '../agent/scripted-provider.js';
 import {
   atLeast,
   equals,
@@ -36,7 +36,10 @@ import {
   fieldOf,
   maxRequestsPerUrl,
   outcomeOf,
-  publishStep,
+  recordPrice,
+  recordSeller,
+  pageField,
+  sourceIdOf,
   requestsDuring,
   resultLabelled,
   stringProp,
@@ -44,11 +47,17 @@ import {
 
 const LISTING_HOST = 'faceted-listing.yantra.test';
 const QUERY = 'new 2026 Norvale Teyra Summit AWD near Fairview';
-const DETAIL_COUNT = 3;
+const DETAIL_COUNT = 5;
 
 /** The listing read the detail records come from: the AWD facet page when followed, else the results page. */
 function listingRead(ctx: ScriptContext): ReturnType<ScriptContext['last']> {
   return ctx.labelled('awd-facet')[0] ?? ctx.labelled('results')[0];
+}
+function deliveredRecords(ctx: ScriptContext): readonly OfferedRecord[] {
+  return [
+    ...ctx.recordsFrom(listingRead(ctx)),
+    ...ctx.labelled('next-page').flatMap((result) => ctx.recordsFrom(result)),
+  ].sort((a, b) => (recordPrice(a) ?? Infinity) - (recordPrice(b) ?? Infinity));
 }
 
 function detailStep(index: number): ScriptStep {
@@ -57,13 +66,27 @@ function detailStep(index: number): ScriptStep {
     tool: 'web_fetch',
     label: `detail-${index + 1}`,
     params: (ctx) => {
-      const record = ctx.recordsFrom(listingRead(ctx))[index];
+      const record = deliveredRecords(ctx)[index];
       return typeof record?.url === 'string' ? { url: record.url } : null;
     },
   };
 }
 
 const script: readonly ScriptStep[] = [
+  {
+    kind: 'call',
+    tool: 'task_contract',
+    label: 'contract',
+    params: {
+      deliverable: 'table',
+      subject: 'SUV listings',
+      required_fields: ['seller', 'price', 'exterior color', 'interior color'],
+      filters: Object.entries(CANONICAL_FILTERS).map(([name, value]) => ({ name, value })),
+      required_sources: [LISTING_HOST],
+      ranking: { field: 'price', direction: 'asc' },
+      limit: 5,
+    },
+  },
   // Discovery: titles and URLs only, no page fetched (FEAT-050's `limit: 0`).
   {
     kind: 'call',
@@ -89,22 +112,72 @@ const script: readonly ScriptStep[] = [
       return url === null ? null : { url };
     },
   },
+  ...['New', 'Summit', 'AWD'].map(
+    (value, i): ScriptStep => ({
+      kind: 'call',
+      tool: 'web_fetch',
+      label: i === 2 ? 'awd-facet' : `filter-${i}`,
+      params: (ctx) => {
+        const previous = ctx.labelled(i === 0 ? 'results' : `filter-${i - 1}`)[0];
+        const link = ctx
+          .linksOfKind('facet', previous)
+          .find(
+            (entry) =>
+              entry.text.replace(/\s*\(\d+\)\s*$/u, '').toLowerCase() === value.toLowerCase(),
+          );
+        return link === undefined ? null : { url: link.url };
+      },
+    }),
+  ),
   {
     kind: 'call',
     tool: 'web_fetch',
-    label: 'awd-facet',
+    label: 'next-page',
     params: (ctx) => {
-      const facet = ctx
-        .linksOfKind('facet', ctx.labelled('results')[0])
-        .find((link) => /^AWD\b/i.test(link.text));
-      return facet === undefined ? null : { url: facet.url };
+      const link = ctx
+        .linksOfKind('pagination', listingRead(ctx))
+        .find((entry) => /^next\b/iu.test(entry.text));
+      return link === undefined ? null : { url: link.url };
     },
+    when: (ctx) =>
+      ctx.linksOfKind('pagination', listingRead(ctx)).some((entry) => /^next\b/iu.test(entry.text)),
   },
   ...Array.from({ length: DETAIL_COUNT }, (_, index) => detailStep(index)),
-  publishStep(
-    'Norvale Teyra Summit listings near Fairview',
-    'Collected the listing and detail pages from faceted-listing.yantra.test; see sources.',
-  ),
+  {
+    kind: 'call',
+    tool: 'result_publish',
+    label: 'publish',
+    params: (ctx) => {
+      const records = deliveredRecords(ctx).slice(0, DETAIL_COUNT);
+      const details = records.map((_, i) => ctx.labelled(`detail-${i + 1}`)[0]);
+      if (records.length === 0 || details.some((result) => sourceIdOf(result) === null))
+        return null;
+      return {
+        brief: {
+          title: 'Norvale Teyra listings near Fairview',
+          overview: 'Collected listing and detail pages from the required source.',
+          table: {
+            columns: ['seller', 'price', 'exterior color', 'interior color'],
+            rows: records.map((record, i) => [
+              recordSeller(record),
+              recordPrice(record),
+              pageField(details[i], 'Exterior color'),
+              pageField(details[i], 'Interior color'),
+            ]),
+            row_sources: records.map((record, i) => [record.id, sourceIdOf(details[i])!]),
+          },
+          constraints: [
+            {
+              name: 'drivetrain',
+              value: 'AWD',
+              status: 'verified',
+              sources: details.map((result) => sourceIdOf(result)!),
+            },
+          ],
+        },
+      };
+    },
+  },
 ];
 
 /** Records offered by the results read, or null when the result carries no `records`. */
@@ -209,7 +282,7 @@ const expectations: readonly Expectation[] = [
     id: 'detail-reads-carry-colors',
     owner: 'FEAT-051',
     measure: (run) =>
-      [1, 2, 3].filter((index) => {
+      Array.from({ length: DETAIL_COUNT }, (_, i) => i + 1).filter((index) => {
         const read = resultLabelled(run, `detail-${index}`);
         if (read?.status !== 'ok') return false;
         return truthRows().some(
@@ -253,7 +326,6 @@ const expectations: readonly Expectation[] = [
       const { rows, rowCitations } = value as { rows: number | null; rowCitations: number | null };
       return rows !== null && rows > 0 && rowCitations === rows;
     }),
-    baseline: equals({ rows: null, rowCitations: null }),
     note: 'G7: the Brief carries a comparison table with `row_citations`.',
   },
   {
@@ -268,7 +340,6 @@ const expectations: readonly Expectation[] = [
       return drivetrain === undefined ? null : stringProp(drivetrain, 'status');
     },
     target: equals('verified'),
-    baseline: equals(null),
     note: '§11 "unverified constraints asserted as fact": AWD appears in `constraints[]` as verified.',
   },
   {
@@ -285,7 +356,6 @@ const expectations: readonly Expectation[] = [
     // correct run can reach plan §11's "≥ 90% of requested cells" target.
     measure: (run) => scoreRun(run, { contract: CONTRACT }, truthRows()).field_coverage.value,
     target: atLeast(0.9),
-    baseline: equals(0),
     note: '§11 "requested cells delivered from the required source": ≥ 90% on this scenario.',
   },
 ];

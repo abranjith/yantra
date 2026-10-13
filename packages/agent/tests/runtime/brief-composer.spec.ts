@@ -1,5 +1,5 @@
 import { DocumentStore, type PageAnalysis } from '@yantra/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { composeAgentBrief, type ComposeContext } from '../../src/runtime/brief-composer.js';
 import type { EvidenceEntry } from '../../src/runtime/run-services.js';
@@ -45,6 +45,46 @@ export function composerContext(): ComposeContext {
 }
 const base = { title: 'Results', overview: '', key_findings: [] };
 describe('@no-llm Brief composer', () => {
+  it('coerces a JSON object that shadows toString without throwing', () => {
+    const value = composeAgentBrief(
+      {
+        ...base,
+        table: { columns: ['Value'], rows: [[{ toString: 'shadowed' }]], row_sources: [['S2']] },
+      },
+      composerContext(),
+    );
+    if (!value.isOk) throw new Error('expected composition');
+    expect(value.value.content.facets).toMatchObject({
+      comparison: { rows: [['[object Object]']] },
+    });
+  });
+  it('materializes a source corpus once across all cells citing it', () => {
+    const ctx = composerContext();
+    const get = vi.spyOn(ctx.documents, 'get');
+    const value = composeAgentBrief(
+      {
+        ...base,
+        table: {
+          columns: ['A', 'B', 'C'],
+          rows: [['Calligraphy', 'AWD', 43204]],
+          row_sources: [['S2']],
+        },
+      },
+      ctx,
+    );
+    expect(value.isOk).toBe(true);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+  it('makes explicit section attribution visible even without inline markers', () => {
+    const value = composeAgentBrief(
+      { ...base, sections: [{ heading: 'Details', body_md: 'Calligraphy AWD', sources: ['S2'] }] },
+      composerContext(),
+    );
+    if (!value.isOk) throw new Error('expected composition');
+    expect(value.value.content.sections).toEqual([
+      { heading: 'Details', body_md: 'Calligraphy AWD\n\n[1]', citations: [1] },
+    ]);
+  });
   it('resolves stable record anchors and flags unsupported cells without removing them', () => {
     const result = composeAgentBrief(
       {

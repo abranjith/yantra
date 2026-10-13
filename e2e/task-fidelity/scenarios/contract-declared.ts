@@ -19,7 +19,7 @@ import {
   contractNoticesOf,
   contractOf,
   crossCuttingExpectations,
-  publishStep,
+  recordTable,
   toolCallPhases,
 } from './common.js';
 
@@ -69,7 +69,27 @@ const script: readonly ScriptStep[] = [
       return url === null ? null : { url };
     },
   },
-  publishStep('SUV listings', 'Read the listing page; see sources.'),
+  {
+    kind: 'call',
+    tool: 'result_publish',
+    label: 'publish',
+    params: (ctx) => {
+      const table = recordTable(ctx);
+      return table === null
+        ? null
+        : {
+            brief: {
+              title: 'SUV listings',
+              overview: 'Read the listing page.',
+              table: {
+                ...table,
+                columns: [...table.columns, 'exterior color', 'interior color'],
+                rows: table.rows.map((row) => [...row, null, null]),
+              },
+            },
+          };
+    },
+  },
 ];
 
 const expectations: readonly Expectation[] = [

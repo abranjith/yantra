@@ -1668,8 +1668,8 @@ describe('@no-llm task-fidelity eval', () => {
       `2 scenarios × 2 runs = 4 agentic runs with fixture/scripted-agent (prompt ${PROMPT_VERSION})`,
     );
     expect(lines.slice(1, 5).map((line) => line.replace(/ · \d+ s$/, ' · N s'))).toEqual([
-      'listing-table 1/2 · published · 8 turns · N s',
-      'listing-table 2/2 · published · 8 turns · N s',
+      'listing-table 1/2 · published · 14 turns · N s',
+      'listing-table 2/2 · published · 14 turns · N s',
       'multi-table 1/2 · published · 2 turns · N s',
       'multi-table 2/2 · published · 2 turns · N s',
     ]);

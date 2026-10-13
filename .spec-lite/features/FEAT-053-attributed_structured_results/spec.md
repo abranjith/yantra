@@ -267,7 +267,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ### TASK-001: The Brief can carry row citations, cited/consulted sources, constraints, and an alternatives section, and every renderer shows them
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **Protocol.** Add the fields, the `contract_gap` kind, and refinements 1–6 from §2, each with `.describe()` text. Extend `CreateBriefInput` with `constraints?`. Regenerate the JSON Schema and `docs/protocol-spec.md` with `pnpm --filter @yantra/protocol emit`.
   - **Markdown (`to-markdown.ts`).** Every addition renders only when its field is present, so an old Brief's bytes are unchanged:
     - **Conditions**: directly after the title, one line `**Conditions:** drivetrain = AWD ✓ verified [2] · location = near Frisco, TX — unverified · …`. `verified` renders `✓ verified`, `unverified` renders `— unverified`, and `violated` renders `✗ not met`. Citations use the existing `capMarkers`.
@@ -284,7 +284,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - Comparison: a `Src` column.
     - Sources: `Also consulted` is shown at `standard` and `full` only, so `overview` stays short.
     - Shown only when the fields are present.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `brief.spec.ts`, one case per refinement:
     - `row_citations` length 2 with 3 rows → an issue at `facets/comparison/row_citations`;
     - a dangling row citation and a dangling constraint citation;
@@ -301,7 +301,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - a cell containing `|` is still escaped in the citation column's row;
     - an all-consulted Brief renders only "Also consulted";
     - the HTML contains no `<script>` and no `on*=` attribute.
-- [ ] **Documentation Update**: Invoke **Document** update mode for protocol-spec (regenerated) and usage (how to read Conditions, Sources versus Also consulted, and Alternatives).
+- [x] **Documentation Update**: Invoke **Document** update mode for protocol-spec (regenerated) and usage (how to read Conditions, Sources versus Also consulted, and Alternatives).
 - **Verify**:
   - `cd packages/protocol && npx vitest run` passes.
   - `npx turbo run build --filter=@yantra/protocol --filter=@yantra/core`.
@@ -310,7 +310,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ### TASK-002: Findings, sections, and prose cite by evidence ID, and sources split into cited and consulted
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`runtime/evidence-refs.ts`.** `parseEvidenceRef(raw): { sourceId: string; anchor: number | null } | null` and `INLINE_EVIDENCE_REF`. This is the only grammar for references. `DocumentStore.resolveAnchor` (FEAT-051) is the authority on whether an anchor exists.
   - **`runtime/brief-composer.ts`** implements stages 1, 2, 6, and 8 of `composeAgentBrief` for findings, sections, and prose. Tables, contract, constraints, and anchoring arrive in TASK-003 to TASK-006, and each extends the same function.
     - **Resolution.** A reference resolves when its `sourceId` belongs to a ledger entry (`services.evidence.entries()`) and, for an anchor, when `documents.resolveAnchor(ref)` is non-null. The two failures are distinct:
@@ -331,7 +331,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - `reference-unknown` (`ref`, `pointer`, `known`): "`{ref}` at `{pointer}` is not a source this run read. Cite a source_id shown in a tool result: {known}." `known` is the run's IDs, compressed as ranges (`S1–S7, S9`) and bounded to 120 characters.
     - `reference-anchor-unknown` (`ref`, `pointer`, `source`): "`{source}` was read, but it has no record `{ref}`. Cite `{source}` itself, or a record id shown in its results."
     - `reference-numeric` (`pointer`): "Cite sources by their source_id in brackets, such as [S3], not by number (`{pointer}`)."
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `evidence-refs.spec.ts`: valid `S1`, `S12#r3`; invalid `S0`, `s3`, `S3#r0`, `S3r1`, `3`, `S3#`.
   - `brief-composer.spec.ts` (a ledger of S1–S4, where S2 has records r1–r3):
     - `{text, sources: ['S2#r2']}` → `citations: [1]`, `editorial: false`, and S2 is source 1 with `cited: true`;
@@ -351,13 +351,13 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - the "first-seen ledger order" source test is rewritten for cited-first order;
     - the old assertion that every agentic finding is editorial is replaced.
   - `message-catalog.spec.ts`: the three templates resolve their keys and capability.
-- [ ] **Documentation Update**: Invoke **Document** update mode for agentic tasks (citing by `source_id`, inline `[S3]`, and cited versus consulted sources).
+- [x] **Documentation Update**: Invoke **Document** update mode for agentic tasks (citing by `source_id`, inline `[S3]`, and cited versus consulted sources).
 - **Verify**: After building protocol and core, `cd packages/agent && npx vitest run tests/runtime/evidence-refs.spec.ts tests/runtime/brief-composer.spec.ts tests/adapters/pi/tools/result-publish.spec.ts tests/runtime/message-catalog.spec.ts` passes.
 - **Depends on**: TASK-001, FEAT-050 TASK-001–003, FEAT-051 TASK-006.
 
 ### TASK-003: An agent can publish a table whose every row cites its source
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **Parameters.** `table: Type.Optional(Type.Object({ columns, rows, row_sources }))`:
     - `columns` is an array of strings;
     - `rows` is an array of arrays of `Type.Unknown()` cells, described as "string, number, boolean, or null";
@@ -377,7 +377,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - `row-width`: "Table row {row} has {width} cells but the table has {columns} columns."
     - `row-sources-length`: "row_sources has {row_sources} entries but the table has {rows} rows; give one list per row."
 
-- [ ] **Unit Tests** (`brief-composer.spec.ts`, `result-publish.spec.ts`):
+- [x] **Unit Tests** (`brief-composer.spec.ts`, `result-publish.spec.ts`):
   - a 3-row table citing `S2#r1`, `S2#r2`, and `[S2#r3, S4]` → `row_citations: [[1],[1],[1,2]]`, and the rendered markdown has the `Sources` column;
   - a row with 2 of 3 cells → `row-width` at `table/rows/1`;
   - `row_sources` length 2 for 3 rows → `row-sources-length`;
@@ -386,13 +386,13 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - a cell containing `\u001b[31m` is published without the escape byte;
   - with no table, `facets` is `null`;
   - `factory.spec.ts`: the `result_publish` root schema is still an object, with no top-level union.
-- [ ] **Documentation Update**: Invoke **Document** update mode for agentic tasks (publishing a table) and research.
+- [x] **Documentation Update**: Invoke **Document** update mode for agentic tasks (publishing a table) and research.
 - **Verify**: After building protocol and core, `cd packages/agent && npx vitest run tests/runtime/brief-composer.spec.ts tests/adapters/pi/tools/result-publish.spec.ts tests/adapters/pi/tools/factory.spec.ts` passes.
 - **Depends on**: TASK-002.
 
 ### TASK-004: A deterministic anchoring check fills `metadata.citation_verdict` and flags unsupported values
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **Core `synthesis/anchoring.ts`** (§2).
     - Move `ANCHOR_OVERLAP_THRESHOLD`, the anchoring rule, and the digit-group rule out of `citation-validator.ts` and export them.
     - `validateCitations` imports them. Its exported behavior and notice texts are unchanged, and its suite is the regression gate.
@@ -412,7 +412,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - **Notice 5** (§2) lists up to 5 flagged pointers, each with up to 40 characters of the value and its missing numbers.
   - **`createBriefPublisher`** stamps `citationVerdict` on the agent-content path.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `anchoring.spec.ts`:
     - `$43,204` against `Price 43204` → anchored;
     - `$41,000` against the same → missing `41000`;
@@ -431,7 +431,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - `verdict.claims_checked` equals the number of checkable claims;
     - an all-editorial Brief → `{0, 0, 0}`.
   - `result-publish.spec.ts`: the persisted `brief.json` has a non-null `citation_verdict`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics-and-audit (what `citation_verdict` means on agentic Briefs, and that flagged values are kept and noticed).
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics-and-audit (what `citation_verdict` means on agentic Briefs, and that flagged values are kept and noticed).
 - **Verify**:
   - `cd packages/core && npx vitest run tests/synthesis tests/extraction/page/evidence-text.spec.ts` passes.
   - Build core.
@@ -440,7 +440,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ### TASK-005: Delivery is checked against the task contract: required sources, required fields, and fulfillment
 
-- [ ] **Implementation** (`runtime/contract-delivery.ts`, called by composer stages 3–4 and 8; every rule is a no-op when `contract === null`, except that the agent's `fulfillment.unmet` still becomes notice 1):
+- [x] **Implementation** (`runtime/contract-delivery.ts`, called by composer stages 3–4 and 8; every rule is a no-op when `contract === null`, except that the agent's `fulfillment.unmet` still becomes notice 1):
   - **Required sources** (when `contract.required_sources` is non-empty).
     - A table row or a non-editorial finding is **on-contract** when at least one of its cited sources satisfies `hostSatisfiesRequiredSource(entry.finalUrl ?? entry.url, contract)` (FEAT-052).
     - Off-contract rows and findings are removed from the main table and findings. They go to **one** runtime section:
@@ -464,7 +464,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - `contract-table-missing`: "The task contract asks for a table. Publish a table, or list the table in fulfillment.unmet with the reason."
     - `contract-field-missing`: "The task contract requires the field `{field}`. Add a column for it (write `not shown on source` where a row lacks it), or list it in fulfillment.unmet with the reason."
   - **Parameters** gain `fulfillment` (§2).
-- [ ] **Unit Tests** (`contract-delivery.spec.ts`, `brief-composer.spec.ts`), with a contract requiring `listings.test` and fields `dealer, price, exterior color, interior color`:
+- [x] **Unit Tests** (`contract-delivery.spec.ts`, `brief-composer.spec.ts`), with a contract requiring `listings.test` and fields `dealer, price, exterior color, interior color`:
   - 3 rows from `listings.test` and 1 from `other.test` → 3 main rows, one `alternatives` section whose body holds the 4th row with its `[n]`, and notice 4 with `1 rows and 0 findings`;
   - a row citing both hosts stays in the main table;
   - `www.listings.test` and `m.listings.test` count as on-contract, and `listings.test.evil.test` does not;
@@ -477,13 +477,13 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - an `answer` contract with no table → publishes;
   - no contract → no partition, no field rule, and agent `unmet` still produces notice 1;
   - notice reasons are bounded at 600 characters with `(+k more)`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for agentic tasks (how the contract is checked at publish: alternatives, `not shown on source`, fulfillment notices) and research.
+- [x] **Documentation Update**: Invoke **Document** update mode for agentic tasks (how the contract is checked at publish: alternatives, `not shown on source`, fulfillment notices) and research.
 - **Verify**: After building protocol and core, `cd packages/agent && npx vitest run tests/runtime/contract-delivery.spec.ts tests/runtime/brief-composer.spec.ts tests/adapters/pi/tools/result-publish.spec.ts` passes.
 - **Depends on**: TASK-003, FEAT-052 TASK-003.
 
 ### TASK-006: Every filter the goal set is reported as verified, unverified, or violated
 
-- [ ] **Implementation** (`contract-delivery.ts`, composer stage 5):
+- [x] **Implementation** (`contract-delivery.ts`, composer stage 5):
   - **Parameters** gain `constraints` (§2). Each entry's `sources` resolve as in TASK-002 and become `citations`.
   - **`verified` with no `sources`** is downgraded to `unverified`, with the cause "marked verified without evidence". It is downgraded rather than rejected: the outcome is still honest, and no retry is needed.
   - **Reconciling with `contract.filters`.** Names are matched case-insensitively after normalization.
@@ -493,7 +493,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - The output is `Brief.constraints` (absent when there is neither a contract filter nor an agent constraint). The anchoring check (TASK-004) covers `verified` values.
   - **Notices 2 and 3** list unverified and violated constraints, each with its cause when the runtime set it.
   - The model-visible publish summary appends `conditions: <v> verified, <u> unverified, <x> not met` when constraints exist.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - contract filters `condition=new, drivetrain=AWD`, with the agent reporting drivetrain `verified` citing `S2#r1` → drivetrain verified with `citations: [n]`, and condition auto-added as `unverified` with the cause;
   - drivetrain `verified` without sources → downgraded, and notice 2 names the cause;
   - `violated` → notice 3;
@@ -501,13 +501,13 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - no contract and no constraints → no `constraints` field, so the Brief renders byte-identically to TASK-001's no-constraint path;
   - the rendered md shows `**Conditions:** condition = new — unverified · drivetrain = AWD ✓ verified [1]`;
   - `validateBrief` refinement 6 can never fire on composed output (property: compose arbitrary constraint payloads, then validate).
-- [ ] **Documentation Update**: Invoke **Document** update mode for agentic tasks and research (what the Conditions line means, and why a condition the agent did not confirm shows as unverified).
+- [x] **Documentation Update**: Invoke **Document** update mode for agentic tasks and research (what the Conditions line means, and why a condition the agent did not confirm shows as unverified).
 - **Verify**: After building protocol and core, `cd packages/agent && npx vitest run tests/runtime/contract-delivery.spec.ts tests/runtime/brief-composer.spec.ts` passes.
 - **Depends on**: TASK-005.
 
 ### TASK-007: Notice assembly, the runtime-assembled fallback, the publish summary, and the `brief_composed` log
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **Notice order.** At FEAT-048's runtime-facts assembly point (as extended by FEAT-052 TASK-005), the document's notices become `[assembly?] + contract.notices() + composed.notices + briefFacts().notices`. The composer's ≤ 5 notices sit before FEAT-048's capped block, and FEAT-048's cap and overflow notice are unchanged.
   - **Fallback.** `maybeAssembleUnpublishedResult` runs `composeAgentBrief` in `assembled` mode over `{ title, overview: draft, key_findings: [] }`:
     - inline `[S…]` markers in the draft resolve;
@@ -521,7 +521,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - **Model-visible success payload.** `summary` becomes `Published "<title>" with <c> cited and <k> consulted source(s)[; table of <r> rows][; <a> rows under Alternatives][; conditions: …][; <g> contract gaps][; <f> values not found in their cited sources]. <first overview line>`. `details` gains the `ComposeSummary`.
   - **`runtime.jsonl`.** One `info` line `brief_composed` with the `ComposeSummary` (counts only: no titles, cells, hosts, or text), written through `services.runtimeLogger` when present. Bridge it with the `toLogPayload` helper (memory → Testing, interface-to-Record).
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `orchestrator.spec.ts`:
     - a fallback draft containing `[S1]` and `[7]` → the Brief cites S1 as `[1]` and has no `[7]`, with the assembly notice first and the verdict non-null;
     - a fallback under a table contract → published, with notice 1 containing the missing-table gap;
@@ -531,13 +531,13 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - the summary string contains each optional clause only when it applies;
     - `details` carries the counts.
   - Runtime log: exactly one `brief_composed` line per successful publication and none on `BRIEF_INVALID`. A canary string placed in a table cell does not appear in `runtime.jsonl`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics-and-audit (`brief_composed`) and agentic tasks (the fallback cites what the draft cited).
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics-and-audit (`brief_composed`) and agentic tasks (the fallback cites what the draft cited).
 - **Verify**: After building protocol and core, `cd packages/agent && npx vitest run tests/runtime/orchestrator.spec.ts tests/adapters/pi/tools/result-publish.spec.ts` passes.
 - **Depends on**: TASK-004, TASK-006, FEAT-048 TASK-005, FEAT-052 TASK-005.
 
 ### TASK-008: Prompt `agent-v10`: teach the attributed publish shape
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`PROMPT_VERSION = 'agent-v10'`.** Its JSDoc says v10 changes only the `research`/`do` publish guidance. Add `'agent-v10'` to the protocol manifest enum. Every older value stays valid.
   - **Addenda** (`profiles.ts`). In both research variants and in `do`, the publish sentence (FEAT-052 kept it as "the existing publish instructions") becomes:
     > "Finish with result_publish. Cite evidence by the source_id a result showed (S3) or a record id (S3#r5): findings as {"text": "...", "sources": ["S3"]}, and prose as [S3]. When the goal asks for items with fields, publish a table {"columns": [...], "rows": [[...]], "row_sources": [["S3#r1"]]} with one row per item and one column per field. Report each condition the goal set in constraints with status verified, unverified, or violated, and list anything you could not deliver in fulfillment.unmet with the reason."
@@ -554,7 +554,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
   - Every move named here exists: `source_id` and record ids are on every evidence result (FEAT-050/051), and `table`, `constraints`, and `fulfillment` are parameters of this tool (memory → advice names engineered moves).
   - The orchestrator's completion-nudge payload example ([`orchestrator.ts:131-132`](../../../packages/agent/src/runtime/orchestrator.ts#L131-L132)) stays minimal and unchanged. A nudged model is packaging, and a minimal payload remains valid.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `prompt.spec.ts`: `PROMPT_VERSION === 'agent-v10'`, and every `agent-v9` system-prompt assertion still holds (the system prompt text is unchanged).
   - `profiles.spec.ts`:
     - the research (both variants) and do addenda contain `row_sources`, `constraints`, and `fulfillment.unmet`;
@@ -563,7 +563,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
     - no addendum still contains `"key_findings": ["..."]`.
   - `result-publish.spec.ts`: the description names `source_id`, `table`, and `row_sources`.
   - Protocol: `agent-v10` validates. Update the expected `prompt_version` in `run-recorder.spec.ts`. CLI and audit fixtures pinned at older versions stay as historical artifacts.
-- [ ] **Documentation Update**: Invoke **Document** update mode for agentic tasks (prompt `agent-v10`: what the agent is told to publish).
+- [x] **Documentation Update**: Invoke **Document** update mode for agentic tasks (prompt `agent-v10`: what the agent is told to publish).
 - **Verify**:
   - `npx turbo run build`.
   - `cd packages/agent && npx vitest run tests/runtime/prompt.spec.ts tests/runtime/profiles.spec.ts tests/runtime/run-recorder.spec.ts tests/adapters/pi/tools/result-publish.spec.ts` passes.
@@ -572,7 +572,7 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ### TASK-009: Pin FEAT-053 in the task-fidelity harness and flip it live
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **Scorer** (`score/scorer.ts`, FEAT-049 TASK-008):
     - delivered-row extraction skips sections with `kind: 'alternatives'`;
     - `source_fidelity` excludes them, as FEAT-049 specified "once FEAT-053 provides that label";
@@ -598,8 +598,8 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
     If the median run spends more than one extra turn on `BRIEF_INVALID` retries, record a TODO to soften the offending rule for the next wave. Do not change it here.
 
-- [ ] **Unit Tests**: The tier is the test. The census passes with `FEAT-053` absent from `PENDING_OWNERS` and no FEAT-053 baselines. The scorer's synthetic oracle (FEAT-049 TASK-008) gains an alternatives section, and its scores are unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the task-fidelity harness (the FEAT-053 scenarios, the alternatives label in scoring, and the owner flip).
+- [x] **Unit Tests**: The tier is the test. The census passes with `FEAT-053` absent from `PENDING_OWNERS` and no FEAT-053 baselines. The scorer's synthetic oracle (FEAT-049 TASK-008) gains an alternatives section, and its scores are unchanged.
+- [x] **Documentation Update**: Invoke **Document** update mode for the task-fidelity harness (the FEAT-053 scenarios, the alternatives label in scoring, and the owner flip).
 - **Verify**:
   - `npx turbo run build`, then `cd e2e && npx vitest run task-fidelity.spec.ts` passes 3 times in a row with identical results.
   - `pnpm test:no-llm` passes.
@@ -638,14 +638,27 @@ If an equivalent helper or test location already exists, extend it instead of cr
 
 ## 8. State Tracking
 
-- [ ] TASK-001: The Brief can carry row citations, cited/consulted sources, constraints, and an alternatives section, and every renderer shows them
-- [ ] TASK-002: Findings, sections, and prose cite by evidence ID, and sources split into cited and consulted
-- [ ] TASK-003: An agent can publish a table whose every row cites its source
-- [ ] TASK-004: A deterministic anchoring check fills `metadata.citation_verdict` and flags unsupported values
-- [ ] TASK-005: Delivery is checked against the task contract: required sources, required fields, and fulfillment
-- [ ] TASK-006: Every filter the goal set is reported as verified, unverified, or violated
-- [ ] TASK-007: Notice assembly, the runtime-assembled fallback, the publish summary, and the `brief_composed` log
-- [ ] TASK-008: Prompt `agent-v10`: teach the attributed publish shape
-- [ ] TASK-009: Pin FEAT-053 in the task-fidelity harness and flip it live
+- [x] TASK-001: The Brief can carry row citations, cited/consulted sources, constraints, and an alternatives section, and every renderer shows them
+- [x] TASK-002: Findings, sections, and prose cite by evidence ID, and sources split into cited and consulted
+- [x] TASK-003: An agent can publish a table whose every row cites its source
+- [x] TASK-004: A deterministic anchoring check fills `metadata.citation_verdict` and flags unsupported values
+- [x] TASK-005: Delivery is checked against the task contract: required sources, required fields, and fulfillment
+- [x] TASK-006: Every filter the goal set is reported as verified, unverified, or violated
+- [x] TASK-007: Notice assembly, the runtime-assembled fallback, the publish summary, and the `brief_composed` log
+- [x] TASK-008: Prompt `agent-v10`: teach the attributed publish shape
+- [x] TASK-009: Pin FEAT-053 in the task-fidelity harness and flip it live
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Implementation Verification
+
+Implemented on `ft/feat-053-attributed-structured-results`; all nine tasks and their deterministic verification gates are complete.
+
+- `npx turbo run build`: 6/6 tasks passed. `npx turbo run lint typecheck`: 12/12 tasks passed.
+- `pnpm test:no-llm -- -- --minWorkers=1 --maxWorkers=2`: 12/12 Turbo tasks passed; 5,792 tests passed and 19 skipped across protocol, test helpers, core, agent, CLI, and e2e. Repository ESLint and Prettier gates passed. The final defensive table-cell coercion change was additionally verified by all 13 composer tests and 27 publication adapter tests, followed by build, lint, and typecheck.
+- Task-fidelity deterministic tier: 174 expectations passed on three consecutive runs with identical results. All four new publish scenarios are registered; `PENDING_OWNERS` is empty and no FEAT-053 baseline remains. The synthetic scorer oracle excludes alternatives without changing its scores.
+- Scripted `listing-table` scorecard medians: field coverage, citation validity, constraint fidelity, and source fidelity are all 1.00. Both runs deliver the same five rows (`itm-08`, `itm-03`, `itm-13`, `itm-01`, `itm-10`), using 14 turns and 9 navigations. These scripted scores are not real-model measurements.
+- Protocol emission updated its schema snapshot and generated documentation. Existing renderer snapshots remain unchanged; new attributed snapshots cover the additive fields.
+- Necessary fixture fixes: harness helpers consume the actual wire shapes, record text provides the asking price rather than MSRP, and detail reads supply the required colors. A sanitizer form pass with no form-value matches now preserves input bytes, preventing JSON query URLs from being HTML-escaped; all sanitizer tests pass. The runtime-observability fixture now uses the ledger evidence ID instead of a numeric agent citation. The pre-existing ignored legacy attempt-ledger fixture was restored locally from the primary checkout for the full suite.
+- Documentation updated through Document for architecture, agentic tasks, research, audit, task-fidelity harness, usage, ask, and README. The two scoped follow-up TODOs already existed and were preserved without duplication.
+- Real-model observational evaluation was attempted with `pnpm eval:tasks --runs 3 --out .spec-lite/features/FEAT-053-attributed_structured_results/agentic-eval`. Startup failed with `AGENT_AUTH_UNAVAILABLE` (exit 3): the default Anthropic model has no available credentials. No scenario or model call ran. Real-model medians, non-editorial citation share, and `BRIEF_INVALID` retry rates remain unmeasured; no rule-softening conclusion was inferred.

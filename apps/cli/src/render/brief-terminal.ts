@@ -137,7 +137,7 @@ function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: nu
  * Scannable key-finding bullets; editorial notes use a distinct glyph.
  *
  * The distinction is drawn only when the Brief actually mixes cited findings
- * with commentary — an all-editorial Brief (every agentic run) would otherwise
+ * with commentary — an all-editorial Brief would otherwise
  * render an identical marker on every bullet, which is decoration, not signal.
  */
 function keyFindingsBlock(findings: readonly KeyFinding[], c: ChalkInstance): string {

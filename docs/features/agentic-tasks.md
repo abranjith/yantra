@@ -10,7 +10,7 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
-The system prompt is versioned as `agent-v9` (recorded as `prompt_version` in `manifest.json`). Beyond the scope rules above, it tells the agent:
+The prompt is versioned as `agent-v10` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and adds publication guidance for cited findings, tables, conditions, and unmet requirements. Beyond the scope rules above, it tells the agent:
 
 - **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
 - **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
@@ -35,7 +35,7 @@ The `do` profile exposes these capabilities:
 | Saved workflows                    | Lists and runs a matching saved workflow through the deterministic executor. The nested workflow gets its own run directory and opens no second model session.                                                                                                                                                                                                                                                                                                   |
 | Task contract                      | Records what the goal requires (deliverable, fields, filters, required sites) as `contract.json` and echoes it to the user. Optional; see [Task contract](#task-contract).                                                                                                                                                                                                                                                                                       |
 | Data transformations               | Runs only the built-in, allowlisted transformations `table_normalize`, `dedupe_lines`, and `json_pick`; it cannot execute arbitrary code or shell commands.                                                                                                                                                                                                                                                                                                      |
-| Publication                        | Publishes exactly one validated Brief, or one report shaped by a selected template. Pages consulted through search, fetch, or any browser extraction except `links` become the engine-owned source list.                                                                                                                                                                                                                                                         |
+| Publication                        | Publishes exactly one validated Brief, including cited findings, sections, and table rows, or one report shaped by a selected template. The Brief distinguishes sources cited in the answer from pages also consulted.                                                                                                                                                                                                                                           |
 
 Browser actions return a fresh observation after the page settles, so the agent can continue without a redundant read. Opaque element references remain usable on the same document and are invalidated when a new document loads. If a site opens a same-site results tab, Yantra policy-checks it and follows it as the run's page. Cross-site or non-HTTP(S) popups are closed and reported so the agent can navigate explicitly when policy permits.
 
@@ -256,7 +256,7 @@ For example, a goal that asks for the colors of the top vehicles in a filtered l
 
 The page is never extracted, never becomes a source, and is not fetched again in the run. A run that ends without publishing after a `SITE_CHALLENGE` is a user handoff. See [Challenge pages](safety-and-privacy.md#challenge-pages) for the markers and the signed-off policy.
 
-The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. Without both, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
+The run completes only with a schema-valid publication. If the model stops with prose instead, Yantra sends one publication nudge and freezes further web evidence gathering when evidence already exists. If the model still does not publish but Yantra has both a draft and evidence, the runtime packages them into a validated Brief marked as a deterministic fallback. That fallback preserves resolvable inline evidence-ID citations, removes numeric and unresolved citation markers, and reports contract gaps as notices. It does not infer a missing table from draft prose. Without both draft and evidence, the run fails with `AGENT_COMPLETION_MISSING` and preserves the final sanitized prose as diagnostic `result.md`.
 
 **The repeated-failure breaker counts identical failures per tool.** `--tool-retries <n>` (default 3) is not a retry count: Yantra never retries a tool call on the agent's behalf. It bounds identical failures of one tool. When the same tool fails with the same error `n + 1` times with no success of that tool in between, the run stops as a repeated tool failure. A success of that tool resets its count, a different error code restarts it at 1, and other tools' outcomes never touch it, so an alternating "observe succeeds, click fails" loop still trips the breaker. Denied and aborted calls are not counted, and a `TOOL_TIMEOUT` that lands after the 80% wind-down has begun does not trip it, so the agent can still publish. The per-run prompt states the rule as "repeated identical failures: a tool failing with the same error N times without succeeding in between stops the run", where N is `n + 1`.
 
@@ -300,7 +300,53 @@ A later revision prints `understood (revised): …`. The summary is built only f
 
 A `research` or `do` run that publishes without ever declaring a contract, including one whose only declaration failed, carries one Brief notice with kind `other` and source `task-contract`, reading exactly: "No task contract was declared, so the deliverable, required fields, filters, and required sources were not recorded for this run." It leads the runtime-derived notices described under [Inputs and Outputs](#inputs-and-outputs). An `ask` run never carries it.
 
-The contract records what the run understood. It is not checked against the published result, and its `required_sources` never make a URL navigable (see [Safety and privacy](safety-and-privacy.md#discovered-link-provenance)).
+The contract records what the run understood and is checked when agent content becomes a Brief. Its `required_sources` never make a URL navigable (see [Safety and privacy](safety-and-privacy.md#discovered-link-provenance)).
+
+### Attributed publication
+
+The agent calls `result_publish` with a `brief` containing `title` and `overview`, plus the structured content below. References are the IDs returned by this run's tools: `S3` names a page and `S3#r1` names a record on that page. Copy the actual IDs from tool results; an ID from another run cannot be cited.
+
+| Field               | Content and limits                                                                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key_findings`      | Up to 20 plain strings or `{text, sources: ["S3"]}` objects. A finding with no references is editorial commentary.                                                                           |
+| `sections`          | Up to 8 `{heading, body_md, sources}` objects; headings are at most 120 characters, bodies 4,000 characters.                                                                                 |
+| `table`             | `{columns, rows, row_sources}` with 1–12 columns and 1–50 rows. Column names are at most 60 characters; cells contain strings (at most 300 characters), finite numbers, booleans, or `null`. |
+| `table.row_sources` | One non-empty reference list for each row, in the same order. Each row must have exactly as many cells as there are columns.                                                                 |
+| `constraints`       | Up to 12 `{name, value, status, sources}` objects. Status is `verified`, `unverified`, or `violated`; names and values are at most 60 and 120 characters.                                    |
+| `fulfillment`       | `{met, unmet: [{item, reason}]}` with up to 12 unmet items; item names are at most 80 characters and reasons 200 characters. Runtime checks still apply when `met` is `true`.                |
+
+Reference lists accept up to 8 IDs. Overview, finding text, and section bodies also accept inline markers such as `[S3]` and `[S3#r1]`. Yantra resolves them into the document's numbered citations. Table references become `facets.comparison.row_citations`, and section and constraint references become their structured `citations` arrays in `brief.json`.
+
+For example, after a read returned record ID `S3#r1`:
+
+```json
+{
+  "brief": {
+    "title": "Listings",
+    "overview": "One listing was read [S3#r1].",
+    "table": {
+      "columns": ["Seller", "Price"],
+      "rows": [["Example seller", 43204]],
+      "row_sources": [["S3#r1"]]
+    },
+    "fulfillment": { "met": true, "unmet": [] }
+  }
+}
+```
+
+When the run has evidence, Yantra owns source URLs, titles, timestamps, and numbering; a model-supplied `sources` list cannot replace them. Sources referenced anywhere in the Brief, including its alternatives, receive `cited: true` and sort first. Other ledger entries receive `cited: false` and render under **Also consulted**. Multiple record references from one page share one numbered source. When the ledger is empty, a supplied source list still undergoes protocol validation. Complete protocol Briefs from internal callers and template reports use their existing publication paths; this evidence-ID composition applies to agent-content Briefs.
+
+**The task contract shapes the answer.** A table contract requires a table and columns for its required fields, unless `fulfillment.unmet` names the missing table or field and explains why it could not be delivered. Field matching ignores case and punctuation and requires every field token in the column name; it does not equate `color` with `colour`. Empty or `null` required cells become `not shown on source`, with a contract-gap notice. This missing-data placeholder is excluded from anchoring checks.
+
+Rows and cited findings with no reference to a required-source host or its subdomains move into an **Alternatives (not from …)** section, marked `kind: "alternatives"` in `brief.json`. A row with at least one required-source citation stays in the main table, even if it also cites another host. Uncited editorial findings stay commentary. The runtime adds notices when the answer has no cited required-source content or all table rows became alternatives; it does not silently merge alternatives into the requested answer.
+
+Every contract filter appears in **Conditions**, beneath the title. An omitted condition is added as `unverified`; a condition marked `verified` without references is downgraded to `unverified`. Unverified and violated conditions, declared unmet items, and missing required cells produce `contract_gap` notices. These checks do not establish that the declared contract matches the original goal or enforce its ranking and result limit.
+
+**Correctable errors leave publication open.** `BRIEF_INVALID` is retryable and returns all composition issues in `details.issues`, each with its `cause`, `pointer`, and corrective message. Causes include `reference-unknown`, `reference-anchor-unknown`, `reference-numeric` (use `[S3]` rather than `[3]` in agent prose), `row-uncited`, `row-width`, `row-sources-length`, `contract-table-missing`, and `contract-field-missing`. The agent can correct the payload and publish again. Exactly one successful publication closes the action phase.
+
+**Anchoring flags unsupported values without deleting them.** A deterministic check compares each cited non-empty string or numeric table cell, cited finding, and verified condition against its referenced evidence. Record IDs use that record's evidence; page IDs use retained page content, or the ledger title and excerpt when page content is unavailable. It checks normalized numbers and word overlap; cited sections receive a numbers-only check. Missing values generate an `uncited_claim_flagged` notice and remain in the published answer. `metadata.citation_verdict` records `claims_checked`, `flagged`, and `stripped: 0`. This is a heuristic check of evidence presence, not proof of truth, entailment, units, or freshness.
+
+Model-authored publication text passes the public sanitizer before composition. Marked user values remain masked during checking and resolve to their original values in the published artifact. A successful publication's tool response summarizes cited and consulted sources, main-table and alternative row counts, condition statuses, contract gaps, and flagged values. Its `brief_composed` entry in `runtime.jsonl` records counts only; cell text, page text, and URLs are excluded. The sanitized tool audit retains the publication parameters and their evidence references.
 
 ## How to Use It
 
@@ -470,7 +516,7 @@ Personalization includes only approved, sanitized preferences. Date, timezone, a
 - A link the sanitizer would alter, such as one whose path contains a masked value, is withheld as `url: null` rather than offered in a changed form, so it cannot be followed.
 - Shape detection is structural and generic. A page whose repeated items do not share a common structure, or whose attributes are not written as label/value pairs, may read as an article or an index page.
 - Challenge detection relies on a documented list of generic widget markers and phrases. A human-verification page that carries none of them is not recognized as one.
-- Evidence-ledger sources prove which pages Yantra consulted; they do not prove that every model-authored statement is entailed, correct, or current. Inspect consequential claims and notices against the linked sources.
+- Evidence-ledger sources distinguish cited pages from pages also consulted. The anchoring check can flag unsupported cited values but does not prove that every model-authored statement is entailed, correct, or current. Inspect consequential claims, conditions, and notices against the linked sources.
 - Report-template runs require a valid model-authored slot payload. The runtime cannot safely assemble a missing templated report from free-form draft prose, so an invalid or missing template publication remains a failure.
 - `--save-as` promotes only the successful browser trace. It cannot preserve transient login state or run-scoped marked values, and later replay may still need workflow parameters, stored website secrets, confirmation, and a compatible page structure.
 

@@ -148,8 +148,15 @@ function publishCell(value: unknown): PublishCell {
   )
     return value;
   // The publish contract deliberately reports String(value), including object coercion.
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  return publishText(String(value), 300);
+  let rendered: string;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+    rendered = String(value);
+  } catch {
+    // swallow-ok: JSON objects can shadow toString; their intrinsic label is safe.
+    rendered = Object.prototype.toString.call(value);
+  }
+  return publishText(rendered, 300);
 }
 
 /** Public-sanitize all model-authored strings before composition and validation. */
@@ -371,6 +378,12 @@ export function composeAgentBrief(
       INLINE_EVIDENCE_REF,
       (_, ref: string) => `[${numbers.get(resolved.get(ref)!.entryIndex)}]`,
     );
+  const sectionBody = (section: CitedSection): string => {
+    const inlineRefs = [...section.body_md.matchAll(INLINE_EVIDENCE_REF)].map((match) => match[1]!);
+    const inlineNumbers = new Set(citations(inlineRefs));
+    const missing = citations(section.refs).filter((n) => !inlineNumbers.has(n));
+    return `${rewrite(section.body_md)}${missing.length > 0 ? `\n\n${missing.map((n) => `[${n}]`).join('')}` : ''}`;
+  };
   const sources =
     evidence.length === 0
       ? publishArray(raw.sources)
@@ -447,7 +460,8 @@ export function composeAgentBrief(
         mode: 'numbers-and-words',
       });
   });
-  const report = checkAnchoring(claims, (ref) => {
+  const evidenceText = new Map<string, string | null>();
+  const loadEvidence = (ref: string): string | null => {
     const parsed = resolved.get(ref);
     if (parsed === undefined) return null;
     if (parsed.anchor !== null) {
@@ -459,6 +473,10 @@ export function composeAgentBrief(
       return pageEvidenceText(stored.page.analysis, stored.title);
     const entry = evidence[parsed.entryIndex]!;
     return `${entry.title ?? ''}\n${entry.excerpt ?? ''}`;
+  };
+  const report = checkAnchoring(claims, (ref) => {
+    if (!evidenceText.has(ref)) evidenceText.set(ref, loadEvidence(ref));
+    return evidenceText.get(ref) ?? null;
   });
   const alternativesCount = delivery.alternativesRows.length + delivery.alternativesFindings.length;
   const notices: BriefNotice[] = [...delivery.notices, ...constraintsResult.notices];
@@ -497,7 +515,7 @@ export function composeAgentBrief(
       sections: [
         ...sections.map((section) => ({
           heading: section.heading,
-          body_md: rewrite(section.body_md),
+          body_md: sectionBody(section),
           citations: citations(section.refs),
         })),
         ...(alternativesCount === 0

@@ -93,11 +93,10 @@ export type KeyFinding = z.infer<typeof KeyFinding>;
  * that is, at least one finding is cited.
  *
  * The mark means "uncited commentary", which is only information when some
- * sibling finding is *not* commentary. Agentic runs publish every finding as
- * editorial by construction (the runtime attaches ledger sources and strips the
- * model's per-call citation numbers rather than mis-attributing them), so a
- * renderer that tags unconditionally puts the same badge on every bullet of
- * every agentic document. Renderers call this to decide whether to show the
+ * sibling finding is *not* commentary. An all-editorial document would show
+ * the same badge on every bullet, adding no information. Agentic findings
+ * carrying evidence references are non-editorial; plain commentary remains
+ * editorial. Renderers call this to decide whether to show the
  * mark at all; the flag itself stays on the finding, where `brief.json`
  * consumers and the citation-integrity rule still read it.
  */

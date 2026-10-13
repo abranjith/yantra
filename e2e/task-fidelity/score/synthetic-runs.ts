@@ -260,6 +260,15 @@ export function oracleRun(): ScenarioRun {
     brief: brief({
       title: 'New 2026 Norvale Teyra Summit AWD offers near Fairview',
       overview: 'Five AWD listings from faceted-listing.yantra.test, lowest price first.',
+      sections: [
+        {
+          heading: 'Alternatives',
+          kind: 'alternatives',
+          body_md:
+            '| Seller | Price | Sources |\n| --- | --- | --- |\n| Prairie Auto Group | 48910 | [999] |',
+          citations: [999],
+        },
+      ],
       comparison: {
         columns: ['Seller', 'Price', 'Exterior color', 'Interior color'],
         rows: expected.map((row) => [

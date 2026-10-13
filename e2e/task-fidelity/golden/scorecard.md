@@ -1,7 +1,7 @@
 # Task-fidelity scorecard
 
 - Model: `fixture/scripted-agent`
-- Prompt: `agent-v9`
+- Prompt: `agent-v10`
 - Runs per scenario: 2
 - Generated: 2026-10-11T00:00:00.000Z
 
@@ -11,51 +11,37 @@ Scores are medians across runs; `—` means not measured (a zero denominator). S
 
 | Scenario | Coverage | Constraints | Sources | Citations | Honesty | Stability (Jaccard) | Same top-5 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| listing-table | 0.00 | 0.00 | — | — | — | — | 0/2 |
+| listing-table | 1.00 | 1.00 | 1.00 | 1.00 | — | 1.00 | 2/2 |
 | multi-table | 0.00 | 1.00 | 1.00 | — | — | 1.00 | 2/2 |
 
 ## Cost (medians)
 
 | Scenario | Turns | Wall (s) | Cost (USD) | Navigations | Browser launches | Interaction required |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| listing-table | 8 | 0.0 | 0.0000 | 5 | 0 | 0 |
+| listing-table | 14 | 0.0 | 0.0000 | 9 | 0 | 0 |
 | multi-table | 2 | 0.0 | 0.0000 | 1 | 0 | 0 |
 
-Totals: 4 runs, 0.0 s, $0.0000, 12 navigations, 0 browser launches.
+Totals: 4 runs, 0.0 s, $0.0000, 20 navigations, 0 browser launches.
 
 ## Per-run detail
 
 ### listing-table — run 1 (`run-1`, published)
 
-- **Coverage** 0.00 (0/20)
-  - itm-08: not delivered
-  - itm-03: not delivered
-  - itm-13: not delivered
-  - itm-01: not delivered
-  - itm-10: not delivered
-- **Constraints** 0.00 (0/1)
-  - asserts trim=Summit in the title or overview without a verified constraint
-- **Sources** — (0/0)
-- **Citations** — (0/0)
-  - nothing was cited
+- **Coverage** 1.00 (20/20)
+- **Constraints** 1.00 (5/5)
+- **Sources** 1.00 (5/5)
+- **Citations** 1.00 (20/20)
 - **Honesty** — (0/0)
-- **Delivered rows** none
+- **Delivered rows** itm-08, itm-03, itm-13, itm-01, itm-10
 
 ### listing-table — run 2 (`run-2`, published)
 
-- **Coverage** 0.00 (0/20)
-  - itm-08: not delivered
-  - itm-03: not delivered
-  - itm-13: not delivered
-  - itm-01: not delivered
-  - itm-10: not delivered
-- **Constraints** 0.00 (0/1)
-  - asserts trim=Summit in the title or overview without a verified constraint
-- **Sources** — (0/0)
-- **Citations** — (0/0)
-  - nothing was cited
+- **Coverage** 1.00 (20/20)
+- **Constraints** 1.00 (5/5)
+- **Sources** 1.00 (5/5)
+- **Citations** 1.00 (20/20)
 - **Honesty** — (0/0)
-- **Delivered rows** none
+- **Delivered rows** itm-08, itm-03, itm-13, itm-01, itm-10
 
 ### multi-table — run 1 (`run-3`, published)
 

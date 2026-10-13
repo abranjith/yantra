@@ -26,10 +26,124 @@
       "task": "TASK-008"
     },
     {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/ask.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity-harness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/common.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-declared.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-alternatives.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-flagged-value.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-unverified-filter.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "e2e/task-fidelity/score/synthetic-runs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/result-publish.ts",
@@ -140,6 +254,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/agent/tests/runtime/runtime-observability.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/core/src/brief/html-shell.ts",
       "status": "M",
       "role": "implement",
@@ -168,6 +288,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/sanitizer/strippers.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/src/synthesis/anchoring.ts",
@@ -204,6 +330,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/sanitizer/form-pass-identity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/tests/synthesis/anchoring.spec.ts",
@@ -248,14 +380,28 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/protocol/tests/agent-manifest.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/protocol/tests/attributed-brief.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-053-attributed_structured_results/changeset.json",
+    ".spec-lite/features/FEAT-053-attributed_structured_results/spec.md",
     ".spec-lite/plan_task_fidelity.md"
   ],
   "baseline": {

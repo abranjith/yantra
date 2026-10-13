@@ -71,6 +71,8 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
 - Manage configuration, models, credentials, browser selection, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
 
+Ordinary agentic Briefs can include cited findings, sections, and comparison tables with row citations. When a task contract is declared, **Conditions** shows each filter as verified, unverified, or not met, and results citing only hosts outside the required sources appear under **Alternatives**. **Sources** lists cited pages; **Also consulted** lists pages read without a citation. Yantra flags values its evidence check cannot anchor; see [Reading an attributed Brief](docs/usage.md#read-an-attributed-brief).
+
 ## Safety and current boundaries
 
 Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Managed-browser downloads require per-operation consent, stay in Yantra-owned storage, and are never initiated by unattended execution. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.
@@ -90,11 +92,11 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Managed Stable Installation](docs/features/managed-stable-installation.md) — consented Chrome for Testing acquisition, verification, storage, retries, and current limitations.
 - [Browser Selection and Diagnostics](docs/features/browser-selection-and-diagnostics.md) — persisting and overriding the browser choice, the local inventory, and explicit compatibility checking.
 - [Explicit Managed Update](docs/features/explicit-managed-update.md) — the only update-check surface, availability-only `--dry-run`, consented replacement, and why nothing checks in the background.
-- [Ask](docs/features/ask.md) — focused public-web questions and synthesized Briefs.
-- [Research](docs/features/research.md) — agentic and deterministic multi-hop research.
-- [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`.
+- [Ask](docs/features/ask.md) — focused public-web questions and cited, structured agentic Briefs.
+- [Research](docs/features/research.md) — multi-hop research, cited tables, conditions, and source requirements.
+- [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`, task contracts, and attributed publication.
 - [Saved Workflows](docs/features/saved-workflows.md) — workflow YAML, replay, promotion, and resume.
-- [Report Templates](docs/features/report-templates.md) — typed, user-authored report structures.
+- [Report Templates](docs/features/report-templates.md) — typed, user-authored report structures and their separate citation path.
 - [Profiles and History](docs/features/profiles-and-history.md) — preferences, context grants, runs, and usage.
 - [Local Site Ranking](docs/features/site-ranking.md) — local domain outcome scores and curation.
 - [Scheduling](docs/features/scheduling.md) — recurring workflow runs and the local daemon.
