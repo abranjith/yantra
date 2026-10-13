@@ -93,11 +93,10 @@ export type KeyFinding = z.infer<typeof KeyFinding>;
  * that is, at least one finding is cited.
  *
  * The mark means "uncited commentary", which is only information when some
- * sibling finding is *not* commentary. Agentic runs publish every finding as
- * editorial by construction (the runtime attaches ledger sources and strips the
- * model's per-call citation numbers rather than mis-attributing them), so a
- * renderer that tags unconditionally puts the same badge on every bullet of
- * every agentic document. Renderers call this to decide whether to show the
+ * sibling finding is *not* commentary. An all-editorial document would show
+ * the same badge on every bullet, adding no information. Agentic findings
+ * carrying evidence references are non-editorial; plain commentary remains
+ * editorial. Renderers call this to decide whether to show the
  * mark at all; the flag itself stays on the finding, where `brief.json`
  * consumers and the citation-integrity rule still read it.
  */
@@ -107,6 +106,10 @@ export function editorialMarkIsInformative(findings: readonly KeyFinding[]): boo
 
 export const Section = z
   .object({
+    kind: z
+      .enum(['alternatives'])
+      .optional()
+      .describe('Labels off-contract alternatives; absent for ordinary sections.'),
     heading: z.string().min(1).describe('Section heading.'),
     body_md: z
       .string()
@@ -126,6 +129,10 @@ export const BriefFacets = z
         rows: z
           .array(z.array(FacetScalar).describe('One comparison row.'))
           .describe('Comparison rows; every row length must equal columns.length.'),
+        row_citations: z
+          .array(CitationList)
+          .optional()
+          .describe('Sources backing each row, in row order; length must equal rows.length.'),
       })
       .nullable()
       .describe('Tabular comparison data, or null when the query has no comparative shape.'),
@@ -136,6 +143,16 @@ export const BriefFacets = z
     }
 
     const width = facets.comparison.columns.length;
+    if (
+      facets.comparison.row_citations !== undefined &&
+      facets.comparison.row_citations.length !== facets.comparison.rows.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['comparison', 'row_citations'],
+        message: 'row_citations length must equal rows.length',
+      });
+    }
     facets.comparison.rows.forEach((row, rowIndex) => {
       if (row.length !== width) {
         ctx.addIssue({
@@ -152,6 +169,12 @@ export type BriefFacets = z.infer<typeof BriefFacets>;
 
 export const BriefSource = z
   .object({
+    cited: z
+      .boolean()
+      .optional()
+      .describe(
+        'True for evidence cited by the answer; false for consulted-only sources. All-or-none across sources.',
+      ),
     n: z.number().int().min(1).describe('Citation number; contiguous 1..N in array order.'),
     url: z.string().url().describe('URL as fetched.'),
     final_url: z
@@ -177,6 +200,25 @@ export const BriefSource = z
   .describe('A numbered, deduplicated source reference.');
 
 export type BriefSource = z.infer<typeof BriefSource>;
+
+export const BriefConstraint = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(60)
+      .refine(noAnsi, ANSI_MESSAGE)
+      .describe('Condition name from the task contract.'),
+    value: z.string().min(1).max(120).refine(noAnsi, ANSI_MESSAGE).describe('Condition value.'),
+    status: z
+      .enum(['verified', 'unverified', 'violated'])
+      .describe('Whether the condition is confirmed, unknown, or not met.'),
+    citations: CitationList.default([]).describe(
+      'Evidence backing the status; verified requires at least one source.',
+    ),
+  })
+  .describe('A declared condition and its evidence-backed delivery status.');
+export type BriefConstraint = z.infer<typeof BriefConstraint>;
 
 export const BriefMetadata = z
   .object({
@@ -267,10 +309,11 @@ export const BriefNotice = z
         'budget_exhausted',
         'limited_evidence',
         'search_failed',
+        'contract_gap',
         'other',
       ])
       .describe(
-        'Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access.',
+        'Notice classification. `contract_gap` marks a part of the declared task contract not delivered, a condition not confirmed or not met, or rows shown as alternatives because they do not come from a required source. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access.',
       ),
   })
   .describe('An honest per-source failure or validator flag.');
@@ -297,6 +340,11 @@ export const Brief = z
       'Structured/tabular facets, or null when the query has no comparative shape.',
     ),
     sources: z.array(BriefSource).describe('Numbered, deduplicated source references.'),
+    constraints: z
+      .array(BriefConstraint)
+      .max(24)
+      .optional()
+      .describe('Declared conditions and their delivery statuses; absent on older artifacts.'),
     metadata: BriefMetadata.describe('Provenance and quality signals.'),
     notices: z
       .array(BriefNotice)
@@ -332,13 +380,35 @@ export const Brief = z
 
     // Referential integrity: every citation must resolve to a declared source.
     const declared = new Set(brief.sources.map((source) => source.n));
+    const consulted = new Set(
+      brief.sources.filter((source) => source.cited === false).map((source) => source.n),
+    );
+    const classified = brief.sources.some((source) => source.cited !== undefined);
+    let seenConsulted = false;
+    brief.sources.forEach((source, index) => {
+      if (classified && source.cited === undefined)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sources', index, 'cited'],
+          message: 'cited must be defined for all sources or none',
+        });
+      if (seenConsulted && source.cited === true)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sources', index, 'cited'],
+          message: 'cited sources must precede consulted-only sources',
+        });
+      if (source.cited === false) seenConsulted = true;
+    });
     const checkCitations = (citations: readonly number[], basePath: (string | number)[]): void => {
       citations.forEach((citation, citationIndex) => {
-        if (!declared.has(citation)) {
+        if (!declared.has(citation) || consulted.has(citation)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: [...basePath, 'citations', citationIndex],
-            message: `citation [${citation}] does not resolve to a declared sources[].n`,
+            message: consulted.has(citation)
+              ? `citation [${citation}] references a consulted-only source`
+              : `citation [${citation}] does not resolve to a declared sources[].n`,
           });
         }
       });
@@ -361,6 +431,25 @@ export const Brief = z
 
     brief.sections.forEach((section, index) => {
       checkCitations(section.citations, ['sections', index]);
+    });
+    brief.facets?.comparison?.row_citations?.forEach((citations, index) => {
+      citations.forEach((citation, j) => {
+        if (!declared.has(citation) || consulted.has(citation))
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['facets', 'comparison', 'row_citations', index, j],
+            message: 'row citation must resolve to a cited source',
+          });
+      });
+    });
+    brief.constraints?.forEach((constraint, index) => {
+      checkCitations(constraint.citations, ['constraints', index]);
+      if (constraint.status === 'verified' && constraint.citations.length === 0)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['constraints', index, 'citations'],
+          message: 'verified constraints must cite at least one source',
+        });
     });
   })
   .describe(

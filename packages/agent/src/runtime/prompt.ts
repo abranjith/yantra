@@ -9,7 +9,9 @@ import type { BrowserCapability } from './profiles.js';
  */
 
 /**
- * The version recorded in agentic run manifests. `agent-v9` (FEAT-052) adds
+ * The version recorded in agentic run manifests. `agent-v10` changes only the
+ * research/do publish addenda to teach attributed structured delivery. The
+ * system prompt remains identical to v9. `agent-v9` (FEAT-052) adds
  * source and condition fidelity to `Scope` (a source the goal names is where
  * the answer comes from; a stated condition is confirmed or reported as
  * unconfirmed, never asserted), forbids explaining missing data with a cause no
@@ -17,7 +19,7 @@ import type { BrowserCapability } from './profiles.js';
  * than a fallback. `agent-v8` added the governed `Scope` section itself.
  * The system prompt text itself intentionally remains output-shape agnostic.
  */
-export const PROMPT_VERSION = 'agent-v9' as const;
+export const PROMPT_VERSION = 'agent-v10' as const;
 
 /**
  * The complete production system prompt for agentic Yantra runs.

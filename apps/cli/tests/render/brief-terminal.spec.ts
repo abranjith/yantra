@@ -12,6 +12,30 @@ const stripAnsi = (value: string): string => value.replace(ANSI_PATTERN, '');
 
 const DETAIL_LEVELS: readonly BriefDetailLevel[] = ['overview', 'standard', 'full'];
 
+describe('@no-llm attributed terminal Brief', () => {
+  const brief = makeBrief({
+    title: 'Attributed results',
+    overview: 'Listing details',
+    key_findings: [],
+    constraints: [{ name: 'drivetrain', value: 'AWD', status: 'verified', citations: [1] }],
+    facets: { comparison: { columns: ['Price'], rows: [[100]], row_citations: [[1]] } },
+    sources: [makeSource(1, { cited: true }), makeSource(2, { cited: false })],
+  });
+  it('renders every additive field', () => {
+    const output = renderBriefTerminal(brief, { detail: 'full', noColor: true });
+    expect(output).toContain('Conditions: drivetrain = AWD ✓ verified [1]');
+    expect(output).toContain('Src');
+    expect(output).toContain('Also consulted');
+    expect(output).toMatchSnapshot();
+  });
+  it('keeps conditions visible and consulted pages hidden at overview', () => {
+    const output = renderBriefTerminal(brief, { detail: 'overview', noColor: true });
+    expect(output).toContain('Conditions:');
+    expect(output).not.toContain('Also consulted');
+    expect(output).not.toContain('[2]');
+  });
+});
+
 /** ANSI-free string generator (valid Briefs never contain escape bytes). */
 const safeStr = (minLength: number, maxLength: number): fc.Arbitrary<string> =>
   fc

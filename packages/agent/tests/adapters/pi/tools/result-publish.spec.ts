@@ -211,7 +211,7 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
       {
         brief: {
           title: 'Latest football results',
-          overview: 'Fixtures for today are listed on BBC Sport. [1]',
+          overview: 'Fixtures for today are listed on BBC Sport.',
           key_findings: ['Many leagues have friendlies today.', 'Kick-off times are UK local.'],
           sources: [
             'https://www.bbc.co.uk/sport/football/scores-fixtures',
@@ -236,18 +236,31 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
       { text: 'Kick-off times are UK local.', editorial: true, citations: [] },
     ]);
     expect(brief.metadata).toMatchObject({ synthesis: 'llm', run_id: 'run-under-test' });
+    expect(brief.metadata).toMatchObject({
+      citation_verdict: { claims_checked: 0, flagged: 0, stripped: 0 },
+    });
   });
 
   it('preserves object findings with citations as non-editorial', async () => {
     const services = buildServices({ runDir, publish: agentPublisher() });
+    services.evidence.add({
+      sourceId: 'S1',
+      url: 'https://example.com/evidence',
+      finalUrl: null,
+      title: 'Evidence',
+      excerpt: 'Backed claim.',
+      fetchedAt: '2026-10-10T00:00:00.000Z',
+      publishedAt: null,
+      tool: 'web_fetch',
+    });
     const tool = wrapTool(resultPublishSpec(services), services);
 
     const result = await tool.execute(
       {
         brief: {
           title: 'Cited answer',
-          overview: 'Answer. [1]',
-          key_findings: [{ text: 'Backed claim. [1]', citations: [1] }],
+          overview: 'Answer. [S1]',
+          key_findings: [{ text: 'Backed claim. [S1]', sources: ['S1'] }],
           sources: ['https://example.com/evidence'],
         },
       },
@@ -270,7 +283,7 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
         brief: {
           title: 'Bad citation',
           overview: 'Answer.',
-          key_findings: [{ text: 'Cites a ghost.', citations: [7] }],
+          key_findings: [{ text: 'Cites a ghost.', sources: ['S7'] }],
           sources: ['https://example.com/only-source'],
         },
       },
@@ -281,9 +294,9 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
     expect(result.error_code).toBe('BRIEF_INVALID');
     expect(result.retryable).toBe(true);
     const details = result.details as { issues: { pointer: string }[] };
-    expect(
-      details.issues.some((issue) => issue.pointer.startsWith('key_findings/0/citations')),
-    ).toBe(true);
+    expect(details.issues.some((issue) => issue.pointer.startsWith('key_findings/0/sources'))).toBe(
+      true,
+    );
   });
 
   it('rejects an unparsable source URL at the sources pointer', async () => {
@@ -307,7 +320,7 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
     expect(result.modelText).toMatch(/web_search/);
   });
 
-  it('honors an explicit editorial: false on an uncited finding by rejecting it', async () => {
+  it('normalizes findings without evidence refs to editorial commentary', async () => {
     const services = buildServices({ runDir, publish: agentPublisher() });
     const tool = wrapTool(resultPublishSpec(services), services);
 
@@ -323,10 +336,10 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
       undefined,
     );
 
-    expect(result.status).toBe('error');
-    expect(result.error_code).toBe('BRIEF_INVALID');
-    const details = result.details as { issues: { pointer: string }[] };
-    expect(details.issues.some((issue) => issue.pointer === 'key_findings/0/citations')).toBe(true);
+    expect(result.status).toBe('ok');
+    expect((await publishedBrief()).key_findings).toMatchObject([
+      { editorial: true, citations: [] },
+    ]);
   });
 
   it('generates a task id when the publisher has no run context (back-compat callers)', async () => {
@@ -421,19 +434,17 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
     ]);
   });
 
-  it('coerces model findings to editorial text so ad-hoc citation numbers can never invalidate the Brief', async () => {
+  it('attributes findings by evidence ID and keeps plain strings editorial', async () => {
     const services = withEvidence();
     const tool = wrapTool(resultPublishSpec(services), services);
 
-    // Citations like [7] point into the model's per-call web_search numbering,
-    // not the run-wide ledger numbering — mis-attribution is worse than none.
     const result = await tool.execute(
       {
         brief: {
           title: 'Cited answer',
-          overview: 'Answer. [1]',
+          overview: 'Answer. [S2]',
           key_findings: [
-            { text: 'Backed claim.', citations: [7] },
+            { text: 'Backed claim.', sources: ['S1'] },
             'A bare string finding.',
             { note: 'junk entry with no text' },
           ],
@@ -445,7 +456,7 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
     expect(result.status).toBe('ok');
     const brief = await publishedBrief();
     expect(brief.key_findings).toMatchObject([
-      { text: 'Backed claim.', citations: [], editorial: true },
+      { text: 'Backed claim.', citations: [2], editorial: false },
       { text: 'A bare string finding.', citations: [], editorial: true },
     ]);
   });
@@ -494,7 +505,7 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
       {
         brief: {
           title: 'Legacy path',
-          overview: 'Answer. [1]',
+          overview: 'Answer.',
           sources: ['https://example.com/evidence'],
         },
       },

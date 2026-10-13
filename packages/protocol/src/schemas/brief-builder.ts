@@ -13,6 +13,7 @@ import { err, ok } from '../utils/result.js';
 import { generateUlid } from '../utils/ulid.js';
 
 import type {
+  BriefConstraint,
   BriefFacets,
   BriefMetadata,
   BriefNotice,
@@ -28,6 +29,8 @@ import { BRIEF_SCHEMA_VERSION, Brief } from './brief.js';
  * of a minimal deterministic Brief.
  */
 export interface CreateBriefInput {
+  /** Declared conditions; omitted when not supplied. */
+  readonly constraints?: readonly BriefConstraint[];
   /** Originating task id (ULID). */
   readonly task_id: string;
   /** One-line document title. */
@@ -99,6 +102,7 @@ export const createBrief = (input: CreateBriefInput): Brief => ({
   sources: [...(input.sources ?? [])],
   metadata: { ...DEFAULT_METADATA, ...input.metadata },
   notices: [...(input.notices ?? [])],
+  ...(input.constraints === undefined ? {} : { constraints: [...input.constraints] }),
 });
 
 /**

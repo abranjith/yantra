@@ -152,6 +152,7 @@ The universal synthesized output document: answer-first overview, key findings, 
 | sections       | Deep-detail sections; empty at the overview synthesis budget.               |
 | facets         | Structured/tabular facets, or null when the query has no comparative shape. |
 | sources        | Numbered, deduplicated source references.                                   |
+| constraints    | Declared conditions and their delivery statuses; absent on older artifacts. |
 | metadata       | Provenance and quality signals.                                             |
 | notices        | Honest per-source failures and validator flags; may be empty.               |
 
@@ -168,8 +169,31 @@ Example:
   "sections": "<sections>",
   "facets": "<facets>",
   "sources": "<sources>",
+  "constraints": "<constraints>",
   "metadata": "<metadata>",
   "notices": "<notices>"
+}
+```
+
+## BriefConstraint
+
+A declared condition and its evidence-backed delivery status.
+
+| Field     | Description                                                         |
+| --------- | ------------------------------------------------------------------- |
+| name      | Condition name from the task contract.                              |
+| value     | Condition value.                                                    |
+| status    | Whether the condition is confirmed, unknown, or not met.            |
+| citations | Evidence backing the status; verified requires at least one source. |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "value": "<value>",
+  "status": "<status>",
+  "citations": "<citations>"
 }
 ```
 
@@ -225,11 +249,11 @@ Example:
 
 An honest per-source failure or validator flag.
 
-| Field  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| source | Host or subsystem the notice concerns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| reason | Human-readable reason for the notice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| kind   | Notice classification. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access. |
+| Field  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source | Host or subsystem the notice concerns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| reason | Human-readable reason for the notice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| kind   | Notice classification. `contract_gap` marks a part of the declared task contract not delivered, a condition not confirmed or not met, or rows shown as alternatives because they do not come from a required source. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access. |
 
 Example:
 
@@ -245,21 +269,23 @@ Example:
 
 A numbered, deduplicated source reference.
 
-| Field        | Description                                                               |
-| ------------ | ------------------------------------------------------------------------- |
-| n            | Citation number; contiguous 1..N in array order.                          |
-| url          | URL as fetched.                                                           |
-| final_url    | Post-redirect landing URL, or null when no redirect was observed.         |
-| host         | Source host.                                                              |
-| title        | Page title, or null when unavailable.                                     |
-| excerpt      | Short extracted snippet of the source content, or null when not captured. |
-| fetched_at   | ISO-8601 UTC fetch timestamp.                                             |
-| published_at | ISO-8601 publication timestamp, or null when unknown.                     |
+| Field        | Description                                                                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| cited        | True for evidence cited by the answer; false for consulted-only sources. All-or-none across sources. |
+| n            | Citation number; contiguous 1..N in array order.                                                     |
+| url          | URL as fetched.                                                                                      |
+| final_url    | Post-redirect landing URL, or null when no redirect was observed.                                    |
+| host         | Source host.                                                                                         |
+| title        | Page title, or null when unavailable.                                                                |
+| excerpt      | Short extracted snippet of the source content, or null when not captured.                            |
+| fetched_at   | ISO-8601 UTC fetch timestamp.                                                                        |
+| published_at | ISO-8601 publication timestamp, or null when unknown.                                                |
 
 Example:
 
 ```json
 {
+  "cited": "<cited>",
   "n": "<n>",
   "url": "<url>",
   "final_url": "<final_url>",
@@ -1469,16 +1495,18 @@ Example:
 
 A deep-detail prose section of the Brief.
 
-| Field     | Description                                             |
-| --------- | ------------------------------------------------------- |
-| heading   | Section heading.                                        |
-| body_md   | Markdown body prose; must not contain raw ANSI escapes. |
-| citations | Source numbers (sources[].n) cited by this section.     |
+| Field     | Description                                                     |
+| --------- | --------------------------------------------------------------- |
+| kind      | Labels off-contract alternatives; absent for ordinary sections. |
+| heading   | Section heading.                                                |
+| body_md   | Markdown body prose; must not contain raw ANSI escapes.         |
+| citations | Source numbers (sources[].n) cited by this section.             |
 
 Example:
 
 ```json
 {
+  "kind": "<kind>",
   "heading": "<heading>",
   "body_md": "<body_md>",
   "citations": "<citations>"

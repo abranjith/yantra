@@ -77,7 +77,6 @@ import {
   createBriefPublisher,
   createTemplatedReportPublisher,
   createYantraTools,
-  evidenceToSourceRecords,
   runtimeFactsFor,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
@@ -92,9 +91,16 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
+import {
+  composeAgentBrief,
+  logBriefComposition,
+  mapPublishText,
+  sanitizePublishContent,
+} from './brief-composer.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
+import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
 import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
@@ -1107,20 +1113,34 @@ async function maybeAssembleUnpublishedResult(
   // The draft is model text, so user-input values appear as placeholders;
   // resolve them for the published Brief — the artifact is the user's own
   // deliverable and must carry the real values (same contract as tool params).
-  const overview = services.userInput?.resolve(draft) ?? draft;
-  const runtimeFacts = runtimeFactsFor(services);
-  const published = await services.domain.publish.publish(
+  const composed = composeAgentBrief(
+    sanitizePublishContent(
+      { title: assembledTitle(draft), overview: draft, key_findings: [] },
+      services.sanitizer,
+      (text) => services.userInput?.mask(text) ?? text,
+    ),
     {
-      title: assembledTitle(overview),
-      overview,
-      key_findings: [],
-      sources: evidenceToSourceRecords(services.evidence.entries()),
+      evidence: services.evidence.entries(),
+      documents: services.documents,
+      contract: services.contract.current(),
+      mode: 'assembled',
     },
-    { assembledByRuntime: true, runtimeFacts },
   );
+  if (!composed.isOk) return undefined;
+  const content =
+    services.userInput === undefined
+      ? composed.value.content
+      : mapPublishText(composed.value.content, (text) => services.userInput!.resolve(text));
+  const runtimeFacts = runtimeFactsFor(services, composed.value.notices);
+  const published = await services.domain.publish.publish(content, {
+    assembledByRuntime: true,
+    runtimeFacts,
+    citationVerdict: composed.value.verdict,
+  });
   if (!published.isOk) return undefined;
   services.actionPhase.close();
   services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
+  logBriefComposition(services, composed.value.summary);
 
   const brief = await readPublishedBrief(services.runDir);
   if (brief === undefined) return undefined;
@@ -1131,6 +1151,8 @@ async function maybeAssembleUnpublishedResult(
 function assembledTitle(draft: string): string {
   const firstLine =
     draft
+      .replace(INLINE_EVIDENCE_REF, '')
+      .replace(/\[\d+\]/gu, '')
       .split(/\r?\n/u)
       .map((line) => line.replace(/^[#>*\-\s]+/u, '').trim())
       .find((line) => line.length > 0) ?? '';

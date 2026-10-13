@@ -11,7 +11,12 @@
 
 import { RunHealth, TaskContractRecord, type TaskContractBody } from '@yantra/protocol';
 
-import type { ReceivedResult, ScriptStep } from '../agent/scripted-provider.js';
+import type {
+  OfferedRecord,
+  ReceivedResult,
+  ScriptContext,
+  ScriptStep,
+} from '../agent/scripted-provider.js';
 import { equals, type Expectation } from '../expectations.js';
 import type { RequestLogEntry } from '../fixtures/server.js';
 import type { ScenarioRun } from '../runner.js';
@@ -47,6 +52,49 @@ export function publishStep(title: string, overview: string): ScriptStep {
     label: 'publish',
     params: { brief: { title, overview } },
   };
+}
+
+/** Values actually offered by a listing record; no truth-data lookup. */
+export function recordSeller(record: OfferedRecord): string | null {
+  const links = Array.isArray(record.links) ? (record.links as unknown[]) : [];
+  return links.map((link) => stringProp(link, 'text')).find((text) => text.length > 0) ?? null;
+}
+export function recordPrice(record: OfferedRecord): number | null {
+  const segments = Array.isArray(record.text) ? (record.text as unknown[]) : [];
+  for (const segment of segments) {
+    if (typeof segment !== 'string') continue;
+    const shown = /^\s*\$?\s*(\d[\d,]*(?:\.\d+)?)(?=\s|$)/u.exec(segment);
+    if (shown?.[1] !== undefined) return Number(shown[1].replace(/,/gu, ''));
+  }
+  const numbers = Array.isArray(record.numbers) ? (record.numbers as unknown[]) : [];
+  const price = numbers.find((entry) => stringProp(entry, 'kind') === 'currency');
+  const text = stringProp(price, 'text').replace(/[^0-9.]/gu, '');
+  const value = text.length === 0 ? NaN : Number(text);
+  return Number.isFinite(value) ? value : null;
+}
+export function pageField(result: ReceivedResult | undefined, label: string): string | null {
+  const fields = fieldOf(result ?? null, 'fields');
+  if (typeof fields !== 'object' || fields === null || Array.isArray(fields)) return null;
+  const field = Object.entries(fields).find(([name]) => name.toLowerCase() === label.toLowerCase());
+  return field === undefined || typeof field[1] !== 'string' ? null : field[1];
+}
+export function sourceIdOf(result: ReceivedResult | undefined): string | null {
+  return result === undefined ? null : stringProp(result.model, 'source_id') || null;
+}
+/** A small table from the records a read actually showed, with stable anchor IDs. */
+export function recordTable(
+  ctx: ScriptContext,
+  label = 'results',
+  count = 3,
+): { columns: string[]; rows: (string | number | null)[][]; row_sources: string[][] } | null {
+  const records = ctx.recordsFrom(ctx.labelled(label)[0]).slice(0, count);
+  return records.length === 0
+    ? null
+    : {
+        columns: ['seller', 'price'],
+        rows: records.map((record) => [recordSeller(record), recordPrice(record)]),
+        row_sources: records.map((record) => [record.id]),
+      };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +237,9 @@ export function contractOf(run: ScenarioRun): TaskContractBody | 'invalid' | nul
 export function contractNoticesOf(
   run: ScenarioRun,
 ): readonly { readonly kind: string; readonly source: string }[] {
-  return noticesOf(run).filter((notice) => notice.source === 'task-contract');
+  return noticesOf(run).filter(
+    (notice) => notice.source === 'task-contract' && notice.kind === 'other',
+  );
 }
 
 /** The run's `contract_declared` progress events, as `{ revision, summary }`. */

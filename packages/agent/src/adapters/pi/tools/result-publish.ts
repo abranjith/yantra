@@ -35,6 +35,9 @@ import {
   validateBrief,
   validateTemplatedReport,
   type Brief,
+  type BriefFacets,
+  type BriefConstraint,
+  type Section,
   type BriefNotice,
   type BriefSource,
   type BriefValidationError,
@@ -46,6 +49,14 @@ import {
 } from '@yantra/protocol';
 import { Type, type Static, type TObject } from 'typebox';
 
+import {
+  composeAgentBrief,
+  composedPublishSummary,
+  logBriefComposition,
+  mapPublishText,
+  sanitizePublishContent,
+} from '../../../runtime/brief-composer.js';
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
   EvidenceEntry,
@@ -81,7 +92,54 @@ const BriefContentParams = Type.Object(
     }),
     key_findings: Type.Optional(
       Type.Array(Type.Unknown(), {
-        description: 'Optional scannable findings, each a short plain-text string.',
+        maxItems: 20,
+        description: 'A plain string (uncited commentary) or {text, sources: ["S3", "S3#r5"]}.',
+      }),
+    ),
+    sections: Type.Optional(
+      Type.Array(
+        Type.Object({
+          heading: Type.String({ minLength: 1, maxLength: 120 }),
+          body_md: Type.String({ maxLength: 4000 }),
+          sources: Type.Optional(Type.Array(Type.String(), { maxItems: 8 })),
+        }),
+        { maxItems: 8 },
+      ),
+    ),
+    constraints: Type.Optional(
+      Type.Array(
+        Type.Object({
+          name: Type.String({ minLength: 1, maxLength: 60 }),
+          value: Type.String({ minLength: 1, maxLength: 120 }),
+          status: Type.String({ enum: ['verified', 'unverified', 'violated'] }),
+          sources: Type.Optional(Type.Array(Type.String(), { maxItems: 8 })),
+        }),
+        { maxItems: 12 },
+      ),
+    ),
+    fulfillment: Type.Optional(
+      Type.Object({
+        met: Type.Boolean(),
+        unmet: Type.Array(
+          Type.Object({
+            item: Type.String({ minLength: 1, maxLength: 80 }),
+            reason: Type.String({ minLength: 1, maxLength: 200 }),
+          }),
+          { maxItems: 12 },
+        ),
+      }),
+    ),
+    table: Type.Optional(
+      Type.Object({
+        columns: Type.Array(Type.String({ minLength: 1, maxLength: 60 }), {
+          minItems: 1,
+          maxItems: 12,
+        }),
+        rows: Type.Array(
+          Type.Array(Type.Unknown({ description: 'string, number, boolean, or null' })),
+          { minItems: 1, maxItems: 50 },
+        ),
+        row_sources: Type.Array(Type.Array(Type.String(), { maxItems: 8 }), { maxItems: 50 }),
       }),
     ),
     sources: Type.Optional(
@@ -122,7 +180,11 @@ export function resultPublishSpec(services: RunServices): ToolWrapperSpec<TObjec
         ? 'Publish the final answer as a validated Brief. This is the ONLY way to complete a task — ' +
           'raw chat text is not a completed result. Call it once, when your answer is ready, with ' +
           '{"brief": {"title": ..., "overview": ...}}; the web pages you consulted are attached as ' +
-          'sources automatically, so you never need to list URLs. Do NOT call it before gathering ' +
+          'sources automatically. Cite evidence by source_id or record id (S3, S3#r5): findings ' +
+          'as {text, sources: ["S3"]}, prose as [S3]. Publish items with fields as a table ' +
+          '{columns, rows, row_sources}, one citation list per row. Report conditions in ' +
+          'constraints with status verified, unverified, or violated; list undelivered items ' +
+          'and reasons in fulfillment.unmet. Invalid references return the exact fix. Do NOT call it before gathering ' +
           'the evidence you need, and do NOT invent facts or URLs; invalid Briefs are rejected with ' +
           'the specific problems to fix.'
         : `Publish the final values for template "${services.template.name ?? 'unnamed'}". ` +
@@ -185,11 +247,50 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   // typed findings, so it passes through untouched.
   const briefInput = paramsRecord.brief;
   const evidence = services.evidence.entries();
+  const composed = isCompleteBrief(briefInput)
+    ? null
+    : composeAgentBrief(
+        sanitizePublishContent(
+          briefInput,
+          services.sanitizer,
+          (text) => services.userInput?.mask(text) ?? text,
+        ),
+        {
+          evidence,
+          documents: services.documents,
+          contract: services.contract.current(),
+          mode: 'tool',
+        },
+      );
+  if (composed !== null && !composed.isOk) {
+    const issues = composed.error.map((issue) => ({
+      cause: issue.cause,
+      pointer: issue.pointer,
+      message: renderAgentMessage('tool', 'BRIEF_INVALID', issue.cause, issue.values),
+    }));
+    return {
+      ok: false,
+      errorCode: 'BRIEF_INVALID',
+      retryable: true,
+      message: issues
+        .slice(0, 5)
+        .map((issue) => issue.message)
+        .join(' '),
+      details: { issues },
+    };
+  }
+  const composedContent = composed?.isOk ? composed.value.content : briefInput;
   const content =
-    evidence.length > 0 && !isCompleteBrief(briefInput)
-      ? withLedgerEvidence(briefInput, evidence)
-      : briefInput;
-  const result = await services.domain.publish.publish(content, { runtimeFacts });
+    services.userInput === undefined
+      ? composedContent
+      : mapPublishText(composedContent, (text) => services.userInput!.resolve(text));
+  const publishFacts = composed?.isOk
+    ? runtimeFactsFor(services, composed.value.notices)
+    : runtimeFacts;
+  const result = await services.domain.publish.publish(content, {
+    runtimeFacts: publishFacts,
+    ...(composed?.isOk ? { citationVerdict: composed.value.verdict } : {}),
+  });
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
     // been observed publishing placeholder sources ("N/A") instead of copying
@@ -207,42 +308,24 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   }
 
   services.actionPhase.close();
-  services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
+  services.runHealth.recordPublishedNotices(publishFacts.notices.length);
+  if (composed?.isOk) logBriefComposition(services, composed.value.summary);
+  const brief = result.value.brief as Brief;
   return {
     ok: true,
-    model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
-    details: { brief_id: (result.value.brief as Brief).brief_id },
+    model: {
+      published: true,
+      summary: composed?.isOk
+        ? composedPublishSummary(brief.title, brief.overview, composed.value.summary)
+        : result.value.summary,
+      html_path: result.value.htmlPath,
+    },
+    details: {
+      brief_id: brief.brief_id,
+      ...(composed?.isOk ? { composition: composed.value.summary } : {}),
+    },
     terminate: true,
   };
-}
-
-/**
- * Ledger-authoritative composition: the runtime already knows every source the
- * run consulted, so the model's payload is reduced to prose. Model-supplied
- * `sources` are replaced wholesale by the ledger, and findings are coerced to
- * uncited editorial text — the model's ad-hoc citation numbers (per-call
- * `web_search` numbering) cannot be trusted against run-wide ledger numbering,
- * and the Brief's evidence lives in the attached sources + excerpts instead.
- */
-function withLedgerEvidence(
-  brief: unknown,
-  evidence: readonly EvidenceEntry[],
-): Record<string, unknown> {
-  const record = asRecord(brief) ?? {};
-  return {
-    ...record,
-    key_findings: asArray(record.key_findings)
-      .map(findingText)
-      .filter((text) => text.length > 0),
-    sources: evidenceToSourceRecords(evidence),
-  };
-}
-
-/** Extract the plain text of a model-supplied finding (string or {text}). */
-function findingText(entry: unknown): string {
-  if (typeof entry === 'string') return entry.trim();
-  const text = asRecord(entry)?.text;
-  return typeof text === 'string' ? text.trim() : '';
 }
 
 /**
@@ -253,8 +336,15 @@ function findingText(entry: unknown): string {
  */
 export function runtimeFactsFor(
   services: Pick<RunServices, 'runHealth' | 'contract'>,
+  composedNotices?: readonly BriefNotice[],
 ): PublishRuntimeFacts {
-  return services.runHealth.briefFacts(services.contract.notices());
+  if (composedNotices === undefined)
+    return services.runHealth.briefFacts(services.contract.notices());
+  const facts = services.runHealth.briefFacts();
+  return {
+    ...facts,
+    notices: [...services.contract.notices(), ...composedNotices, ...facts.notices],
+  };
 }
 
 /**
@@ -331,7 +421,7 @@ export function createBriefPublisher(
       const assembled = options?.assembledByRuntime === true;
       const built = isCompleteBrief(raw)
         ? raw
-        : buildBriefFromAgentContent(raw, context, assembled);
+        : buildBriefFromAgentContent(raw, context, assembled, options?.citationVerdict);
       const candidate = withRuntimeFacts(built, options?.runtimeFacts);
       const validated = validateBrief(candidate);
       if (!validated.isOk) {
@@ -529,6 +619,7 @@ function buildBriefFromAgentContent(
   raw: unknown,
   context: BriefPublisherContext,
   assembledByRuntime = false,
+  citationVerdict?: PublishOptions['citationVerdict'],
 ): unknown {
   const record = asRecord(raw) ?? {};
   const nowIso = (context.now?.() ?? new Date()).toISOString();
@@ -537,10 +628,16 @@ function buildBriefFromAgentContent(
     title: typeof record.title === 'string' ? record.title : '',
     overview: typeof record.overview === 'string' ? record.overview : '',
     key_findings: asArray(record.key_findings).map(toKeyFinding),
+    sections: asArray(record.sections) as Section[],
+    facets: (record.facets ?? null) as BriefFacets | null,
+    ...(Array.isArray(record.constraints)
+      ? { constraints: record.constraints as BriefConstraint[] }
+      : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {
       synthesis: 'llm',
       run_id: context.runId ?? null,
+      citation_verdict: citationVerdict ?? { claims_checked: 0, flagged: 0, stripped: 0 },
       ...(assembledByRuntime ? { deterministic_fallback_used: true } : {}),
     },
     notices: assembledByRuntime
@@ -594,6 +691,7 @@ function toSource(entry: unknown, index: number, fetchedAt: string): BriefSource
     excerpt: typeof record.excerpt === 'string' ? record.excerpt : null,
     fetched_at: typeof record.fetched_at === 'string' ? record.fetched_at : fetchedAt,
     published_at: typeof record.published_at === 'string' ? record.published_at : null,
+    ...(typeof record.cited === 'boolean' ? { cited: record.cited } : {}),
   };
 }
 

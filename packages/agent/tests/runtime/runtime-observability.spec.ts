@@ -187,7 +187,11 @@ class ToolDrivingProvider implements AgentProvider {
                   params: {
                     brief: {
                       title: 'Fixture result',
-                      overview: 'The fixture completed its single browser-backed fetch. [1]',
+                      overview:
+                        'The fixture completed its single browser-backed fetch.' +
+                        (this.services.evidence.entries()[0]?.sourceId
+                          ? ` [${this.services.evidence.entries()[0]!.sourceId}]`
+                          : ''),
                     },
                   },
                 },

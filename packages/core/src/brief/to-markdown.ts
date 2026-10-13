@@ -47,6 +47,11 @@ export function briefToMarkdown(brief: Brief): string {
   const blocks: string[] = [];
 
   blocks.push(`# ${inline(brief.title)}`);
+  if (brief.constraints !== undefined && brief.constraints.length > 0) {
+    blocks.push(
+      `**Conditions:** ${brief.constraints.map((condition) => `${inline(condition.name)} = ${inline(condition.value)} ${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}${condition.citations.length > 0 ? ` ${capMarkers(condition.citations)}` : ''}`).join(' · ')}`,
+    );
+  }
 
   const overview = brief.overview.trim();
   if (overview.length > 0) {
@@ -74,7 +79,11 @@ export function briefToMarkdown(brief: Brief): string {
   }
 
   if (brief.sources.length > 0) {
-    blocks.push(['## Sources', '', ...brief.sources.map(sourceLine)].join('\n'));
+    const cited = brief.sources.filter((source) => source.cited !== false);
+    const consulted = brief.sources.filter((source) => source.cited === false);
+    if (cited.length > 0) blocks.push(['## Sources', '', ...cited.map(sourceLine)].join('\n'));
+    if (consulted.length > 0)
+      blocks.push(['## Also consulted', '', ...consulted.map(sourceLine)].join('\n'));
   }
 
   if (brief.notices.length > 0) {
@@ -176,9 +185,16 @@ function cleanSectionBody(bodyMd: string): string {
 function comparisonTable(
   comparison: NonNullable<NonNullable<Brief['facets']>['comparison']>,
 ): string {
-  const header = `| ${comparison.columns.map(cell).join(' | ')} |`;
-  const divider = `| ${comparison.columns.map(() => '---').join(' | ')} |`;
-  const rows = comparison.rows.map((row) => `| ${row.map(cell).join(' | ')} |`);
+  const columns = [
+    ...comparison.columns,
+    ...(comparison.row_citations === undefined ? [] : ['Sources']),
+  ];
+  const header = `| ${columns.map(cell).join(' | ')} |`;
+  const divider = `| ${columns.map(() => '---').join(' | ')} |`;
+  const rows = comparison.rows.map(
+    (row, i) =>
+      `| ${[...row.map(cell), ...(comparison.row_citations === undefined ? [] : [capMarkers(comparison.row_citations[i] ?? [])])].join(' | ')} |`,
+  );
   return [header, divider, ...rows].join('\n');
 }
 

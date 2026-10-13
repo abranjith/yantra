@@ -93,7 +93,11 @@ export function renderBriefTerminal(brief: Brief, options: BriefTerminalOptions 
   }
 
   if (brief.sources.length > 0) {
-    blocks.push(sourcesBlock(brief.sources, c, detail));
+    const cited = brief.sources.filter((source) => source.cited !== false);
+    const consulted = brief.sources.filter((source) => source.cited === false);
+    if (cited.length > 0) blocks.push(sourcesBlock(cited, c, detail));
+    if (detail !== 'overview' && consulted.length > 0)
+      blocks.push(sourcesBlock(consulted, c, detail, 'Also consulted'));
   }
 
   return blocks.join('\n\n');
@@ -111,7 +115,13 @@ function clampWidth(width: number | undefined): number {
 function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: number): string {
   const title = c.bold(brief.title);
   const overview = styleInline(brief.overview.trim(), c);
-  const content = overview.length > 0 ? overview : c.dim('(no overview available)');
+  const conditions = brief.constraints
+    ?.map(
+      (condition) =>
+        `${condition.name} = ${condition.value} ${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}${condition.citations.length > 0 ? ` ${condition.citations.map((n) => `[${n}]`).join('')}` : ''}`,
+    )
+    .join(' · ');
+  const content = `${conditions ? `Conditions: ${conditions}\n` : ''}${overview.length > 0 ? overview : c.dim('(no overview available)')}`;
 
   const boxOptions: BoxenOptions = {
     padding: { top: 0, bottom: 0, left: 1, right: 1 },
@@ -127,7 +137,7 @@ function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: nu
  * Scannable key-finding bullets; editorial notes use a distinct glyph.
  *
  * The distinction is drawn only when the Brief actually mixes cited findings
- * with commentary — an all-editorial Brief (every agentic run) would otherwise
+ * with commentary — an all-editorial Brief would otherwise
  * render an identical marker on every bullet, which is decoration, not signal.
  */
 function keyFindingsBlock(findings: readonly KeyFinding[], c: ChalkInstance): string {
@@ -162,17 +172,26 @@ function comparisonBlock(
   color: boolean,
   width: number,
 ): string {
+  const columns = [
+    ...comparison.columns,
+    ...(comparison.row_citations === undefined ? [] : ['Src']),
+  ];
   const table = new Table({
-    head: [...comparison.columns],
-    colWidths: distributeWidth(width, comparison.columns.length),
+    head: columns,
+    colWidths: distributeWidth(width, columns.length),
     wordWrap: true,
     // Colors are applied via the label + surrounding blocks, not here, so the
     // table stays free of `@colors/colors` TTY-detection nondeterminism.
     style: { head: color ? ['cyan'] : [], border: [] },
   });
-  for (const row of comparison.rows) {
-    table.push(row.map(cellText));
-  }
+  comparison.rows.forEach((row, i) =>
+    table.push([
+      ...row.map(cellText),
+      ...(comparison.row_citations === undefined
+        ? []
+        : [(comparison.row_citations[i] ?? []).map((n) => `[${n}]`).join('')]),
+    ]),
+  );
   return `${c.bold('Comparison')}\n${table.toString()}`;
 }
 
@@ -254,6 +273,7 @@ function sourcesBlock(
   sources: readonly BriefSource[],
   c: ChalkInstance,
   detail: BriefDetailLevel,
+  heading = 'Sources',
 ): string {
   const lines = sources.flatMap((source) => {
     const label = source.title ?? source.host;
@@ -267,7 +287,7 @@ function sourcesBlock(
     }
     return [head, c.dim(`    ${source.url}  ${meta.join(' · ')}`)];
   });
-  return `${c.bold('Sources')}\n${lines.join('\n')}`;
+  return `${c.bold(heading)}\n${lines.join('\n')}`;
 }
 
 /**

@@ -591,6 +591,68 @@ arrives on stdout as an `agent_progress` record (event type
 `contract_declared`) instead of the stderr line. `ask` and deterministic runs
 never print it.
 
+## Read an attributed Brief
+
+Agentic research and browser tasks can publish a comparison table, cited
+findings, and conditions checked against their declared task contract. Read
+the `understood:` line against your goal, then check the published Conditions,
+row citations, and Notices before using the answer. The runtime checks delivery
+against that declaration; it does not establish that the declaration matches
+your original goal.
+
+**Conditions** appears beneath the title when the Brief includes conditions:
+
+| Display      | Meaning                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `verified`   | The agent reports the condition as confirmed and supplies a citation.                                                                |
+| `unverified` | The condition is not confirmed. An omitted contract filter, or a `verified` claim without evidence references, receives this status. |
+| `not met`    | The agent reports that the condition is violated; JSON stores the status as `violated`.                                              |
+
+Markers such as `[1]` beside a condition, finding, or table row refer to the
+numbered source list in this Brief. A table's citation column is **Src** in
+the terminal and **Sources** in Markdown and HTML. References to several
+records on the same page share one source number; these document numbers are
+separate from the tool's evidence IDs such as `S3#r5`.
+
+**Sources** contains pages cited by the answer or its alternatives. **Also
+consulted** contains pages the run considered but did not cite. Its presence
+does not establish support for a claim. If every page was only consulted, the
+Brief shows only **Also consulted**.
+
+When the declared contract requires a source, rows and cited findings supported
+only by other hosts appear under **Alternatives (not from …)**. They remain
+visible with citations, and a notice explains the separation. A row with at
+least one citation to a required host or its subdomain stays in the main table.
+If the requested source supplied no cited answer content, Notices discloses
+that gap.
+
+A required table cell that was published empty or `null` becomes **not shown
+on source**. This is a missing-value label, not a guessed value or a claim that
+the field cannot exist anywhere on the site. **Notices** reports missing
+fields or deliverables, unmet items declared by the agent, unconfirmed or
+violated conditions, and alternatives. Runtime checks can report a gap even
+when the agent says fulfillment is complete.
+
+An **anchoring** notice reports cited values that the deterministic evidence
+check could not find in the cited material. Those values remain in the answer;
+inspect them against their sources. The check compares numbers and word overlap,
+so a citation or a `verified` condition is not proof of truth, units, or
+freshness. For agent-content Briefs, `brief.json` records the check counts in
+`metadata.citation_verdict` (`claims_checked`, `flagged`, and `stripped: 0`).
+
+Terminal `--detail overview` keeps Conditions visible but hides tables, Notices,
+and Also consulted. `--detail standard` includes those blocks; `--detail full`
+also includes detail sections such as Alternatives and source URLs. Saved
+`brief.md` and `brief.html` contain the full document. Use the
+[run inspection commands](#diagnostics-and-run-inspection) to open those
+artifacts after completion.
+
+These fields are optional. Older Brief artifacts and deterministic
+`--no-llm` Briefs without them keep their existing rendering: no added
+Conditions or row-citation column, and their original Sources list. See
+[Attributed publication](features/agentic-tasks.md#attributed-publication)
+for the publication contract and validation errors.
+
 ## Saved workflows
 
 List and inspect local workflows:

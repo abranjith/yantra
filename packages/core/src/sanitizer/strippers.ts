@@ -153,7 +153,10 @@ export function stripFormValues(html: string): TransformResult {
   });
 
   return {
-    text: $.html(),
+    // Preserve plain payload bytes when no form value was changed. Re-serializing
+    // a JSON string through HTML otherwise escapes URL ampersands and causes
+    // discovered links with multiple query parameters to be withheld.
+    text: hits === 0 ? html : $.html(),
     hits,
   };
 }

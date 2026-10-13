@@ -39,6 +39,7 @@ export const AgentManifestSection = z
         'agent-v7',
         'agent-v8',
         'agent-v9',
+        'agent-v10',
       ])
       .describe('Version of the authoritative agent prompt.'),
     prompt_hash: z

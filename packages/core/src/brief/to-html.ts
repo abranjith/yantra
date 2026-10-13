@@ -78,6 +78,11 @@ export function briefToHtml(brief: Brief): string {
   const declared = new Set(brief.sources.map((source) => source.n));
 
   body.push(`<h1>${escapeHtml(brief.title)}</h1>`);
+  if (brief.constraints !== undefined && brief.constraints.length > 0) {
+    body.push(
+      `<p class="constraints"><strong>Conditions:</strong> ${brief.constraints.map((condition) => `${escapeHtml(condition.name)} = ${escapeHtml(condition.value)} <span class="${condition.status}">${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}</span>${citationSuperscripts(condition.citations)}`).join(' · ')}</p>`,
+    );
+  }
 
   const overview = brief.overview.trim();
   if (overview.length > 0) {
@@ -102,8 +107,10 @@ export function briefToHtml(brief: Brief): string {
   }
 
   if (brief.sources.length > 0) {
-    body.push('<h2>Sources</h2>');
-    body.push(sourcesHtml(brief.sources));
+    const cited = brief.sources.filter((source) => source.cited !== false);
+    const consulted = brief.sources.filter((source) => source.cited === false);
+    if (cited.length > 0) body.push('<h2>Sources</h2>', sourcesHtml(cited));
+    if (consulted.length > 0) body.push('<h2>Also consulted</h2>', sourcesHtml(consulted));
   }
 
   if (brief.notices.length > 0) {
@@ -111,7 +118,11 @@ export function briefToHtml(brief: Brief): string {
     body.push(noticesHtml(brief.notices));
   }
 
-  return inertDocument(brief.title, body.join('\n'));
+  const extraStyles =
+    brief.constraints === undefined
+      ? ''
+      : '.constraints .verified { color: var(--accent); }\n.constraints .unverified { color: var(--warn); }\n.constraints .violated { color: var(--danger); }';
+  return inertDocument(brief.title, body.join('\n'), extraStyles);
 }
 
 /** Renders a Brief Markdown field to inert HTML (fields escaped pre-parse). */
@@ -222,9 +233,17 @@ function sectionHtml(section: Section, declared: ReadonlySet<number>): string {
 function comparisonHtml(
   comparison: NonNullable<NonNullable<Brief['facets']>['comparison']>,
 ): string {
-  const head = comparison.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
+  const head = [
+    ...comparison.columns,
+    ...(comparison.row_citations === undefined ? [] : ['Sources']),
+  ]
+    .map((column) => `<th>${escapeHtml(column)}</th>`)
+    .join('');
   const rows = comparison.rows
-    .map((row) => `<tr>${row.map((value) => `<td>${cell(value)}</td>`).join('')}</tr>`)
+    .map(
+      (row, i) =>
+        `<tr>${row.map((value) => `<td>${cell(value)}</td>`).join('')}${comparison.row_citations === undefined ? '' : `<td>${citationSuperscripts(comparison.row_citations[i] ?? [])}</td>`}</tr>`,
+    )
     .join('\n');
   // The wrapper matches what the Markdown table renderer emits, so a wide
   // comparison scrolls in its own box instead of stretching the page.
@@ -289,6 +308,7 @@ const NOTICE_SEVERITY: Readonly<Record<BriefNotice['kind'], 'danger' | 'warn' | 
   budget_exhausted: 'warn',
   limited_evidence: 'warn',
   search_failed: 'warn',
+  contract_gap: 'warn',
   other: 'info',
 };
 

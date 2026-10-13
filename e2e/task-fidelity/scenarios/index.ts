@@ -23,6 +23,10 @@ import { listingStructured } from './listing-structured.js';
 import { listingTableFaults } from './listing-table-faults.js';
 import { listingTable } from './listing-table.js';
 import { multiTable } from './multi-table.js';
+import { publishAlternatives } from './publish-alternatives.js';
+import { publishBadReference } from './publish-bad-reference.js';
+import { publishFlaggedValue } from './publish-flagged-value.js';
+import { publishUnverifiedFilter } from './publish-unverified-filter.js';
 import { repeatRead } from './repeat-read.js';
 import { researchBrowse } from './research-browse.js';
 import { researchNoBrowse } from './research-no-browse.js';
@@ -41,6 +45,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
   challengeLargeMain,
   article,
   multiTable,
+  publishAlternatives,
+  publishBadReference,
+  publishUnverifiedFilter,
+  publishFlaggedValue,
   searchConcurrency,
   searchBreaker,
   searchEmptyTimeout,
