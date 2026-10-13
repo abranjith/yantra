@@ -111,25 +111,25 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-alternatives.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-flagged-value.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-unverified-filter.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -333,7 +333,7 @@
     },
     {
       "path": "packages/core/tests/sanitizer/form-pass-identity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
