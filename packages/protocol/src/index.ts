@@ -3,6 +3,7 @@ export { emitProtocolSpecDoc } from './emit/spec-doc.js';
 export {
   BRIEF_SCHEMA_VERSION,
   Brief,
+  BriefConstraint,
   BriefFacets,
   BriefMetadata,
   BriefNotice,

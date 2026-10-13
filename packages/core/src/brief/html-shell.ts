@@ -128,7 +128,7 @@ hardenedMarkdown.use({
 });
 
 /** Wrap already-rendered inert body HTML in the self-contained document theme. */
-export function inertDocument(title: string, body: string): string {
+export function inertDocument(title: string, body: string, extraStyles = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -137,7 +137,7 @@ export function inertDocument(title: string, body: string): string {
 <meta name="referrer" content="no-referrer">
 <title>${escapeHtml(title)}</title>
 <style>
-${THEME_CSS}
+${THEME_CSS}${extraStyles.length > 0 ? `\n${extraStyles}` : ''}
 </style>
 </head>
 <body>

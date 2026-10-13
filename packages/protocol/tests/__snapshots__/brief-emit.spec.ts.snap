@@ -14,6 +14,49 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
           "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
           "type": "string",
         },
+        "constraints": {
+          "description": "Declared conditions and their delivery statuses; absent on older artifacts.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A declared condition and its evidence-backed delivery status.",
+            "properties": {
+              "citations": {
+                "$ref": "#/definitions/Brief/properties/facets/anyOf/0/properties/comparison/anyOf/0/properties/row_citations/items",
+                "default": [],
+                "description": "Evidence backing the status; verified requires at least one source.",
+              },
+              "name": {
+                "description": "Condition name from the task contract.",
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string",
+              },
+              "status": {
+                "description": "Whether the condition is confirmed, unknown, or not met.",
+                "enum": [
+                  "verified",
+                  "unverified",
+                  "violated",
+                ],
+                "type": "string",
+              },
+              "value": {
+                "description": "Condition value.",
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "name",
+              "value",
+              "status",
+            ],
+            "type": "object",
+          },
+          "maxItems": 24,
+          "type": "array",
+        },
         "facets": {
           "anyOf": [
             {
@@ -31,6 +74,17 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
                             "type": "string",
                           },
                           "minItems": 1,
+                          "type": "array",
+                        },
+                        "row_citations": {
+                          "description": "Sources backing each row, in row order; length must equal rows.length.",
+                          "items": {
+                            "description": "Source numbers (sources[].n) backing this content.",
+                            "items": {
+                              "$ref": "#/definitions/Brief/properties/key_findings/items/properties/citations/items",
+                            },
+                            "type": "array",
+                          },
                           "type": "array",
                         },
                         "rows": {
@@ -326,7 +380,7 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
             "description": "An honest per-source failure or validator flag.",
             "properties": {
               "kind": {
-                "description": "Notice classification. \`source_excluded\` marks a source dropped as irrelevant to the query before assembly; \`limited_evidence\` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; \`search_failed\` marks web searches that failed during the run, grouped by stable failure code (source \`search:<provider>\`); \`budget_exhausted\` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access.",
+                "description": "Notice classification. \`contract_gap\` marks a part of the declared task contract not delivered, a condition not confirmed or not met, or rows shown as alternatives because they do not come from a required source. \`source_excluded\` marks a source dropped as irrelevant to the query before assembly; \`limited_evidence\` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; \`search_failed\` marks web searches that failed during the run, grouped by stable failure code (source \`search:<provider>\`); \`budget_exhausted\` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access.",
                 "enum": [
                   "fetch_failed",
                   "extract_failed",
@@ -337,6 +391,7 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
                   "budget_exhausted",
                   "limited_evidence",
                   "search_failed",
+                  "contract_gap",
                   "other",
                 ],
                 "type": "string",
@@ -391,6 +446,13 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
                 "minLength": 1,
                 "type": "string",
               },
+              "kind": {
+                "description": "Labels off-contract alternatives; absent for ordinary sections.",
+                "enum": [
+                  "alternatives",
+                ],
+                "type": "string",
+              },
             },
             "required": [
               "heading",
@@ -407,6 +469,10 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
             "additionalProperties": false,
             "description": "A numbered, deduplicated source reference.",
             "properties": {
+              "cited": {
+                "description": "True for evidence cited by the answer; false for consulted-only sources. All-or-none across sources.",
+                "type": "boolean",
+              },
               "excerpt": {
                 "default": null,
                 "description": "Short extracted snippet of the source content, or null when not captured.",

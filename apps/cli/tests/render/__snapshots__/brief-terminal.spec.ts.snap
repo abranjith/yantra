@@ -1,5 +1,26 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`@no-llm attributed terminal Brief > renders every additive field 1`] = `
+"Attributed results
+ Conditions: drivetrain = AWD ✓ verified [1]                                    
+ Listing details                                                                
+
+Comparison
+┌───────────────────────────────────────┬──────────────────────────────────────┐
+│ Price                                 │ Src                                  │
+├───────────────────────────────────────┼──────────────────────────────────────┤
+│ 100                                   │ [1]                                  │
+└───────────────────────────────────────┴──────────────────────────────────────┘
+
+Sources
+[1] Source 1 — source-1.example.com
+    https://source-1.example.com/page  fetched 2026-07-01T10:00:00.000Z
+
+Also consulted
+[2] Source 2 — source-2.example.com
+    https://source-2.example.com/page  fetched 2026-07-01T10:00:00.000Z"
+`;
+
 exports[`@no-llm renderBriefTerminal > renders the canonical Brief at detail=full noColor=false 1`] = `
 "[1mCheapest Sony WH-1000XM5 today[22m
 ╭──────────────────────────────────────────────────────────────────────────────╮
