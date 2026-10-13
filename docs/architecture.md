@@ -1237,10 +1237,13 @@ derives `interact` when any click or fill tool is present, `read` for any other 
 and `none` otherwise. The orchestrator passes that value to `buildAgentUserPrompt`
 (`packages/agent/src/runtime/prompt.ts`), which renders the matching scope line. The `read` line
 tells the model to report a goal that needs clicking or filling and to name `yantra do` as the next
-step. The system prompt is `agent-v9`. Its `Scope` section makes a source the goal names the place
-the answer comes from, requires a stated condition to be confirmed or reported as unconfirmed, and
+step. The recorded prompt version is `agent-v10`; the system text retains v9's `Scope` section,
+which makes a source the goal names the place the answer comes from, requires a stated condition
+to be confirmed or reported as unconfirmed, and
 forbids explaining missing data with a cause no tool reported. It also treats following a link a
 result offered as progress rather than a fallback.
+The `research` and `do` addenda teach evidence-ID citations, tables with `row_sources`, condition
+statuses, and explicit `fulfillment.unmet` items. Older manifest prompt versions remain valid.
 
 `task_contract` (`packages/agent/src/adapters/pi/tools/task-contract.ts`) is registered for
 `research` and `do` only. It records what the goal requires: the deliverable (`table`, `answer`,
@@ -1268,7 +1271,7 @@ exactly once even when parallel declarations finish together. The event carries
 beside the goal echo.
 
 The contract is model-authored and grants nothing. No URL provenance, allowlist, or budget is
-derived from it. `hostSatisfiesRequiredSource` is a pure helper for later delivery checks.
+derived from it. `hostSatisfiesRequiredSource` is a pure helper used by publication delivery checks.
 `TaskContractStore.notices()` returns exactly one `other` notice from source `task-contract` when
 a `research` or `do` run never declared a contract, and nothing otherwise.
 
@@ -1279,6 +1282,82 @@ parallel calls therefore cannot hide a loop in which one tool succeeds while ano
 failing. Denied and aborted results are ignored. At `toolRetries + 1` identical failures, the run
 is interrupted as `repeated-tool-failure`. The one exception is a `TOOL_TIMEOUT` reached after the
 soft wall-clock wind-down: it yields to that wind-down so the session can still publish.
+
+#### Attributed structured publication
+
+Agent-authored `result_publish` content passes through `composeAgentBrief` in
+`packages/agent/src/runtime/brief-composer.ts` before the Brief publisher. The input includes
+findings as `{ text, sources }`, cited sections, a table `{ columns, rows, row_sources }`,
+constraints, and fulfillment gaps. String findings remain editorial when they carry no evidence
+references. Model-authored text is user-input-masked and public-sanitized as string leaves before
+composition, then control-stripped and bounded. Composition reads the run's evidence ledger,
+`DocumentStore`, and current task contract; it performs no acquisition or model call.
+
+`runtime/evidence-refs.ts` owns the `S<n>` / `S<n>#r<k>` grammar and inline `[S3]` markers.
+Every reference must name evidence in this run; record anchors must also resolve in the store.
+The composer collects unknown-source, unknown-anchor, numeric-marker, uncited-row, row-width,
+and row-source-count errors, plus missing contract table or field errors. Tool publication returns
+correctable `BRIEF_INVALID` issues with pointers and registered cause-specific messages. It does
+not close the action phase or log a successful composition until publication succeeds.
+
+Resolved references become contiguous protocol source numbers. Cited sources come first, in
+first-reference order across overview, findings, agent sections, the runtime Alternatives section,
+main table rows, and constraints. Consulted-only sources follow in ledger order. The first ledger
+entry for a source ID wins; entries with no source ID cannot be cited. Record references map to
+their parent source number in `brief.json`; the original anchors remain in the sanitized publish
+audit. With a nonempty ledger, model-supplied source lists are ignored and every source carries
+`cited`. Complete protocol Briefs supplied by internal/scripted callers retain their own sources
+and verdict and bypass composition. Templated reports retain their separate publishing path.
+
+Pure helpers in `runtime/contract-delivery.ts` reconcile the document with a declared contract:
+
+- Rows and cited findings supported only by other hosts move to one runtime-owned section with
+  `kind: 'alternatives'`. A reference to any required host, including a subdomain, keeps an item in
+  the main answer; final redirect URLs take precedence for this check. Uncited editorial findings
+  remain in the main answer.
+- A table contract requires a table and columns containing every required field's normalized
+  tokens, unless `fulfillment.unmet` explicitly reports the omission. Empty required cells become
+  `not shown on source`; these and independently proven gaps produce bounded `contract_gap`
+  notices even when the agent reports `met: true`.
+- Contract filters lead the published constraints. Omitted conditions are added as `unverified`,
+  and `verified` without references becomes `unverified`. Unconfirmed conditions, violated
+  conditions, and off-source alternatives each receive a disclosure notice.
+
+The pure core module `packages/core/src/synthesis/anchoring.ts` owns the shared normalization,
+digit-group matching, and 0.5 content-word-overlap threshold. Both the agent composer and core's
+existing `validateCitations` consume these helpers. The agent check tests numeric cells by digits;
+string cells, cited findings, and verified constraint values by digits and words; and cited section
+bodies by digits. It includes alternative rows and findings. Record references use
+`recordEvidenceText`; page references use `pageEvidenceText` over stored prose, records, fields,
+tables, and structured scalar values, capped at 200,000 characters. A source without stored page
+analysis falls back to its ledger title and excerpt. These corpora are runtime-only. A mismatch
+adds one bounded `uncited_claim_flagged` notice and increments `metadata.citation_verdict.flagged`;
+agent content is retained and `stripped` is always zero. This is an overlap check, not a semantic
+proof that a condition holds. The existing core synthesis validator retains its own stripping
+policy for numeric mismatches.
+
+The protocol additions keep Brief schema version `0.2`: optional comparison `row_citations`,
+source `cited`, section `kind: 'alternatives'`, and `constraints`, plus the `contract_gap` notice
+kind. Schema refinements require row-citation count to match row count, citations to resolve,
+source classification to be all-or-none with cited sources first, no citation to a consulted-only
+source, and at least one citation for a verified constraint. Markdown, HTML, and terminal rendering
+show condition statuses, row citations, and a separate "Also consulted" list when these fields
+are present; older Briefs retain their rendering.
+
+Each successfully published composed Brief writes exactly one `info` `brief_composed` line to
+`runtime.jsonl`, with `schema_version: 1` and counts only: cited and consulted sources, main and
+alternative rows, alternative findings, constraints by status, contract gaps, checked claims,
+and flags. No claim, field, condition, or URL text enters that event. The tool's success summary
+derives its delivery counts from the same summary. Notices appear after a runtime-assembly notice when present:
+missing contract first, composition notices next, then the run-health facts bounded by their
+existing ten-notice cap.
+
+The completion fallback uses the same composer in `assembled` mode when the nudge still leaves a
+draft and ledger evidence without publication. It retains resolvable inline evidence markers,
+removes numeric and unknown markers, reports missing table/field delivery as notices, and adds
+omitted filters as unverified. It invents neither a table nor verification. The publisher stamps
+`deterministic_fallback_used: true`, records the assembly notice and citation verdict, and writes
+the same count-only event after success. Failure to assemble still follows the normal failure path.
 
 #### Run facts and run health
 
@@ -2072,8 +2151,10 @@ sequenceDiagram
     Tools-->>Pi: sanitized, bounded result
     Pi-->>Run: normalized events, structurally sanitized tool audit, and usage
   end
-  Pi->>Tools: result_publish
+  Pi->>Tools: result_publish with S evidence references and structured content
+  Tools->>Tools: compose citations, check contract delivery and evidence anchoring
   Tools->>Run: validated Brief or document with runtime notices and search provider
+  Tools->>Run: count-only brief_composed for composed Brief
   Agent->>Run: tear down task browser, page pool, session, and recorder, finalize trace
   Agent->>Run: write run-health.json, then log run_health
   Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock

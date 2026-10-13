@@ -48,7 +48,11 @@ import {
 } from '../../src/runtime/profiles.js';
 import type { EvidenceEntry, RunServices } from '../../src/runtime/run-services.js';
 import { MISSING_CONTRACT_REASON, renderContractEcho } from '../../src/runtime/task-contract.js';
-import { extractorReturning, searchServiceFor } from '../adapters/pi/tools/test-support.js';
+import {
+  extractorReturning,
+  recordingRuntimeLogger,
+  searchServiceFor,
+} from '../adapters/pi/tools/test-support.js';
 import { FakeAgentProvider } from '../provider/fake-provider.js';
 
 const tempDirs: string[] = [];
@@ -1785,12 +1789,14 @@ async function scriptedRun(options: {
   readonly outcome: AgenticTaskOutcome;
   readonly connector: RecordingConnector;
   readonly services: RunServices;
+  readonly runtimeLogger: ReturnType<typeof recordingRuntimeLogger>;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'yantra-orchestrator-contract-'));
   tempDirs.push(root);
   const connector = new RecordingConnector();
   const profile: CommandTaskProfile = resolveCommandTaskProfile(options.command, { browse: false });
-  const environment = buildEnvironment(vi.fn(() => Promise.resolve()));
+  const runtimeLogger = recordingRuntimeLogger();
+  const environment = { ...buildEnvironment(vi.fn(() => Promise.resolve())), runtimeLogger };
   let services: RunServices | undefined;
   const provider = new FakeAgentProvider({
     onRun: async (_prompt, runIndex, session) => {
@@ -1846,7 +1852,7 @@ async function scriptedRun(options: {
     },
   );
   if (services === undefined) throw new Error('provider was never created');
-  return { outcome, connector, services };
+  return { outcome, connector, services, runtimeLogger };
 }
 
 const CONTRACT_CALL: ScriptedCall = {
@@ -1963,7 +1969,7 @@ describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
   it.each(['Evidence [S1] and old [7].', 'Evidence [S99].'])(
     'assembles fallback draft citations honestly: %s',
     async (draft) => {
-      const { outcome } = await scriptedRun({
+      const { outcome, runtimeLogger } = await scriptedRun({
         command: 'research',
         calls: [],
         draft,
@@ -1983,8 +1989,7 @@ describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
       expect(markdown).not.toContain('[7]');
       expect(markdown).not.toContain('[S99]');
       if (draft.includes('[S1]')) expect(markdown).toContain('[1]');
-      const log = await readFile(join(outcome.runDir, 'runtime.jsonl'), 'utf8');
-      expect(log.split('\n').filter((line) => line.includes('brief_composed'))).toHaveLength(1);
+      expect(runtimeLogger.lines.filter((line) => line.event === 'brief_composed')).toHaveLength(1);
     },
   );
   it('publishes a fallback under an undelivered table contract with the missing-table gap', async () => {

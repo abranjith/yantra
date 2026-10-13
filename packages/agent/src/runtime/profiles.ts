@@ -65,7 +65,8 @@ function researchAddendum(browse: boolean): string {
     (browse
       ? 'Use browser_navigate and browser_extract for a page that needs a live browser. '
       : '') +
-    PUBLISH_GUIDANCE
+    PUBLISH_GUIDANCE +
+    ' Each web_search returns fetched source content, not just links — follow specific leads with web_fetch.'
   );
 }
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;

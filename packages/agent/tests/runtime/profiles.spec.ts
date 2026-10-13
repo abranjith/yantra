@@ -343,7 +343,16 @@ describe('@no-llm command task profiles', () => {
     expect(research).toContain(
       'Use browser_navigate and browser_extract for a page that needs a live browser.',
     );
-    expect(research).toContain('result_publish with {"brief"');
+    expect(research).toContain('Finish with result_publish.');
+    for (const profile of [
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+      resolveCommandTaskProfile('do'),
+    ]) {
+      for (const field of ['source_id', 'row_sources', 'constraints', 'fulfillment.unmet'])
+        expect(profile.promptAddendum).toContain(field);
+      expect(profile.promptAddendum).not.toContain('"key_findings": ["..."]');
+    }
   });
 
   it('never tells a no-browse research run about browser tools', () => {
