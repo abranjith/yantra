@@ -1,9 +1,23 @@
 /** Run-owned attribution: resolve evidence IDs before numbering protocol sources. */
-import type { DocumentStore, PayloadSanitizer } from '@yantra/core';
+import {
+  checkAnchoring,
+  pageEvidenceText,
+  recordEvidenceText,
+  type AnchorClaim,
+  type DocumentStore,
+  type PayloadSanitizer,
+} from '@yantra/core';
 import { err, ok, type BriefNotice, type Result, type TaskContractBody } from '@yantra/protocol';
 
+import {
+  alternativesBody,
+  boundedNotice,
+  checkContractDelivery,
+  NOT_SHOWN_ON_SOURCE,
+} from './contract-delivery.js';
 import { INLINE_EVIDENCE_REF, parseEvidenceRef } from './evidence-refs.js';
 import type { EvidenceEntry } from './run-services.js';
+import { hostSatisfiesRequiredSource } from './task-contract.js';
 
 export type ComposeCause =
   | 'reference-unknown'
@@ -51,6 +65,15 @@ export interface ComposedBrief {
   readonly summary: ComposeSummary;
 }
 export interface AgentPublishContent {
+  readonly fulfillment?: {
+    readonly met: boolean;
+    readonly unmet: readonly { readonly item: string; readonly reason: string }[];
+  };
+  readonly table?: {
+    readonly columns: readonly string[];
+    readonly rows: readonly (readonly PublishCell[])[];
+    readonly row_sources: readonly (readonly string[])[];
+  };
   readonly title: string;
   readonly overview: string;
   readonly key_findings: readonly (
@@ -80,6 +103,12 @@ interface CitedSection {
   refs: string[];
   pointer: string;
 }
+export type PublishCell = string | number | boolean | null;
+interface CitedRow {
+  cells: PublishCell[];
+  refs: string[];
+  pointer: string;
+}
 
 // Keep line breaks only in paragraph fields; strip C0/C1 bytes everywhere else.
 // eslint-disable-next-line no-control-regex
@@ -104,6 +133,17 @@ const refsFrom = (value: unknown): string[] =>
     .slice(0, 8)
     .filter((ref): ref is string => typeof ref === 'string');
 const union = (refs: readonly string[]): string[] => [...new Set(refs)];
+function publishCell(value: unknown): PublishCell {
+  if (
+    value === null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  )
+    return value;
+  // The publish contract deliberately reports String(value), including object coercion.
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
+  return publishText(String(value), 300);
+}
 
 /** Public-sanitize all model-authored strings before composition and validation. */
 export function sanitizePublishContent(raw: unknown, sanitizer: PayloadSanitizer): unknown {
@@ -197,15 +237,89 @@ export function composeAgentBrief(
         pointer: body.pointer,
       };
     });
+  const table = raw.table === undefined ? null : asPublishRecord(raw.table);
+  const columns =
+    table === null
+      ? []
+      : publishArray(table.columns)
+          .slice(0, 12)
+          .map((column) => publishText(column, 60));
+  const rowSources = publishArray(table?.row_sources);
+  const rawRows = publishArray(table?.rows).slice(0, 50);
+  if (table !== null && rowSources.length !== rawRows.length)
+    issues.push({
+      cause: 'row-sources-length',
+      pointer: 'table/row_sources',
+      values: { row_sources: String(rowSources.length), rows: String(rawRows.length) },
+    });
+  const rows: CitedRow[] = rawRows.map((value, index) => {
+    const cells = publishArray(value).map(publishCell);
+    const pointer = `table/rows/${index}`;
+    if (cells.length !== columns.length)
+      issues.push({
+        cause: 'row-width',
+        pointer,
+        values: {
+          row: String(index),
+          width: String(cells.length),
+          columns: String(columns.length),
+        },
+      });
+    const refs = refsFrom(rowSources[index]);
+    if (refs.length === 0)
+      issues.push({
+        cause: 'row-uncited',
+        pointer: `table/row_sources/${index}`,
+        values: { row: String(index) },
+      });
+    return {
+      cells,
+      pointer,
+      refs: refs.filter((ref, j) => resolve(ref, `table/row_sources/${index}/${j}`)),
+    };
+  });
+  const unmet = publishArray(asPublishRecord(raw.fulfillment).unmet)
+    .slice(0, 12)
+    .map((value) => {
+      const item = asPublishRecord(value);
+      return { item: publishText(item.item, 80), reason: publishText(item.reason, 200) };
+    });
+  const delivery = checkContractDelivery({
+    rows,
+    findings,
+    columns,
+    tablePresent: table !== null,
+    unmet,
+    contract: ctx.contract,
+    mode: ctx.mode,
+    onContract: (refs) =>
+      refs.some((ref) => {
+        const resolvedRef = resolved.get(ref);
+        const entry = resolvedRef === undefined ? undefined : evidence[resolvedRef.entryIndex];
+        return (
+          entry !== undefined &&
+          ctx.contract !== null &&
+          hostSatisfiesRequiredSource(entry.finalUrl ?? entry.url, ctx.contract)
+        );
+      }),
+  });
+  issues.push(...delivery.issues);
+  const alternativeRefs = union(
+    [...delivery.alternativesRows, ...delivery.alternativesFindings].flatMap((item) => item.refs),
+  );
   const blocking =
     ctx.mode === 'assembled'
       ? issues.filter((issue) => !issue.cause.startsWith('reference-'))
       : issues;
   if (blocking.length > 0) return err(blocking);
   const citedIds = union(
-    [overview, ...findings, ...sections].flatMap((item) =>
-      item.refs.map((ref) => resolved.get(ref)!.sourceId),
-    ),
+    [
+      overview,
+      ...delivery.findings,
+      ...sections,
+      { refs: alternativeRefs },
+      ...delivery.rows,
+    ].flatMap((item) => item.refs.map((ref) => resolved.get(ref)!.sourceId)),
   );
   const order = [
     ...citedIds.map((id) => byId.get(id)!),
@@ -247,35 +361,141 @@ export function composeAgentBrief(
             cited: citedIds.includes(entry.sourceId ?? ''),
           };
         });
+  const claims: AnchorClaim[] = [];
+  [...delivery.rows, ...delivery.alternativesRows].forEach((row) =>
+    row.cells.forEach((cell, i) => {
+      if (
+        (typeof cell === 'string' && cell.length > 0 && cell !== NOT_SHOWN_ON_SOURCE) ||
+        typeof cell === 'number'
+      )
+        claims.push({
+          id: `${row.pointer}/${i}`,
+          kind: 'cell',
+          text: String(cell),
+          refs: row.refs,
+          mode: typeof cell === 'number' ? 'numbers' : 'numbers-and-words',
+        });
+    }),
+  );
+  findings
+    .filter((finding) => finding.refs.length > 0)
+    .forEach((finding) =>
+      claims.push({
+        id: finding.pointer,
+        kind: 'finding',
+        text: finding.text.replace(INLINE_EVIDENCE_REF, ''),
+        refs: finding.refs,
+        mode: 'numbers-and-words',
+      }),
+    );
+  sections
+    .filter((section) => section.refs.length > 0)
+    .forEach((section) =>
+      claims.push({
+        id: section.pointer,
+        kind: 'section',
+        text: section.body_md.replace(INLINE_EVIDENCE_REF, ''),
+        refs: section.refs,
+        mode: 'numbers',
+      }),
+    );
+  const report = checkAnchoring(claims, (ref) => {
+    const parsed = resolved.get(ref);
+    if (parsed === undefined) return null;
+    if (parsed.anchor !== null) {
+      const anchor = ctx.documents.resolveAnchor(ref);
+      return anchor === null ? null : recordEvidenceText(anchor.record);
+    }
+    const stored = ctx.documents.get(parsed.sourceId);
+    if (stored?.page !== null && stored?.page !== undefined)
+      return pageEvidenceText(stored.page.analysis, stored.title);
+    const entry = evidence[parsed.entryIndex]!;
+    return `${entry.title ?? ''}\n${entry.excerpt ?? ''}`;
+  });
+  const alternativesCount = delivery.alternativesRows.length + delivery.alternativesFindings.length;
+  const notices: BriefNotice[] = [...delivery.notices];
+  if (alternativesCount > 0)
+    notices.push({
+      kind: 'contract_gap',
+      source: 'task-contract',
+      reason:
+        `${delivery.alternativesRows.length} rows and ${delivery.alternativesFindings.length} findings cite only sources other than ${ctx.contract!.required_sources.join(', ')}; they are listed under Alternatives.`.slice(
+          0,
+          600,
+        ),
+    });
+  if (report.flagged.length > 0)
+    notices.push({
+      kind: 'uncited_claim_flagged',
+      source: 'anchoring',
+      reason: boundedNotice(
+        `${report.flagged.length} of ${report.checked} cited values were not found in their cited sources: `,
+        report.flagged.map(
+          (flag) =>
+            `${flag.id} "${flag.text.slice(0, 40)}"${flag.missing.length > 0 ? ` (missing ${flag.missing.join(', ').slice(0, 80)})` : ''}`,
+        ),
+        5,
+      ),
+    });
   return ok({
     content: {
       title: publishText(raw.title, 200),
       overview: rewrite(overview.text),
-      key_findings: findings.map((finding) => ({
+      key_findings: delivery.findings.map((finding) => ({
         text: rewrite(finding.text),
         citations: citations(finding.refs),
         editorial: finding.refs.length === 0,
       })),
-      sections: sections.map((section) => ({
-        heading: section.heading,
-        body_md: rewrite(section.body_md),
-        citations: citations(section.refs),
-      })),
-      facets: null,
+      sections: [
+        ...sections.map((section) => ({
+          heading: section.heading,
+          body_md: rewrite(section.body_md),
+          citations: citations(section.refs),
+        })),
+        ...(alternativesCount === 0
+          ? []
+          : [
+              {
+                heading: `Alternatives (not from ${ctx.contract!.required_sources.join(', ')})`,
+                kind: 'alternatives',
+                body_md: alternativesBody(
+                  columns,
+                  delivery.alternativesRows,
+                  delivery.alternativesFindings,
+                  (refs) =>
+                    citations(refs)
+                      .map((n) => `[${n}]`)
+                      .join(''),
+                  rewrite,
+                ),
+                citations: citations(alternativeRefs),
+              },
+            ]),
+      ],
+      facets:
+        table === null || delivery.rows.length === 0
+          ? null
+          : {
+              comparison: {
+                columns,
+                rows: delivery.rows.map((row) => row.cells),
+                row_citations: delivery.rows.map((row) => citations(row.refs)),
+              },
+            },
       sources,
     },
-    notices: [],
-    verdict: { claims_checked: 0, flagged: 0, stripped: 0 },
+    notices,
+    verdict: { claims_checked: report.checked, flagged: report.flagged.length, stripped: 0 },
     summary: {
       cited_sources: citedIds.length,
       consulted_sources: evidence.length - citedIds.length,
-      table_rows: 0,
-      alternatives_rows: 0,
-      alternatives_findings: 0,
+      table_rows: delivery.rows.length,
+      alternatives_rows: delivery.alternativesRows.length,
+      alternatives_findings: delivery.alternativesFindings.length,
       constraints: { verified: 0, unverified: 0, violated: 0 },
-      contract_gaps: 0,
-      claims_checked: 0,
-      flagged: 0,
+      contract_gaps: delivery.gaps.length,
+      claims_checked: report.checked,
+      flagged: report.flagged.length,
     },
   });
 }

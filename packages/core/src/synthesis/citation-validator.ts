@@ -28,20 +28,11 @@
 
 import type { Brief, BriefNotice, KeyFinding } from '@yantra/protocol';
 
-import { tokenize } from './similarity.js';
+import { isAnchored, numbersMissing } from './anchoring.js';
 import type { CitationVerdict, SynthesisInput } from './types.js';
 
 /** Inline citation marker, e.g. `[3]`. */
 const INLINE_CITATION = /\[(\d+)\]/g;
-
-/** Digit groups used to compare a claim's numbers against source text. */
-const NUMBER_GROUP = /\d[\d.,]*/g;
-
-/**
- * Minimum fraction of a finding's content words that must appear in its
- * cited sources for the finding to count as anchored.
- */
-const ANCHOR_OVERLAP_THRESHOLD = 0.5;
 
 /** Options controlling {@link validateCitations}. */
 export interface ValidateCitationsOptions {
@@ -123,7 +114,7 @@ export function validateCitations(
     // figures during the numeric-mismatch and anchoring checks.
     const claimBody = finding.text.replace(/\[\d+\]/g, ' ');
 
-    const numericMismatch = hasNumericMismatch(claimBody, citedText);
+    const numericMismatch = numbersMissing(claimBody, citedText).length > 0;
     if (numericMismatch) {
       stripped += 1;
       notices.push({
@@ -201,52 +192,6 @@ function buildSourceTextMap(brief: Brief, input: SynthesisInput): Map<number, st
     map.set(source.n, matching.map((doc) => doc.text).join('\n'));
   }
   return map;
-}
-
-/** True when the claim's content words are well-represented in the source text. */
-function isAnchored(claimText: string, citedText: string): boolean {
-  const claimWords = new Set(tokenize(claimText));
-  if (claimWords.size === 0) {
-    return true;
-  }
-  const sourceWords = new Set(tokenize(citedText));
-  let hits = 0;
-  for (const word of claimWords) {
-    if (sourceWords.has(word)) {
-      hits += 1;
-    }
-  }
-  return hits / claimWords.size >= ANCHOR_OVERLAP_THRESHOLD;
-}
-
-/**
- * True when the claim contains a number that appears in no cited source —
- * the signature of a fabricated statistic. Numbers are compared on their
- * digit groups with thousands separators removed.
- */
-function hasNumericMismatch(claimText: string, citedText: string): boolean {
-  const claimNumbers = extractNumbers(claimText);
-  if (claimNumbers.size === 0) {
-    return false;
-  }
-  const sourceNumbers = extractNumbers(citedText);
-  for (const number of claimNumbers) {
-    if (!sourceNumbers.has(number)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function extractNumbers(text: string): Set<string> {
-  const numbers = new Set<string>();
-  for (const match of text.matchAll(NUMBER_GROUP)) {
-    const normalized = match[0].replace(/[.,]/g, '');
-    if (normalized.length > 0) {
-      numbers.add(normalized);
-    }
-  }
-  return numbers;
 }
 
 function truncate(text: string): string {

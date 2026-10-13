@@ -33,13 +33,19 @@
     },
     {
       "path": "packages/agent/src/runtime/brief-composer.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/agent/src/runtime/evidence-refs.ts",
+      "path": "packages/agent/src/runtime/contract-delivery.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/evidence-refs.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -50,6 +56,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/result-publish.spec.ts",
       "status": "M",
       "role": "implement",
@@ -57,13 +69,13 @@
     },
     {
       "path": "packages/agent/tests/runtime/brief-composer.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/agent/tests/runtime/evidence-refs.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -86,6 +98,36 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/extraction/page/evidence-text.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/extraction/page/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/synthesis/anchoring.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/synthesis/citation-validator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/synthesis/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/brief/__snapshots__/attributed.spec.ts.snap",
       "status": "A",
       "role": "implement",
@@ -96,6 +138,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/extraction/page/evidence-text.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/synthesis/anchoring.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/generated/json-schema/brief.schema.json",

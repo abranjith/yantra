@@ -3,6 +3,7 @@ export * from './analysis/baseline-analyzer.js';
 export * from './analysis/block-segmentation.js';
 export * from './analysis/wink-analyzer.js';
 export * from './citation-validator.js';
+export * from './anchoring.js';
 export * from './clustering.js';
 export * from './deterministic.js';
 export * from './evidence/types.js';

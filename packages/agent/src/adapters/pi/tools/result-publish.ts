@@ -100,6 +100,31 @@ const BriefContentParams = Type.Object(
         { maxItems: 8 },
       ),
     ),
+    fulfillment: Type.Optional(
+      Type.Object({
+        met: Type.Boolean(),
+        unmet: Type.Array(
+          Type.Object({
+            item: Type.String({ minLength: 1, maxLength: 80 }),
+            reason: Type.String({ minLength: 1, maxLength: 200 }),
+          }),
+          { maxItems: 12 },
+        ),
+      }),
+    ),
+    table: Type.Optional(
+      Type.Object({
+        columns: Type.Array(Type.String({ minLength: 1, maxLength: 60 }), {
+          minItems: 1,
+          maxItems: 12,
+        }),
+        rows: Type.Array(
+          Type.Array(Type.Unknown({ description: 'string, number, boolean, or null' })),
+          { minItems: 1, maxItems: 50 },
+        ),
+        row_sources: Type.Array(Type.Array(Type.String(), { maxItems: 8 }), { maxItems: 50 }),
+      }),
+    ),
     sources: Type.Optional(
       Type.Array(Type.Unknown(), {
         description:
@@ -227,7 +252,10 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     };
   }
   const content = composed?.isOk ? composed.value.content : briefInput;
-  const result = await services.domain.publish.publish(content, { runtimeFacts });
+  const result = await services.domain.publish.publish(content, {
+    runtimeFacts,
+    ...(composed?.isOk ? { citationVerdict: composed.value.verdict } : {}),
+  });
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
     // been observed publishing placeholder sources ("N/A") instead of copying
@@ -340,7 +368,7 @@ export function createBriefPublisher(
       const assembled = options?.assembledByRuntime === true;
       const built = isCompleteBrief(raw)
         ? raw
-        : buildBriefFromAgentContent(raw, context, assembled);
+        : buildBriefFromAgentContent(raw, context, assembled, options?.citationVerdict);
       const candidate = withRuntimeFacts(built, options?.runtimeFacts);
       const validated = validateBrief(candidate);
       if (!validated.isOk) {
@@ -538,6 +566,7 @@ function buildBriefFromAgentContent(
   raw: unknown,
   context: BriefPublisherContext,
   assembledByRuntime = false,
+  citationVerdict?: PublishOptions['citationVerdict'],
 ): unknown {
   const record = asRecord(raw) ?? {};
   const nowIso = (context.now?.() ?? new Date()).toISOString();
@@ -555,6 +584,7 @@ function buildBriefFromAgentContent(
     metadata: {
       synthesis: 'llm',
       run_id: context.runId ?? null,
+      citation_verdict: citationVerdict ?? { claims_checked: 0, flagged: 0, stripped: 0 },
       ...(assembledByRuntime ? { deterministic_fallback_used: true } : {}),
     },
     notices: assembledByRuntime

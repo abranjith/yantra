@@ -1,4 +1,4 @@
-import { DocumentStore } from '@yantra/core';
+import { DocumentStore, type PageAnalysis } from '@yantra/core';
 import { describe, expect, it } from 'vitest';
 
 import { composeAgentBrief, type ComposeContext } from '../../src/runtime/brief-composer.js';
@@ -6,6 +6,31 @@ import type { EvidenceEntry } from '../../src/runtime/run-services.js';
 
 export function composerContext(): ComposeContext {
   const documents = new DocumentStore();
+  for (let n = 1; n <= 4; n += 1)
+    documents.observe(`https://source${n}.test/`, {
+      title: `Source ${n}`,
+      tool: 'browser_extract',
+    });
+  const analysis: PageAnalysis = {
+    shape: 'collection',
+    records: [1, 2, 3].map((n) => ({
+      key: String(n),
+      title: 'Calligraphy AWD',
+      url: null,
+      segments: ['Price 43204'],
+      fields: [{ label: 'Price', value: '43204' }],
+      numbers: [],
+      links: [],
+    })),
+    readableText: 'Calligraphy AWD Price 43204',
+    fields: [],
+    tables: [],
+    structured: [],
+    links: [],
+    recordLinkCount: 0,
+    coverage: { shape_basis: 'test', fetch_mode: 'http', not_found: [], omitted: [] },
+  };
+  documents.attachPage('S2', analysis, { delivered: 'full', article: null });
   const evidence: EvidenceEntry[] = [1, 2, 3, 4].map((n) => ({
     sourceId: `S${n}`,
     url: `https://source${n}.test/`,
@@ -20,6 +45,82 @@ export function composerContext(): ComposeContext {
 }
 const base = { title: 'Results', overview: '', key_findings: [] };
 describe('@no-llm Brief composer', () => {
+  it('resolves stable record anchors and flags unsupported cells without removing them', () => {
+    const result = composeAgentBrief(
+      {
+        ...base,
+        table: {
+          columns: ['Trim', 'Price'],
+          rows: [['Calligraphy AWD', 41000]],
+          row_sources: [['S2#r1']],
+        },
+      },
+      composerContext(),
+    );
+    if (!result.isOk) throw new Error('expected composition');
+    expect(result.value.verdict).toEqual({ claims_checked: 2, flagged: 1, stripped: 0 });
+    expect(result.value.notices[0]?.reason).toContain('table/rows/0/1');
+    expect(result.value.content.facets).toMatchObject({
+      comparison: { rows: [['Calligraphy AWD', 41000]], row_citations: [[1]] },
+    });
+  });
+  it('anchors grouped prices to records and produces a zero verdict for commentary', () => {
+    const result = composeAgentBrief(
+      { ...base, table: { columns: ['Price'], rows: [['$43,204']], row_sources: [['S2#r1']] } },
+      composerContext(),
+    );
+    if (!result.isOk) throw new Error('expected composition');
+    expect(result.value.verdict).toEqual({ claims_checked: 1, flagged: 0, stripped: 0 });
+    const editorial = composeAgentBrief(
+      { ...base, key_findings: ['Commentary'] },
+      composerContext(),
+    );
+    if (!editorial.isOk) throw new Error('expected composition');
+    expect(editorial.value.verdict).toEqual({ claims_checked: 0, flagged: 0, stripped: 0 });
+  });
+  it('publishes cited table rows and coerces non-scalar cells', () => {
+    const result = composeAgentBrief(
+      {
+        ...base,
+        table: {
+          columns: ['Seller', 'Price'],
+          rows: [
+            ['Calligraphy', 43204],
+            ['AWD', { value: 3 }],
+            ['x\u001b[31m', null],
+          ],
+          row_sources: [['S2'], ['S2', 'S4'], ['S4']],
+        },
+      },
+      composerContext(),
+    );
+    if (!result.isOk) throw new Error('expected composition');
+    expect(result.value.content.facets).toEqual({
+      comparison: {
+        columns: ['Seller', 'Price'],
+        rows: [
+          ['Calligraphy', 43204],
+          ['AWD', '[object Object]'],
+          ['x[31m', null],
+        ],
+        row_citations: [[1], [1, 2], [2]],
+      },
+    });
+  });
+  it('reports every table shape problem with precise pointers', () => {
+    const result = composeAgentBrief(
+      { ...base, table: { columns: ['A', 'B'], rows: [['x'], ['x', 'y']], row_sources: [['S1']] } },
+      composerContext(),
+    );
+    if (result.isOk) throw new Error('expected issues');
+    expect(result.error).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cause: 'row-width', pointer: 'table/rows/0' }),
+        expect.objectContaining({ cause: 'row-sources-length', pointer: 'table/row_sources' }),
+        expect.objectContaining({ cause: 'row-uncited', pointer: 'table/row_sources/1' }),
+      ]),
+    );
+  });
   it('numbers cited sources first, in content reading order', () => {
     const result = composeAgentBrief(
       {

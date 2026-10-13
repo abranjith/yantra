@@ -173,6 +173,11 @@ export interface PublishRuntimeFacts {
 
 /** Options for one publication. */
 export interface PublishOptions {
+  readonly citationVerdict?: {
+    readonly claims_checked: number;
+    readonly flagged: number;
+    readonly stripped: number;
+  };
   readonly assembledByRuntime?: boolean;
   readonly runtimeFacts?: PublishRuntimeFacts;
 }

@@ -1,4 +1,5 @@
 export * from './analyze.js';
+export * from './evidence-text.js';
 export * from './fields.js';
 export * from './links.js';
 export * from './records.js';

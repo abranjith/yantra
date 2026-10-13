@@ -236,6 +236,9 @@ describe('@no-llm result_publish tool — agent-authored content', () => {
       { text: 'Kick-off times are UK local.', editorial: true, citations: [] },
     ]);
     expect(brief.metadata).toMatchObject({ synthesis: 'llm', run_id: 'run-under-test' });
+    expect(brief.metadata).toMatchObject({
+      citation_verdict: { claims_checked: 0, flagged: 0, stripped: 0 },
+    });
   });
 
   it('preserves object findings with citations as non-editorial', async () => {
