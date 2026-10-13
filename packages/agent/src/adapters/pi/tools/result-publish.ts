@@ -100,6 +100,17 @@ const BriefContentParams = Type.Object(
         { maxItems: 8 },
       ),
     ),
+    constraints: Type.Optional(
+      Type.Array(
+        Type.Object({
+          name: Type.String({ minLength: 1, maxLength: 60 }),
+          value: Type.String({ minLength: 1, maxLength: 120 }),
+          status: Type.String({ enum: ['verified', 'unverified', 'violated'] }),
+          sources: Type.Optional(Type.Array(Type.String(), { maxItems: 8 })),
+        }),
+        { maxItems: 12 },
+      ),
+    ),
     fulfillment: Type.Optional(
       Type.Object({
         met: Type.Boolean(),

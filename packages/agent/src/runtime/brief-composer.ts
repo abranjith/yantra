@@ -14,6 +14,7 @@ import {
   boundedNotice,
   checkContractDelivery,
   NOT_SHOWN_ON_SOURCE,
+  reconcileConstraints,
 } from './contract-delivery.js';
 import { INLINE_EVIDENCE_REF, parseEvidenceRef } from './evidence-refs.js';
 import type { EvidenceEntry } from './run-services.js';
@@ -65,6 +66,12 @@ export interface ComposedBrief {
   readonly summary: ComposeSummary;
 }
 export interface AgentPublishContent {
+  readonly constraints?: readonly {
+    readonly name: string;
+    readonly value: string;
+    readonly status: 'verified' | 'unverified' | 'violated';
+    readonly sources?: readonly string[];
+  }[];
   readonly fulfillment?: {
     readonly met: boolean;
     readonly unmet: readonly { readonly item: string; readonly reason: string }[];
@@ -304,6 +311,26 @@ export function composeAgentBrief(
       }),
   });
   issues.push(...delivery.issues);
+  const constraintsResult = reconcileConstraints(
+    publishArray(raw.constraints)
+      .slice(0, 12)
+      .map((value, index) => {
+        const condition = asPublishRecord(value);
+        return {
+          name: publishText(condition.name, 60),
+          value: publishText(condition.value, 120),
+          status:
+            condition.status === 'verified' || condition.status === 'violated'
+              ? condition.status
+              : 'unverified',
+          refs: refsFrom(condition.sources).filter((ref, i) =>
+            resolve(ref, `constraints/${index}/sources/${i}`),
+          ),
+        };
+      }),
+    ctx.contract,
+  );
+  const constraints = constraintsResult.constraints;
   const alternativeRefs = union(
     [...delivery.alternativesRows, ...delivery.alternativesFindings].flatMap((item) => item.refs),
   );
@@ -319,6 +346,7 @@ export function composeAgentBrief(
       ...sections,
       { refs: alternativeRefs },
       ...delivery.rows,
+      ...constraints,
     ].flatMap((item) => item.refs.map((ref) => resolved.get(ref)!.sourceId)),
   );
   const order = [
@@ -399,6 +427,16 @@ export function composeAgentBrief(
         mode: 'numbers',
       }),
     );
+  constraints.forEach((condition, index) => {
+    if (condition.status === 'verified')
+      claims.push({
+        id: `constraints/${index}/value`,
+        kind: 'constraint',
+        text: condition.value,
+        refs: condition.refs,
+        mode: 'numbers-and-words',
+      });
+  });
   const report = checkAnchoring(claims, (ref) => {
     const parsed = resolved.get(ref);
     if (parsed === undefined) return null;
@@ -413,7 +451,7 @@ export function composeAgentBrief(
     return `${entry.title ?? ''}\n${entry.excerpt ?? ''}`;
   });
   const alternativesCount = delivery.alternativesRows.length + delivery.alternativesFindings.length;
-  const notices: BriefNotice[] = [...delivery.notices];
+  const notices: BriefNotice[] = [...delivery.notices, ...constraintsResult.notices];
   if (alternativesCount > 0)
     notices.push({
       kind: 'contract_gap',
@@ -483,6 +521,16 @@ export function composeAgentBrief(
               },
             },
       sources,
+      ...(constraints.length === 0
+        ? {}
+        : {
+            constraints: constraints.map((condition) => ({
+              name: condition.name,
+              value: condition.value,
+              status: condition.status,
+              citations: citations(condition.refs),
+            })),
+          }),
     },
     notices,
     verdict: { claims_checked: report.checked, flagged: report.flagged.length, stripped: 0 },
@@ -492,7 +540,11 @@ export function composeAgentBrief(
       table_rows: delivery.rows.length,
       alternatives_rows: delivery.alternativesRows.length,
       alternatives_findings: delivery.alternativesFindings.length,
-      constraints: { verified: 0, unverified: 0, violated: 0 },
+      constraints: {
+        verified: constraints.filter((condition) => condition.status === 'verified').length,
+        unverified: constraints.filter((condition) => condition.status === 'unverified').length,
+        violated: constraints.filter((condition) => condition.status === 'violated').length,
+      },
       contract_gaps: delivery.gaps.length,
       claims_checked: report.checked,
       flagged: report.flagged.length,

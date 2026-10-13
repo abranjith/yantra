@@ -4,6 +4,53 @@ import type { BriefNotice, TaskContractBody } from '@yantra/protocol';
 import type { ComposeIssue, PublishCell } from './brief-composer.js';
 
 export const NOT_SHOWN_ON_SOURCE = 'not shown on source';
+export interface DeliveryConstraint {
+  readonly name: string;
+  readonly value: string;
+  readonly status: 'verified' | 'unverified' | 'violated';
+  readonly refs: string[];
+  readonly cause?: string;
+}
+/** Contract filters lead; omitted or unsupported verification is explicitly unknown. */
+export function reconcileConstraints(
+  input: readonly DeliveryConstraint[],
+  contract: TaskContractBody | null,
+): { constraints: DeliveryConstraint[]; notices: BriefNotice[] } {
+  const normalized = input.map(
+    (condition): DeliveryConstraint =>
+      condition.status === 'verified' && condition.refs.length === 0
+        ? { ...condition, status: 'unverified', cause: 'marked verified without evidence' }
+        : condition,
+  );
+  const filters = contract?.filters ?? [];
+  const names = new Set(filters.map((filter) => normalizeDeliveryName(filter.name)));
+  const constraints = [
+    ...filters.map(
+      (filter): DeliveryConstraint =>
+        normalized.find(
+          (condition) =>
+            normalizeDeliveryName(condition.name) === normalizeDeliveryName(filter.name),
+        ) ?? { ...filter, status: 'unverified', refs: [], cause: 'not reported by the agent' },
+    ),
+    ...normalized.filter((condition) => !names.has(normalizeDeliveryName(condition.name))),
+  ];
+  const notices: BriefNotice[] = [];
+  for (const status of ['unverified', 'violated'] as const) {
+    const items = constraints
+      .filter((condition) => condition.status === status)
+      .map(
+        (condition) =>
+          `${condition.name} = ${condition.value}${condition.cause ? ` (${condition.cause})` : ''}`,
+      );
+    if (items.length > 0)
+      notices.push({
+        kind: 'contract_gap',
+        source: 'task-contract',
+        reason: boundedNotice(status === 'unverified' ? 'Not confirmed: ' : 'Not met: ', items),
+      });
+  }
+  return { constraints, notices };
+}
 export interface DeliveryRow {
   readonly cells: PublishCell[];
   readonly refs: string[];

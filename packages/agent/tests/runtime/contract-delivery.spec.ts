@@ -1,5 +1,6 @@
 import { DocumentStore } from '@yantra/core';
-import { TaskContractBody } from '@yantra/protocol';
+import { TaskContractBody, createBrief, validateBrief } from '@yantra/protocol';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -45,6 +46,84 @@ function composed(payload: unknown, ctx = context()): ComposedBrief {
   return result.value;
 }
 describe('@no-llm contract delivery', () => {
+  it('reports every contract filter and preserves extras in delivery order', () => {
+    const value = composed(
+      {
+        ...base,
+        constraints: [
+          { name: 'Drivetrain', value: 'AWD', status: 'verified', sources: ['S1'] },
+          { name: 'distance', value: '50 mi', status: 'violated' },
+        ],
+      },
+      context({
+        deliverable: 'answer',
+        filters: [
+          { name: 'condition', value: 'new' },
+          { name: 'drivetrain', value: 'AWD' },
+        ],
+      }),
+    );
+    expect(value.content.constraints).toEqual([
+      { name: 'condition', value: 'new', status: 'unverified', citations: [] },
+      { name: 'Drivetrain', value: 'AWD', status: 'verified', citations: [1] },
+      { name: 'distance', value: '50 mi', status: 'violated', citations: [] },
+    ]);
+    expect(value.notices.map((notice) => notice.reason)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('not reported by the agent'),
+        'Not met: distance = 50 mi',
+      ]),
+    );
+  });
+  it('downgrades unsupported verification with its cause', () => {
+    const value = composed(
+      { ...base, constraints: [{ name: 'drivetrain', value: 'AWD', status: 'verified' }] },
+      context({ deliverable: 'answer' }),
+    );
+    expect(value.content.constraints).toEqual([
+      { name: 'drivetrain', value: 'AWD', status: 'unverified', citations: [] },
+    ]);
+    expect(
+      value.notices.some((notice) => notice.reason.includes('marked verified without evidence')),
+    ).toBe(true);
+  });
+  it('omits constraints when neither contract nor payload declares any', () => {
+    expect(composed(base, { ...context(), contract: null }).content).not.toHaveProperty(
+      'constraints',
+    );
+  });
+  it('always produces protocol-valid constraint citations and statuses', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            name: fc.constantFrom('condition', 'drivetrain', 'distance'),
+            value: fc.constantFrom('AWD', 'new', '50'),
+            status: fc.constantFrom('verified', 'unverified', 'violated'),
+            sources: fc.constantFrom([], ['S1']),
+          }),
+          { maxLength: 12 },
+        ),
+        (constraints) => {
+          const value = composed({ ...base, constraints }, context({ deliverable: 'answer' }));
+          const sources = (value.content.sources as Record<string, unknown>[]).map((source, i) => ({
+            n: i + 1,
+            host: 'listings.test',
+            final_url: null,
+            title: null,
+            published_at: null,
+            ...source,
+          }));
+          const result = validateBrief({
+            ...createBrief({ task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', title: 'Test', overview: '' }),
+            ...value.content,
+            sources,
+          });
+          expect(result.isOk).toBe(true);
+        },
+      ),
+    );
+  });
   it('partitions rows and cited findings into one structured alternatives section', () => {
     const value = composed({
       ...base,

@@ -75,7 +75,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/contract-delivery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
