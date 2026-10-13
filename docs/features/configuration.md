@@ -419,7 +419,6 @@ YANTRA_AGENT_MAX_DURATION
 YANTRA_AGENT_MAX_TOKENS
 YANTRA_AGENT_MODEL
 YANTRA_AGENT_PROVIDER
-YANTRA_AGENT_RESEARCH_BROWSE
 YANTRA_AGENT_THINKING
 YANTRA_AGENT_TOOL_RETRIES
 YANTRA_AGENT_TOOL_TIMEOUT
@@ -446,13 +445,14 @@ YANTRA_LOG_LEVEL
 | `YANTRA_AGENT_TOOL_TIMEOUT`    | Below `--tool-timeout`, above the profile value and default `3m`; uses the duration grammar above.                                               |
 | `YANTRA_AGENT_TOOL_RETRIES`    | Below `--tool-retries`, above the profile value and default `3`; must be a non-negative integer.                                                 |
 | `YANTRA_AGENT_CONFIRM_TIMEOUT` | Below `--confirm-timeout`, above the profile value and default `3m`; uses the duration grammar above.                                            |
-| `YANTRA_AGENT_RESEARCH_BROWSE` | `1` or `true` adds Yantra's read-only browser navigation, observation, and extraction tools to agentic `research`; other values leave them out.  |
 
 The general agent option order is explicit flag, then `YANTRA_AGENT_*`, then
 the effective profile/preference, then the pinned default. Runtime-key auth is
 the exception: its order is `--auth-secret`, then
-`YANTRA_AGENT_AUTH_SECRET`, then managed auth. `YANTRA_AGENT_RESEARCH_BROWSE`
-is a capability toggle rather than a value in that chain.
+`YANTRA_AGENT_AUTH_SECRET`, then managed auth. Whether agentic `research` gets the read-only browser is
+not an environment setting: it is the `agent.research_browse` preference in
+`profile.yaml` (see [Profiles and history](profiles-and-history.md)),
+overridden for one run by `research --no-browse`.
 
 Unlike `profile.yaml`, these variables are not schema-validated when they are
 set, so a typo in one of the five budget variables would otherwise only surface

@@ -16,6 +16,8 @@ The tool is registered only when all of these conditions hold:
 - the invocation does not use `--no-screenshots`; and
 - the execution is model-backed rather than a zero-LLM scheduled, daemon, or nested-workflow context.
 
+Two commands have browser tools: `do`, and agentic `research`, which browses read-only by default (see [Research](research.md#agentic-research)). So `browser_screenshot` is reachable in `research` too, but only under the same explicit `context.screenshots` grant and with an image-capable model. A `research` run with browsing turned off (`agent.research_browse: false` or `--no-browse`) has no browser tools and therefore no screenshot tool, and `ask` never has one. A screenshot captures pixels only; it adds no click or fill capability to `research`.
+
 If any registration condition is false or uncertain, the tool is absent from the model's catalog. Vision is never required for deterministic replay or for Yantra's browser interaction layer.
 
 Every screenshot is subject to dedicated, fail-closed limits: at most 3 capture reservations per run, PNG only, no more than 1600 by 1200 pixels, and no more than 5 MiB of encoded PNG bytes per capture. A resolved website secret also latches the current top-level document against capture. Ordinary clicks, DOM changes, dialogs, subframe navigations, and same-document route changes do not clear that latch; capture becomes eligible only after a new top-level document loads or the browser is torn down.
@@ -44,7 +46,7 @@ Suppress screenshots for one invocation without changing the stored grant:
 yantra do 'complete the requested browser task' --no-screenshots
 ```
 
-The same downward-only option is accepted by `ask` and `research`; it cannot enable Vision Assist on a command that has no browser capability. There is deliberately no `--screenshots` opt-in flag.
+The same downward-only option is accepted by `ask` and `research`, and suppresses the screenshot tool in a browsing `research` run exactly as it does in `do`; it cannot enable Vision Assist on a command that has no browser capability. There is deliberately no `--screenshots` opt-in flag.
 
 Revoke the grant by setting it to false or forgetting the preference:
 

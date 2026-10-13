@@ -36,6 +36,35 @@ export interface CommandTaskProfile {
 }
 
 const READ_TOOLS = ['web_search', 'web_fetch', 'script_run', 'result_publish'] as const;
+
+// Source fidelity (FEAT-052): a source the goal names is where the answer
+// comes from. Shared verbatim by every addendum that carries it.
+const REQUIRED_SOURCE =
+  'When the goal names a site or source, that source is required: read the answer from it, ' +
+  'and present any other source only as a clearly labeled alternative, never merged into the ' +
+  'answer.';
+const DECLARE_CONTRACT = 'Call task_contract in the same turn as your first search or fetch.';
+
+/**
+ * The research addendum. `browse` adds the one sentence naming the live
+ * browser tools, so a run without them is never told about them.
+ */
+function researchAddendum(browse: boolean): string {
+  return (
+    `${REQUIRED_SOURCE} Otherwise use independent sources and cover material gaps. ` +
+    `${DECLARE_CONTRACT} To find a page, use web_search (limit: 0 lists URLs without reading ` +
+    'them). When a page lists items, follow its records[] and links[] to the pages you need ' +
+    '(pagination, filters, details) rather than searching for them. ' +
+    (browse
+      ? 'Use browser_navigate and browser_extract for a page that needs a live browser. '
+      : '') +
+    'Finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
+    '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
+    'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
+    'web_search returns fetched source content, not just links — follow specific leads with ' +
+    'web_fetch.'
+  );
+}
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
 // Browser fill tools mutate the page, so they belong here beside
 // `browser_click` and deliberately NOT in BROWSE_TOOLS — that set
@@ -74,13 +103,9 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     command: 'research',
     toolNames: [...READ_TOOLS, 'workflow_run', 'task_contract'],
     workflowToolMode: 'run',
-    promptAddendum:
-      'Research broadly before publishing: use independent sources and cover material gaps, ' +
-      'then finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
-      '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
-      'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
-      'web_search returns fetched source content, not just links — follow specific leads with ' +
-      'web_fetch.',
+    // The stable default is the no-browse catalog; `resolveCommandTaskProfile`
+    // swaps in the browse addendum together with the browse tools.
+    promptAddendum: researchAddendum(false),
     briefKind: 'research',
   },
   do: {
@@ -90,7 +115,8 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       'Complete the requested task safely, verify the outcome, and finish by calling ' +
       'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      'Brief. When a form needs more than one field set, fill it with a single ' +
+      `Brief. ${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ` +
+      'When a form needs more than one field set, fill it with a single ' +
       'browser_fill_form listing every field — one call for the whole search form (destination, ' +
       'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +
       'field to set, or for a stored secret. Filling fields one at a time is what makes a search ' +
@@ -200,7 +226,7 @@ export function promptAddendumFor(
     profile.command === 'ask'
       ? 'Answer the question directly from the fetched evidence.'
       : profile.command === 'research'
-        ? 'Research broadly, use independent sources, and cover material gaps before publishing.'
+        ? `${REQUIRED_SOURCE} Otherwise use independent sources and cover material gaps before publishing.`
         : 'Complete the requested task safely and verify the outcome.';
   return (
     `${researchDirection} Finish by calling result_publish with a report object containing ` +
@@ -228,5 +254,6 @@ export function resolveCommandTaskProfile(
   return {
     ...base,
     toolNames: browseEnabled ? [...base.toolNames, ...BROWSE_TOOLS] : [...base.toolNames],
+    ...(browseEnabled ? { promptAddendum: researchAddendum(true) } : {}),
   };
 }

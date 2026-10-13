@@ -169,7 +169,11 @@ describe('@no-llm web_search combined tool', () => {
     const withNote = JSON.parse(result.modelText) as { note?: string };
     expect(withNote.note).toMatch(/sources automatically/i);
     expect(withNote.note).toMatch(/result_publish/);
-    expect(withNote.note).toMatch(/do not search again/i);
+    expect(withNote.note).not.toMatch(/do not search again for the same topic/i);
+    expect(withNote.note).toMatch(/search again only for a different part of the goal/i);
+    expect(withNote.note).toMatch(/do not re-run a search you already ran/i);
+    // Plain article text offers no links or records, so no deeper-reading advice.
+    expect(withNote.note).not.toMatch(/links\[\] or records\[\]/u);
     // Every fetched site lands in the evidence ledger (ledger-authoritative
     // sources for result_publish), in rank order, with excerpts.
     expect(services.evidence.entries().map((entry) => entry.url)).toEqual([
@@ -1146,6 +1150,10 @@ describe('@no-llm web_search — shape summaries (FEAT-051)', () => {
       ),
     ).toBe(true);
     expect(listing?.note).toMatch(/web_fetch of this URL returns its full records/u);
+    // A site with links/records makes the deeper-reading move possible (FEAT-052).
+    expect((payload as { note?: string }).note).toMatch(
+      /To go deeper into a site above, follow its links\[\] or records\[\]\./u,
+    );
     expect(listing?.text).toBeUndefined();
 
     expect(Object.keys(article ?? {}).sort()).toEqual(

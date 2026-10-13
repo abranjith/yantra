@@ -81,6 +81,8 @@ export interface RunArtifacts {
   readonly usage: unknown;
   readonly report: string | null;
   readonly runHealth: unknown;
+  /** `contract.json`, when the run declared a task contract (FEAT-052). */
+  readonly contract: unknown;
   /** JSON artifacts that exist but do not parse, by file name. */
   readonly unparseableJson: readonly string[];
 }
@@ -98,6 +100,10 @@ export interface ScenarioRun {
   readonly skipped: readonly string[];
   /** Deterministic tier only: the tool catalog the run's profile registered. */
   readonly registeredTools: readonly string[];
+  /** Deterministic tier only: the per-run user prompt the agent received. */
+  readonly prompt: string | null;
+  /** Every progress event the run sent its connector, in order. */
+  readonly progress: readonly AgentProgressEvent[];
   /** Fixture-server requests, counted outside the code under test. */
   readonly requests: readonly RequestLogEntry[];
   readonly searchCalls: readonly SearchCallRecord[];
@@ -180,7 +186,11 @@ export async function runScenario(
     const rankSink: RankSignalSink = { record: (signal) => rankSignals.push(signal) };
     const egress = new EgressLog();
     const launches = new LaunchCounter();
-    const profile = resolveCommandTaskProfile(scenario.command, {});
+    // The catalog comes from the scenario alone, never from the environment.
+    const profile = resolveCommandTaskProfile(scenario.command, {
+      browse: scenario.browse ?? true,
+    });
+    const connector = new SilentConnector();
     let agent: ScriptedAgentProvider | undefined;
 
     const leaves: Partial<EnvironmentLeaves> = {
@@ -212,7 +222,7 @@ export async function runScenario(
           grants: { location: true, screenshots: false },
           userLocation: locationOf(scenario.userLocation),
         },
-        connector: new SilentConnector(),
+        connector,
       },
       {
         runStore: new LocalRunStore(options.runRoot),
@@ -244,6 +254,8 @@ export async function runScenario(
       unreachable: report?.unreachable ?? [],
       skipped: report?.skipped ?? [],
       registeredTools: report?.registeredTools ?? [],
+      prompt: report?.prompt ?? null,
+      progress: connector.progress(),
       requests: server.requests(),
       searchCalls: search.calls(),
       searchPeakConcurrency: search.peakConcurrency(),
@@ -316,8 +328,16 @@ class SilentConnector implements AgentTaskConnector {
     return Promise.resolve('denied');
   }
 
-  public emitAgentEvent(_event: AgentProgressEvent): void {
-    // Progress rendering is not measured.
+  private readonly events: AgentProgressEvent[] = [];
+
+  public emitAgentEvent(event: AgentProgressEvent): void {
+    // Nothing is rendered; the events are kept so a measure can read them.
+    this.events.push(event);
+  }
+
+  /** Every progress event received so far, in order. */
+  public progress(): readonly AgentProgressEvent[] {
+    return [...this.events];
   }
 
   public renderAgentOutcome(_outcome: AgenticTaskOutcome): void {
@@ -359,6 +379,7 @@ export async function readArtifacts(runDir: string): Promise<RunArtifacts> {
     usage: await json('usage.json'),
     report: await readText(join(runDir, 'report.md')),
     runHealth: await json('run-health.json'),
+    contract: await json('contract.json'),
     unparseableJson,
   };
 }

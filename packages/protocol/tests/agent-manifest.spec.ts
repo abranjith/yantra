@@ -52,13 +52,14 @@ describe('@no-llm agent persistence protocol schemas', () => {
       'agent-v6',
       'agent-v7',
       'agent-v8',
+      'agent-v9',
     ]) {
       expect(AgentManifestSection.safeParse({ ...makeManifest(), prompt_version }).success).toBe(
         true,
       );
     }
     expect(
-      AgentManifestSection.safeParse({ ...makeManifest(), prompt_version: 'agent-v9' }).success,
+      AgentManifestSection.safeParse({ ...makeManifest(), prompt_version: 'agent-v10' }).success,
     ).toBe(false);
   });
 

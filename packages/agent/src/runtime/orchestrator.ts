@@ -98,7 +98,12 @@ import type { AgentTaskConnector } from './connector.js';
 import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
-import { COMMAND_TASK_PROFILES, promptAddendumFor, type CommandTaskProfile } from './profiles.js';
+import {
+  COMMAND_TASK_PROFILES,
+  browserCapabilityOf,
+  promptAddendumFor,
+  type CommandTaskProfile,
+} from './profiles.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
 import { countingBrowserProvider, RunHealthLedger } from './run-health.js';
 import { RunRecorder } from './run-recorder.js';
@@ -709,6 +714,7 @@ export async function runAgenticTask(
         ...(request.allowedHosts ? { allowedHosts: request.allowedHosts } : {}),
         ...(redacted.profileContext ? { profileContext: redacted.profileContext } : {}),
         attended: request.interactive === true,
+        browserCapability: browserCapabilityOf(profile.toolNames),
         promptAddendum: promptAddendumFor(profile, services.template),
       },
       userInput,

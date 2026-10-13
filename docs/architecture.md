@@ -1219,6 +1219,67 @@ site fault distinguishable from an expected browser refusal without either one l
 Model-visible text always comes from the registered message catalog, never from the core error's
 own prose, which can embed an executable path or a raw helper `detail`.
 
+#### Command profiles and the task contract
+
+`resolveCommandTaskProfile(command, { browse })` in `packages/agent/src/runtime/profiles.ts` returns
+a configured copy of the stable `COMMAND_TASK_PROFILES`. `ask` gets the read tools plus a
+list-only `workflow_run`. `research` adds `task_contract` and a runnable `workflow_run`, and also the
+read-only browse tools `browser_navigate`, `browser_observe`, and `browser_extract` — never a
+click or fill tool — unless `browse` is `false`. `do` gets the full catalog. The research addendum
+names the browser tools only when they are registered. The CLI decides `browse` in
+`apps/cli/src/research-browse.ts`: `--no-browse` beats the stored `agent.research_browse`
+preference, which beats a pinned `true`. There is no environment layer, so nothing outside the
+saved preference and the typed flag can change a catalog. The research preamble reports the
+result as `browse=on|off`.
+
+The per-run prompt cannot claim a capability the catalog lacks. `browserCapabilityOf(toolNames)`
+derives `interact` when any click or fill tool is present, `read` for any other `browser_` tool,
+and `none` otherwise. The orchestrator passes that value to `buildAgentUserPrompt`
+(`packages/agent/src/runtime/prompt.ts`), which renders the matching scope line. The `read` line
+tells the model to report a goal that needs clicking or filling and to name `yantra do` as the next
+step. The system prompt is `agent-v9`. Its `Scope` section makes a source the goal names the place
+the answer comes from, requires a stated condition to be confirmed or reported as unconfirmed, and
+forbids explaining missing data with a cause no tool reported. It also treats following a link a
+result offered as progress rather than a fallback.
+
+`task_contract` (`packages/agent/src/adapters/pi/tools/task-contract.ts`) is registered for
+`research` and `do` only. It records what the goal requires: the deliverable (`table`, `answer`,
+or `report`), the subject, required fields, stated filters, required sources, an optional ranking
+and limit, and notes. It fetches nothing, mutates nothing, gathers no evidence, and no other tool
+requires it. `normalizeContract` in `packages/agent/src/runtime/task-contract.ts` cleans every
+string first: it masks the user's own input values, applies the `public` sanitizer profile, strips
+control characters, and bounds the length. It then reduces each required source to a bare
+hostname. It rejects case-insensitive duplicates, a `table` without fields, and a table ranking
+that does not order by one of its fields, and returns only the first issue as a cause-specific
+`INVALID_INPUT`.
+
+The orchestrator constructs one `TaskContractStore` per run, and `RunServices.contract` requires
+it. A construction site that forgot the store would silently drop the missing-contract notice.
+Declarations are serialized and capped at `TASK_CONTRACT_MAX_REVISIONS` (3); a fourth declaration
+is a non-retryable `CONTRACT_REVISION_LIMIT`, and any declaration after publication is
+`ACTION_PHASE_CLOSED`. Each revision is validated as a protocol `TaskContractRecord` and written
+atomically to `<runDir>/contract.json`, through a temporary file and rename, before it takes
+effect. A write that fails therefore leaves the run as it was. A successful declaration writes one
+`info` `contract_declared` line to `runtime.jsonl` that carries the revision, the deliverable, the
+field and filter counts, and the source hostnames. It never carries subject, field, filter, or
+note text. The orchestrator also emits one `contract_declared` progress event per revision, each
+exactly once even when parallel declarations finish together. The event carries
+`renderContractEcho`, a single control-free line of at most 400 characters, which the CLI prints
+beside the goal echo.
+
+The contract is model-authored and grants nothing. No URL provenance, allowlist, or budget is
+derived from it. `hostSatisfiesRequiredSource` is a pure helper for later delivery checks.
+`TaskContractStore.notices()` returns exactly one `other` notice from source `task-contract` when
+a `research` or `do` run never declared a contract, and nothing otherwise.
+
+The stuck-loop breaker in the orchestrator's event handling counts identical failures per tool.
+Its key is the tool plus the error code. A success of the same tool resets that tool's streak, a
+different failure restarts it, and the outcomes of other tools never touch it. Interleaved or
+parallel calls therefore cannot hide a loop in which one tool succeeds while another keeps
+failing. Denied and aborted results are ignored. At `toolRetries + 1` identical failures, the run
+is interrupted as `repeated-tool-failure`. The one exception is a `TOOL_TIMEOUT` reached after the
+soft wall-clock wind-down: it yields to that wind-down so the session can still publish.
+
 #### Run facts and run health
 
 A run's account of itself — the operator's `tool_failure` lines, the published document's
@@ -1242,6 +1303,7 @@ flowchart TD
   Counter[countingBrowserProvider] -->|successful launches| Ledger
   Acq[PagePool and SearchService stats] -->|read at teardown| Ledger
   Ledger -->|briefFacts at publish| Document[Brief or templated report notices and search_provider]
+  Contract[TaskContractStore] -->|leading missing-contract notice via runtimeFactsFor| Document
   Ledger -->|summary at teardown| HealthFile[run-health.json]
   Ledger -->|summary at teardown| HealthLine[One info run_health line]
   Warn --> RuntimeLog[runtime.jsonl]
@@ -1306,13 +1368,18 @@ directories still validate.
 **Three readers, at three moments.**
 
 - _Publish time._ `result_publish`, and the runtime assembly of an unpublished draft, call
-  `briefFacts()` once and pass the result to the publisher as `runtimeFacts`. The Brief publisher
+  `runtimeFactsFor(services)` in `packages/agent/src/adapters/pi/tools/result-publish.ts` once
+  and pass the result to the publisher as `runtimeFacts`. It is the single runtime-facts assembly
+  point: it calls `briefFacts()` with the contract store's missing-contract notice, if any, as a
+  leading notice. The Brief publisher
   and the templated-report publisher both append the notices after any existing notice (a runtime
   assembly notice stays first) and set `metadata.search_provider` to the distinct providers in
-  first-use order, or `null` when no search ran. Notices are built in a fixed order — one
+  first-use order, or `null` when no search ran. Notices are built in a fixed order — the leading
+  missing-contract notice, one
   `search_failed` per failing search code, one `budget_exhausted` per spent limit, then per-host
   read failures — from fixed phrase tables, counts, and hostnames only, never page or provider
-  text, so nothing untrusted enters the document through this path. At most ten are attached; the
+  text, so nothing untrusted enters the document through this path. At most ten are attached, the
+  leading notice included; the
   overflow becomes one `other` notice pointing to the report's Run Health section. The count
   actually attached is recorded on the ledger at that moment rather than recomputed later.
 - _Teardown._ After browser, session, and recorder teardown and before the runtime log closes,
@@ -1323,7 +1390,10 @@ directories still validate.
 - _Report._ `MarkdownReportBuilder` reads `run-health.json` with the same schema and renders
   `## Run Health` after "Tool Calls", listing the file under the Audit Trail. An absent file
   renders nothing, so older reports are unchanged; an invalid one renders a single
-  "run-health.json unreadable" line.
+  "run-health.json unreadable" line. Immediately before it, the builder reads `contract.json` with
+  the protocol `TaskContractRecord` schema and renders `## Task Contract` from the current
+  revision, with the revision count, and lists `contract.json` under the Audit Trail. An absent file
+  renders nothing, and an invalid one renders a single "contract.json present but invalid" line.
 
 #### Default environment composition and leaves
 
@@ -1525,7 +1595,11 @@ Links become navigable because a page offered them. `UrlProvenance.record(url, o
 link kind, `text`, or `structured`). The first origin recorded for a normalized URL wins.
 `explain(url)` returns the matching rule (`exact`, `origin-root`, `query-variant`, or
 `allowed-host`) and the origin that granted it, or `null`. `has()` is defined as
-`explain(url) !== null`, so the two cannot disagree. `recordDiscovered` walks the payload the model
+`explain(url) !== null`, so the two cannot disagree. `seed` records the run's trusted inputs only:
+`--allow-host` hosts, URLs the user wrote in the goal, and the `https://<host>/` and
+`http://<host>/` origin roots of hostnames the user wrote bare in the goal. A bare host attests no
+path and no `www.` variant. A task contract's `required_sources` is never a seed, because model
+text attests nothing. `recordDiscovered` walks the payload the model
 will actually read — offered links, record URLs and their secondary links, absolute http(s)
 structured properties, and URLs written in returned text — and records each one as `discovered`.
 A link a bound trimmed is therefore not attested until a later view shows it.
@@ -1968,6 +2042,9 @@ closes. Web reads go through the run's `SearchService`, `DocumentStore`, and `Pa
 ID. Each read returns a shape-aware view of the page. The URLs that view shows become attested,
 attributed to the page that offered them, and `web_fetch` and `browser_navigate` refuse any URL
 nothing attested (see "Shape-aware page views and discovered links"). The pool closes after the task browser's teardown and before `run-health.json` is written. A
+`research` or `do` run declares what the goal requires with `task_contract`, which persists
+`contract.json` and echoes the contract to the user. A run that never declares one publishes with a
+leading notice saying so (see "Command profiles and the task contract"). A
 successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
 plain assistant text alone is not the success contract.
 
@@ -2162,6 +2239,15 @@ is present only when a shape-aware view was returned or a discovered link was fo
 `schema_version` stays 1. A run has zero or one such file and zero or one `run_health` line; a
 startup failure before the environment exists writes neither. Every reader treats the file as
 optional, so older run directories validate and render unchanged.
+
+The task contract adds one optional run artifact and no table. `<runDir>/contract.json` is a
+protocol `TaskContractRecord` at `schema_version: 1` whose JSON Schema is emitted with the other
+protocol artifacts. It holds the run ID, the declaring command (`research` or `do`), and one to
+three revisions in declaration order, each with its 1-based number, declaration time, and
+normalized `TaskContractBody`; the last revision is current. Required sources are normalized
+hostnames, and field and filter names are unique case-insensitively. Its text is model-authored
+and sanitized before it is written, and it is never a source of authority. `ask` runs, runs that
+never declared a contract, and older runs have no file, and every reader treats it as optional.
 
 Shape-aware extraction adds no table and no artifact type. `PageAnalysis`, each source's
 `StoredPage` and its record-anchor map, and every `ProvenanceOrigin` are run-local memory held by

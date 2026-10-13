@@ -8,7 +8,7 @@
 
 `research` has two current execution paths:
 
-- **Agentic (ordinary mode):** when model credentials are available, Yantra opens one fresh provider session. The research profile asks the model to search broadly, consult independent sources, follow specific leads, cover material gaps, and publish a validated research Brief. It can use public-web search and fetch tools, allowlisted local transformations, and saved workflows. It has no browser tools by default.
+- **Agentic (ordinary mode):** when model credentials are available, Yantra opens one fresh provider session. The research profile asks the model to read the answer from any source the goal names (otherwise to consult independent sources), follow specific leads, cover material gaps, and publish a validated research Brief. It can use public-web search and fetch tools, read-only browsing, allowlisted local transformations, saved workflows, and `task_contract`.
 - **Deterministic (`--no-llm`) mode:** Yantra runs the core research loop without constructing a model session. `LLM_PROVIDER=none` selects the same path. If ordinary mode cannot resolve model credentials, the command prints a warning and degrades to deterministic research.
 
 Both paths apply Yantra's outbound URL policy, ethics gate, blocklist, robots policy, host rate limits, fetch limits, sanitizer, and audit rules. They report bot walls and CAPTCHAs instead of attempting to evade them.
@@ -37,9 +37,26 @@ A failed `web_search` returns a typed code: `SEARCH_BLOCKED`, `SEARCH_NO_RESULTS
 
 Every successfully consulted page enters a run-local evidence ledger in first-consulted order, under its evidence ID. The ledger deduplicates by final URL and stores bounded, sanitized titles and excerpts. At publication, Yantra replaces any model-supplied source list with this ledger, assigns the source numbers, validates the resulting Brief, and writes the artifacts. Raw assistant prose is not a successful result.
 
-The model controls how many searches to make and when the evidence is broad enough. Agentic research does not use the deterministic hop counter, source pool, numeric coverage score, or follow-up-query generator. Its bounds are the shared agent budgets: a 15-minute default hard deadline, publication wind-down after 80% of that time, a 2,000,000-provider-token ceiling, a three-minute per-tool timeout, and three retries after an identical tool failure. Tool-call counts are audit data, not caps.
+The model controls how many searches to make and when the evidence is broad enough. Agentic research does not use the deterministic hop counter, source pool, numeric coverage score, or follow-up-query generator. Its bounds are the shared agent budgets: a 15-minute default hard deadline, publication wind-down after 80% of that time, a 2,000,000-provider-token ceiling, a three-minute per-tool timeout, and a repeated-failure breaker that stops the run when one tool fails with the same error four times (the `--tool-retries` default of 3, plus one) without succeeding in between. Tool-call counts are audit data, not caps.
 
-By default the research agent cannot navigate a live browser, click, or fill forms. Setting `YANTRA_AGENT_RESEARCH_BROWSE=1` adds read-only `browser_navigate`, `browser_observe`, and `browser_extract`; mutation tools remain unavailable. `browser_extract` reads the live page through the same shape-aware analyzer as `web_fetch`, so its `records`, `links`, `structured`, and `tables` kinds return the same parts. Browser navigation is limited to URLs established by the goal or Yantra tools. The profile may also run a matching saved workflow; the nested workflow replay is deterministic and opens no second model session.
+**Agentic research browses read-only by default.** The research catalog includes `browser_navigate`, `browser_observe`, and `browser_extract`, and never `browser_click`, `browser_fill_element`, or `browser_fill_form`. `browser_extract` reads the live page through the same shape-aware analyzer as `web_fetch`, so its `records`, `links`, `structured`, and `tables` kinds return the same parts. Browser navigation is limited to URLs established by the goal or Yantra tools; a site the goal names by bare hostname, such as `Use example.com`, is reachable at its root (see [Safety and privacy](safety-and-privacy.md)). Browsing is turned off by the stored preference `agent.research_browse: false`, or for one run by `--no-browse`; a run without it has no `browser_*` tool at all. The per-run prompt states what the catalog can do:
+
+- With browsing: "Scope: web search, page reading, and read-only browsing (navigate, observe, extract); this run cannot click or fill forms — if the goal needs that, report it and name `yantra do` as the next step."
+- Without browsing: "Scope: web search and page reading only; this run has no live browser."
+
+A goal that needs clicks or form fills is therefore not completed by `research`; the run reports it and names `yantra do` as the next step.
+
+The research guidance (the per-run "command completion criteria") tells the model:
+
+- When the goal names a site or source, that source is required: read the answer from it, and present any other source only as a clearly labeled alternative, never merged into the answer. Otherwise use independent sources and cover material gaps.
+- Call `task_contract` in the same turn as the first search or fetch (see [Agentic tasks](agentic-tasks.md#task-contract)).
+- To find a page, use `web_search`; `limit: 0` lists URLs without reading them.
+- When a page lists items, follow its `records[]` and `links[]` to the pages needed (pagination, filters, details) rather than searching for them.
+- With browsing on only: use `browser_navigate` and `browser_extract` for a page that needs a live browser. The no-browse guidance names no browser tool.
+
+A template-mode run's completion criteria carry the same required-source sentence.
+
+The profile may also run a matching saved workflow; the nested workflow replay is deterministic and opens no second model session.
 
 ### Deterministic research
 
@@ -104,6 +121,15 @@ Produce machine-readable output:
 yantra research "recent changes to right-to-repair laws" --json
 ```
 
+Run one agentic research without the read-only browser, or turn browsing off for every run:
+
+```console
+yantra research "list the open roles on example.com" --no-browse
+yantra prefs set agent.research_browse false
+```
+
+`--no-browse` exists only on `research`: `ask` never browses and `do` always can. On a deterministic run (`--no-llm`, `LLM_PROVIDER=none`, or missing credentials) an explicit `--no-browse` prints `warning: --no-browse has no effect on deterministic research, which never opens a browsing session` to stderr and the run continues.
+
 Use an authored report structure in agentic mode:
 
 ```console
@@ -146,6 +172,8 @@ The required input is one topic string. Ordinary agentic runs receive the saniti
 
 In both modes, the command writes the topic exactly as it received it to stderr, right after the `research:` preamble line, as `goal: "<text>"`. This shows when the shell rewrote the argument: in bash, `yantra research "under $40"` receives `under 0` and echoes `goal: "under 0"`. The echo shows credential-shaped and `@{...}`-marked values as their placeholders, replaces control characters, collapses whitespace, and escapes quotes and backslashes. It shows at most 200 characters; a longer topic ends with `…` followed by ` (N characters received)`. A topic with a malformed `@{...}` marker echoes as `goal: [not shown: the goal has a malformed @{...} marker]` and is never printed raw. The echo goes only to stderr, so `--json` stdout is unchanged.
 
+In agentic mode the `research:` preamble line ends with `model=<provider>/<model> browse=on` or `browse=off`, naming whether this run has the read-only browser; the deterministic preamble has neither field. When the agent declares a task contract, a text-mode run also prints `understood: <contract summary>` to stderr (`understood (revised): …` for a later revision); `--json` carries it as a `contract_declared` `agent_progress` record instead. See [Agentic tasks](agentic-tasks.md#task-contract).
+
 A normal result is a protocol Brief containing:
 
 - a title and answer-first overview;
@@ -158,7 +186,7 @@ A normal result is a protocol Brief containing:
 Source semantics differ by mode:
 
 - In agentic mode, the Sources list means “pages successfully consulted by Yantra tools.” The evidence ledger, not the model, owns URLs and numbering. Model-authored findings are published as editorial text when they do not carry engine-verifiable claim citations, so the presence of a source list does not prove that every sentence is supported by one particular source.
-- In agentic mode, the runtime also appends notices it derives from the run's own record, after any notices the document already carries. These are one `search_failed` notice per failing search code, one `budget_exhausted` notice per spent navigation or distinct-host limit, one `blocked` notice per host whose page was a challenge in the standard browser, one `other` notice per host that challenged only Yantra's HTTP client before its page was read in the browser, and per-host read failures, up to 10 in total. `metadata.search_provider` names the providers the run searched through and is `null` only when no search ran. A templated report gets the same notices. See [runtime notices](agentic-tasks.md#inputs-and-outputs).
+- In agentic mode, the runtime also appends notices it derives from the run's own record, after any notices the document already carries. A run that never declared a task contract leads them with one `task-contract` notice (see [Agentic tasks](agentic-tasks.md#task-contract)). The rest are one `search_failed` notice per failing search code, one `budget_exhausted` notice per spent navigation or distinct-host limit, one `blocked` notice per host whose page was a challenge in the standard browser, one `other` notice per host that challenged only Yantra's HTTP client before its page was read in the browser, and per-host read failures, up to 10 in total. `metadata.search_provider` names the providers the run searched through and is `null` only when no search ran. A templated report gets the same notices. See [runtime notices](agentic-tasks.md#inputs-and-outputs).
 - In deterministic mode, the Sources list contains only sources retained by relevance selection and clustering. Structured finding citations derive from documents whose extracted sentences support the claim. `metadata.citation_verdict` records the post-synthesis validation result, while excluded sources and failures remain visible as notices.
 
 Terminal output uses progressive disclosure. Markdown is a portable full-detail document. HTML is self-contained and inert: source-derived text is escaped, source links are restricted to HTTP(S), and no scripts or remote assets are emitted. JSON contains the complete validated document.
@@ -179,7 +207,7 @@ brief.html
 
 `research-state.json` is atomically replaced after each hop, so it contains the latest checkpoint: issued queries, fetch/keep counts, source identities and hashes, subtopic coverage, remaining budgets, and the final termination reason. Fetched HTML is retained locally for post-mortem inspection. Brief artifact writes are best-effort; a run can still succeed and render stdout if those three writes fail.
 
-Agentic runs use the shared run layout, including `manifest.json`, `events.jsonl`, provider session data under `agent/`, `tool-calls.jsonl`, `usage.json`, `run-health.json`, captures for oversized extracted text, `report.md`, and the published `brief.*` or `document.*` artifacts. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) and [Run Health](diagnostics-and-audit.md#run-health).
+Agentic runs use the shared run layout, including `manifest.json`, `events.jsonl`, provider session data under `agent/`, `tool-calls.jsonl`, `usage.json`, `run-health.json`, `contract.json` when a task contract was declared, captures for oversized extracted text, `report.md`, and the published `brief.*` or `document.*` artifacts. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) and [Run Health](diagnostics-and-audit.md#run-health).
 
 Invalid CLI choices and shared agent-option values exit as validation failures. Deterministic per-source failures and budget stops usually return exit 0 with notices. An unrecoverable loop/synthesis error, failed agent publication, provider-session failure, or user handoff is currently reported by the `research` command as an execution failure. If an agent finishes without publishing but has both a draft and ledger evidence, the runtime first attempts to assemble and validate a fallback Brief; without enough material, it preserves the final unvalidated response as diagnostic `result.md` and the command still fails.
 
@@ -200,10 +228,11 @@ search:
 
 Agent settings resolve in this order: explicit flag, `YANTRA_AGENT_*` environment, approved `profile.yaml` `agent.*` preference, then the pinned default. Credential availability is probed offline. Missing credentials cause a warning and deterministic fallback; credential values are never read merely to perform the probe. Runtime-only `--auth-secret` references are resolved at the provider boundary and are not written to prompts or artifacts.
 
-The research profile has public read tools, the allowlisted `script_run`, `workflow_run`, and `result_publish`. It has no arbitrary shell/filesystem tool. Optional browser access is read-only and must be enabled with `YANTRA_AGENT_RESEARCH_BROWSE=1`; it does not add click or fill permissions.
+The research profile has public read tools, the allowlisted `script_run`, `workflow_run`, and `result_publish`. It has no arbitrary shell/filesystem tool. It has read-only browser access (`browser_navigate`, `browser_observe`, `browser_extract`) unless the `agent.research_browse` preference is `false` or the run passes `--no-browse` (precedence: flag, then preference, then the default `true`; nothing in the environment changes it). Browsing never adds click or fill permissions. With the explicit `context.screenshots` grant and an image-capable model, a browsing research run can also use `browser_screenshot`; see [Vision assist](vision-assist.md).
 
 ## Limitations
 
+- Agentic research never clicks or fills a form. A goal that needs either is reported as such, with `yantra do` named as the next step.
 - Agentic and deterministic research are different algorithms. `--depth`, `--max-sources`, `--per-query-limit`, `--fetch-timeout`, `--pipeline-timeout`, and `--max-llm-calls` do not govern an agentic run. Agentic report breadth is model-driven within the shared duration/token/tool safety budgets, and `--length` does not impose a prose budget on it.
 - Deterministic coverage is a lexical heuristic. It may overstate coverage for repeated terminology or understate it when sources use synonyms, and an empty gap set can stop the loop before the requested depth.
 - Deterministic synthesis selects and organizes extracted sentences; it does not rewrite poor source prose or independently verify that a source is truthful. Agentic synthesis adds model judgment but also inherits model errors.

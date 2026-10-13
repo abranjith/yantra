@@ -234,7 +234,6 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-052',
     measure: (run) => run.registeredTools,
     target: includesAll(['browser_extract', 'browser_navigate', 'browser_observe']),
-    baseline: equals(['result_publish', 'script_run', 'web_fetch', 'web_search', 'workflow_run']),
     note: 'G1: `research` registers read-only browsing by default.',
   },
   {

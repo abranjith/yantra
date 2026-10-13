@@ -310,13 +310,80 @@ describe('@no-llm command task profiles', () => {
     expect(byName.get('browser_click')).toMatch(/resolved_by/);
   });
 
-  it('keeps ask and research addenda byte-identical while do guidance changes', () => {
+  it('keeps ask byte-identical; research and do carry the contract and required-source guidance', () => {
     const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
     expect(digest(COMMAND_TASK_PROFILES.ask.promptAddendum)).toBe(
       'ee8fe1634fd2a09ad7c9c78ffb3da050121a74648082e62d16649adb0b85f40b',
     );
-    expect(digest(COMMAND_TASK_PROFILES.research.promptAddendum)).toBe(
-      'a2b284bef5c60dc165f2211ea1f984e1794440d4a956d907a2676817694ebe6c',
+    const requiredSource =
+      'When the goal names a site or source, that source is required: read the answer from it, ' +
+      'and present any other source only as a clearly labeled alternative, never merged into the ' +
+      'answer.';
+    for (const profile of [
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+      resolveCommandTaskProfile('do'),
+    ]) {
+      expect(profile.promptAddendum).toContain(requiredSource);
+      expect(profile.promptAddendum).toContain(
+        'Call task_contract in the same turn as your first search or fetch.',
+      );
+    }
+    expect(COMMAND_TASK_PROFILES.ask.promptAddendum).not.toMatch(/task_contract|required:/u);
+    // `do` keeps its single-site rule.
+    expect(COMMAND_TASK_PROFILES.do.promptAddendum).toContain(
+      'Do not switch to web_search for data the goal asked you to read from a specific site.',
+    );
+  });
+
+  it('tells research how to find and traverse pages (FEAT-050/051 moves)', () => {
+    const research = resolveCommandTaskProfile('research').promptAddendum;
+    expect(research).toContain('web_search (limit: 0 lists URLs without reading them)');
+    expect(research).toContain('follow its records[] and links[] to the pages you need');
+    expect(research).toContain(
+      'Use browser_navigate and browser_extract for a page that needs a live browser.',
+    );
+    expect(research).toContain('result_publish with {"brief"');
+  });
+
+  it('never tells a no-browse research run about browser tools', () => {
+    const noBrowse = resolveCommandTaskProfile('research', { browse: false });
+    expect(noBrowse.promptAddendum).not.toMatch(/browser_/u);
+    expect(noBrowse.promptAddendum).toBe(COMMAND_TASK_PROFILES.research.promptAddendum);
+    expect(resolveCommandTaskProfile('research').promptAddendum).not.toBe(noBrowse.promptAddendum);
+  });
+
+  it('names in every addendum only tools that profile actually has', () => {
+    const toolName =
+      /\b(?:web_search|web_fetch|script_run|result_publish|workflow_run|task_contract|browser_[a-z_]+)\b/gu;
+    for (const profile of [
+      resolveCommandTaskProfile('ask'),
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+      resolveCommandTaskProfile('do'),
+    ]) {
+      const named = new Set(profile.promptAddendum.match(toolName) ?? []);
+      for (const name of named) expect(profile.toolNames).toContain(name);
+    }
+  });
+
+  it('never says "independent sources" without the required-source qualifier', () => {
+    const parsed = parseTemplate('# {{ title | text }}\n\n{{ sources }}');
+    if (!parsed.isOk) throw new Error('fixture template did not parse');
+    const texts = [
+      ...[
+        resolveCommandTaskProfile('ask'),
+        resolveCommandTaskProfile('research'),
+        resolveCommandTaskProfile('research', { browse: false }),
+        resolveCommandTaskProfile('do'),
+      ].flatMap((profile) => [profile.promptAddendum, promptAddendumFor(profile, parsed.value)]),
+    ];
+    for (const text of texts) {
+      if (!/independent sources/u.test(text)) continue;
+      expect(text).toMatch(/that source is required[^]*Otherwise use independent sources/u);
+    }
+    expect(promptAddendumFor(resolveCommandTaskProfile('research'), parsed.value)).toMatch(
+      /Otherwise use independent sources/u,
     );
   });
 

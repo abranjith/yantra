@@ -9,7 +9,7 @@
  * does not exist yet.
  */
 
-import { RunHealth } from '@yantra/protocol';
+import { RunHealth, TaskContractRecord, type TaskContractBody } from '@yantra/protocol';
 
 import type { ReceivedResult, ScriptStep } from '../agent/scripted-provider.js';
 import { equals, type Expectation } from '../expectations.js';
@@ -176,6 +176,44 @@ export function runtimeEvents(run: ScenarioRun, name: string): readonly Record<s
     (line): line is Record<string, unknown> =>
       typeof line === 'object' && line !== null && (line as { event?: unknown }).event === name,
   );
+}
+
+/** The current contract in `contract.json` when it validates, `'invalid'` when not, or null. */
+export function contractOf(run: ScenarioRun): TaskContractBody | 'invalid' | null {
+  if (run.artifacts.contract === null) return null;
+  const parsed = TaskContractRecord.safeParse(run.artifacts.contract);
+  return parsed.success ? (parsed.data.revisions.at(-1)?.contract ?? 'invalid') : 'invalid';
+}
+
+/** The Brief's `task-contract` notices (FEAT-052's missing-contract notice). */
+export function contractNoticesOf(
+  run: ScenarioRun,
+): readonly { readonly kind: string; readonly source: string }[] {
+  return noticesOf(run).filter((notice) => notice.source === 'task-contract');
+}
+
+/** The run's `contract_declared` progress events, as `{ revision, summary }`. */
+export function contractEchoesOf(
+  run: ScenarioRun,
+): readonly { readonly revision: number; readonly summary: string }[] {
+  return run.progress.flatMap((event) =>
+    event.type === 'contract_declared'
+      ? [{ revision: event.revision, summary: event.summary }]
+      : [],
+  );
+}
+
+/** `tool-calls.jsonl` phases recorded for `tool`, in order. */
+export function toolCallPhases(run: ScenarioRun, tool: string): readonly string[] {
+  return (run.artifacts.toolCalls?.lines ?? []).flatMap((line) => {
+    const { tool: name, phase } = line as { tool?: unknown; phase?: unknown };
+    return name === tool && typeof phase === 'string' ? [phase] : [];
+  });
+}
+
+/** The per-run prompt's `Scope:` line, or null when it has none. */
+export function scopeLineOf(run: ScenarioRun): string | null {
+  return run.prompt?.split('\n').find((line) => line.startsWith('Scope: ')) ?? null;
 }
 
 // ---------------------------------------------------------------------------

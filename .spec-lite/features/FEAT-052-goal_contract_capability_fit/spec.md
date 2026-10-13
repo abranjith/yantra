@@ -524,7 +524,14 @@ If an equivalent helper or test location already exists, extend it instead of cr
 - [x] TASK-005: A `research`/`do` run that never declares a contract says so in its Brief
 - [x] TASK-006: A site the user names by bare hostname is reachable at its root
 - [x] TASK-007: The repeated-failure breaker counts per tool, so other tools cannot reset it
-- [ ] TASK-008: Prompt alignment `agent-v9`: capability-true scope, source fidelity, and no conflicting advice
-- [ ] TASK-009: Pin FEAT-052 in the task-fidelity harness and flip it live
+- [x] TASK-008: Prompt alignment `agent-v9`: capability-true scope, source fidelity, and no conflicting advice
+- [x] TASK-009: Pin FEAT-052 in the task-fidelity harness and flip it live
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+### Implementation notes
+
+- DEVIATION (TASK-008): the `limit: 0` discovery note keeps its existing discovery text and appends only the "search again only for…" sentence, without "These sites are recorded as your sources automatically" — a discovery result fetches nothing, so that clause would be false (memory: a tool result says what actually happened).
+- DEVIATION (TASK-009): `research-browse` reaches records in two hops — the fixture's root is a home page with links and no cards, so the script navigates the goal-attested root, extracts `links`, follows the offered "Shop new" link, then extracts `records`. Every move after the root is a discovered link.
+- TASK-001 boundary test: the retired switch's name is asserted absent from `packages/`, `apps/`, `e2e/`, and `docs/`; the env-isolation assertion lives in the same file (`packages/agent/tests/boundaries/forbidden.spec.ts`), so that file is the only place the name appears.
+- TASK-008 verify step "a fresh agentic `research` run's manifest shows `agent-v9`" and TASK-009's agentic tier were not run: both need a live model and spend tokens.

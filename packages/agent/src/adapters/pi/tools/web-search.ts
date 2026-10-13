@@ -187,7 +187,7 @@ function discover(
       query,
       mode: 'discovery',
       results,
-      note: renderAgentMessage('tool', 'WEB_SEARCH', 'discovery'),
+      note: `${renderAgentMessage('tool', 'WEB_SEARCH', 'discovery')} ${SEARCH_AGAIN}`,
     },
     diagnostic: { provider },
     details: { provider, mode: 'discovery', discovered: results.length },
@@ -574,10 +574,7 @@ async function mapReads(
       // payload (observed: sources: [{url: "N/A"}], and a post-nudge re-search
       // that changed the answer). Sources attach from the run's evidence
       // ledger, so the note steers the model straight to publishing prose.
-      note:
-        'These sites are recorded as your sources automatically, each under its source_id. ' +
-        'When you are done, call result_publish with your title and overview — do not search ' +
-        'again for the same topic and do not re-type URLs.',
+      note: searchNote(sites),
     },
     diagnostic: { provider },
     details: {
@@ -593,6 +590,31 @@ async function mapReads(
     },
   };
 }
+
+/**
+ * Says when another search is useful, so the note never forbids the searches a
+ * collection task needs (FEAT-052). The deeper-reading sentence names a move
+ * only when the result makes it possible: some site carries links or records.
+ */
+function searchNote(sites: readonly unknown[]): string {
+  const followable = sites.some((site) => {
+    if (typeof site !== 'object' || site === null) return false;
+    const { links, records } = site as { links?: unknown; records?: unknown };
+    return (
+      (Array.isArray(links) && links.length > 0) || (Array.isArray(records) && records.length > 0)
+    );
+  });
+  return (
+    'These sites are recorded as your sources automatically, each under its source_id. ' +
+    `Publish with result_publish when the evidence answers the goal. ${SEARCH_AGAIN}` +
+    (followable ? ' To go deeper into a site above, follow its links[] or records[].' : '')
+  );
+}
+
+/** When another search is useful — shared by the full and discovery notes. */
+export const SEARCH_AGAIN =
+  'Search again only for a different part of the goal or to locate a source the goal ' +
+  'requires — do not re-run a search you already ran, and do not re-type URLs.';
 
 /** A per-site failure with a best-effort host (mirrors core `sourceFailure`). */
 function sourceFailureOf(

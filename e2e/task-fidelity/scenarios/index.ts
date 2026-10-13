@@ -14,6 +14,9 @@ import { budgetExhaustion } from './budget-exhaustion.js';
 import { challengeLargeMain } from './challenge-large-main.js';
 import { challengeRequiredSource } from './challenge-required-source.js';
 import { challengeSmall } from './challenge-small.js';
+import { contractDeclared } from './contract-declared.js';
+import { contractInvalid } from './contract-invalid.js';
+import { contractMissing } from './contract-missing.js';
 import { handAssembledUrl } from './hand-assembled-url.js';
 import { listingClientRendered } from './listing-client-rendered.js';
 import { listingStructured } from './listing-structured.js';
@@ -21,6 +24,8 @@ import { listingTableFaults } from './listing-table-faults.js';
 import { listingTable } from './listing-table.js';
 import { multiTable } from './multi-table.js';
 import { repeatRead } from './repeat-read.js';
+import { researchBrowse } from './research-browse.js';
+import { researchNoBrowse } from './research-no-browse.js';
 import { searchBreaker } from './search-breaker.js';
 import { searchConcurrency } from './search-concurrency.js';
 import { searchEmptyTimeout } from './search-empty-timeout.js';
@@ -42,6 +47,11 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
   budgetExhaustion,
   repeatRead,
   handAssembledUrl,
+  contractDeclared,
+  contractMissing,
+  contractInvalid,
+  researchBrowse,
+  researchNoBrowse,
   // Agentic tier only.
   challengeRequiredSource,
   articleQuestion,
