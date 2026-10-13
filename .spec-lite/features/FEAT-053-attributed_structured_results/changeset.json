@@ -39,7 +39,7 @@
     },
     {
       "path": "packages/agent/src/runtime/contract-delivery.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -74,6 +74,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/tests/runtime/contract-delivery.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/tests/runtime/evidence-refs.spec.ts",
       "status": "A",
       "role": "implement",
@@ -99,7 +105,7 @@
     },
     {
       "path": "packages/core/src/extraction/page/evidence-text.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -111,7 +117,7 @@
     },
     {
       "path": "packages/core/src/synthesis/anchoring.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -141,13 +147,13 @@
     },
     {
       "path": "packages/core/tests/extraction/page/evidence-text.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/synthesis/anchoring.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
