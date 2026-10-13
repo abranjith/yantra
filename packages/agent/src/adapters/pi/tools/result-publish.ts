@@ -49,7 +49,13 @@ import {
 } from '@yantra/protocol';
 import { Type, type Static, type TObject } from 'typebox';
 
-import { composeAgentBrief, sanitizePublishContent } from '../../../runtime/brief-composer.js';
+import {
+  composeAgentBrief,
+  composedPublishSummary,
+  logBriefComposition,
+  mapPublishText,
+  sanitizePublishContent,
+} from '../../../runtime/brief-composer.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
@@ -174,7 +180,11 @@ export function resultPublishSpec(services: RunServices): ToolWrapperSpec<TObjec
         ? 'Publish the final answer as a validated Brief. This is the ONLY way to complete a task — ' +
           'raw chat text is not a completed result. Call it once, when your answer is ready, with ' +
           '{"brief": {"title": ..., "overview": ...}}; the web pages you consulted are attached as ' +
-          'sources automatically, so you never need to list URLs. Do NOT call it before gathering ' +
+          'sources automatically. Cite evidence by source_id or record id (S3, S3#r5): findings ' +
+          'as {text, sources: ["S3"]}, prose as [S3]. Publish items with fields as a table ' +
+          '{columns, rows, row_sources}, one citation list per row. Report conditions in ' +
+          'constraints with status verified, unverified, or violated; list undelivered items ' +
+          'and reasons in fulfillment.unmet. Invalid references return the exact fix. Do NOT call it before gathering ' +
           'the evidence you need, and do NOT invent facts or URLs; invalid Briefs are rejected with ' +
           'the specific problems to fix.'
         : `Publish the final values for template "${services.template.name ?? 'unnamed'}". ` +
@@ -239,12 +249,19 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   const evidence = services.evidence.entries();
   const composed = isCompleteBrief(briefInput)
     ? null
-    : composeAgentBrief(sanitizePublishContent(briefInput, services.sanitizer), {
-        evidence,
-        documents: services.documents,
-        contract: services.contract.current(),
-        mode: 'tool',
-      });
+    : composeAgentBrief(
+        sanitizePublishContent(
+          briefInput,
+          services.sanitizer,
+          (text) => services.userInput?.mask(text) ?? text,
+        ),
+        {
+          evidence,
+          documents: services.documents,
+          contract: services.contract.current(),
+          mode: 'tool',
+        },
+      );
   if (composed !== null && !composed.isOk) {
     const issues = composed.error.map((issue) => ({
       cause: issue.cause,
@@ -262,9 +279,16 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       details: { issues },
     };
   }
-  const content = composed?.isOk ? composed.value.content : briefInput;
+  const composedContent = composed?.isOk ? composed.value.content : briefInput;
+  const content =
+    services.userInput === undefined
+      ? composedContent
+      : mapPublishText(composedContent, (text) => services.userInput!.resolve(text));
+  const publishFacts = composed?.isOk
+    ? runtimeFactsFor(services, composed.value.notices)
+    : runtimeFacts;
   const result = await services.domain.publish.publish(content, {
-    runtimeFacts,
+    runtimeFacts: publishFacts,
     ...(composed?.isOk ? { citationVerdict: composed.value.verdict } : {}),
   });
   if (!result.isOk) {
@@ -284,11 +308,22 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   }
 
   services.actionPhase.close();
-  services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
+  services.runHealth.recordPublishedNotices(publishFacts.notices.length);
+  if (composed?.isOk) logBriefComposition(services, composed.value.summary);
+  const brief = result.value.brief as Brief;
   return {
     ok: true,
-    model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
-    details: { brief_id: (result.value.brief as Brief).brief_id },
+    model: {
+      published: true,
+      summary: composed?.isOk
+        ? composedPublishSummary(brief.title, brief.overview, composed.value.summary)
+        : result.value.summary,
+      html_path: result.value.htmlPath,
+    },
+    details: {
+      brief_id: brief.brief_id,
+      ...(composed?.isOk ? { composition: composed.value.summary } : {}),
+    },
     terminate: true,
   };
 }
@@ -301,8 +336,15 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
  */
 export function runtimeFactsFor(
   services: Pick<RunServices, 'runHealth' | 'contract'>,
+  composedNotices?: readonly BriefNotice[],
 ): PublishRuntimeFacts {
-  return services.runHealth.briefFacts(services.contract.notices());
+  if (composedNotices === undefined)
+    return services.runHealth.briefFacts(services.contract.notices());
+  const facts = services.runHealth.briefFacts();
+  return {
+    ...facts,
+    notices: [...services.contract.notices(), ...composedNotices, ...facts.notices],
+  };
 }
 
 /**

@@ -65,7 +65,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     ]);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
-    expect(PROMPT_VERSION).toBe('agent-v9');
+    expect(PROMPT_VERSION).toBe('agent-v10');
     expect(createHash('sha256').update(AGENT_SYSTEM_PROMPT).digest('hex')).toBe(
       'f84d51c82a695e258af64d904ae9ea39ec282a6c3635e01aec595637c99c91bd',
     );

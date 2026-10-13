@@ -217,6 +217,7 @@ function finished(callId: string, tool: string, outcome: string): AgentEvent {
 /** A ledger entry as the web tools would record it during a run. */
 function evidenceEntry(url: string, title: string): EvidenceEntry {
   return {
+    sourceId: 'S1',
     url,
     finalUrl: null,
     title,
@@ -1959,6 +1960,48 @@ function recordFailedSearch(services: RunServices): void {
 }
 
 describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
+  it.each(['Evidence [S1] and old [7].', 'Evidence [S99].'])(
+    'assembles fallback draft citations honestly: %s',
+    async (draft) => {
+      const { outcome } = await scriptedRun({
+        command: 'research',
+        calls: [],
+        draft,
+        beforeCalls: (services) =>
+          services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
+      });
+      expect(outcome.kind).toBe('published');
+      const brief: unknown = JSON.parse(await readFile(join(outcome.runDir, 'brief.json'), 'utf8'));
+      expect(brief).toMatchObject({
+        metadata: { citation_verdict: { claims_checked: 0, flagged: 0, stripped: 0 } },
+        notices: [
+          expect.objectContaining({ source: 'runtime' }),
+          expect.objectContaining({ source: 'task-contract' }),
+        ],
+      });
+      const markdown = await readFile(join(outcome.runDir, 'brief.md'), 'utf8');
+      expect(markdown).not.toContain('[7]');
+      expect(markdown).not.toContain('[S99]');
+      if (draft.includes('[S1]')) expect(markdown).toContain('[1]');
+      const log = await readFile(join(outcome.runDir, 'runtime.jsonl'), 'utf8');
+      expect(log.split('\n').filter((line) => line.includes('brief_composed'))).toHaveLength(1);
+    },
+  );
+  it('publishes a fallback under an undelivered table contract with the missing-table gap', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL],
+      draft: 'Evidence [S1].',
+      beforeCalls: (services) =>
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
+    });
+    expect(outcome.kind).toBe('published');
+    expect(
+      (await briefNotices(outcome)).some((notice) =>
+        notice.reason.includes('no table was published'),
+      ),
+    ).toBe(true);
+  });
   it('gives an undeclared research run exactly one task-contract notice, first', async () => {
     const { outcome } = await scriptedRun({
       command: 'research',
@@ -1980,15 +2023,18 @@ describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
     expect((await briefNotices(outcome)).map((notice) => notice.source)).toEqual(['task-contract']);
   });
 
-  it('gives a declared run no task-contract notice', async () => {
+  it('gives a declared run no missing-contract notice', async () => {
     const { outcome } = await scriptedRun({
       command: 'research',
       calls: [CONTRACT_CALL, PUBLISH_CALL],
+      draft: 'The listing source was read [S1].',
+      beforeCalls: (services) =>
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
     });
 
-    expect((await briefNotices(outcome)).some((notice) => notice.source === 'task-contract')).toBe(
-      false,
-    );
+    expect(
+      (await briefNotices(outcome)).some((notice) => notice.reason === MISSING_CONTRACT_REASON),
+    ).toBe(false);
   });
 
   it('never gives an ask run the notice', async () => {

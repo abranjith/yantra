@@ -17,7 +17,7 @@ import {
   reconcileConstraints,
 } from './contract-delivery.js';
 import { INLINE_EVIDENCE_REF, parseEvidenceRef } from './evidence-refs.js';
-import type { EvidenceEntry } from './run-services.js';
+import type { EvidenceEntry, RunServices } from './run-services.js';
 import { hostSatisfiesRequiredSource } from './task-contract.js';
 
 export type ComposeCause =
@@ -153,12 +153,20 @@ function publishCell(value: unknown): PublishCell {
 }
 
 /** Public-sanitize all model-authored strings before composition and validation. */
-export function sanitizePublishContent(raw: unknown, sanitizer: PayloadSanitizer): unknown {
-  if (typeof raw === 'string') return sanitizer.sanitize(raw, 'public').text;
-  if (Array.isArray(raw)) return raw.map((value) => sanitizePublishContent(value, sanitizer));
+export function sanitizePublishContent(
+  raw: unknown,
+  sanitizer: PayloadSanitizer,
+  mask?: (text: string) => string,
+): unknown {
+  return mapPublishText(raw, (text) => sanitizer.sanitize(mask?.(text) ?? text, 'public').text);
+}
+/** Transform string leaves without changing structure (user-input masking/resolution). */
+export function mapPublishText(raw: unknown, transform: (text: string) => string): unknown {
+  if (typeof raw === 'string') return transform(raw);
+  if (Array.isArray(raw)) return raw.map((value) => mapPublishText(value, transform));
   if (raw !== null && typeof raw === 'object')
     return Object.fromEntries(
-      Object.entries(raw).map(([key, value]) => [key, sanitizePublishContent(value, sanitizer)]),
+      Object.entries(raw).map(([key, value]) => [key, mapPublishText(value, transform)]),
     );
   return raw;
 }
@@ -170,11 +178,13 @@ export function composeAgentBrief(
 ): Result<ComposedBrief, ComposeIssue[]> {
   const raw = asPublishRecord(input);
   const issues: ComposeIssue[] = [];
-  const evidence = ctx.evidence.filter(
-    (entry, i, all) =>
-      entry.sourceId === null ||
-      all.findIndex((candidate) => candidate.sourceId === entry.sourceId) === i,
-  );
+  const evidence = ctx.evidence
+    .map((entry) => ({ ...entry, sourceId: entry.sourceId ?? null }))
+    .filter(
+      (entry, i, all) =>
+        entry.sourceId === null ||
+        all.findIndex((candidate) => candidate.sourceId === entry.sourceId) === i,
+    );
   const byId = new Map(
     evidence.flatMap((entry, index) =>
       entry.sourceId === null ? [] : [[entry.sourceId, index] as const],
@@ -565,4 +575,42 @@ function knownSources(ids: readonly string[]): string {
     ranges.push(start === end ? `S${start}` : `S${start}–S${end}`);
   }
   return (ranges.join(', ') || '(none)').slice(0, 120);
+}
+
+/** Count-only publication event: text and URLs never enter the runtime log. */
+export function logBriefComposition(
+  services: Pick<RunServices, 'runtimeLogger'>,
+  summary: ComposeSummary,
+): void {
+  services.runtimeLogger?.info(
+    toLogPayload({ schema_version: 1, event: 'brief_composed', ...summary }),
+    'brief composed',
+  );
+}
+function toLogPayload(event: object): Record<string, unknown> {
+  return { ...event };
+}
+
+/** Model-visible account of what the successful publication actually contains. */
+export function composedPublishSummary(
+  title: string,
+  overview: string,
+  summary: ComposeSummary,
+): string {
+  const clauses = [
+    `Published "${title}" with ${summary.cited_sources} cited and ${summary.consulted_sources} consulted source(s)`,
+  ];
+  if (summary.table_rows > 0) clauses.push(`table of ${summary.table_rows} rows`);
+  if (summary.alternatives_rows > 0)
+    clauses.push(`${summary.alternatives_rows} rows under Alternatives`);
+  const conditions = summary.constraints;
+  if (conditions.verified + conditions.unverified + conditions.violated > 0)
+    clauses.push(
+      `conditions: ${conditions.verified} verified, ${conditions.unverified} unverified, ${conditions.violated} not met`,
+    );
+  if (summary.contract_gaps > 0) clauses.push(`${summary.contract_gaps} contract gaps`);
+  if (summary.flagged > 0)
+    clauses.push(`${summary.flagged} values not found in their cited sources`);
+  const firstLine = overview.split('\n').find((line) => line.trim().length > 0) ?? '';
+  return `${clauses.join('; ')}. ${firstLine}`.trim();
 }

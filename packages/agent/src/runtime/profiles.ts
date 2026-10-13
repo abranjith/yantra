@@ -44,6 +44,13 @@ const REQUIRED_SOURCE =
   'and present any other source only as a clearly labeled alternative, never merged into the ' +
   'answer.';
 const DECLARE_CONTRACT = 'Call task_contract in the same turn as your first search or fetch.';
+const PUBLISH_GUIDANCE =
+  'Finish with result_publish. Cite evidence by the source_id a result showed (S3) or a record ' +
+  'id (S3#r5): findings as {"text": "...", "sources": ["S3"]}, and prose as [S3]. When the ' +
+  'goal asks for items with fields, publish a table {"columns": [...], "rows": [[...]], ' +
+  '"row_sources": [["S3#r1"]]} with one row per item and one column per field. Report each ' +
+  'condition the goal set in constraints with status verified, unverified, or violated, and ' +
+  'list anything you could not deliver in fulfillment.unmet with the reason.';
 
 /**
  * The research addendum. `browse` adds the one sentence naming the live
@@ -58,11 +65,7 @@ function researchAddendum(browse: boolean): string {
     (browse
       ? 'Use browser_navigate and browser_extract for a page that needs a live browser. '
       : '') +
-    'Finish by calling result_publish with {"brief": {"title": "...", "overview": "...", ' +
-    '"key_findings": ["..."]}} to publish a research Brief — every page you fetched is ' +
-    'attached as a source automatically, so never re-search for or re-type URLs. Each ' +
-    'web_search returns fetched source content, not just links — follow specific leads with ' +
-    'web_fetch.'
+    PUBLISH_GUIDANCE
   );
 }
 const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] as const;
@@ -113,9 +116,8 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     toolNames: ALL_TOOLS,
     workflowToolMode: 'run',
     promptAddendum:
-      'Complete the requested task safely, verify the outcome, and finish by calling ' +
-      'result_publish with {"brief": {"title": "...", "overview": "..."}} to publish a task ' +
-      `Brief. ${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ` +
+      `Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
+      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ` +
       'When a form needs more than one field set, fill it with a single ' +
       'browser_fill_form listing every field — one call for the whole search form (destination, ' +
       'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +
