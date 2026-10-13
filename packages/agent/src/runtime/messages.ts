@@ -10,6 +10,30 @@ const REFUSED_AGAIN =
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
+    'BRIEF_INVALID',
+    'reference-unknown',
+    (d) =>
+      `${text(d.ref)} at ${text(d.pointer)} is not a source this run read. Cite a source_id shown in a tool result: ${text(d.known)}.`,
+    ['ref', 'pointer', 'known'],
+    'result_publish',
+  ),
+  tool(
+    'BRIEF_INVALID',
+    'reference-anchor-unknown',
+    (d) =>
+      `${text(d.source)} was read, but it has no record ${text(d.ref)}. Cite ${text(d.source)} itself, or a record id shown in its results.`,
+    ['ref', 'pointer', 'source'],
+    'result_publish',
+  ),
+  tool(
+    'BRIEF_INVALID',
+    'reference-numeric',
+    (d) =>
+      `Cite sources by their source_id in brackets, such as [S3], not by number (${text(d.pointer)}).`,
+    ['pointer'],
+    'result_publish',
+  ),
+  tool(
     'BROWSER_UNAVAILABLE',
     'not-configured',
     () => 'Browser services are not configured for this run.',

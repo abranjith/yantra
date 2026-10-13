@@ -35,6 +35,9 @@ import {
   validateBrief,
   validateTemplatedReport,
   type Brief,
+  type BriefFacets,
+  type BriefConstraint,
+  type Section,
   type BriefNotice,
   type BriefSource,
   type BriefValidationError,
@@ -46,6 +49,8 @@ import {
 } from '@yantra/protocol';
 import { Type, type Static, type TObject } from 'typebox';
 
+import { composeAgentBrief, sanitizePublishContent } from '../../../runtime/brief-composer.js';
+import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
   EvidenceEntry,
@@ -81,8 +86,19 @@ const BriefContentParams = Type.Object(
     }),
     key_findings: Type.Optional(
       Type.Array(Type.Unknown(), {
-        description: 'Optional scannable findings, each a short plain-text string.',
+        maxItems: 20,
+        description: 'A plain string (uncited commentary) or {text, sources: ["S3", "S3#r5"]}.',
       }),
+    ),
+    sections: Type.Optional(
+      Type.Array(
+        Type.Object({
+          heading: Type.String({ minLength: 1, maxLength: 120 }),
+          body_md: Type.String({ maxLength: 4000 }),
+          sources: Type.Optional(Type.Array(Type.String(), { maxItems: 8 })),
+        }),
+        { maxItems: 8 },
+      ),
     ),
     sources: Type.Optional(
       Type.Array(Type.Unknown(), {
@@ -185,10 +201,32 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   // typed findings, so it passes through untouched.
   const briefInput = paramsRecord.brief;
   const evidence = services.evidence.entries();
-  const content =
-    evidence.length > 0 && !isCompleteBrief(briefInput)
-      ? withLedgerEvidence(briefInput, evidence)
-      : briefInput;
+  const composed = isCompleteBrief(briefInput)
+    ? null
+    : composeAgentBrief(sanitizePublishContent(briefInput, services.sanitizer), {
+        evidence,
+        documents: services.documents,
+        contract: services.contract.current(),
+        mode: 'tool',
+      });
+  if (composed !== null && !composed.isOk) {
+    const issues = composed.error.map((issue) => ({
+      cause: issue.cause,
+      pointer: issue.pointer,
+      message: renderAgentMessage('tool', 'BRIEF_INVALID', issue.cause, issue.values),
+    }));
+    return {
+      ok: false,
+      errorCode: 'BRIEF_INVALID',
+      retryable: true,
+      message: issues
+        .slice(0, 5)
+        .map((issue) => issue.message)
+        .join(' '),
+      details: { issues },
+    };
+  }
+  const content = composed?.isOk ? composed.value.content : briefInput;
   const result = await services.domain.publish.publish(content, { runtimeFacts });
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
@@ -214,35 +252,6 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     details: { brief_id: (result.value.brief as Brief).brief_id },
     terminate: true,
   };
-}
-
-/**
- * Ledger-authoritative composition: the runtime already knows every source the
- * run consulted, so the model's payload is reduced to prose. Model-supplied
- * `sources` are replaced wholesale by the ledger, and findings are coerced to
- * uncited editorial text — the model's ad-hoc citation numbers (per-call
- * `web_search` numbering) cannot be trusted against run-wide ledger numbering,
- * and the Brief's evidence lives in the attached sources + excerpts instead.
- */
-function withLedgerEvidence(
-  brief: unknown,
-  evidence: readonly EvidenceEntry[],
-): Record<string, unknown> {
-  const record = asRecord(brief) ?? {};
-  return {
-    ...record,
-    key_findings: asArray(record.key_findings)
-      .map(findingText)
-      .filter((text) => text.length > 0),
-    sources: evidenceToSourceRecords(evidence),
-  };
-}
-
-/** Extract the plain text of a model-supplied finding (string or {text}). */
-function findingText(entry: unknown): string {
-  if (typeof entry === 'string') return entry.trim();
-  const text = asRecord(entry)?.text;
-  return typeof text === 'string' ? text.trim() : '';
 }
 
 /**
@@ -537,6 +546,11 @@ function buildBriefFromAgentContent(
     title: typeof record.title === 'string' ? record.title : '',
     overview: typeof record.overview === 'string' ? record.overview : '',
     key_findings: asArray(record.key_findings).map(toKeyFinding),
+    sections: asArray(record.sections) as Section[],
+    facets: (record.facets ?? null) as BriefFacets | null,
+    ...(Array.isArray(record.constraints)
+      ? { constraints: record.constraints as BriefConstraint[] }
+      : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {
       synthesis: 'llm',
@@ -594,6 +608,7 @@ function toSource(entry: unknown, index: number, fetchedAt: string): BriefSource
     excerpt: typeof record.excerpt === 'string' ? record.excerpt : null,
     fetched_at: typeof record.fetched_at === 'string' ? record.fetched_at : fetchedAt,
     published_at: typeof record.published_at === 'string' ? record.published_at : null,
+    ...(typeof record.cited === 'boolean' ? { cited: record.cited } : {}),
   };
 }
 
