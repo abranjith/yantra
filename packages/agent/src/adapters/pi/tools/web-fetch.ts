@@ -42,6 +42,7 @@ import type { AllowedUrl, UrlPolicyRejection } from '../../../runtime/url-policy
 import { provenanceDetails } from '../../../runtime/url-provenance.js';
 
 import { mapBrowserStartupError } from './browser-startup-errors.js';
+import { knownPageChallenge } from './page-challenge.js';
 import { evidenceExcerpt, fullViewBudget, projectPage, recordDiscovered } from './page-payload.js';
 import { recordProvenanceRefusal } from './provenance-refusals.js';
 
@@ -142,9 +143,9 @@ async function runWebFetch(
     case 'hit': {
       services.runHealth.recordCacheHit();
       const { record } = read;
-      // A page web_search showed only as a summary: the full view is one store
-      // read away — no network load, no navigation charged, no evidence re-add.
-      if (record.page !== null && record.page.delivered === 'summary') {
+      // Search summaries and partial browser reads can serve a full stored
+      // view without network work or navigation charges.
+      if (record.page !== null && record.page.delivered !== 'full') {
         return storeServedFullView(record, record.page, services, host);
       }
       return {
@@ -164,6 +165,11 @@ async function runWebFetch(
       };
     }
     case 'failed': {
+      const challenged = read.memoized ? knownPageChallenge(services, allowed.value.url) : null;
+      if (challenged !== null) {
+        services.runHealth.recordMemoHit();
+        return challenged;
+      }
       const original = read.failure as DomainFailure;
       if (!read.memoized) return original;
       // The memo answered: the same code, told plainly that nothing was
@@ -399,9 +405,9 @@ async function publishPage(
 }
 
 /**
- * The full view of a page `web_search` showed only as a summary, served from
- * the run's store: no network load, no navigation charged, no evidence re-add,
- * and no rank signal. Marked delivered, so a later read is `already_read`.
+ * Serve a full stored view after a search summary or partial browser read,
+ * registering content evidence if it was missing, without network work or
+ * rank signals. Marked delivered, so a later read is `already_read`.
  */
 async function storeServedFullView(
   record: DocumentRecord,
@@ -417,6 +423,17 @@ async function storeServedFullView(
   );
   recordDiscovered(services, record.sourceId, projection.model);
   services.documents.markDelivered(record.sourceId, 'full');
+  // A links-only browser view owns an identity but has not registered evidence.
+  services.evidence.add({
+    url: record.finalUrl ?? record.url,
+    finalUrl: record.finalUrl,
+    title: record.title,
+    excerpt: evidenceExcerpt(page.analysis, null),
+    fetchedAt: record.firstReadAt,
+    publishedAt: page.article?.publishedAt ?? null,
+    tool: 'web_fetch',
+    sourceId: record.sourceId,
+  });
   if (page.analysis.shape !== null) {
     services.runHealth.recordPage(page.analysis.shape, projection.stats);
   }
@@ -535,6 +552,9 @@ function failed(cause: unknown, failure: DomainFailure): LoadOutcome<FetchedPage
     code: failure.errorCode,
     reason: failure.diagnostic?.cause ?? failure.errorCode,
     failure,
+    ...(cause instanceof FetchError && cause.context.kind === 'challenge'
+      ? { browserChallenge: true as const }
+      : {}),
   };
 }
 

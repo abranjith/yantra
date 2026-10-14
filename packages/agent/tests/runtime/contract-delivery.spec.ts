@@ -65,7 +65,7 @@ describe('@no-llm contract delivery', () => {
     );
     expect(value.content.constraints).toEqual([
       { name: 'condition', value: 'new', status: 'unverified', citations: [] },
-      { name: 'Drivetrain', value: 'AWD', status: 'verified', citations: [1] },
+      { name: 'drivetrain', value: 'AWD', status: 'verified', citations: [1] },
       { name: 'distance', value: '50 mi', status: 'violated', citations: [] },
     ]);
     expect(value.notices.map((notice) => notice.reason)).toEqual(
@@ -86,6 +86,24 @@ describe('@no-llm contract delivery', () => {
     expect(
       value.notices.some((notice) => notice.reason.includes('marked verified without evidence')),
     ).toBe(true);
+  });
+  it.each([
+    ['FWD', 'violated', 'source reports FWD'],
+    ['unsupported drivetrain', 'unverified', 'unconfirmed'],
+  ])('keeps the required AWD value when the agent reports %s', (observed, status, cause) => {
+    const ctx = context({ deliverable: 'answer', filters: [{ name: 'drivetrain', value: 'AWD' }] });
+    const value = composed(
+      {
+        ...base,
+        constraints: [{ name: 'Drivetrain', value: observed, status: 'verified', sources: ['S1'] }],
+      },
+      { ...ctx, evidence: ctx.evidence.map((entry) => ({ ...entry, excerpt: 'FWD vehicle' })) },
+    );
+    expect(value.content.constraints).toEqual([
+      { name: 'drivetrain', value: 'AWD', status, citations: [1] },
+    ]);
+    expect(value.notices.some((notice) => notice.reason.includes(cause))).toBe(true);
+    expect(value.summary.constraints.verified).toBe(0);
   });
   it('omits constraints when neither contract nor payload declares any', () => {
     expect(composed(base, { ...context(), contract: null }).content).not.toHaveProperty(

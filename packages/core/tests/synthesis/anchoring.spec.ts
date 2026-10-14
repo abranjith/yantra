@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   checkAnchoring,
@@ -8,6 +8,33 @@ import {
   numbersMissing,
 } from '../../src/synthesis/anchoring.js';
 describe('@no-llm evidence anchoring', () => {
+  it.each([
+    ['45000', '$45,000.00', []],
+    ['45000', '$450.00', ['45000']],
+    ['-450.50', '$450.50', ['-450.5']],
+    ['+450.50', '$450.5', []],
+    ['450', '450,00', ['450']],
+    ['45000', '45.000,00', ['45000']],
+    ['001.2500', '1.25', []],
+    ['.50', '0.5', []],
+    ['.50', '50', ['0.5']],
+    ['-.50', '-$0.50', []],
+    ['-$450.50', '$450.50', ['-450.5']],
+  ])('compares %s with %s without changing magnitude', (claim, evidence, missing) => {
+    expect(numbersMissing(claim, evidence)).toEqual(missing);
+  });
+  it('prepares each source once for 600 cells, including equivalent reference groups', () => {
+    const evidenceFor = vi.fn(() => 'Glacier White Price 45000 '.repeat(8000));
+    const claims = Array.from({ length: 600 }, (_, index) => ({
+      id: String(index),
+      kind: 'cell' as const,
+      text: 'Glacier White 45000',
+      refs: index % 2 === 0 ? ['S1', 'S2'] : ['S2', 'S1', 'S1'],
+      mode: 'numbers-and-words' as const,
+    }));
+    expect(checkAnchoring(claims, evidenceFor)).toEqual({ checked: 600, flagged: [] });
+    expect(evidenceFor).toHaveBeenCalledTimes(2);
+  });
   it('normalizes Unicode, whitespace and grouped prices', () => {
     expect(normalizeEvidence(' ＡＷＤ  \n ４３２０４ ')).toBe('awd 43204');
     expect([...digitGroups('$43,204')]).toEqual(['43204']);

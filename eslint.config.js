@@ -39,6 +39,8 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       '**/_lint-fixtures/**',
       '.claude/**',
+      // Separate feature checkouts have their own lint gates and TS projects.
+      '.worktrees/**',
       // Task-fidelity harness output (scorecards, run directories); gitignored.
       'e2e/task-fidelity/.out/**',
     ],

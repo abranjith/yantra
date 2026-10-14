@@ -21,6 +21,7 @@ import {
   type BrowserSession,
   type FetchTierEvent,
   type LaunchOptions,
+  type Logger,
   type SourceFailure,
 } from '@yantra/core';
 import { RUN_HEALTH_SCHEMA_VERSION, type BriefNotice, type RunHealth } from '@yantra/protocol';
@@ -759,4 +760,63 @@ function readNotice(failure: ReadFailure, count: number, firstReason: string): B
         reason: `${reads} on ${failure.host} failed: ${firstReason}.`,
       };
   }
+}
+
+/** The `fetch_challenge` runtime-log projection: tier, marker, and host only. */
+interface FetchChallengeEvent {
+  readonly schema_version: 1;
+  readonly event: 'fetch_challenge';
+  readonly tier: 'http' | 'browser';
+  readonly marker: string;
+  readonly host: string;
+}
+
+/** The `fetch_escalated` runtime-log projection: why, and the host only. */
+interface FetchEscalatedEvent {
+  readonly schema_version: 1;
+  readonly event: 'fetch_escalated';
+  readonly reason: string;
+  readonly host: string;
+}
+
+/**
+ * Audit one hybrid-fetcher tier decision: a challenge is a `warn` (the site's
+ * bot detection refused a tier), an escalation an `info`. Neither line carries
+ * a URL path, query, or page text. Recording never changes the fetch, so a
+ * fault here is reported to the process and the fetch proceeds.
+ */
+export function recordFetchTierEvent(
+  event: FetchTierEvent,
+  logger: Logger | undefined,
+  ledger: RunHealthLedger,
+): void {
+  try {
+    ledger.recordTierEvent(event);
+    if (event.kind === 'challenge') {
+      const line: FetchChallengeEvent = {
+        schema_version: 1,
+        event: 'fetch_challenge',
+        tier: event.tier,
+        marker: event.marker,
+        host: event.host,
+      };
+      logger?.warn(fetchLogPayload(line), 'fetch challenge');
+    } else {
+      const line: FetchEscalatedEvent = {
+        schema_version: 1,
+        event: 'fetch_escalated',
+        reason: event.reason,
+        host: event.host,
+      };
+      logger?.info(fetchLogPayload(line), 'fetch escalated');
+    }
+  } catch (error) {
+    process.emitWarning(
+      `fetch tier event recording failed (${error instanceof Error ? error.name : 'UnknownError'})`,
+    );
+  }
+}
+
+function fetchLogPayload(event: object): Record<string, unknown> {
+  return { ...event };
 }

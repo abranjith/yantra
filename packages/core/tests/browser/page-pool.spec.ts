@@ -40,7 +40,9 @@ interface FakeSessionHandle extends BrowserSession {
 }
 
 /** A provider counting launches, isolated contexts, and context closes. */
-function fakeProvider(options: { readonly launchDelayMs?: number } = {}) {
+function fakeProvider(
+  options: { readonly launchDelayMs?: number; readonly pageDelayMs?: number } = {},
+) {
   const sessions: FakeSessionHandle[] = [];
   let contexts = 0;
   let contextCloses = 0;
@@ -62,9 +64,11 @@ function fakeProvider(options: { readonly launchDelayMs?: number } = {}) {
         },
         profilePath: '/tmp/fake',
         newPage: () => Promise.reject(new Error('the pool must only use isolated pages')),
-        newIsolatedPage: () => {
+        newIsolatedPage: async () => {
+          if (options.pageDelayMs !== undefined)
+            await new Promise((resolve) => setTimeout(resolve, options.pageDelayMs));
           contexts += 1;
-          return Promise.resolve(fakePage(() => (contextCloses += 1)));
+          return fakePage(() => (contextCloses += 1));
         },
         close: () => {
           isClosed = true;
@@ -117,6 +121,131 @@ function deferred(): { readonly promise: Promise<void>; readonly resolve: () => 
 }
 
 describe('@no-llm browser/page-pool', () => {
+  it.each([0, 40])(
+    'rejects a late-created page before its callback with %i ms cleanup',
+    async (closeDelay) => {
+      const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+      const fake = fakeProvider();
+      const closed = deferred();
+      const provider: BrowserProvider = {
+        ...fake.provider,
+        launch: async (options) => {
+          const session = await fake.provider.launch(options);
+          const createPage = session.newIsolatedPage.bind(session);
+          session.newIsolatedPage = async () => {
+            const page = await createPage();
+            const close = page.close.bind(page);
+            page.close = async () => {
+              if (closeDelay > 0) await new Promise((resolve) => setTimeout(resolve, closeDelay));
+              await close();
+              closed.resolve();
+            };
+            clock.mockReturnValue(21);
+            return page;
+          };
+          return session;
+        },
+      };
+      const pool = new PagePool({ provider });
+      try {
+        const callback = vi.fn(async () => 'late');
+        await expect(pool.withPage(callback, { ...OPTS, timeoutMs: 20 })).rejects.toBeInstanceOf(
+          PageTimeoutError,
+        );
+        expect(callback).not.toHaveBeenCalled();
+        await closed.promise;
+        expect(fake.contextCloses()).toBe(1);
+        expect(pool.stats().timeouts).toBe(1);
+      } finally {
+        clock.mockRestore();
+        await pool.close();
+      }
+    },
+  );
+  it('expires a queued borrower without acquiring a page or waiting for the holder', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeProvider();
+      const pool = new PagePool({ provider: fake.provider, maxConcurrentPages: 1 });
+      const holder = deferred();
+      const holding = pool.withPage(() => holder.promise, OPTS);
+      await vi.advanceTimersByTimeAsync(0);
+      const run = vi.fn(async () => 'queued');
+      const expired = pool
+        .withPage(run, { ...OPTS, timeoutMs: 20 })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await expired).toBeInstanceOf(PageTimeoutError);
+      expect(run).not.toHaveBeenCalled();
+      expect(fake.contexts()).toBe(1);
+      holder.resolve();
+      await holding;
+      await expect(pool.withPage(async () => 'next', OPTS)).resolves.toBe('next');
+      await pool.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('cancels a borrower during a shared launch without cancelling another borrower', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeProvider({ launchDelayMs: 100 });
+      const pool = new PagePool({ provider: fake.provider });
+      const abandoned = vi.fn(async () => 'abandoned');
+      const expired = pool
+        .withPage(abandoned, { ...OPTS, timeoutMs: 20 })
+        .catch((error: unknown) => error);
+      const survivor = pool.withPage(async () => 'survived', OPTS);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await expired).toBeInstanceOf(PageTimeoutError);
+      await vi.advanceTimersByTimeAsync(80);
+      expect(await survivor).toBe('survived');
+      expect(abandoned).not.toHaveBeenCalled();
+      expect(fake.launches()).toBe(1);
+      expect(fake.contexts()).toBe(1);
+      await pool.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('closes a late-created context and never starts the cancelled callback', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeProvider({ pageDelayMs: 100 });
+      const pool = new PagePool({ provider: fake.provider });
+      const cancelled = new AbortController();
+      const run = vi.fn(async () => 'must not run');
+      const pending = pool
+        .withPage(run, { ...OPTS, signal: cancelled.signal })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(0);
+      cancelled.abort(new Error('cancelled acquisition'));
+      expect(await pending).toMatchObject({ message: 'cancelled acquisition' });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(run).not.toHaveBeenCalled();
+      expect(fake.contextCloses()).toBe(1);
+      await pool.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('closes a late per-use browser after the acquisition deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeProvider({ launchDelayMs: 100 });
+      const run = vi.fn(async () => 'must not run');
+      const pending = launchPerUsePageSource(fake.provider)
+        .withPage(run, { ...OPTS, timeoutMs: 20 })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await pending).toBeInstanceOf(PageTimeoutError);
+      await vi.advanceTimersByTimeAsync(80);
+      expect(run).not.toHaveBeenCalled();
+      expect(fake.sessions[0]?.closed()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('serves five concurrent uses from one launch, five contexts, and at most two open pages', async () => {
     const fake = fakeProvider();
     const pool = new PagePool({ provider: fake.provider });

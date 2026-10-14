@@ -85,6 +85,8 @@ export interface RunArtifacts {
   readonly contract: unknown;
   /** JSON artifacts that exist but do not parse, by file name. */
   readonly unparseableJson: readonly string[];
+  /** Referenced run-local captures; absent on older/synthetic runs. Never model input. */
+  readonly captures?: Readonly<Record<string, unknown>>;
 }
 
 /** Everything a measure may read about one completed scenario run. */
@@ -369,11 +371,49 @@ export async function readArtifacts(runDir: string): Promise<RunArtifacts> {
     const text = await readText(join(runDir, name));
     return text === null ? null : parseJsonl(text);
   };
+  const toolCalls = await jsonl('tool-calls.jsonl');
+  const captures: Record<string, unknown> = {};
+  const refs = new Set<string>();
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (value === null || typeof value !== 'object') return;
+    for (const [key, nested] of Object.entries(value)) {
+      if (
+        (key === 'capture_ref' || key === 'analysis_capture_ref') &&
+        typeof nested === 'string' &&
+        /^cap-[0-9A-HJKMNP-TV-Z]{26}$/u.test(nested)
+      )
+        refs.add(nested);
+      if (key === 'text' && typeof nested === 'string' && /^[{[]/u.test(nested.trim())) {
+        try {
+          collect(JSON.parse(nested) as unknown);
+        } catch {
+          /* Not embedded JSON; no references. */
+        }
+      } else collect(nested);
+    }
+  };
+  collect(toolCalls?.lines);
+  for (const ref of refs) {
+    const text =
+      (await readText(join(runDir, 'captures', `${ref}.txt`))) ??
+      (await readText(join(runDir, 'captures', `${ref}.json`)));
+    if (text === null) continue;
+    try {
+      captures[ref] = JSON.parse(text) as unknown;
+    } catch {
+      captures[ref] = text;
+    }
+  }
   return {
     manifest: await json('manifest.json'),
     brief: await json('brief.json'),
     document: await json('document.json'),
-    toolCalls: await jsonl('tool-calls.jsonl'),
+    toolCalls,
+    captures,
     events: await jsonl('events.jsonl'),
     runtime: await jsonl('runtime.jsonl'),
     usage: await json('usage.json'),

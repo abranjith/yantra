@@ -8,7 +8,7 @@
  */
 
 import { X509Certificate, createPublicKey } from 'node:crypto';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1033,6 +1033,66 @@ describe('@no-llm task-fidelity runner', () => {
     expect(result.prompt).toContain('Scope: web search, page reading, and read-only browsing');
   }, 60_000);
 
+  it.each(['web_fetch', 'browser_extract'] as const)(
+    'scores an attributed %s publication whose values exist only in structured evidence',
+    async (tool) => {
+      const base = scenarioNamed('listing-structured');
+      const url = `${originOf('structured-listing')}/results`;
+      const scripted: Scenario = {
+        ...base,
+        id: `runner-attributed-${tool}`,
+        script: [
+          ...(tool === 'browser_extract'
+            ? [{ kind: 'call', tool: 'browser_navigate', params: { url } } as const]
+            : []),
+          { kind: 'call', tool, params: tool === 'web_fetch' ? { url } : { kind: 'structured' } },
+          {
+            kind: 'call',
+            tool: 'result_publish',
+            params: (ctx) => {
+              const payload = ctx.last(tool)?.model as
+                | {
+                    source_id?: string;
+                    structured?: { type: string; props: Record<string, unknown> }[];
+                  }
+                | undefined;
+              const products = payload?.structured?.filter((entry) => entry.type === 'Product');
+              if (payload?.source_id === undefined || products === undefined) return null;
+              return {
+                brief: {
+                  title: 'Listings',
+                  overview: '',
+                  table: {
+                    columns: ['Item', 'Seller', 'Price'],
+                    rows: products.map((entry) => [
+                      entry.props.name,
+                      entry.props['offers.seller.name'],
+                      formatAmount(Number(entry.props['offers.price'])),
+                    ]),
+                    row_sources: products.map(() => [payload.source_id]),
+                  },
+                },
+              };
+            },
+          },
+        ],
+      };
+      const result = await runScenario(scripted, { mode: 'deterministic', runRoot });
+      expect(result.outcome.kind).toBe('published');
+      expect(result.unreachable).toEqual([]);
+      const score = scoreRun(result, scripted, scripted.truth());
+      expect(score.citation_validity).toMatchObject({ numerator: 12, denominator: 12 });
+      expect(score.field_coverage).toMatchObject({ numerator: 12, denominator: 12 });
+      if (tool === 'browser_extract')
+        expect(
+          result.toolResults.some(
+            (entry) => entry.tool === 'web_fetch' || entry.tool === 'web_search',
+          ),
+        ).toBe(false);
+    },
+    60_000,
+  );
+
   it('reads a missing artifact as null and reports unparseable JSONL lines by number', async () => {
     const empty = await mkdtemp(join(tmpdir(), 'yantra-empty-run-'));
     try {
@@ -1051,6 +1111,28 @@ describe('@no-llm task-fidelity runner', () => {
       expect(artifacts.toolCalls).toEqual({ lines: [{ a: 1 }, { b: 2 }], unparseable: [2] });
     } finally {
       await rm(empty, { recursive: true, force: true });
+    }
+  });
+  it('loads only valid referenced capture IDs from the owning run directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'yantra-capture-score-'));
+    const ref = 'cap-01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    try {
+      await mkdir(join(dir, 'captures'));
+      await writeFile(join(dir, 'captures', `${ref}.txt`), 'Price 45000', 'utf8');
+      await writeFile(
+        join(dir, 'tool-calls.jsonl'),
+        JSON.stringify({
+          phase: 'end',
+          output_sanitized: {
+            content: [{ text: JSON.stringify({ capture_ref: ref }) }],
+            details: { analysis_capture_ref: '../../unowned' },
+          },
+        }) + '\n',
+        'utf8',
+      );
+      expect((await readArtifacts(dir)).captures).toEqual({ [ref]: 'Price 45000' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
@@ -1386,6 +1468,80 @@ describe('@no-llm task-fidelity scorer', () => {
           : rows.map((row, index) => fetchAudit(sourceFor(ids[index] ?? ''), detailText(row))),
     });
   };
+  it.each(['structured', 'records', 'fields', 'tables', 'capture', 'browser'])(
+    'scores cited %s evidence absent from visible shell text',
+    (kind) => {
+      const row = rowById('itm-08');
+      const url = row.detailUrl;
+      const values = [
+        row.fields.seller,
+        row.fields.price,
+        row.fields.exteriorColor,
+        row.fields.interiorColor,
+      ];
+      const ref = 'cap-01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      const data: Record<string, unknown> = {
+        url,
+        text: 'Browse inventory',
+        ...(kind === 'structured' ? { structured: [{ type: 'Product', props: row.fields }] } : {}),
+        ...(kind === 'records'
+          ? { records: [{ id: 'S1#r1', title: row.fields.title, text: values }] }
+          : {}),
+        ...(kind === 'fields' ? { fields: row.fields } : {}),
+        ...(kind === 'tables'
+          ? { tables: [{ headers: ['seller', 'price', 'exterior', 'interior'], rows: [values] }] }
+          : {}),
+        ...(kind === 'capture' ? { capture_ref: ref } : {}),
+        ...(kind === 'browser' ? { text: detailText(row), source_id: 'S1' } : {}),
+      };
+      const oracle = tableRun(['itm-08'], { evidence: false });
+      const run = {
+        ...oracle,
+        artifacts: {
+          ...oracle.artifacts,
+          toolCalls: {
+            lines: [
+              {
+                phase: 'end',
+                tool: kind === 'browser' ? 'browser_extract' : 'web_fetch',
+                output_sanitized: {
+                  content: [{ type: 'text', text: JSON.stringify(data) }],
+                },
+              },
+            ],
+            unparseable: [],
+          },
+          captures: { [ref]: detailText(row) },
+        },
+      };
+      expect(score(run).citation_validity).toMatchObject({
+        value: 1,
+        numerator: 4,
+        denominator: 4,
+      });
+    },
+  );
+  it.each(['AWD offers', 'Listings'])(
+    'does not treat verified FWD as verification of AWD under title %s',
+    (title) => {
+      const original = tableRun(['itm-08']);
+      const run = {
+        ...original,
+        artifacts: {
+          ...original.artifacts,
+          brief: {
+            ...(original.artifacts.brief as Record<string, unknown>),
+            title,
+            constraints: [{ name: 'drivetrain', value: 'FWD', status: 'verified' }],
+          },
+        },
+      };
+      expect(score(run).constraint_fidelity).toMatchObject({ value: 0 });
+      expect(score(run).constraint_fidelity.detail).toContain(
+        'verifies drivetrain=FWD instead of required AWD',
+      );
+    },
+  );
 
   it('scores the motivating run near zero, with one asserted-unverified constraint and 0/12 honesty', () => {
     const scores = score(motivatingRun());

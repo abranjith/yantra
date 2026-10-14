@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   BrowserActionabilityError,
   EthicsRefusedError,
+  FetchError,
   ReadabilityExtractor,
   StaleElementRefError,
   type AgentBrowserController,
@@ -17,14 +18,24 @@ import { browserExtractSpec } from '../../../../src/adapters/pi/tools/browser-ex
 import { browserFillElementSpec } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
 import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-observe.js';
+import {
+  resultPublishSpec,
+  createBriefPublisher,
+} from '../../../../src/adapters/pi/tools/result-publish.js';
 import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
+import { webSearchSpec } from '../../../../src/adapters/pi/tools/web-search.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps, RunServices } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { UrlProvenance } from '../../../../src/runtime/url-provenance.js';
 
 import { listingHtml, multiTableHtml } from './page-fixtures.js';
-import { assertToolContract, buildServices } from './test-support.js';
+import {
+  assertToolContract,
+  buildServices,
+  searchProviderReturning,
+  searchServiceFor,
+} from './test-support.js';
 
 describe('@no-llm browser tools', () => {
   let runDir: string;
@@ -633,14 +644,14 @@ describe('@no-llm browser tools', () => {
 
   it('extracts readable content when kind is omitted', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({
+    setContent(controller, {
       title: 'Secure Area',
       text: 'Welcome to the Secure Area.',
     });
     const services = browserServices(controller);
     const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
     expect(result.status).toBe('ok');
-    expect(controller.extract).toHaveBeenCalledWith('content');
+    expect(controller.snapshot).toHaveBeenCalledOnce();
     expect(result.modelText).toContain('Welcome to the Secure Area.');
   });
 
@@ -663,7 +674,7 @@ describe('@no-llm browser tools', () => {
     ['schema', 'structured'],
   ])('resolves kind "%s" to the %s extraction', async (requested, part) => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'T', text: 'body text' });
+    setContent(controller, { title: 'T', text: 'body text' });
     controller.snapshot.mockResolvedValue(snapshotOf(listingWithTablesHtml()));
     const services = browserServices(controller);
     const result = await wrapTool(browserExtractSpec(services), services).execute(
@@ -672,8 +683,8 @@ describe('@no-llm browser tools', () => {
     );
     expect(result.status).toBe('ok');
     if (part === 'content') {
-      expect(controller.extract).toHaveBeenCalledWith('content');
-      expect(controller.snapshot).not.toHaveBeenCalled();
+      expect(controller.snapshot).toHaveBeenCalledOnce();
+      expect(controller.extract).not.toHaveBeenCalled();
     } else {
       expect(controller.snapshot).toHaveBeenCalledOnce();
       expect(JSON.parse(result.modelText)).toHaveProperty(part);
@@ -720,7 +731,7 @@ describe('@no-llm browser tools', () => {
 
   it('records the resolved kind in the run trace for an aliased request', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'T', text: 'body text' });
+    setContent(controller, { title: 'T', text: 'body text' });
     controller.host.mockReturnValue('shop.example');
     const trace = new AgentTrace();
     const services = buildServices({
@@ -748,7 +759,7 @@ describe('@no-llm browser tools', () => {
     // the ledger — so the published Brief cited the search hop, not the pages
     // the answer came from.
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'Frisco Hotels', text: 'Motel 6 — $116 total.' });
+    setContent(controller, { title: 'Frisco Hotels', text: 'Motel 6 — $116 total.' });
     controller.url.mockReturnValue('https://www.expedia.com/Frisco-Hotels');
     const services = browserServices(controller);
 
@@ -774,7 +785,7 @@ describe('@no-llm browser tools', () => {
 
   it('records one entry per page when the same page is extracted twice', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'Frisco Hotels', text: 'Prices.' });
+    setContent(controller, { title: 'Frisco Hotels', text: 'Prices.' });
     const services = browserServices(controller);
     const tool = wrapTool(browserExtractSpec(services), services);
 
@@ -798,7 +809,7 @@ describe('@no-llm browser tools', () => {
 
   it('skips evidence for a page with no fetchable URL', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: '', text: 'body' });
+    setContent(controller, { title: '', text: 'body' });
     controller.url.mockReturnValue('about:blank');
     const services = browserServices(controller);
 
@@ -810,7 +821,7 @@ describe('@no-llm browser tools', () => {
 
   it('gives a content extraction the page’s evidence ID, and the same ID on a second extract', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'Listing', text: 'Live prices.' });
+    setContent(controller, { title: 'Listing', text: 'Live prices.' });
     const services = browserServices(controller);
     const tool = wrapTool(browserExtractSpec(services), services);
 
@@ -827,7 +838,7 @@ describe('@no-llm browser tools', () => {
 
   it('reuses the ID web_fetch minted for the same page', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'Page', text: 'Body.' });
+    setContent(controller, { title: 'Page', text: 'Body.' });
     const services = browserServices(controller);
     await services.documents.read('https://example.com/page', () =>
       Promise.resolve({
@@ -883,7 +894,7 @@ describe('@no-llm browser tools', () => {
 
   it('mints no ID and no ledger entry for about:blank', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: '', text: 'body' });
+    setContent(controller, { title: '', text: 'body' });
     controller.url.mockReturnValue('about:blank');
     const services = browserServices(controller);
 
@@ -895,7 +906,7 @@ describe('@no-llm browser tools', () => {
 
   it('carries the budget meter on an extract result', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'T', text: 'x' });
+    setContent(controller, { title: 'T', text: 'x' });
     const services = browserServices(controller);
 
     const result = await wrapTool(browserExtractSpec(services), services).execute({}, undefined);
@@ -907,7 +918,7 @@ describe('@no-llm browser tools', () => {
 
   it('rejects a content extraction whose shape does not validate', async () => {
     const controller = fakeController();
-    controller.extract.mockResolvedValue({ title: 'T' });
+    setContent(controller, { title: 'T' });
     const services = browserServices(controller);
     const result = await wrapTool(browserExtractSpec(services), services).execute(
       { kind: 'text' },
@@ -1269,24 +1280,179 @@ describe('@no-llm browser_extract — shape-aware kinds (FEAT-051)', () => {
     });
   });
 
-  it('refuses a challenge page with a handoff, no evidence, and no provenance', async () => {
+  it.each(['content', 'records', 'links', 'structured', 'tables', 'table'])(
+    'refuses a %s challenge read across tools with one audit notice and no evidence',
+    async (kind) => {
+      const controller = fakeController();
+      controller.snapshot.mockResolvedValue(
+        snapshotOf(
+          '<html><head><title>Verify you are human</title></head><body><form>' +
+            '<div class="g-recaptcha" data-sitekey="k"></div><a href="/next">next</a></form></body></html>',
+          'https://example.com/walled',
+        ),
+      );
+      const run = services(controller);
+
+      run.urlProvenance.record('https://example.com/walled', { kind: 'goal' });
+      const result = await extract(run, { kind });
+      controller.url.mockReturnValue('https://example.com/walled');
+      for (const tool of [
+        wrapTool(browserExtractSpec(run), run),
+        wrapTool(webFetchSpec(run), run),
+        wrapTool(browserNavigateSpec(run), run),
+      ]) {
+        const next = await tool.execute(
+          tool.name === 'browser_extract' ? { kind } : { url: controller.url() },
+          undefined,
+        );
+        expect(next.error_code).toBe('SITE_CHALLENGE');
+        expect(next.details).toMatchObject({ already_attempted: true });
+      }
+      expect(controller.snapshot).toHaveBeenCalledOnce();
+      expect(controller.navigate).not.toHaveBeenCalled();
+      expect(run.budgets.snapshot().navigations).toBe(0);
+      expect(run.runHealth.briefFacts().notices).toEqual([
+        expect.objectContaining({ kind: 'blocked', source: 'example.com' }),
+      ]);
+
+      expect(result.error_code).toBe('SITE_CHALLENGE');
+      expect(result.details).toMatchObject({ handoff: true, tier: 'browser' });
+      expect(run.evidence.isEmpty()).toBe(true);
+      expect(run.urlProvenance.has('https://example.com/next')).toBe(false);
+      expect(run.documents.entries()).toEqual([]);
+
+      const searching = {
+        ...run,
+        domain: {
+          ...run.domain,
+          search: {
+            ...run.domain.search,
+            service: searchServiceFor(
+              searchProviderReturning([
+                {
+                  url: controller.url(),
+                  rank: 1,
+                  title: 'Inventory',
+                  snippet: '',
+                  source: 'duckduckgo',
+                  publishedAt: null,
+                },
+              ]),
+            ),
+          },
+        },
+      };
+      const searched = await wrapTool(webSearchSpec(searching), searching).execute(
+        { query: 'inventory', limit: 1 },
+        undefined,
+      );
+      expect(searched.modelText).toContain('challenge page');
+      expect(run.documents.stats().networkLoads).toBe(0);
+    },
+  );
+
+  it('refuses browser reads and navigation after a fetch observed a browser challenge', async () => {
     const controller = fakeController();
-    controller.snapshot.mockResolvedValue(
-      snapshotOf(
-        '<html><head><title>Verify you are human</title></head><body><form>' +
-          '<div class="g-recaptcha" data-sitekey="k"></div><a href="/next">next</a></form></body></html>',
-        'https://example.com/walled',
+    const run = services(controller);
+    const url = 'https://example.com/page';
+    run.urlProvenance.record(url, { kind: 'goal' });
+    const fetcher = vi.fn(() =>
+      Promise.reject(
+        new FetchError('Browser challenge', {
+          url,
+          kind: 'challenge',
+          tier: 'browser',
+          marker: 'g-recaptcha',
+        }),
       ),
     );
+    const fetching = {
+      ...run,
+      domain: { ...run.domain, fetch: { ...run.domain.fetch, fetcher: { fetch: fetcher } } },
+    };
+    expect(
+      (await wrapTool(webFetchSpec(fetching), fetching).execute({ url }, undefined)).error_code,
+    ).toBe('SITE_CHALLENGE');
+    for (const tool of [
+      wrapTool(browserExtractSpec(run), run),
+      wrapTool(browserNavigateSpec(run), run),
+    ]) {
+      const result = await tool.execute(
+        tool.name === 'browser_extract' ? { kind: 'content' } : { url },
+        undefined,
+      );
+      expect(result.error_code).toBe('SITE_CHALLENGE');
+      expect(result.details).toMatchObject({ already_attempted: true });
+    }
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(controller.snapshot).not.toHaveBeenCalled();
+    expect(controller.navigate).not.toHaveBeenCalled();
+  });
+
+  it('serves both stored tables after extracting only the first one', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(multiTableHtml()));
     const run = services(controller);
+    await extract(run, { kind: 'table', index: 0 });
+    const result = await wrapTool(webFetchSpec(run), run).execute(
+      { url: 'https://example.com/page' },
+      undefined,
+    );
+    const payload = JSON.parse(result.modelText) as { tables: unknown[] };
+    expect(payload.tables).toHaveLength(2);
+    expect(run.documents.stats().networkLoads).toBe(0);
+  });
 
-    const result = await extract(run, { kind: 'records' });
+  it('serves and cites a full stored page after a links-only browser read without a fetch', async () => {
+    const controller = fakeController();
+    controller.snapshot.mockResolvedValue(snapshotOf(listingHtml()));
+    const run = services(controller);
+    await extract(run, { kind: 'links' });
+    expect(run.documents.get('S1')?.page?.delivered).toBe('partial');
+    const fetched = await wrapTool(webFetchSpec(run), run).execute(
+      { url: 'https://example.com/page' },
+      undefined,
+    );
+    const model = JSON.parse(fetched.modelText) as { source_id: string; records: { id: string }[] };
+    expect(model.records).toHaveLength(6);
+    expect(run.evidence.entries()[0]?.sourceId).toBe('S1');
+    expect(run.documents.stats().networkLoads).toBe(0);
+    const publishing = { ...run, domain: { ...run.domain, publish: createBriefPublisher(runDir) } };
+    const published = await wrapTool(resultPublishSpec(publishing), publishing).execute(
+      {
+        brief: {
+          title: 'Inventory',
+          overview: '',
+          table: { columns: ['Price'], rows: [[50000]], row_sources: [[model.records[0]!.id]] },
+        },
+      },
+      undefined,
+    );
+    expect(published.status).toBe('ok');
+  });
 
-    expect(result.error_code).toBe('SITE_CHALLENGE');
-    expect(result.details).toMatchObject({ handoff: true, tier: 'browser' });
-    expect(run.evidence.isEmpty()).toBe(true);
-    expect(run.urlProvenance.has('https://example.com/next')).toBe(false);
-    expect(run.documents.entries()).toEqual([]);
+  it('retains rendered content beyond the ledger excerpt for citation anchoring', async () => {
+    const controller = fakeController();
+    setContent(controller, {
+      title: 'Inventory',
+      text: 'Introduction. '.repeat(90) + 'Price 45000',
+    });
+    const run = services(controller);
+    await extract(run, { kind: 'content' });
+    const publishing = { ...run, domain: { ...run.domain, publish: createBriefPublisher(runDir) } };
+    const result = await wrapTool(resultPublishSpec(publishing), publishing).execute(
+      {
+        brief: {
+          title: 'Offer',
+          overview: '',
+          table: { columns: ['Price'], rows: [[45000]], row_sources: [['S1']] },
+        },
+      },
+      undefined,
+    );
+    expect(result.status).toBe('ok');
+    const brief: unknown = JSON.parse(await readFile(join(runDir, 'brief.json'), 'utf8'));
+    expect(brief).toMatchObject({ metadata: { citation_verdict: { flagged: 0 } } });
   });
 
   it('keeps record anchors stable when a card is inserted at the top', async () => {
@@ -1363,3 +1529,15 @@ describe('@no-llm browser_extract — shape-aware kinds (FEAT-051)', () => {
     ).toEqual(['table', 'content', 'content']);
   });
 });
+
+/** Supply one live snapshot, preserving the browser's rendered-text seam. */
+function setContent(
+  controller: ReturnType<typeof fakeController>,
+  content: { title: string; text?: string },
+): void {
+  controller.snapshot.mockImplementation(async () => ({
+    ...snapshotOf('<html><body><main><p>Visible body.</p></main></body></html>', controller.url()),
+    title: content.title,
+    visibleText: content.text,
+  }));
+}

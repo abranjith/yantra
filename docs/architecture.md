@@ -1285,7 +1285,7 @@ soft wall-clock wind-down: it yields to that wind-down so the session can still 
 
 #### Attributed structured publication
 
-Agent-authored `result_publish` content passes through `composeAgentBrief` in
+Every model-facing `result_publish` Brief payload passes through `composeAgentBrief` in
 `packages/agent/src/runtime/brief-composer.ts` before the Brief publisher. The input includes
 findings as `{ text, sources }`, cited sections, a table `{ columns, rows, row_sources }`,
 constraints, and fulfillment gaps. String findings remain editorial when they carry no evidence
@@ -1307,7 +1307,9 @@ entry for a source ID wins; entries with no source ID cannot be cited. Record re
 their parent source number in `brief.json`; the original anchors remain in the sanitized publish
 audit. With a nonempty ledger, model-supplied source lists are ignored and every source carries
 `cited`. Complete protocol Briefs supplied by internal/scripted callers retain their own sources
-and verdict and bypass composition. Templated reports retain their separate publishing path.
+and verdict through the trusted publisher API directly. Model-supplied `brief_id` or
+`schema_version` fields do not select that API or bypass sanitization and composition.
+Templated reports retain their separate publishing path.
 
 Pure helpers in `runtime/contract-delivery.ts` reconcile the document with a declared contract:
 
@@ -1320,14 +1322,20 @@ Pure helpers in `runtime/contract-delivery.ts` reconcile the document with a dec
   `not shown on source`; these and independently proven gaps produce bounded `contract_gap`
   notices even when the agent reports `met: true`.
 - Contract filters lead the published constraints. Omitted conditions are added as `unverified`,
-  and `verified` without references becomes `unverified`. Unconfirmed conditions, violated
-  conditions, and off-source alternatives each receive a disclosure notice.
+  and `verified` without references becomes `unverified`. The contract's name and value remain
+  authoritative: a different reported value becomes `violated` when its cited evidence supports
+  it, or `unverified` otherwise, with the reported value in the cause. Unconfirmed conditions,
+  violated conditions, and off-source alternatives each receive a disclosure notice.
 
 The pure core module `packages/core/src/synthesis/anchoring.ts` owns the shared normalization,
-digit-group matching, and 0.5 content-word-overlap threshold. Both the agent composer and core's
-existing `validateCitations` consume these helpers. The agent check tests numeric cells by digits;
-string cells, cited findings, and verified constraint values by digits and words; and cited section
-bodies by digits. It includes alternative rows and findings. Record references use
+numeric matching, and 0.5 content-word-overlap threshold. Numeric matching accepts English-style
+comma thousands groups and decimal points, preserves magnitude and sign, and removes insignificant
+leading and fractional trailing zeros. Unsupported separator patterns match only the same token.
+Both the agent composer and core's existing `validateCitations` consume these helpers. The agent
+check tests numeric cells by numeric values; string cells, cited findings, and verified constraint
+values by numbers and words; and cited section bodies by numbers. It includes alternative rows and
+findings. Each anchoring pass prepares word and number sets once per evidence reference and reuses
+their unions for repeated reference groups. Record references use
 `recordEvidenceText`; page references use `pageEvidenceText` over stored prose, records, fields,
 tables, and structured scalar values, capped at 200,000 characters. A source without stored page
 analysis falls back to its ledger title and excerpt. These corpora are runtime-only. A mismatch
@@ -1549,14 +1557,16 @@ of them reached through `RunServices`. A search goes `SearchService` → `Docume
 - **`DocumentStore`** (`packages/core/src/extraction/document-store.ts`), constructed by
   `runAgenticTask()` next to the `EvidenceLedger` and required on `RunServices.documents`. It owns
   evidence identity. Every `web_fetch` read and every `web_search` inline read goes through
-  `read(url, load)`. The store looks up the canonical requested URL and the canonical final URL,
-  then a memo of terminal failures, then loads already in flight (single-flight). It calls `load`
-  only when none of those answer. Each successful load mints a dense run-wide ID (`S1`, `S2`, …),
+  `read(url, load)`. The store checks terminal failure memos before cached documents, then looks up
+  the canonical requested URL and canonical final URL, then loads already in flight (single-flight).
+  A browser challenge overrides an earlier successful read, including known URL aliases. It calls
+  `load` only when none of those answer. Each successful load mints a dense run-wide ID (`S1`, `S2`, …),
   and `observe()` lets `browser_extract` mint or reuse an ID for a page the browser already shows,
   with no fetch. `attachPage(sourceId, analysis, …)` stores a source's latest `PageAnalysis` as its
-  `StoredPage`, together with record anchors and whether the model has seen the `full` view or only
-  a `summary`. A record whose key already has an anchor keeps it, and a new key gets the next
-  number, so re-reading a live page never renumbers a record `S<n>#r<k>` that was already shown.
+  `StoredPage`, together with record anchors and whether the model has seen the `full` view, a
+  search `summary`, or a `partial` browser view. A record whose key already has an anchor keeps it,
+  and a new key gets the next number, so re-reading a live page never renumbers a record
+  `S<n>#r<k>` that was already shown.
   `resolveAnchor` maps such an ID back to its source and record. The store does no I/O of its own.
 - **`PagePool`** (`packages/core/src/browser/page-pool.ts`), composed in
   `composeDefaultEnvironment` from the run's counted browser provider and implementing
@@ -1564,7 +1574,10 @@ of them reached through `RunServices`. A search goes `SearchService` → `Docume
   (`ScrapeTransport`) and every `BrowserFallbackFetcher` render in the run. Each use gets its own
   isolated browser context through `BrowserSession.newIsolatedPage()`. At most two pages are open
   at once, waiters queue in FIFO order, and a crash allows one relaunch before
-  `PagePoolExhaustedError`. Each use's timeout and abort signal close that use's context. The
+  `PagePoolExhaustedError`. One deadline covers each use's queue wait, shared browser launch,
+  isolated-page acquisition, work, and cleanup. Timeout or abort removes queued borrowers and
+  closes acquired contexts; a page acquired after cancellation is closed without running its
+  callback. Canceling a borrower does not close the shared browser needed by other borrowers. The
   `AgentBrowserController` keeps its own browser, because it may run headed for `do` and its page
   carries user-visible interaction state. Barring a pool relaunch after a crash, a run therefore
   starts at most two Chrome processes. The
@@ -1578,15 +1591,19 @@ host, no fragment, tracking parameters stripped, one trailing slash and the defa
 which runs every check except the budget and audits the decision, and `reserve`, which charges the
 navigation and host. The read tools evaluate before the store and reserve only inside `load`, so a
 repeat read costs no navigation and a refused URL never reaches a cached answer. `browser_navigate`
-still calls `check()`, which is `evaluate` followed by `reserve`, because a navigation always
-reaches the network. `classifyResponse` (`packages/core/src/extraction/response-classifier.ts`)
-runs inside `HybridContentFetcher` before any extraction and labels each response `challenge`,
+rejects known browser challenges before `check()` or a network attempt; admitted navigation calls
+`check()`, which is `evaluate` followed by `reserve`. `classifyResponse`
+(`packages/core/src/extraction/response-classifier.ts`) runs inside `HybridContentFetcher` before
+any extraction and labels each response `challenge`,
 `js-shell`, or `content`, using a documented list of generic challenge-widget markers and phrases.
 A challenge at the HTTP tier gets exactly one render in the standard browser. A challenge in the
 rendered page is terminal for that URL: the fetcher throws a `challenge` `FetchError`, which the
 store memoizes. `web_fetch` reports it as a non-retryable `SITE_CHALLENGE` handoff, and
 `web_search` reports a `blocked` site. Each tier event is written to `runtime.jsonl` as a
-`fetch_challenge` warning or a `fetch_escalated` info line, with the host only.
+`fetch_challenge` warning or a `fetch_escalated` info line, with the host only. Live
+`browser_extract` challenges use the same tier-event recorder and terminal store state through
+`page-challenge.ts`, so subsequent extraction, fetch, search reads, and navigation refuse that URL
+and run-health notices disclose the challenge.
 
 ```mermaid
 flowchart TD
@@ -1598,7 +1615,7 @@ flowchart TD
   Explain -->|unattested| Refused[URL_NOT_FROM_EVIDENCE,<br/>nothing spent]
   Explain -->|attested| Evaluate[UrlPolicy.evaluate]
   Evaluate --> Store[DocumentStore.read<br/>canonicalUrl, memo, single-flight]
-  Store -->|hit on a summary-only page| Project
+  Store -->|hit on a summary or partial page| Project
   Store -->|other hit or memoized failure| Result[Result with source_id or already_read]
   Store -->|load| Gate[Ethics, then UrlPolicy.reserve]
   Gate --> Hybrid[HybridContentFetcher]
@@ -1610,9 +1627,14 @@ flowchart TD
   Classify2 -->|challenge| Blocked[Terminal blocked failure,<br/>memoized, never extracted]
   Classify2 -->|content or js-shell| Extract
   Extract --> Attach[DocumentStore.attachPage<br/>stable record anchors]
-  Extract2[browser_extract] -->|snapshot, challenge check,<br/>analyzeLivePage| Observe[DocumentStore.observe, no fetch]
+  Extract2[browser_extract, every kind] --> LiveClassify[Snapshot and classifyResponse]
+  LiveClassify -->|challenge| Blocked
+  Blocked -->|record terminal memo| Store
+  LiveClassify -->|content or js-shell: analyzeLivePage| Observe[DocumentStore.observe, no fetch]
   Observe --> Attach
   Attach --> Project[projectPage<br/>full or summary view within a byte budget]
+  Attach -->|browser content kind| Visible[Rendered title and visible text]
+  Visible --> Discovered
   Project --> Discovered[recordDiscovered<br/>shown, offerable URLs into UrlProvenance]
   Project --> Result
 ```
@@ -1653,20 +1675,22 @@ The read tools differ only in where the page comes from:
 
 - `web_fetch` calls `extractPage` inside the store's `load`. A `null` shape is a terminal
   `EXTRACTION_EMPTY` whose message says what was looked for. Otherwise the page is attached as
-  `full` and projected. On a store hit whose page the model saw only as a search `summary`, it
-  projects the full view from the store with `from_store: true` and marks the page `full`. That
-  read loads nothing, reserves no navigation, and adds no evidence. Any later hit returns
-  `already_read`.
+  `full` and projected. On a store hit whose page the model saw only as a search `summary`
+  or a `partial` browser view, it projects the full view from the store with `from_store: true`,
+  marks the page `full`, and registers content evidence, including for a links-only identity.
+  That read loads nothing and reserves no navigation. Any later hit returns `already_read`.
 - `web_search` passes `extractPage` to `processSource`. A site whose shape is `article` keeps its
   text or capture payload, now with `shape` and `coverage`, and is stored as `full`. Any other shape
   is stored as `summary` and returned as the summary view.
-- `browser_extract` reads `content` as the controller's rendered title and block-structured text.
-  `records`, `links`, `structured`, `tables`, and `table` with an `index` are read from
-  `snapshot()`. The snapshot is classified first: a challenge is a non-retryable `SITE_CHALLENGE`
-  handoff and is never analyzed. Otherwise it goes through `analyzeLivePage`, an http(s) page is
-  `observe`d and attached as `full`, and the full view is restricted to the requested part. An
-  out-of-range table index is `INVALID_INPUT` with the table count. Every kind except `links`
-  records the page as evidence.
+- `browser_extract` takes one `snapshot()` for every kind and classifies it before analysis or
+  evidence registration. A challenge is a non-retryable `SITE_CHALLENGE` handoff, audited and
+  memoized as terminal, and is never analyzed. Otherwise the snapshot goes through `analyzeLivePage`;
+  an http(s) page is `observe`d and its complete analysis retained as `partial`. `content` returns
+  the rendered title and normalized visible text, retaining that full text in the stored analysis
+  for anchoring. `records`, `links`, `structured`, `tables`, and `table` with an `index` project only
+  the requested part. An out-of-range table index is `INVALID_INPUT` with the table count. Every
+  kind except `links` records content evidence immediately; a subsequent store-served `web_fetch`
+  registers it for links-only reads too.
 
 Links become navigable because a page offered them. `UrlProvenance.record(url, origin)`
 (`packages/agent/src/runtime/url-provenance.ts`) requires a `ProvenanceOrigin`: `goal`,
@@ -1917,8 +1941,11 @@ The two tiers assert different things:
 - _Agentic tier._ Each run is scored from the published Brief's delivered rows, extracted in
   structural order and matched to truth items by exact normalized keys, never fuzzily: field
   coverage, constraint fidelity, source fidelity, citation validity, honesty about injected faults,
-  cost, and cross-run stability. Every score is a fraction with a per-decision `detail` line, or
-  `null` when its denominator is 0. The runner writes a Zod-validated `scorecard.json`, a rendered
+  cost, and cross-run stability. Citation scoring reads prose and extracted records, fields, tables,
+  and structured scalar values from audited web and browser reads and referenced run-local captures.
+  Constraint verification matches both normalized name and required value; verification of a
+  contrary value counts as a violation. Every score is a fraction with a per-decision `detail` line,
+  or `null` when its denominator is 0. The runner writes a Zod-validated `scorecard.json`, a rendered
   `scorecard.md`, and an aggregate-only `baseline.json` (no run directories, page text, or per-run
   row keys) under the gitignored `e2e/task-fidelity/.out/<timestamp>/`. Scores are observational:
   the process exits 0 whenever the scorecard was written.

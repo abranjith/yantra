@@ -19,8 +19,8 @@
  * The ID is what `web_search`, `web_fetch`, `browser_extract`, and the
  * evidence ledger all show, so a later citation can name a page unambiguously.
  *
- * The store holds no page text and does no I/O of its own: `load` is the
- * caller's fetch, and the store only decides whether to call it.
+ * The store retains attached page analyses and does no I/O of its own:
+ * `load` is the caller's fetch, and the store decides whether to call it.
  */
 
 import { EthicsRefusedError } from '../executor/errors.js';
@@ -45,13 +45,13 @@ export interface StoredPage {
   /** Record key → anchor `k` (`S<n>#r<k>`). Never reassigned within a run. */
   readonly anchors: ReadonlyMap<string, number>;
   readonly article: { readonly byline: string | null; readonly publishedAt: string | null } | null;
-  /** `summary` until a full view has been returned (a search summary), then `full`. */
-  readonly delivered: 'full' | 'summary';
+  /** Search summaries and selected browser parts remain eligible for a full view. */
+  readonly delivered: 'full' | 'summary' | 'partial';
 }
 
 /** Options for {@link DocumentStore.attachPage}. */
 export interface AttachPageOptions {
-  readonly delivered: 'full' | 'summary';
+  readonly delivered: StoredPage['delivered'];
   readonly article: StoredPage['article'];
 }
 
@@ -104,6 +104,7 @@ export type LoadOutcome<T> =
       readonly code: string;
       readonly reason: string;
       readonly failure: unknown;
+      readonly browserChallenge?: true;
     };
 
 /** The answer to one {@link DocumentStore.read}. */
@@ -129,6 +130,7 @@ export interface FailureMemo {
   readonly code: string;
   readonly reason: string;
   readonly failure: unknown;
+  readonly browserChallenge?: true;
 }
 
 /** Counters for the run-health summary. */
@@ -251,14 +253,13 @@ export class DocumentStore {
    */
   public async read<T>(url: string, load: () => Promise<LoadOutcome<T>>): Promise<StoreRead<T>> {
     const key = canonicalUrl(url);
-    const existing = this.index.get(key);
-    if (existing !== undefined) return this.hit(existing);
-
     const remembered = this.memo.get(key);
     if (remembered !== undefined) {
       this.memoHits += 1;
       return { kind: 'failed', ...remembered, memoized: true };
     }
+    const existing = this.index.get(key);
+    if (existing !== undefined) return this.hit(existing);
 
     const pending = this.inFlight.get(key);
     if (pending !== undefined) {
@@ -408,6 +409,21 @@ export class DocumentStore {
     return record === undefined ? null : snapshot(record);
   }
 
+  /** A terminal failure recorded by a fetch or an already-rendered browser read. */
+  public failureFor(url: string): FailureMemo | null {
+    return this.memo.get(canonicalUrl(url)) ?? null;
+  }
+
+  /** Memoize an observed terminal failure, including known aliases of the page. */
+  public rememberFailure(url: string, error: unknown, failure: FailureMemo): void {
+    if (!isTerminalFetchFailure(error)) return;
+    const key = canonicalUrl(url);
+    const record = this.index.get(key);
+    this.memo.set(key, failure);
+    if (record !== undefined)
+      for (const [alias, entry] of this.index) if (entry === record) this.memo.set(alias, failure);
+  }
+
   /** Every record, in mint order. */
   public entries(): readonly DocumentRecord[] {
     return this.records.map(snapshot);
@@ -446,6 +462,7 @@ export class DocumentStore {
           code: outcome.code,
           reason: outcome.reason,
           failure: outcome.failure,
+          ...(outcome.browserChallenge ? { browserChallenge: true as const } : {}),
         });
       }
       return { settled: { kind: 'failed', outcome }, fresh: false };

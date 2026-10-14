@@ -1301,6 +1301,6 @@ describe('@no-llm web_fetch — shape-aware view (FEAT-051)', () => {
     expect(again.already_read).toBe('S1');
     expect(calls).toEqual([]);
     expect(services.budgets.snapshot().navigations).toBe(before);
-    expect(services.evidence.isEmpty()).toBe(true);
+    expect(services.evidence.entries()).toEqual([expect.objectContaining({ sourceId: 'S1' })]);
   });
 });

@@ -466,8 +466,10 @@ their output and audit:
 
 - `web_search` with `limit: 0` only lists titles, URLs, and snippets. The agent
   then reads selected URLs with `web_fetch`.
-- Each page is read at most once per run and keeps one evidence ID (`S1`, `S2`,
-  …). A repeat read returns `already_read` with that ID and fetches nothing.
+- Each page is fetched at most once per run and keeps one evidence ID (`S1`,
+  `S2`, …). After its full view has been delivered, a repeat `web_fetch` returns
+  `already_read` with that ID and fetches nothing. `browser_extract` reads the
+  live page.
 - Each page read reports its `shape` (`article`, `collection`, `table`,
   `detail`, or `index`) and returns that shape's data: `records` with IDs such
   as `S3#r5`, `tables`, `fields`, schema.org `structured` data, or `text`, plus
@@ -475,17 +477,23 @@ their output and audit:
 - `web_fetch` refuses a URL that no search result, page read, or goal supplied
   with `URL_NOT_FROM_EVIDENCE`, before anything is fetched. Links a read page
   offers can be followed.
-- `web_search` returns a non-article site as a summary. A later `web_fetch` of
-  that URL returns the full view from the run's store with `from_store: true`
-  and fetches nothing.
+- `web_search` returns a non-article site as a summary, and `browser_extract`
+  delivers the requested part of a page. A later `web_fetch` of either URL
+  returns the full stored view with `from_store: true`, keeps the evidence ID,
+  and makes no network request or additional navigation.
 - The run paces a scraped search provider (`duckduckgo`, `google`) at one query
   at a time. After the provider's first challenge or rate-limit refusal, the run
   sends no more searches; later searches return `SEARCH_BLOCKED` with cause
   `circuit-open`. A keyed provider avoids this pacing; see the `search.provider`
   check in [Diagnostics and run inspection](#diagnostics-and-run-inspection).
-- Yantra does not extract a human-verification page. `web_fetch` reports
-  `SITE_CHALLENGE`, and a run that ends without a result is handed back to you.
-  The result carries a `blocked` notice for that host.
+- Yantra does not extract a human-verification page, including through any
+  `browser_extract` kind. An HTTP challenge permits one look in the standard
+  browser. A browser challenge returns `SITE_CHALLENGE` and closes that URL for
+  the run: later extraction, fetch, search-hit reads, and navigation refuse it
+  without reading it again. The challenge is audited and any published result
+  carries a `blocked` notice for that host; repeat refusals add no duplicate
+  notice. A run that ends without a result is handed back to you. An HTTP-only
+  challenge followed by a successful browser read is also disclosed in Notices.
 
 See [Agentic tasks](features/agentic-tasks.md#what-it-does) for result shapes and
 failure codes, [Discovered-link provenance](features/safety-and-privacy.md#discovered-link-provenance)
@@ -598,7 +606,9 @@ findings, and conditions checked against their declared task contract. Read
 the `understood:` line against your goal, then check the published Conditions,
 row citations, and Notices before using the answer. The runtime checks delivery
 against that declaration; it does not establish that the declaration matches
-your original goal.
+your original goal. Every model-authored Brief receives the same source,
+contract, and citation checks, even when it supplies document identity or
+metadata fields.
 
 **Conditions** appears beneath the title when the Brief includes conditions:
 
@@ -606,7 +616,13 @@ your original goal.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `verified`   | The agent reports the condition as confirmed and supplies a citation.                                                                |
 | `unverified` | The condition is not confirmed. An omitted contract filter, or a `verified` claim without evidence references, receives this status. |
-| `not met`    | The agent reports that the condition is violated; JSON stores the status as `violated`.                                              |
+| `not met`    | The agent reports a violation, or cited evidence supports a different value; JSON stores the status as `violated`.                   |
+
+Each declared filter retains its required name and value in Conditions. If the
+agent reports a different value for that condition, cited evidence that supports
+the reported value makes the requirement **not met**; an unconfirmed report
+leaves it **unverified**. For example, a requested `drivetrain=AWD` stays an AWD
+condition when the source reports FWD. A notice explains the reported value.
 
 Markers such as `[1]` beside a condition, finding, or table row refer to the
 numbered source list in this Brief. A table's citation column is **Src** in

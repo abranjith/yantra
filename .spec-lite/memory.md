@@ -89,6 +89,8 @@
 - **`@yantra/test-helpers` loads Vitest at import time, so nothing a `tsx` script imports may depend on it.** Its index imports `it` from `vitest`, and Vitest throws "failed to access its internal state" outside its own runner. The task-fidelity harness hit this twice: the scenario runner imported the runtime-log scanner, and `expectations.ts` imported `it`, so `pnpm eval:tasks` could not even start. Keep harness modules Vitest-free and inject what only a spec has — the scanner as a runner option, `it` as an `assertExpectations` parameter. _(auto-captured 2026-10-11)_
 - Maintain boundary tests for adapter-only SDK imports, no core-to-agent imports, and forbidden legacy files/imports. Add tests for each security-critical behavior and use property tests for sanitizer and protocol invariants.
 
+- **Pass Vitest worker limits as explicit Turbo task arguments and verify the emitted `vitest run` command.** The current strict Turbo configuration does not forward undeclared `VITEST_*` environment variables, so setting them in the parent shell does not limit workspace runners. Use Turbo's `--` task-argument delimiter for requested `--maxWorkers`/`--minWorkers` limits. _(auto-captured 2026-10-13)_
+
 ## Security
 
 - Never expose literal secrets to the agent. Resolve opaque references only at the execution boundary and scan artifacts/provider sessions with canaries.

@@ -77,9 +77,9 @@ import { validateSlots } from './template-validate.js';
  * runs — small local models repeatedly omitted `title` when the whole payload
  * was `Type.Unknown` and the post-hoc BRIEF_INVALID message read like a length
  * problem ("String must contain at least 1 character(s)"), not a missing one.
- * The object stays open (`additionalProperties: true`) because complete
- * protocol Briefs (internal/scripted callers) travel through the same
- * parameter; content-level validation remains the publisher's job.
+ * The object stays open (`additionalProperties: true`) for legacy content
+ * fields. Every model payload passes through composition; trusted callers
+ * supply complete protocol Briefs directly to the publisher API.
  */
 const BriefContentParams = Type.Object(
   {
@@ -242,27 +242,24 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     };
   }
 
-  // Ledger-authoritative composition applies to agent-authored content only:
-  // a complete protocol Brief (internal/scripted callers) owns its sources and
-  // typed findings, so it passes through untouched.
+  // Tool arguments are always model-authored. Complete protocol Briefs belong
+  // to the trusted publisher API, never a branch selected by argument fields.
   const briefInput = paramsRecord.brief;
   const evidence = services.evidence.entries();
-  const composed = isCompleteBrief(briefInput)
-    ? null
-    : composeAgentBrief(
-        sanitizePublishContent(
-          briefInput,
-          services.sanitizer,
-          (text) => services.userInput?.mask(text) ?? text,
-        ),
-        {
-          evidence,
-          documents: services.documents,
-          contract: services.contract.current(),
-          mode: 'tool',
-        },
-      );
-  if (composed !== null && !composed.isOk) {
+  const composed = composeAgentBrief(
+    sanitizePublishContent(
+      briefInput,
+      services.sanitizer,
+      (text) => services.userInput?.mask(text) ?? text,
+    ),
+    {
+      evidence,
+      documents: services.documents,
+      contract: services.contract.current(),
+      mode: 'tool',
+    },
+  );
+  if (!composed.isOk) {
     const issues = composed.error.map((issue) => ({
       cause: issue.cause,
       pointer: issue.pointer,
@@ -279,17 +276,15 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       details: { issues },
     };
   }
-  const composedContent = composed?.isOk ? composed.value.content : briefInput;
+  const composedContent = composed.value.content;
   const content =
     services.userInput === undefined
       ? composedContent
       : mapPublishText(composedContent, (text) => services.userInput!.resolve(text));
-  const publishFacts = composed?.isOk
-    ? runtimeFactsFor(services, composed.value.notices)
-    : runtimeFacts;
+  const publishFacts = runtimeFactsFor(services, composed.value.notices);
   const result = await services.domain.publish.publish(content, {
     runtimeFacts: publishFacts,
-    ...(composed?.isOk ? { citationVerdict: composed.value.verdict } : {}),
+    citationVerdict: composed.value.verdict,
   });
   if (!result.isOk) {
     // A URL validation miss gets an explicit remedy: small local models have
@@ -309,20 +304,18 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
 
   services.actionPhase.close();
   services.runHealth.recordPublishedNotices(publishFacts.notices.length);
-  if (composed?.isOk) logBriefComposition(services, composed.value.summary);
+  logBriefComposition(services, composed.value.summary);
   const brief = result.value.brief as Brief;
   return {
     ok: true,
     model: {
       published: true,
-      summary: composed?.isOk
-        ? composedPublishSummary(brief.title, brief.overview, composed.value.summary)
-        : result.value.summary,
+      summary: composedPublishSummary(brief.title, brief.overview, composed.value.summary),
       html_path: result.value.htmlPath,
     },
     details: {
       brief_id: brief.brief_id,
-      ...(composed?.isOk ? { composition: composed.value.summary } : {}),
+      composition: composed.value.summary,
     },
     terminate: true,
   };

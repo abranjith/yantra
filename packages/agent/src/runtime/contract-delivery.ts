@@ -15,6 +15,7 @@ export interface DeliveryConstraint {
 export function reconcileConstraints(
   input: readonly DeliveryConstraint[],
   contract: TaskContractBody | null,
+  supported: (condition: DeliveryConstraint) => boolean,
 ): { constraints: DeliveryConstraint[]; notices: BriefNotice[] } {
   const normalized = input.map(
     (condition): DeliveryConstraint =>
@@ -25,13 +26,22 @@ export function reconcileConstraints(
   const filters = contract?.filters ?? [];
   const names = new Set(filters.map((filter) => normalizeDeliveryName(filter.name)));
   const constraints = [
-    ...filters.map(
-      (filter): DeliveryConstraint =>
-        normalized.find(
-          (condition) =>
-            normalizeDeliveryName(condition.name) === normalizeDeliveryName(filter.name),
-        ) ?? { ...filter, status: 'unverified', refs: [], cause: 'not reported by the agent' },
-    ),
+    ...filters.map((filter): DeliveryConstraint => {
+      const condition = normalized.find(
+        (entry) => normalizeDeliveryName(entry.name) === normalizeDeliveryName(filter.name),
+      );
+      if (condition === undefined)
+        return { ...filter, status: 'unverified', refs: [], cause: 'not reported by the agent' };
+      if (normalizeDeliveryName(condition.value) === normalizeDeliveryName(filter.value))
+        return { ...condition, ...filter };
+      const confirmed = condition.refs.length > 0 && supported(condition);
+      return {
+        ...condition,
+        ...filter,
+        status: confirmed ? 'violated' : 'unverified',
+        cause: `${confirmed ? 'source reports' : 'agent reported an unconfirmed'} ${condition.value}`,
+      };
+    }),
     ...normalized.filter((condition) => !names.has(normalizeDeliveryName(condition.name))),
   ];
   const notices: BriefNotice[] = [];

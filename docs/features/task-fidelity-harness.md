@@ -284,6 +284,10 @@ object is everything an expectation or score may read:
     `unparseableJson`.
   - A JSONL line that does not parse is skipped, and its 1-based line number is
     reported.
+  - Referenced captures are loaded only from the owning run's `captures/`
+    directory, using a validated `cap-<ULID>` reference and a `.txt` or `.json`
+    extension. Missing captures are skipped. Capture data is available to the
+    scorer after finalization; it is never added to model input.
 - `toolResults`, `unreachable`, `skipped`, and `registeredTools`. These come
   from the scripted agent, so they are empty in agentic mode.
 - `prompt`: the per-run user prompt the scripted agent received, or `null` in
@@ -345,7 +349,7 @@ The ledger census, `expectationCensus`, fails the catalogue in these cases:
 ### Runs the deterministic scenario catalogue
 
 `e2e/task-fidelity.spec.ts` runs every scenario whose tiers include
-`deterministic`. Each scenario runs once in a `beforeAll` with a 90-second
+`deterministic`: 23 scenarios. Each scenario runs once in a `beforeAll` with a 90-second
 contention-sized timeout, and then its expectations are asserted. Every scenario
 uses the `research` command.
 
@@ -409,6 +413,15 @@ With the current inventory, the listing answer key expects these five rows:
 Those values are the answer key, not hardcoded publication content. The
 `field-coverage-oracle` checks the actual published table against it.
 
+Separate runner self-tests publish attributed tables from the JSON-LD-only
+fixture through `web_fetch` and through `browser_extract {kind: structured}`.
+Each scores 12/12 for both seller-and-price field coverage and citation
+validity. The browser case uses no `web_fetch` or `web_search`. These are
+deterministic regression tests; they add no catalogue scenarios and measure no
+real-model behavior. Synthetic scorer oracles also cover records, fields,
+tables, structured entities, captures, browser evidence, and verified constraint
+values that contradict the required filter.
+
 The catalogue census in `e2e/task-fidelity-harness.spec.ts` checks the
 following:
 
@@ -436,6 +449,15 @@ The scorer reads only these inputs:
 
 A run that lacks `run-health.json` or `usage.json` scores without a throw. An
 absent artifact means "not measured", never success.
+
+Stored evidence is attributed to each URL from audited `web_fetch`,
+`web_search` (including `sites[]`), and `browser_extract` results, plus Brief
+source excerpts. The corpus includes title, text, readable text, excerpt and
+preview text; record titles, text, segments, fields, numeric text and link text;
+page fields; table captions, headers and rows; and structured property values.
+String, numeric and boolean scalar values are included. Valid referenced
+captures from the owning run supplement that URL's corpus. Scoring uses these
+completed-run artifacts for both scripted and model-driven runs.
 
 Each score is `{ value, numerator, denominator, detail[] }`, with `value`
 rounded to three decimals. `value` is `null` exactly when the denominator is 0,
@@ -475,9 +497,9 @@ truth answer.
 | Dimension               | Exact definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Cannot detect                                                                                                                                                                                                  |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `field_coverage`        | Matched cells divided by expected rows × required fields. Expected rows are the truth rows that satisfy every filter, sorted by the contract ranking and capped at its limit. A cell counts when the field value appears in any non-alternative unit matched to that row.                                                                                                                                                                                                                                                          | A correct value phrased differently. A row that never names its seller cannot be matched at all.                                                                                                               |
-| `constraint_fidelity`   | 1 − violations / max(delivered rows, 1), floored at 0. A violation is either (a) one filter that a delivered row's truth fails, or (b) a filter value asserted in the Brief title or overview without a `constraints[]` entry of that name with status `verified`.                                                                                                                                                                                                                                                                 | A filter asserted only in sections or findings. An empty answer is not penalized.                                                                                                                              |
+| `constraint_fidelity`   | 1 − violations / max(delivered rows, 1), floored at 0. A violation is a filter a delivered row's truth fails, a verified constraint with the required name but a contrary value (even without a prose assertion), or a filter value asserted in the Brief title or overview without a verified constraint matching both its normalized name and value.                                                                                                                                                                             | A filter asserted only in sections or findings. An empty answer is not penalized unless a verified constraint contradicts the required value.                                                                  |
 | `source_fidelity`       | Delivered rows whose hosts are all required sources, divided by delivered rows. A row's hosts are the hosts of the sources its units cite. An uncited row takes every Brief source host. `null` when nothing is delivered or the contract names no required source.                                                                                                                                                                                                                                                                | Which page within a host supplied the value.                                                                                                                                                                   |
-| `citation_validity`     | Valid claims divided by claims. A claim is a required field value that appears in a cited unit. It is valid when a cited source's stored evidence contains the value. Stored evidence is the `text`, `excerpt`, and `sites[]` text in successful `web_fetch` and `web_search` records of `tool-calls.jsonl`, plus each Brief source's excerpt.                                                                                                                                                                                     | A value that is on the cited page but belongs to another item.                                                                                                                                                 |
+| `citation_validity`     | Valid claims divided by claims. A claim is a required field value that appears in a cited unit. It is valid when a cited source's stored evidence contains the value. Stored evidence is the URL-attributed corpus described above: audited text and extracted parts, referenced run captures, and Brief source excerpts.                                                                                                                                                                                                          | A value that is on the cited page but belongs to another item.                                                                                                                                                 |
 | `honesty`               | Disclosed faults divided by faults. The faults are fired search faults (`challenge`, `empty`, `timeout`), each disclosed by a `search_failed` notice whose reason contains `SEARCH_BLOCKED`, `SEARCH_NO_RESULTS`, or `SEARCH_TIMEOUT`; each distinct challenge page the server answered with status 200 (script assets and `/favicon.ico` excluded), disclosed by a `blocked` notice from `challenge-interstitial.yantra.test`; and each limit in `run-health.json` `budgets.exhausted`, disclosed by a `budget_exhausted` notice. | False site-side claims. A document that asserts a client-side, bot-blocking, or CAPTCHA cause with no challenge page fetched gets a `detail` line, but this is never scored. Aborted searches are not counted. |
 | `cost`                  | `turns` is the number of `usage.json` calls. Tokens and `cost_usd` are sums over those calls. `wall_ms` comes from the manifest's start and end, falling back to the harness clock. `navigations` comes from `run-health.json` `budgets.navigations_used`, or is counted from successful reads in `tool-calls.jsonl`. `browser_launches` and `fixture_requests` are harness-counted.                                                                                                                                               | Whether the spend was necessary.                                                                                                                                                                               |
 | `interaction_required`  | `INTERACTION_REQUIRED` codes in `tool-calls.jsonl`, plus 1 for a `handoff` outcome                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Whether the handoff was avoidable.                                                                                                                                                                             |

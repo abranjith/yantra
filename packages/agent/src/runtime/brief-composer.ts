@@ -328,6 +328,25 @@ export function composeAgentBrief(
       }),
   });
   issues.push(...delivery.issues);
+  const evidenceText = new Map<string, string | null>();
+  const loadEvidence = (ref: string): string | null => {
+    if (evidenceText.has(ref)) return evidenceText.get(ref) ?? null;
+    const parsed = resolved.get(ref);
+    if (parsed === undefined) return null;
+    let text: string | null;
+    if (parsed.anchor !== null) {
+      const anchor = ctx.documents.resolveAnchor(ref);
+      text = anchor === null ? null : recordEvidenceText(anchor.record);
+    } else {
+      const stored = ctx.documents.get(parsed.sourceId);
+      const entry = evidence[parsed.entryIndex]!;
+      text = stored?.page
+        ? pageEvidenceText(stored.page.analysis, stored.title)
+        : `${entry.title ?? ''}\n${entry.excerpt ?? ''}`;
+    }
+    evidenceText.set(ref, text);
+    return text;
+  };
   const constraintsResult = reconcileConstraints(
     publishArray(raw.constraints)
       .slice(0, 12)
@@ -346,6 +365,19 @@ export function composeAgentBrief(
         };
       }),
     ctx.contract,
+    (condition) =>
+      checkAnchoring(
+        [
+          {
+            id: condition.name,
+            kind: 'constraint',
+            text: condition.value,
+            refs: condition.refs,
+            mode: 'numbers-and-words',
+          },
+        ],
+        loadEvidence,
+      ).flagged.length === 0,
   );
   const constraints = constraintsResult.constraints;
   const alternativeRefs = union(
@@ -460,24 +492,7 @@ export function composeAgentBrief(
         mode: 'numbers-and-words',
       });
   });
-  const evidenceText = new Map<string, string | null>();
-  const loadEvidence = (ref: string): string | null => {
-    const parsed = resolved.get(ref);
-    if (parsed === undefined) return null;
-    if (parsed.anchor !== null) {
-      const anchor = ctx.documents.resolveAnchor(ref);
-      return anchor === null ? null : recordEvidenceText(anchor.record);
-    }
-    const stored = ctx.documents.get(parsed.sourceId);
-    if (stored?.page !== null && stored?.page !== undefined)
-      return pageEvidenceText(stored.page.analysis, stored.title);
-    const entry = evidence[parsed.entryIndex]!;
-    return `${entry.title ?? ''}\n${entry.excerpt ?? ''}`;
-  };
-  const report = checkAnchoring(claims, (ref) => {
-    if (!evidenceText.has(ref)) evidenceText.set(ref, loadEvidence(ref));
-    return evidenceText.get(ref) ?? null;
-  });
+  const report = checkAnchoring(claims, loadEvidence);
   const alternativesCount = delivery.alternativesRows.length + delivery.alternativesFindings.length;
   const notices: BriefNotice[] = [...delivery.notices, ...constraintsResult.notices];
   if (alternativesCount > 0)

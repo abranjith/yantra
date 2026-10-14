@@ -54,7 +54,7 @@ import {
   exitCodeFor,
   type OrchestratorRunOutcome,
 } from '@yantra/core/workflow/replay';
-import { createBrief, type BriefSource, type ConfirmationRequest } from '@yantra/protocol';
+import type { ConfirmationRequest } from '@yantra/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fixtureSearchService } from './fixtures/search-service.js';
@@ -446,8 +446,10 @@ function promotionScenario(): Scenario {
     });
     expect(submitted.status).toBe('ok');
     await session.call('browser_observe', {});
-    await session.call('browser_extract', { kind: 'content' });
-    await publish(session, [source(1, `${fixtureSite.baseUrl}/form.html`)]);
+    const extracted = await session.call('browser_extract', { kind: 'content' });
+    const ref = parseModel(extracted).source_id;
+    expect(typeof ref).toBe('string');
+    await publish(session, [String(ref)]);
   };
 }
 
@@ -460,7 +462,7 @@ function invocationScenario(): Scenario {
     const ran = await session.call('workflow_run', { mode: 'run', workflow: 'catalog-flow' });
     expect(ran.status).toBe('ok');
     expect(ran.modelText).toContain('completed');
-    await publish(session, [source(1, `${fixtureSite.baseUrl}/form.html`)]);
+    await publish(session, []);
   };
 }
 
@@ -490,29 +492,14 @@ function catalogTrace(): PromotableTraceStep[] {
   ];
 }
 
-async function publish(session: ScenarioSession, sources: BriefSource[]): Promise<void> {
-  const citations = sources.map((item) => `[${item.n}]`).join('');
-  const brief = createBrief({
-    task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
+  const citations = refs.map((ref) => `[${ref}]`).join('');
+  const brief = {
     title: 'Bridge result',
     overview: `Fixture evidence was verified. ${citations}`,
-    sources,
-  });
+  };
   const result = await session.call('result_publish', { brief });
   expect(result.status).toBe('ok');
-}
-
-function source(n: number, url: string): BriefSource {
-  return {
-    n,
-    url,
-    final_url: null,
-    host: new URL(url).host,
-    title: `Fixture source ${n}`,
-    excerpt: null,
-    fetched_at: new Date().toISOString(),
-    published_at: null,
-  };
 }
 
 function parseModel(result: YantraToolResult): Record<string, unknown> {

@@ -18,7 +18,6 @@ import {
   type BrowserRuntimeServices,
   type BrowserSelection,
   type EthicsConfig,
-  type FetchTierEvent,
   type HttpFetcherOptions,
   type InstallOfferGateway,
   type KeychainProvider,
@@ -111,7 +110,7 @@ import {
   type CommandTaskProfile,
 } from './profiles.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
-import { countingBrowserProvider, RunHealthLedger } from './run-health.js';
+import { countingBrowserProvider, recordFetchTierEvent, RunHealthLedger } from './run-health.js';
 import { RunRecorder } from './run-recorder.js';
 import {
   ActionPhase,
@@ -1777,61 +1776,6 @@ async function writeRunHealth(runDir: string, health: RunHealth): Promise<void> 
   const temp = `${target}.${process.pid}.tmp`;
   await writeFile(temp, `${JSON.stringify(validated, null, 2)}\n`, 'utf8');
   await rename(temp, target);
-}
-
-/** The `fetch_challenge` runtime-log projection: tier, marker, and host only. */
-interface FetchChallengeEvent {
-  readonly schema_version: 1;
-  readonly event: 'fetch_challenge';
-  readonly tier: 'http' | 'browser';
-  readonly marker: string;
-  readonly host: string;
-}
-
-/** The `fetch_escalated` runtime-log projection: why, and the host only. */
-interface FetchEscalatedEvent {
-  readonly schema_version: 1;
-  readonly event: 'fetch_escalated';
-  readonly reason: string;
-  readonly host: string;
-}
-
-/**
- * Audit one hybrid-fetcher tier decision: a challenge is a `warn` (the site's
- * bot detection refused a tier), an escalation an `info`. Neither line carries
- * a URL path, query, or page text. Recording never changes the fetch, so a
- * fault here is reported to the process and the fetch proceeds.
- */
-function recordFetchTierEvent(
-  event: FetchTierEvent,
-  logger: Logger,
-  ledger: RunHealthLedger,
-): void {
-  try {
-    ledger.recordTierEvent(event);
-    if (event.kind === 'challenge') {
-      const line: FetchChallengeEvent = {
-        schema_version: 1,
-        event: 'fetch_challenge',
-        tier: event.tier,
-        marker: event.marker,
-        host: event.host,
-      };
-      logger.warn(toLogPayload(line), 'fetch challenge');
-    } else {
-      const line: FetchEscalatedEvent = {
-        schema_version: 1,
-        event: 'fetch_escalated',
-        reason: event.reason,
-        host: event.host,
-      };
-      logger.info(toLogPayload(line), 'fetch escalated');
-    }
-  } catch (error) {
-    process.emitWarning(
-      `fetch tier event recording failed (${error instanceof Error ? error.name : 'UnknownError'})`,
-    );
-  }
 }
 
 /** The `run_health` runtime-log projection: the summary, under a fixed event name. */

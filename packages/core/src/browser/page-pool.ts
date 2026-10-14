@@ -22,7 +22,13 @@
  * starts at most two Chrome processes: this pool's and the task browser's.
  */
 
-import { abortError, raceDeadline, type PageSource, type PageUseOptions } from './page-source.js';
+import {
+  abortError,
+  withPageDeadline,
+  useAcquiredPage,
+  type PageSource,
+  type PageUseOptions,
+} from './page-source.js';
 import type { BrowserProvider, BrowserSession, Logger, Page } from './types.js';
 
 /** `withPage` was called on (or was waiting when) the pool closed. */
@@ -105,30 +111,25 @@ export class PagePool implements PageSource {
   /** @inheritdoc */
   public async withPage<T>(fn: (page: Page) => Promise<T>, opts: PageUseOptions): Promise<T> {
     if (this.closing !== null) throw new PagePoolClosedError();
-    opts.signal.throwIfAborted();
-    await this.acquireSlot(opts.signal);
-    try {
-      const session = await this.ensureSession();
-      const page = await session.newIsolatedPage();
-      this.contexts += 1;
-      try {
-        return await raceDeadline(
-          fn(page),
-          opts,
-          () => page.close(),
-          () => {
-            this.timeouts += 1;
-          },
-        );
-      } finally {
-        // Closing the facade closes its context. A context the deadline path
-        // already closed (or a crashed browser) makes this a no-op failure.
-        // swallow-ok: the use's own outcome is what the caller needs.
-        await page.close().catch(() => undefined);
-      }
-    } finally {
-      this.releaseSlot();
-    }
+    return withPageDeadline(
+      async (signal, assertActive) => {
+        await this.acquireSlot(signal);
+        try {
+          assertActive();
+          const session = await this.ensureSession();
+          assertActive();
+          const page = await session.newIsolatedPage();
+          this.contexts += 1;
+          return await useAcquiredPage(page, signal, fn, assertActive);
+        } finally {
+          this.releaseSlot();
+        }
+      },
+      opts,
+      () => {
+        this.timeouts += 1;
+      },
+    );
   }
 
   /**
@@ -209,6 +210,7 @@ export class PagePool implements PageSource {
   }
 
   private acquireSlot(signal: AbortSignal): Promise<void> {
+    if (this.closing !== null) return Promise.reject(new PagePoolClosedError());
     if (this.active < this.maxConcurrentPages && this.waiters.length === 0) {
       this.take();
       return Promise.resolve();

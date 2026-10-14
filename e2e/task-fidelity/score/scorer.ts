@@ -235,9 +235,9 @@ function hostOf(url: string): string {
 }
 
 /**
- * The evidence the run stored for each URL: page text from every successful
- * `web_fetch`/`web_search` audit record in `tool-calls.jsonl`, plus each Brief
- * source's excerpt. Read from the artifact, so it works for agentic runs too.
+ * URL-attributed text and extracted parts from audited web/browser reads,
+ * referenced run captures, and Brief source excerpts. Agentic and scripted
+ * runs use the same artifact boundary.
  */
 export function storedEvidence(run: Pick<ScenarioRun, 'artifacts'>): Map<string, string> {
   const evidence = new Map<string, string>();
@@ -245,9 +245,52 @@ export function storedEvidence(run: Pick<ScenarioRun, 'artifacts'>): Map<string,
     if (typeof url !== 'string' || typeof text !== 'string') return;
     evidence.set(url, `${evidence.get(url) ?? ''}\n${text}`);
   };
+  const corpus = (payload: Loose): string => {
+    const parts = [
+      payload.title,
+      payload.text,
+      payload.readableText,
+      payload.excerpt,
+      asRecord(payload.preview)?.text,
+    ];
+    for (const record of asArray(payload.records)) {
+      const entry = asRecord(record);
+      if (entry !== null)
+        parts.push(
+          entry.title,
+          entry.text,
+          entry.segments,
+          entry.fields,
+          asArray(entry.numbers).map((number) => asRecord(number)?.text),
+          asArray(entry.links).map((link) => asRecord(link)?.text),
+        );
+    }
+    parts.push(
+      payload.fields,
+      asArray(payload.tables).map((table) => {
+        const entry = asRecord(table);
+        return [entry?.caption, entry?.headers, entry?.rows];
+      }),
+      asArray(payload.structured).map((entry) => asRecord(entry)?.props),
+    );
+    return scalarLeaves(parts).join('\n');
+  };
+  const readPage = (payload: Loose | null, details: Loose | null): void => {
+    if (payload === null) return;
+    const url = payload.url ?? details?.final_url;
+    add(url, corpus(payload));
+    for (const ref of [payload.capture_ref, details?.capture_ref, details?.analysis_capture_ref]) {
+      if (typeof ref !== 'string') continue;
+      const captured = run.artifacts.captures?.[ref];
+      add(url, typeof captured === 'string' ? captured : corpus(asRecord(captured) ?? {}));
+    }
+  };
   for (const line of run.artifacts.toolCalls?.lines ?? []) {
     const record = asRecord(line);
-    if (record?.phase !== 'end' || (record.tool !== 'web_fetch' && record.tool !== 'web_search'))
+    if (
+      record?.phase !== 'end' ||
+      !['web_fetch', 'web_search', 'browser_extract'].includes(textOf(record.tool))
+    )
       continue;
     for (const part of asArray(asRecord(record.output_sanitized)?.content)) {
       const text = asRecord(part)?.text;
@@ -259,15 +302,25 @@ export function storedEvidence(run: Pick<ScenarioRun, 'artifacts'>): Map<string,
         continue; // swallow-ok: a non-JSON part carries no URL-attributable evidence.
       }
       const payload = asRecord(model);
-      add(payload?.url, `${textOf(payload?.text)}\n${textOf(payload?.excerpt)}`);
+      const details = asRecord(asRecord(record.output_sanitized)?.details);
+      readPage(payload, details);
       for (const site of asArray(payload?.sites)) {
         const siteRecord = asRecord(site);
-        add(siteRecord?.url, `${textOf(siteRecord?.text)}\n${textOf(siteRecord?.excerpt)}`);
+        readPage(siteRecord, null);
       }
     }
   }
   for (const source of sourcesOf(run).values()) add(source.url, source.excerpt);
   return evidence;
+}
+
+/** Source data can carry numeric/boolean values as well as string leaves. */
+function scalarLeaves(value: unknown): string[] {
+  if (typeof value === 'number' || typeof value === 'boolean') return [String(value)];
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(scalarLeaves);
+  const record = asRecord(value);
+  return record === null ? [] : Object.values(record).flatMap(scalarLeaves);
 }
 
 // ---------------------------------------------------------------------------
@@ -413,14 +466,27 @@ export function constraintFidelity(
   }
   const brief = asRecord(run.artifacts.brief);
   const asserted = `${textOf(brief?.title)}\n${textOf(brief?.overview)}`;
+  const verifiedConditions = asArray(brief?.constraints)
+    .map(asRecord)
+    .filter((entry) => entry?.status === 'verified');
   const verified = new Set(
-    asArray(brief?.constraints)
-      .map(asRecord)
-      .filter((entry) => entry?.status === 'verified')
-      .map((entry) => normalize(textOf(entry?.name))),
+    verifiedConditions.map((entry) =>
+      JSON.stringify([normalize(textOf(entry?.name)), normalize(textOf(entry?.value))]),
+    ),
   );
   for (const filter of contract.filters) {
-    if (containsTerm(asserted, filter.value) && !verified.has(normalize(filter.name))) {
+    const required = JSON.stringify([normalize(filter.name), normalize(filter.value)]);
+    const contrary = verifiedConditions.find(
+      (entry) =>
+        normalize(textOf(entry?.name)) === normalize(filter.name) &&
+        normalize(textOf(entry?.value)) !== normalize(filter.value),
+    );
+    if (contrary !== undefined) {
+      violations += 1;
+      detail.push(
+        `verifies ${filter.name}=${textOf(contrary?.value)} instead of required ${filter.value}`,
+      );
+    } else if (containsTerm(asserted, filter.value) && !verified.has(required)) {
       violations += 1;
       detail.push(
         `asserts ${filter.name}=${filter.value} in the title or overview without a verified constraint`,

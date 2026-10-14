@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import {
   analyzeLivePage,
   classifyResponse,
+  normalizeExtractedText,
   type AgentBrowserController,
+  type PageSnapshot,
+  type PageExtraction,
   type PageAnalysis,
   type PageLink,
 } from '@yantra/core';
@@ -16,6 +19,7 @@ import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.
 import type { RunServices } from '../../../runtime/run-services.js';
 
 import { browserController, browserFailure, isDomainFailure } from './browser-common.js';
+import { knownPageChallenge, recordPageChallenge } from './page-challenge.js';
 import {
   evidenceExcerpt,
   fullViewBudget,
@@ -158,40 +162,80 @@ async function runExtract(params: Params, services: RunServices): Promise<Domain
           message: renderAgentMessage('tool', 'BROWSER_UNAVAILABLE', 'services-missing'),
           retryable: false,
         };
-  if (resolved.kind === 'content') return extractContent(controller, services);
-  return extractPart({ kind: resolved.kind, index: resolved.index }, controller, services);
+  const challenged = knownPageChallenge(services, controller.url());
+  if (challenged !== null) {
+    services.runHealth.recordMemoHit();
+    return challenged;
+  }
+  let snapshot: PageSnapshot;
+  try {
+    snapshot = await controller.snapshot();
+  } catch (error) {
+    return browserFailure(error);
+  }
+  if (!validSnapshot(snapshot))
+    return {
+      ok: false,
+      errorCode: 'EXTRACTION_SCHEMA_INVALID',
+      retryable: true,
+      message: renderAgentMessage('tool', 'EXTRACTION_SCHEMA_INVALID', 'invalid-extraction', {
+        kind: resolved.kind,
+      }),
+    };
+  // The page may have redirected since controller.url() was read.
+  const finalChallenge = knownPageChallenge(services, snapshot.url);
+  if (finalChallenge !== null) {
+    services.runHealth.recordMemoHit();
+    return finalChallenge;
+  }
+  const classified = classifyResponse({ html: snapshot.html, contentType: 'text/html' });
+  if (classified.kind === 'challenge')
+    return recordPageChallenge(services, snapshot.url, classified.marker);
+  const extraction = await analyzeLivePage(
+    { extractor: services.domain.fetch.extractor },
+    snapshot,
+  );
+  if (resolved.kind === 'content')
+    return extractContent(snapshot, extraction, controller, services);
+  return extractPart(
+    { kind: resolved.kind, index: resolved.index },
+    snapshot,
+    extraction,
+    controller,
+    services,
+  );
 }
 
 /** `content`: the rendered title and block-structured text. */
 async function extractContent(
+  snapshot: PageSnapshot,
+  extraction: PageExtraction,
   controller: AgentBrowserController,
   services: RunServices,
 ): Promise<DomainResult> {
   const deps = services.domain.browser;
   const host = controller.host();
-  let extracted: unknown;
-  try {
-    extracted = await controller.extract('content');
-  } catch (error) {
-    return browserFailure(error);
-  }
-  if (!validContent(extracted))
-    return {
-      ok: false,
-      errorCode: 'EXTRACTION_SCHEMA_INVALID',
-      message: renderAgentMessage('tool', 'EXTRACTION_SCHEMA_INVALID', 'invalid-extraction', {
-        kind: 'content',
-      }),
-      retryable: true,
-    };
+  const extracted = { title: snapshot.title, text: normalizeExtractedText(snapshot.visibleText) };
   services.trace?.append({
     kind: 'extract',
     host,
     extractionKind: 'content',
     requires_confirmation: false,
   });
-  const sourceId = recordContentEvidence(extracted, controller, services);
-  const identity = sourceId === null ? {} : { source_id: sourceId };
+  const sourceId = recordContentEvidence(extracted, snapshot.url, services);
+  if (sourceId !== null) {
+    services.urlProvenance.record(snapshot.url, { kind: 'tool', tool: 'browser_extract' });
+    services.documents.attachPage(
+      sourceId,
+      { ...extraction.page, readableText: extracted.text },
+      {
+        delivered: 'partial',
+        article: extraction.article,
+      },
+    );
+    recordDiscovered(services, sourceId, { text: extracted.text });
+  }
+  const identity = sourceId === null ? {} : { source_id: sourceId, url: snapshot.url };
   const serialized = JSON.stringify(extracted);
   if (deps === null || Buffer.byteLength(serialized, 'utf8') <= deps.captureThresholdBytes)
     return { ok: true, model: { ...extracted, ...identity } };
@@ -219,34 +263,12 @@ async function extractContent(
  */
 async function extractPart(
   resolved: PartRequest,
+  snapshot: PageSnapshot,
+  extraction: PageExtraction,
   controller: AgentBrowserController,
   services: RunServices,
 ): Promise<DomainResult> {
   const host = controller.host();
-  let snapshot;
-  try {
-    snapshot = await controller.snapshot();
-  } catch (error) {
-    return browserFailure(error);
-  }
-
-  // A challenge page is never extracted, on any path (memory: a challenge seen
-  // in the browser is terminal for that URL — no evidence, a handoff).
-  const classified = classifyResponse({ html: snapshot.html, contentType: 'text/html' });
-  if (classified.kind === 'challenge') {
-    return {
-      ok: false,
-      errorCode: 'SITE_CHALLENGE',
-      message: renderAgentMessage('tool', 'SITE_CHALLENGE', 'challenge', { host }),
-      retryable: false,
-      details: { host, tier: 'browser', handoff: true, marker: classified.marker },
-    };
-  }
-
-  const extraction = await analyzeLivePage(
-    { extractor: services.domain.fetch.extractor },
-    snapshot,
-  );
   const page = extraction.page;
 
   if (resolved.kind === 'table' && resolved.index >= page.tables.length) {
@@ -285,7 +307,9 @@ async function extractPart(
   const stored =
     record === null
       ? null
-      : services.documents.attachPage(record.sourceId, page, { delivered: 'full', article });
+      : services.documents.attachPage(record.sourceId, page, { delivered: 'partial', article });
+  if (record !== null)
+    services.urlProvenance.record(snapshot.url, { kind: 'tool', tool: 'browser_extract' });
 
   const view = viewFor(resolved, page);
   const input: ProjectPageInput = {
@@ -401,10 +425,9 @@ const EVIDENCE_EXCERPT_CHARS = 1_000;
  */
 function recordContentEvidence(
   extracted: { readonly title: string; readonly text: string },
-  controller: AgentBrowserController,
+  url: string,
   services: RunServices,
 ): string | null {
-  const url = controller.url();
   if (!/^https?:\/\//iu.test(url)) return null;
   const { title, text } = extracted;
   const record = services.documents.observe(url, {
@@ -424,8 +447,8 @@ function recordContentEvidence(
   return record.sourceId;
 }
 
-function validContent(value: unknown): value is { title: string; text: string } {
+function validSnapshot(value: unknown): value is PageSnapshot {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
-  return typeof record.title === 'string' && typeof record.text === 'string';
+  return ['title', 'url', 'html', 'visibleText'].every((key) => typeof record[key] === 'string');
 }

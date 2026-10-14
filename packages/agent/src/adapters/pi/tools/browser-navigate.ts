@@ -20,6 +20,7 @@ import {
   recordActionProvenance,
 } from './browser-common.js';
 import { mapBrowserStartupError } from './browser-startup-errors.js';
+import { knownPageChallenge } from './page-challenge.js';
 import { recordProvenanceRefusal } from './provenance-refusals.js';
 
 const BrowserNavigateParams = Type.Object(
@@ -70,6 +71,11 @@ async function runNavigate(params: Params, services: RunServices): Promise<Domai
   }
   // Audit-only: how this URL was attested, so a discovered chain is visible hop by hop.
   const provenance = provenanceDetails(explanation);
+  const challenged = knownPageChallenge(services, params.url);
+  if (challenged !== null) {
+    services.runHealth.recordMemoHit();
+    return { ...challenged, details: { ...asDetailsRecord(challenged.details), provenance } };
+  }
   const allowed = services.urlPolicy.check(params.url);
   if (!allowed.isOk)
     return {

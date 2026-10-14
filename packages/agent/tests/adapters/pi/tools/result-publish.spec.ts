@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createBriefPublisher,
   resultPublishSpec,
+  runtimeFactsFor,
 } from '../../../../src/adapters/pi/tools/result-publish.js';
 import { webFetchSpec } from '../../../../src/adapters/pi/tools/web-fetch.js';
 import {
@@ -461,11 +462,10 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
     ]);
   });
 
-  it('passes a complete protocol Brief through untouched even when the ledger has entries', async () => {
+  it('allows trusted internal callers to publish a complete protocol Brief directly', async () => {
     // Internal/scripted callers publish fully-formed Briefs; replacing their
     // sources or coercing their typed findings would invalidate them.
     const services = withEvidence();
-    const tool = wrapTool(resultPublishSpec(services), services);
 
     const complete = createBrief({
       task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -487,9 +487,9 @@ describe('@no-llm result_publish tool — ledger-authoritative sources', () => {
         },
       ],
     });
-    const result = await tool.execute({ brief: complete }, undefined);
+    const result = await services.domain.publish.publish(complete);
 
-    expect(result.status).toBe('ok');
+    expect(result.isOk).toBe(true);
     const brief = await publishedBrief();
     expect(brief.sources).toMatchObject([{ n: 1, url: 'https://scripted.example.com/evidence' }]);
     expect(brief.key_findings).toMatchObject([
@@ -622,7 +622,7 @@ describe('@no-llm result_publish — runtime-derived notices and search provider
       notices: [{ source: 'x.example', reason: 'own notice', kind: 'other' }],
     });
 
-    await wrapTool(resultPublishSpec(services), services).execute({ brief: complete }, undefined);
+    await services.domain.publish.publish(complete, { runtimeFacts: runtimeFactsFor(services) });
 
     const brief = await storedBrief();
     expect(brief.notices.map((notice) => notice.kind)).toEqual([

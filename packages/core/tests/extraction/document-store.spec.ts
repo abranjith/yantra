@@ -49,6 +49,43 @@ function failLoader(terminal: boolean, code = 'FETCH_HTTP_ERROR') {
 }
 
 describe('@no-llm extraction/document-store read', () => {
+  it('an observed challenge overrides cached content and blocks known redirect aliases', async () => {
+    const store = new DocumentStore();
+    const requested = 'https://inventory.test/start';
+    const final = 'https://inventory.test/list';
+    await store.read(requested, okLoader(requested, final).load);
+    store.rememberFailure(
+      final,
+      new FetchError('challenge', { url: final, kind: 'challenge', tier: 'browser' }),
+      {
+        code: 'SITE_CHALLENGE',
+        reason: 'challenge',
+        failure: {},
+        browserChallenge: true,
+      },
+    );
+    const loader = okLoader(requested);
+    for (const url of [requested, final]) {
+      expect(store.failureFor(url)?.browserChallenge).toBe(true);
+      expect(await store.read(url, loader.load)).toMatchObject({
+        kind: 'failed',
+        code: 'SITE_CHALLENGE',
+        memoized: true,
+      });
+    }
+    expect(loader.calls()).toBe(0);
+    expect(store.entries()).toHaveLength(1);
+  });
+  it('never memorizes an observed transient failure', () => {
+    const store = new DocumentStore();
+    const url = 'https://inventory.test/';
+    store.rememberFailure(url, new FetchError('timeout', { url, kind: 'timeout' }), {
+      code: 'FETCH_TIMEOUT',
+      reason: 'timeout',
+      failure: {},
+    });
+    expect(store.failureFor(url)).toBeNull();
+  });
   it('three sequential reads load once: fetched, then two hits with the same S1', async () => {
     const store = new DocumentStore();
     const loader = okLoader('https://a.com/x');

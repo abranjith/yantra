@@ -81,16 +81,92 @@ export class PageTimeoutError extends Error {
 export function launchPerUsePageSource(provider: BrowserProvider): PageSource {
   return {
     async withPage<T>(fn: (page: Page) => Promise<T>, opts: PageUseOptions): Promise<T> {
-      opts.signal.throwIfAborted();
-      const session = await provider.launch({ profile: { kind: 'ephemeral' }, headless: true });
-      try {
-        const page = await session.newPage();
-        return await raceDeadline(fn(page), opts, () => page.close());
-      } finally {
-        await session.close();
-      }
+      return withPageDeadline(async (signal, assertActive) => {
+        const session = await provider.launch({ profile: { kind: 'ephemeral' }, headless: true });
+        try {
+          assertActive();
+          const page = await session.newPage();
+          return await useAcquiredPage(page, signal, fn, assertActive);
+        } finally {
+          await session.close();
+        }
+      }, opts);
     },
   };
+}
+
+/** @internal One deadline covers queueing, acquisition, work, and cleanup. */
+export function withPageDeadline<T>(
+  work: (signal: AbortSignal, assertActive: () => void) => Promise<T>,
+  opts: PageUseOptions,
+  onTimeout: () => void = () => undefined,
+): Promise<T> {
+  if (opts.signal.aborted) return Promise.reject(abortError(opts.signal));
+  const cancellation = new AbortController();
+  const deadline = performance.now() + opts.timeoutMs;
+  let timedOut = false;
+  const recordTimeout = (): void => {
+    if (timedOut) return;
+    timedOut = true;
+    onTimeout();
+  };
+  const assertActive = (): void => {
+    cancellation.signal.throwIfAborted();
+    if (performance.now() >= deadline) {
+      const error = new PageTimeoutError(opts.timeoutMs);
+      cancellation.abort(error);
+      recordTimeout();
+      throw error;
+    }
+  };
+  const pending = Promise.resolve().then(async () => {
+    assertActive();
+    const value = await work(cancellation.signal, assertActive);
+    assertActive();
+    return value;
+  });
+  return raceDeadline(
+    pending,
+    opts,
+    () => {
+      cancellation.abort(
+        opts.signal.aborted ? abortError(opts.signal) : new PageTimeoutError(opts.timeoutMs),
+      );
+      return Promise.resolve();
+    },
+    recordTimeout,
+  );
+}
+
+/** @internal A late-acquired page is closed without running a cancelled callback. */
+export async function useAcquiredPage<T>(
+  page: Page,
+  signal: AbortSignal,
+  fn: (page: Page) => Promise<T>,
+  assertActive: () => void,
+): Promise<T> {
+  let cancel: () => void = () => undefined;
+  try {
+    assertActive();
+    return await new Promise<T>((resolve, reject) => {
+      cancel = () => {
+        // swallow-ok: deadline cancellation may already have closed the context.
+        void page.close().catch(() => undefined);
+        reject(abortError(signal));
+      };
+      signal.addEventListener('abort', cancel, { once: true });
+      void Promise.resolve()
+        .then(() => {
+          assertActive();
+          return fn(page);
+        })
+        .then(resolve, reject);
+    });
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    // swallow-ok: preserve the page-work outcome after a crash or cancellation.
+    await page.close().catch(() => undefined);
+  }
 }
 
 /**
@@ -128,11 +204,6 @@ export function raceDeadline<T>(
       abandon(new PageTimeoutError(opts.timeoutMs));
     }, opts.timeoutMs);
     timer.unref?.();
-    if (opts.signal.aborted) {
-      onAbort();
-      return;
-    }
-    opts.signal.addEventListener('abort', onAbort, { once: true });
     work.then(
       (value) => {
         if (finish()) resolve(value);
@@ -141,5 +212,7 @@ export function raceDeadline<T>(
         if (finish()) reject(asError(error));
       },
     );
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener('abort', onAbort, { once: true });
   });
 }

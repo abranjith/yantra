@@ -164,9 +164,12 @@ a Chrome process for each page.
   the next.
 - **Bounded.** At most two background pages are open at once. Further requests wait in arrival order,
   and a request cancelled while waiting leaves the queue without taking a page.
-- **Honest about time.** Each use honors its caller's timeout and cancellation. On either, the
-  page's context is closed, which stops the page work in flight, and the caller gets a timeout or the
-  cancellation instead of waiting for the page to go idle.
+- **Honest about time.** One caller timeout covers waiting in the queue, browser launch, page
+  creation, page work, and cleanup. Timeout or cancellation closes the page's context to stop work
+  in flight and returns the corresponding error promptly. A page acquired after cancellation is
+  closed without starting its callback. Cancelling one borrower preserves the shared browser launch
+  for other borrowers; the deterministic per-use path closes a browser that arrives after its caller
+  has stopped waiting.
 - **Relaunched once.** If the pool's browser crashes or disconnects, the next request relaunches it,
   once per run. A second loss fails background page work for the rest of the run with a typed error
   rather than launching again.

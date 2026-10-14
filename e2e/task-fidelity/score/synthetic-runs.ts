@@ -120,6 +120,7 @@ export function syntheticRun(input: {
   readonly browserLaunches?: number;
   readonly wallMs?: number;
   readonly outcome?: AgenticTaskOutcome['kind'];
+  readonly captures?: Readonly<Record<string, unknown>>;
 }): ScenarioRun {
   const artifacts: RunArtifacts = {
     manifest: input.manifest ?? null,
@@ -133,6 +134,7 @@ export function syntheticRun(input: {
     runHealth: input.runHealth ?? null,
     contract: null,
     unparseableJson: [],
+    ...(input.captures === undefined ? {} : { captures: input.captures }),
   };
   return {
     scenario: listingTable,

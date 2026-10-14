@@ -23,6 +23,7 @@
  */
 
 import {
+  FetchError,
   createAskEthicsAdapter,
   domainFromUrl,
   isTerminalFetchFailure,
@@ -47,6 +48,7 @@ import type { RunServices } from '../../../runtime/run-services.js';
 import type { AllowedUrl } from '../../../runtime/url-policy.js';
 
 import { writeCapture } from './capture.js';
+import { knownPageChallenge } from './page-challenge.js';
 import { evidenceExcerpt, projectPage, recordDiscovered, summaryBudget } from './page-payload.js';
 import { mapSearchError } from './search-errors.js';
 
@@ -280,6 +282,9 @@ async function readHit(
         code: failure.stage,
         reason: failure.reason,
         failure: { processed, decision: gated.decision } satisfies HitFailure,
+        ...(processed.cause instanceof FetchError && processed.cause.context.kind === 'challenge'
+          ? { browserChallenge: true as const }
+          : {}),
       };
     },
   );
@@ -290,6 +295,18 @@ async function readHit(
     case 'hit':
       return { kind: 'already-read', record: read.record };
     case 'failed': {
+      if (read.memoized && knownPageChallenge(services, allowed.value.url) !== null)
+        return {
+          kind: 'processed',
+          record: null,
+          memoized: true,
+          processed: {
+            rank: hit.rank,
+            doc: null,
+            failure: sourceFailureOf(hit.url, 'blocked', 'challenge page'),
+            fetchMode: null,
+          },
+        };
       // The payload of whichever load ran — this call's, or the concurrent
       // read this call joined — so its gate decision is the one that applied.
       const { processed, decision } = read.failure as HitFailure;

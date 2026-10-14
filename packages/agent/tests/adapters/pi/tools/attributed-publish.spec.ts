@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { TaskContractBody, validateBrief } from '@yantra/protocol';
+import { TaskContractBody, createBrief, validateBrief } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -45,6 +45,35 @@ describe('@no-llm attributed publication', () => {
     });
     return { services, logger, tool: wrapTool(resultPublishSpec(services), services) };
   }
+  it('applies the contract to model arguments containing complete protocol identity and metadata', async () => {
+    const { services, tool } = setup();
+    await services.contract.declare(
+      TaskContractBody.parse({
+        deliverable: 'table',
+        subject: 'cars',
+        required_fields: ['price'],
+        filters: [{ name: 'drivetrain', value: 'AWD' }],
+        required_sources: ['listings.test'],
+        ranking: null,
+        limit: null,
+        notes: null,
+      }),
+      services.nowIso(),
+    );
+    const input = createBrief({
+      task_id: services.runId,
+      title: 'AWD offers',
+      overview: 'All requirements met.',
+      metadata: { citation_verdict: { claims_checked: 0, flagged: 0, stripped: 0 } },
+    });
+    const result = await tool.execute({ brief: input }, undefined);
+    expect(result.error_code).toBe('BRIEF_INVALID');
+    expect(result.details).toMatchObject({
+      issues: [expect.objectContaining({ cause: 'contract-table-missing' })],
+    });
+    await expect(access(join(runDir, 'brief.json'))).rejects.toThrow();
+    expect(services.actionPhase.isClosed()).toBe(false);
+  });
   it('reports invalid refs without artifacts or composition logs, then accepts correction', async () => {
     const { tool, logger } = setup();
     const input = {

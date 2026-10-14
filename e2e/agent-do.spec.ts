@@ -30,7 +30,7 @@ import {
   type SearchProvider,
 } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
-import { createBrief, type BriefSource, type ConfirmationRequest } from '@yantra/protocol';
+import type { ConfirmationRequest } from '@yantra/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fixtureSearchService } from './fixtures/search-service.js';
@@ -257,17 +257,16 @@ describe('@no-llm yantra do release scenarios', () => {
       scenario: async (session) => {
         await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/` });
         await session.call('browser_observe', {});
+        const first = await session.call('browser_extract', { kind: 'content' });
         await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/form.html` });
         await session.call('browser_observe', {});
-        await publish(session, [
-          source(1, `${fixtureSite.baseUrl}/`),
-          source(2, `${fixtureSite.baseUrl}/form.html`),
-        ]);
+        const second = await session.call('browser_extract', { kind: 'content' });
+        await publish(session, [sourceRef(first), sourceRef(second)]);
       },
     });
 
     expect(result.outcome.kind).toBe('published');
-    expect(result.toolCalls.filter((entry) => entry.phase === 'end')).toHaveLength(5);
+    expect(result.toolCalls.filter((entry) => entry.phase === 'end')).toHaveLength(7);
     expect(await readFile(join(result.outcome.runDir, 'brief.json'), 'utf8')).toContain(
       'Fixture evidence',
     );
@@ -350,7 +349,8 @@ describe('@no-llm yantra do release scenarios', () => {
         // refused before host policy, the store, or any budget is reached.
         const blocked = await session.call('web_fetch', { url: 'https://foreign.invalid/steal' });
         expect(blocked.error_code).toBe('URL_NOT_FROM_EVIDENCE');
-        await publish(session, [source(1, `${fixtureSite.baseUrl}/hostile.html`)]);
+        const evidence = await session.call('browser_extract', { kind: 'content' });
+        await publish(session, [sourceRef(evidence)]);
       },
     });
 
@@ -368,7 +368,10 @@ describe('@no-llm yantra do release scenarios', () => {
           url: `${fixtureSite.baseUrl}/?q=sk-ABCDEF0123456789abcdef01`,
         });
         expect(blocked.error_code).toBe('URL_CREDENTIAL_SHAPE');
-        await publish(session, [source(1, `${fixtureSite.baseUrl}/hostile.html`)]);
+        const evidence = await session.call('web_fetch', {
+          url: `${fixtureSite.baseUrl}/hostile.html`,
+        });
+        await publish(session, [sourceRef(evidence)]);
       },
     });
 
@@ -415,33 +418,24 @@ function formScenario(publishOnSuccess: boolean): Scenario {
     await session.call('browser_observe', {});
     const extracted = await session.call('browser_extract', { kind: 'table' });
     expect(extracted.modelText).toContain('accepted');
-    await publish(session, [source(1, `${fixtureSite.baseUrl}/form.html`)]);
+    await publish(session, [sourceRef(extracted)]);
   };
 }
 
-async function publish(session: ScenarioSession, sources: BriefSource[]): Promise<void> {
-  const citations = sources.map((item) => `[${item.n}]`).join('');
-  const brief = createBrief({
-    task_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
+  const citations = refs.map((ref) => `[${ref}]`).join('');
+  const brief = {
     title: 'Fixture result',
     overview: `Fixture evidence was verified. ${citations}`,
-    sources,
-  });
+  };
   const result = await session.call('result_publish', { brief });
   expect(result.status).toBe('ok');
 }
 
-function source(n: number, url: string): BriefSource {
-  return {
-    n,
-    url,
-    final_url: null,
-    host: new URL(url).host,
-    title: `Fixture source ${n}`,
-    excerpt: null,
-    fetched_at: new Date().toISOString(),
-    published_at: null,
-  };
+function sourceRef(result: YantraToolResult): string {
+  const ref = parseModel(result).source_id;
+  if (typeof ref !== 'string') throw new Error('Scenario read returned no source ID');
+  return ref;
 }
 
 function parseModel(result: YantraToolResult): Record<string, unknown> {
