@@ -119,6 +119,8 @@ describe('@no-llm production InjectedScriptHost', () => {
     const puppeteerPage = page.puppeteerPage!;
     const host = page.locatorHost as PuppeteerInjectedScriptHost;
     const port = new URL(baseUrl).port;
+    const sameUrl = `${baseUrl}?frame=same`;
+    const crossUrl = `http://localhost:${port}/?frame=cross`;
     await puppeteerPage.evaluate(
       ({ same, cross }) => {
         const first = document.createElement('iframe');
@@ -129,12 +131,13 @@ describe('@no-llm production InjectedScriptHost', () => {
         second.src = cross;
         document.body.append(first, second);
       },
-      { same: `${baseUrl}?frame=same`, cross: `http://localhost:${port}/?frame=cross` },
+      { same: sameUrl, cross: crossUrl },
     );
-    await puppeteerPage.waitForFunction(() => window.frames.length === 2);
-    const children = puppeteerPage.frames().filter((frame) => frame !== puppeteerPage.mainFrame());
-    const same = children.find((frame) => frame.url().includes('127.0.0.1'))!;
-    const cross = children.find((frame) => frame.url().includes('localhost'))!;
+    const [same, cross] = await Promise.all([
+      puppeteerPage.waitForFrame((frame) => frame.url() === sameUrl),
+      puppeteerPage.waitForFrame((frame) => frame.url() === crossUrl),
+    ]);
+    await Promise.all([same.waitForSelector('#covered'), cross.waitForSelector('#covered')]);
     const sameToken = host.getFrameId(same);
     const crossToken = host.getFrameId(cross);
 
@@ -150,21 +153,27 @@ describe('@no-llm production InjectedScriptHost', () => {
       host.call(sameToken, 'resolveCandidate', [{ kind: 'css', selector: '#covered' }, true]),
     ).resolves.toMatchObject({ count: 1 });
     await puppeteerPage.evaluate(() => document.querySelector('#same-frame')?.remove());
-    await puppeteerPage.waitForFunction(() => window.frames.length === 1);
+    await expect.poll(() => puppeteerPage.frames().includes(same)).toBe(false);
     await expect(host.call(sameToken, 'resolveCandidate', [])).rejects.toThrow(
       /detached or unknown/,
     );
 
-    await puppeteerPage.evaluate((url) => {
+    const replacementUrl = `${baseUrl}?frame=replacement`;
+    await puppeteerPage.evaluate(() => {
       const replacement = document.createElement('iframe');
       replacement.id = 'same-frame-replacement';
-      replacement.src = url;
       document.body.append(replacement);
-    }, `${baseUrl}?frame=replacement`);
+    });
     await puppeteerPage.waitForFunction(() => window.frames.length === 2);
-    const replacement = puppeteerPage
-      .frames()
-      .find((frame) => frame.url().includes('frame=replacement'))!;
+    // Attachment alone does not mean the requested document has committed.
+    // Hold the replacement at about:blank to pin the previously racy gap.
+    expect(puppeteerPage.frames().find((frame) => frame.url() === replacementUrl)).toBeUndefined();
+    await puppeteerPage.evaluate((url) => {
+      const replacement = document.querySelector<HTMLIFrameElement>('#same-frame-replacement')!;
+      replacement.src = url;
+    }, replacementUrl);
+    const replacement = await puppeteerPage.waitForFrame((frame) => frame.url() === replacementUrl);
+    await replacement.waitForSelector('#covered');
     expect(host.getFrameId(replacement)).not.toBe(sameToken);
   });
 });
