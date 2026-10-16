@@ -55,15 +55,35 @@ export {
 export {
   CONTRACT_FILE,
   MISSING_CONTRACT_REASON,
+  NO_ACTION_TERMS,
   TaskContractStore,
+  effectiveActionTermsOf,
   hostSatisfiesRequiredSource,
   normalizeContract,
   normalizeSourceHost,
+  renderActionPhrase,
   renderContractEcho,
   type ContractIssue,
+  type EffectiveActionTerms,
   type TaskContractParams,
   type TaskContractStoreOptions,
 } from './task-contract.js';
+export {
+  ActionLedger,
+  actionLedgerFor,
+  type ActionLedgerEntry,
+  type ActionLedgerInput,
+  type CaptureEntry,
+  type ClickExecutedEntry,
+  type CommittedActionEntry,
+  type FillCommittedEntry,
+  type SubmitRefusedEntry,
+} from './action-ledger.js';
+export {
+  visionContractCapabilities,
+  type CaptureGapReason,
+  type ContractCapabilityResolver,
+} from './contract-capabilities.js';
 export {
   COMMAND_TASK_PROFILES,
   browserCapabilityOf,

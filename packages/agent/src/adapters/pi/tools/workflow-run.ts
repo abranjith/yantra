@@ -119,7 +119,7 @@ async function runWorkflowTool(params: Params, services: RunServices): Promise<D
   // FEAT-054 S8: a nested workflow would otherwise bypass the agent-side
   // no-submit refusal, so a clicking plan is refused before it runs.
   if (submitForbidden(services) && (await workflowMayClick(name, deps.loadSteps?.bind(deps)))) {
-    return submitRefusal(services, 'nested-workflow', name);
+    return submitRefusal(services, 'nested-workflow', name, null);
   }
 
   const outcome = await deps.run(

@@ -90,6 +90,7 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
+import { actionLedgerFor } from './action-ledger.js';
 import {
   composeAgentBrief,
   logBriefComposition,
@@ -692,6 +693,13 @@ export async function runAgenticTask(
       workflowToolMode: profile.workflowToolMode,
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
       contract,
+      actionLedger: actionLedgerFor({
+        controller: domain.browser?.controller ?? null,
+        sanitizer,
+        userInput,
+        nowIso: () => now().toISOString(),
+        ...(environment.runtimeLogger ? { logger: environment.runtimeLogger } : {}),
+      }),
     };
     const tools = createYantraTools(services, profile);
     const provider =

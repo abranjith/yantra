@@ -8,16 +8,46 @@
       "task": "TASK-001"
     },
     {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
     },
     {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-screenshot.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
@@ -32,6 +62,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/src/runtime/action-ledger.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/src/runtime/budget.ts",
       "status": "M",
       "role": "implement",
@@ -42,6 +78,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/agent/src/runtime/messages.ts",
@@ -104,6 +146,36 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-delta.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-obstruction.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-screenshot.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/task-contract.spec.ts",
       "status": "M",
       "role": "implement",
@@ -122,10 +194,28 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/tests/runtime/action-ledger.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/tests/runtime/budget.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",

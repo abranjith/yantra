@@ -15,6 +15,7 @@ import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
 import { toAgentToolResult } from '../../src/adapters/pi/tools/index.js';
+import { actionLedgerFor } from '../../src/runtime/action-ledger.js';
 import {
   BudgetTracker,
   DEFAULT_BUDGET_LIMITS,
@@ -85,6 +86,11 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       runDir: '.',
       command: 'ask',
       required: false,
+    }),
+    actionLedger: actionLedgerFor({
+      controller: null,
+      sanitizer,
+      nowIso: () => new Date().toISOString(),
     }),
   };
 }

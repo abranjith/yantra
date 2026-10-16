@@ -1133,6 +1133,8 @@ function fakeController() {
     url: vi.fn().mockReturnValue('https://example.com/page'),
     host: vi.fn().mockReturnValue('example.com'),
     describeRef: vi.fn().mockReturnValue({ ref: 'e1', role: 'button', name: 'Continue' }),
+    // Unreadable facts classify by name alone (FEAT-054 reads this before every click).
+    submitFacts: vi.fn().mockResolvedValue(null),
     // The real controller derives the persisted locator from the live element
     // via the locator engine's ranker. Default to the degraded (empty) result
     // so tests exercise the observed-role fallback unless they opt in.

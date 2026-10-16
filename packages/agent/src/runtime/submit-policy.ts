@@ -26,16 +26,21 @@ export function submitForbidden(services: RunServices): boolean {
 }
 
 /**
- * The typed refusal for a submit-class action, logged as one `submit_refused`
- * runtime line (signal and host only, never the control's name).
+ * The typed refusal for a submit-class action, recorded in the action ledger
+ * and logged as one `submit_refused` runtime line (signal and host only,
+ * never the control's name).
  *
- * @param name The refused control's accessible name, for the model-visible message.
+ * @param name The refused control's accessible name (or workflow name), for the
+ *   model-visible message.
+ * @param ref The refused ref, or null for a nested workflow.
  */
 export function submitRefusal(
   services: RunServices,
   signal: SubmitRefusalSignal,
   name: string,
+  ref: string | null,
 ): DomainFailure {
+  services.actionLedger.record({ kind: 'submit_refused', ref, name, signal });
   const host = services.domain.browser?.controller.host() ?? '';
   services.runtimeLogger?.info(
     { schema_version: 1, event: 'submit_refused', signal, host },

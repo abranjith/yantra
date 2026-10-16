@@ -238,3 +238,43 @@ describe('@no-llm browser_click when submitting is allowed', () => {
     expect(gateway.requests).toHaveLength(0);
   });
 });
+
+describe('@no-llm browser_click records verified outcomes in the action ledger (FEAT-054)', () => {
+  it('records an executed click with its submit class, reading the facts once', async () => {
+    const { services, controller } = await setup('allowed');
+
+    await click(services, 'e1');
+
+    expect(controller.submitFacts).toHaveBeenCalledOnce();
+    expect(services.actionLedger.entries()).toEqual([
+      expect.objectContaining({
+        kind: 'click_executed',
+        ref: 'e1',
+        name: 'Send now',
+        submitClass: 'structural',
+        host: 'forms.example.test',
+      }),
+    ]);
+  });
+
+  it('records a refusal, and the refused click is not a committed action', async () => {
+    const { services } = await setup('forbidden');
+
+    await click(services, 'e1');
+
+    expect(services.actionLedger.entries()).toEqual([
+      expect.objectContaining({ kind: 'submit_refused', ref: 'e1', signal: 'structural' }),
+    ]);
+    expect(services.actionLedger.lastCommittedAction()).toBeNull();
+  });
+
+  it('records nothing for a click that fails', async () => {
+    const { services, controller } = await setup('allowed');
+    controller.click.mockRejectedValue(new Error('click failed'));
+
+    const result = await click(services, 'e2');
+
+    expect(result.status).toBe('error');
+    expect(services.actionLedger.entries()).toEqual([]);
+  });
+});

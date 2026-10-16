@@ -106,6 +106,14 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
       marks: captured.marks,
       seq,
     };
+    services.actionLedger.record({
+      kind: 'capture',
+      scope: artifact.scope,
+      path: artifact.path,
+      sha256: artifact.sha256,
+      bytes: artifact.bytes,
+      producer: 'browser_screenshot',
+    });
     const auditCapture = {
       path: artifact.path,
       sha256: artifact.sha256,

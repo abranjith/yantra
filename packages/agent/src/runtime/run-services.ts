@@ -38,6 +38,7 @@ import type {
   TemplatedReport,
 } from '@yantra/protocol';
 
+import type { ActionLedger } from './action-ledger.js';
 import type { BudgetTracker } from './budget.js';
 import type { ContractCapabilityResolver } from './contract-capabilities.js';
 import type { WorkflowToolMode } from './profiles.js';
@@ -512,6 +513,13 @@ export interface RunServices {
    * would silently drop the missing-contract notice.
    */
   readonly contract: TaskContractStore;
+  /**
+   * The run's record of verified action outcomes (FEAT-054): committed fills,
+   * executed and refused clicks, and captures. Fulfillment is judged from it.
+   * Required, not optional, for the same reason as `urlProvenance`: a
+   * construction site that forgot it would silently judge every action unmet.
+   */
+  readonly actionLedger: ActionLedger;
   /**
    * Which declared contract items the run can deliver (FEAT-054). Absent means
    * the default Vision-Assist-backed resolver over {@link vision}.

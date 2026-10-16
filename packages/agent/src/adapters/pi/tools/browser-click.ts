@@ -117,7 +117,7 @@ export function browserClickSpec(
       if (controller === undefined) return null;
       const name = controller.describeRef(params.ref)?.name ?? '';
       const signal = classifySubmitTarget(await controller.submitFacts(params.ref), name);
-      return signal === null ? null : submitRefusal(ctx.services, signal, name);
+      return signal === null ? null : submitRefusal(ctx.services, signal, name, params.ref);
     },
     requiresConfirmation: (params: Params) =>
       PROTECTED_ACTION_RE.test(
@@ -138,6 +138,10 @@ export function browserClickSpec(
       const described = controller.describeRef(params.ref);
       const host = controller.host();
       const name = described?.name ?? '';
+      // Read before the click for the same reason: a click that submits or
+      // navigates leaves no element to read afterwards. One read-only
+      // evaluation; the `effects.submit` evidence needs it on every click.
+      const submitClass = classifySubmitTarget(await controller.submitFacts(params.ref), name);
 
       let activeRef = params.ref;
       let ranked = await safeLocatorFor(controller, activeRef);
@@ -177,6 +181,12 @@ export function browserClickSpec(
       // produced it, so it is attested. Attesting BEFORE following the tab is
       // what lets the follow re-check it like any other navigation target.
       recordActionProvenance(ctx.services, clicked, 'browser_click');
+      ctx.services.actionLedger.record({
+        kind: 'click_executed',
+        ref: activeRef,
+        name,
+        submitClass,
+      });
       const result = await followSiteOpenedTab(ctx.services, controller, clicked);
       ctx.services.trace?.append({
         kind: 'click',
