@@ -45,9 +45,10 @@
                     "enum": [
                       "table",
                       "answer",
-                      "report"
+                      "report",
+                      "actions"
                     ],
-                    "description": "What the run delivers: rows of fields, a direct answer, or a prose report."
+                    "description": "What the run delivers: rows of fields, a direct answer, a prose report, or page actions (state changed or captured) with a Brief of what was done."
                   },
                   "subject": {
                     "type": "string",
@@ -101,7 +102,7 @@
                       "maxLength": 253
                     },
                     "maxItems": 5,
-                    "description": "Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique."
+                    "description": "Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique. For an actions deliverable, the host the actions must happen on."
                   },
                   "ranking": {
                     "anyOf": [
@@ -159,6 +160,93 @@
                       }
                     ],
                     "description": "Anything the structure cannot express, such as a site named without its address."
+                  },
+                  "fill": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "coverage": {
+                            "type": "string",
+                            "enum": [
+                              "all_eligible",
+                              "listed"
+                            ],
+                            "description": "Fill every field the engine judges eligible on the form, or only the listed fields."
+                          },
+                          "fields": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/definitions/TaskContractRecord/properties/revisions/items/properties/contract/properties/required_fields/items"
+                            },
+                            "maxItems": 40,
+                            "description": "The field names to fill; required (1-40, unique case-insensitively) for listed, forbidden for all_eligible."
+                          }
+                        },
+                        "required": [
+                          "coverage"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Which form fields the goal asks to fill."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Which form fields the goal asks to fill, or null when it asks for none.",
+                    "default": null
+                  },
+                  "artifacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "screenshot",
+                          "description": "The artifact kind."
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "viewport",
+                            "full_page",
+                            "element"
+                          ],
+                          "description": "What a screenshot covers: the visible viewport, the full page, or one element."
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "scope"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One artifact the goal asks the run to produce."
+                    },
+                    "maxItems": 3,
+                    "default": [],
+                    "description": "Artifacts the goal asks for, such as a screenshot; unique by kind and scope."
+                  },
+                  "effects": {
+                    "type": "object",
+                    "properties": {
+                      "submit": {
+                        "type": "string",
+                        "enum": [
+                          "forbidden",
+                          "allowed"
+                        ],
+                        "description": "Whether the run may submit a form; forbidden makes the engine refuse it."
+                      }
+                    },
+                    "required": [
+                      "submit"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Side effects the goal permits; submit defaults to allowed.",
+                    "default": {
+                      "submit": "allowed"
+                    }
                   }
                 },
                 "required": [
@@ -186,6 +274,32 @@
           "minItems": 1,
           "maxItems": 3,
           "description": "Declarations in order; the last one is the current contract."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^(?:deliverable|fill|effects\\.submit|artifact:screenshot:(?:viewport|full_page|element)|filter:\\S(?:.{0,58}\\S)?)$",
+                "description": "The requirement id, such as fill or artifact:screenshot:viewport."
+              },
+              "declared_in": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The revision that first declared this requirement."
+              }
+            },
+            "required": [
+              "id",
+              "declared_in"
+            ],
+            "additionalProperties": false,
+            "description": "An action requirement still in force and the revision that declared it."
+          },
+          "maxItems": 5,
+          "description": "Action requirements (fill, artifacts, effects) in force across every revision, each with the revision that declared it. A later revision cannot drop one. Absent on older files."
         }
       },
       "required": [

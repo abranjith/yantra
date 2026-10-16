@@ -9,19 +9,21 @@ The 0.2 bump is additive: it introduces the Brief document type; Plan and workfl
 
 Stable agent metadata embedded in manifest.json for one run-local session.
 
-| Field             | Description                                                            |
-| ----------------- | ---------------------------------------------------------------------- |
-| adapter           | Agent adapter used for this run.                                       |
-| sdk_version       | Installed provider SDK version resolved at runtime.                    |
-| provider          | Effective model provider identifier.                                   |
-| model             | Effective provider-scoped model identifier.                            |
-| thinking          | Effective model thinking or reasoning level.                           |
-| auth_source       | Credential source used to open the session; never credential material. |
-| session_id        | Provider-assigned session identifier.                                  |
-| session_file      | Relative path from the run directory to the provider session JSONL.    |
-| prompt_version    | Version of the authoritative agent prompt.                             |
-| prompt_hash       | SHA-256 of the exact system prompt.                                    |
-| tool_catalog_hash | SHA-256 of the canonical tool catalog serialization.                   |
+| Field             | Description                                                              |
+| ----------------- | ------------------------------------------------------------------------ |
+| adapter           | Agent adapter used for this run.                                         |
+| sdk_version       | Installed provider SDK version resolved at runtime.                      |
+| provider          | Effective model provider identifier.                                     |
+| model             | Effective provider-scoped model identifier.                              |
+| thinking          | Effective model thinking or reasoning level.                             |
+| auth_source       | Credential source used to open the session; never credential material.   |
+| session_id        | Provider-assigned session identifier.                                    |
+| session_file      | Relative path from the run directory to the provider session JSONL.      |
+| prompt_version    | Version of the authoritative agent prompt.                               |
+| prompt_hash       | SHA-256 of the exact system prompt.                                      |
+| tool_catalog_hash | SHA-256 of the canonical tool catalog serialization.                     |
+| yantra_version    | Version of the Yantra agent package that ran; absent on older manifests. |
+| budgets           | Effective run budgets; absent on older manifests.                        |
 
 Example:
 
@@ -37,7 +39,35 @@ Example:
   "session_file": "<session_file>",
   "prompt_version": "<prompt_version>",
   "prompt_hash": "<prompt_hash>",
-  "tool_catalog_hash": "<tool_catalog_hash>"
+  "tool_catalog_hash": "<tool_catalog_hash>",
+  "yantra_version": "<yantra_version>",
+  "budgets": "<budgets>"
+}
+```
+
+## AgentRunBudgets
+
+Effective budgets for one agentic run.
+
+| Field                    | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| wall_clock_ms            | Run wall-clock budget, or null if unbounded.                   |
+| soft_wall_clock_fraction | Fraction of the wall clock after which exploration winds down. |
+| max_provider_tokens      | Provider-token budget, or null if unbounded.                   |
+| max_navigations          | Browser navigation budget.                                     |
+| max_hosts                | Distinct-host budget.                                          |
+| tool_retries             | Consecutive failed tool calls the breaker tolerates.           |
+
+Example:
+
+```json
+{
+  "wall_clock_ms": "<wall_clock_ms>",
+  "soft_wall_clock_fraction": "<soft_wall_clock_fraction>",
+  "max_provider_tokens": "<max_provider_tokens>",
+  "max_navigations": "<max_navigations>",
+  "max_hosts": "<max_hosts>",
+  "tool_retries": "<tool_retries>"
 }
 ```
 
@@ -61,6 +91,16 @@ Example:
   "output_tokens": "<output_tokens>",
   "cost_usd": "<cost_usd>"
 }
+```
+
+## ArtifactScope
+
+What a screenshot covers: the visible viewport, the full page, or one element.
+
+Example:
+
+```json
+"viewport"
 ```
 
 ## AssertCondition
@@ -141,20 +181,21 @@ Example:
 
 The universal synthesized output document: answer-first overview, key findings, sections, facets, numbered sources, notices, and metadata. Every citation resolves to a declared source (no uncited claims).
 
-| Field          | Description                                                                 |
-| -------------- | --------------------------------------------------------------------------- |
-| brief_id       | Unique Brief document id (ULID).                                            |
-| task_id        | Originating task id (ULID).                                                 |
-| schema_version | Protocol schema version this document was written under.                    |
-| title          | One-line document title.                                                    |
-| overview       | Answer-first Markdown synthesis (1-3 paragraphs) with inline [n] citations. |
-| key_findings   | Scannable findings; may be empty.                                           |
-| sections       | Deep-detail sections; empty at the overview synthesis budget.               |
-| facets         | Structured/tabular facets, or null when the query has no comparative shape. |
-| sources        | Numbered, deduplicated source references.                                   |
-| constraints    | Declared conditions and their delivery statuses; absent on older artifacts. |
-| metadata       | Provenance and quality signals.                                             |
-| notices        | Honest per-source failures and validator flags; may be empty.               |
+| Field          | Description                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| brief_id       | Unique Brief document id (ULID).                                                                                                 |
+| task_id        | Originating task id (ULID).                                                                                                      |
+| schema_version | Protocol schema version this document was written under.                                                                         |
+| title          | One-line document title.                                                                                                         |
+| overview       | Answer-first Markdown synthesis (1-3 paragraphs) with inline [n] citations.                                                      |
+| key_findings   | Scannable findings; may be empty.                                                                                                |
+| sections       | Deep-detail sections; empty at the overview synthesis budget.                                                                    |
+| facets         | Structured/tabular facets, or null when the query has no comparative shape.                                                      |
+| sources        | Numbered, deduplicated source references.                                                                                        |
+| constraints    | Declared conditions and their delivery statuses; absent on older artifacts.                                                      |
+| requirements   | Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs. |
+| metadata       | Provenance and quality signals.                                                                                                  |
+| notices        | Honest per-source failures and validator flags; may be empty.                                                                    |
 
 Example:
 
@@ -170,6 +211,7 @@ Example:
   "facets": "<facets>",
   "sources": "<sources>",
   "constraints": "<constraints>",
+  "requirements": "<requirements>",
   "metadata": "<metadata>",
   "notices": "<notices>"
 }
@@ -262,6 +304,34 @@ Example:
   "source": "<source>",
   "reason": "<reason>",
   "kind": "<kind>"
+}
+```
+
+## BriefRequirement
+
+One declared requirement of the task contract and its evidence-judged status.
+
+| Field           | Description                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| id              | Requirement id: deliverable, filter:<name>, fill, artifact:screenshot:<scope>, or effects.submit. |
+| label           | Plain-words name of the requirement.                                                              |
+| status          | Whether evidence shows the requirement met, unmet, or not applicable.                             |
+| reason          | What the evidence showed, or null when nothing needs saying.                                      |
+| declared_in     | The contract revision that declared the requirement, or null when not tracked.                    |
+| exemptions      | Controls the engine judged exempt from the fill requirement.                                      |
+| exempt_overflow | How many more exempt controls exist beyond the listed ones.                                       |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "label": "<label>",
+  "status": "<status>",
+  "reason": "<reason>",
+  "declared_in": "<declared_in>",
+  "exemptions": "<exemptions>",
+  "exempt_overflow": "<exempt_overflow>"
 }
 ```
 
@@ -567,6 +637,24 @@ Example:
 
 ```json
 "reversible"
+```
+
+## ContractRequirementOrigin
+
+An action requirement still in force and the revision that declared it.
+
+| Field       | Description                                                       |
+| ----------- | ----------------------------------------------------------------- |
+| id          | The requirement id, such as fill or artifact:screenshot:viewport. |
+| declared_in | The revision that first declared this requirement.                |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "declared_in": "<declared_in>"
+}
 ```
 
 ## DiscoveryBudget
@@ -945,6 +1033,16 @@ Example:
   "locator": "<locator>",
   "value": "<value>"
 }
+```
+
+## FillExemption
+
+Why the engine left a form control out of "fill every eligible field".
+
+Example:
+
+```json
+"disabled"
 ```
 
 ## FillStep
@@ -1557,16 +1655,19 @@ Example:
 
 A normalized task contract: the deliverable, required fields, filters, and required sources a run declared for the user's goal.
 
-| Field            | Description                                                                                               |
-| ---------------- | --------------------------------------------------------------------------------------------------------- |
-| deliverable      | What the run delivers: rows of fields, a direct answer, or a prose report.                                |
-| subject          | What the rows or the answer are about.                                                                    |
-| required_fields  | Fields each row or answer must carry, unique case-insensitively. Non-empty for a table.                   |
-| filters          | Every condition the goal states, with names unique case-insensitively.                                    |
-| required_sources | Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique. |
-| ranking          | How results are ordered, when the goal asks for an order.                                                 |
-| limit            | How many results the goal asks for, when it says.                                                         |
-| notes            | Anything the structure cannot express, such as a site named without its address.                          |
+| Field            | Description                                                                                                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| deliverable      | What the run delivers: rows of fields, a direct answer, a prose report, or page actions (state changed or captured) with a Brief of what was done.                         |
+| subject          | What the rows or the answer are about.                                                                                                                                     |
+| required_fields  | Fields each row or answer must carry, unique case-insensitively. Non-empty for a table.                                                                                    |
+| filters          | Every condition the goal states, with names unique case-insensitively.                                                                                                     |
+| required_sources | Normalized hostnames of sites the goal names (lowercase; no scheme, path, port, or leading www.). Unique. For an actions deliverable, the host the actions must happen on. |
+| ranking          | How results are ordered, when the goal asks for an order.                                                                                                                  |
+| limit            | How many results the goal asks for, when it says.                                                                                                                          |
+| notes            | Anything the structure cannot express, such as a site named without its address.                                                                                           |
+| fill             | Which form fields the goal asks to fill, or null when it asks for none.                                                                                                    |
+| artifacts        | Artifacts the goal asks for, such as a screenshot; unique by kind and scope.                                                                                               |
+| effects          | Side effects the goal permits; submit defaults to allowed.                                                                                                                 |
 
 Example:
 
@@ -1579,7 +1680,10 @@ Example:
   "required_sources": "<required_sources>",
   "ranking": "<ranking>",
   "limit": "<limit>",
-  "notes": "<notes>"
+  "notes": "<notes>",
+  "fill": "<fill>",
+  "artifacts": "<artifacts>",
+  "effects": "<effects>"
 }
 ```
 
@@ -1587,12 +1691,13 @@ Example:
 
 The task contract an agentic research/do run declared (contract.json): every revision in declaration order, the last being current. Sanitized, model-authored, and never a source of authority.
 
-| Field          | Description                                                  |
-| -------------- | ------------------------------------------------------------ |
-| schema_version | Task-contract schema version.                                |
-| run_id         | Owning run id.                                               |
-| command        | The agentic command that declared the contract.              |
-| revisions      | Declarations in order; the last one is the current contract. |
+| Field          | Description                                                                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| schema_version | Task-contract schema version.                                                                                                                                                    |
+| run_id         | Owning run id.                                                                                                                                                                   |
+| command        | The agentic command that declared the contract.                                                                                                                                  |
+| revisions      | Declarations in order; the last one is the current contract.                                                                                                                     |
+| requirements   | Action requirements (fill, artifacts, effects) in force across every revision, each with the revision that declared it. A later revision cannot drop one. Absent on older files. |
 
 Example:
 
@@ -1601,7 +1706,8 @@ Example:
   "schema_version": "<schema_version>",
   "run_id": "<run_id>",
   "command": "<command>",
-  "revisions": "<revisions>"
+  "revisions": "<revisions>",
+  "requirements": "<requirements>"
 }
 ```
 
@@ -1613,6 +1719,16 @@ Example:
 
 ```json
 "<value>"
+```
+
+## TaskOutcome
+
+Whether the task was done: fulfilled (every declared requirement met), partial (a result was saved but a requirement is unmet or no contract was declared), handoff (the run needs the user), failed (nothing usable was saved), or aborted (the user interrupted).
+
+Example:
+
+```json
+"fulfilled"
 ```
 
 ## TaskRequest
@@ -1801,6 +1917,16 @@ Example:
   "metadata": "<metadata>",
   "notices": "<notices>"
 }
+```
+
+## TerminationReason
+
+Why the run stopped: the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.
+
+Example:
+
+```json
+"model_finished"
 ```
 
 ## ToolAuditEntry

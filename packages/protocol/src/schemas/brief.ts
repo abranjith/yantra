@@ -18,6 +18,8 @@ import { z } from 'zod';
 
 import { ULID_PATTERN } from '../utils/ulid.js';
 
+import { CONTRACT_REQUIREMENT_ID_PATTERN, FillExemption } from './task-contract.js';
+
 /**
  * Schema version Briefs are written under. Briefs are introduced by the
  * 0.2 protocol bump; older documents cannot exist, so this stays a strict
@@ -220,6 +222,65 @@ export const BriefConstraint = z
   .describe('A declared condition and its evidence-backed delivery status.');
 export type BriefConstraint = z.infer<typeof BriefConstraint>;
 
+/** Most per-item requirement statuses one Brief carries. */
+export const BRIEF_MAX_REQUIREMENTS = 16;
+
+/** Most fill exemptions one requirement lists before counting the rest. */
+export const BRIEF_MAX_EXEMPTIONS = 20;
+
+export const BriefRequirement = z
+  .object({
+    id: z
+      .string()
+      .regex(CONTRACT_REQUIREMENT_ID_PATTERN)
+      .describe(
+        'Requirement id: deliverable, filter:<name>, fill, artifact:screenshot:<scope>, or effects.submit.',
+      ),
+    label: z
+      .string()
+      .min(1)
+      .max(120)
+      .refine(noAnsi, ANSI_MESSAGE)
+      .describe('Plain-words name of the requirement.'),
+    status: z
+      .enum(['met', 'unmet', 'not_applicable'])
+      .describe('Whether evidence shows the requirement met, unmet, or not applicable.'),
+    reason: z
+      .string()
+      .min(1)
+      .max(200)
+      .refine(noAnsi, ANSI_MESSAGE)
+      .nullable()
+      .describe('What the evidence showed, or null when nothing needs saying.'),
+    declared_in: z
+      .number()
+      .int()
+      .min(1)
+      .nullable()
+      .describe('The contract revision that declared the requirement, or null when not tracked.'),
+    exemptions: z
+      .array(
+        z
+          .object({
+            label: z.string().min(1).max(120).refine(noAnsi, ANSI_MESSAGE).describe('Field label.'),
+            reason: FillExemption,
+          })
+          .describe('A form control the engine left out of "fill every eligible field".'),
+      )
+      .max(BRIEF_MAX_EXEMPTIONS)
+      .optional()
+      .describe('Controls the engine judged exempt from the fill requirement.'),
+    exempt_overflow: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('How many more exempt controls exist beyond the listed ones.'),
+  })
+  .describe('One declared requirement of the task contract and its evidence-judged status.');
+
+export type BriefRequirement = z.infer<typeof BriefRequirement>;
+
 export const BriefMetadata = z
   .object({
     search_provider: z
@@ -345,6 +406,13 @@ export const Brief = z
       .max(24)
       .optional()
       .describe('Declared conditions and their delivery statuses; absent on older artifacts.'),
+    requirements: z
+      .array(BriefRequirement)
+      .max(BRIEF_MAX_REQUIREMENTS)
+      .optional()
+      .describe(
+        'Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs.',
+      ),
     metadata: BriefMetadata.describe('Provenance and quality signals.'),
     notices: z
       .array(BriefNotice)
@@ -450,6 +518,16 @@ export const Brief = z
           path: ['constraints', index, 'citations'],
           message: 'verified constraints must cite at least one source',
         });
+    });
+    const requirementIds = new Set<string>();
+    brief.requirements?.forEach((requirement, index) => {
+      if (requirementIds.has(requirement.id))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['requirements', index, 'id'],
+          message: 'requirement ids must be unique within a Brief',
+        });
+      requirementIds.add(requirement.id);
     });
   })
   .describe(

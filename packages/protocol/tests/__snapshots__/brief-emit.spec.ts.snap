@@ -419,6 +419,108 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
           "description": "Answer-first Markdown synthesis (1-3 paragraphs) with inline [n] citations.",
           "type": "string",
         },
+        "requirements": {
+          "description": "Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs.",
+          "items": {
+            "additionalProperties": false,
+            "description": "One declared requirement of the task contract and its evidence-judged status.",
+            "properties": {
+              "declared_in": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The contract revision that declared the requirement, or null when not tracked.",
+              },
+              "exempt_overflow": {
+                "description": "How many more exempt controls exist beyond the listed ones.",
+                "minimum": 1,
+                "type": "integer",
+              },
+              "exemptions": {
+                "description": "Controls the engine judged exempt from the fill requirement.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A form control the engine left out of "fill every eligible field".",
+                  "properties": {
+                    "label": {
+                      "description": "Field label.",
+                      "maxLength": 120,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "reason": {
+                      "description": "Why the engine left a form control out of "fill every eligible field".",
+                      "enum": [
+                        "disabled",
+                        "read_only",
+                        "hidden",
+                        "file_input",
+                        "human_verification",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "label",
+                    "reason",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 20,
+                "type": "array",
+              },
+              "id": {
+                "description": "Requirement id: deliverable, filter:<name>, fill, artifact:screenshot:<scope>, or effects.submit.",
+                "pattern": "^(?:deliverable|fill|effects\\.submit|artifact:screenshot:(?:viewport|full_page|element)|filter:\\S(?:.{0,58}\\S)?)$",
+                "type": "string",
+              },
+              "label": {
+                "description": "Plain-words name of the requirement.",
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string",
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "What the evidence showed, or null when nothing needs saying.",
+              },
+              "status": {
+                "description": "Whether evidence shows the requirement met, unmet, or not applicable.",
+                "enum": [
+                  "met",
+                  "unmet",
+                  "not_applicable",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "label",
+              "status",
+              "reason",
+              "declared_in",
+            ],
+            "type": "object",
+          },
+          "maxItems": 16,
+          "type": "array",
+        },
         "schema_version": {
           "const": "0.2",
           "description": "Protocol schema version this document was written under.",

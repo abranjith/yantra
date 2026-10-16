@@ -3,7 +3,10 @@ export { emitProtocolSpecDoc } from './emit/spec-doc.js';
 export {
   BRIEF_SCHEMA_VERSION,
   Brief,
+  BRIEF_MAX_EXEMPTIONS,
+  BRIEF_MAX_REQUIREMENTS,
   BriefConstraint,
+  BriefRequirement,
   BriefFacets,
   BriefMetadata,
   BriefNotice,
@@ -34,7 +37,7 @@ export {
   type TemplatedReportValidationIssue,
 } from './schemas/report-template.js';
 export { TaskEvent, HandoffReason } from './schemas/events.js';
-export { AgentManifestSection } from './schemas/agent-manifest.js';
+export { AgentManifestSection, AgentRunBudgets } from './schemas/agent-manifest.js';
 export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';
 export { ToolAuditEntry } from './schemas/tool-audit.js';
 export type { ToolAuditEntry as ToolAuditEntryType } from './schemas/tool-audit.js';
@@ -112,12 +115,21 @@ export {
 } from './schemas/usage.js';
 export { RUN_HEALTH_SCHEMA_VERSION, RunHealth } from './schemas/run-health.js';
 export {
+  ArtifactScope,
+  CONTRACT_FILL_MAX_FIELDS,
+  CONTRACT_MAX_ARTIFACTS,
+  CONTRACT_REQUIREMENT_ID_PATTERN,
+  ContractRequirementOrigin,
+  FillExemption,
   SOURCE_HOST_PATTERN,
   TASK_CONTRACT_MAX_REVISIONS,
   TASK_CONTRACT_SCHEMA_VERSION,
   TaskContractBody,
   TaskContractRecord,
+  artifactRequirementId,
+  type TaskContractBodyInput,
 } from './schemas/task-contract.js';
+export { TaskOutcome, TerminationReason } from './schemas/task-outcome.js';
 export {
   LocatorCandidate,
   ParamDeclaration,
