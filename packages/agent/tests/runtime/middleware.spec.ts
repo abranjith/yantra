@@ -21,6 +21,7 @@ import {
   DEFAULT_BUDGET_LIMITS,
   type BudgetLimits,
 } from '../../src/runtime/budget.js';
+import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import { ActionPhase, type RunServices } from '../../src/runtime/run-services.js';
@@ -87,6 +88,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       command: 'ask',
       required: false,
     }),
+    fulfillment: new FulfillmentRecord(),
     actionLedger: actionLedgerFor({
       controller: null,
       sanitizer,

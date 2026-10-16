@@ -15,6 +15,7 @@ import {
   checkContractDelivery,
   NOT_SHOWN_ON_SOURCE,
   reconcileConstraints,
+  type DeliveryConstraint,
 } from './contract-delivery.js';
 import { INLINE_EVIDENCE_REF, parseEvidenceRef } from './evidence-refs.js';
 import type { EvidenceEntry, RunServices } from './run-services.js';
@@ -55,8 +56,18 @@ export interface ComposeSummary {
   readonly claims_checked: number;
   readonly flagged: number;
 }
+/** What the composition established, for judging per-item fulfillment (FEAT-054). */
+export interface ComposedEvidence {
+  /** Gaps in the published content against the contract's deliverable. */
+  readonly deliverableGaps: readonly string[];
+  /** Every declared condition, reconciled against the evidence. */
+  readonly constraints: readonly DeliveryConstraint[];
+  /** The model's own `fulfillment.met` claim, or null when it sent none. */
+  readonly claimedMet: boolean | null;
+}
 export interface ComposedBrief {
   readonly content: Record<string, unknown>;
+  readonly evidence: ComposedEvidence;
   readonly notices: readonly BriefNotice[];
   readonly verdict: {
     readonly claims_checked: number;
@@ -576,6 +587,14 @@ export function composeAgentBrief(
           }),
     },
     notices,
+    evidence: {
+      deliverableGaps: delivery.deliverableGaps,
+      constraints,
+      claimedMet:
+        typeof asPublishRecord(raw.fulfillment).met === 'boolean'
+          ? (asPublishRecord(raw.fulfillment).met as boolean)
+          : null,
+    },
     verdict: { claims_checked: report.checked, flagged: report.flagged.length, stripped: 0 },
     summary: {
       cited_sources: citedIds.length,

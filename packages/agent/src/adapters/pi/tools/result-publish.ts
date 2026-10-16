@@ -37,6 +37,7 @@ import {
   type Brief,
   type BriefFacets,
   type BriefConstraint,
+  type BriefRequirement,
   type Section,
   type BriefNotice,
   type BriefSource,
@@ -55,7 +56,16 @@ import {
   logBriefComposition,
   mapPublishText,
   sanitizePublishContent,
+  type ComposedEvidence,
 } from '../../../runtime/brief-composer.js';
+import { visionContractCapabilities } from '../../../runtime/contract-capabilities.js';
+import {
+  UNAVAILABLE_FILL,
+  evaluateFulfillment,
+  fulfillmentSummary,
+  toBriefRequirements,
+  type FulfillmentEvaluation,
+} from '../../../runtime/fulfillment.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type {
@@ -221,6 +231,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   // provider), computed once at publish time and attached by the publisher.
   const runtimeFacts = runtimeFactsFor(services);
   if (services.template !== null) {
+    const evaluation = evaluatePublication(services, null);
     const result = await services.domain.publish.publish(paramsRecord.report, { runtimeFacts });
     if (!result.isOk) {
       return {
@@ -233,10 +244,16 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     }
     services.actionPhase.close();
     services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
+    recordEvaluation(services, evaluation);
     const report = result.value.brief as TemplatedReport;
     return {
       ok: true,
-      model: { published: true, summary: result.value.summary, html_path: result.value.htmlPath },
+      model: {
+        published: true,
+        summary: result.value.summary,
+        html_path: result.value.htmlPath,
+        ...(evaluation === null ? {} : { requirements: fulfillmentSummary(evaluation) }),
+      },
       details: { report_id: report.report_id },
       terminate: true,
     };
@@ -276,12 +293,16 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       details: { issues },
     };
   }
-  const composedContent = composed.value.content;
+  const evaluation = evaluatePublication(services, composed.value.evidence);
+  const composedContent = withRequirements(composed.value.content, evaluation);
   const content =
     services.userInput === undefined
       ? composedContent
       : mapPublishText(composedContent, (text) => services.userInput!.resolve(text));
-  const publishFacts = runtimeFactsFor(services, composed.value.notices);
+  const publishFacts = runtimeFactsFor(services, [
+    ...composed.value.notices,
+    ...(evaluation?.disagreement ? [evaluation.disagreement] : []),
+  ]);
   const result = await services.domain.publish.publish(content, {
     runtimeFacts: publishFacts,
     citationVerdict: composed.value.verdict,
@@ -305,6 +326,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   services.actionPhase.close();
   services.runHealth.recordPublishedNotices(publishFacts.notices.length);
   logBriefComposition(services, composed.value.summary);
+  recordEvaluation(services, evaluation);
   const brief = result.value.brief as Brief;
   return {
     ok: true,
@@ -312,6 +334,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       published: true,
       summary: composedPublishSummary(brief.title, brief.overview, composed.value.summary),
       html_path: result.value.htmlPath,
+      ...(evaluation === null ? {} : { requirements: fulfillmentSummary(evaluation) }),
     },
     details: {
       brief_id: brief.brief_id,
@@ -319,6 +342,65 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     },
     terminate: true,
   };
+}
+
+/**
+ * Judges the publication against the run's contract (FEAT-054), for `do`
+ * only: `ask` and `research` keep their criteria and their Briefs unchanged.
+ *
+ * @param evidence What the composition established, or null on the template
+ *   path, which has no delivery check.
+ * @returns The evaluation, or null for a command that is not judged per item.
+ */
+export function evaluatePublication(
+  services: Pick<RunServices, 'contract' | 'actionLedger' | 'contractCapabilities' | 'vision'>,
+  evidence: ComposedEvidence | null,
+): FulfillmentEvaluation | null {
+  if (services.contract.command !== 'do') return null;
+  const capabilities = services.contractCapabilities ?? visionContractCapabilities(services.vision);
+  return evaluateFulfillment({
+    command: services.contract.command,
+    contract: services.contract.current(),
+    terms: services.contract.effectiveActionTerms(),
+    deliverableGaps: evidence?.deliverableGaps ?? [],
+    constraints: evidence?.constraints ?? [],
+    ledger: services.actionLedger.entries(),
+    claimedMet: evidence?.claimedMet ?? null,
+    captureGap: (scope) => capabilities.captureGap(scope),
+    evaluateFill: UNAVAILABLE_FILL,
+  });
+}
+
+/** Stores a successful publication's evaluation and logs its counts only. */
+export function recordEvaluation(
+  services: Pick<RunServices, 'fulfillment' | 'runtimeLogger'>,
+  evaluation: FulfillmentEvaluation | null,
+): void {
+  if (evaluation === null) return;
+  services.fulfillment.record(evaluation);
+  const count = (status: string): number =>
+    evaluation.items.filter((item) => item.status === status).length;
+  services.runtimeLogger?.info(
+    {
+      schema_version: 1,
+      event: 'fulfillment_evaluated',
+      contract_declared: evaluation.contractDeclared,
+      met: count('met'),
+      unmet: count('unmet'),
+      not_applicable: count('not_applicable'),
+      disagreement: evaluation.disagreement !== null,
+    },
+    'fulfillment evaluated',
+  );
+}
+
+/** Content with the evaluation's `requirements`, or unchanged when there is none to show. */
+export function withRequirements(
+  content: Record<string, unknown>,
+  evaluation: FulfillmentEvaluation | null,
+): Record<string, unknown> {
+  if (evaluation === null || evaluation.items.length === 0) return content;
+  return { ...content, requirements: toBriefRequirements(evaluation) };
 }
 
 /**
@@ -625,6 +707,9 @@ function buildBriefFromAgentContent(
     facets: (record.facets ?? null) as BriefFacets | null,
     ...(Array.isArray(record.constraints)
       ? { constraints: record.constraints as BriefConstraint[] }
+      : {}),
+    ...(Array.isArray(record.requirements)
+      ? { requirements: record.requirements as BriefRequirement[] }
       : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {

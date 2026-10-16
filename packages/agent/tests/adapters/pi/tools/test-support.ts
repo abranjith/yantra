@@ -33,6 +33,7 @@ import {
   type BudgetLimits,
 } from '../../../../src/runtime/budget.js';
 import type { ContractCapabilityResolver } from '../../../../src/runtime/contract-capabilities.js';
+import { FulfillmentRecord } from '../../../../src/runtime/fulfillment.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
@@ -171,6 +172,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
         required: false,
       }),
     ...(options.contractCapabilities ? { contractCapabilities: options.contractCapabilities } : {}),
+    fulfillment: new FulfillmentRecord(),
     actionLedger:
       options.actionLedger ??
       actionLedgerFor({

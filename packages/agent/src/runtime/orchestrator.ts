@@ -76,7 +76,10 @@ import {
   createBriefPublisher,
   createTemplatedReportPublisher,
   createYantraTools,
+  evaluatePublication,
+  recordEvaluation,
   runtimeFactsFor,
+  withRequirements,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
 import { AgentStartupError, AgentSessionStartFailedError } from '../errors.js';
@@ -101,6 +104,7 @@ import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } f
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
+import { FulfillmentRecord } from './fulfillment.js';
 import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
 import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
@@ -693,6 +697,7 @@ export async function runAgenticTask(
       workflowToolMode: profile.workflowToolMode,
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
       contract,
+      fulfillment: new FulfillmentRecord(),
       actionLedger: actionLedgerFor({
         controller: domain.browser?.controller ?? null,
         sanitizer,
@@ -1137,10 +1142,14 @@ async function maybeAssembleUnpublishedResult(
     },
   );
   if (!composed.isOk) return undefined;
+  // Judged like a tool publication (FEAT-054); a salvaged `do` run with no
+  // contract is evaluated as undeclared and ends partial.
+  const evaluation = evaluatePublication(services, composed.value.evidence);
+  const withItems = withRequirements(composed.value.content, evaluation);
   const content =
     services.userInput === undefined
-      ? composed.value.content
-      : mapPublishText(composed.value.content, (text) => services.userInput!.resolve(text));
+      ? withItems
+      : mapPublishText(withItems, (text) => services.userInput!.resolve(text));
   const runtimeFacts = runtimeFactsFor(services, composed.value.notices);
   const published = await services.domain.publish.publish(content, {
     assembledByRuntime: true,
@@ -1151,6 +1160,7 @@ async function maybeAssembleUnpublishedResult(
   services.actionPhase.close();
   services.runHealth.recordPublishedNotices(runtimeFacts.notices.length);
   logBriefComposition(services, composed.value.summary);
+  recordEvaluation(services, evaluation);
 
   const brief = await readPublishedBrief(services.runDir);
   if (brief === undefined) return undefined;

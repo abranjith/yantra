@@ -14,6 +14,7 @@ import { generateUlid } from '../utils/ulid.js';
 
 import type {
   BriefConstraint,
+  BriefRequirement,
   BriefFacets,
   BriefMetadata,
   BriefNotice,
@@ -31,6 +32,8 @@ import { BRIEF_SCHEMA_VERSION, Brief } from './brief.js';
 export interface CreateBriefInput {
   /** Declared conditions; omitted when not supplied. */
   readonly constraints?: readonly BriefConstraint[];
+  /** Per-item requirement statuses of a `do` task (FEAT-054); omitted elsewhere. */
+  readonly requirements?: readonly BriefRequirement[];
   /** Originating task id (ULID). */
   readonly task_id: string;
   /** One-line document title. */
@@ -103,6 +106,7 @@ export const createBrief = (input: CreateBriefInput): Brief => ({
   metadata: { ...DEFAULT_METADATA, ...input.metadata },
   notices: [...(input.notices ?? [])],
   ...(input.constraints === undefined ? {} : { constraints: [...input.constraints] }),
+  ...(input.requirements === undefined ? {} : { requirements: [...input.requirements] }),
 });
 
 /**

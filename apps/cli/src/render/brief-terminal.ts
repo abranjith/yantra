@@ -121,7 +121,14 @@ function overviewPanel(brief: Brief, c: ChalkInstance, color: boolean, width: nu
         `${condition.name} = ${condition.value} ${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}${condition.citations.length > 0 ? ` ${condition.citations.map((n) => `[${n}]`).join('')}` : ''}`,
     )
     .join(' · ');
-  const content = `${conditions ? `Conditions: ${conditions}\n` : ''}${overview.length > 0 ? overview : c.dim('(no overview available)')}`;
+  // FEAT-054: a `do` Brief's per-item status, judged from evidence.
+  const requirements = brief.requirements
+    ?.map(
+      (requirement) =>
+        `${requirement.status === 'met' ? '✓' : requirement.status === 'unmet' ? '✗' : '–'} ${requirement.label}${requirement.status === 'unmet' && requirement.reason !== null ? ` (${requirement.reason})` : ''}`,
+    )
+    .join(' · ');
+  const content = `${conditions ? `Conditions: ${conditions}\n` : ''}${requirements ? `Requirements: ${requirements}\n` : ''}${overview.length > 0 ? overview : c.dim('(no overview available)')}`;
 
   const boxOptions: BoxenOptions = {
     padding: { top: 0, bottom: 0, left: 1, right: 1 },

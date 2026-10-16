@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/render/brief-terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -50,6 +56,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/result-publish.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
       "status": "M",
       "role": "implement",
@@ -63,9 +81,15 @@
     },
     {
       "path": "packages/agent/src/runtime/action-ledger.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/brief-composer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/src/runtime/budget.ts",
@@ -78,6 +102,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-delivery.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/fulfillment.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/src/runtime/index.ts",
@@ -176,6 +212,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/task-contract.spec.ts",
       "status": "M",
       "role": "implement",
@@ -195,7 +237,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/action-ledger.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -204,6 +246,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
@@ -236,6 +284,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/brief/to-html.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/brief/to-markdown.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/browser/agent-controller.ts",
       "status": "M",
       "role": "implement",
@@ -252,6 +312,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/brief/__snapshots__/requirements.spec.ts.snap",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/brief/requirements.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/browser/agent-controller-submit-facts.spec.ts",
@@ -294,6 +366,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/brief-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/protocol/src/schemas/brief.ts",

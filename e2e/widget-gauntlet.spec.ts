@@ -19,6 +19,7 @@ import {
   EvidenceLedger,
   EvidencePhase,
   TaskContractStore,
+  FulfillmentRecord,
   actionLedgerFor,
   UrlPolicy,
   RunHealthLedger,
@@ -355,6 +356,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     evidence: new EvidenceLedger(sanitizer),
     evidencePhase: new EvidencePhase(),
     contract: new TaskContractStore({ runId: 'run', runDir: '.', command: 'do', required: false }),
+    fulfillment: new FulfillmentRecord(),
     actionLedger: actionLedgerFor({
       controller,
       sanitizer,

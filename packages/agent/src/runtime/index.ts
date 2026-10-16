@@ -80,6 +80,16 @@ export {
   type SubmitRefusedEntry,
 } from './action-ledger.js';
 export {
+  FulfillmentRecord,
+  evaluateFulfillment,
+  fulfillmentSummary,
+  toBriefRequirements,
+  unmetPhrase,
+  type FulfillmentEvaluation,
+  type FulfillmentInput,
+  type RequirementStatus,
+} from './fulfillment.js';
+export {
   visionContractCapabilities,
   type CaptureGapReason,
   type ContractCapabilityResolver,

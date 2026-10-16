@@ -9,6 +9,7 @@ import {
   EvidenceLedger,
   EvidencePhase,
   TaskContractStore,
+  FulfillmentRecord,
   actionLedgerFor,
   UrlPolicy,
   RunHealthLedger,
@@ -95,6 +96,7 @@ describe('@no-llm real Chrome browser tools', () => {
         command: 'do',
         required: false,
       }),
+      fulfillment: new FulfillmentRecord(),
       actionLedger: actionLedgerFor({
         controller,
         sanitizer,

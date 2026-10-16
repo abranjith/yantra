@@ -41,6 +41,7 @@ import type {
 import type { ActionLedger } from './action-ledger.js';
 import type { BudgetTracker } from './budget.js';
 import type { ContractCapabilityResolver } from './contract-capabilities.js';
+import type { FulfillmentRecord } from './fulfillment.js';
 import type { WorkflowToolMode } from './profiles.js';
 import type { RunHealthLedger } from './run-health.js';
 import type { TaskContractStore } from './task-contract.js';
@@ -520,6 +521,12 @@ export interface RunServices {
    * construction site that forgot it would silently judge every action unmet.
    */
   readonly actionLedger: ActionLedger;
+  /**
+   * The evaluation of the run's publication against its contract (FEAT-054),
+   * set by `result_publish` or the runtime-assembled fallback. Required for
+   * the same reason as {@link actionLedger}.
+   */
+  readonly fulfillment: FulfillmentRecord;
   /**
    * Which declared contract items the run can deliver (FEAT-054). Absent means
    * the default Vision-Assist-backed resolver over {@link vision}.

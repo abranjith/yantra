@@ -19,6 +19,7 @@
 import {
   editorialMarkIsInformative,
   type Brief,
+  type BriefRequirement,
   type BriefSource,
   type KeyFinding,
   type Section,
@@ -51,6 +52,10 @@ export function briefToMarkdown(brief: Brief): string {
     blocks.push(
       `**Conditions:** ${brief.constraints.map((condition) => `${inline(condition.name)} = ${inline(condition.value)} ${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}${condition.citations.length > 0 ? ` ${capMarkers(condition.citations)}` : ''}`).join(' · ')}`,
     );
+  }
+
+  if (brief.requirements !== undefined && brief.requirements.length > 0) {
+    blocks.push(['## Requirements', '', ...brief.requirements.map(requirementLines)].join('\n'));
   }
 
   const overview = brief.overview.trim();
@@ -242,4 +247,44 @@ function blockquote(value: string): string {
     .split(/\r?\n/)
     .map((line) => (line.length > 0 ? `> ${line}` : '>'))
     .join('\n');
+}
+
+/** The status glyph and word for one requirement. */
+const REQUIREMENT_STATUS: Readonly<Record<BriefRequirement['status'], string>> = {
+  met: '✓ met',
+  unmet: '✗ unmet',
+  not_applicable: '– not applicable',
+};
+
+/** Readable words for each fill exemption reason. */
+export const FILL_EXEMPTION_WORDS: Readonly<
+  Record<NonNullable<BriefRequirement['exemptions']>[number]['reason'], string>
+> = {
+  disabled: 'disabled',
+  read_only: 'read-only',
+  hidden: 'hidden',
+  file_input: 'file upload',
+  human_verification: 'human verification',
+};
+
+/** One requirement as a list item, its exemptions as a nested line. */
+function requirementLines(requirement: BriefRequirement): string {
+  const declared =
+    requirement.declared_in !== null && requirement.declared_in > 1
+      ? ` (declared in revision ${requirement.declared_in})`
+      : '';
+  const reason = requirement.reason === null ? '' : ` — ${inline(requirement.reason)}`;
+  const lines = [
+    `- ${REQUIREMENT_STATUS[requirement.status]}: ${inline(requirement.label)}${reason}${declared}`,
+  ];
+  const exemptions = requirement.exemptions ?? [];
+  if (exemptions.length > 0) {
+    const listed = exemptions
+      .map((entry) => `${inline(entry.label)} (${FILL_EXEMPTION_WORDS[entry.reason]})`)
+      .join(', ');
+    const more =
+      requirement.exempt_overflow === undefined ? '' : ` (+${requirement.exempt_overflow} more)`;
+    lines.push(`  - Exempt: ${listed}${more}`);
+  }
+  return lines.join('\n');
 }

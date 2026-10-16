@@ -81,6 +81,13 @@ export interface DeliveryResult {
   readonly alternativesRows: DeliveryRow[];
   readonly alternativesFindings: DeliveryFinding[];
   readonly gaps: string[];
+  /**
+   * What the published content itself lacks against the contract's
+   * deliverable — a missing table, column, or cell, or nothing cited from a
+   * required source — whether or not the model listed it in
+   * `fulfillment.unmet` (FEAT-054). The model's own unmet items are not here.
+   */
+  readonly deliverableGaps: string[];
   readonly issues: ComposeIssue[];
   readonly notices: BriefNotice[];
 }
@@ -126,11 +133,13 @@ export function checkContractDelivery(input: {
   const rows = input.rows.map((row) => ({ ...row, cells: [...row.cells] }));
   const issues: ComposeIssue[] = [];
   const runtimeGaps: string[] = [];
+  const deliverableGaps: string[] = [];
   const exempt = (name: string): boolean =>
     input.unmet.some((item) =>
       normalizeDeliveryName(item.item).includes(normalizeDeliveryName(name)),
     );
   if (contract?.deliverable === 'table') {
+    if (!input.tablePresent) deliverableGaps.push('table: no table was published');
     if (!input.tablePresent && !exempt('table')) {
       if (input.mode === 'assembled') runtimeGaps.push('table: no table was published');
       else issues.push({ cause: 'contract-table-missing', pointer: 'table', values: {} });
@@ -139,6 +148,7 @@ export function checkContractDelivery(input: {
       for (const field of contract.required_fields) {
         const column = input.columns.findIndex((name) => columnMatchesField(name, field));
         if (column === -1) {
+          deliverableGaps.push(`${field}: no column was published`);
           if (!exempt(field)) {
             if (input.mode === 'assembled') runtimeGaps.push(`${field}: no column was published`);
             else
@@ -160,8 +170,11 @@ export function checkContractDelivery(input: {
             row.cells[column] = NOT_SHOWN_ON_SOURCE;
             missing += 1;
           }
-        if (missing > 0)
-          runtimeGaps.push(`${field}: not shown for ${missing} of ${rows.length} rows`);
+        if (missing > 0) {
+          const gap = `${field}: not shown for ${missing} of ${rows.length} rows`;
+          runtimeGaps.push(gap);
+          deliverableGaps.push(gap);
+        }
       }
   }
   const partition = contract !== null && contract.required_sources.length > 0;
@@ -178,10 +191,14 @@ export function checkContractDelivery(input: {
     partition &&
     !mainRows.some((row) => input.onContract(row.refs)) &&
     !findings.some((finding) => finding.refs.length > 0 && input.onContract(finding.refs))
-  )
+  ) {
     runtimeGaps.push(`nothing in the answer is cited from ${hosts}`);
-  if (rows.length > 0 && mainRows.length === 0 && partition)
+    deliverableGaps.push(`nothing in the answer is cited from ${hosts}`);
+  }
+  if (rows.length > 0 && mainRows.length === 0 && partition) {
     runtimeGaps.push(`no row came from ${hosts}`);
+    deliverableGaps.push(`no row came from ${hosts}`);
+  }
   const gaps = [
     ...input.unmet.map((item) => `${item.item} (${item.reason})`),
     ...runtimeGaps.filter(
@@ -207,6 +224,7 @@ export function checkContractDelivery(input: {
     alternativesRows,
     alternativesFindings,
     gaps,
+    deliverableGaps,
     issues,
     notices,
   };

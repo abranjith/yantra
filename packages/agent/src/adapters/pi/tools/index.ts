@@ -37,7 +37,10 @@ export {
   createBriefPublisher,
   createTemplatedReportPublisher,
   evidenceToSourceRecords,
+  evaluatePublication,
+  recordEvaluation,
   runtimeFactsFor,
+  withRequirements,
   type BriefPublisherContext,
   type TemplatedReportPublisherContext,
 } from './result-publish.js';
