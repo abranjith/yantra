@@ -111,7 +111,7 @@
     },
     {
       "path": "packages/agent/src/runtime/fulfillment.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -213,7 +213,7 @@
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -249,7 +249,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -302,6 +302,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/interaction/fill-eligibility.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/core/src/interaction/index.ts",
       "status": "M",
       "role": "implement",
@@ -315,13 +321,13 @@
     },
     {
       "path": "packages/core/tests/brief/__snapshots__/requirements.spec.ts.snap",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/brief/requirements.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -330,6 +336,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/interaction/fill-eligibility.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/interaction/submit-class.spec.ts",

@@ -1144,7 +1144,7 @@ async function maybeAssembleUnpublishedResult(
   if (!composed.isOk) return undefined;
   // Judged like a tool publication (FEAT-054); a salvaged `do` run with no
   // contract is evaluated as undeclared and ends partial.
-  const evaluation = evaluatePublication(services, composed.value.evidence);
+  const evaluation = await evaluatePublication(services, composed.value.evidence);
   const withItems = withRequirements(composed.value.content, evaluation);
   const content =
     services.userInput === undefined

@@ -12,6 +12,7 @@
  * census (TASK-006); until a census source exists it is never `met`.
  */
 
+import type { FillCensus } from '@yantra/core';
 import type {
   ArtifactScope,
   BriefNotice,
@@ -21,7 +22,12 @@ import type {
 } from '@yantra/protocol';
 import { BRIEF_MAX_REQUIREMENTS, artifactRequirementId } from '@yantra/protocol';
 
-import type { ActionLedgerEntry, CaptureEntry, CommittedActionEntry } from './action-ledger.js';
+import type {
+  ActionLedgerEntry,
+  CaptureEntry,
+  CommittedActionEntry,
+  FillCommittedEntry,
+} from './action-ledger.js';
 import type { CaptureGapReason } from './contract-capabilities.js';
 import {
   boundedNotice,
@@ -97,11 +103,109 @@ export interface FulfillmentInput {
   readonly evaluateFill: FillEvaluator;
 }
 
-/** The fill evaluator used until a form census exists: never `met`. */
+/** The fill evaluator used when no form census exists: never `met`. */
 export const UNAVAILABLE_FILL: FillEvaluator = () => ({
   status: 'unmet',
   reason: 'fields not counted (inventory_unavailable)',
 });
+
+/** Most exemptions an item lists before counting the rest. */
+const MAX_EXEMPTIONS = 20;
+
+/**
+ * The fill evaluator measured against the engine's form census (TASK-006).
+ *
+ * - `all_eligible`: every eligible control (grouped controls count once)
+ *   needs a verified commit on the census document, matched by ref or group.
+ *   No census, an incomplete one, or a census of a different document than
+ *   the last fill is never `met`.
+ * - `listed`: every listed name needs a commit whose resolved field name
+ *   matches it under FEAT-053's name grammar.
+ *
+ * Exempt controls are listed on the item, bounded with an overflow count.
+ */
+export function censusFillEvaluator(census: FillCensus | null): FillEvaluator {
+  return (fill, ledger) => {
+    const commits = ledger.filter(
+      (entry): entry is FillCommittedEntry => entry.kind === 'fill_committed',
+    );
+    if (fill.coverage === 'listed') return listedFill(fill.fields, commits);
+    if (census === null) return UNAVAILABLE_FILL(fill, ledger);
+    const exemptions = exemptionsOf(census);
+    if (!census.complete) {
+      return {
+        status: 'unmet',
+        reason: 'fields not counted (inventory_incomplete)',
+        ...exemptions,
+      };
+    }
+    const lastFill = commits.at(-1);
+    if (lastFill !== undefined && lastFill.epoch !== census.epoch) {
+      return { status: 'unmet', reason: 'fields not counted (form_document_left)', ...exemptions };
+    }
+    const units = new Map<string, Set<string>>();
+    for (const control of census.controls) {
+      if (control.exemption !== null) continue;
+      const key = control.groupKey === null ? `ref:${control.ref}` : `group:${control.groupKey}`;
+      const refs = units.get(key) ?? new Set<string>();
+      refs.add(control.ref);
+      units.set(key, refs);
+    }
+    if (units.size === 0) {
+      return { status: 'unmet', reason: 'no eligible fields were found', ...exemptions };
+    }
+    const onCensus = commits.filter((entry) => entry.epoch === census.epoch);
+    let filled = 0;
+    for (const [key, refs] of units) {
+      const group = key.startsWith('group:') ? key.slice('group:'.length) : null;
+      const committed = onCensus.some(
+        (entry) => refs.has(entry.ref) || (group !== null && entry.groupKey === group),
+      );
+      if (committed) filled += 1;
+    }
+    return {
+      status: filled === units.size ? 'met' : 'unmet',
+      reason: `fields ${filled} of ${units.size} filled`,
+      ...exemptions,
+    };
+  };
+}
+
+function listedFill(
+  fields: readonly string[],
+  commits: readonly FillCommittedEntry[],
+): Omit<RequirementStatus, 'id' | 'label' | 'declaredIn'> {
+  const filled = new Set(commits.map((entry) => normalizeDeliveryName(entry.field)));
+  const missing = fields.filter((field) => !filled.has(normalizeDeliveryName(field)));
+  return missing.length === 0
+    ? { status: 'met', reason: `fields ${fields.length} of ${fields.length} filled` }
+    : {
+        status: 'unmet',
+        reason: `fields ${fields.length - missing.length} of ${fields.length} filled; not filled: ${missing.join(', ')}`,
+      };
+}
+
+function exemptionsOf(
+  census: FillCensus,
+): Pick<RequirementStatus, 'exemptions' | 'exemptOverflow'> {
+  const seen = new Set<string>();
+  const exempt: { label: string; reason: FillExemption }[] = [];
+  for (const control of census.controls) {
+    if (control.exemption === null) continue;
+    const key = control.groupKey ?? `ref:${control.ref}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    exempt.push({
+      label: bound(control.label.length > 0 ? control.label : control.ref, MAX_LABEL),
+      reason: control.exemption,
+    });
+  }
+  if (exempt.length === 0) return {};
+  return {
+    exemptions: exempt.slice(0, MAX_EXEMPTIONS),
+    ...(exempt.length > MAX_EXEMPTIONS ? { exemptOverflow: exempt.length - MAX_EXEMPTIONS } : {}),
+  };
+}
 
 /**
  * Judges every declared item from evidence.

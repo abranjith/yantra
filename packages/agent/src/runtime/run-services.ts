@@ -14,6 +14,7 @@ import type {
   ConfirmationGateway,
   ConfirmationStore,
   ContentFetcher,
+  FillCensusSource,
   DocumentStore,
   EthicsGate,
   PageExtractor,
@@ -527,6 +528,13 @@ export interface RunServices {
    * the same reason as {@link actionLedger}.
    */
   readonly fulfillment: FulfillmentRecord;
+  /**
+   * Where `fill.coverage: 'all_eligible'` reads its denominator: a census of
+   * the current form (FEAT-055 TASK-001). STUB until that producer lands:
+   * absent means no census, so a declared fill is never `met`. Read only when
+   * the contract declares a fill.
+   */
+  readonly fillCensus?: FillCensusSource;
   /**
    * Which declared contract items the run can deliver (FEAT-054). Absent means
    * the default Vision-Assist-backed resolver over {@link vision}.

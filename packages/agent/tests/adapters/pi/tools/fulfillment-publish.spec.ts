@@ -2,9 +2,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { DefaultSanitizer } from '@yantra/core';
+import { DefaultSanitizer, type FillCensus, type FillCensusSource } from '@yantra/core';
 import { Brief } from '@yantra/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createBriefPublisher,
@@ -30,7 +30,11 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
-  async function setup(command: 'do' | 'research', declared?: TaskContractParams) {
+  async function setup(
+    command: 'do' | 'research',
+    declared?: TaskContractParams,
+    fillCensus?: FillCensusSource,
+  ) {
     const logger = recordingRuntimeLogger();
     const contract = new TaskContractStore({ runId: 'r', runDir, command, required: true });
     if (declared !== undefined) {
@@ -38,7 +42,7 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
       if (!body.isOk) throw new Error(`fixture rejected: ${body.error.cause}`);
       await contract.declare(body.value, '2026-10-15T12:00:00.000Z');
     }
-    const services = buildServices({
+    const built = buildServices({
       runDir,
       runtimeLogger: logger,
       contract,
@@ -49,6 +53,7 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
         sanitizer: new DefaultSanitizer(),
       }),
     });
+    const services = fillCensus === undefined ? built : { ...built, fillCensus };
     services.evidence.add({
       sourceId: 'S1',
       url: 'https://forms.example.test/signup',
@@ -176,6 +181,56 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
 
   it('evaluates a template publication without composition evidence', async () => {
     const { services } = await setup('do', ACTIONS);
-    expect(evaluatePublication(services, null)).toMatchObject({ total: 3, met: 1 });
+    expect(await evaluatePublication(services, null)).toMatchObject({ total: 3, met: 1 });
+  });
+
+  it('reads the form census only when the contract declares a fill, exactly once', async () => {
+    const source = {
+      census: vi.fn(
+        (): Promise<FillCensus> =>
+          Promise.resolve({
+            epoch: 1,
+            host: 'forms.example.test',
+            complete: true,
+            controls: [{ ref: 'e1', groupKey: null, label: 'Email', exemption: null }],
+          }),
+      ),
+    };
+    const without = await setup('do', ACTIONS, source);
+    await without.tool.execute({ brief: { title: 'Form', overview: 'Done.' } }, undefined);
+    expect(source.census).toHaveBeenCalledTimes(0);
+
+    await rm(runDir, { recursive: true, force: true });
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-fulfillment-'));
+    const withFill = await setup('do', { ...ACTIONS, fill: { coverage: 'all_eligible' } }, source);
+    withFill.services.actionLedger.record({
+      kind: 'fill_committed',
+      tool: 'browser_fill_form',
+      ref: 'e1',
+      field: 'Email',
+      groupKey: null,
+      covers: 1,
+    });
+    await withFill.tool.execute({ brief: { title: 'Form', overview: 'Done.' } }, undefined);
+    expect(source.census).toHaveBeenCalledTimes(1);
+    expect(
+      withFill.services.fulfillment.current()?.items.find((i) => i.id === 'fill'),
+    ).toMatchObject({ status: 'met', reason: 'fields 1 of 1 filled' });
+  });
+
+  it('reports a census that fails to read as incomplete, never as a failed publish', async () => {
+    const source = { census: vi.fn(() => Promise.reject(new Error('page gone'))) };
+    const { services, tool } = await setup(
+      'do',
+      { ...ACTIONS, fill: { coverage: 'all_eligible' } },
+      source,
+    );
+
+    const result = await tool.execute({ brief: { title: 'Form', overview: 'Done.' } }, undefined);
+
+    expect(result.status).toBe('ok');
+    expect(services.fulfillment.current()?.items.find((i) => i.id === 'fill')?.reason).toBe(
+      'fields not counted (inventory_incomplete)',
+    );
   });
 });

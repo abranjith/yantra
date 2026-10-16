@@ -1,5 +1,10 @@
-import { DefaultSanitizer } from '@yantra/core';
-import { Brief, CONTRACT_REQUIREMENT_ID_PATTERN, type TaskContractBody } from '@yantra/protocol';
+import { DefaultSanitizer, type FillCensus } from '@yantra/core';
+import {
+  Brief,
+  CONTRACT_REQUIREMENT_ID_PATTERN,
+  type FillExemption,
+  type TaskContractBody,
+} from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { ActionLedger, type ActionLedgerInput } from '../../src/runtime/action-ledger.js';
@@ -7,6 +12,7 @@ import type { DeliveryConstraint } from '../../src/runtime/contract-delivery.js'
 import {
   FulfillmentRecord,
   UNAVAILABLE_FILL,
+  censusFillEvaluator,
   evaluateFulfillment,
   fulfillmentSummary,
   toBriefRequirements,
@@ -452,5 +458,163 @@ describe('@no-llm fulfillment projections', () => {
     const evaluation = evaluateFulfillment(input());
     record.record(evaluation);
     expect(record.current()).toBe(evaluation);
+  });
+});
+
+describe('@no-llm censusFillEvaluator (FEAT-054 TASK-006)', () => {
+  const ALL: NonNullable<EffectiveActionTerms['fill']> = {
+    coverage: 'all_eligible',
+    fields: [],
+    declaredIn: 1,
+  };
+
+  function census(
+    eligible: number,
+    exempt: readonly FillExemption[] = [],
+    overrides: Partial<FillCensus> = {},
+  ): FillCensus {
+    return {
+      epoch: 1,
+      host: 'forms.example.test',
+      complete: true,
+      controls: [
+        ...Array.from({ length: eligible }, (_, index) => ({
+          ref: `e${index + 1}`,
+          groupKey: null,
+          label: `Field ${index + 1}`,
+          exemption: null,
+        })),
+        ...exempt.map((exemption, index) => ({
+          ref: `x${index + 1}`,
+          groupKey: null,
+          label: `Exempt ${index + 1}`,
+          exemption,
+        })),
+      ],
+      ...overrides,
+    };
+  }
+
+  const commits = (count: number, epoch = 1) =>
+    ledger(
+      Array.from({ length: count }, (_, index) => ({
+        ...fill,
+        ref: `e${index + 1}`,
+        field: `Field ${index + 1}`,
+        epoch,
+      })),
+    );
+
+  it('is met when every eligible control was committed, and lists the exemptions', () => {
+    const result = censusFillEvaluator(census(48, ['file_input', 'read_only', 'disabled']))(
+      ALL,
+      commits(48),
+    );
+    expect(result).toMatchObject({ status: 'met', reason: 'fields 48 of 48 filled' });
+    expect(result.exemptions).toEqual([
+      { label: 'Exempt 1', reason: 'file_input' },
+      { label: 'Exempt 2', reason: 'read_only' },
+      { label: 'Exempt 3', reason: 'disabled' },
+    ]);
+  });
+
+  it('counts the committed controls when some are missing', () => {
+    expect(censusFillEvaluator(census(48))(ALL, commits(10))).toMatchObject({
+      status: 'unmet',
+      reason: 'fields 10 of 48 filled',
+    });
+  });
+
+  it('counts a radio group committed through one member once', () => {
+    const grouped: FillCensus = {
+      ...census(1),
+      controls: [
+        { ref: 'e1', groupKey: null, label: 'Name', exemption: null },
+        { ref: 'r1', groupKey: 'Plan', label: 'Basic', exemption: null },
+        { ref: 'r2', groupKey: 'Plan', label: 'Pro', exemption: null },
+      ],
+    };
+    const committed = ledger([
+      { ...fill, ref: 'e1' },
+      { ...fill, ref: 'r2', groupKey: 'Plan' },
+    ]);
+    expect(censusFillEvaluator(grouped)(ALL, committed)).toMatchObject({
+      status: 'met',
+      reason: 'fields 2 of 2 filled',
+    });
+  });
+
+  it('does not count a commit whose control the page replaced with a new ref', () => {
+    const replaced = ledger([
+      { ...fill, ref: 'e1' },
+      { ...fill, ref: 'e99' },
+    ]);
+    expect(censusFillEvaluator(census(2))(ALL, replaced)).toMatchObject({
+      status: 'unmet',
+      reason: 'fields 1 of 2 filled',
+    });
+  });
+
+  it('is unmet for an incomplete census, a census of another document, or none', () => {
+    expect(censusFillEvaluator(census(2, [], { complete: false }))(ALL, commits(2))).toMatchObject({
+      status: 'unmet',
+      reason: 'fields not counted (inventory_incomplete)',
+    });
+    expect(censusFillEvaluator(census(2, [], { epoch: 2 }))(ALL, commits(2))).toMatchObject({
+      status: 'unmet',
+      reason: 'fields not counted (form_document_left)',
+    });
+    expect(censusFillEvaluator(null)(ALL, commits(2))).toMatchObject({
+      status: 'unmet',
+      reason: 'fields not counted (inventory_unavailable)',
+    });
+  });
+
+  it('is unmet when the census found no eligible field', () => {
+    expect(censusFillEvaluator(census(0, ['hidden']))(ALL, commits(0))).toMatchObject({
+      status: 'unmet',
+      reason: 'no eligible fields were found',
+    });
+  });
+
+  it('bounds the exemption list to 20 with an overflow count, one entry per group', () => {
+    const many = census(
+      1,
+      Array.from({ length: 25 }, () => 'hidden' as const),
+    );
+    const result = censusFillEvaluator(many)(ALL, commits(1));
+    expect(result.exemptions).toHaveLength(20);
+    expect(result.exemptOverflow).toBe(5);
+    const grouped: FillCensus = {
+      ...census(1),
+      controls: [
+        ...census(1).controls,
+        { ref: 'x1', groupKey: 'Captcha', label: 'Code', exemption: 'human_verification' },
+        { ref: 'x2', groupKey: 'Captcha', label: 'Audio', exemption: 'human_verification' },
+      ],
+    };
+    expect(censusFillEvaluator(grouped)(ALL, commits(1)).exemptions).toHaveLength(1);
+  });
+
+  it('matches listed fields by name and names the ones not filled', () => {
+    const listed: NonNullable<EffectiveActionTerms['fill']> = {
+      coverage: 'listed',
+      fields: ['First name', 'E-mail'],
+      declaredIn: 1,
+    };
+    const committed = ledger([{ ...fill, field: 'first  NAME' }]);
+    expect(censusFillEvaluator(null)(listed, committed)).toMatchObject({
+      status: 'unmet',
+      reason: 'fields 1 of 2 filled; not filled: E-mail',
+    });
+    expect(
+      censusFillEvaluator(null)(
+        listed,
+        ledger([
+          { ...fill, field: 'First name' },
+          { ...fill, field: 'e mail' },
+        ]),
+      ),
+    ).toMatchObject({ status: 'met', reason: 'fields 2 of 2 filled' });
   });
 });

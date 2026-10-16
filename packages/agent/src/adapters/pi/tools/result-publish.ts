@@ -26,7 +26,13 @@
  * only when the ledger is empty (a run that published without reading a page).
  */
 
-import { renderTemplate, writeBriefArtifacts, writeReportArtifacts } from '@yantra/core';
+import {
+  renderTemplate,
+  writeBriefArtifacts,
+  writeReportArtifacts,
+  type FillCensus,
+  type FillCensusSource,
+} from '@yantra/core';
 import {
   BRIEF_SCHEMA_VERSION,
   TemplatedReportValidationError,
@@ -60,7 +66,7 @@ import {
 } from '../../../runtime/brief-composer.js';
 import { visionContractCapabilities } from '../../../runtime/contract-capabilities.js';
 import {
-  UNAVAILABLE_FILL,
+  censusFillEvaluator,
   evaluateFulfillment,
   fulfillmentSummary,
   toBriefRequirements,
@@ -231,7 +237,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   // provider), computed once at publish time and attached by the publisher.
   const runtimeFacts = runtimeFactsFor(services);
   if (services.template !== null) {
-    const evaluation = evaluatePublication(services, null);
+    const evaluation = await evaluatePublication(services, null);
     const result = await services.domain.publish.publish(paramsRecord.report, { runtimeFacts });
     if (!result.isOk) {
       return {
@@ -293,7 +299,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       details: { issues },
     };
   }
-  const evaluation = evaluatePublication(services, composed.value.evidence);
+  const evaluation = await evaluatePublication(services, composed.value.evidence);
   const composedContent = withRequirements(composed.value.content, evaluation);
   const content =
     services.userInput === undefined
@@ -352,23 +358,42 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
  *   path, which has no delivery check.
  * @returns The evaluation, or null for a command that is not judged per item.
  */
-export function evaluatePublication(
-  services: Pick<RunServices, 'contract' | 'actionLedger' | 'contractCapabilities' | 'vision'>,
+export async function evaluatePublication(
+  services: Pick<
+    RunServices,
+    'contract' | 'actionLedger' | 'contractCapabilities' | 'vision' | 'fillCensus'
+  >,
   evidence: ComposedEvidence | null,
-): FulfillmentEvaluation | null {
+): Promise<FulfillmentEvaluation | null> {
   if (services.contract.command !== 'do') return null;
   const capabilities = services.contractCapabilities ?? visionContractCapabilities(services.vision);
+  const terms = services.contract.effectiveActionTerms();
+  // The census is a page read, paid only when the contract declares a fill.
+  const census =
+    terms.fill === null || services.fillCensus === undefined
+      ? null
+      : await readCensus(services.fillCensus);
   return evaluateFulfillment({
     command: services.contract.command,
     contract: services.contract.current(),
-    terms: services.contract.effectiveActionTerms(),
+    terms,
     deliverableGaps: evidence?.deliverableGaps ?? [],
     constraints: evidence?.constraints ?? [],
     ledger: services.actionLedger.entries(),
     claimedMet: evidence?.claimedMet ?? null,
     captureGap: (scope) => capabilities.captureGap(scope),
-    evaluateFill: UNAVAILABLE_FILL,
+    evaluateFill: censusFillEvaluator(census),
   });
+}
+
+/** A census, or an incomplete one when the read fails: never an exception path. */
+async function readCensus(source: FillCensusSource): Promise<FillCensus | null> {
+  try {
+    return await source.census();
+  } catch {
+    // swallow-ok: a failed census read is an honest "not counted", never a failed publish
+    return { epoch: null, host: '', complete: false, controls: [] };
+  }
 }
 
 /** Stores a successful publication's evaluation and logs its counts only. */
