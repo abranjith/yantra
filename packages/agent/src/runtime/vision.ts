@@ -33,6 +33,29 @@ export interface CaptureMetadata {
   readonly seq: number;
 }
 
+/** Why Vision Assist is unavailable, as a stable reason code. */
+export type VisionUnavailableReason =
+  | 'zero_llm'
+  | 'suppressed_by_flag'
+  | 'no_browser_tools'
+  | 'grant_missing'
+  | 'model_text_only';
+
+/**
+ * The first gate that keeps Vision Assist off, in a fixed precedence (the
+ * structural gates before the user-owned ones), or null when it is available.
+ */
+export function visionUnavailableReason(
+  vision: VisionAvailability,
+): VisionUnavailableReason | null {
+  if (vision.available) return null;
+  if (vision.zeroLlm) return 'zero_llm';
+  if (vision.suppressedByFlag) return 'suppressed_by_flag';
+  if (!vision.hasBrowserTools) return 'no_browser_tools';
+  if (!vision.grantEnabled) return 'grant_missing';
+  return 'model_text_only';
+}
+
 /** Computes the five-condition gate. Only literal true inputs can enable capture. */
 export function resolveVisionAvailability(input: VisionAvailabilityInput): VisionAvailability {
   const capability: ModelVisionCapability = {

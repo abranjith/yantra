@@ -31,6 +31,7 @@ import {
   DEFAULT_BUDGET_LIMITS,
   type BudgetLimits,
 } from '../../../../src/runtime/budget.js';
+import type { ContractCapabilityResolver } from '../../../../src/runtime/contract-capabilities.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
@@ -79,6 +80,8 @@ export interface BuildServicesOptions {
   readonly runtimeLogger?: Logger;
   /** The run's contract store; defaults to an unrequired, empty one. */
   readonly contract?: TaskContractStore;
+  /** Contract capability resolver; absent means the vision-backed default. */
+  readonly contractCapabilities?: ContractCapabilityResolver;
 }
 
 /**
@@ -164,6 +167,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
         command: 'do',
         required: false,
       }),
+    ...(options.contractCapabilities ? { contractCapabilities: options.contractCapabilities } : {}),
   };
 }
 

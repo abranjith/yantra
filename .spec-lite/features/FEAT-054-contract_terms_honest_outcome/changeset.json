@@ -8,6 +8,174 @@
       "task": "TASK-001"
     },
     {
+      "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/workflow-run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/budget.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-capabilities.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/prompt.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/submit-policy.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/task-contract.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/vision.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-click.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/task-contract.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/workflow-run.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/budget.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/prompt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-recorder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/task-contract.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/submit-class.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller-submit-facts.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/interaction/submit-class.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/protocol/generated/json-schema/brief.schema.json",
       "status": "M",
       "role": "implement",
@@ -63,7 +231,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/task-outcome.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -81,7 +249,7 @@
     },
     {
       "path": "packages/protocol/tests/generated-drift.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -93,13 +261,14 @@
     },
     {
       "path": "packages/protocol/tests/task-outcome.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     }
   ],
   "excluded": [
     ".spec-lite/features/FEAT-054-contract_terms_honest_outcome/changeset.json",
+    ".spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md",
     ".spec-lite/plan_do_workflow_reliability.md"
   ],
   "baseline": {

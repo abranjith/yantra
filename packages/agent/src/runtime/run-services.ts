@@ -39,6 +39,7 @@ import type {
 } from '@yantra/protocol';
 
 import type { BudgetTracker } from './budget.js';
+import type { ContractCapabilityResolver } from './contract-capabilities.js';
 import type { WorkflowToolMode } from './profiles.js';
 import type { RunHealthLedger } from './run-health.js';
 import type { TaskContractStore } from './task-contract.js';
@@ -242,6 +243,20 @@ export interface WorkflowToolDeps {
   listCatalog(): Promise<readonly WorkflowCatalogEntry[]>;
   /** Execute a saved workflow deterministically in its own nested run directory. */
   run(input: WorkflowRunInput, ctx: WorkflowRunContext): Promise<WorkflowRunToolOutcome>;
+  /**
+   * The validated steps of a saved workflow (verb plus, for `call_workflow`,
+   * the callee), or null when it cannot be loaded. Read only under
+   * `effects.submit: forbidden` (FEAT-054 S8) to refuse a clicking workflow
+   * before it runs; absent means the plan cannot be checked, so such a run is
+   * refused.
+   */
+  loadSteps?(name: string): Promise<readonly WorkflowStepShape[] | null>;
+}
+
+/** The part of a workflow step the no-submit check reads. */
+export interface WorkflowStepShape {
+  readonly verb: string;
+  readonly workflow_name?: string;
 }
 
 /** Browser tool dependencies for the run's single ephemeral controller. */
@@ -497,6 +512,11 @@ export interface RunServices {
    * would silently drop the missing-contract notice.
    */
   readonly contract: TaskContractStore;
+  /**
+   * Which declared contract items the run can deliver (FEAT-054). Absent means
+   * the default Vision-Assist-backed resolver over {@link vision}.
+   */
+  readonly contractCapabilities?: ContractCapabilityResolver;
 }
 
 export type { SearchProviderName, SearchResult };

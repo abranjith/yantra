@@ -1,4 +1,5 @@
 import {
+  classifySubmitTarget,
   normalizeText,
   resolveInteractable,
   runEscalationPlan,
@@ -15,6 +16,7 @@ import {
   type ToolWrapperSpec,
 } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+import { submitForbidden, submitRefusal } from '../../../runtime/submit-policy.js';
 import { toCandidateChain } from '../../../runtime/trace.js';
 
 import {
@@ -107,6 +109,16 @@ export function browserClickSpec(
     parameters: BrowserClickParams,
     sanitizationProfile: 'public',
     mutating: true,
+    // FEAT-054: under `effects.submit: forbidden` a submit-class target is
+    // refused here, before the confirmation gate, so no prompt is ever built.
+    policy: async (params: Params, ctx) => {
+      if (!submitForbidden(ctx.services)) return null;
+      const controller = ctx.services.domain.browser?.controller;
+      if (controller === undefined) return null;
+      const name = controller.describeRef(params.ref)?.name ?? '';
+      const signal = classifySubmitTarget(await controller.submitFacts(params.ref), name);
+      return signal === null ? null : submitRefusal(ctx.services, signal, name);
+    },
     requiresConfirmation: (params: Params) =>
       PROTECTED_ACTION_RE.test(
         services.domain.browser?.controller.describeRef(params.ref)?.name ?? '',

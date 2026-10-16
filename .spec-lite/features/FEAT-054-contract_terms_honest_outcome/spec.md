@@ -575,9 +575,9 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Protocol action terms, outcome vocabulary, Brief requirements, `requirements_unmet`
-- [ ] TASK-002: `task_contract` action terms, carry-forward, plain-word echo, wind-down exemption, `agent-v11`
-- [ ] TASK-003: Engine-enforced no-submit (`SUBMIT_FORBIDDEN`) before any prompt
+- [x] TASK-001: Protocol action terms, outcome vocabulary, Brief requirements, `requirements_unmet`
+- [x] TASK-002: `task_contract` action terms, carry-forward, plain-word echo, wind-down exemption, `agent-v11`
+- [x] TASK-003: Engine-enforced no-submit (`SUBMIT_FORBIDDEN`) before any prompt
 - [ ] TASK-004: Run action ledger with epoch-stamped verified commits, clicks, refusals, captures
 - [ ] TASK-005: Per-item fulfillment from evidence, Brief requirements, disagreement notice
 - [ ] TASK-006: `fill` coverage against the engine census with classified exemptions (STUB census until FEAT-055 TASK-001)

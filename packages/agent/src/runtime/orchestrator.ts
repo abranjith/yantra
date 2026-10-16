@@ -1006,7 +1006,10 @@ function createExecutionState(input: {
             input.connector.emitAgentEvent({
               type: 'contract_declared',
               revision: echoedRevisions,
-              summary: renderContractEcho(body),
+              summary: renderContractEcho(
+                body,
+                input.contract.effectiveActionTermsThrough(echoedRevisions),
+              ),
               at: event.at,
             });
           }
@@ -1595,6 +1598,10 @@ function composeDefaultEnvironment(
       }),
       workflow: {
         listCatalog: () => workflowStore.listCatalog(),
+        loadSteps: async (name) => {
+          const loaded = await workflowStore.load(name);
+          return loaded.isOk ? loaded.value.steps : null;
+        },
         run: async (input, ctx) => {
           // Each nested run gets its own run directory (RunOrchestrator owns
           // the run lifecycle). Confirmation checkpoints inside the workflow use

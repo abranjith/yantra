@@ -10,11 +10,15 @@ import {
   CONTRACT_ECHO_MAX,
   ContractRevisionLimitError,
   MISSING_CONTRACT_REASON,
+  NO_ACTION_TERMS,
   TaskContractStore,
+  effectiveActionTermsOf,
   hostSatisfiesRequiredSource,
   normalizeContract,
   normalizeSourceHost,
+  renderActionPhrase,
   renderContractEcho,
+  requirementOrigins,
   type TaskContractParams,
 } from '../../src/runtime/task-contract.js';
 
@@ -67,6 +71,9 @@ describe('@no-llm normalizeContract', () => {
       ranking: { field: 'price', direction: 'asc' },
       limit: 10,
       notes: null,
+      fill: null,
+      artifacts: [],
+      effects: { submit: 'allowed' },
     });
   });
 
@@ -346,5 +353,346 @@ describe('@no-llm TaskContractStore', () => {
     const ask = new TaskContractStore({ runId: 'r', runDir: dir, command: 'ask', required: false });
     expect(ask.notices()).toEqual([]);
     await expect(ask.declare(normalized(), '2026-10-12T12:00:00.000Z')).rejects.toThrow(/ask/u);
+  });
+});
+
+describe('@no-llm contract action terms (FEAT-054)', () => {
+  const actionParams = (overrides: Partial<TaskContractParams> = {}): TaskContractParams => ({
+    deliverable: 'actions',
+    subject: 'the sign-up form',
+    required_sources: ['forms.example.test'],
+    ...overrides,
+  });
+
+  it('normalizes fill, artifacts, and effects', () => {
+    const result = normalizeContract(
+      actionParams({
+        fill: { coverage: 'listed', fields: ['  First\u0007 name ', 'Email'] },
+        artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+        effects: { submit: 'forbidden' },
+      }),
+      cleaning,
+    );
+    expect(result.isOk && result.value).toMatchObject({
+      deliverable: 'actions',
+      fill: { coverage: 'listed', fields: ['First name', 'Email'] },
+      artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+      effects: { submit: 'forbidden' },
+    });
+  });
+
+  it('masks a listed field name that carries the user’s own input', () => {
+    const vault = new UserInputVault();
+    vault.redact('reply to jane.private@example.test');
+    const token = vault.mask('jane.private@example.test');
+    expect(token).not.toBe('jane.private@example.test');
+    const result = normalizeContract(
+      actionParams({ fill: { coverage: 'listed', fields: ['jane.private@example.test'] } }),
+      { ...cleaning, mask: (text) => vault.mask(text) },
+    );
+    expect(result.isOk && result.value.fill?.fields).toEqual([token]);
+  });
+
+  it('defaults absent action terms to neutral values', () => {
+    const result = normalizeContract(actionParams(), cleaning);
+    expect(result.isOk && result.value).toMatchObject({
+      fill: null,
+      artifacts: [],
+      effects: { submit: 'allowed' },
+    });
+  });
+
+  it('rejects duplicate listed fields and duplicate artifacts with contract-duplicate', () => {
+    expect(
+      normalizeContract(
+        actionParams({ fill: { coverage: 'listed', fields: ['Email', 'EMAIL'] } }),
+        cleaning,
+      ),
+    ).toEqual({ isOk: false, error: { cause: 'contract-duplicate', name: 'EMAIL' } });
+    expect(
+      normalizeContract(
+        actionParams({
+          artifacts: [
+            { kind: 'screenshot', scope: 'full_page' },
+            { kind: 'screenshot', scope: 'full_page' },
+          ],
+        }),
+        cleaning,
+      ),
+    ).toEqual({
+      isOk: false,
+      error: { cause: 'contract-duplicate', name: 'full-page screenshot' },
+    });
+  });
+
+  it.each([
+    ['listed with no fields', { coverage: 'listed' as const }, 'listed'],
+    ['listed with an empty list', { coverage: 'listed' as const, fields: [] }, 'listed'],
+    [
+      'all_eligible with fields',
+      { coverage: 'all_eligible' as const, fields: ['Email'] },
+      'all_eligible',
+    ],
+  ])('rejects %s with contract-fill-fields', (_label, fill, coverage) => {
+    expect(normalizeContract(actionParams({ fill }), cleaning)).toEqual({
+      isOk: false,
+      error: { cause: 'contract-fill-fields', coverage },
+    });
+  });
+
+  it.each([
+    ['an actions deliverable', { deliverable: 'actions' as const }],
+    ['a fill', { deliverable: 'report' as const, fill: { coverage: 'all_eligible' as const } }],
+    [
+      'an artifact',
+      {
+        deliverable: 'report' as const,
+        artifacts: [{ kind: 'screenshot' as const, scope: 'viewport' as const }],
+      },
+    ],
+    [
+      'a forbidden submit',
+      { deliverable: 'report' as const, effects: { submit: 'forbidden' as const } },
+    ],
+  ])('rejects %s in research with contract-actions-command', (_label, overrides) => {
+    expect(
+      normalizeContract(actionParams(overrides), { ...cleaning, command: 'research' }),
+    ).toEqual({ isOk: false, error: { cause: 'contract-actions-command' } });
+  });
+
+  it('accepts neutral action terms in research and action terms in do', () => {
+    expect(
+      normalizeContract(
+        actionParams({
+          deliverable: 'report',
+          artifacts: [],
+          effects: { submit: 'allowed' },
+        }),
+        { ...cleaning, command: 'research' },
+      ).isOk,
+    ).toBe(true);
+    expect(
+      normalizeContract(actionParams({ fill: { coverage: 'all_eligible' } }), {
+        ...cleaning,
+        command: 'do',
+      }).isOk,
+    ).toBe(true);
+  });
+});
+
+describe('@no-llm effective action terms carry forward (FEAT-054 S2)', () => {
+  const body = (overrides: Partial<TaskContractParams>): TaskContractBody => {
+    const result = normalizeContract(
+      { deliverable: 'actions', subject: 'the form', ...overrides },
+      cleaning,
+    );
+    if (!result.isOk) throw new Error(`fixture rejected: ${result.error.cause}`);
+    return result.value;
+  };
+
+  const storeDirs = new WeakMap<TaskContractStore, string>();
+  const storeDir = (store: TaskContractStore): string => storeDirs.get(store) ?? '';
+
+  async function storeWith(...bodies: TaskContractBody[]): Promise<TaskContractStore> {
+    const dir = await runDir();
+    const store = new TaskContractStore({
+      runId: 'run-1',
+      runDir: dir,
+      command: 'do',
+      required: true,
+    });
+    storeDirs.set(store, dir);
+    for (const [index, value] of bodies.entries()) {
+      await store.declare(value, `2026-10-15T12:00:0${index}.000Z`);
+    }
+    return store;
+  }
+
+  const full = (): TaskContractBody =>
+    body({
+      fill: { coverage: 'all_eligible' },
+      artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+      effects: { submit: 'forbidden' },
+    });
+
+  it('has neutral terms before any declaration', async () => {
+    const store = await storeWith();
+    expect(store.effectiveActionTerms()).toEqual(NO_ACTION_TERMS);
+  });
+
+  it('keeps every action item a later revision omits, each declared in revision 1', async () => {
+    const store = await storeWith(full(), body({}));
+    expect(store.effectiveActionTerms()).toEqual({
+      fill: { coverage: 'all_eligible', fields: [], declaredIn: 1 },
+      artifacts: [{ kind: 'screenshot', scope: 'viewport', declaredIn: 1 }],
+      submit: { value: 'forbidden', declaredIn: 1 },
+    });
+  });
+
+  it('does not let a later submit: allowed loosen an earlier forbidden', async () => {
+    const store = await storeWith(full(), body({ effects: { submit: 'allowed' } }));
+    expect(store.effectiveActionTerms().submit).toEqual({ value: 'forbidden', declaredIn: 1 });
+  });
+
+  it('adds a new artifact with the revision that requested it', async () => {
+    const store = await storeWith(
+      full(),
+      body({ artifacts: [{ kind: 'screenshot', scope: 'full_page' }] }),
+    );
+    expect(store.effectiveActionTerms().artifacts).toEqual([
+      { kind: 'screenshot', scope: 'viewport', declaredIn: 1 },
+      { kind: 'screenshot', scope: 'full_page', declaredIn: 2 },
+    ]);
+  });
+
+  it('keeps the first revision of an unchanged fill and takes a changed fill as new', async () => {
+    const same = await storeWith(full(), full());
+    expect(same.effectiveActionTerms().fill?.declaredIn).toBe(1);
+    const changed = await storeWith(
+      full(),
+      body({ fill: { coverage: 'listed', fields: ['Email'] } }),
+    );
+    expect(changed.effectiveActionTerms().fill).toEqual({
+      coverage: 'listed',
+      fields: ['Email'],
+      declaredIn: 2,
+    });
+  });
+
+  it('writes the requirements in force into contract.json on every declaration', async () => {
+    const store = await storeWith(
+      full(),
+      body({ artifacts: [{ kind: 'screenshot', scope: 'full_page' }] }),
+    );
+    const record = TaskContractRecord.parse(
+      JSON.parse(await readFile(join(storeDir(store), 'contract.json'), 'utf8')),
+    );
+    expect(record.requirements).toEqual([
+      { id: 'fill', declared_in: 1 },
+      { id: 'artifact:screenshot:viewport', declared_in: 1 },
+      { id: 'artifact:screenshot:full_page', declared_in: 2 },
+      { id: 'effects.submit', declared_in: 1 },
+    ]);
+  });
+
+  it('writes no requirements key for a contract without action items', async () => {
+    const dir = await runDir();
+    const store = new TaskContractStore({
+      runId: 'run-1',
+      runDir: dir,
+      command: 'research',
+      required: true,
+    });
+    await store.declare(normalized(), '2026-10-15T12:00:00.000Z');
+    const raw = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf8')) as object;
+    expect('requirements' in raw).toBe(false);
+  });
+
+  it('reports the terms in force through each revision', async () => {
+    const store = await storeWith(body({}), full());
+    expect(store.effectiveActionTermsThrough(1)).toEqual(NO_ACTION_TERMS);
+    expect(store.effectiveActionTermsThrough(2).submit.value).toBe('forbidden');
+  });
+
+  it('exposes requiredToPublish and the command', async () => {
+    const dir = await runDir();
+    const doStore = new TaskContractStore({
+      runId: 'r',
+      runDir: dir,
+      command: 'do',
+      required: true,
+      requiredToPublish: true,
+    });
+    expect(doStore.requiredToPublish).toBe(true);
+    expect(doStore.command).toBe('do');
+    const research = new TaskContractStore({
+      runId: 'r',
+      runDir: dir,
+      command: 'research',
+      required: true,
+    });
+    expect(research.requiredToPublish).toBe(false);
+  });
+
+  it('derives the same terms from a pure revision list', () => {
+    expect(
+      effectiveActionTermsOf([
+        { revision: 1, contract: full() },
+        { revision: 2, contract: body({}) },
+      ]).artifacts,
+    ).toEqual([{ kind: 'screenshot', scope: 'viewport', declaredIn: 1 }]);
+    expect(requirementOrigins(NO_ACTION_TERMS)).toEqual([]);
+  });
+});
+
+describe('@no-llm action-term echo (FEAT-054)', () => {
+  it('renders the action phrase in plain words', () => {
+    const result = normalizeContract(
+      {
+        deliverable: 'actions',
+        subject: 'the sign-up form',
+        fill: { coverage: 'all_eligible' },
+        artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+        effects: { submit: 'forbidden' },
+      },
+      cleaning,
+    );
+    if (!result.isOk) throw new Error('fixture rejected');
+    expect(renderContractEcho(result.value)).toBe(
+      'actions of the sign-up form — understood: fill all eligible fields; ' +
+        'capture a viewport screenshot; do not submit',
+    );
+  });
+
+  it('counts listed fields and joins several artifacts', () => {
+    expect(
+      renderActionPhrase({
+        fill: { coverage: 'listed', fields: ['Email'], declaredIn: 1 },
+        artifacts: [
+          { kind: 'screenshot', scope: 'full_page', declaredIn: 1 },
+          { kind: 'screenshot', scope: 'element', declaredIn: 2 },
+        ],
+        submit: { value: 'allowed', declaredIn: null },
+      }),
+    ).toBe('fill 1 listed field; capture a full-page screenshot and an element screenshot');
+    expect(renderActionPhrase(NO_ACTION_TERMS)).toBeNull();
+  });
+
+  it('echoes carried-forward terms passed in, not only the current body', () => {
+    const result = normalizeContract({ deliverable: 'actions', subject: 'the form' }, cleaning);
+    if (!result.isOk) throw new Error('fixture rejected');
+    expect(
+      renderContractEcho(result.value, {
+        ...NO_ACTION_TERMS,
+        submit: { value: 'forbidden', declaredIn: 1 },
+      }),
+    ).toBe('actions of the form — understood: do not submit');
+  });
+
+  it('collapses whitespace and stays within the bound with every term at maximum length', () => {
+    const result = normalizeContract(
+      {
+        deliverable: 'actions',
+        subject: 's'.repeat(200),
+        required_sources: ['a.test', 'b.test', 'c.test', 'd.test', 'e.test'],
+        notes: 'n   '.repeat(125),
+        fill: {
+          coverage: 'listed',
+          fields: Array.from({ length: 40 }, (_, index) => `f${index}${'x'.repeat(55)}`),
+        },
+        artifacts: [
+          { kind: 'screenshot', scope: 'viewport' },
+          { kind: 'screenshot', scope: 'full_page' },
+          { kind: 'screenshot', scope: 'element' },
+        ],
+        effects: { submit: 'forbidden' },
+      },
+      cleaning,
+    );
+    if (!result.isOk) throw new Error('fixture rejected');
+    const echo = renderContractEcho(result.value);
+    expect(echo.length).toBeLessThanOrEqual(CONTRACT_ECHO_MAX);
+    expect(echo).not.toMatch(/\s{2}|[\r\n]/u);
+    expect(echo).toContain('understood: fill 40 listed fields');
   });
 });

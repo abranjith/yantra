@@ -24,6 +24,11 @@ import { Type, type Static } from 'typebox';
 
 import type { DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+import {
+  submitForbidden,
+  submitRefusal,
+  workflowMayClick,
+} from '../../../runtime/submit-policy.js';
 
 const WorkflowRunParams = Type.Object(
   {
@@ -110,6 +115,12 @@ async function runWorkflowTool(params: Params, services: RunServices): Promise<D
 
   const validation = validateParams(entry, params.params ?? {});
   if (!validation.ok) return validation.failure;
+
+  // FEAT-054 S8: a nested workflow would otherwise bypass the agent-side
+  // no-submit refusal, so a clicking plan is refused before it runs.
+  if (submitForbidden(services) && (await workflowMayClick(name, deps.loadSteps?.bind(deps)))) {
+    return submitRefusal(services, 'nested-workflow', name);
+  }
 
   const outcome = await deps.run(
     { workflow: name, params: validation.params },

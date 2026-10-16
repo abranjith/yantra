@@ -44,6 +44,13 @@ const REQUIRED_SOURCE =
   'and present any other source only as a clearly labeled alternative, never merged into the ' +
   'answer.';
 const DECLARE_CONTRACT = 'Call task_contract in the same turn as your first search or fetch.';
+// FEAT-054: the requirements the engine checks live in the contract, not in
+// notes. Shared by the `do` addendum only; research cannot declare actions.
+const DECLARE_ACTIONS =
+  'When the goal changes or captures a page, declare deliverable "actions": put "every field" ' +
+  'or the fields to fill in fill, a requested screenshot in artifacts, and "do not submit" in ' +
+  'effects, never in notes, which nothing checks. The result is judged item by item from what ' +
+  'the tools recorded, so publish even when an item is unmet and say why in fulfillment.unmet.';
 const PUBLISH_GUIDANCE =
   'Finish with result_publish. Cite evidence by the source_id a result showed (S3) or a record ' +
   'id (S3#r5): findings as {"text": "...", "sources": ["S3"]}, and prose as [S3]. When the ' +
@@ -118,7 +125,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     promptAddendum:
       `Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
-      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ` +
+      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ` +
       'When a form needs more than one field set, fill it with a single ' +
       'browser_fill_form listing every field — one call for the whole search form (destination, ' +
       'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +

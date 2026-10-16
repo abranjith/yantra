@@ -192,6 +192,12 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
    */
   readonly terminal?: boolean;
   /**
+   * True for a tool that must stay callable during the exploration wind-down
+   * (`task_contract`, FEAT-054). Skips only the soft wall-clock refusal; the
+   * hard deadline, byte caps, and every security gate still apply.
+   */
+  readonly windDownExempt?: boolean;
+  /**
    * True for tools that gather new web evidence (`web_search`, `web_fetch`).
    * Once the orchestrator freezes the evidence phase at completion-nudge time,
    * these calls are rejected with `EVIDENCE_FROZEN` so the model can only
@@ -344,7 +350,10 @@ async function runStages<TParams extends TSchema>(
       return { result: abortedResult(spec, services), cause: 'run-aborted' };
     }
     const terminal = spec.terminal === true;
-    const reserved = services.budgets.reserveCall(spec.name, { terminal });
+    const reserved = services.budgets.reserveCall(spec.name, {
+      terminal,
+      windDownExempt: spec.windDownExempt === true,
+    });
     if (!reserved.isOk) {
       // The remedy only makes sense for the tools that can be starved; the
       // terminal tool itself has nowhere else to go. And it is only appended
