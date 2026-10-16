@@ -39,7 +39,7 @@
     },
     {
       "path": "packages/agent/src/runtime/contract-capabilities.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -81,7 +81,7 @@
     },
     {
       "path": "packages/agent/src/runtime/submit-policy.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -99,7 +99,7 @@
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/browser-click.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -159,19 +159,19 @@
     },
     {
       "path": "packages/core/src/interaction/submit-class.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/browser/agent-controller-submit-facts.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/interaction/submit-class.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
