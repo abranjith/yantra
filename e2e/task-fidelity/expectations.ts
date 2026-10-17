@@ -39,9 +39,6 @@ export type Owner = (typeof OWNERS)[number];
  * never by editing the expectation.
  */
 export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>([
-  // FEAT-055 TASK-001 supplies the form census `fill.coverage: all_eligible`
-  // is measured against; until it lands a declared fill is never met.
-  'FEAT-055',
   // FEAT-056 verifies protected and other controls whose readback differs
   // from the typed value; until it lands they report not committed.
   'FEAT-056',

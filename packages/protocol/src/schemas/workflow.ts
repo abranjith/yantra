@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ConsequenceLevel, ExpectedCost } from './confirmation.js';
 import { RoleEnum } from './refs.js';
 import { SecurityClass, SecurityScope } from './security.js';
-import { AssertCondition, ExtractionSchema } from './steps.js';
+import { AssertCondition, ExtractionSchema, FieldLabelOrigin } from './steps.js';
 
 const WORKFLOW_NAME_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const OUTPUT_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
@@ -127,6 +127,7 @@ export const WorkflowStep = z
       ...WorkflowConfirmationAnnotations,
       verb: z.literal('fill_element').describe('Semantic fill-element workflow step.'),
       field_name: z.string().min(1).describe('Accessible field name used for fresh resolution.'),
+      field_label_origin: FieldLabelOrigin.optional(),
       locator: z.string().min(1).describe('Fallback named locator key from _locators.'),
       value: WorkflowValueExpression.describe('Semantic fill value or template expression.'),
     }),

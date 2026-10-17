@@ -3,7 +3,11 @@ import { renderInteractionMessage } from '../interaction/messages.js';
 /** Expected stale-ref failure that directs the agent back to observation. */
 export class StaleElementRefError extends Error {
   public readonly code = 'STALE_ELEMENT_REF' as const;
-  public constructor(ref: string, reason?: string) {
+  public constructor(
+    public readonly ref: string,
+    public readonly reason?: string,
+    public readonly candidates: readonly string[] = [],
+  ) {
     super(
       renderInteractionMessage('actionability', 'STALE_ELEMENT_REF', 'stale-ref', {
         ref,

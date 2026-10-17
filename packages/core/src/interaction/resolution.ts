@@ -20,6 +20,7 @@
 import type { AgentInteractable } from '../browser/agent-controller.js';
 import type { WidgetTarget } from '../widgets/types.js';
 
+import { resolvableNames } from './field-identity.js';
 import { normalizeText } from './types.js';
 
 /** A literal opaque ref, as minted by `observe()`. */
@@ -51,6 +52,7 @@ export type TieBreakRung =
 
 /** Inputs that let the ladder narrow a tie without guessing at intent. */
 export interface ResolveInteractableOptions {
+  readonly match?: 'name' | 'name-or-label';
   /**
    * The control the caller already resolved once and is now re-finding.
    *
@@ -101,7 +103,11 @@ export function resolveInteractable(
   options: ResolveInteractableOptions = {},
 ): Resolution {
   const trimmed = query.trim();
-  const named = interactables.filter((entry) => entry.name.trim().length > 0);
+  const names = (entry: AgentInteractable): readonly string[] =>
+    options.match === 'name' ? [entry.name] : resolvableNames(entry);
+  const named = interactables.filter((entry) =>
+    names(entry).some((name) => name.trim().length > 0),
+  );
   if (trimmed.length === 0) return { kind: 'none', offered: named };
 
   if (REF_PATTERN.test(trimmed)) {
@@ -114,7 +120,9 @@ export function resolveInteractable(
   const wanted = normalizeText(trimmed);
   const wantedTokens = wanted.split(' ').filter(Boolean);
   for (const tier of MATCH_TIERS) {
-    const hits = named.filter((entry) => matchesTier(entry.name, wanted, wantedTokens, tier));
+    const hits = named.filter((entry) =>
+      names(entry).some((name) => matchesTier(name, wanted, wantedTokens, tier)),
+    );
     if (hits.length === 0) continue;
     return narrow(hits, tier, options);
   }
@@ -205,18 +213,24 @@ function narrow(
   // Differently-named fields can never reach this rung: "Check-in" and
   // "Check-out" tie on the prefix tier, differ in name, and fall through to
   // `ambiguous` exactly as they always have. No value decision is ever guessed.
-  const firstName = normalizeText(pool[0]!.name);
+  const firstName = normalizeText(
+    pool[0]!.name.trim() ? pool[0]!.name : (pool[0]!.field?.label ?? ''),
+  );
   const firstRole = pool[0]!.role;
   const firstGroup = pool[0]!.group ?? null;
+  const firstSection = pool[0]!.field?.section ?? null;
   const copiesOfOneControl = pool.every(
     (entry) =>
-      normalizeText(entry.name) === firstName &&
+      normalizeText(entry.name.trim() ? entry.name : (entry.field?.label ?? '')) === firstName &&
       entry.role === firstRole &&
+      (entry.field?.section ?? null) === firstSection &&
       (entry.group ?? null) === firstGroup,
   );
   const matchesPreferredIdentity =
     options.preferred !== undefined &&
-    normalizeText(options.preferred.name) === firstName &&
+    normalizeText(
+      options.preferred.name.trim() ? options.preferred.name : (options.preferred.label ?? ''),
+    ) === firstName &&
     options.preferred.role === firstRole &&
     options.preferred.group === firstGroup;
   if (options.allowEquivalentCopies === true && copiesOfOneControl && matchesPreferredIdentity) {

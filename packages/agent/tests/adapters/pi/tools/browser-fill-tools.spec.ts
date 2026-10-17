@@ -23,9 +23,11 @@ import {
   type WidgetTarget,
 } from '@yantra/core';
 import type { ConfirmationGateway } from '@yantra/core';
+import { layoutMatrix } from '@yantra/test-helpers/layout-matrix';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
+import { layoutBrowser } from '../../../../../core/tests/helpers/layout-browser.js';
 import { browserClickSpec } from '../../../../src/adapters/pi/tools/browser-click.js';
 import { mapFillFailure } from '../../../../src/adapters/pi/tools/browser-common.js';
 import {
@@ -42,6 +44,41 @@ import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { allowingEthics, buildServices } from './test-support.js';
 
 describe('@no-llm browser_fill_form engine delegation', () => {
+  it.each(['table-label-cell', 'css-order-grid'])(
+    'fills structural labels on %s in real Chrome',
+    async (id) => {
+      const browser = await layoutBrowser();
+      try {
+        const fixture = layoutMatrix.find((item) => item.id === id)!;
+        await browser.page.setContent(fixture.html());
+        const browserDeps: BrowserToolDeps = {
+          controller: browser.controller as unknown as AgentBrowserController,
+          ethics: allowingEthics(),
+          secretResolver: null,
+          sensitiveScreenLatch: new SensitiveScreenLatch(),
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 16_384,
+        };
+        const services = buildServices({ domain: { browser: browserDeps } });
+        const control = fixture.controls[0]!;
+        if (control.expect.kind !== 'label') throw new Error('Expected a labelled fixture');
+        const result = await wrapTool(browserFillFormSpec(services), services).execute(
+          { fields: [{ field: control.expect.query, value: 'Synthetic' }] },
+          undefined,
+        );
+        expect(result.status).toBe('ok');
+        expect(
+          await browser.page.$eval(
+            `[data-fixture-key="${control.key}"]`,
+            (element) => (element as HTMLInputElement).value,
+          ),
+        ).toBe('Synthetic');
+      } finally {
+        await browser.close();
+      }
+    },
+    45_000,
+  );
   it('applies text, typeahead, and a date range through the expected paths', async () => {
     const controller = formController();
     const trace = new AgentTrace();
@@ -341,7 +378,13 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(trace.steps()).toEqual([
       expect.objectContaining({
         kind: 'fill_element',
-        field: { role: 'textbox', name: 'Search', group: null },
+        field: {
+          role: 'textbox',
+          name: 'Search',
+          group: null,
+          label: 'Search',
+          label_origin: 'explicit',
+        },
         value: { kind: 'literal', value: 'quiet room' },
       }),
     ]);
@@ -689,6 +732,14 @@ describe('@no-llm browser_fill_element contract', () => {
         title: '',
         digest: '',
         digestUnchanged: false,
+        inventory: {
+          total: 0,
+          shown: 0,
+          skippedBefore: 0,
+          omitted: {},
+          continueAfter: null,
+          scanBounded: false,
+        },
         interactables: [],
       }),
       click: async () => undefined,
@@ -1565,6 +1616,14 @@ class FormController {
       title: 'Form',
       digest: 'form',
       digestUnchanged: false,
+      inventory: {
+        total: 0,
+        shown: 0,
+        skippedBefore: 0,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: false,
+      },
       interactables,
     };
   }

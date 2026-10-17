@@ -10,7 +10,18 @@ import {
   modelObservation,
 } from './browser-common.js';
 
-const BrowserObserveParams = Type.Object({}, { additionalProperties: false });
+const BrowserObserveParams = Type.Object(
+  {
+    after: Type.Optional(Type.String({ pattern: '^e[0-9]+$' })),
+    kinds: Type.Optional(
+      Type.Array(
+        Type.Union(['field', 'button', 'link', 'option'].map((kind) => Type.Literal(kind))),
+        { minItems: 1, maxItems: 4, uniqueItems: true },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
 
 /** Build the side-effect-free observation tool. */
 export function browserObserveSpec(
@@ -20,23 +31,34 @@ export function browserObserveSpec(
     name: 'browser_observe',
     label: 'Browser Observe',
     description:
-      'Read the current page without acting, as bounded sanitized text and opaque interactable refs. Action tools already return a fresh observation, so do not chain this after every action. Use it for an independent fresh read; never invent refs or reuse them after navigation.',
+      'Read the current page without acting, as bounded sanitized text and opaque interactable refs. Action tools already return a fresh observation, so do not chain this after every action. Use it for an independent fresh read; never invent refs or reuse them after navigation. When inventory is present, pass continue_after as after for the next window; kinds: ["field"] lists fillable controls. Windowed results carry no digest. A field\'s field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.',
     parameters: BrowserObserveParams,
     sanitizationProfile: 'public',
-    run: async (_params, ctx): Promise<DomainResult> => {
+    run: async (params, ctx): Promise<DomainResult> => {
       const controller = browserController(ctx.services);
       if (isDomainFailure(controller)) return controller;
       try {
-        const observation = await controller.observe();
+        const windowed = params.after !== undefined || params.kinds !== undefined;
+        const observation = await controller.observe(
+          windowed
+            ? {
+                window: {
+                  ...(params.after === undefined ? {} : { after: params.after }),
+                  ...(params.kinds === undefined ? {} : { kinds: params.kinds }),
+                },
+              }
+            : undefined,
+        );
         // Recorded so promotion can tell that this run *ended* by reading the
         // page. A run whose last act is an observation has collected its answer
         // from the digest and never calls `browser_extract`; without this the
         // promoted workflow clicks through and captures nothing.
-        ctx.services.trace?.append({
-          kind: 'observe',
-          host: controller.host(),
-          requires_confirmation: false,
-        });
+        if (!windowed)
+          ctx.services.trace?.append({
+            kind: 'observe',
+            host: controller.host(),
+            requires_confirmation: false,
+          });
         return { ok: true, model: modelObservation(observation) };
       } catch (error) {
         return browserFailure(error);

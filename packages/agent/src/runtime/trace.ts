@@ -63,6 +63,8 @@ export type AgentTraceStep =
         readonly role: string;
         readonly name: string;
         readonly group: string | null;
+        readonly label?: string | null;
+        readonly label_origin?: 'explicit' | 'structural' | 'placeholder' | 'title' | 'none';
       };
       readonly locator: readonly LocatorCandidateType[];
       readonly value: TraceFillValue;
@@ -133,7 +135,15 @@ const AgentTraceStepSchema = z.discriminatedUnion('kind', [
       kind: z.literal('fill_element'),
       host: z.string(),
       field: z
-        .object({ role: z.string(), name: z.string(), group: z.string().nullable() })
+        .object({
+          role: z.string(),
+          name: z.string(),
+          group: z.string().nullable(),
+          label: z.string().nullable().optional(),
+          label_origin: z
+            .enum(['explicit', 'structural', 'placeholder', 'title', 'none'])
+            .optional(),
+        })
         .strict(),
       locator: z.array(LocatorCandidate).min(1),
       value: TraceFillValueSchema,

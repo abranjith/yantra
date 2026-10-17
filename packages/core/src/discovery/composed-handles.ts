@@ -4,6 +4,7 @@ import { scanInteractablesInPage, type RawInteractable } from './interactable-sc
 
 /** One composed-tree pass, returned as live handles plus their records. */
 export interface ComposedInteractables {
+  readonly truncated: boolean;
   /**
    * Described records for the candidates the projection has a kind for.
    *
@@ -41,11 +42,18 @@ export interface ComposedInteractables {
  */
 export async function collectComposedInteractables(
   page: PuppeteerPage,
-  options: { readonly max: number; readonly selector?: string } = { max: 400 },
+  options: {
+    readonly max: number;
+    readonly selector?: string;
+    readonly elementKeys?: boolean;
+    readonly challengeTokens?: readonly string[];
+  } = { max: 400 },
 ): Promise<ComposedInteractables> {
   const scanHandle = await page.evaluateHandle(scanInteractablesInPage, {
     withElements: true,
     max: options.max,
+    ...(options.elementKeys === undefined ? {} : { elementKeys: options.elementKeys }),
+    ...(options.challengeTokens === undefined ? {} : { challengeTokens: options.challengeTokens }),
     ...(options.selector === undefined ? {} : { selector: options.selector }),
   });
   const elements: (ElementHandle<Element> | null)[] = [];
@@ -76,7 +84,10 @@ export async function collectComposedInteractables(
         transferred.add(property);
       }
     }
-    return { records, elements };
+    const truncatedHandle = await scanHandle.getProperty('truncated');
+    owned.add(truncatedHandle);
+    const truncated = await truncatedHandle.jsonValue();
+    return { records, elements, truncated };
   } catch (error) {
     transferred.clear();
     throw error;

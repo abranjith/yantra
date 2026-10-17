@@ -131,7 +131,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      'Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form.',
+      "Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.",
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -397,6 +397,8 @@ async function appendSemanticTrace(
       role: described.role,
       name: described.name,
       group: described.group ?? null,
+      label: target.label ?? (described.name.trim() ? described.name : null),
+      label_origin: target.labelOrigin ?? (described.name.trim() ? 'explicit' : 'none'),
     },
     locator: ranked.length > 0 ? ranked : toCandidateChain(described.role, described.name),
     value,

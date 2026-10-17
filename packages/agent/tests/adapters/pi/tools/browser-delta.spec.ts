@@ -113,6 +113,14 @@ class DeltaController {
       title: this.frame.title ?? 'Page',
       digest: '',
       digestUnchanged: false,
+      inventory: {
+        total: 0,
+        shown: 0,
+        skippedBefore: 0,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: false,
+      },
       interactables,
     });
   }

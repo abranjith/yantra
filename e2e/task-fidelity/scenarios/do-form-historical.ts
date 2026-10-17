@@ -97,11 +97,6 @@ const expectations: readonly Expectation[] = [
       'names "fields 10 of" the eligible total',
       (line) => typeof line === 'string' && line.includes('fields 10 of'),
     ),
-    baseline: satisfies(
-      'says the fields were not counted: no form census yet',
-      (line) =>
-        typeof line === 'string' && line.includes('fields not counted (inventory_unavailable)'),
-    ),
     note: 'G1: counting filled fields needs FEAT-055 TASK-001 census of the whole form.',
   },
 ];

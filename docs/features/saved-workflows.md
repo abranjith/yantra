@@ -21,6 +21,8 @@ The recorder and annotation state machines exist in the core package, but the cu
 
 `yantra do --save-as` promotes only a `fulfilled` run, one that published its Brief and met every requirement its task contract declared (see [Judging a `do` result](agentic-tasks.md#judging-a-do-result)), and only the successful browser interactions in its trace. A `partial` run is not saved, so a trace that did not finish the task never becomes a workflow. Navigate, click, ordinary fill, semantic `fill_element`, and extraction activity can become workflow steps. Mid-run observations are treated as navigation aids and dropped; a trailing run of reads becomes one terminal `extract`, preferring an explicit browser extraction when one exists. The promoter declares an output for each resulting extraction.
 
+For a semantic fill with an explicit accessible name, promotion saves that name as `field_name`. A label inferred from page structure, a placeholder, or a title is saved as `field_name` with `field_label_origin: structural`, `placeholder`, or `title`. If the field has no usable label, promotion saves an ordinary locator-based `fill` with `submit: false`. The promotion result includes a note naming that step, and ordinary terminal output prints it below the saved-workflow line, for example `s3: unlabeled field saved as a locator-only fill (submit: false).` These disclosure notes are not stored in the workflow YAML.
+
 Promotion also preserves confirmation flags and stores secret **references**, never resolved secret values. It saves:
 
 - `cookies: none`, so every promoted replay starts with an ephemeral browser profile;
@@ -39,6 +41,8 @@ Saving is best-effort. An existing workflow name is not overwritten, an empty or
 ### Deterministic execution
 
 The executor supports `navigate`, `click`, `fill`, `fill_element`, `extract`, `wait_for`, `assert`, `branch`, `loop`, and `llm_summarize`. It resolves named UI targets through each locator's ordered candidate chain, auto-waits for the actionability level the step needs, and settles the page after navigation and interactions and before reads. Scope rules are checked before ordinary execution, retries are bounded, total step executions are capped, and a checkpoint is written after every completed step.
+
+Semantic `fill_element` replay uses the same field identity and resolver as live browser tools. With `field_label_origin` present, fresh resolution can match an inferred label as well as an accessible name. Without it, `field_name` retains its existing accessible-name meaning; older YAML remains valid. If an unmarked step matches only an inferred label, replay fails with `WIDGET_TARGET_UNREACHABLE` before trying its fallback locator. Equal-ranked matches produce an ambiguity failure instead of selecting a control by position.
 
 When `fill` or `fill_element` targets a nonempty text control, replay focuses that control and sends the platform select-all chord (`Meta+A` on macOS, `Control+A` elsewhere) before typing. This replaces the existing text without dispatching the former triple pointer click, which could toggle widget-bearing controls. Native `<select>` controls keep their value-based option handling, and fills still wait for navigation caused by typing or an optional Enter submission to settle before replay continues.
 
@@ -229,6 +233,22 @@ Step values may be scalar literals, a whole parameter/secret/capture reference, 
 Each extraction capture is an envelope with `rows` and row-count/error metadata. Primitive `readable` removes common page chrome and falls back to rendered text; primitive `string` reads raw `textContent`. Array and object schemas read repeated rows or named fields.
 
 Output-expression failures are non-fatal: the affected binding is omitted and its error appears in the run report. Each expression has a 200 ms evaluation timeout and a 100 KB serialized-result cap. All declared outputs are persisted; the current YAML schema has no per-output retention option.
+
+### Semantic fill identity
+
+A canonical `fill_element` step may include the optional `field_label_origin` field. Accepted values are `explicit`, `structural`, `placeholder`, and `title`; `none` is not a workflow value. For example, a field identified by its surrounding table label can be saved as:
+
+```yaml
+- id: s2
+  verb: fill_element
+  scope: null
+  field_name: City
+  field_label_origin: structural
+  locator: City field
+  value: '{{ param:city }}'
+```
+
+Declare the `city` parameter and the `City field` fallback chain in the containing workflow. Keep the origin when editing a promoted inferred-label step: removing it changes resolution back to accessible-name matching. A locator-only `fill` saved for an unlabeled control depends on its recorded locator chain and does not perform semantic field resolution.
 
 ### Run artifacts
 

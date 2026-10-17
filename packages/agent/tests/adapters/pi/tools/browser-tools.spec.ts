@@ -38,6 +38,43 @@ import {
 } from './test-support.js';
 
 describe('@no-llm browser tools', () => {
+  it('projects continuation counts and leaves windowed reads out of the promotion trace', async () => {
+    const controller = fakeController();
+    const services = { ...browserServices(controller), trace: new AgentTrace() };
+    controller.observe.mockResolvedValue({
+      url: 'https://example.com/',
+      title: 'Form',
+      digest: '',
+      digestUnchanged: false,
+      interactables: [{ ref: 'e51', role: 'textbox', name: 'City' }],
+      inventory: {
+        total: 51,
+        shown: 1,
+        skippedBefore: 50,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: false,
+      },
+      window: { after: 'e50', kinds: ['field'] },
+    });
+    const result = await wrapTool(browserObserveSpec(services), services).execute(
+      { after: 'e50', kinds: ['field'] },
+      undefined,
+    );
+    expect(result.status).toBe('ok');
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      inventory: { total: 51, skipped_before: 50, window: { after: 'e50', kinds: ['field'] } },
+    });
+    expect(result.modelText).not.toContain('digest');
+    expect(controller.observe).toHaveBeenCalledWith({ window: { after: 'e50', kinds: ['field'] } });
+    expect(services.trace.steps()).toHaveLength(0);
+    controller.observe.mockRejectedValue(new StaleElementRefError('e50', 'continuation-cursor'));
+    const stale = await wrapTool(browserObserveSpec(services), services).execute(
+      { after: 'e50' },
+      undefined,
+    );
+    expect(stale.modelText).toContain('without after');
+  });
   let runDir: string;
   beforeEach(async () => {
     runDir = await mkdtemp(join(tmpdir(), 'yantra-browser-tools-'));

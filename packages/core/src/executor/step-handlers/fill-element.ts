@@ -3,10 +3,12 @@ import type { ElementHandle, KeyInput, Page as PuppeteerPage } from 'puppeteer-c
 
 import {
   StaleElementRefError,
+  projectAgentInteractable,
   type AgentBrowserObservation,
   type AgentInteractable,
 } from '../../browser/agent-controller.js';
 import { collectComposedInteractables } from '../../discovery/composed-handles.js';
+import { ensureLocatorRuntime } from '../../discovery/observe.js';
 import { fillField, fillSecretField, parseFillValue, type FillFailure } from '../../fill/index.js';
 import { resolveInteractable } from '../../interaction/index.js';
 import { scrollContainerInPage } from '../../widgets/scroll.js';
@@ -63,7 +65,11 @@ export const handleFillElement: StepHandler<FillElementStep> = async (
   const port = new ReplayWidgetPort(page, ctx);
   try {
     const observation = await port.observe({ cap: 400, trackDigest: false });
-    const semantic = resolveField(step.field_name, observation.interactables);
+    const semantic = resolveField(
+      step.field_name,
+      observation.interactables,
+      step.field_label_origin !== undefined,
+    );
     if (semantic.kind === 'ambiguous') {
       return fromFailure(
         step,
@@ -80,6 +86,19 @@ export const handleFillElement: StepHandler<FillElementStep> = async (
     if (semantic.kind === 'match') {
       target = toTarget(semantic.target);
     } else {
+      if (
+        !step.field_label_origin &&
+        resolveInteractable(step.field_name, observation.interactables).kind !== 'none'
+      ) {
+        return failed(
+          'locator_not_found',
+          new FillElementExecutionError(
+            'WIDGET_TARGET_UNREACHABLE',
+            `The field "${step.field_name}" has no matching accessible name. Set field_label_origin to address an inferred label.`,
+            { field_name: step.field_name },
+          ),
+        );
+      }
       if (!ctx.locatorHost) {
         return failed(
           'locator_not_found',
@@ -218,8 +237,14 @@ type FieldResolution =
   | { readonly kind: 'none' };
 
 /** Replay resolves fields through the same shared resolver as the live tools. */
-function resolveField(field: string, interactables: readonly AgentInteractable[]): FieldResolution {
-  const resolved = resolveInteractable(field, interactables);
+function resolveField(
+  field: string,
+  interactables: readonly AgentInteractable[],
+  labels: boolean,
+): FieldResolution {
+  const resolved = resolveInteractable(field, interactables, {
+    match: labels ? 'name-or-label' : 'name',
+  });
   if (resolved.kind === 'match') return { kind: 'match', target: resolved.entry };
   if (resolved.kind === 'none') return { kind: 'none' };
   return { kind: 'ambiguous', offered: resolved.offered.slice(0, 10).map((entry) => entry.name) };
@@ -227,6 +252,9 @@ function resolveField(field: string, interactables: readonly AgentInteractable[]
 
 function toTarget(entry: AgentInteractable): WidgetTarget {
   return {
+    ...(entry.field
+      ? { label: entry.field.label ?? entry.name, labelOrigin: entry.field.origin }
+      : {}),
     ref: entry.ref,
     role: entry.role,
     name: entry.name,
@@ -252,20 +280,27 @@ class ReplayWidgetPort implements WidgetPort {
     // One composed-tree pass, so a control inside an open shadow root is
     // addressable at replay time exactly as it is at agent time. Divergence
     // there is how a promoted workflow silently stops working.
-    const { elements } = await collectComposedInteractables(this.page, {
+    if (this.ctx.page) await ensureLocatorRuntime(this.ctx.page);
+    const { elements, records, truncated } = await collectComposedInteractables(this.page, {
       max: 400,
       selector: INTERACTABLE_SELECTOR,
     });
-    const handles = elements.filter((handle): handle is ElementHandle<Element> => handle !== null);
+    const rawByIndex = new Map(records.map((raw) => [raw.elementIndex, raw]));
     const next = new Map<string, ElementHandle<Element>>();
     const interactables: AgentInteractable[] = [];
     const ordinals = new Map<string, number>();
-    for (const handle of handles) {
+    for (const [index, handle] of elements.entries()) {
+      if (!handle) continue;
       if (interactables.length >= cap) {
         dispose(handle);
         continue;
       }
-      const described = await describe(handle).catch(() => null);
+      const raw = rawByIndex.get(index);
+      const described = raw
+        ? raw.visible
+          ? projectAgentInteractable('', raw)
+          : null
+        : await describe(handle).catch(() => null);
       if (!described) {
         dispose(handle);
         continue;
@@ -280,7 +315,7 @@ class ReplayWidgetPort implements WidgetPort {
         this.refByIdentity.set(identity, ref);
       }
       next.set(ref, handle);
-      interactables.push({ ref, ...described });
+      interactables.push({ ...described, ref });
     }
     for (const [ref, handle] of this.refs) {
       if (next.get(ref) !== handle) dispose(handle);
@@ -292,6 +327,14 @@ class ReplayWidgetPort implements WidgetPort {
       title: await this.page.title().catch(() => ''),
       digest: '',
       digestUnchanged: false,
+      inventory: {
+        total: interactables.length,
+        shown: interactables.length,
+        skippedBefore: 0,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: truncated,
+      },
       interactables,
     };
   }

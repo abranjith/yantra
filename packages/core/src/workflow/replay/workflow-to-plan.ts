@@ -279,6 +279,7 @@ function translateStep(wfStep: WorkflowStep, stepId: string): Step {
         consequence: wfStep.consequence,
         type: 'fill_element',
         field_name: wfStep.field_name,
+        ...(wfStep.field_label_origin ? { field_label_origin: wfStep.field_label_origin } : {}),
         locator: workflowLocator(wfStep.locator),
         value: exprToValueRef(wfStep.value),
       };
