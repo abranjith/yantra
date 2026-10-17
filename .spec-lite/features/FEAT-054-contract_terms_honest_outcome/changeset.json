@@ -177,7 +177,7 @@
     },
     {
       "path": "e2e/task-fidelity-do-form.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -243,49 +243,49 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-claims-met-contrary.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-contract-missing.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-form-complete.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-form-historical.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-form.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-fulfillment-omitted.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-revision-drops-screenshot.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-submit-forbidden.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
