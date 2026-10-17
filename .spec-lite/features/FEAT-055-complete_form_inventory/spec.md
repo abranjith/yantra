@@ -504,7 +504,7 @@ An unlabeled field with a structural label:
 
 - [x] TASK-001: Truncation totals, full-set ref registry, and the `FillCensus` producer
 - [x] TASK-002: `browser_observe { after, kinds }` continuation
-- [ ] TASK-003: Synthetic layout matrix, safety gate, and coverage baseline
+- [x] TASK-003: Synthetic layout matrix, safety gate, and coverage baseline
 - [ ] TASK-004: Shared field-identity module (evidence order, structural labels, origin, confidence, section, constraints)
 - [ ] TASK-005: Model-visible field identity within byte budgets; label and section-qualified resolution; matrix coverage gate
 - [ ] TASK-006: Element-keyed refs and verified re-identification

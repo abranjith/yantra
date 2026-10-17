@@ -68,6 +68,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/browser/agent-controller-inventory.spec.ts",
       "status": "A",
       "role": "implement",
@@ -80,10 +86,130 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/discovery/layout-matrix-baseline.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/discovery/observe.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/helpers/layout-browser.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/css-order-grid.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/describedby-help.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/dynamic-replacement.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/fieldset-groups.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/floating-labels.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/label-after-control.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/no-evidence.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/open-shadow.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/over-cap.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/placeholder-only.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/repeated-sections.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/split-controls.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/stacked-wrappers.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/table-label-cell.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/types.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     }
   ],
   "excluded": [

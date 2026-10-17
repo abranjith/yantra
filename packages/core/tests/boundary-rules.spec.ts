@@ -22,6 +22,14 @@ const lintMessagesFor = async (filePath: string) => {
 };
 
 describe('@no-llm lint boundary rules', () => {
+  it('never reads layout ground truth from production source', () => {
+    const violations = globSync('packages/*/src/**/*.ts', { cwd: repoRoot }).filter(
+      (path) =>
+        !path.includes('test-helpers') &&
+        readFileSync(resolve(repoRoot, path), 'utf8').includes('data-fixture-'),
+    );
+    expect(violations).toEqual([]);
+  });
   it('builds Yantra paths from homedir only in browser/paths.ts', () => {
     const sourceFiles = globSync('{apps,packages}/*/src/**/*.ts', { cwd: repoRoot });
     const violations = sourceFiles.filter((filePath) => {
