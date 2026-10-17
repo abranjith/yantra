@@ -153,7 +153,7 @@
     },
     {
       "path": "packages/core/tests/browser/agent-controller-ref-stability.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },

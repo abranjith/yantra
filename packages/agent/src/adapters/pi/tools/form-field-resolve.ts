@@ -132,8 +132,13 @@ function describe(candidates: readonly AgentInteractable[]): string {
       : `(${['no label', hint?.html_name ? `developer hint name "${hint.html_name}"` : '', hint?.html_id ? `developer hint id "${hint.html_id}"` : ''].filter(Boolean).join('; ')})`;
     return `${entry.ref} ${entry.role} ${name}${entry.field ? ` (${entry.field.origin}${context})` : context}`;
   });
-  const extra = candidates.length - names.length;
-  return extra > 0 ? `${names.join(', ')} (+${extra} more)` : names.join(', ');
+  const bounded: string[] = [];
+  for (const name of names) {
+    if (Buffer.byteLength([...bounded, name].join(', '), 'utf8') > 3000) break;
+    bounded.push(name);
+  }
+  const extra = candidates.length - bounded.length;
+  return extra > 0 ? `${bounded.join(', ')} (+${extra} more)` : bounded.join(', ');
 }
 
 /** Token overlap, with character pairs supporting a misspelled single token. */

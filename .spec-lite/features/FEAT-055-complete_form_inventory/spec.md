@@ -510,7 +510,7 @@ An unlabeled field with a structural label:
 - [x] TASK-004: Shared field-identity module (evidence order, structural labels, origin, confidence, section, constraints)
 - [x] TASK-005: Model-visible field identity within byte budgets; label and section-qualified resolution; matrix coverage gate
 - [x] TASK-006: Element-keyed refs and verified re-identification
-- [ ] TASK-007: Fillable-control not-found and ambiguity feedback in the model-visible message
+- [x] TASK-007: Fillable-control not-found and ambiguity feedback in the model-visible message
 - [ ] TASK-008: `field_label_origin` promotion and shared-identity replay
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
