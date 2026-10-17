@@ -226,3 +226,45 @@ describe('LocalRunStore', () => {
     });
   });
 });
+
+describe('LocalRunStore task outcome fields (FEAT-054)', () => {
+  it('writes taskOutcome and terminationReason when given, and leaves them absent otherwise', async () => {
+    const store = new LocalRunStore(tmpDir);
+    const first = await store.createAgentRun({
+      taskId: 'task-1',
+      command: 'do',
+      partialAgent: { provider: 'anthropic', model: 'claude-sonnet' },
+    });
+    const second = await store.createAgentRun({
+      taskId: 'task-2',
+      command: 'ask',
+      partialAgent: { provider: 'anthropic', model: 'claude-sonnet' },
+    });
+
+    await store.updateRunStatus(first.runId, {
+      status: 'failed',
+      endedAt: '2026-10-15T12:00:00.000Z',
+      failureClass: 'requirements_unmet',
+      taskOutcome: 'partial',
+      terminationReason: 'model_finished',
+    });
+    await store.updateRunStatus(second.runId, { status: 'completed' });
+
+    const written = JSON.parse(await readFile(join(first.runDir, 'manifest.json'), 'utf8')) as {
+      taskOutcome?: string;
+      terminationReason?: string;
+      failureClass?: string;
+    };
+    expect(written).toMatchObject({
+      taskOutcome: 'partial',
+      terminationReason: 'model_finished',
+      failureClass: 'requirements_unmet',
+    });
+    const older = JSON.parse(
+      await readFile(join(second.runDir, 'manifest.json'), 'utf8'),
+    ) as object;
+    expect('taskOutcome' in older).toBe(false);
+    expect('terminationReason' in older).toBe(false);
+    expect((await store.getRun(second.runId))?.manifest.taskOutcome).toBeUndefined();
+  });
+});

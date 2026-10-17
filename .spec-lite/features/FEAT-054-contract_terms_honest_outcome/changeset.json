@@ -152,6 +152,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/src/runtime/outcome.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/agent/src/runtime/profiles.ts",
       "status": "M",
       "role": "implement",
@@ -162,6 +168,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-recorder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/agent/src/runtime/run-services.ts",
@@ -225,7 +237,7 @@
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/contract-required.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -252,6 +264,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/index.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/agent/tests/runtime/action-ledger.spec.ts",
@@ -294,6 +312,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/agent/tests/runtime/outcome.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
@@ -356,6 +380,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/workflow/replay/run-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/brief/__snapshots__/requirements.spec.ts.snap",
       "status": "A",
       "role": "implement",
@@ -384,6 +420,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/run-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/protocol/generated/json-schema/brief.schema.json",

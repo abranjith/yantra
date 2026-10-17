@@ -67,7 +67,10 @@ import {
   validateTemplatedReport,
   type FailureClass,
   type Result,
+  type AgentRunBudgets,
+  type TaskOutcome,
   type TemplateManifest,
+  type TerminationReason,
 } from '@yantra/protocol';
 
 import { modelSupportsImageInput } from '../adapters/pi/environment.js';
@@ -104,10 +107,18 @@ import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } f
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
-import { FulfillmentRecord } from './fulfillment.js';
+import { FulfillmentRecord, type FulfillmentEvaluation } from './fulfillment.js';
 import { locationHandoffFor } from './location-gate.js';
 import type { ToolStatus } from './middleware.js';
-import type { AgenticTaskOutcome, PublishedBriefRef } from './outcome.js';
+import {
+  TASK_OUTCOME_TABLE,
+  failureClassFor,
+  outcomeFirstLine,
+  taskOutcomeOf,
+  type AgenticTaskOutcome,
+  type PublishedBriefRef,
+  type RequirementsSummary,
+} from './outcome.js';
 import {
   COMMAND_TASK_PROFILES,
   browserCapabilityOf,
@@ -326,6 +337,8 @@ export interface AgenticRunStore extends AgentRunStore {
       readonly status: RunStatus;
       readonly endedAt?: string;
       readonly failureClass?: FailureClass;
+      readonly taskOutcome?: TaskOutcome;
+      readonly terminationReason?: TerminationReason;
     },
   ): Promise<void>;
   releaseLock(runId: string): Promise<void>;
@@ -542,6 +555,7 @@ export async function runAgenticTask(
       runId: created.runId,
       runDir: created.runDir,
       ...locationHandoff,
+      terminationReason: 'handoff',
     };
     const gateEvents = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
     gateEvents.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
@@ -756,6 +770,7 @@ export async function runAgenticTask(
       model: request.model,
       systemPrompt: AGENT_SYSTEM_PROMPT,
       tools: yantraToolCatalog(services, profile),
+      budgets: manifestBudgets(budgetsConfig),
     });
     events = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
     events.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
@@ -792,10 +807,15 @@ export async function runAgenticTask(
         buildCompletionNudge(evidenceEntries, preNudgeDraft, services.template),
       );
     }
-    terminal =
+    const draft =
       (services.template === null
         ? await maybeAssembleUnpublishedResult(state, latestRunResult, services, preNudgeDraft)
         : undefined) ?? (await resolveTerminalOutcome(state, latestRunResult, services));
+    terminal = settleOutcome(
+      draft,
+      terminationReasonFor(state, latestRunResult, runBudget),
+      services,
+    );
   } catch (error) {
     if (session === undefined) {
       const startup = toStartupError(error);
@@ -803,12 +823,14 @@ export async function runAgenticTask(
       startupFinalized = true;
       // This branch skips the teardown block below, so it owns the close.
       await environment?.closeRuntimeLog?.().catch(() => undefined);
-      terminal = failed(created.runId, created.runDir, startup.toAgentError());
+      terminal = failed(created.runId, created.runDir, startup.toAgentError(), 'provider_failed');
     } else {
-      terminal = failed(created.runId, created.runDir, {
-        code: 'AGENT_TOOL_FAILED',
-        message: safeError(error),
-      });
+      terminal = failed(
+        created.runId,
+        created.runDir,
+        { code: 'AGENT_TOOL_FAILED', message: safeError(error) },
+        'provider_failed',
+      );
     }
   } finally {
     executionState?.dispose();
@@ -861,15 +883,25 @@ export async function runAgenticTask(
       await captureTeardown(() => environment?.closeRuntimeLog?.(), teardownErrors);
 
       if (teardownErrors.length > 0 && terminal?.kind === 'published') {
-        terminal = failed(created.runId, created.runDir, {
-          code: 'AGENT_TOOL_FAILED',
-          message: 'The task result was produced, but run teardown did not complete cleanly.',
-        });
+        terminal = failed(
+          created.runId,
+          created.runDir,
+          {
+            code: 'AGENT_TOOL_FAILED',
+            message: 'The task result was produced, but run teardown did not complete cleanly.',
+          },
+          terminal.terminationReason,
+        );
       }
-      terminal ??= failed(created.runId, created.runDir, {
-        code: 'AGENT_TOOL_FAILED',
-        message: 'The agentic run ended without a terminal outcome.',
-      });
+      terminal ??= failed(
+        created.runId,
+        created.runDir,
+        {
+          code: 'AGENT_TOOL_FAILED',
+          message: 'The agentic run ended without a terminal outcome.',
+        },
+        'provider_failed',
+      );
       await finalizeRun({
         outcome: terminal,
         taskId,
@@ -881,10 +913,12 @@ export async function runAgenticTask(
     }
   }
 
-  terminal ??= failed(created.runId, created.runDir, {
-    code: 'AGENT_TOOL_FAILED',
-    message: 'The agentic run could not be finalized.',
-  });
+  terminal ??= failed(
+    created.runId,
+    created.runDir,
+    { code: 'AGENT_TOOL_FAILED', message: 'The agentic run could not be finalized.' },
+    'provider_failed',
+  );
   request.connector.renderAgentOutcome(terminal);
   return terminal;
 }
@@ -1123,7 +1157,7 @@ async function maybeAssembleUnpublishedResult(
   result: AgentRunResult | undefined,
   services: RunServices,
   draft: string,
-): Promise<AgenticTaskOutcome | undefined> {
+): Promise<OutcomeDraft | undefined> {
   if (state.interrupted || state.published) return undefined;
   if (result?.outcome !== 'completed') return undefined;
   if (draft.length === 0 || services.evidence.isEmpty()) return undefined;
@@ -1188,8 +1222,23 @@ async function resolveTerminalOutcome(
   state: ExecutionState,
   result: AgentRunResult | undefined,
   services: RunServices,
-): Promise<AgenticTaskOutcome> {
+): Promise<OutcomeDraft> {
   const { runId, runDir } = services;
+  // A user abort always wins. Then a validated Brief: it was saved, so the
+  // run is `published` (fulfilled or partial) whatever budget or breaker
+  // fired after it — "failed" means no Brief was saved (FEAT-054 S4).
+  if (state.userAborted) {
+    return {
+      kind: 'aborted',
+      runId,
+      runDir,
+      error: { code: 'AGENT_ABORTED', message: 'The agentic run was interrupted.' },
+    };
+  }
+  if (state.published) {
+    const brief = await readPublishedBrief(runDir, services.template !== null);
+    if (brief !== undefined) return { kind: 'published', runId, runDir, brief };
+  }
   // The stuck-loop breaker wins over the generic budget mapping it triggers, so
   // the failure reads as "repeated the same failing action" rather than a bare
   // budget-exhausted code.
@@ -1213,17 +1262,13 @@ async function resolveTerminalOutcome(
       },
     };
   }
-  if (state.userAborted || result?.outcome === 'aborted') {
+  if (result?.outcome === 'aborted') {
     return {
       kind: 'aborted',
       runId,
       runDir,
       error: { code: 'AGENT_ABORTED', message: 'The agentic run was interrupted.' },
     };
-  }
-  if (state.published) {
-    const brief = await readPublishedBrief(runDir, services.template !== null);
-    if (brief !== undefined) return { kind: 'published', runId, runDir, brief };
   }
   if (result?.outcome === 'failed' || state.lastError !== undefined) {
     return failed(
@@ -1315,9 +1360,11 @@ async function finalizeRun(input: {
   readonly now: () => Date;
 }): Promise<void> {
   const endedAt = input.now().toISOString();
-  const mapping = finalizationFor(input.outcome);
+  const taskOutcome = taskOutcomeOf(input.outcome);
+  const mapping = TASK_OUTCOME_TABLE[taskOutcome];
+  const failureClass = failureClassFor(input.outcome);
   if (input.events !== undefined) {
-    if (input.outcome.kind === 'published') {
+    if (mapping.event === 'task_completed') {
       input.events.publish({
         task_id: input.taskId,
         at: endedAt,
@@ -1329,56 +1376,148 @@ async function finalizeRun(input: {
         task_id: input.taskId,
         at: endedAt,
         kind: 'task_failed',
-        failure_class: mapping.failureClass ?? 'unexpected',
+        failure_class: failureClass ?? 'unexpected',
         report_path: 'report.md',
+        task_outcome: taskOutcome,
       });
     }
     await input.events.close();
   }
   await input.runStore.updateRunStatus(input.outcome.runId, {
-    status: mapping.status,
+    status: mapping.manifestStatus,
     endedAt,
-    ...(mapping.failureClass ? { failureClass: mapping.failureClass } : {}),
+    ...(failureClass ? { failureClass } : {}),
+    taskOutcome,
+    terminationReason: input.outcome.terminationReason,
   });
   await input.reportBuilder.build(
     input.outcome.runDir,
-    input.outcome.kind === 'published' ? 'completed' : 'failed',
-    input.outcome.kind === 'published'
-      ? undefined
-      : { failureClass: mapping.error.code, message: mapping.error.message },
+    mapping.manifestStatus === 'completed' ? 'completed' : 'failed',
+    reportFailure(input.outcome, failureClass),
   );
   await input.runStore.releaseLock(input.outcome.runId);
 }
 
-function finalizationFor(outcome: AgenticTaskOutcome): {
-  readonly status: RunStatus;
-  readonly failureClass?: FailureClass;
-  readonly error: AgentError;
-} {
+/** The report's failure block, or undefined for a fulfilled run. */
+function reportFailure(
+  outcome: AgenticTaskOutcome,
+  failureClass: FailureClass | undefined,
+): { readonly failureClass: string; readonly message: string } | undefined {
   switch (outcome.kind) {
     case 'published':
-      return { status: 'completed', error: { code: 'OK', message: 'Published.' } };
+      return outcome.taskOutcome === 'fulfilled'
+        ? undefined
+        : {
+            failureClass: failureClass ?? 'requirements_unmet',
+            // Run-relative: report.md lives beside the artifact it names.
+            message: outcomeFirstLine(
+              outcome,
+              outcome.brief.kind === 'templated_report' ? 'document.html' : 'brief.html',
+            ),
+          };
     case 'handoff':
-      return {
-        status: 'aborted',
-        failureClass: /captcha/i.test(outcome.blocker) ? 'captcha_detected' : 'unexpected',
-        error: { code: 'AGENT_TOOL_FAILED', message: outcome.blocker },
-      };
-    case 'budget_exhausted':
-      return { status: 'failed', failureClass: 'budget_exhausted', error: outcome.error };
-    case 'aborted':
-      return { status: 'aborted', failureClass: 'user_aborted', error: outcome.error };
+      return { failureClass: 'AGENT_TOOL_FAILED', message: outcome.blocker };
     case 'failed':
-      // A missing/unvalidated publication is a validation-contract failure,
-      // not an unexpected crash: keep manifest/events consistent with the
-      // AGENT_COMPLETION_MISSING code report.md already shows.
-      return {
-        status: 'failed',
-        failureClass:
-          outcome.error.code === 'AGENT_COMPLETION_MISSING' ? 'validation_error' : 'unexpected',
-        error: outcome.error,
-      };
+    case 'budget_exhausted':
+    case 'aborted':
+      return { failureClass: outcome.error.code, message: outcome.error.message };
   }
+}
+
+/**
+ * A terminal outcome before it is settled: everything but the task outcome,
+ * the requirement summary, and the termination reason, which are decided once
+ * by {@link settleOutcome}.
+ */
+type OutcomeDraft =
+  | Omit<
+      Extract<AgenticTaskOutcome, { kind: 'published' }>,
+      'taskOutcome' | 'requirements' | 'terminationReason'
+    >
+  | DistributiveOmit<Exclude<AgenticTaskOutcome, { kind: 'published' }>, 'terminationReason'>;
+
+/** `Omit` applied to each member of a union, so the discriminant still narrows. */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/**
+ * Settles a draft: a published `do` run is `fulfilled` only when it declared a
+ * contract and the evidence met every item; otherwise `partial`. `ask` and
+ * `research` keep their criteria: a published result is `fulfilled`.
+ */
+function settleOutcome(
+  draft: OutcomeDraft,
+  terminationReason: TerminationReason,
+  services: Pick<RunServices, 'contract' | 'fulfillment'>,
+): AgenticTaskOutcome {
+  if (draft.kind !== 'published') return { ...draft, terminationReason };
+  if (services.contract.command !== 'do') {
+    return { ...draft, taskOutcome: 'fulfilled', requirements: null, terminationReason };
+  }
+  const requirements = requirementsSummary(services.fulfillment.current());
+  const fulfilled = requirements.contractDeclared && requirements.met === requirements.total;
+  return {
+    ...draft,
+    taskOutcome: fulfilled ? 'fulfilled' : 'partial',
+    requirements,
+    terminationReason,
+  };
+}
+
+function requirementsSummary(evaluation: FulfillmentEvaluation | null): RequirementsSummary {
+  if (!evaluation?.contractDeclared) {
+    return { met: 0, total: 0, unmet: [], contractDeclared: false };
+  }
+  return {
+    met: evaluation.met,
+    total: evaluation.total,
+    unmet: evaluation.items
+      .filter((item) => item.status === 'unmet')
+      .map((item) => ({ id: item.id, label: item.label, reason: item.reason })),
+    contractDeclared: true,
+  };
+}
+
+/** The run's effective budgets as the manifest records them; null means unbounded. */
+function manifestBudgets(budgets: AgentBudgetConfig): AgentRunBudgets {
+  const bounded = (value: number): number | null =>
+    Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
+  return {
+    wall_clock_ms: bounded(budgets.wallClockMs),
+    soft_wall_clock_fraction: budgets.softWallClockFraction,
+    max_provider_tokens: bounded(budgets.maxProviderTokens),
+    max_navigations: Math.max(0, Math.round(budgets.maxNavigations)),
+    max_hosts: Math.max(0, Math.round(budgets.maxHosts)),
+    tool_retries: Math.max(0, Math.round(budgets.toolRetries)),
+  };
+}
+
+/** The interrupt reasons the orchestrator raises, as termination reasons (S5). */
+const INTERRUPT_TERMINATIONS: Readonly<Record<string, TerminationReason>> = {
+  'wall-clock': 'wall-clock-hard',
+  'provider-tokens': 'provider-tokens',
+  'tool-budget': 'tool-budget',
+  'repeated-tool-failure': 'repeated-tool-failure',
+};
+
+/**
+ * Why the run stopped (FEAT-054 S5): a user abort, an interrupt, a handoff, a
+ * provider failure, or the model finishing — after the exploration wind-down
+ * began (`wall-clock-soft`) or before it (`model_finished`).
+ */
+function terminationReasonFor(
+  state: ExecutionState,
+  result: AgentRunResult | undefined,
+  budgets: Pick<BudgetTracker, 'softWindDownReached'>,
+): TerminationReason {
+  if (state.userAborted) return 'user_abort';
+  if (state.budgetReason !== undefined) {
+    return INTERRUPT_TERMINATIONS[state.budgetReason] ?? 'tool-budget';
+  }
+  if (!state.published) {
+    if (state.handoff !== undefined) return 'handoff';
+    if (result?.outcome === 'failed' || state.lastError !== undefined) return 'provider_failed';
+  }
+  return budgets.softWindDownReached ? 'wall-clock-soft' : 'model_finished';
 }
 
 /**
@@ -1437,7 +1576,7 @@ export async function maybePromoteTrace(input: {
     return {
       ...outcome,
       promotion: result.isOk
-        ? { saved: true, workflowName }
+        ? { saved: true, workflowName, omitted: [] }
         : { saved: false, workflowName, error: result.error.message },
     };
   } catch (error) {
@@ -1780,8 +1919,22 @@ function duration(started: number | undefined, endedAt: string): number | null {
     : Math.max(0, ended - started);
 }
 
-function failed(runId: string, runDir: string, error: AgentError): AgenticTaskOutcome {
-  return { kind: 'failed', runId, runDir, error };
+function failed(runId: string, runDir: string, error: AgentError): OutcomeDraft;
+function failed(
+  runId: string,
+  runDir: string,
+  error: AgentError,
+  terminationReason: TerminationReason,
+): AgenticTaskOutcome;
+function failed(
+  runId: string,
+  runDir: string,
+  error: AgentError,
+  terminationReason?: TerminationReason,
+): OutcomeDraft | AgenticTaskOutcome {
+  return terminationReason === undefined
+    ? { kind: 'failed', runId, runDir, error }
+    : { kind: 'failed', runId, runDir, error, terminationReason };
 }
 
 function toStartupError(error: unknown): AgentStartupError {

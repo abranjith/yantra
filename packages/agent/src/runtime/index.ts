@@ -4,7 +4,12 @@ export {
   sha256Text,
   type HashableToolDefinition,
 } from './catalog-hash.js';
-export { RunRecorder, resolvePiSdkVersion, type RunRecorderOptions } from './run-recorder.js';
+export {
+  RunRecorder,
+  resolvePiSdkVersion,
+  resolveYantraVersion,
+  type RunRecorderOptions,
+} from './run-recorder.js';
 export {
   AGENT_SYSTEM_PROMPT,
   PROMPT_VERSION,
@@ -34,9 +39,18 @@ export {
   type ConfirmationConnector,
 } from './confirmation-bridge.js';
 export {
+  TASK_OUTCOME_TABLE,
   exitCodeForAgenticOutcome,
+  failureClassFor,
+  outcomeFirstLine,
+  outcomeSummary,
+  taskOutcomeOf,
   type AgenticTaskOutcome,
+  type PromotionResult,
   type PublishedBriefRef,
+  type RequirementsSummary,
+  type TaskOutcomeMapping,
+  type UnmetRequirement,
 } from './outcome.js';
 export type { AgentProgressEvent, AgentTaskConnector } from './connector.js';
 export {

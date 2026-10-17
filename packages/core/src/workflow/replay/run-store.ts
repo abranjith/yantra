@@ -8,7 +8,7 @@
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { FailureClass } from '@yantra/protocol';
+import type { FailureClass, TaskOutcome, TerminationReason } from '@yantra/protocol';
 
 import { MarkdownReportBuilder } from '../../audit/report-builder.js';
 import { runsRoot } from '../../browser/paths.js';
@@ -246,6 +246,8 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       endedAt?: string;
       failureClass?: FailureClass;
       lastCheckpointStepId?: string;
+      taskOutcome?: TaskOutcome;
+      terminationReason?: TerminationReason;
     },
   ): Promise<void> {
     const runDir = join(this.root, runId);
@@ -261,6 +263,10 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       status: patch.status,
       endedAt: patch.endedAt ?? manifest.endedAt,
       failureClass: patch.failureClass ?? manifest.failureClass,
+      ...(patch.taskOutcome === undefined ? {} : { taskOutcome: patch.taskOutcome }),
+      ...(patch.terminationReason === undefined
+        ? {}
+        : { terminationReason: patch.terminationReason }),
       durationMs:
         patch.endedAt && manifest.startedAt
           ? new Date(patch.endedAt).getTime() - new Date(manifest.startedAt).getTime()

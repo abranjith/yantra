@@ -40,7 +40,11 @@ import {
   type AgenticRunEnvironment,
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
-import { exitCodeForAgenticOutcome, type AgenticTaskOutcome } from '../../src/runtime/outcome.js';
+import {
+  exitCodeForAgenticOutcome,
+  outcomeFirstLine,
+  type AgenticTaskOutcome,
+} from '../../src/runtime/outcome.js';
 import {
   resolveCommandTaskProfile,
   type AgenticCommand,
@@ -1785,6 +1789,10 @@ async function scriptedRun(options: {
   readonly calls: readonly ScriptedCall[];
   readonly draft?: string;
   readonly beforeCalls?: (services: RunServices) => void;
+  /** Runs after the scripted calls, before the session's run resolves. */
+  readonly afterCalls?: (services: RunServices) => Promise<void>;
+  readonly budgets?: AgenticTaskRequest['budgets'];
+  readonly signal?: AbortSignal;
 }): Promise<{
   readonly outcome: AgenticTaskOutcome;
   readonly connector: RecordingConnector;
@@ -1821,6 +1829,7 @@ async function scriptedRun(options: {
       if (options.draft !== undefined) {
         session.emit(event('assistant_text', { text: options.draft }));
       }
+      await options.afterCalls?.(services);
     },
   });
   const outcome = await runAgenticTask(
@@ -1830,6 +1839,8 @@ async function scriptedRun(options: {
       model: { provider: 'fixture', id: 'fixture-model' },
       auth: { mode: 'managed' },
       connector,
+      ...(options.budgets === undefined ? {} : { budgets: options.budgets }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     },
     {
       runStore: new LocalRunStore(root),
@@ -2078,5 +2089,241 @@ describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
     expect(outcome.kind).toBe('published');
     const sources = (await briefNotices(outcome)).map((notice) => notice.source);
     expect(sources.slice(0, 2)).toEqual(['runtime', 'task-contract']);
+  });
+});
+
+describe('@no-llm runAgenticTask task outcome (FEAT-054)', () => {
+  const ACTIONS_CONTRACT: ScriptedCall = {
+    tool: 'task_contract',
+    params: {
+      deliverable: 'actions',
+      subject: 'the test form',
+      fill: { coverage: 'all_eligible' },
+      artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+      effects: { submit: 'forbidden' },
+    },
+  };
+  const PUBLISH_UNMET: ScriptedCall = {
+    tool: 'result_publish',
+    params: {
+      brief: {
+        title: 'Form partly filled',
+        overview: 'Ten fields were filled before time ran out.',
+        fulfillment: {
+          met: false,
+          unmet: [{ item: 'screenshot', reason: 'ran out of time' }],
+        },
+      },
+    },
+  };
+  const tenFills = (services: RunServices): void => {
+    for (let index = 1; index <= 10; index += 1) {
+      services.actionLedger.record({
+        kind: 'fill_committed',
+        tool: 'browser_fill_form',
+        ref: `e${index}`,
+        field: `Field ${index}`,
+        groupKey: null,
+        covers: 1,
+      });
+    }
+  };
+
+  async function manifestOf(outcome: AgenticTaskOutcome): Promise<Record<string, unknown>> {
+    return JSON.parse(await readFile(join(outcome.runDir, 'manifest.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+  }
+
+  async function terminalEvent(outcome: AgenticTaskOutcome): Promise<Record<string, unknown>> {
+    const lines = (await readFile(join(outcome.runDir, 'events.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    return lines.at(-1)!;
+  }
+
+  it('makes the historical run partial: Brief kept, wall-clock-soft, exit 2, task_failed', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      budgets: { softWallClockFraction: 0.000001 },
+      beforeCalls: tenFills,
+      calls: [
+        ACTIONS_CONTRACT,
+        { tool: 'web_search', params: { query: 'test form' } },
+        PUBLISH_UNMET,
+      ],
+    });
+
+    expect(outcome).toMatchObject({
+      kind: 'published',
+      taskOutcome: 'partial',
+      terminationReason: 'wall-clock-soft',
+    });
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(2);
+    if (outcome.kind !== 'published') throw new Error('expected a published outcome');
+    expect(outcome.requirements?.unmet.map((item) => item.id)).toEqual([
+      'fill',
+      'artifact:screenshot:viewport',
+    ]);
+    // The first line names the missing screenshot and the unfilled fields.
+    expect(outcomeFirstLine(outcome)).toMatch(
+      /^Partial: 2 of 4 requirements met; fields not counted \(inventory_unavailable\); viewport screenshot not captured \(no_browser_tools\)\. Brief: /u,
+    );
+    await expect(readFile(join(outcome.runDir, 'brief.json'), 'utf8')).resolves.toContain(
+      '"requirements"',
+    );
+    expect(await manifestOf(outcome)).toMatchObject({
+      status: 'failed',
+      failureClass: 'budget_exhausted',
+      taskOutcome: 'partial',
+      terminationReason: 'wall-clock-soft',
+    });
+    expect(await terminalEvent(outcome)).toMatchObject({
+      kind: 'task_failed',
+      failure_class: 'budget_exhausted',
+      task_outcome: 'partial',
+    });
+    const report = await readFile(join(outcome.runDir, 'report.md'), 'utf8');
+    expect(report).toContain('Partial: 2 of 4 requirements met');
+  });
+
+  it('classes a partial run that was not cut short as requirements_unmet', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [ACTIONS_CONTRACT, PUBLISH_UNMET],
+    });
+
+    expect(outcome).toMatchObject({ taskOutcome: 'partial', terminationReason: 'model_finished' });
+    expect(await manifestOf(outcome)).toMatchObject({
+      status: 'failed',
+      failureClass: 'requirements_unmet',
+    });
+  });
+
+  it('is fulfilled, completed, and exit 0 when every declared item is met', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      beforeCalls: (services) => {
+        services.actionLedger.record({
+          kind: 'click_executed',
+          ref: 'e1',
+          name: 'Next',
+          submitClass: null,
+        });
+      },
+      calls: [
+        {
+          tool: 'task_contract',
+          params: {
+            deliverable: 'actions',
+            subject: 'the wizard',
+            effects: { submit: 'forbidden' },
+          },
+        },
+        PUBLISH_CALL,
+      ],
+    });
+
+    expect(outcome).toMatchObject({ kind: 'published', taskOutcome: 'fulfilled' });
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(0);
+    expect(await manifestOf(outcome)).toMatchObject({
+      status: 'completed',
+      taskOutcome: 'fulfilled',
+      terminationReason: 'model_finished',
+    });
+    expect(await terminalEvent(outcome)).toMatchObject({ kind: 'task_completed' });
+    expect(await terminalEvent(outcome)).not.toHaveProperty('task_outcome');
+  });
+
+  it('keeps a Brief published before a hard wall-clock interrupt as published (S4)', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      budgets: { wallClockMs: 1_500 },
+      calls: [ACTIONS_CONTRACT, PUBLISH_UNMET],
+      afterCalls: () => new Promise((resolve) => setTimeout(resolve, 2_000)),
+    });
+
+    expect(outcome).toMatchObject({
+      kind: 'published',
+      taskOutcome: 'partial',
+      terminationReason: 'wall-clock-hard',
+    });
+    expect(await manifestOf(outcome)).toMatchObject({ failureClass: 'budget_exhausted' });
+  }, 15_000);
+
+  it('lets a user abort after publication win (aborted, 130)', async () => {
+    const controller = new AbortController();
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      signal: controller.signal,
+      calls: [ACTIONS_CONTRACT, PUBLISH_UNMET],
+      afterCalls: () => {
+        controller.abort();
+        return Promise.resolve();
+      },
+    });
+
+    expect(outcome).toMatchObject({ kind: 'aborted', terminationReason: 'user_abort' });
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(130);
+    expect(await manifestOf(outcome)).toMatchObject({
+      status: 'aborted',
+      taskOutcome: 'aborted',
+      failureClass: 'user_aborted',
+    });
+  });
+
+  it('keeps research fulfilled and exit 0 even with contract gaps', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'research',
+      calls: [CONTRACT_CALL, PUBLISH_CALL],
+      draft: 'The listing source was read [S1].',
+      beforeCalls: (services) =>
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
+    });
+
+    expect(outcome).toMatchObject({
+      kind: 'published',
+      taskOutcome: 'fulfilled',
+      requirements: null,
+    });
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(0);
+    expect(await manifestOf(outcome)).toMatchObject({
+      status: 'completed',
+      taskOutcome: 'fulfilled',
+    });
+  });
+
+  it('makes a salvaged do run with no contract partial with no task contract declared', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [],
+      draft: 'Evidence [S1].',
+      beforeCalls: (services) =>
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
+    });
+
+    expect(outcome).toMatchObject({ kind: 'published', taskOutcome: 'partial' });
+    if (outcome.kind !== 'published') throw new Error('expected a published outcome');
+    expect(outcome.requirements?.contractDeclared).toBe(false);
+    expect(outcomeFirstLine(outcome)).toMatch(/^Partial: no task contract was declared\. Brief: /u);
+    expect(await manifestOf(outcome)).toMatchObject({ failureClass: 'requirements_unmet' });
+  });
+
+  it('records the yantra version and effective budgets in the manifest', async () => {
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      budgets: { maxNavigations: 7 },
+      calls: [ACTIONS_CONTRACT, PUBLISH_UNMET],
+    });
+    const agentPackage = JSON.parse(
+      await readFile(join(import.meta.dirname, '..', '..', 'package.json'), 'utf8'),
+    ) as { version: string };
+
+    expect((await manifestOf(outcome)).agent).toMatchObject({
+      yantra_version: agentPackage.version,
+      budgets: { max_navigations: 7, soft_wall_clock_fraction: 0.8, tool_retries: 3 },
+    });
   });
 });
