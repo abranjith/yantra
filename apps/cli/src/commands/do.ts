@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import {
   exitCodeForAgenticOutcome,
   resolveCommandTaskProfile,
+  taskOutcomeOf,
   type runAgenticTask,
   type ActiveReportTemplate,
   type AgenticTaskOutcome,
@@ -224,7 +225,8 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     if (options.open === true && outcome.kind === 'published') openArtifact(outcome.brief.htmlPath);
     const exitCode = exitCodeForDoOutcome(outcome);
     if (exitCode !== 0) {
-      throw new CommanderError(exitCode, `yantra.do.${outcome.kind}`, outcome.kind);
+      const word = taskOutcomeOf(outcome);
+      throw new CommanderError(exitCode, `yantra.do.${word}`, word);
     }
   } catch (error) {
     if (error instanceof UserInputMarkerError) {

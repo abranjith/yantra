@@ -36,6 +36,40 @@ describe('@no-llm attributed terminal Brief', () => {
   });
 });
 
+describe('@no-llm terminal Brief requirements (FEAT-054)', () => {
+  it('shows each requirement with its status, and an unmet item with its reason', () => {
+    const brief = makeBrief({
+      title: 'Form',
+      key_findings: [],
+      requirements: [
+        {
+          id: 'deliverable',
+          label: 'actions of the form',
+          status: 'met',
+          reason: null,
+          declared_in: null,
+        },
+        {
+          id: 'artifact:screenshot:viewport',
+          label: 'viewport screenshot',
+          status: 'unmet',
+          reason: 'not captured',
+          declared_in: 1,
+        },
+      ],
+    });
+    const output = renderBriefTerminal(brief, { detail: 'overview', noColor: true });
+    expect(output).toContain(
+      'Requirements: ✓ actions of the form · ✗ viewport screenshot (not captured)',
+    );
+  });
+
+  it('adds nothing for a Brief without requirements', () => {
+    const output = renderBriefTerminal(makeBrief(), { detail: 'full', noColor: true });
+    expect(output).not.toContain('Requirements:');
+  });
+});
+
 /** ANSI-free string generator (valid Briefs never contain escape bytes). */
 const safeStr = (minLength: number, maxLength: number): fc.Arbitrary<string> =>
   fc

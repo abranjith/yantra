@@ -56,7 +56,7 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO } from '../connector-io.js';
+import { CLIConnectorIO, agentFailureLine } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import {
@@ -511,7 +511,7 @@ async function renderAgenticOutcome(
   options: AskOptions,
 ): Promise<void> {
   if (outcome.kind !== 'published') {
-    throw new Error(agentFailureMessage(outcome));
+    throw new Error(agentFailureLine(outcome));
   }
   const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
   if (outcome.brief.kind === 'templated_report') {
@@ -527,14 +527,6 @@ async function renderAgenticOutcome(
   if (options.open === true) openArtifact(outcome.brief.htmlPath);
   const exitCode = exitCodeForAgenticOutcome(outcome);
   if (exitCode !== 0) throw new Error(`Agentic ask exited with ${exitCode}.`);
-}
-
-function agentFailureMessage(
-  outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>,
-): string {
-  return outcome.kind === 'handoff'
-    ? `${outcome.blocker}: ${outcome.safestNextAction}`
-    : `${outcome.error.code}: ${outcome.error.message}`;
 }
 
 /** Resolved presentation/synthesis defaults (explicit flag > prefs > hardcoded). */

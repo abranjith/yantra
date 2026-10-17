@@ -1,10 +1,10 @@
 import { Writable } from 'node:stream';
 
-import type { AgentProgressEvent } from '@yantra/agent';
+import type { AgentProgressEvent, AgenticTaskOutcome } from '@yantra/agent';
 import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CLIConnectorIO, buildRenderOpts } from '../src/connector-io.js';
+import { CLIConnectorIO, agentFailureLine, buildRenderOpts } from '../src/connector-io.js';
 import { JSONRenderer } from '../src/render/json.js';
 import { TerminalRenderer } from '../src/render/terminal.js';
 import type {
@@ -263,6 +263,7 @@ describe('@no-llm cli/connector-io', () => {
       runId: 'run-1',
       runDir: '/runs/run-1',
       error: { code: 'AGENT_COMPLETION_MISSING', message: 'No publication.' },
+      terminationReason: 'model_finished',
     });
 
     const lines = stdout
@@ -366,5 +367,150 @@ describe('@no-llm cli/connector-io task-contract echo (FEAT-052)', () => {
       kind: 'agent_progress',
       event: { type: 'contract_declared', revision: 1, summary: 'answer of x' },
     });
+  });
+});
+
+describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
+  const brief = {
+    kind: 'brief' as const,
+    briefId: 'brief-1',
+    jsonPath: '/runs/run-1/brief.json',
+    markdownPath: '/runs/run-1/brief.md',
+    htmlPath: '/runs/run-1/brief.html',
+  };
+  const fulfilled: AgenticTaskOutcome = {
+    kind: 'published',
+    runId: 'run-1',
+    runDir: '/runs/run-1',
+    brief,
+    taskOutcome: 'fulfilled',
+    requirements: { met: 3, total: 3, unmet: [], contractDeclared: true },
+    terminationReason: 'model_finished',
+  };
+  const partial: AgenticTaskOutcome = {
+    ...fulfilled,
+    taskOutcome: 'partial',
+    requirements: {
+      met: 2,
+      total: 4,
+      unmet: [
+        { id: 'fill', label: 'fill all eligible fields', reason: 'fields 10 of 48 filled' },
+        {
+          id: 'artifact:screenshot:viewport',
+          label: 'viewport screenshot',
+          reason: 'not captured (grant_missing)',
+        },
+      ],
+      contractDeclared: true,
+    },
+    terminationReason: 'wall-clock-soft',
+  };
+
+  function render(outcome: AgenticTaskOutcome, json = false, suppress = false) {
+    const stdout = capture();
+    const stderr = capture();
+    const connector = new CLIConnectorIO(new JSONRenderer(), {
+      renderOpts: { ...makeOpts(stdout.stream, json), errStream: stderr.stream },
+      interactive: false,
+      ...(suppress ? { suppressPublishedOutcome: true } : {}),
+    });
+    connector.renderAgentOutcome(outcome);
+    return { stdout: stdout.value(), stderr: stderr.value() };
+  }
+
+  it('prints the fulfilled first line and the run id on stdout', () => {
+    expect(render(fulfilled)).toEqual({
+      stdout: '\nFulfilled: 3 of 3 requirements met. Brief: /runs/run-1/brief.html\nRun: run-1\n',
+      stderr: '',
+    });
+  });
+
+  it('prints the partial first line naming the unmet items', () => {
+    expect(render(partial).stdout).toBe(
+      '\nPartial: 2 of 4 requirements met; fields 10 of 48 filled; viewport screenshot not captured (grant_missing). Brief: /runs/run-1/brief.html\nRun: run-1\n',
+    );
+  });
+
+  it('prints Fulfilled without a count for ask and research', () => {
+    expect(render({ ...fulfilled, requirements: null }).stdout).toBe(
+      '\nFulfilled. Brief: /runs/run-1/brief.html\nRun: run-1\n',
+    );
+  });
+
+  it('keeps handoff and failure text on stderr unchanged', () => {
+    expect(
+      render({
+        kind: 'handoff',
+        runId: 'run-1',
+        runDir: '/runs/run-1',
+        blocker: 'CAPTCHA',
+        safestNextAction: 'Complete it manually.',
+        terminationReason: 'handoff',
+      }),
+    ).toEqual({
+      stdout: '',
+      stderr: '\nHuman handoff required: CAPTCHA\nSafest next action: Complete it manually.\n',
+    });
+  });
+
+  it('carries task_outcome and termination_reason in the JSON record', () => {
+    const record = JSON.parse(render(partial, true).stdout) as Record<string, unknown>;
+    expect(Object.keys(record)).toEqual([
+      'schemaVersion',
+      'kind',
+      'task_outcome',
+      'termination_reason',
+      'outcome',
+    ]);
+    expect(record).toMatchObject({
+      kind: 'agent_outcome',
+      task_outcome: 'partial',
+      termination_reason: 'wall-clock-soft',
+    });
+  });
+
+  it('writes nothing for a suppressed published outcome', () => {
+    expect(render(partial, false, true)).toEqual({ stdout: '', stderr: '' });
+    expect(render(partial, true, true)).toEqual({ stdout: '', stderr: '' });
+  });
+
+  it('leads ask and research failure lines with the outcome word', () => {
+    expect(
+      agentFailureLine({
+        kind: 'failed',
+        runId: 'r',
+        runDir: '/r',
+        error: { code: 'AGENT_COMPLETION_MISSING', message: 'No publication.' },
+        terminationReason: 'model_finished',
+      }),
+    ).toBe('Failed: AGENT_COMPLETION_MISSING: No publication.');
+    expect(
+      agentFailureLine({
+        kind: 'budget_exhausted',
+        runId: 'r',
+        runDir: '/r',
+        error: { code: 'AGENT_BUDGET_EXHAUSTED', message: 'Used.' },
+        terminationReason: 'tool-budget',
+      }),
+    ).toBe('Failed: AGENT_BUDGET_EXHAUSTED: Used.');
+    expect(
+      agentFailureLine({
+        kind: 'handoff',
+        runId: 'r',
+        runDir: '/r',
+        blocker: 'Sign-in needed',
+        safestNextAction: 'Sign in',
+        terminationReason: 'handoff',
+      }),
+    ).toBe('Handoff: Sign-in needed: Sign in');
+    expect(
+      agentFailureLine({
+        kind: 'aborted',
+        runId: 'r',
+        runDir: '/r',
+        error: { code: 'AGENT_ABORTED', message: 'Interrupted.' },
+        terminationReason: 'user_abort',
+      }),
+    ).toBe('Aborted: AGENT_ABORTED: Interrupted.');
   });
 });

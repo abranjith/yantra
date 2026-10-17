@@ -583,7 +583,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-006: `fill` coverage against the engine census with classified exemptions (STUB census until FEAT-055 TASK-001) — STUB: production wires no `RunServices.fillCensus`, so a declared `fill` reports `inventory_unavailable` until FEAT-055 TASK-001 supplies the producer
 - [x] TASK-007: `CONTRACT_REQUIRED` on `do` publish; salvaged no-contract run is `partial`
 - [x] TASK-008: One outcome mapping table: outcome, termination reason, manifest, event, report, exit code
-- [ ] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
+- [x] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
 - [ ] TASK-010: `run`, history, and listings show outcome words
 - [ ] TASK-011: Promotion gated on `fulfilled`; omitted capture step named
 - [ ] TASK-012: Task-fidelity scenarios pin FEAT-054
