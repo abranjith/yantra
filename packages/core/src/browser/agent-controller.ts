@@ -21,6 +21,11 @@ import {
 } from '../extraction/index.js';
 import { CHALLENGE_MARKERS } from '../extraction/response-classifier.js';
 import { assertReceivable } from '../interaction/capabilities.js';
+import {
+  deriveFieldIdentity,
+  type FieldIdentity,
+  type AgentFieldIdentity,
+} from '../interaction/field-identity.js';
 import { classifyFillExemption, type FillCensus } from '../interaction/fill-eligibility.js';
 import { renderInteractionMessage } from '../interaction/messages.js';
 import {
@@ -157,6 +162,7 @@ function siteHost(value: string): string | null {
 }
 
 export interface AgentInteractable {
+  readonly field?: AgentFieldIdentity;
   readonly ref: string;
   readonly role: string;
   readonly name: string;
@@ -225,6 +231,7 @@ export interface BrowserActionResult {
 }
 
 interface InteractableRecord extends AgentInteractable {
+  readonly fieldIdentity?: FieldIdentity;
   readonly raw?: RawInteractable;
   readonly handle: ElementHandle<Element>;
   /**
@@ -561,7 +568,14 @@ export class AgentBrowserController implements WidgetPort {
       }
       claimed.add(handle);
       const projected = projectAgentInteractable(ref, raw);
-      this.refs.set(ref, { ...projected, handle, raw, composedScope: raw.composedScope });
+      const fieldIdentity = raw.field ? deriveFieldIdentity(raw.role, raw.field) : undefined;
+      this.refs.set(ref, {
+        ...projected,
+        handle,
+        raw,
+        ...(fieldIdentity ? { fieldIdentity } : {}),
+        composedScope: raw.composedScope,
+      });
       refByIndex.set(raw.elementIndex, ref);
       this.identityByRef.set(ref, {
         role: projected.role,
@@ -658,7 +672,7 @@ export class AgentBrowserController implements WidgetPort {
                 : facts.checkboxSet
                   ? `checkbox:${facts.checkboxSet}`
                   : null,
-              label: entry.name || `(unlabeled ${entry.role})`,
+              label: entry.fieldIdentity?.label ?? (entry.name || `(unlabeled ${entry.role})`),
               exemption: classifyFillExemption({
                 ...facts,
                 hidden: !raw.visible,
@@ -785,7 +799,13 @@ export class AgentBrowserController implements WidgetPort {
   public describeRef(ref: string): AgentInteractable | undefined {
     const record = this.refs.get(ref);
     if (!record) return undefined;
-    const { handle: _handle, raw: _raw, composedScope: _composedScope, ...described } = record;
+    const {
+      handle: _handle,
+      raw: _raw,
+      fieldIdentity: _identity,
+      composedScope: _composedScope,
+      ...described
+    } = record;
     return described;
   }
 

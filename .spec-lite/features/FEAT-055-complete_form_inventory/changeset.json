@@ -68,6 +68,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/interaction/field-identity.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/boundary-rules.spec.ts",
       "status": "M",
       "role": "implement",
@@ -87,13 +93,13 @@
     },
     {
       "path": "packages/core/tests/discovery/layout-matrix-baseline.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/core/tests/discovery/layout-matrix.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -105,9 +111,15 @@
     },
     {
       "path": "packages/core/tests/helpers/layout-browser.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/field-identity.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/test-helpers/package.json",
@@ -117,97 +129,97 @@
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/css-order-grid.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/describedby-help.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/dynamic-replacement.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/fieldset-groups.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/floating-labels.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/label-after-control.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/no-evidence.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/open-shadow.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/over-cap.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/placeholder-only.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/repeated-sections.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/split-controls.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/stacked-wrappers.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/pages/table-label-cell.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/types.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     }

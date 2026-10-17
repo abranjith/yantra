@@ -2,6 +2,21 @@
 
 /** One candidate element's raw signal, before ranking/capping. */
 export interface RawFieldEvidence {
+  readonly explicit: string | null;
+  readonly autocomplete: string | null;
+  readonly maxLength: number | null;
+  readonly pattern: string | null;
+  readonly selectPlaceholder: string | null;
+  readonly placeholder: string | null;
+  readonly title: string | null;
+  readonly structural: {
+    readonly text: string;
+    readonly source: 'row' | 'label-cell' | 'wrapper' | 'legend';
+    readonly adjacent: boolean | null;
+  } | null;
+  readonly section: string | null;
+  readonly htmlName: string | null;
+  readonly htmlId: string | null;
   readonly inputType: string | null;
   readonly readOnly: boolean;
   readonly disabled: boolean;
@@ -327,6 +342,23 @@ export function scanInteractablesInPage(
           : `${groupIndex(owner)}:${name}`
         : null;
     return {
+      explicit: explicitLabel(element),
+      autocomplete: autocompleteToken(element),
+      maxLength:
+        'maxLength' in element && (element as HTMLInputElement).maxLength > 0
+          ? (element as HTMLInputElement).maxLength
+          : null,
+      pattern: boundedText(element.getAttribute('pattern'), 40, false),
+      selectPlaceholder:
+        element instanceof HTMLSelectElement && element.options[0]?.value === ''
+          ? boundedText(element.options[0].text, 80)
+          : null,
+      placeholder: boundedText(element.getAttribute('placeholder'), 80),
+      title: boundedText(element.getAttribute('title'), 80),
+      structural: structuralLabel(element),
+      section: fieldSection(element, owner),
+      htmlName: developerHint(name),
+      htmlId: developerHint(element.id),
       inputType: input
         ? input.type.toLowerCase()
         : element.matches('textarea,select')
@@ -351,6 +383,170 @@ export function scanInteractablesInPage(
       humanVerification,
       hiddenInput: input?.type === 'hidden',
     };
+  }
+
+  function boundedText(value: string | null | undefined, limit: number, cut = true): string | null {
+    const text = normalize(value ?? '');
+    return text ? (text.length > limit ? (cut ? text.slice(0, limit) : null) : text) : null;
+  }
+
+  function developerHint(value: string | null): string | null {
+    return (value?.match(/\p{L}/gu)?.length ?? 0) >= 2 ? boundedText(value, 40) : null;
+  }
+
+  function explicitLabel(element: HTMLElement): string | null {
+    const ids = element.getAttribute('aria-labelledby');
+    const byIds = ids ? textById(element, ids) : '';
+    if (byIds) return boundedText(byIds, 200);
+    const aria = boundedText(element.getAttribute('aria-label'), 200);
+    if (aria) return aria;
+    const labels = 'labels' in element ? (element as HTMLInputElement).labels : null;
+    if (labels?.length)
+      return boundedText(Array.from(labels, (label) => labelText(label, element)).join(' '), 200);
+    return null;
+  }
+
+  function autocompleteToken(element: HTMLElement): string | null {
+    const fields = new Set(
+      'name honorific-prefix given-name additional-name family-name honorific-suffix nickname username new-password current-password one-time-code organization-title organization street-address address-line1 address-line2 address-line3 address-level4 address-level3 address-level2 address-level1 country country-name postal-code cc-name cc-given-name cc-additional-name cc-family-name cc-number cc-exp cc-exp-month cc-exp-year cc-csc cc-type transaction-currency transaction-amount language bday bday-day bday-month bday-year sex url photo tel tel-country-code tel-national tel-area-code tel-local tel-local-prefix tel-local-suffix tel-extension email impp'.split(
+        ' ',
+      ),
+    );
+    return (
+      element
+        .getAttribute('autocomplete')
+        ?.toLowerCase()
+        .split(/\s+/u)
+        .find((token) => fields.has(token)) ?? null
+    );
+  }
+
+  function fillableMembers(root: Element): Element[] {
+    return Array.from(
+      root.querySelectorAll(
+        'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), textarea, select, [role="textbox"], [role="searchbox"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"]',
+      ),
+    );
+  }
+
+  /** Text belonging to this bounded structure, excluding controls and diagnostics. */
+  function labelText(root: Element, control: Element): string {
+    const excludedIds = new Set(
+      [
+        control.getAttribute('aria-describedby') ?? '',
+        control.getAttribute('aria-errormessage') ?? '',
+      ]
+        .join(' ')
+        .split(/\s+/u)
+        .filter(Boolean),
+    );
+    const parts: string[] = [];
+    let visited = 0;
+    function visit(node: Node, depth: number): void {
+      if (++visited > 200 || depth > 8) return;
+      if (node.nodeType === 3) {
+        parts.push(node.nodeValue ?? '');
+        return;
+      }
+      if (!(node instanceof Element)) return;
+      if (
+        node === control ||
+        node.matches(
+          'input,textarea,select,option,button,script,style,[role="textbox"],[role="searchbox"],[role="combobox"],[role="listbox"],[role="radio"],[role="checkbox"],[role="option"],[role="alert"],[role="status"],[aria-live]',
+        ) ||
+        excludedIds.has(node.id)
+      )
+        return;
+      for (const child of node.childNodes) visit(child, depth + 1);
+    }
+    // The root may itself be a label/legend, but never take a control subtree.
+    for (const child of root.childNodes) visit(child, 0);
+    return visited > 200 ? '' : normalize(parts.join(' '));
+  }
+
+  function singleControlOrSet(root: Element, control: Element): boolean {
+    const members = fillableMembers(root);
+    if (members.length === 1) return members[0] === control;
+    if (members.length < 2) return false;
+    const role = computeRole(control as HTMLElement);
+    if (role !== 'radio' && role !== 'checkbox') return false;
+    if (!members.every((member) => computeRole(member as HTMLElement) === role)) return false;
+    const name = control.getAttribute('name');
+    return (
+      (role === 'checkbox' && root.matches('fieldset')) ||
+      Boolean(name && members.every((member) => member.getAttribute('name') === name))
+    );
+  }
+
+  function structuralLabel(element: HTMLElement): RawFieldEvidence['structural'] {
+    function evidence(
+      root: Element,
+      source: NonNullable<RawFieldEvidence['structural']>['source'],
+    ): RawFieldEvidence['structural'] {
+      const text = boundedText(labelText(root, element), 80, false);
+      if (!text) return null;
+      const labelBox = root.getBoundingClientRect();
+      const controlBox = element.getBoundingClientRect();
+      const adjacent =
+        labelBox.width <= 0 ||
+        labelBox.height <= 0 ||
+        controlBox.width <= 0 ||
+        controlBox.height <= 0
+          ? null
+          : labelBox.left <= controlBox.left &&
+            labelBox.top <= controlBox.top &&
+            Math.max(controlBox.left - labelBox.right, controlBox.top - labelBox.bottom) <= 160;
+      return { text, source, adjacent };
+    }
+    const cell = element.closest('td,th,[role="cell"],[role="gridcell"]');
+    if (cell) {
+      let previous = cell.previousElementSibling;
+      for (let n = 0; previous && n < 20; n += 1, previous = previous.previousElementSibling) {
+        // Crossing another control would bind the preceding pair's label.
+        if (fillableMembers(previous).length > 0) break;
+        const found = evidence(previous, 'label-cell');
+        if (found) return found;
+      }
+    }
+    let ancestor = element.parentElement;
+    for (let depth = 0; ancestor && depth < 3; depth += 1, ancestor = ancestor.parentElement) {
+      if (ancestor.matches('body,html,form')) break;
+      if (!singleControlOrSet(ancestor, element)) continue;
+      const source = ancestor.matches('tr,[role="row"]') ? 'row' : 'wrapper';
+      // A legend is handled explicitly so its source survives diagnostics.
+      if (ancestor.matches('fieldset')) continue;
+      const found = evidence(ancestor, source);
+      if (found) return found;
+    }
+    const fieldset = element.closest('fieldset');
+    if (
+      fieldset &&
+      singleControlOrSet(fieldset, element) &&
+      element.matches('input[type="radio"],input[type="checkbox"],[role="radio"],[role="checkbox"]')
+    ) {
+      const legend = fieldset.querySelector(':scope > legend');
+      if (legend) return evidence(legend, 'legend');
+    }
+    return null;
+  }
+
+  function fieldSection(element: HTMLElement, owner: HTMLFormElement | null): string | null {
+    const legend = element.closest('fieldset')?.querySelector(':scope > legend');
+    if (legend) return boundedText(labelText(legend, element), 60);
+    if (!owner) return null;
+    let current: Element | null = element;
+    for (
+      let level = 0;
+      current && current !== owner && level < 8;
+      level += 1, current = current.parentElement
+    ) {
+      let sibling = current.previousElementSibling;
+      for (let n = 0; sibling && n < 20; n += 1, sibling = sibling.previousElementSibling) {
+        if (sibling.matches('h1,h2,h3,h4,h5,h6,[role="heading"]'))
+          return boundedText(labelText(sibling, element), 60);
+      }
+    }
+    return null;
   }
 
   /**

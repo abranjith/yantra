@@ -2,8 +2,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { layoutMatrix } from '@yantra/test-helpers/layout-matrix';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { collectComposedInteractables } from '../../src/discovery/composed-handles.js';
+import { deriveFieldIdentity } from '../../src/interaction/field-identity.js';
 import { resolveInteractable } from '../../src/interaction/resolution.js';
 import { layoutBrowser } from '../helpers/layout-browser.js';
 
@@ -19,7 +21,26 @@ describe('@no-llm synthetic layout matrix', () => {
   for (const fixture of layoutMatrix) {
     it(`${fixture.id}: never resolves to the wrong control`, async () => {
       await browser.page.setContent(fixture.html());
+      const reads = vi.spyOn(browser.page, 'evaluateHandle');
       const observation = await browser.controller.observe({ cap: 400 });
+      expect(reads).toHaveBeenCalledTimes(1);
+      reads.mockRestore();
+      const scan = await collectComposedInteractables(browser.page, { max: 400 });
+      try {
+        for (const raw of scan.records) {
+          if (!raw.field) continue;
+          const key = await scan.elements[raw.elementIndex]!.evaluate((element) =>
+            element.getAttribute('data-fixture-key'),
+          );
+          const control = fixture.controls.find((item) => item.key === key);
+          if (control?.expect.kind === 'label')
+            expect(deriveFieldIdentity(raw.role, raw.field).origin).toBe(control.expect.origin);
+          if (control?.expect.kind === 'ref-only')
+            expect(deriveFieldIdentity(raw.role, raw.field).origin).toBe('none');
+        }
+      } finally {
+        await Promise.all(scan.elements.map((element) => element?.dispose()));
+      }
       const keys = await browser.page.evaluate(() => {
         const result: string[] = [];
         const visit = (root: ParentNode): void => {
