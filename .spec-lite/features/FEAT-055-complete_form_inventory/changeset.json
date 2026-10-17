@@ -297,7 +297,7 @@
     },
     {
       "path": "packages/core/tests/fixtures/artifacts/legacy-attempt-ledger.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
