@@ -31,7 +31,7 @@ export function browserObserveSpec(
     name: 'browser_observe',
     label: 'Browser Observe',
     description:
-      'Read the current page without acting, as bounded sanitized text and opaque interactable refs. Action tools already return a fresh observation, so do not chain this after every action. Use it for an independent fresh read; never invent refs or reuse them after navigation. When inventory is present, pass continue_after as after for the next window; kinds: ["field"] lists fillable controls. Windowed results carry no digest.',
+      'Read the current page without acting, as bounded sanitized text and opaque interactable refs. Action tools already return a fresh observation, so do not chain this after every action. Use it for an independent fresh read; never invent refs or reuse them after navigation. When inventory is present, pass continue_after as after for the next window; kinds: ["field"] lists fillable controls. Windowed results carry no digest. A field\'s field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.',
     parameters: BrowserObserveParams,
     sanitizationProfile: 'public',
     run: async (params, ctx): Promise<DomainResult> => {

@@ -51,7 +51,7 @@ import { dismissWidget } from './dismiss.js';
 import { asPlanBudget, buildDriverPlan, buildTextPlan } from './plans.js';
 import {
   fillFailure,
-  type FieldIdentity,
+  type FillFieldIdentity,
   type FillBudget,
   type FillFailure,
   type FillIntent,
@@ -67,7 +67,7 @@ import {
  */
 export async function fillField(
   port: WidgetPort,
-  identity: FieldIdentity,
+  identity: FillFieldIdentity,
   intent: FillIntent,
   requestedBudget: FillBudget = defaultWidgetBudget(port),
 ): Promise<FillOutcome> {
@@ -480,9 +480,9 @@ export async function fillField(
  */
 async function rangeEntryPoint(
   port: WidgetPort,
-  identity: FieldIdentity,
+  identity: FillFieldIdentity,
   intent: FillIntent,
-): Promise<FieldIdentity> {
+): Promise<FillFieldIdentity> {
   if (intent.kind !== 'date_range') return identity;
   const pair = await resolveDatePair(port, identity.target);
   if (!pair) return identity;
@@ -500,7 +500,7 @@ async function rangeEntryPoint(
  */
 export async function fillSecretField(
   port: WidgetPort,
-  identity: FieldIdentity,
+  identity: FillFieldIdentity,
   secretValue: string,
   requestedBudget: FillBudget = defaultWidgetBudget(port),
 ): Promise<FillOutcome> {
@@ -1192,7 +1192,7 @@ const COMMIT_SETTLE_POLL_MS = 100;
  */
 function runnerPortForField(
   port: WidgetPort,
-  identity: FieldIdentity,
+  identity: FillFieldIdentity,
   state: MutableRunState,
 ): { readonly port: WidgetPort; readonly target: WidgetTarget; readonly actions: () => number } {
   // Ownership, expressed by declining rather than by a second ref map: an
@@ -1228,11 +1228,16 @@ function runnerPortForField(
  */
 async function reacquireTarget(
   port: WidgetPort,
-  identity: FieldIdentity,
+  identity: FillFieldIdentity,
   current: WidgetTarget,
 ): Promise<WidgetTarget | null> {
   const observation = await port.observe({ cap: 400, trackDigest: false });
-  const queries = [identity.field, identity.target.name, identity.target.name.split(',')[0] ?? '']
+  const queries = [
+    identity.field,
+    identity.target.label ?? '',
+    identity.target.name,
+    identity.target.name.split(',')[0] ?? '',
+  ]
     .map((value) => value.trim())
     .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
   for (const query of queries) {
@@ -1264,6 +1269,9 @@ function resolveField(
 
 function toTarget(entry: AgentInteractable): WidgetTarget {
   return {
+    ...(entry.field
+      ? { label: entry.field.label ?? entry.name, labelOrigin: entry.field.origin }
+      : {}),
     ref: entry.ref,
     role: entry.role,
     name: entry.name,

@@ -193,6 +193,9 @@ export async function resolveFillField(
 
 function toWidgetTarget(entry: AgentInteractable): WidgetTarget {
   return {
+    ...(entry.field
+      ? { label: entry.field.label ?? entry.name, labelOrigin: entry.field.origin }
+      : {}),
     ref: entry.ref,
     role: entry.role,
     name: entry.name,

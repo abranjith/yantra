@@ -75,6 +75,13 @@ describe('@no-llm synthetic layout matrix', () => {
             ? [...keyByRef].find(([, key]) => key === control.key)![0]
             : expected.query;
         const resolution = resolveInteractable(query, observation.interactables);
+        if (expected.kind === 'ambiguous') {
+          expect(resolution.kind).toBe('ambiguous');
+          if (resolution.kind === 'ambiguous')
+            expect(resolution.offered.map((entry) => keyByRef.get(entry.ref)).sort()).toEqual(
+              [...expected.with].sort(),
+            );
+        } else expect(resolution.kind).toBe('match');
         if (resolution.kind === 'match') {
           expect(keyByRef.get(resolution.entry.ref)).toBe(control.key);
           pageCounts.resolved += 1;

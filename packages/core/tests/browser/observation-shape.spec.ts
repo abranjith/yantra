@@ -29,6 +29,46 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
 }
 
 describe('@no-llm agent observation projection', () => {
+  it('pins identity and whole-entry UTF-8 budgets with reserved withheld headroom', () => {
+    const entry = projectAgentInteractable(
+      'e200',
+      raw({
+        role: 'textbox',
+        name: '界'.repeat(200),
+        value: '界'.repeat(120),
+        group: '界'.repeat(60),
+        field: {
+          explicit: null,
+          structural: { text: '界'.repeat(80), source: 'wrapper', adjacent: true },
+          section: '界'.repeat(60),
+          inputType: 'email',
+          autocomplete: 'email',
+          required: true,
+          maxLength: 100,
+          pattern: '.'.repeat(40),
+          htmlName: 'name',
+          htmlId: 'field',
+          placeholder: null,
+          selectPlaceholder: null,
+          title: null,
+          radioGroup: null,
+          checkboxSet: null,
+          humanVerification: false,
+          hiddenInput: false,
+          disabled: false,
+          readOnly: false,
+        },
+      }),
+    );
+    expect(Object.keys(entry.field!)).toEqual(
+      expect.arrayContaining(['origin', 'confidence', 'label']),
+    );
+    expect(Buffer.byteLength(JSON.stringify(entry.field))).toBeLessThanOrEqual(256);
+    expect(
+      Buffer.byteLength(JSON.stringify({ ...entry, withheld: 'x'.repeat(32) })),
+    ).toBeLessThanOrEqual(768);
+    expect(entry.field).not.toHaveProperty('hint');
+  });
   it('keeps a plain enabled element at the minimal three-key shape', () => {
     expect(projectAgentInteractable('e1', raw())).toEqual({
       ref: 'e1',

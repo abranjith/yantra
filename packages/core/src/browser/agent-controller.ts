@@ -23,6 +23,8 @@ import { CHALLENGE_MARKERS } from '../extraction/response-classifier.js';
 import { assertReceivable } from '../interaction/capabilities.js';
 import {
   deriveFieldIdentity,
+  projectFieldIdentity,
+  INTERACTABLE_ENTRY_MAX_BYTES,
   type FieldIdentity,
   type AgentFieldIdentity,
 } from '../interaction/field-identity.js';
@@ -567,8 +569,8 @@ export class AgentBrowserController implements WidgetPort {
         this.refIdByIdentity.set(identity, ref);
       }
       claimed.add(handle);
-      const projected = projectAgentInteractable(ref, raw);
       const fieldIdentity = raw.field ? deriveFieldIdentity(raw.role, raw.field) : undefined;
+      const projected = projectAgentInteractable(ref, raw, fieldIdentity);
       this.refs.set(ref, {
         ...projected,
         handle,
@@ -611,7 +613,7 @@ export class AgentBrowserController implements WidgetPort {
       interactables.length,
       ...window.flatMap((raw) => {
         const ref = refByIndex.get(raw.elementIndex);
-        return ref ? [projectAgentInteractable(ref, raw)] : [];
+        return ref ? [this.describeRef(ref)!] : [];
       }),
     );
     const inventory = inventoryForWindow(
@@ -1834,8 +1836,13 @@ export class AgentBrowserController implements WidgetPort {
 }
 
 /** Internal raw-scan to model-visible projection; exported for shape contract tests. */
-export function projectAgentInteractable(ref: string, raw: RawInteractable): AgentInteractable {
+export function projectAgentInteractable(
+  ref: string,
+  raw: RawInteractable,
+  identity?: FieldIdentity,
+): AgentInteractable {
   const projected: {
+    field?: AgentFieldIdentity;
     ref: string;
     role: string;
     name: string;
@@ -1854,6 +1861,19 @@ export function projectAgentInteractable(ref: string, raw: RawInteractable): Age
   if (raw.checked) projected.checked = true;
   if (raw.expanded !== null) projected.expanded = raw.expanded;
   if (raw.selected !== null) projected.selected = raw.selected;
+  const field = identity ?? (raw.field ? deriveFieldIdentity(raw.role, raw.field) : undefined);
+  const publicField = field ? projectFieldIdentity(projected.name, field) : undefined;
+  if (publicField && publicField.section === projected.group) delete publicField.section;
+  if (publicField) projected.field = publicField;
+  const limit = INTERACTABLE_ENTRY_MAX_BYTES - 56;
+  const over = (): boolean => Buffer.byteLength(JSON.stringify(projected), 'utf8') > limit;
+  for (const key of ['value', 'group', 'name'] as const) {
+    while (over() && projected[key])
+      projected[key] = Array.from(projected[key]).slice(0, -1).join('');
+    if (key !== 'name' && projected[key] === '') delete projected[key];
+  }
+  if (process.env.NODE_ENV === 'development' && over())
+    throw new Error('Interactable projection exceeds byte budget');
   return projected;
 }
 

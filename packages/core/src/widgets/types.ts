@@ -1,6 +1,7 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { ChoiceSubstitution } from '../interaction/choice.js';
 import type { MutableRunState, VerdictEvidence } from '../interaction/escalation.js';
+import type { LabelOrigin } from '../interaction/field-identity.js';
 import type { InteractionFailureCause } from '../interaction/types.js';
 
 /**
@@ -111,6 +112,8 @@ export interface ScrollFrame {
 
 /** Model-observed trigger or form field passed to a driver. */
 export interface WidgetTarget {
+  readonly label?: string | null;
+  readonly labelOrigin?: LabelOrigin;
   /** Opaque reference minted by the latest observation. */
   readonly ref: string;
   /** Observed ARIA role. */

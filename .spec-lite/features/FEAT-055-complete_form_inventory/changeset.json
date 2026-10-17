@@ -8,6 +8,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/browser-observe.ts",
       "status": "M",
       "role": "implement",
@@ -24,6 +36,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
@@ -68,10 +86,40 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/interaction/field-identity.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/interaction/resolution.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/boundary-rules.spec.ts",
@@ -84,6 +132,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/observation-shape.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/discovery/interactable-scan.spec.ts",
@@ -120,6 +174,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/interaction/resolution.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/test-helpers/package.json",
