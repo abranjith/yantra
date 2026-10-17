@@ -1,5 +1,5 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "format": "v2",
   "provider": "copilot",
   "providers": ["copilot", "claude-code", "codex", "pi"],
@@ -30,7 +30,7 @@
     "orchestrator"
   ],
   "installedAt": "2026-05-05T04:30:51.698Z",
-  "updatedAt": "2026-10-11T17:43:43.399Z",
+  "updatedAt": "2026-10-17T18:23:16.410Z",
   "projectProfile": {
     "languages": ["TypeScript"],
     "frameworks": [],
