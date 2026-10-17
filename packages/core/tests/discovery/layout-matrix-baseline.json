@@ -1,0 +1,72 @@
+{
+  "table-label-cell": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 2
+  },
+  "stacked-wrappers": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 2
+  },
+  "css-order-grid": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 2
+  },
+  "floating-labels": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 1
+  },
+  "placeholder-only": {
+    "resolved": 2,
+    "ambiguous": 0,
+    "unresolvable": 0
+  },
+  "fieldset-groups": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 4
+  },
+  "label-after-control": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 1
+  },
+  "split-controls": {
+    "resolved": 3,
+    "ambiguous": 0,
+    "unresolvable": 3
+  },
+  "describedby-help": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 1
+  },
+  "repeated-sections": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 3
+  },
+  "open-shadow": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 1
+  },
+  "dynamic-replacement": {
+    "resolved": 0,
+    "ambiguous": 0,
+    "unresolvable": 1
+  },
+  "over-cap": {
+    "resolved": 35,
+    "ambiguous": 3,
+    "unresolvable": 32
+  },
+  "no-evidence": {
+    "resolved": 2,
+    "ambiguous": 0,
+    "unresolvable": 0
+  }
+}

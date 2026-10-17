@@ -14,7 +14,7 @@ export type FillIntent =
   | { readonly kind: 'secret'; readonly key: string };
 
 /** Durable caller identity plus the first live target resolved for it. */
-export interface FieldIdentity {
+export interface FillFieldIdentity {
   readonly field: string;
   readonly target: WidgetTarget;
   /**

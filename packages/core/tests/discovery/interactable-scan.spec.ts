@@ -23,6 +23,39 @@ function stubVisible(el: Element, top = 10, left = 10): void {
 }
 
 describe('@no-llm scanInteractablesInPage', () => {
+  it('collects structural evidence while excluding help, errors and multi-control wrappers', () => {
+    document.body.innerHTML =
+      '<form><h2>Office</h2><div><span>City</span><input id="city" aria-describedby="help" aria-errormessage="error" autocomplete="section-work shipping address-level2" maxlength="20" required><span id="help">A long explanation</span><span role="alert" id="error">Invalid</span></div><div>Unbound<input><input></div><fieldset><legend>Options</legend><input type="radio" name="choice"><input type="radio" name="choice"></fieldset></form>';
+    const scan = scanInteractablesInPage();
+    expect(scan.records[0]?.field).toMatchObject({
+      structural: { text: 'City' },
+      section: 'Office',
+      required: true,
+      maxLength: 20,
+      autocomplete: 'address-level2',
+    });
+    expect(scan.records[1]?.field?.structural).toBeNull();
+    expect(scan.records[3]?.field).toMatchObject({
+      structural: { text: 'Options', source: 'legend' },
+      section: 'Options',
+    });
+    document.querySelector('#error')!.textContent = 'Changed validation message';
+    expect(scanInteractablesInPage().records[0]?.field?.structural?.text).toBe('City');
+  });
+  it('reports the scan bound and ignores hidden-input records', () => {
+    document.body.innerHTML = '<input type="hidden">' + '<input>'.repeat(450);
+    expect(scanInteractablesInPage({ max: 400 }).truncated).toBe(true);
+    document.body.innerHTML = '<input type="hidden">' + '<input>'.repeat(10);
+    const scan = scanInteractablesInPage({ max: 400, elementKeys: true });
+    expect(scan.truncated).toBe(false);
+    expect(scan.records).toHaveLength(10);
+    expect(scan.records.every((entry) => entry.elementKey !== null)).toBe(true);
+    const markup = document.body.innerHTML;
+    expect(
+      scanInteractablesInPage({ elementKeys: true }).records.map((entry) => entry.elementKey),
+    ).toEqual(scan.records.map((entry) => entry.elementKey));
+    expect(document.body.innerHTML).toBe(markup);
+  });
   beforeEach(() => {
     document.body.innerHTML = '';
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
@@ -64,6 +97,8 @@ describe('@no-llm scanInteractablesInPage', () => {
         rootNodeDepth: 0,
         focused: false,
         container: null,
+        elementKey: null,
+        field: null,
       },
     ]);
   });

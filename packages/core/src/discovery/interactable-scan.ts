@@ -1,7 +1,53 @@
 /// <reference lib="dom" />
 
+/** Options for the single serialized composed-tree scan. */
+export interface ScanOptions {
+  readonly withElements?: boolean;
+  readonly max?: number;
+  readonly elementKeys?: boolean;
+  readonly challengeTokens?: readonly string[];
+  /**
+   * Membership override for a caller asking a different question.
+   *
+   * The deterministic replay port legitimately addresses a slightly wider
+   * set than the agent observation does, and it describes the handles
+   * itself. Sharing the **walk** while letting each caller keep its own
+   * membership is what stops a third copy of the traversal appearing —
+   * which is the drift this whole scan exists to remove.
+   */
+  readonly selector?: string;
+}
+
 /** One candidate element's raw signal, before ranking/capping. */
+export interface RawFieldEvidence {
+  readonly explicit: string | null;
+  readonly autocomplete: string | null;
+  readonly maxLength: number | null;
+  readonly pattern: string | null;
+  readonly selectPlaceholder: string | null;
+  readonly placeholder: string | null;
+  readonly title: string | null;
+  readonly structural: {
+    readonly text: string;
+    readonly source: 'row' | 'label-cell' | 'wrapper' | 'legend';
+    readonly adjacent: boolean | null;
+  } | null;
+  readonly section: string | null;
+  readonly htmlName: string | null;
+  readonly htmlId: string | null;
+  readonly inputType: string | null;
+  readonly readOnly: boolean;
+  readonly disabled: boolean;
+  readonly required: boolean;
+  readonly radioGroup: string | null;
+  readonly checkboxSet: string | null;
+  readonly humanVerification: boolean;
+  readonly hiddenInput: boolean;
+}
+
 export interface RawInteractable {
+  readonly elementKey: number | null;
+  readonly field: RawFieldEvidence | null;
   readonly role: string;
   readonly name: string | null;
   readonly kind: 'button' | 'link' | 'input' | 'select';
@@ -66,6 +112,7 @@ export interface RawInteractable {
 
 /** Result of one composed-tree pass: records and, optionally, their elements. */
 export interface InteractableScan {
+  readonly truncated: boolean;
   readonly records: RawInteractable[];
   /**
    * Every candidate element the walk reached, indexed by `elementIndex`.
@@ -110,22 +157,7 @@ export interface InteractableScan {
  * than two sharing a helper: a helper defined outside would not survive
  * serialization.
  */
-export function scanInteractablesInPage(
-  options: {
-    readonly withElements?: boolean;
-    readonly max?: number;
-    /**
-     * Membership override for a caller asking a different question.
-     *
-     * The deterministic replay port legitimately addresses a slightly wider
-     * set than the agent observation does, and it describes the handles
-     * itself. Sharing the **walk** while letting each caller keep its own
-     * membership is what stops a third copy of the traversal appearing —
-     * which is the drift this whole scan exists to remove.
-     */
-    readonly selector?: string;
-  } = {},
-): InteractableScan {
+export function scanInteractablesInPage(options: ScanOptions = {}): InteractableScan {
   const withElements = options.withElements === true;
   const max =
     typeof options.max === 'number' && Number.isFinite(options.max)
@@ -168,6 +200,20 @@ export function scanInteractablesInPage(
   ).__yantra;
 
   const seen = new Set<Element>();
+  const memoHost = window as unknown as Record<
+    symbol,
+    { keys: WeakMap<Element, number>; next: number }
+  >;
+  const memoSymbol = Symbol.for('yantra.elementKeys');
+  const memo = options.elementKeys
+    ? (memoHost[memoSymbol] ??= { keys: new WeakMap(), next: 1 })
+    : null;
+  const groupIndexes = new Map<Element, number>();
+  function groupIndex(element: Element | null): number {
+    if (!element) return -1;
+    if (!groupIndexes.has(element)) groupIndexes.set(element, groupIndexes.size);
+    return groupIndexes.get(element)!;
+  }
   /** Per-scan memo for container identities; see `describeContainer`. */
   const containerIdentities = new Map<
     HTMLElement,
@@ -209,10 +255,11 @@ export function scanInteractablesInPage(
     }
   }
 
-  return { records: results, elements };
+  return { records: results, elements, truncated: stack.length > 0 };
 
   function record(element: HTMLElement, depth: number): void {
     if (!element.matches(candidateSelector)) return;
+    if (element instanceof HTMLInputElement && element.type === 'hidden') return;
     // Collected before it is described: an addressable element the record
     // projection has no kind for is still addressable, and a caller that
     // describes handles itself must be able to reach it.
@@ -226,13 +273,19 @@ export function scanInteractablesInPage(
     const style = window.getComputedStyle(element);
     const currentValue = computeValue(element);
     const enclosing = computeScope(element);
+    const field = ['textbox', 'searchbox', 'combobox', 'listbox', 'checkbox', 'radio'].includes(
+      role,
+    )
+      ? fieldEvidence(element)
+      : null;
+    if (memo && !memo.keys.has(element)) memo.keys.set(element, memo.next++);
     results.push({
+      elementKey: memo?.keys.get(element) ?? null,
+      field,
       role,
       name: computeName(element),
       kind,
-      disabled:
-        ('disabled' in element && Boolean((element as HTMLInputElement).disabled)) ||
-        element.getAttribute('aria-disabled') === 'true',
+      disabled: element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true',
       top: rect.top,
       left: rect.left,
       group: computeGroup(element),
@@ -253,6 +306,248 @@ export function scanInteractablesInPage(
       composedScope: depth > 0 ? 'open-shadow' : 'document',
       rootNodeDepth: depth,
     });
+  }
+
+  function fieldEvidence(element: HTMLElement): RawFieldEvidence {
+    const input = element instanceof HTMLInputElement ? element : null;
+    const owner = (element as HTMLInputElement).form ?? null;
+    const name = element.getAttribute('name');
+    const fieldset = element.closest('fieldset');
+    const radioRoot = element.closest('[role="radiogroup"]');
+    let humanVerification = false;
+    let ancestor: HTMLElement | null = element;
+    for (let depth = 0; ancestor && depth < 20; depth += 1) {
+      const markers = [
+        ancestor.id,
+        ancestor.className,
+        ancestor.getAttribute('name') ?? '',
+        ...ancestor.getAttributeNames(),
+      ]
+        .join(' ')
+        .toLowerCase();
+      if (options.challengeTokens?.some((token) => markers.includes(token)))
+        humanVerification = true;
+      if (ancestor === owner) break;
+      ancestor = composedParent(ancestor);
+    }
+    const checkboxScope = fieldset ?? owner ?? rootOf(element);
+    const checkboxes = Array.from(
+      checkboxScope.querySelectorAll('input[type="checkbox"], [role="checkbox"]'),
+    );
+    const checkboxSet =
+      checkboxes.filter(
+        (item) => fieldset !== null || (name !== null && item.getAttribute('name') === name),
+      ).length >= 2
+        ? fieldset
+          ? `fieldset:${groupIndex(fieldset)}`
+          : `${groupIndex(owner)}:${name}`
+        : null;
+    return {
+      explicit: explicitLabel(element),
+      autocomplete: autocompleteToken(element),
+      maxLength:
+        'maxLength' in element && (element as HTMLInputElement).maxLength > 0
+          ? (element as HTMLInputElement).maxLength
+          : null,
+      pattern: boundedText(element.getAttribute('pattern'), 40, false),
+      selectPlaceholder:
+        element instanceof HTMLSelectElement && element.options[0]?.value === ''
+          ? boundedText(element.options[0].text, 80)
+          : null,
+      placeholder: boundedText(element.getAttribute('placeholder'), 80),
+      title: boundedText(element.getAttribute('title'), 80),
+      structural: structuralLabel(element),
+      section: fieldSection(element, owner),
+      htmlName: developerHint(name),
+      htmlId: developerHint(element.id),
+      inputType: input
+        ? input.type.toLowerCase()
+        : element.matches('textarea,select')
+          ? element.tagName.toLowerCase()
+          : null,
+      readOnly:
+        ('readOnly' in element && Boolean((element as HTMLInputElement).readOnly)) ||
+        element.getAttribute('aria-readonly') === 'true',
+      disabled: element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true',
+      required:
+        ('required' in element && Boolean((element as HTMLInputElement).required)) ||
+        element.getAttribute('aria-required') === 'true',
+      radioGroup:
+        input?.type === 'radio' && name
+          ? `${groupIndex(owner)}:${name}`
+          : radioRoot
+            ? `aria:${groupIndex(radioRoot)}`
+            : null,
+      checkboxSet: element.matches('input[type="checkbox"], [role="checkbox"]')
+        ? checkboxSet
+        : null,
+      humanVerification,
+      hiddenInput: input?.type === 'hidden',
+    };
+  }
+
+  function boundedText(value: string | null | undefined, limit: number, cut = true): string | null {
+    const text = normalize(value ?? '');
+    return text ? (text.length > limit ? (cut ? text.slice(0, limit) : null) : text) : null;
+  }
+
+  function developerHint(value: string | null): string | null {
+    return (value?.match(/\p{L}/gu)?.length ?? 0) >= 2 ? boundedText(value, 40) : null;
+  }
+
+  function explicitLabel(element: HTMLElement): string | null {
+    const ids = element.getAttribute('aria-labelledby');
+    const byIds = ids ? textById(element, ids) : '';
+    if (byIds) return boundedText(byIds, 200);
+    const aria = boundedText(element.getAttribute('aria-label'), 200);
+    if (aria) return aria;
+    const labels = 'labels' in element ? (element as HTMLInputElement).labels : null;
+    if (labels?.length)
+      return boundedText(Array.from(labels, (label) => labelText(label, element)).join(' '), 200);
+    return null;
+  }
+
+  function autocompleteToken(element: HTMLElement): string | null {
+    const fields = new Set(
+      'name honorific-prefix given-name additional-name family-name honorific-suffix nickname username new-password current-password one-time-code organization-title organization street-address address-line1 address-line2 address-line3 address-level4 address-level3 address-level2 address-level1 country country-name postal-code cc-name cc-given-name cc-additional-name cc-family-name cc-number cc-exp cc-exp-month cc-exp-year cc-csc cc-type transaction-currency transaction-amount language bday bday-day bday-month bday-year sex url photo tel tel-country-code tel-national tel-area-code tel-local tel-local-prefix tel-local-suffix tel-extension email impp'.split(
+        ' ',
+      ),
+    );
+    return (
+      element
+        .getAttribute('autocomplete')
+        ?.toLowerCase()
+        .split(/\s+/u)
+        .find((token) => fields.has(token)) ?? null
+    );
+  }
+
+  function fillableMembers(root: Element): Element[] {
+    return Array.from(
+      root.querySelectorAll(
+        'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), textarea, select, [role="textbox"], [role="searchbox"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"]',
+      ),
+    );
+  }
+
+  /** Text belonging to this bounded structure, excluding controls and diagnostics. */
+  function labelText(root: Element, control: Element): string {
+    const excludedIds = new Set(
+      [
+        control.getAttribute('aria-describedby') ?? '',
+        control.getAttribute('aria-errormessage') ?? '',
+      ]
+        .join(' ')
+        .split(/\s+/u)
+        .filter(Boolean),
+    );
+    const parts: string[] = [];
+    let visited = 0;
+    function visit(node: Node, depth: number): void {
+      if (++visited > 200 || depth > 8) return;
+      if (node.nodeType === 3) {
+        parts.push(node.nodeValue ?? '');
+        return;
+      }
+      if (!(node instanceof Element)) return;
+      if (
+        node === control ||
+        node.matches(
+          'input,textarea,select,option,button,script,style,[role="textbox"],[role="searchbox"],[role="combobox"],[role="listbox"],[role="radio"],[role="checkbox"],[role="option"],[role="alert"],[role="status"],[aria-live]',
+        ) ||
+        excludedIds.has(node.id)
+      )
+        return;
+      for (const child of node.childNodes) visit(child, depth + 1);
+    }
+    // The root may itself be a label/legend, but never take a control subtree.
+    for (const child of root.childNodes) visit(child, 0);
+    return visited > 200 ? '' : normalize(parts.join(' '));
+  }
+
+  function singleControlOrSet(root: Element, control: Element): boolean {
+    const members = fillableMembers(root);
+    if (members.length === 1) return members[0] === control;
+    if (members.length < 2) return false;
+    const role = computeRole(control as HTMLElement);
+    if (role !== 'radio' && role !== 'checkbox') return false;
+    if (!members.every((member) => computeRole(member as HTMLElement) === role)) return false;
+    const name = control.getAttribute('name');
+    return (
+      (role === 'checkbox' && root.matches('fieldset')) ||
+      Boolean(name && members.every((member) => member.getAttribute('name') === name))
+    );
+  }
+
+  function structuralLabel(element: HTMLElement): RawFieldEvidence['structural'] {
+    function evidence(
+      root: Element,
+      source: NonNullable<RawFieldEvidence['structural']>['source'],
+    ): RawFieldEvidence['structural'] {
+      const text = boundedText(labelText(root, element), 80, false);
+      if (!text) return null;
+      const labelBox = root.getBoundingClientRect();
+      const controlBox = element.getBoundingClientRect();
+      const adjacent =
+        labelBox.width <= 0 ||
+        labelBox.height <= 0 ||
+        controlBox.width <= 0 ||
+        controlBox.height <= 0
+          ? null
+          : labelBox.left <= controlBox.left &&
+            labelBox.top <= controlBox.top &&
+            Math.max(controlBox.left - labelBox.right, controlBox.top - labelBox.bottom) <= 160;
+      return { text, source, adjacent };
+    }
+    const cell = element.closest('td,th,[role="cell"],[role="gridcell"]');
+    if (cell) {
+      let previous = cell.previousElementSibling;
+      for (let n = 0; previous && n < 20; n += 1, previous = previous.previousElementSibling) {
+        // Crossing another control would bind the preceding pair's label.
+        if (fillableMembers(previous).length > 0) break;
+        const found = evidence(previous, 'label-cell');
+        if (found) return found;
+      }
+    }
+    let ancestor = element.parentElement;
+    for (let depth = 0; ancestor && depth < 3; depth += 1, ancestor = ancestor.parentElement) {
+      if (ancestor.matches('body,html,form')) break;
+      if (!singleControlOrSet(ancestor, element)) continue;
+      const source = ancestor.matches('tr,[role="row"]') ? 'row' : 'wrapper';
+      // A legend is handled explicitly so its source survives diagnostics.
+      if (ancestor.matches('fieldset')) continue;
+      const found = evidence(ancestor, source);
+      if (found) return found;
+    }
+    const fieldset = element.closest('fieldset');
+    if (
+      fieldset &&
+      singleControlOrSet(fieldset, element) &&
+      element.matches('input[type="radio"],input[type="checkbox"],[role="radio"],[role="checkbox"]')
+    ) {
+      const legend = fieldset.querySelector(':scope > legend');
+      if (legend) return evidence(legend, 'legend');
+    }
+    return null;
+  }
+
+  function fieldSection(element: HTMLElement, owner: HTMLFormElement | null): string | null {
+    const legend = element.closest('fieldset')?.querySelector(':scope > legend');
+    if (legend) return boundedText(labelText(legend, element), 60);
+    if (!owner) return null;
+    let current: Element | null = element;
+    for (
+      let level = 0;
+      current && current !== owner && level < 8;
+      level += 1, current = current.parentElement
+    ) {
+      let sibling = current.previousElementSibling;
+      for (let n = 0; sibling && n < 20; n += 1, sibling = sibling.previousElementSibling) {
+        if (sibling.matches('h1,h2,h3,h4,h5,h6,[role="heading"]'))
+          return boundedText(labelText(sibling, element), 60);
+      }
+    }
+    return null;
   }
 
   /**

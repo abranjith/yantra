@@ -56,7 +56,11 @@ async function reacquireClickTarget(
   controller: AgentBrowserController,
   described: AgentInteractable | undefined,
 ): Promise<AgentInteractable | null> {
-  if (!described || described.name.trim().length === 0) return null;
+  if (!described) return null;
+  const field = ['textbox', 'searchbox', 'combobox', 'listbox', 'checkbox', 'radio'].includes(
+    described.role,
+  );
+  if (!field && described.name.trim().length === 0) return null;
   // Recovery is best-effort by construction: it exists to save a click that
   // would otherwise fail, and must never convert that click's typed failure
   // into an unexpected crash. A read that cannot be taken simply means the
@@ -69,6 +73,7 @@ async function reacquireClickTarget(
     return null;
   }
   if (!observation || !Array.isArray(observation.interactables)) return null;
+  if (field) return controller.describeRef(described.ref) ?? null;
   const resolved = resolveInteractable(described.name, observation.interactables, {
     preferred: {
       ref: described.ref,
@@ -156,7 +161,13 @@ export function browserClickSpec(
         },
         click: async (ref) => {
           try {
-            return await controller.click(ref, { healStale: false });
+            return await controller.click(ref, {
+              healStale:
+                described !== undefined &&
+                ['textbox', 'searchbox', 'combobox', 'listbox', 'checkbox', 'radio'].includes(
+                  described.role,
+                ),
+            });
           } catch (error) {
             return browserFailure(error, ctx.services);
           }

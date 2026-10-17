@@ -1,0 +1,18 @@
+[
+  {
+    "attempt": 1,
+    "strategy": "overtype",
+    "axis": "how",
+    "errorCode": "WIDGET_NOT_COMMITTED",
+    "elapsedMs": 2,
+    "detail": "field stayed empty"
+  },
+  {
+    "attempt": 2,
+    "strategy": "locate-editee",
+    "axis": "where",
+    "errorCode": null,
+    "elapsedMs": 1,
+    "detail": "keystrokes landed in \"Search airports\""
+  }
+]

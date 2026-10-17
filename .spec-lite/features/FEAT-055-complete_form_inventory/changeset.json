@@ -1,0 +1,493 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": ".gitignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": ".prettierignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/saved-workflows.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/features/widget-gauntlet-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-complete.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-historical.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-observe.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/form-field-resolve.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/outcome.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/src/runtime/trace.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-delta.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/form-field-resolve.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/browser/actionability-errors.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/composed-handles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/interactable-scan.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/observe.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/discovery/promote.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/interaction/field-identity.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/interaction/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/interaction/resolution.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/workflow-to-plan.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller-inventory.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller-ref-stability.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/browser/observation-shape.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/discovery/composed-handles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/discovery/interactable-scan.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix-baseline.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/discovery/observe.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/promote-agent-trace.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/executor/fill-element.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/fixtures/artifacts/legacy-attempt-ledger.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/fixtures/puppeteer-migration-replay-baseline.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/helpers/layout-browser.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interaction/field-identity.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/interaction/resolution.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/fill-element-workflow.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/discovery-session.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/plan.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/step.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/task-event.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/workflow.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/schemas/steps.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/schemas/workflow.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/test-helpers/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/css-order-grid.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/describedby-help.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/dynamic-replacement.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/fieldset-groups.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/floating-labels.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/label-after-control.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/no-evidence.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/open-shadow.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/over-cap.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/placeholder-only.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/repeated-sections.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/split-controls.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/stacked-wrappers.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/pages/table-label-cell.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/types.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-055-complete_form_inventory/changeset.json",
+    ".spec-lite/features/FEAT-055-complete_form_inventory/spec.md",
+    ".spec-lite/plan_do_workflow_reliability.md"
+  ],
+  "baseline": {
+    "sha": "3872fd20e2f88105b1552e1d4085436ef944bb81",
+    "capturedAt": "2026-10-17T16:21:53.679Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-055-complete-form-inventory@3872fd20e2f88105b1552e1d4085436ef944bb81"
+  },
+  "featureId": "FEAT-055"
+}

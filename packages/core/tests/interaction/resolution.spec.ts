@@ -18,6 +18,46 @@ const preferred = (role: string, name: string, group: string | null = null): Wid
 });
 
 describe('@no-llm resolveInteractable tiers', () => {
+  it('resolves labels and qualified sections while preserving legacy name-only matching', () => {
+    const entries: AgentInteractable[] = [
+      {
+        ref: 'e1',
+        role: 'textbox',
+        name: '',
+        field: { label: 'City', origin: 'structural', section: 'Billing' },
+      },
+      {
+        ref: 'e2',
+        role: 'textbox',
+        name: '',
+        field: { label: 'City', origin: 'structural', section: 'Shipping' },
+      },
+    ];
+    expect(resolveInteractable('City', entries).kind).toBe('ambiguous');
+    expect(
+      resolveInteractable('City', entries, {
+        preferred: {
+          ref: 'e2',
+          role: 'textbox',
+          name: '',
+          label: 'City',
+          labelOrigin: 'structural',
+          group: null,
+          value: null,
+        },
+        allowEquivalentCopies: true,
+      }).kind,
+    ).toBe('ambiguous');
+    expect(resolveInteractable('Shipping City', entries)).toMatchObject({
+      kind: 'match',
+      tier: 'exact',
+      entry: { ref: 'e2' },
+    });
+    expect(resolveInteractable('Shipping City', entries, { match: 'name' }).kind).toBe('none');
+    expect(
+      resolveInteractable('City', [entries[0]!, { ref: 'e3', role: 'button', name: 'City' }]).kind,
+    ).toBe('ambiguous');
+  });
   it('resolves a literal ref without consulting names', () => {
     const result = resolveInteractable(
       'e2',

@@ -47,6 +47,8 @@ export interface BuildObservationDeps {
 
 /** Model-safe page snapshot used by the run-scoped browser controller. */
 export interface AgentPageSnapshot {
+  readonly ordered: readonly RawInteractable[];
+  readonly inventory: AgentInventory;
   readonly url: string;
   readonly title: string;
   readonly digest: string;
@@ -89,6 +91,7 @@ export async function buildAgentPageSnapshot(
      * record-only callers, which scan here.
      */
     readonly records?: readonly RawInteractable[];
+    readonly scanBounded?: boolean;
   },
 ): Promise<AgentPageSnapshot> {
   await ensureLocatorRuntime(page);
@@ -104,12 +107,14 @@ export async function buildAgentPageSnapshot(
   // emptiness is never read as "the page has no controls" — which would
   // otherwise make the next delta claim every control on the page vanished.
   let degraded = false;
+  let scanBounded = options.scanBounded ?? false;
   let raw: readonly RawInteractable[];
   if (options.records !== undefined) {
     raw = options.records;
   } else {
     const scan = await safeEvaluate(page, scanInteractablesInPage);
     degraded = scan === null;
+    scanBounded = scan?.truncated ?? false;
     raw = scan?.records ?? [];
   }
   const title = clampChars(pageData?.title ?? '', 300);
@@ -122,7 +127,49 @@ export async function buildAgentPageSnapshot(
     title,
     digest,
     interactables,
+    ordered,
+    inventory: inventoryForWindow(ordered, interactables, 0, scanBounded),
     fingerprint: fingerprintFromScan(url, title, ordered, degraded),
+  };
+}
+
+/** Kinds accepted by inventory continuation. */
+export type InventoryKind = 'field' | 'button' | 'link' | 'option';
+/** Counts for the visible window of a bounded scan. */
+export interface AgentInventory {
+  readonly total: number;
+  readonly shown: number;
+  readonly skippedBefore: number;
+  readonly omitted: Partial<Record<InventoryKind, number>>;
+  readonly continueAfter: string | null;
+  readonly scanBounded: boolean;
+}
+/** Classify one scan record without using its accessible name. */
+export function inventoryKind(entry: RawInteractable): InventoryKind {
+  if (entry.field) return 'field';
+  if (entry.role === 'option') return 'option';
+  return entry.kind === 'link' ? 'link' : entry.kind === 'button' ? 'button' : 'field';
+}
+/** Compute counts from the full filtered list, never from the capped window. */
+export function inventoryForWindow(
+  ordered: readonly RawInteractable[],
+  window: readonly RawInteractable[],
+  skippedBefore: number,
+  scanBounded: boolean,
+  continueAfter: string | null = null,
+): AgentInventory {
+  const omitted: Partial<Record<InventoryKind, number>> = {};
+  for (const entry of ordered.slice(skippedBefore + window.length)) {
+    const kind = inventoryKind(entry);
+    omitted[kind] = (omitted[kind] ?? 0) + 1;
+  }
+  return {
+    total: ordered.length,
+    shown: window.length,
+    skippedBefore,
+    omitted,
+    continueAfter,
+    scanBounded,
   };
 }
 

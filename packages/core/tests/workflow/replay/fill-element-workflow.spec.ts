@@ -46,6 +46,26 @@ function workflow(value: string): WorkflowFileType {
 }
 
 describe('@no-llm fill_element workflow schema and translation', () => {
+  it('round-trips optional origin and rejects unknown origins at the step path', () => {
+    const original = workflow('Synthetic');
+    const oldYaml = emitWorkflow(original).yaml;
+    const parsedOld = parseWorkflowYaml(oldYaml);
+    expect(parsedOld.isOk && emitWorkflow(parsedOld.value).yaml).toBe(oldYaml);
+    const marked = WorkflowFile.parse({
+      ...original,
+      steps: original.steps.map((step) => ({ ...step, field_label_origin: 'structural' })),
+    });
+    expect(translate(marked, {}).plan.steps[0]).toMatchObject({ field_label_origin: 'structural' });
+    const invalid = WorkflowFile.safeParse({
+      ...original,
+      steps: original.steps.map((step) => ({ ...step, field_label_origin: 'invented' })),
+    });
+    expect(invalid.success).toBe(false);
+    if (!invalid.success)
+      expect(
+        invalid.error.issues.some((issue) => issue.path.join('.') === 'steps.0.field_label_origin'),
+      ).toBe(true);
+  });
   it('round-trips canonical YAML and keeps the locator lint-clean', () => {
     const original = workflow('{{ param:from }}..{{ param:to }}');
     const parsed = parseWorkflowYaml(emitWorkflow(original).yaml);

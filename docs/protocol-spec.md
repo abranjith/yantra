@@ -1015,6 +1015,7 @@ Resolve and semantically fill one browser field.
 | consequence              | Reversibility hint for the action, or null to default to "unknown".                                                                     |
 | type                     | Semantic fill-element step discriminator.                                                                                               |
 | field_name               | Accessible field name used for fresh resolution.                                                                                        |
+| field_label_origin       | How field_name was derived when it is not the control's accessible name. Absent means accessible name.                                  |
 | locator                  | Fallback locator chain for the target field.                                                                                            |
 | value                    | Semantic value committed through the unified fill engine.                                                                               |
 
@@ -1030,6 +1031,7 @@ Example:
   "consequence": "<consequence>",
   "type": "<type>",
   "field_name": "<field_name>",
+  "field_label_origin": "<field_label_origin>",
   "locator": "<locator>",
   "value": "<value>"
 }

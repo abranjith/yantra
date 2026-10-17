@@ -84,6 +84,8 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+!packages/core/tests/fixtures/artifacts/
+!packages/core/tests/fixtures/artifacts/legacy-attempt-ledger.json
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

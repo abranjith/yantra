@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Internal test helpers — @no-llm / @requires-llm tag plumbing.",
+  "description": "Internal test helpers â€” @no-llm / @requires-llm tag plumbing.",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./layout-matrix": {
+      "types": "./dist/layout-matrix/index.d.ts",
+      "import": "./dist/layout-matrix/index.js"
     }
   },
   "files": [

@@ -1,18 +1,86 @@
 // @no-llm
 import type { FillElementStep } from '@yantra/protocol';
+import { layoutMatrix } from '@yantra/test-helpers/layout-matrix';
 import { describe, expect, it, vi } from 'vitest';
 
+import { wrapPuppeteerPage } from '../../src/browser/session.js';
+import { promoteAgentTrace, type PromotableTraceStep } from '../../src/discovery/promote.js';
 import { InMemoryCaptureStore } from '../../src/executor/capture-store.js';
 import {
   driveFillElement,
+  handleFillElement,
   FillElementExecutionError,
 } from '../../src/executor/step-handlers/fill-element.js';
 import { STEP_DISPATCH } from '../../src/executor/step-handlers/index.js';
 import { realClock, type ExecutionContext } from '../../src/executor/types.js';
 import type { WidgetTarget } from '../../src/widgets/types.js';
+import { translate } from '../../src/workflow/replay/workflow-to-plan.js';
+import type { WorkflowStore } from '../../src/workflow/store.types.js';
+import { layoutBrowser } from '../helpers/layout-browser.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 describe('@no-llm fill_element replay handler', () => {
+  it('replays promoted structural fields and refuses legacy widening before locator fallback', async () => {
+    const browser = await layoutBrowser();
+    try {
+      const fixture = layoutMatrix.find((item) => item.id === 'table-label-cell')!;
+      await browser.page.setContent(fixture.html());
+      const observation = await browser.controller.observe();
+      const trace: PromotableTraceStep[] = [];
+      for (const entry of observation.interactables) {
+        await browser.controller.fill(entry.ref, 'Synthetic');
+        trace.push({
+          kind: 'fill_element',
+          host: '',
+          field: {
+            role: entry.role,
+            name: entry.name,
+            group: null,
+            label: entry.field!.label!,
+            label_origin: entry.field!.origin,
+          },
+          locator: [{ kind: 'css', value: 'input' }],
+          value: { kind: 'literal', value: 'Synthetic' },
+          requires_confirmation: false,
+        });
+      }
+      const store = { save: async () => undefined } as unknown as WorkflowStore;
+      const promoted = await promoteAgentTrace(trace, { workflowName: 'structural-replay', store });
+      expect(promoted.isOk).toBe(true);
+      if (!promoted.isOk) return;
+      const plan = translate(promoted.value, {}).plan;
+      await browser.page.setContent(fixture.html());
+      const facade = wrapPuppeteerPage(browser.page);
+      const ctx = {
+        ...context(),
+        page: facade,
+        locatorHost: facade.locatorHost,
+      } as ExecutionContext;
+      for (const step of plan.steps) {
+        if (step.type !== 'fill_element') throw new Error('Expected a semantic fill');
+        expect(await handleFillElement(step, ctx)).toMatchObject({ kind: 'completed' });
+      }
+      for (const control of fixture.controls)
+        expect(
+          await browser.page.$eval(
+            `[data-fixture-key="${control.key}"]`,
+            (element) => (element as HTMLInputElement).value,
+          ),
+        ).toBe('Synthetic');
+      await browser.page.setContent(fixture.html());
+      const first = plan.steps[0]!;
+      if (first.type !== 'fill_element') throw new Error('Expected a semantic fill');
+      const { field_label_origin: _origin, ...legacy } = first;
+      const result = await handleFillElement(legacy, ctx);
+      expect(result).toMatchObject({
+        kind: 'failed',
+        error: { code: 'WIDGET_TARGET_UNREACHABLE' },
+      });
+      expect(await browser.page.$eval('input', (element) => element.value)).toBe('');
+    } finally {
+      await browser.close();
+    }
+  }, 45_000);
   it('is registered in the executor dispatch table', () => {
     expect(STEP_DISPATCH.has('fill_element')).toBe(true);
   });

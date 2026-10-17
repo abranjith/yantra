@@ -715,6 +715,12 @@ export async function runAgenticTask(
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
       contract,
       fulfillment: new FulfillmentRecord(),
+      fillCensus: {
+        census: async () => {
+          const controller = domain.browser?.controller;
+          return controller?.launched ? controller.fillCensus() : null;
+        },
+      },
       actionLedger: actionLedgerFor({
         controller: domain.browser?.controller ?? null,
         sanitizer,
@@ -1589,7 +1595,12 @@ export async function maybePromoteTrace(input: {
     return {
       ...outcome,
       promotion: result.isOk
-        ? { saved: true, workflowName, omitted: unreplayableItems(outcome) }
+        ? {
+            saved: true,
+            workflowName,
+            omitted: unreplayableItems(outcome),
+            ...(result.value.notes ? { notes: result.value.notes } : {}),
+          }
         : { saved: false, workflowName, error: result.error.message },
     };
   } catch (error) {

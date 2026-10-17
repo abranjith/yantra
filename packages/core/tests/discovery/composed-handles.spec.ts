@@ -36,6 +36,7 @@ describe('@no-llm composed handle ownership', () => {
     const first = handle();
     const second = handle({ element: true });
     const metadata = handle();
+    const truncated = handle({ value: true });
     const elements = handle({
       properties: new Map([
         ['0', first],
@@ -47,14 +48,16 @@ describe('@no-llm composed handle ownership', () => {
       properties: new Map([
         ['records', records],
         ['elements', elements],
+        ['truncated', truncated],
       ]),
     });
 
     const result = await collectComposedInteractables(pageReturning(scan));
 
     expect(result.elements).toEqual([null, null, second]);
+    expect(result.truncated).toBe(true);
     expect(second.dispose).not.toHaveBeenCalled();
-    expectDisposedOnce(scan, records, elements, first, metadata);
+    expectDisposedOnce(scan, records, elements, first, metadata, truncated);
   });
 
   it('disposes earlier elements and all remaining properties when asElement fails partway', async () => {

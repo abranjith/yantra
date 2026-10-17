@@ -117,7 +117,8 @@ export function promotionLine(promotion: PromotionResult): string {
     promotion.omitted.length === 0
       ? ''
       : ` without its ${promotion.omitted.join(' and ')} step (no replay step captures a screenshot yet)`;
-  return `✓ Saved workflow "${promotion.workflowName}"${omitted}. Replay it with: yantra run ${promotion.workflowName}\n`;
+  const notes = promotion.notes?.map((note) => `  ${note}\n`).join('') ?? '';
+  return `✓ Saved workflow "${promotion.workflowName}"${omitted}. Replay it with: yantra run ${promotion.workflowName}\n${notes}`;
 }
 
 async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
