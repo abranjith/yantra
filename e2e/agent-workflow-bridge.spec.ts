@@ -303,7 +303,7 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
     // The run published and promotion saved a workflow.
     expect(outcome.kind).toBe('published');
     if (outcome.kind !== 'published') return;
-    expect(outcome.promotion).toEqual({ saved: true, workflowName: 'fixture-login' });
+    expect(outcome.promotion).toEqual({ saved: true, workflowName: 'fixture-login', omitted: [] });
 
     // trace.json is the raw record of what the run did, observations included:
     // promotion needs them to tell whether a run *ended* by reading the page.

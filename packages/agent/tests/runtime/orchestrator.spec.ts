@@ -485,6 +485,9 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     const outcome = await runAgenticTask(
       {
         goal: 'sign in with @password{p1}',
+        // Promotion needs a fulfilled run; an undeclared `do` run is partial
+        // (FEAT-054 D5), so this privacy check runs as `research`.
+        profile: resolveCommandTaskProfile('research'),
         saveAs: 'masked-login',
         model: { provider: 'fixture', id: 'fixture-model' },
         auth: { mode: 'managed' },

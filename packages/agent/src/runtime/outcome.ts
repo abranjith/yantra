@@ -39,6 +39,8 @@ export interface RequirementsSummary {
   readonly met: number;
   readonly total: number;
   readonly unmet: readonly UnmetRequirement[];
+  /** The met items, by id and label (promotion names the ones it cannot replay). */
+  readonly satisfied: readonly { readonly id: string; readonly label: string }[];
   /** False when the run published without declaring a contract. */
   readonly contractDeclared: boolean;
 }

@@ -1465,7 +1465,7 @@ function settleOutcome(
 
 function requirementsSummary(evaluation: FulfillmentEvaluation | null): RequirementsSummary {
   if (!evaluation?.contractDeclared) {
-    return { met: 0, total: 0, unmet: [], contractDeclared: false };
+    return { met: 0, total: 0, unmet: [], satisfied: [], contractDeclared: false };
   }
   return {
     met: evaluation.met,
@@ -1473,6 +1473,9 @@ function requirementsSummary(evaluation: FulfillmentEvaluation | null): Requirem
     unmet: evaluation.items
       .filter((item) => item.status === 'unmet')
       .map((item) => ({ id: item.id, label: item.label, reason: item.reason })),
+    satisfied: evaluation.items
+      .filter((item) => item.status === 'met')
+      .map((item) => ({ id: item.id, label: item.label })),
     contractDeclared: true,
   };
 }
@@ -1522,9 +1525,13 @@ function terminationReasonFor(
 
 /**
  * Promote the run's browser trace into a saved workflow when `--save-as` was
- * requested and the run published a result. Promotion is best-effort: any
- * failure (no store, lint error, name collision, save error) is reported on the
- * outcome but never changes a published run into a failure (plan §6).
+ * requested and the run was `fulfilled` (FEAT-054 D5): a partial trace must
+ * not become a workflow. Promotion is best-effort: any failure (no store,
+ * lint error, name collision, save error) is reported on the outcome but never
+ * changes the run's outcome (plan §6).
+ *
+ * A fulfilled item no workflow step can replay — today, a screenshot — is left
+ * out of the workflow, and `omitted` names it so the terminal can say so.
  *
  * Exported for direct testing: the terminal path that reaches it requires a
  * provider that actually executes browser tools (only those populate the trace),
@@ -1545,6 +1552,12 @@ export async function maybePromoteTrace(input: {
   const workflowName = request.saveAs?.trim();
   if (workflowName === undefined || workflowName.length === 0) return outcome;
   if (outcome?.kind !== 'published') return outcome;
+  if (taskOutcomeOf(outcome) !== 'fulfilled') {
+    return {
+      ...outcome,
+      promotion: { saved: false, workflowName, error: partialPromotionError(outcome) },
+    };
+  }
 
   const store = environment?.workflowStore;
   if (!store) {
@@ -1576,7 +1589,7 @@ export async function maybePromoteTrace(input: {
     return {
       ...outcome,
       promotion: result.isOk
-        ? { saved: true, workflowName, omitted: [] }
+        ? { saved: true, workflowName, omitted: unreplayableItems(outcome) }
         : { saved: false, workflowName, error: result.error.message },
     };
   } catch (error) {
@@ -1589,6 +1602,28 @@ export async function maybePromoteTrace(input: {
       },
     };
   }
+}
+
+/** Why a partial run was not saved as a workflow. */
+function partialPromotionError(
+  outcome: Extract<AgenticTaskOutcome, { kind: 'published' }>,
+): string {
+  const requirements = outcome.requirements;
+  const detail = !requirements?.contractDeclared
+    ? 'no task contract was declared'
+    : `${requirements.met} of ${requirements.total} requirements met`;
+  return `Not saved: the run was partial (${detail}). Only a fulfilled run is saved as a workflow.`;
+}
+
+/**
+ * Labels of met items no workflow step can replay. No step captures a
+ * screenshot yet (TODO: the zero-LLM `capture` verb), so every met artifact
+ * is saved without its step.
+ */
+function unreplayableItems(outcome: Extract<AgenticTaskOutcome, { kind: 'published' }>): string[] {
+  return (outcome.requirements?.satisfied ?? [])
+    .filter((item) => item.id.startsWith('artifact:'))
+    .map((item) => item.label);
 }
 
 /** Map a deterministic run outcome onto the model-visible workflow tool result. */

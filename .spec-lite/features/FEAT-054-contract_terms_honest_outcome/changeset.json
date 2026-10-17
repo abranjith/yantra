@@ -56,6 +56,12 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/cli/tests/commands/do-promotion.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "apps/cli/tests/commands/do.spec.ts",
       "status": "M",
       "role": "implement",
@@ -75,7 +81,7 @@
     },
     {
       "path": "apps/cli/tests/render/run-list.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -102,6 +108,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/sites.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/test-form.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
@@ -390,6 +408,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/runtime/promote-synthesis.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
