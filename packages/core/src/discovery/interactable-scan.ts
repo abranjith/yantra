@@ -1,5 +1,23 @@
 /// <reference lib="dom" />
 
+/** Options for the single serialized composed-tree scan. */
+export interface ScanOptions {
+  readonly withElements?: boolean;
+  readonly max?: number;
+  readonly elementKeys?: boolean;
+  readonly challengeTokens?: readonly string[];
+  /**
+   * Membership override for a caller asking a different question.
+   *
+   * The deterministic replay port legitimately addresses a slightly wider
+   * set than the agent observation does, and it describes the handles
+   * itself. Sharing the **walk** while letting each caller keep its own
+   * membership is what stops a third copy of the traversal appearing —
+   * which is the drift this whole scan exists to remove.
+   */
+  readonly selector?: string;
+}
+
 /** One candidate element's raw signal, before ranking/capping. */
 export interface RawFieldEvidence {
   readonly explicit: string | null;
@@ -139,24 +157,7 @@ export interface InteractableScan {
  * than two sharing a helper: a helper defined outside would not survive
  * serialization.
  */
-export function scanInteractablesInPage(
-  options: {
-    readonly withElements?: boolean;
-    readonly max?: number;
-    readonly elementKeys?: boolean;
-    readonly challengeTokens?: readonly string[];
-    /**
-     * Membership override for a caller asking a different question.
-     *
-     * The deterministic replay port legitimately addresses a slightly wider
-     * set than the agent observation does, and it describes the handles
-     * itself. Sharing the **walk** while letting each caller keep its own
-     * membership is what stops a third copy of the traversal appearing —
-     * which is the drift this whole scan exists to remove.
-     */
-    readonly selector?: string;
-  } = {},
-): InteractableScan {
+export function scanInteractablesInPage(options: ScanOptions = {}): InteractableScan {
   const withElements = options.withElements === true;
   const max =
     typeof options.max === 'number' && Number.isFinite(options.max)

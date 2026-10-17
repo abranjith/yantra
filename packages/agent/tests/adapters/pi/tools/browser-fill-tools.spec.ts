@@ -52,7 +52,7 @@ describe('@no-llm browser_fill_form engine delegation', () => {
         const fixture = layoutMatrix.find((item) => item.id === id)!;
         await browser.page.setContent(fixture.html());
         const browserDeps: BrowserToolDeps = {
-          controller: browser.controller,
+          controller: browser.controller as unknown as AgentBrowserController,
           ethics: allowingEthics(),
           secretResolver: null,
           sensitiveScreenLatch: new SensitiveScreenLatch(),
@@ -726,6 +726,14 @@ describe('@no-llm browser_fill_element contract', () => {
         title: '',
         digest: '',
         digestUnchanged: false,
+        inventory: {
+          total: 0,
+          shown: 0,
+          skippedBefore: 0,
+          omitted: {},
+          continueAfter: null,
+          scanBounded: false,
+        },
         interactables: [],
       }),
       click: async () => undefined,
@@ -1602,6 +1610,14 @@ class FormController {
       title: 'Form',
       digest: 'form',
       digestUnchanged: false,
+      inventory: {
+        total: 0,
+        shown: 0,
+        skippedBefore: 0,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: false,
+      },
       interactables,
     };
   }

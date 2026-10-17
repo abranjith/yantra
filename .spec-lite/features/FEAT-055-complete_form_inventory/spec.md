@@ -280,7 +280,7 @@ An unlabeled field with a structural label:
 
 ### TASK-001: A truncated observation states its totals, every control within the resolution bound has a live ref, and the engine can take a fill census
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Scan: return `truncated` (the stack was non-empty when `collected` reached `max`). Add `elementKeys` and `challengeTokens`. Collect the census subset of `RawFieldEvidence` (`inputType`, `readOnly`, `disabled`, `required`, `radioGroup`, `checkboxSet`, `humanVerification`, `hiddenInput`) for fillable roles; TASK-004 completes the evidence. Drop `hiddenInput` records before anything is counted.
   - `buildAgentPageSnapshot`: return `ordered` (the whole visible list), `interactables` (the window, unchanged default of first `maxInteractables`), and `inventory` computed from `ordered` by `InventoryKind`.
   - Controller `observe()`:
@@ -292,19 +292,19 @@ An unlabeled field with a structural label:
   - `fill-eligibility.ts` per deviation 2. `classifyFillExemption(facts)` reads `FillControlFacts`, with `rendered` taken from `visible`.
   - Controller `fillCensus(): Promise<FillCensus>`: one `observe({ cap: 400, trackDigest: false })`, then census entries for every fillable record (visible or not), with `groupKey`, label (TASK-004 improves it; until then `name` or `(unlabeled <role>)`), and exemption. A thrown read returns `{ complete: false, controls: [] }` with the epoch, and never throws.
   - Agent `RunServices.fillCensus`: call `controller.fillCensus()` when the browser launched, else null. Replace FEAT-054's stub if present.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - jsdom scan: 450 candidates with `max: 400` → `truncated: true`; 10 candidates → false; `input[type=hidden]` is absent from records; the no-mutation composed-markup assertion still holds with `elementKeys: true`.
   - `buildAgentPageSnapshot`: 98 visible (60 fields, 20 buttons, 18 links) with cap 50 → `total: 98`, `shown: 50`, and `omitted` per kind summing to 48. 30 visible → no omissions.
   - Real Chrome (`about:blank` navigation, then a generated 98-control page): the first observation shows 50 entries with a projected `inventory`; `e75` (never shown) is accepted by `browser_fill_element` and `browser_click` resolution without a re-observe; a 30-control page has no `inventory` key.
   - `capturePng` marks count equals the window size, not the registry size.
   - Census: radio group members share one `groupKey`; a checkbox set in a fieldset shares one; split phone parts have distinct null keys. A disabled field → `disabled`. `display:none` field → `hidden` with a ref. A field inside a `g-recaptcha` container → `human_verification`. `type=password` and `autocomplete=cc-number` → eligible. More than 400 candidates → `complete: false`. The page read count is exactly one per census (`vi.spyOn(controller, 'observe')`).
   - Classifier precedence table (shared with FEAT-054 TASK-006).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (observation totals and the `inventory` block).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (observation totals and the `inventory` block).
 - **Verify**: `cd packages/core && npx vitest run tests/discovery/interactable-scan.spec.ts tests/discovery/composed-scan.spec.ts tests/discovery/observe.spec.ts tests/interaction/fill-eligibility.spec.ts tests/browser/agent-controller-inventory.spec.ts tests/browser/set-of-marks.spec.ts`; `npx turbo run build --filter=@yantra/core`; `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-tools.spec.ts`.
 
 ### TASK-002: The model can page through the whole inventory with `browser_observe { after, kinds }`
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Core `observe({ window })`:
     - Filter `ordered` by `kinds`, start after the `after` ref's position, and take up to the cap.
     - `skippedBefore` is the filtered count before the window.
@@ -315,18 +315,18 @@ An unlabeled field with a structural label:
     - The description says: when `inventory` is present the page has more controls than were shown; pass `continue_after` as `after` to list the next window; use `kinds: ["field"]` to list only fillable controls; windowed results carry no digest.
     - Map the cursor failure to the catalog entry `STALE_ELEMENT_REF / continuation-cursor`. The hint is to call `browser_observe` without `after`.
   - Record nothing in the trace for a windowed observation. It is a navigation aid, and the terminal-read rule in `promote.ts` must not treat it as the run's answer.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Core windowing: `after: e50` on 98 → `shown: 48`, `skippedBefore: 50`, no `continueAfter`. `kinds: ['field']` → only field-kind entries, `total: 60`. `after` plus `kinds` compose. An `after` ref that vanished → typed stale error. Refs in a later window equal the refs `fillCensus` reports for the same controls.
   - Agent tool: a parameterless call is byte-identical to before on a 30-control page. A windowed call projects `window`, `skipped_before`, and no `digest`. The `digest_unchanged` state of the next unwindowed call is unaffected by a windowed call.
   - The message catalog test resolves `browser_observe` for both new entries and checks their required detail keys.
   - Real Chrome: on a 98-control page, following `continue_after` until it is absent visits every visible control exactly once.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (continuation and kind scope).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (continuation and kind scope).
 - **Verify**: `cd packages/core && npx vitest run tests/discovery/observe.spec.ts tests/browser/agent-controller-inventory.spec.ts`; build core; `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-tools.spec.ts tests/runtime/message-catalog.spec.ts`.
 - **Depends on**: TASK-001
 
 ### TASK-003: A synthetic layout matrix pins today's resolution baseline and defines ground truth for every later slice
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `@yantra/test-helpers/layout-matrix`: a Vitest-free subpath export (memory: harness modules must not load Vitest). Each page exports `{ id, pattern, html(): string, controls: MatrixControl[] }`.
   - **`MatrixControl`**: `{ key; role; expect: { kind: 'label'; query: string; origin: LabelOrigin } | { kind: 'ambiguous'; query: string; with: string[] } | { kind: 'ref-only' } }`. Fixture markup tags each control with `data-fixture-key`, which only tests read.
   - Pages (plan §10), all synthetic, with no recreated site and no site names:
@@ -349,21 +349,21 @@ An unlabeled field with a structural label:
     - **Safety (gates now):** zero wrong-target matches on every page.
     - **Coverage (recorded now):** write per-page counts of `resolved`, `ambiguous`, and `unresolvable` to a baseline JSON. TASK-005 turns coverage into a gate.
   - Boundary rule: no file under `packages/*/src` contains `data-fixture-`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Every page's HTML parses, every `data-fixture-key` is unique on its page, and every `with` list names keys on the same page (a fixture census like the widget gauntlet's).
   - The matrix spec itself: the safety assertion passes on today's code, and the baseline file exists and is UTF-8 without control bytes (explicit byte scan).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/widget-gauntlet-harness.md` (the layout matrix, its expectation grammar, and the reuse contract for FEAT-057 to FEAT-060).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/widget-gauntlet-harness.md` (the layout matrix, its expectation grammar, and the reuse contract for FEAT-057 to FEAT-060).
 - **Verify**: `pnpm --filter @yantra/test-helpers build`; `cd packages/core && npx vitest run tests/discovery/layout-matrix.spec.ts tests/boundary-rules.spec.ts`.
 - **Depends on**: TASK-001 (uses the 400-entry registry)
 
 ### TASK-004: The shared core module derives each field's label, origin, confidence, section, and constraints from structural evidence, never from order
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Scan: collect the full `RawFieldEvidence` (§2), with the structural label rules, the exclusions, and the `adjacent` geometry flag. Keep every walk bounded as §2 states. The work stays inside the existing pass.
   - New `interaction/field-identity.ts`: `deriveFieldIdentity`, `projectFieldIdentity` with trimming, `resolvableNames`, and the constants.
   - Controller: compute `FieldIdentity` once per record in `observe()` and keep it on `InteractableRecord`. The census `label` now uses `FieldIdentity.label`.
   - Nothing is model-visible yet.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Pure derivation table:
     - explicit beats structural;
     - structural beats placeholder;
@@ -382,19 +382,19 @@ An unlabeled field with a structural label:
     - a legend labels the radio group;
     - a section comes from the legend first, then the preceding heading inside the form.
   - Real Chrome (layout matrix): expected origins match on pages 1–11. The `no-evidence` page yields `none` for every control, and no control's label equals another control's expected label (anti-zip). The scan stays one evaluate per observe, counted by `vi.spyOn(page, 'evaluateHandle')`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (how field labels are found and what each origin means).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (how field labels are found and what each origin means).
 - **Verify**: `cd packages/core && npx vitest run tests/interaction/field-identity.spec.ts tests/discovery/interactable-scan.spec.ts tests/discovery/layout-matrix.spec.ts`.
 - **Depends on**: TASK-001, TASK-003
 
 ### TASK-005: Every observation shows bounded field identity, and every field tool resolves a structural or section-qualified label, or returns the actual candidates
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `projectAgentInteractable` adds `field` via `projectFieldIdentity`, under the omission rules in §2. Assert both byte budgets in development builds by throwing on overrun. Production trims and never throws.
   - `resolveInteractable`: candidates match over `resolvableNames(entry)` for `match: 'name-or-label'`, and over `[name]` for `'name'`. Tiers and the tie-break ladder are unchanged. The `preferred` comparison uses `label` when `name` is empty. `offered` covers every entry with a resolvable name.
   - Agent `toWidgetTarget` and fill-engine reacquisition carry and query `label`. Reacquisition passes `preferred` with `label` and `labelOrigin`.
   - Tool descriptions for `browser_observe`, `browser_fill_element`, and `browser_fill_form` add one sentence: a field's `field.label` and `section` are usable as its name; `origin` says where the label came from; `hint` values are developer attributes, not labels.
   - Flip the layout-matrix coverage from recorded to **gated**: every `label` expectation resolves to its key, every `ambiguous` expectation returns exactly its `with` set, and every `ref-only` control resolves by ref. The baseline file keeps the pre-change numbers for the record.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Resolver:
     - a structural label resolves at `exact`;
     - "City" on billing plus shipping → `ambiguous` with both, and "Shipping City" → the shipping match through the qualified name;
@@ -407,13 +407,13 @@ An unlabeled field with a structural label:
   - `observation-shape.spec.ts` pins the new optional keys.
   - Agent: `browser_fill_form` with `{ field: "First name" }` on `table-label-cell` commits to the correct control, checked by reading the fixture key back; the same on `css-order-grid`.
   - Layout-matrix gate green on all 14 pages.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the `field` block and addressing fields by label or section).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the `field` block and addressing fields by label or section).
 - **Verify**: `cd packages/core && npx vitest run tests/interaction/resolution.spec.ts tests/browser/observation-shape.spec.ts tests/discovery/layout-matrix.spec.ts tests/fill`; build core; `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-fill-tools.spec.ts tests/adapters/pi/tools/form-field-resolve.spec.ts`.
 - **Depends on**: TASK-004
 
 ### TASK-006: A ref follows its element; text added nearby never renames a field, and a replaced control inherits a ref only when its labelled identity verifies
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Controller ref minting:
     1. A known `elementKey` keeps its ref.
     2. An unknown key reuses a ref from `refIdByIdentity` only when all of these hold: the identity's `origin` is not `none`, exactly one current record carries that `identityKey`, and the ref's previous element is absent from this scan. That is verified re-identification.
@@ -430,13 +430,13 @@ An unlabeled field with a structural label:
   - **Two identical replacements:** two new same-identity nodes → no reuse; stale with candidates.
   - Picker-copy healing for named buttons is unchanged (the existing duplicate-trigger fixture stays green).
   - The widget gauntlet is unchanged: same outcomes and the same mutation and read counts.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (ref lifetime and when a ref is reported stale).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (ref lifetime and when a ref is reported stale).
 - **Verify**: `cd packages/core && npx vitest run tests/browser/agent-controller-ref-stability.spec.ts tests/browser/agent-controller.spec.ts tests/interaction/widget-regressions.spec.ts`; build core; `npx turbo run build && cd e2e && npx vitest run widget-gauntlet.spec.ts`.
 - **Depends on**: TASK-004
 
 ### TASK-007: A failed lookup offers fillable controls with refs and contextual labels in the message the model reads
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Move `FORM_FIELD_NOT_FOUND` and `FORM_FIELD_AMBIGUOUS` into `runtime/messages.ts` as `(code, cause)` entries. Each declares its detail keys and capability.
   - **Not found:**
     - Offer up to 8 field-kind entries from the same 400-entry observation, enabled ones first, ranked by token overlap between `resolvableNames` and the query, ties by document order.
@@ -445,18 +445,18 @@ An unlabeled field with a structural label:
     - Links and buttons are never offered for a fill lookup.
   - **Ambiguous:** list the actual candidates with the same rendering. When sections differ, show the section-qualified names the resolver accepts (TASK-005).
   - All of this rides in `message`, not only in `details`. `details.candidates` keeps the structured form for audit.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - On a page of 40 unlabeled fields plus 10 named links, "Email" not found → the message lists fields and no links; with structural labels, "Emial" ranks the "Email" field first.
   - Ambiguous billing/shipping → the message contains both qualified names, and re-issuing with one resolves (the advice names an engineered path).
   - The message catalog test: both entries declare their detail keys, the payload carries them, and their capabilities resolve against the active tool catalog.
   - Byte bound: the not-found message stays within the existing failure message cap.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (what a not-found or ambiguous fill returns).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (what a not-found or ambiguous fill returns).
 - **Verify**: `cd packages/agent && npx vitest run tests/adapters/pi/tools/form-field-resolve.spec.ts tests/runtime/message-catalog.spec.ts tests/adapters/pi/tools/browser-fill-tools.spec.ts`.
 - **Depends on**: TASK-005
 
 ### TASK-008: Promoted fills keep their label origin, replay resolves through the shared identity module, and every existing workflow keeps its meaning
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Protocol: `field_label_origin` on `WorkflowStep` `fill_element` and on `FillElementStep`, with `.describe()` text. `workflow-to-plan.ts` passes it through.
   - Agent trace: `fill_element.field` gains `label` and `label_origin`.
   - `promote.ts`, using the trace field:
@@ -466,16 +466,18 @@ An unlabeled field with a structural label:
   - Replay port:
     - `observe()` collects with the shared scan and takes `name` and `field` from each record. The private `describe()` is kept only for elements without a record (for example `gridcell`).
     - `resolveField` passes `match: step.field_label_origin ? 'name-or-label' : 'name'`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Protocol: old workflow YAML (no field) validates and round-trips byte-identically. An unknown origin value rejects at path `steps.N.field_label_origin`.
   - Promote: three trace steps (explicit, structural, none) → `fill_element` without origin, `fill_element` with `structural`, and a `fill` step plus a note.
   - Replay (real Chrome): a workflow promoted from a scripted run on `table-label-cell` replays every `fill_element` step onto the right controls, checked through fixture keys. The same workflow with `field_label_origin` removed fails `WIDGET_TARGET_UNREACHABLE` on the first structural step, before its locator fallback runs. That proves legacy steps are not silently widened.
   - Characterization: every existing replay suite (`fill-element.spec.ts`, `fill-element-workflow.spec.ts`, `replay-page-settling.spec.ts`, `input-characterization-browser.spec.ts`) passes unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md` (`field_label_origin`, and how unlabeled fields are saved) and `docs/protocol-spec.md` (generated from the Zod descriptions).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md` (`field_label_origin`, and how unlabeled fields are saved) and `docs/protocol-spec.md` (generated from the Zod descriptions).
 - **Verify**: `cd packages/protocol && npx vitest run`; `npx turbo run build --filter=@yantra/core`; `cd packages/core && npx vitest run tests/discovery/promote-agent-trace.spec.ts tests/executor/fill-element.spec.ts tests/workflow/replay/fill-element-workflow.spec.ts`; finally `npx turbo run lint typecheck` and `npx turbo run build && cd e2e && npx vitest run`.
 - **Depends on**: TASK-005, TASK-006
 
 > Implementation note: the existing fill-plan `FieldIdentity` was renamed `FillFieldIdentity` to distinguish it from the new shared semantic identity. Not-found characterization expectations now exclude buttons and links, as TASK-007 requires.
+
+> Verification repair: the previously formatted migration replay baseline was restored to the compact JSON emitted by its unchanged characterization test and excluded from Prettier. The suite was explicitly enabled against local Chrome.
 
 ## 6. Cross-Cutting Concerns
 
@@ -511,6 +513,6 @@ An unlabeled field with a structural label:
 - [x] TASK-005: Model-visible field identity within byte budgets; label and section-qualified resolution; matrix coverage gate
 - [x] TASK-006: Element-keyed refs and verified re-identification
 - [x] TASK-007: Fillable-control not-found and ambiguity feedback in the model-visible message
-- [ ] TASK-008: `field_label_origin` promotion and shared-identity replay
+- [x] TASK-008: `field_label_origin` promotion and shared-identity replay
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

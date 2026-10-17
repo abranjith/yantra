@@ -9,7 +9,12 @@ import { beginMigrationBrowserFixture } from './migration-browser.js';
 /** An isolated, offline real-browser fixture shared by form identity suites. */
 export async function layoutBrowser() {
   const fixture = await beginMigrationBrowserFixture();
-  const logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
+  const logger = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+  };
   const provider = new LocalBrowserProvider({ profileStore: new LocalProfileStore(), logger });
   let page: PuppeteerPage;
   const controller = new AgentBrowserController({

@@ -1691,6 +1691,16 @@
                                 "minLength": 1,
                                 "description": "Accessible field name used for fresh resolution."
                               },
+                              "field_label_origin": {
+                                "type": "string",
+                                "enum": [
+                                  "explicit",
+                                  "structural",
+                                  "placeholder",
+                                  "title"
+                                ],
+                                "description": "How field_name was derived when it is not the control's accessible name. Absent means accessible name."
+                              },
                               "locator": {
                                 "anyOf": [
                                   {

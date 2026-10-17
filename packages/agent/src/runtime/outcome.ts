@@ -24,6 +24,7 @@ export type PromotionResult =
       readonly workflowName: string;
       /** Labels of fulfilled items no workflow step can replay, saved without them. */
       readonly omitted: readonly string[];
+      readonly notes?: readonly string[];
     }
   | { readonly saved: false; readonly workflowName: string; readonly error: string };
 

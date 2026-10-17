@@ -7,6 +7,13 @@ import { SecurityScope } from './security.js';
 const STEP_ID_PATTERN = /^s[0-9]+$/;
 const CAPTURE_ALIAS_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+/** Persisted provenance for a semantic field query. */
+export const FieldLabelOrigin = z
+  .enum(['explicit', 'structural', 'placeholder', 'title'])
+  .describe(
+    "How field_name was derived when it is not the control's accessible name. Absent means accessible name.",
+  );
+
 /** Step types that may carry `requires_confirmation`. */
 const CONFIRMABLE_STEP_TYPES = new Set(['navigate', 'click', 'fill', 'fill_element']);
 
@@ -161,6 +168,7 @@ export const FillElementStep = z
     ...ConfirmationAnnotations,
     type: z.literal('fill_element').describe('Semantic fill-element step discriminator.'),
     field_name: z.string().min(1).describe('Accessible field name used for fresh resolution.'),
+    field_label_origin: FieldLabelOrigin.optional(),
     locator: LocatorChain.describe('Fallback locator chain for the target field.'),
     value: ValueRef.describe('Semantic value committed through the unified fill engine.'),
   })

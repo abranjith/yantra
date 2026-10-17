@@ -152,13 +152,12 @@ export function projectFieldIdentity(
 /** The single vocabulary for name and contextual-label resolution. */
 export function resolvableNames(entry: AgentInteractable): readonly string[] {
   const label = entry.field?.label ?? (entry.field?.origin !== 'none' ? entry.name : '');
+  const section = entry.field?.section ?? entry.group;
   return [
     ...new Set(
-      [
-        entry.name,
-        label,
-        entry.field?.section && label ? `${entry.field.section} ${label}` : '',
-      ].filter((value): value is string => Boolean(value?.trim())),
+      [entry.name, label, section && label ? `${section} ${label}` : ''].filter(
+        (value): value is string => Boolean(value?.trim()),
+      ),
     ),
   ];
 }

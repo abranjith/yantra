@@ -3,6 +3,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { layoutBrowser } from '../helpers/layout-browser.js';
 
 describe('@no-llm element-keyed refs and verified replacements', () => {
+  it('keeps refs through history changes but never reuses one across documents', async () => {
+    await browser.page.setContent('<input aria-label="Email">');
+    const ref = (await browser.controller.observe()).interactables[0]!.ref;
+    await browser.page.evaluate(() => {
+      history.pushState({}, '', '#route');
+    });
+    expect((await browser.controller.observe()).interactables[0]!.ref).toBe(ref);
+    await browser.page.goto('about:blank');
+    await browser.page.setContent('<input aria-label="Email">');
+    expect((await browser.controller.observe()).interactables[0]!.ref).not.toBe(ref);
+    await expect(browser.controller.fill(ref, 'Wrong')).rejects.toMatchObject({
+      code: 'STALE_ELEMENT_REF',
+    });
+    expect(await browser.page.$eval('input', (element) => element.value)).toBe('');
+  }, 45_000);
   let browser: Awaited<ReturnType<typeof layoutBrowser>>;
   beforeEach(async () => {
     browser = await layoutBrowser();

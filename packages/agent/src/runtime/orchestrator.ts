@@ -1595,7 +1595,12 @@ export async function maybePromoteTrace(input: {
     return {
       ...outcome,
       promotion: result.isOk
-        ? { saved: true, workflowName, omitted: unreplayableItems(outcome) }
+        ? {
+            saved: true,
+            workflowName,
+            omitted: unreplayableItems(outcome),
+            ...(result.value.notes ? { notes: result.value.notes } : {}),
+          }
         : { saved: false, workflowName, error: result.error.message },
     };
   } catch (error) {

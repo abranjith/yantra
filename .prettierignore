@@ -14,6 +14,9 @@ packages/core/tests/extraction/__fixtures__/malformed.html
 # Golden template twin preserves directive placement for byte-identical rendering.
 packages/core/tests/report-template/fixtures/exec-brief-guidance.md
 
+# Byte-for-byte replay artifact from the migration characterization suite.
+packages/core/tests/fixtures/puppeteer-migration-replay-baseline.json
+
 # Stale agent worktrees managed outside the repo.
 .claude/
 

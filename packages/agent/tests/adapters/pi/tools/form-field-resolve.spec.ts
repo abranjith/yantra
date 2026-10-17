@@ -13,6 +13,14 @@ function observation(
     title: 'Search',
     digest: 'a page',
     digestUnchanged: false,
+    inventory: {
+      total: 0,
+      shown: 0,
+      skippedBefore: 0,
+      omitted: {},
+      continueAfter: null,
+      scanBounded: false,
+    },
     interactables: entries.map(([ref, role, name]) => ({ ref, role, name })),
   };
 }

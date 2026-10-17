@@ -534,7 +534,16 @@ export class AgentBrowserController implements WidgetPort {
     // Stamp the document these identities are being read from, so a later heal
     // can tell an in-page route change (marker survives) from a real navigation
     // (new window, marker gone) without trusting the commit event alone.
-    this.documentMarker = await this.stampDocument();
+    const documentMarker = await this.stampDocument();
+    if (
+      documentMarker === null ||
+      (this.documentMarker !== null && this.documentMarker !== documentMarker)
+    ) {
+      this.refIdByIdentity.clear();
+      this.refByElementKey.clear();
+      this.identityByRef.clear();
+    }
+    this.documentMarker = documentMarker;
     // The epoch is the controller's to supply — it is the only component that
     // stamps and reads the marker — so the builder's fingerprint is completed
     // here rather than being handed a page facade of its own.
@@ -1445,8 +1454,8 @@ export class AgentBrowserController implements WidgetPort {
     this.settler = new PageSettler(page, {
       onNavigationCommitted: () => {
         this.invalidateObservation();
-        this.refIdByIdentity.clear();
-        this.refByElementKey.clear();
+        // The next observation compares document markers before reusing refs.
+        // A history-API commit keeps both the memo and its element identities.
         // `identityByRef` deliberately survives: this event cannot tell a
         // history-API navigation from a real one, and single-page sites fire it
         // while every element stays put. Healing checks the document marker

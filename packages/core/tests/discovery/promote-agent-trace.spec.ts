@@ -37,6 +37,61 @@ const navigate: PromotableTraceStep = {
 };
 
 describe('@no-llm promoteAgentTrace', () => {
+  it('preserves label provenance and discloses locator-only unlabeled fills', async () => {
+    const store = makeFakeStore();
+    const fields: PromotableTraceStep[] = [
+      {
+        kind: 'fill_element',
+        host: 'example.test',
+        field: {
+          role: 'textbox',
+          name: 'Email',
+          group: null,
+          label: 'Email',
+          label_origin: 'explicit',
+        },
+        locator: [{ kind: 'css', value: '#email' }],
+        value: { kind: 'literal', value: 'one' },
+        requires_confirmation: false,
+      },
+      {
+        kind: 'fill_element',
+        host: 'example.test',
+        field: {
+          role: 'textbox',
+          name: '',
+          group: null,
+          label: 'City',
+          label_origin: 'structural',
+        },
+        locator: [{ kind: 'css', value: '#city' }],
+        value: { kind: 'literal', value: 'two' },
+        requires_confirmation: false,
+      },
+      {
+        kind: 'fill_element',
+        host: 'example.test',
+        field: { role: 'textbox', name: '', group: null, label: null, label_origin: 'none' },
+        locator: [{ kind: 'css', value: '#other' }],
+        value: { kind: 'literal', value: 'three' },
+        requires_confirmation: false,
+      },
+    ];
+    const result = await promoteAgentTrace(fields, { workflowName: 'field-labels', store });
+    expect(result.isOk).toBe(true);
+    if (!result.isOk) return;
+    expect(result.value.steps[0]).toMatchObject({ verb: 'fill_element', field_name: 'Email' });
+    expect(result.value.steps[0]).not.toHaveProperty('field_label_origin');
+    expect(result.value.steps[1]).toMatchObject({
+      verb: 'fill_element',
+      field_name: 'City',
+      field_label_origin: 'structural',
+    });
+    expect(result.value.steps[2]).toMatchObject({ verb: 'fill', submit: false });
+    expect(result.value.notes).toEqual([expect.stringContaining('s3')]);
+    expect(store.saved[0]).not.toHaveProperty('notes');
+    expect(WorkflowFileSchema.safeParse(store.saved[0]).success).toBe(true);
+  });
   it('promotes a fill+click+extract trace into a valid, lint-clean workflow', async () => {
     const store = makeFakeStore();
     const steps: PromotableTraceStep[] = [

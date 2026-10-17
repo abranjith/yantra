@@ -397,6 +397,8 @@ async function appendSemanticTrace(
       role: described.role,
       name: described.name,
       group: described.group ?? null,
+      label: target.label ?? (described.name.trim() ? described.name : null),
+      label_origin: target.labelOrigin ?? (described.name.trim() ? 'explicit' : 'none'),
     },
     locator: ranked.length > 0 ? ranked : toCandidateChain(described.role, described.name),
     value,

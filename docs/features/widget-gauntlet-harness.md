@@ -7,6 +7,10 @@ the protocol-driver seam and the real agent-tool seam. A companion message
 catalog keeps model-visible interaction advice complete, distinct, and tied to
 capabilities Yantra can actually execute.
 
+The synthetic form layout matrix also checks that every declared control can
+be addressed by label, returned as an explicit ambiguity, or used by ref when
+there is no label evidence.
+
 This is a maintainer and integrator feature. It adds no CLI command and does not
 change any stable interaction error code.
 
@@ -171,6 +175,71 @@ file's leading HTML comment and must not occur in the fixture body or anywhere
 under the core or agent production-source trees. Current fixtures otherwise
 record generic patterns and, where relevant, originating run IDs.
 
+### Gates field identity across 14 synthetic form layouts
+
+FEAT-055 adds a separate layout matrix in
+`packages/test-helpers/src/layout-matrix/`. Its real-Chrome suite,
+`packages/core/tests/discovery/layout-matrix.spec.ts`, loads generated HTML
+with `setContent` after opening `about:blank`. The pages describe generic DOM
+structures and contain no recreated website.
+
+| Fixture               | Ground truth                                                              |
+| --------------------- | ------------------------------------------------------------------------- |
+| `table-label-cell`    | Two label/control pairs in the same table row                             |
+| `stacked-wrappers`    | Label text above the control inside its wrapper                           |
+| `css-order-grid`      | Visual order differs from DOM order                                       |
+| `floating-labels`     | Label follows the input; placeholder is a space                           |
+| `placeholder-only`    | Placeholder and title supply separate fallback labels                     |
+| `fieldset-groups`     | Shared legends produce explicit radio/checkbox ambiguity                  |
+| `label-after-control` | Wrapper text follows its control                                          |
+| `split-controls`      | Individually named phone parts and Month/Day/Year selects                 |
+| `describedby-help`    | Help and error text must not become the field label                       |
+| `repeated-sections`   | Billing, Shipping, and Office qualify field queries                       |
+| `open-shadow`         | Wrapper label inside an open shadow root                                  |
+| `dynamic-replacement` | A labelled input and a button that replaces its node                      |
+| `over-cap`            | 70 fields with mixed explicit/structural labels plus 30 buttons and links |
+| `no-evidence`         | Unbound text supplies no label to either unnamed input                    |
+
+Each `MatrixPage` supplies `id`, `pattern`, `html()`, and `controls`. A
+`MatrixControl` supplies its fixture `key`, `role`, and one expectation:
+
+- `{ kind: 'label', query, origin }`: the query must resolve to that exact
+  control, and the derived label origin must match. The declared origin type
+  is `explicit`, `structural`, `placeholder`, `title`, or `none`.
+- `{ kind: 'ambiguous', query, with }`: the query must return ambiguity, with
+  exactly the fixture keys in `with` as its offered controls.
+- `{ kind: 'ref-only' }`: the field must have origin `none`, and its observed
+  ref must resolve to that exact control. Nearby unbound text is never paired
+  with unnamed controls by position.
+
+The suite observes at `cap: 400`, maps refs back to fixture keys through their
+element handles, and gates all three expectation forms on every page. It also
+checks the fixture-key census, including controls inside open shadow roots,
+and verifies that ambiguity lists name controls on the same page. Each
+observation takes exactly one `evaluateHandle` call for the composed scan.
+Fixture keys are test ground truth: a boundary test prohibits `data-fixture-`
+in production sources under `packages/*/src`.
+
+`packages/core/tests/discovery/layout-matrix-baseline.json` preserves the
+pre-change per-page `resolved`, `ambiguous`, and `unresolvable` counts. Current
+coverage is enforced by the expectations rather than by matching those old
+counts. The baseline test checks its page IDs and rejects raw control bytes
+other than tabs and line endings; ordinary runs leave the file untouched.
+
+### Shares the layout fixtures with later reliability slices
+
+Import `layoutMatrix` and its types from the dedicated
+`@yantra/test-helpers/layout-matrix` subpath. This entry imports only fixture
+modules and types, so it can be loaded without importing Vitest. The package's
+root entry is not required to consume these fixtures.
+
+The reuse contract for FEAT-057 through FEAT-060 is to consume and extend this
+same matrix for fill performance, deliverable capture, progress tracking, and
+action-evidence scenarios. Keep generic layouts and declared control ground
+truth together, preserve the historical baseline, and retain the existing
+resolution gate when adding scenario assertions. These reusable fixtures do
+not themselves establish live-provider task-completion or timing results.
+
 ### Catalogs model-visible interaction messages
 
 Catalog ownership follows the production package boundary:
@@ -243,6 +312,18 @@ cd packages/agent && npx vitest run tests/runtime/message-catalog.spec.ts
 cd e2e && npx vitest run widget-gauntlet.spec.ts
 ```
 
+For the synthetic layout matrix, first build its shared fixtures from the
+repository root, then run the real-browser gate from the core workspace:
+
+```bash
+pnpm --filter @yantra/test-helpers build
+cd packages/core && npx vitest run tests/discovery/layout-matrix.spec.ts tests/boundary-rules.spec.ts
+```
+
+Leave `UPDATE_LAYOUT_BASELINE` unset for normal verification. Setting it to
+`1` rewrites the baseline with current counts; it does not recreate the
+historical pre-change measurement.
+
 `pnpm --filter <pkg> test -- <pattern>` is not a way to run a subset: the
 pattern is silently ignored and the whole package suite runs. Use the
 `cd <workspace> && npx vitest run <path>` form above instead.
@@ -291,6 +372,10 @@ durable artifact. The real-browser tier checks the wrapped tool's existing
 status, error code, and JSON `modelText` payload, but it does not recreate the
 orchestrator-owned `tool-calls.jsonl` projection.
 
+The layout matrix consumes generated HTML and control expectations. Its
+per-page counts stay in memory during ordinary runs, and its checked-in
+baseline remains a historical input.
+
 Catalog rendering returns existing model-visible message and hint text. Missing
 catalog entries or required detail values throw a typed dangling-message error
 instead of falling back to generic advice.
@@ -304,6 +389,9 @@ and uses temporary run/profile state that is removed during teardown.
 
 No fixture performs a secret fill, and all three tiers are tagged `@no-llm`.
 
+The layout matrix is also tagged `@no-llm` and requires a compatible system
+Chrome. It uses isolated temporary browser state and offline DOM fixtures.
+
 ## Limitations
 
 - The current gallery contains 20 fixtures: 16 protocol cases and four
@@ -311,6 +399,9 @@ No fixture performs a secret fill, and all three tiers are tagged `@no-llm`.
   shadow-root native select, a page-blocking consent modal, and a
   viewport-pinned band that owns a control's click point). Both halves are
   pinned as numbers, so growing the gallery is a deliberate edit.
+- The 14-page layout matrix is a separate gate from that 20-fixture gallery.
+  Its matrix suite verifies field discovery and resolution; it does not click
+  the dynamic-replacement button or measure fill throughput.
 - A control inside a _closed_ shadow root is out of scope and is never counted
   as a pass. The platform returns `null` for `host.shadowRoot` on a closed
   root, and no piercing library and no DOM tagging is used to get around that,

@@ -45,6 +45,7 @@ import type {
 } from '@yantra/protocol';
 import { err, ok, type Result } from '@yantra/protocol';
 
+import type { LabelOrigin } from '../interaction/field-identity.js';
 import { lint } from '../workflow/lint/index.js';
 import { WorkflowCollisionError } from '../workflow/store.js';
 import type { WorkflowStore } from '../workflow/store.types.js';
@@ -76,6 +77,8 @@ export interface PromotableTraceStep {
     readonly role: string;
     readonly name: string;
     readonly group: string | null;
+    readonly label?: string | null;
+    readonly label_origin?: LabelOrigin;
   };
   readonly submit?: boolean;
   readonly extractionKind?: 'content' | 'table';
@@ -193,7 +196,7 @@ function synthesisFor(goal: string | undefined, usedLlm: boolean): WorkflowSynth
 export async function promoteAgentTrace(
   steps: readonly PromotableTraceStep[],
   opts: PromoteTraceOptions,
-): Promise<Result<WorkflowFile, PromoteError>> {
+): Promise<Result<AgentTracePromotion, PromoteError>> {
   if (steps.length === 0) {
     return err({
       kind: 'no_completed_steps',
@@ -206,11 +209,14 @@ export async function promoteAgentTrace(
   const workflowSteps: WorkflowStep[] = [];
   let stepCounter = 1;
   let extractCounter = 0;
+  const notes: string[] = [];
 
   for (const step of withTerminalReadOnly(steps)) {
     const id = `s${stepCounter}`;
     const converted = convertTraceStep(step, id, locators, secrets, () => (extractCounter += 1));
     if (converted !== null) {
+      if (step.kind === 'fill_element' && converted.verb === 'fill')
+        notes.push(`${id}: unlabeled field saved as a locator-only fill (submit: false).`);
       workflowSteps.push(converted);
       stepCounter += 1;
     }
@@ -261,7 +267,12 @@ export async function promoteAgentTrace(
     });
   }
 
-  return ok(workflow);
+  return ok(notes.length > 0 ? { ...workflow, notes } : workflow);
+}
+
+/** Saved workflow plus transient promotion disclosures, never written into YAML. */
+export interface AgentTracePromotion extends WorkflowFile {
+  readonly notes?: readonly string[];
 }
 
 /**
@@ -318,6 +329,22 @@ function convertTraceStep(
     case 'fill_element': {
       const value = step.value ?? { kind: 'literal', value: '' };
       if (value.kind === 'secret_ref') secrets.add(value.key);
+      const origin = step.field?.label_origin;
+      const label = step.field?.label;
+      if (origin === 'none' || (!label && !step.field?.name.trim())) {
+        return {
+          id,
+          verb: 'fill',
+          scope: null,
+          requires_confirmation: step.requires_confirmation,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
+          locator: registerCandidateChain(step.locator, id, locators),
+          value: value.kind === 'secret_ref' ? `{{ secret:${value.key} }}` : value.value,
+          submit: false,
+        };
+      }
       return {
         id,
         verb: 'fill_element',
@@ -326,7 +353,8 @@ function convertTraceStep(
         confirmation_description: null,
         expected_cost: null,
         consequence: null,
-        field_name: step.field?.name ?? '',
+        field_name: origin && origin !== 'explicit' ? (label ?? '') : (step.field?.name ?? ''),
+        ...(origin && origin !== 'explicit' ? { field_label_origin: origin } : {}),
         locator: registerCandidateChain(step.locator, id, locators),
         value: value.kind === 'secret_ref' ? `{{ secret:${value.key} }}` : value.value,
       };
@@ -545,6 +573,7 @@ function convertStep(
         expected_cost: step.expected_cost,
         consequence: step.consequence,
         field_name: step.field_name,
+        ...(step.field_label_origin ? { field_label_origin: step.field_label_origin } : {}),
         locator: registerLocator(step.locator, id, locators),
         value: literalToScalar(step.value),
       };

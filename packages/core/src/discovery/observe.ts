@@ -107,12 +107,14 @@ export async function buildAgentPageSnapshot(
   // emptiness is never read as "the page has no controls" — which would
   // otherwise make the next delta claim every control on the page vanished.
   let degraded = false;
+  let scanBounded = options.scanBounded ?? false;
   let raw: readonly RawInteractable[];
   if (options.records !== undefined) {
     raw = options.records;
   } else {
     const scan = await safeEvaluate(page, scanInteractablesInPage);
     degraded = scan === null;
+    scanBounded = scan?.truncated ?? false;
     raw = scan?.records ?? [];
   }
   const title = clampChars(pageData?.title ?? '', 300);
@@ -126,7 +128,7 @@ export async function buildAgentPageSnapshot(
     digest,
     interactables,
     ordered,
-    inventory: inventoryForWindow(ordered, interactables, 0, options.scanBounded ?? false),
+    inventory: inventoryForWindow(ordered, interactables, 0, scanBounded),
     fingerprint: fingerprintFromScan(url, title, ordered, degraded),
   };
 }
