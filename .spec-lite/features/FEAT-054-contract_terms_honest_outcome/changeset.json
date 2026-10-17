@@ -14,10 +14,22 @@
       "task": "TASK-009"
     },
     {
+      "path": "apps/cli/src/commands/list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/src/commands/research.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/cli/src/connector-io.ts",
@@ -30,6 +42,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/render/terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/render/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/cli/tests/commands/do.spec.ts",
@@ -48,6 +72,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/render/run-list.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -404,6 +434,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/index-db/history-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/core/src/index-db/migrations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/core/src/interaction/fill-eligibility.ts",
       "status": "A",
       "role": "implement",
@@ -420,6 +462,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/core/src/workflow/replay/run-store.ts",
@@ -452,6 +506,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/index-db/domain-rank-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/core/tests/index-db/history-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/core/tests/interaction/fill-eligibility.spec.ts",
       "status": "A",
       "role": "implement",
@@ -462,6 +528,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/run-orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/core/tests/workflow/replay/run-store.spec.ts",

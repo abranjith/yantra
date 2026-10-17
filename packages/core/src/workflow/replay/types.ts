@@ -282,6 +282,8 @@ export interface RunSummary {
   readonly endedAt: string | undefined;
   readonly durationMs: number | undefined;
   readonly failureClass: FailureClass | undefined;
+  /** The task outcome the run recorded (FEAT-054); absent on older runs. */
+  readonly taskOutcome?: TaskOutcome;
 }
 
 // ---------------------------------------------------------------------------

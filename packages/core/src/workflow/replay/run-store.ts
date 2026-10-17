@@ -200,6 +200,7 @@ export class LocalRunStore implements RunStore, AgentRunStore {
             endedAt: manifest.endedAt,
             durationMs: manifest.durationMs,
             failureClass: manifest.failureClass,
+            ...(manifest.taskOutcome === undefined ? {} : { taskOutcome: manifest.taskOutcome }),
           });
         } catch {
           // Skip entries without a valid manifest.json

@@ -151,6 +151,7 @@ function fileRunToItem(run: RunSummary): ListItem {
     status: run.status,
     startedAt: run.startedAt,
     durationMs: run.durationMs ?? null,
+    ...(run.taskOutcome === undefined ? {} : { taskOutcome: run.taskOutcome }),
   };
 }
 
@@ -162,6 +163,7 @@ function historyToItem(entry: HistoryEntry): ListItem {
     status: entry.status,
     startedAt: entry.startedAt,
     durationMs: entry.durationMs,
+    ...(entry.taskOutcome === null ? {} : { taskOutcome: entry.taskOutcome }),
   };
 }
 

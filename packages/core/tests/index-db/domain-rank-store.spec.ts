@@ -51,8 +51,9 @@ describe('@no-llm migration v3', () => {
       "INSERT INTO preferences (key, value, source, approved, updated_at) VALUES ('k', '1', 'user', 1, 'now')",
     ).run();
 
-    expect(runMigrations(db)).toBe(3);
-    expect(runMigrations(db)).toBe(3);
+    // Upgrading brings the database to the latest schema, v3 included.
+    expect(runMigrations(db)).toBe(SCHEMA_VERSION);
+    expect(runMigrations(db)).toBe(SCHEMA_VERSION);
     expect(db.prepare('SELECT value FROM preferences WHERE key = ?').get('k')).toMatchObject({
       value: '1',
     });

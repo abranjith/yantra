@@ -9,7 +9,7 @@ import {
   deriveHistoryEntry,
   type HistoryEntry,
 } from '../../src/index-db/history-store.js';
-import { runMigrations } from '../../src/index-db/migrations.js';
+import { MIGRATIONS, SCHEMA_VERSION, runMigrations } from '../../src/index-db/migrations.js';
 import { DatabaseSync } from '../../src/index-db/sqlite.js';
 
 function makeDb(): DatabaseSync {
@@ -30,6 +30,7 @@ function entry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
     durationMs: 3000,
     costUsd: 0.02,
     provider: 'tavily',
+    taskOutcome: null,
     ...overrides,
   };
 }
@@ -375,5 +376,83 @@ describe('@no-llm deriveHistoryEntry', () => {
 
   it('returns null for an unrecognized manifest shape', () => {
     expect(deriveHistoryEntry('r', { foo: 'bar' }, null)).toBeNull();
+  });
+});
+
+describe('@no-llm history task outcome (FEAT-054)', () => {
+  let runsDir: string;
+
+  beforeEach(async () => {
+    runsDir = await mkdtemp(join(tmpdir(), 'yantra-outcome-runs-'));
+  });
+
+  afterEach(async () => {
+    await rm(runsDir, { recursive: true, force: true });
+  });
+
+  it('migrates an index created before the column, keeping rows with a null outcome', async () => {
+    const db = new DatabaseSync(':memory:');
+    for (const migration of MIGRATIONS.filter((item) => item.version <= 3)) {
+      migration.up(db);
+      db.exec(`PRAGMA user_version = ${migration.version}`);
+    }
+    db.prepare(
+      `INSERT INTO history (run_id, task_type, intent_text, brief_id, status, started_at,
+         finished_at, duration_ms, cost_usd, provider)
+       VALUES ('old-run', 'do', 'fill the form', NULL, 'succeeded',
+         '2026-07-01T10:00:00.000Z', NULL, NULL, NULL, NULL)`,
+    ).run();
+
+    expect(runMigrations(db)).toBe(SCHEMA_VERSION);
+    const store = new SqliteHistoryStore({ db });
+    const listed = await store.list();
+    expect(listed.isOk && listed.value).toEqual([
+      expect.objectContaining({ runId: 'old-run', taskOutcome: null }),
+    ]);
+    expect(() =>
+      db.prepare("UPDATE history SET task_outcome = 'published' WHERE run_id = 'old-run'").run(),
+    ).toThrow();
+    db.close();
+  });
+
+  it('round-trips a recorded outcome word', async () => {
+    const db = makeDb();
+    const store = new SqliteHistoryStore({ db });
+    await store.record(entry({ runId: 'new-run', taskType: 'do', taskOutcome: 'partial' }));
+    const listed = await store.list();
+    expect(listed.isOk && listed.value[0]?.taskOutcome).toBe('partial');
+    db.close();
+  });
+
+  it('fills the column from manifests that carry taskOutcome, and only those', async () => {
+    const write = async (name: string, manifest: unknown) => {
+      await mkdir(join(runsDir, name), { recursive: true });
+      await writeFile(join(runsDir, name, 'manifest.json'), JSON.stringify(manifest), 'utf8');
+    };
+    const agentic = {
+      workflowName: 'do',
+      runKind: 'agentic',
+      status: 'failed',
+      startedAt: '2026-10-15T12:00:00.000Z',
+      endedAt: '2026-10-15T12:13:04.000Z',
+    };
+    await write('new-run', { ...agentic, runId: 'new-run', taskOutcome: 'partial' });
+    await write('old-run', { ...agentic, runId: 'old-run', status: 'completed' });
+    await write('junk-run', { ...agentic, runId: 'junk-run', taskOutcome: 'published' });
+    const db = makeDb();
+    const store = new SqliteHistoryStore({ db, runsDir });
+
+    expect((await store.rebuildFromRuns()).isOk).toBe(true);
+
+    const listed = await store.list();
+    const byId = new Map(
+      (listed.isOk ? listed.value : []).map((item) => [item.runId, item.taskOutcome]),
+    );
+    expect(Object.fromEntries(byId)).toEqual({
+      'new-run': 'partial',
+      'old-run': null,
+      'junk-run': null,
+    });
+    db.close();
   });
 });

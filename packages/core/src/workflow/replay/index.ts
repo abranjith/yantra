@@ -64,7 +64,7 @@ export {
 export type { OutputEvaluationError } from './errors.js';
 
 // Orchestrator + exit codes
-export { RunOrchestrator, exitCodeFor } from './run-orchestrator.js';
+export { RunOrchestrator, exitCodeFor, taskOutcomeForReplay } from './run-orchestrator.js';
 export type { RunOrchestratorOptions } from './run-orchestrator.js';
 
 // Run store + run-id formatting
