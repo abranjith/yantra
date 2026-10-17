@@ -503,7 +503,7 @@ An unlabeled field with a structural label:
 ## 8. State Tracking
 
 - [x] TASK-001: Truncation totals, full-set ref registry, and the `FillCensus` producer
-- [ ] TASK-002: `browser_observe { after, kinds }` continuation
+- [x] TASK-002: `browser_observe { after, kinds }` continuation
 - [ ] TASK-003: Synthetic layout matrix, safety gate, and coverage baseline
 - [ ] TASK-004: Shared field-identity module (evidence order, structural labels, origin, confidence, section, constraints)
 - [ ] TASK-005: Model-visible field identity within byte budgets; label and section-qualified resolution; matrix coverage gate
