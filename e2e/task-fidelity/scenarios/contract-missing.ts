@@ -3,6 +3,8 @@
  * so in its Brief (FEAT-052).
  */
 
+import { exitCodeForAgenticOutcome } from '@yantra/agent';
+
 import { equals, type Expectation } from '../expectations.js';
 import { originOf } from '../fixtures/sites.js';
 import type { Scenario } from '../scenario.js';
@@ -39,6 +41,16 @@ const expectations: readonly Expectation[] = [
     measure: (run) => run.outcome.kind,
     target: equals('published'),
     note: 'Declaring a contract is not a precondition for publishing.',
+  },
+  {
+    id: 'research-still-fulfilled-exit-0',
+    owner: 'FEAT-054',
+    measure: (run) => ({
+      outcome: run.outcome.kind === 'published' ? run.outcome.taskOutcome : run.outcome.kind,
+      exit: exitCodeForAgenticOutcome(run.outcome),
+    }),
+    target: equals({ outcome: 'fulfilled', exit: 0 }),
+    note: 'D3 compatibility: research keeps its criteria; only the outcome word is new.',
   },
 ];
 

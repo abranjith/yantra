@@ -586,6 +586,6 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
 - [x] TASK-010: `run`, history, and listings show outcome words
 - [x] TASK-011: Promotion gated on `fulfilled`; omitted capture step named
-- [ ] TASK-012: Task-fidelity scenarios pin FEAT-054
+- [x] TASK-012: Task-fidelity scenarios pin FEAT-054 — `do-form-complete` is pending: `fulfilled` waits on FEAT-055 (census, fieldset group names) and the password and native-date commits on FEAT-056, each pinned at its observed baseline
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

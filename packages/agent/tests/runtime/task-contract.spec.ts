@@ -639,7 +639,7 @@ describe('@no-llm action-term echo (FEAT-054)', () => {
     );
     if (!result.isOk) throw new Error('fixture rejected');
     expect(renderContractEcho(result.value)).toBe(
-      'actions of the sign-up form — understood: fill all eligible fields; ' +
+      'actions of the sign-up form — fill all eligible fields; ' +
         'capture a viewport screenshot; do not submit',
     );
   });
@@ -666,7 +666,7 @@ describe('@no-llm action-term echo (FEAT-054)', () => {
         ...NO_ACTION_TERMS,
         submit: { value: 'forbidden', declaredIn: 1 },
       }),
-    ).toBe('actions of the form — understood: do not submit');
+    ).toBe('actions of the form — do not submit');
   });
 
   it('collapses whitespace and stays within the bound with every term at maximum length', () => {
@@ -693,6 +693,6 @@ describe('@no-llm action-term echo (FEAT-054)', () => {
     const echo = renderContractEcho(result.value);
     expect(echo.length).toBeLessThanOrEqual(CONTRACT_ECHO_MAX);
     expect(echo).not.toMatch(/\s{2}|[\r\n]/u);
-    expect(echo).toContain('understood: fill 40 listed fields');
+    expect(echo).toContain('— fill 40 listed fields');
   });
 });

@@ -42,6 +42,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-054 — Contract Terms & Honest Task Outcome** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)
+A `do` contract can declare `deliverable: "actions"`, `fill` coverage (`all_eligible` or `listed`), screenshot `artifacts`, and `effects.submit`; an action item a later revision omits is carried forward, and `forbidden` cannot be loosened. `result_publish` in `do` refuses with `CONTRACT_REQUIRED` until a contract exists, then judges every declared item `met`/`unmet`/`not_applicable` from a run-scoped action ledger (verified fills, executed and refused clicks, captures, each stamped with its document epoch) and FEAT-053's delivery checks; the model's `fulfillment.met` only raises a disagreement notice. One table in `outcome.ts` maps `fulfilled`/`partial`/`handoff`/`failed`/`aborted` to exit code, manifest status, failure class, and event, with the termination reason recorded separately; a published Brief outranks a later budget interrupt. `fill: all_eligible` stays `unmet (inventory_unavailable)` until FEAT-055 supplies the form census. `--save-as` saves only a fulfilled run and names screenshot steps it could not keep.
+
 **FEAT-053 — Attributed, Structured Publication** _(updated: 2026-10-13 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-053-attributed_structured_results/spec.md)
 Agent-authored results cite run-wide source IDs or record anchors in findings, prose, sections, table rows, and conditions. Unknown references and malformed or uncited rows return pointer-addressed correction messages before publication; cited sources are numbered in reading order, followed by consulted-only pages. A declared contract moves off-source rows and findings to Alternatives, fills empty required cells with `not shown on source`, and reports fulfillment gaps and every filter's status. Every model tool payload is sanitized and composed, including complete-Brief-shaped inputs; trusted protocol callers use the publisher API directly. Goal filters retain their requested name/value pair: a cited conflicting value becomes violated when supported, otherwise unverified, with a contract-gap notice. Runtime fallback resolves valid draft citations, removes obsolete or unknown markers, and publishes structural gaps as notices; each successful composition records counts only in `brief_composed`.
@@ -183,6 +187,10 @@ Source spec: [feature_scheduling_runner.md](features/FEAT-021-scheduling_runner/
 
 ## Personalization & History
 
+**FEAT-054 — History Task Outcome** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)
+The history index (schema v4) has a nullable `task_outcome` column, filled from manifests that carry `taskOutcome` on record and on rebuild; older rows stay null.
+
 **Sensitive Ambient Context Grants** _(updated: 2026-08-03 by implement)_
 Source spec: [feature_agent_grounding.md](features/FEAT-FP-007-agent_grounding/spec.md)
 A `context` block in `profile.yaml` records which sensitive facts the agent may be told about the user. Today it holds one grant, `context.location` (default `true`), gating the value composed from `locale.city` (new, free text at city grain) and `locale.region`; both keys are settable via `yantra prefs set` and visible with provenance in `yantra profile`. `yantra init` collects the grant explicitly on an interactive terminal and silently accepts defaults everywhere else, so CI and scripted use are unaffected. Date, timezone, and locale are host-environment facts, not personal data — they are always supplied and are deliberately not grants. `resolveUserLocation` is a second preference→prompt chokepoint alongside `buildPersonalizationContext` and upholds the same three structural guarantees: preferences only (never history), approved rows only, and sanitized/120-char-capped/`Sanitized`-branded output. It is covered by the same build-time import-graph guard. A denied grant and an unset value are indistinguishable to the model — both render `not available` — so the model cannot infer that a withheld value exists; only the user-facing handoff remedy distinguishes them.
@@ -237,6 +245,10 @@ FEAT-FP-002 update: deterministic synthesis is now block-aware and coherence-foc
 Turns N extracted articles into **one** synthesized `Brief` behind a single `Synthesizer` strategy interface (`packages/core/src/synthesis/`). The `DeterministicSynthesizer` (the `--no-llm` contract and golden-test backbone) is now **evidence-first**: it selects evidence before it assembles a document. A local, deterministic winkNLP analyzer (`wink-nlp` + `wink-eng-lite-web-model`, behind a `TextAnalyzer` port) drives every stage in `synthesis/evidence/`: `buildQueryProfile` infers intent (price/comparison/rate-or-trend/factual/entity/general) with required evidence kinds and buildable facet columns; a **source relevance gate** drops off-topic sources (a NASA Mars page in an "EV sales" set) before clustering/numbering, recording each as a `source_excluded` notice; **eligibility gates** reject headings (no finite verb), wrong-kind figures, and off-topic sentences; **sentence-level citation support** replaces whole-doc token overlap so a claim is cited only by docs whose sentences actually restate it (no more `[1][4][6][7][8]` runs); an **entity-anchored facet planner** builds only query-relevant, anchored comparison columns; and the `EvidenceSet` treats length budgets (short=3/medium=6/long=10) as **caps, never fill targets**, near-dup-merges paraphrases, and emits a `limited_evidence` notice when fewer relevant findings survive than requested. Key findings carry citations only in the structured `citations[]` array; overview/sections keep inline `[n]`. `metadata.evidence` reports candidate/accepted claim counts and excluded-source counts; `coverage` is over included sources. `LlmSynthesizer` (default for `public` scope) is unchanged: sanitize → send → validate → re-prompt ≤2 → deterministic fallback (`metadata.deterministic_fallback_used`). The post-synthesis citation-faithfulness validator still enforces no-uncited-claims (verdict in `metadata.citation_verdict`); the `synthesis_completed` event is still emitted. A checked-in golden-Brief suite (`e2e/golden-briefs/`, regenerate with `pnpm golden:update`) byte-pins the deterministic output for five corpora, including `ev-sales-mixed` which pins the off-topic-exclusion behavior.
 
 ## Protocol
+
+**FEAT-054 — Action Terms and Task Outcome Vocabulary** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)
+`TaskContractBody` gains optional `fill`, `artifacts`, `effects`, and `deliverable: "actions"` with neutral defaults, and `contract.json` records `requirements` with the revision that declared each action item. New `TaskOutcome` and `TerminationReason` enums, `FailureClass` `requirements_unmet`, optional `task_outcome` on `task_failed`, optional Brief `requirements`, and optional manifest `agent.yantra_version` and `agent.budgets`. Every older artifact parses unchanged; a drift test pins the generated JSON Schema.
 
 **FEAT-053 — Optional Attribution Fields** _(updated: 2026-10-12 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-053-attributed_structured_results/spec.md)
@@ -388,6 +400,10 @@ The **redactor** (`DefaultCaptureRedactor`) is the only code that reads `raw_val
 
 ## CLI Surface
 
+**FEAT-054 — Outcome Words in Every Command** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)
+`yantra do` prints `Fulfilled: N of N requirements met. Brief: <path>` or `Partial: M of N requirements met; <unmet items>. Brief: <path>` and exits 0 or 2; `--json` adds `task_outcome` and `termination_reason`. `ask`/`research` failures lead with `Failed:`, `Handoff:`, or `Aborted:`, with output and exit codes otherwise unchanged. `yantra run` prints `fulfilled`/`handoff`/`aborted`/`failed` and adds `task_outcome` to JSON with unchanged exit codes; `list runs` shows the word beside the status when a run recorded one. Brief md/html/terminal renderers show a Requirements block only when present.
+
 **FEAT-052 — `--no-browse`, `agent.research_browse`, and the Contract Echo** _(updated: 2026-10-12 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-052-goal_contract_capability_fit/spec.md)
 `research` alone registers `--no-browse`; `ask` and `do` reject it as unknown. `yantra prefs set agent.research_browse false` stores the default (booleans only). When an agentic run declares its task contract, stderr shows `understood: <summary>` (later `understood (revised): …`), control characters stripped; with `--json` it is an `agent_progress` event on stdout.
@@ -421,6 +437,10 @@ The `ConnectorIO` interface in `apps/cli/src/connector-io.ts` is the load-bearin
 Verification: 29 unit tests across `apps/cli/src/` (commander setup, exit-code map, global-flags parser, ConnectorIO contract, audit-builder round-trip, auto-detect for `show`); 7 e2e tests in `e2e/cli-commands.spec.ts` covering the no-args banner, `list runs|workflows --json` empty roots, `audit`/`report` not-found paths, and `init --provider {none|invalid}`. Distribution channels (npm `bin: { yantra: dist/bin.js }`, Homebrew tap, Scoop bucket) and the bundled-CLI release pipeline are deferred to the first stable release.
 
 ## Consent & Safety
+
+**FEAT-054 — Engine-Enforced No-Submit** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)
+Under `effects.submit: forbidden`, `browser_click` refuses a submit-class target (a submit-typed button or image input with a form owner, or a protected-action name) with `SUBMIT_FORBIDDEN` before the confirmation gate, so no prompt is built and no submission handler fires; `workflow_run` refuses any saved workflow whose plan, or a workflow it calls, contains a click. `type="button"` controls and buttons outside a form still click. Under `allowed`, confirmation behavior is unchanged.
 
 **FEAT-052 — Bare-Hostname Goal Attestation** _(updated: 2026-10-12 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-052-goal_contract_capability_fit/spec.md)

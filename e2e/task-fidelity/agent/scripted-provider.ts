@@ -47,7 +47,13 @@ export type ScriptStep =
        */
       readonly when?: (ctx: ScriptContext) => boolean;
     }
-  | { readonly kind: 'parallel'; readonly steps: readonly ScriptStep[] };
+  | { readonly kind: 'parallel'; readonly steps: readonly ScriptStep[] }
+  /**
+   * Time passing between tool calls, as a long model turn spends it: advances
+   * the run's budget clock by `ms` (FEAT-054). No tool is called and no turn
+   * is counted. Only meaningful when the runner wires a harness clock.
+   */
+  | { readonly kind: 'advance-clock'; readonly ms: number };
 
 /** One tool call the scripted agent made, as it received the result. */
 export interface ReceivedResult {
@@ -139,6 +145,8 @@ export class ScriptedAgentProvider implements AgentProvider {
     private readonly services: RunServices,
     private readonly script: readonly ScriptStep[],
     private readonly profile: Pick<CommandTaskProfile, 'toolNames' | 'workflowToolMode'>,
+    /** Advances the run's budget clock; a no-op when the runner wires none. */
+    private readonly advanceClock: (ms: number) => void = () => undefined,
   ) {}
 
   /** Everything the agent did, readable after the run. */
@@ -166,6 +174,10 @@ export class ScriptedAgentProvider implements AgentProvider {
     let calls = 0;
 
     const execute = async (step: ScriptStep): Promise<void> => {
+      if (step.kind === 'advance-clock') {
+        this.advanceClock(step.ms);
+        return;
+      }
       if (step.kind === 'parallel') {
         // Pi issues a multi-tool turn concurrently; events interleave in real
         // completion order because each call emits its own pair.
@@ -245,6 +257,7 @@ export class ScriptedAgentProvider implements AgentProvider {
         this.firstPrompt = prompt;
         for (const step of this.script) {
           await execute(step);
+          if (step.kind === 'advance-clock') continue;
           this.turnCount += 1;
           emit({ type: 'turn_finished', usage: SCRIPTED_TURN_USAGE, at: new Date().toISOString() });
         }

@@ -1,7 +1,7 @@
 # Task-fidelity scorecard
 
 - Model: `fixture/scripted-agent`
-- Prompt: `agent-v10`
+- Prompt: `agent-v11`
 - Runs per scenario: 2
 - Generated: 2026-10-11T00:00:00.000Z
 

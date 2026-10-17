@@ -121,6 +121,21 @@ obstruction protocol's auto-clearance veto runs there, so `PROTECTED_ACTION_RE` 
 `packages/core/src/interaction/protected-actions.ts` and re-exported unchanged by the agent tool
 layer rather than injected into core by a caller who could omit it.
 
+Two pure classifiers that the agent's contract evaluation needs sit beside it for the same reason.
+`classifySubmitTarget(facts, name)` in `packages/core/src/interaction/submit-class.ts` returns
+`structural` for a native submit control (a `<button>` whose resolved `type` is `submit`, or an
+`<input type="submit|image">`) that has a form owner, `name` when the accessible name matches
+`PROTECTED_ACTION_RE`, and `null` otherwise; structural wins when both fire. Its facts come from
+`AgentBrowserController.submitFacts(ref)`, one read-only element evaluation returning `tag`,
+`resolvedType`, and `hasFormOwner`, or `null` for an unknown or stale ref.
+`classifyFillExemption(facts)` in `packages/core/src/interaction/fill-eligibility.ts` decides, in
+fixed precedence, whether a control is exempt from "fill every eligible field":
+`human_verification` (the response classifier's `CHALLENGE_MARKERS`), `hidden`, `disabled`,
+`read_only`, then `file_input`. Password and sensitive-`autocomplete` controls stay eligible. The
+same module defines the `FillCensus` / `FillCensusSource` port, a read-only census of the current
+document's fillable controls keyed by ref and group. No production producer implements that port
+yet.
+
 #### Configuration and storage authority
 
 `packages/core/src/browser/paths.ts` is the single authority for the Yantra home and primary storage
@@ -1138,7 +1153,7 @@ re-opens and verifies the private artifact before the Pi adapter can construct a
 flowchart LR
   Call[Provider tool call] --> Validate[Closed-schema validation]
   Validate --> Budget[Abort, budget, and timeout]
-  Budget --> Policy[Host, ethics, scope, and action-phase policy]
+  Budget --> Policy[Host, ethics, scope, action-phase,<br/>and no-submit policy]
   Policy --> Consent[Confirmation when required]
   Consent --> Domain[Core domain operation]
   Domain --> Sanitize[Sanitize and bound text]
@@ -1237,24 +1252,36 @@ derives `interact` when any click or fill tool is present, `read` for any other 
 and `none` otherwise. The orchestrator passes that value to `buildAgentUserPrompt`
 (`packages/agent/src/runtime/prompt.ts`), which renders the matching scope line. The `read` line
 tells the model to report a goal that needs clicking or filling and to name `yantra do` as the next
-step. The recorded prompt version is `agent-v10`; the system text retains v9's `Scope` section,
+step. The recorded prompt version is `agent-v11`; the system text retains v9's `Scope` section,
 which makes a source the goal names the place the answer comes from, requires a stated condition
 to be confirmed or reported as unconfirmed, and
 forbids explaining missing data with a cause no tool reported. It also treats following a link a
 result offered as progress rather than a fallback.
 The `research` and `do` addenda teach evidence-ID citations, tables with `row_sources`, condition
-statuses, and explicit `fulfillment.unmet` items. Older manifest prompt versions remain valid.
+statuses, and explicit `fulfillment.unmet` items. The `do` addendum also teaches the action terms:
+a task that changes or captures a page declares `deliverable: "actions"` and puts "every field", a
+screenshot, and "do not submit" in `fill`, `artifacts`, and `effects` rather than in `notes`.
+Older manifest prompt versions remain valid.
 
 `task_contract` (`packages/agent/src/adapters/pi/tools/task-contract.ts`) is registered for
 `research` and `do` only. It records what the goal requires: the deliverable (`table`, `answer`,
-or `report`), the subject, required fields, stated filters, required sources, an optional ranking
-and limit, and notes. It fetches nothing, mutates nothing, gathers no evidence, and no other tool
-requires it. `normalizeContract` in `packages/agent/src/runtime/task-contract.ts` cleans every
+`report`, or `actions`), the subject, required fields, stated filters, required sources, an
+optional ranking and limit, notes, and the optional action terms — `fill` coverage
+(`all_eligible`, or `listed` with field names), screenshot `artifacts` by scope (`viewport`,
+`full_page`, `element`), and `effects.submit` (`forbidden` or `allowed`). It fetches nothing,
+mutates nothing, gathers no evidence, and no other tool requires it in `ask` or `research`.
+`normalizeContract` in `packages/agent/src/runtime/task-contract.ts` cleans every
 string first: it masks the user's own input values, applies the `public` sanitizer profile, strips
 control characters, and bounds the length. It then reduces each required source to a bare
-hostname. It rejects case-insensitive duplicates, a `table` without fields, and a table ranking
-that does not order by one of its fields, and returns only the first issue as a cause-specific
-`INVALID_INPUT`.
+hostname. It rejects case-insensitive duplicates, a `table` without fields, a table ranking
+that does not order by one of its fields, and any action term in a `research` run
+(`contract-actions-command`), and returns only the first issue as a cause-specific
+`INVALID_INPUT`. The spec sets `windDownExempt`, so `BudgetTracker.reserveCall` skips the soft
+wall-clock refusal for `task_contract` alone; the hard wall clock and every other cap still apply.
+When a declared artifact cannot be produced in this run, the result carries `capability_gaps`
+from `RunServices.contractCapabilities`, which defaults to `visionContractCapabilities` in
+`runtime/contract-capabilities.ts`: `viewport` and `element` are capturable exactly when Vision
+Assist is available, and `full_page` is always `scope_unsupported`.
 
 The orchestrator constructs one `TaskContractStore` per run, and `RunServices.contract` requires
 it. A construction site that forgot the store would silently drop the missing-contract notice.
@@ -1264,14 +1291,24 @@ is a non-retryable `CONTRACT_REVISION_LIMIT`, and any declaration after publicat
 atomically to `<runDir>/contract.json`, through a temporary file and rename, before it takes
 effect. A write that fails therefore leaves the run as it was. A successful declaration writes one
 `info` `contract_declared` line to `runtime.jsonl` that carries the revision, the deliverable, the
-field and filter counts, and the source hostnames. It never carries subject, field, filter, or
+field and filter counts, the source hostnames, and the action-term counts (`fill_coverage`,
+`artifact_count`, `submit`). It never carries subject, field, filter, or
 note text. The orchestrator also emits one `contract_declared` progress event per revision, each
 exactly once even when parallel declarations finish together. The event carries
-`renderContractEcho`, a single control-free line of at most 400 characters, which the CLI prints
-beside the goal echo.
+`renderContractEcho`, a single control-free line of at most 400 characters that includes the
+action terms in plain words, which the CLI prints beside the goal echo.
+
+The last revision is current for the FEAT-052/053 terms, but the action terms carry forward.
+`TaskContractStore.effectiveActionTerms()` derives them across every revision: `fill` is the latest
+non-null one, `artifacts` is the union keyed by kind and scope, and `submit` stays `forbidden` once
+any revision forbade it. Each term keeps the revision that first declared it, and every append
+rewrites the record's `requirements` list (`id`, `declared_in`) from those terms. A revision that
+omits a screenshot therefore cannot drop it, and a later `allowed` cannot loosen a `forbidden`. The
+store's `requiredToPublish` flag is true for `do` only.
 
 The contract is model-authored and grants nothing. No URL provenance, allowlist, or budget is
-derived from it. `hostSatisfiesRequiredSource` is a pure helper used by publication delivery checks.
+derived from it. Its one effect on the tools only removes capability: `effects.submit: forbidden`
+switches on the no-submit policy described below. `hostSatisfiesRequiredSource` is a pure helper used by publication delivery checks.
 `TaskContractStore.notices()` returns exactly one `other` notice from source `task-contract` when
 a `research` or `do` run never declared a contract, and nothing otherwise.
 
@@ -1366,6 +1403,116 @@ removes numeric and unknown markers, reports missing table/field delivery as not
 omitted filters as unverified. It invents neither a table nor verification. The publisher stamps
 `deterministic_fallback_used: true`, records the assembly notice and citation verdict, and writes
 the same count-only event after success. Failure to assemble still follows the normal failure path.
+
+#### Action ledger, fulfillment, and the task outcome
+
+A `do` run is judged against its contract from what the tools verifiably did, and one mapping
+table says what the judgment means for every consumer. Four run-scoped pieces on `RunServices`
+carry it.
+
+- **`ActionLedger`** (`packages/agent/src/runtime/action-ledger.ts`), required on
+  `RunServices.actionLedger` and built by `actionLedgerFor` from the task browser controller. It is
+  an append-only, in-memory record of verified outcomes only: `fill_committed` (from
+  `browser_fill_form` and `browser_fill_element` through one shared helper, with ref, resolved
+  field name, group key, and how many caller fields the entry covers), `click_executed` (with the
+  target's `classifySubmitTarget` signal), `submit_refused`, and `capture` (from
+  `browser_screenshot`, with scope, run-relative path, SHA-256, and bytes). A failed fill or click
+  records nothing. `browser_click` reads `submitFacts` before every click, because a click that
+  submits or navigates leaves no element to read afterwards. Each entry is stamped with a monotonic
+  `seq`, its time, and the controller's
+  top-level committed-document epoch and host at record time. Names are user-input-masked,
+  public-sanitized, and bounded; no value, selector, or secret reference is kept. Each record writes
+  one `action_recorded` line to `runtime.jsonl` with the kind, sequence, epoch, host, and counts, and
+  no names, refs, or paths.
+- **The no-submit policy** (`runtime/submit-policy.ts`). When `effectiveActionTerms().submit` is
+  `forbidden`, `browser_click`'s pre-domain `policy` hook reads `submitFacts` and refuses a
+  submit-class target with non-retryable `SUBMIT_FORBIDDEN`. The hook runs before
+  `requiresConfirmation`, so no confirmation request is built and no submission handler fires.
+  `workflow_run` refuses, before execution, a saved workflow whose plan or any workflow it calls
+  through `call_workflow` contains a `click` step. An unloadable plan, a call with no callee, or more
+  than 16 workflows counts as "may click". Every refusal records a `submit_refused` ledger entry and
+  one `submit_refused` runtime line with the signal and host. Under `allowed`, nothing changes.
+- **`evaluateFulfillment`** (`runtime/fulfillment.ts`), a pure function with no I/O and no clock.
+  It judges, in order, the deliverable, each filter, the fill, each artifact, and
+  `effects.submit`, each as `met`, `unmet`, or `not_applicable`. The deliverable and filters reuse
+  FEAT-053's delivery gaps and reconciled conditions. An `actions` deliverable needs at least one
+  committed fill or click on a required host. An artifact needs a capture of a satisfying scope
+  recorded after the last committed action, on that action's epoch. `effects.submit` is unmet if
+  any executed click was submit-class. `censusFillEvaluator(census)` measures the fill: `listed`
+  matches committed field names by FEAT-053's name grammar; `all_eligible` needs a commit for every
+  eligible control or group on the census epoch. With no census, the fill item is `unmet` with
+  `inventory_unavailable`, and production wires no census source today. When the model claimed
+  `fulfillment.met: true` and an item is unmet, the evaluation carries one `contract_gap` notice from
+  source `fulfillment`; the claim never changes a status. A run with no contract has no items and
+  `contractDeclared: false`.
+- **`FulfillmentRecord`**, required on `RunServices.fulfillment`. It holds the evaluation of the
+  run's one successful publication for the orchestrator to read.
+
+`result_publish` runs this only for `do`. Before composition it refuses with retryable
+`CONTRACT_REQUIRED`, which names `task_contract` as the move, when `contract.requiredToPublish` is
+set and nothing was declared, on both the Brief and the template path. On the Brief path, after
+composition, `evaluatePublication` reads `RunServices.fillCensus` only when the effective terms
+carry a fill, evaluates, writes `requirements` onto the Brief, and appends the disagreement notice;
+the template path evaluates without delivery evidence. After the
+publish succeeds, `recordEvaluation` stores the result and writes one count-only
+`fulfillment_evaluated` runtime line. The runtime-assembled fallback runs the same evaluation, so a
+salvaged `do` run with no contract is still judged, as undeclared. `ask` and `research` Briefs get no
+`requirements`.
+
+The orchestrator settles one outcome. `resolveTerminalOutcome` produces a draft in fixed
+precedence. A user abort wins first. A validated published Brief comes next, whatever budget
+interrupt or stuck-loop breaker fired after it. Then come the repeated-failure breaker, the budget
+reason, provider abort or failure, handoff, and missing completion. `settleOutcome` then adds what
+the draft lacks. A published `do` run is `fulfilled` only when it declared a contract and every
+judged item was met; otherwise it is `partial`. A published `ask` or `research` run is always
+`fulfilled`. `terminationReasonFor` records why the run stopped, separately from the outcome:
+`user_abort`, an interrupt reason (`wall-clock-hard`, `provider-tokens`, `tool-budget`,
+`repeated-tool-failure`), `handoff`, `provider_failed`, or, for a model that finished, `wall-clock-soft`
+when `BudgetTracker.softWindDownReached` and `model_finished` otherwise.
+
+`TASK_OUTCOME_TABLE` in `runtime/outcome.ts` is the one mapping every consumer reads:
+
+| Task outcome | Exit code | Manifest status | Terminal event   |
+| ------------ | --------- | --------------- | ---------------- |
+| `fulfilled`  | 0         | `completed`     | `task_completed` |
+| `partial`    | 2         | `failed`        | `task_failed`    |
+| `handoff`    | 4         | `failed`        | `task_failed`    |
+| `failed`     | 2         | `failed`        | `task_failed`    |
+| `aborted`    | 130       | `aborted`       | `task_failed`    |
+
+`taskOutcomeOf` maps each `AgenticTaskOutcome` kind onto a row; `budget_exhausted` and `failed`
+both read as `failed`. `failureClassFor` classes a `partial` run as `budget_exhausted` when a
+budget ended it and `requirements_unmet` otherwise, and a handoff by its blocker
+(`captcha_detected`, `mfa_required`, or `unexpected`). `finalizeRun` writes the event (with
+`task_outcome` on `task_failed`), the manifest `status`, `taskOutcome`, and `terminationReason`,
+and a `report.md` status, all from that row. `exitCodeForAgenticOutcome` reads the same row.
+`outcomeFirstLine` renders the bounded terminal line: `Fulfilled: N of N requirements met`, or
+`Partial:` with at most two unmet items and `+N more`, followed by the Brief or report path. A
+teardown error still demotes a published run to `failed`. `maybePromoteTrace` saves a `--save-as`
+workflow only for a `fulfilled` run, and lists the met artifact items it left out as `omitted`,
+because no workflow step captures a screenshot.
+
+```mermaid
+flowchart TD
+  Fill[browser_fill_form and browser_fill_element] -->|verified commits| Ledger[ActionLedger, epoch-stamped]
+  Click[browser_click] -->|executed clicks with submit signal| Ledger
+  Shot[browser_screenshot] -->|captures| Ledger
+  Click --> Policy{effects.submit forbidden<br/>and submit-class?}
+  Nested[workflow_run] --> Policy
+  Policy -->|yes: SUBMIT_FORBIDDEN before consent| Ledger
+  Contract[TaskContractStore<br/>effectiveActionTerms] --> Evaluate[evaluateFulfillment]
+  Ledger --> Evaluate
+  Delivery[FEAT-053 delivery gaps and conditions] --> Evaluate
+  Caps[contractCapabilities] --> Evaluate
+  Census[fillCensus, absent today] -.-> Evaluate
+  Publish[result_publish in do] -->|no contract: CONTRACT_REQUIRED| Contract
+  Publish --> Evaluate
+  Evaluate --> Brief[Brief requirements and disagreement notice]
+  Evaluate --> Record[FulfillmentRecord]
+  Record --> Settle[settleOutcome and terminationReasonFor]
+  Settle --> Table[TASK_OUTCOME_TABLE]
+  Table --> Artifacts[Exit code, manifest, task event, report.md, first line]
+```
 
 #### Run facts and run health
 
@@ -1759,7 +1906,10 @@ in `src/index.ts`, which registers the public command surface. Commands parse an
 merge flags/environment/profile defaults, choose deterministic or agentic execution before
 constructing a provider, build runtime dependencies, render terminal or machine output, record
 best-effort history, and map outcomes to exit codes. The CLI does not implement a second agent
-reasoning loop. Besides renderers, its package index re-exports `resolveAgentInvocation` and
+reasoning loop, nor a second outcome mapping: `renderAgentOutcome` in `src/connector-io.ts` prints
+the agent's `outcomeFirstLine`, its `agent_outcome` JSON record carries `task_outcome` and
+`termination_reason`, `do` exits through `exitCodeForAgenticOutcome`, and `run` reports core's
+`taskOutcomeForReplay` word beside its unchanged `exitCodeFor`. Besides renderers, its package index re-exports `resolveAgentInvocation` and
 `loadEffectivePreferences` solely so the dev-only task-fidelity runner resolves model, credentials,
 and budgets through the same flag > environment > profile > pinned-default chain the commands use.
 
@@ -2152,7 +2302,11 @@ nothing attested (see "Shape-aware page views and discovered links"). The pool c
 `contract.json` and echoes the contract to the user. A run that never declares one publishes with a
 leading notice saying so (see "Command profiles and the task contract"). A
 successful run ends with `result_publish` producing a protocol-valid Brief or templated report;
-plain assistant text alone is not the success contract.
+plain assistant text alone is not the success contract. In `do`, publication also requires a
+declared contract, and each declared item is judged from the run's action ledger. The orchestrator
+then settles one task outcome and a separate termination reason, and one table maps them to the
+manifest, the terminal event, the report, and the exit code (see "Action ledger, fulfillment, and
+the task outcome").
 
 ```mermaid
 sequenceDiagram
@@ -2180,13 +2334,15 @@ sequenceDiagram
   end
   Pi->>Tools: result_publish with S evidence references and structured content
   Tools->>Tools: compose citations, check contract delivery and evidence anchoring
+  Tools->>Tools: in do, judge each contract item from the action ledger
   Tools->>Run: validated Brief or document with runtime notices and search provider
   Tools->>Run: count-only brief_composed for composed Brief
+  Agent->>Agent: settle task outcome and termination reason
   Agent->>Run: tear down task browser, page pool, session, and recorder, finalize trace
   Agent->>Run: write run-health.json, then log run_health
-  Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock
-  Agent-->>CLI: published, failed, handoff, or aborted outcome
-  CLI-->>User: progress and terminal outcome
+  Agent->>Run: close runtime.jsonl, then manifest, events, report, and lock from TASK_OUTCOME_TABLE
+  Agent-->>CLI: fulfilled, partial, handoff, failed, or aborted outcome
+  CLI-->>User: outcome first line, progress, and exit code
 ```
 
 ### Vision-assisted screenshot capture
@@ -2281,7 +2437,10 @@ launches Chrome. The executor resolves locators and values step by step, writes 
 events, evaluates declared outputs, and optionally synthesizes a Brief only after execution has
 finished. A model may write that final document when the workflow declares `synthesis.use_llm`,
 but it cannot alter steps, branches, loop bounds, or locator repair. `--no-llm` vetoes synthesis;
-nested `workflow_run` and scheduled daemon executions hard-disable it.
+nested `workflow_run` and scheduled daemon executions hard-disable it. `taskOutcomeForReplay` in
+`packages/core/src/workflow/replay/run-orchestrator.ts` names a replay outcome in the agent's
+vocabulary (`success` is `fulfilled`, a user handoff `handoff`, a user abort `aborted`, anything
+else `failed`) without changing `exitCodeFor`.
 
 The scheduler is a lightweight local process. It polls SQLite schedules, skips missed or
 overlapping fires, and calls the same orchestrator used by interactive `run`. Its confirmation
@@ -2353,9 +2512,25 @@ protocol `TaskContractRecord` at `schema_version: 1` whose JSON Schema is emitte
 protocol artifacts. It holds the run ID, the declaring command (`research` or `do`), and one to
 three revisions in declaration order, each with its 1-based number, declaration time, and
 normalized `TaskContractBody`; the last revision is current. Required sources are normalized
-hostnames, and field and filter names are unique case-insensitively. Its text is model-authored
-and sanitized before it is written, and it is never a source of authority. `ask` runs, runs that
-never declared a contract, and older runs have no file, and every reader treats it as optional.
+hostnames, and field and filter names are unique case-insensitively. The body's action terms
+(`fill`, `artifacts`, `effects`) default to neutral values, so a file written before them parses
+to `fill: null`, `artifacts: []`, and `effects.submit: 'allowed'`. An optional `requirements` list
+records each action item in force across the revisions with the revision that declared it. Its
+text is model-authored and sanitized before it is written, and it is never a source of authority.
+`ask` runs, runs that never declared a contract, and older runs have no file, and every reader
+treats it as optional.
+
+The task outcome adds no artifact type and one nullable column. The `ActionLedger`,
+`FulfillmentEvaluation`, and effective action terms are run-local memory; the ledger's durable
+trace is count-only `action_recorded`, `submit_refused`, and `fulfillment_evaluated` lines in
+`runtime.jsonl`. What persists rides existing artifacts as optional fields. A `do` Brief carries
+`requirements` (at most 16, unique ids, each `met`, `unmet`, or `not_applicable` with a bounded
+reason, the declaring revision, and bounded exemptions). `manifest.json` carries camelCase
+`taskOutcome` and `terminationReason`, and its `agent` section carries `yantra_version` and the
+effective `budgets`. A `task_failed` event carries snake_case `task_outcome`. `FailureClass` gains
+`requirements_unmet`. History index schema v4 adds `history.task_outcome`, a nullable `TEXT`
+constrained to the five outcome words, with no backfill: `rebuildFromRuns` fills it only from
+manifests that carry `taskOutcome`, and older rows stay null.
 
 Shape-aware extraction adds no table and no artifact type. `PageAnalysis`, each source's
 `StoredPage` and its record-anchor map, and every `ProvenanceOrigin` are run-local memory held by
@@ -2442,7 +2617,7 @@ flowchart TD
 | Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. |
-| Data `index.db`                | SQLite schema version 3: `history`, `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                               |
+| Data `index.db`                | SQLite schema version 4: `history` (with the nullable `task_outcome` column), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                     |
 | Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                        |
 | Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                       |
 | Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -2731,6 +2906,32 @@ update` is the only surface that contacts a version server, and only when a huma
   The first origin wins and is written to the audit on every fetch and navigation, which makes a
   discovered chain reconstructable hop by hop. The cost is a required origin at every `record` call
   site and a sanitizer pass per offered URL.
+- **A task is judged by evidence, and publication is not success.** A recorded `do` run committed
+  10 of at least 40 form controls and captured no screenshot. It still exited 0 as `completed`,
+  because a validated Brief was the whole success test, and the run's own `contract_gap` notice
+  was ignored. Requirements that lived in free-text `notes` could not be checked. The contract
+  therefore carries action terms, and each item is judged from an engine-owned ledger of verified
+  outcomes, with captures tied to the document epoch the last action left. The model's own
+  `fulfillment.met` can only add a disagreement notice. Action items carry forward across
+  revisions and `forbidden` never loosens, so a revision cannot quietly drop what the user was
+  shown in the echo. The older terms keep "last revision is current", so `research` Briefs do not
+  change. One `TASK_OUTCOME_TABLE` drives the exit code, manifest status, event, report, and first
+  line, so no consumer keeps its own copy. The termination reason is recorded beside the outcome
+  rather than folded into it. A saved Brief outranks a later budget interrupt, because `failed`
+  means no Brief was saved. The costs are that a handoff records manifest status `failed`, which a
+  `--status aborted` listing filter does not match, and that `fill: all_eligible` can never be met
+  until a form-census
+  producer exists. That is conservative by construction: no census means "not counted", never
+  "met".
+- **No-submit is a removed capability, enforced before consent.** A contract that says "do not
+  submit" is honored by the tool, not the prompt. `browser_click`'s pre-domain policy hook refuses
+  a submit-class target before the confirmation gate, so no prompt is built and no handler fires.
+  `workflow_run` refuses any nested plan that could click, because a nested workflow would
+  otherwise bypass the agent-side check. Submit-class is a structural, language-independent fact (a
+  native submit control with a form owner) or the existing protected-action lexicon, never a site
+  rule. The cost is one read-only element evaluation before every click, taken whatever the
+  contract says, because a click that submits or navigates leaves nothing to read afterwards and
+  the ledger's submit signal needs it. Under `forbidden` the policy hook takes a second one.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

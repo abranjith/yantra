@@ -10,16 +10,16 @@ Yantra stores each workflow as `<name>.yaml` in the local workflow directory. A 
 
 There are currently two user-accessible ways to create a saved workflow:
 
-| Method                         | Current behavior                                                                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Promote an agentic browser run | `yantra do "<goal>" --save-as <name>` saves the successful interaction trace after the run publishes its Brief. `discover` is an alias for `do`. |
-| Author YAML directly           | Create or edit `<yantra-data-dir>/workflows/<name>.yaml`, lint the file, then replay it by its `name`.                                           |
+| Method                         | Current behavior                                                                                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Promote an agentic browser run | `yantra do "<goal>" --save-as <name>` saves the successful interaction trace after a `fulfilled` run publishes its Brief. `discover` is an alias for `do`. |
+| Author YAML directly           | Create or edit `<yantra-data-dir>/workflows/<name>.yaml`, lint the file, then replay it by its `name`.                                                     |
 
 The recorder and annotation state machines exist in the core package, but the current CLI does **not** register `record` or `annotate` commands. Do not rely on those command names until they appear in live `yantra --help` output.
 
 ### Promotion lifecycle
 
-`yantra do --save-as` promotes only a published run and only the successful browser interactions in its trace. Navigate, click, ordinary fill, semantic `fill_element`, and extraction activity can become workflow steps. Mid-run observations are treated as navigation aids and dropped; a trailing run of reads becomes one terminal `extract`, preferring an explicit browser extraction when one exists. The promoter declares an output for each resulting extraction.
+`yantra do --save-as` promotes only a `fulfilled` run, one that published its Brief and met every requirement its task contract declared (see [Judging a `do` result](agentic-tasks.md#judging-a-do-result)), and only the successful browser interactions in its trace. A `partial` run is not saved, so a trace that did not finish the task never becomes a workflow. Navigate, click, ordinary fill, semantic `fill_element`, and extraction activity can become workflow steps. Mid-run observations are treated as navigation aids and dropped; a trailing run of reads becomes one terminal `extract`, preferring an explicit browser extraction when one exists. The promoter declares an output for each resulting extraction.
 
 Promotion also preserves confirmation flags and stores secret **references**, never resolved secret values. It saves:
 
@@ -28,7 +28,13 @@ Promotion also preserves confirmation flags and stores secret **references**, ne
 - `security_class: authenticated` when a promoted fill used a secret reference, otherwise `public`;
 - a `synthesis:` block containing the original goal with `use_llm: true`, because the promoted run's published Brief was model-authored.
 
-Saving is best-effort. An existing workflow name is not overwritten, an empty or unconvertible trace is not saved, and lint or filesystem failures are reported in the published outcome without turning the successful `do` run into a failure.
+No workflow step captures a screenshot, so a met screenshot requirement has nothing to replay. The workflow is saved without it, and the saved line names what was left out:
+
+```text
+✓ Saved workflow "order-status" without its viewport screenshot step (no replay step captures a screenshot yet). Replay it with: yantra run order-status
+```
+
+Saving is best-effort. An existing workflow name is not overwritten, an empty or unconvertible trace is not saved, and lint or filesystem failures are reported in the published outcome without changing the `do` run's outcome. A partial run is reported the same way, as `⚠ Could not save workflow "<name>": Not saved: the run was partial (<met> of <total> requirements met). Only a fulfilled run is saved as a workflow.`, or `(no task contract was declared)` in place of the count.
 
 ### Deterministic execution
 
@@ -157,7 +163,9 @@ yantra run order-status --json
 
 Repeat `--params key=value` for several values. A parameter file must be a YAML or JSON mapping; explicit CLI values win over file values. Declared values are coerced to `string`, `number`, `boolean`, or `date`, required values must be present, and credential-shaped values are rejected because parameters are not a secret channel. Extra undeclared values are accepted as strings but are unused unless an expression references them.
 
-`--json` prints the raw run outcome, including outputs and Brief document data when available. Without it, a successful ordinary run prints declared outputs and truncates very long terminal values with a pointer to `outputs.json`. A workflow with a `synthesis:` block renders the Brief instead.
+`--json` prints the raw run outcome, including outputs and Brief document data when available, plus `task_outcome`. Without it, the first line names the run and its outcome word, such as `✓ Run <run-id>: fulfilled`; a successful ordinary run then prints declared outputs and truncates very long terminal values with a pointer to `outputs.json`. A workflow with a `synthesis:` block renders the Brief instead.
+
+Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. The words change no behavior: exit codes are as listed under [Exit behavior](#exit-behavior), so a replay user abort still exits `4`. A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
 
 ### Control replay synthesis
 
@@ -263,6 +271,7 @@ Direct replay launches Chrome headlessly. A workflow that needs a persistent aut
 
 - There is no public recorder or annotation CLI command. Creation is currently promotion or direct YAML editing.
 - Promoted workflows always use `cookies: none`, have no parameter declarations, and cannot be resumed. Parameterize or change profile policy manually, then lint again.
+- Only a `fulfilled` `do` run is promoted, and its workflow cannot take a screenshot: no workflow verb captures one, so a requested screenshot is left out of the saved steps.
 - Resume currently restores only the next-step position. Prior captures/budgets, page URL/state, named locator chains, final synthesis, and refreshed reports are not restored.
 - Workflow-to-workflow composition through the YAML `call_workflow` verb is not implemented; it fails at execution. Agent `workflow_run` is a separate supported bridge.
 - `llm_summarize` is schema-valid, but the current CLI replay runtime does not inject its step-level LLM client. It passes the input capture through unchanged and records `llm_step_skipped`; missing input still fails.

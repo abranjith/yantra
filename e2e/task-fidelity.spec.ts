@@ -49,7 +49,7 @@ describe('@no-llm task fidelity — deterministic tier', () => {
           runRoot,
           runtimeLogScanner: assertRuntimeLinesAreSafe,
         });
-      }, SCENARIO_TIMEOUT_MS);
+      }, scenario.timeoutMs ?? SCENARIO_TIMEOUT_MS);
 
       assertExpectations(
         it,

@@ -369,8 +369,10 @@ export function renderContractEcho(
   terms: EffectiveActionTerms = effectiveActionTermsOf([{ revision: 1, contract: body }]),
 ): string {
   const parts: string[] = [];
-  const understood = renderActionPhrase(terms);
-  if (understood !== null) parts.push(`understood: ${understood}`);
+  // The CLI already leads the echo with "understood:", so the action phrase
+  // joins the other parts without repeating it.
+  const actions = renderActionPhrase(terms);
+  if (actions !== null) parts.push(actions);
   if (body.required_fields.length > 0) parts.push(`fields: ${body.required_fields.join(', ')}`);
   if (body.filters.length > 0) {
     parts.push(

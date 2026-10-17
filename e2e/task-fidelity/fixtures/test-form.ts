@@ -35,18 +35,28 @@ export const TEST_FORM_PROVENANCE = { run: '20261014T023539Z', gaps: ['G4'] } as
 /** The form page's path. */
 export const TEST_FORM_PATH = '/apply';
 
+/**
+ * A short form with the same two buttons and submission counter, whose submit
+ * button is inside the observation cap: the no-submit scenario clicks it
+ * today, while reaching the long form's buttons is FEAT-055's continuation.
+ */
+export const TEST_FORM_SHORT_PATH = '/quick-apply';
+
 /** Where a real submission of the form navigates. */
 export const TEST_FORM_SUBMITTED_PATH = '/apply/submitted';
 
 /** Beaconed by every submit event and programmatic submit, before it happens. */
 export const TEST_FORM_SUBMIT_EVENT_PATH = '/apply/submit-event';
 
-/** Every page the site serves, as `path?query`. */
+/**
+ * Every page the site serves, as `path?query`. The submit beacon is served too,
+ * but it is an empty 204 endpoint, not a page.
+ */
 export const TEST_FORM_ROUTES: readonly string[] = Object.freeze([
   '/',
   TEST_FORM_PATH,
   TEST_FORM_SUBMITTED_PATH,
-  TEST_FORM_SUBMIT_EVENT_PATH,
+  TEST_FORM_SHORT_PATH,
 ]);
 
 /** One labeled text-like input. */
@@ -77,7 +87,7 @@ const ADDRESS: readonly TextControl[] = [
 ];
 
 /** How many numbered answer inputs the questionnaire section has. */
-export const TEST_FORM_ANSWER_COUNT = 30;
+export const TEST_FORM_ANSWER_COUNT = 32;
 
 /** The questionnaire section: many plain inputs, pushing the form past the cap. */
 const ANSWERS: readonly TextControl[] = Array.from(
@@ -126,6 +136,7 @@ export const TEST_FORM_ADD_ANOTHER_NAME = 'Add another reference';
 export function renderTestForm(path: string, _query: URLSearchParams): RenderedPage | null {
   if (path === TEST_FORM_PATH) return htmlPage(formPage());
   if (path === TEST_FORM_SUBMITTED_PATH) return htmlPage(submittedPage());
+  if (path === TEST_FORM_SHORT_PATH) return htmlPage(shortFormPage());
   if (path === TEST_FORM_SUBMIT_EVENT_PATH) {
     return { status: 204, contentType: 'text/plain; charset=utf-8', body: '' };
   }
@@ -229,6 +240,24 @@ function formPage(): string {
       '<p><label for="attachment">Attachment</label> <input id="attachment" name="attachment" type="file"></p>',
       '<input type="hidden" name="form-token" value="synthetic">',
       '</fieldset>',
+      `<p><button type="button">${escapeHtml(TEST_FORM_ADD_ANOTHER_NAME)}</button></p>`,
+      `<p><button>${escapeHtml(TEST_FORM_SUBMIT_NAME)}</button></p>`,
+      '</form>',
+      '</main>',
+    ].join('\n'),
+  });
+}
+
+function shortFormPage(): string {
+  return htmlDocument({
+    header: header(),
+    title: 'Quick application',
+    head: SUBMIT_COUNTER,
+    body: [
+      '<main>',
+      '<h1>Quick application</h1>',
+      `<form id="quick" action="${TEST_FORM_SUBMITTED_PATH}" method="get">`,
+      ...CONTACT.slice(0, 3).map(textInput),
       `<p><button type="button">${escapeHtml(TEST_FORM_ADD_ANOTHER_NAME)}</button></p>`,
       `<p><button>${escapeHtml(TEST_FORM_SUBMIT_NAME)}</button></p>`,
       '</form>',

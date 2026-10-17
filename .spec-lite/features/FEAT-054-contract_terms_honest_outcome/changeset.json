@@ -57,7 +57,7 @@
     },
     {
       "path": "apps/cli/tests/commands/do-promotion.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -86,10 +86,76 @@
       "task": "TASK-010"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/ask.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/profiles-and-history.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/saved-workflows.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "docs/features/vision-assist.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "e2e/agent-browser.spec.ts",
@@ -110,6 +176,30 @@
       "task": "TASK-007"
     },
     {
+      "path": "e2e/task-fidelity-do-form.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/agent/scripted-provider.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "e2e/task-fidelity/fixtures/sites.ts",
       "status": "M",
       "role": "implement",
@@ -117,15 +207,105 @@
     },
     {
       "path": "e2e/task-fidelity/fixtures/test-form.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/runner.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenario.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-declared.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/contract-missing.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-claims-met-contrary.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-contract-missing.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-complete.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-historical.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-fulfillment-omitted.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-revision-drops-screenshot.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-submit-forbidden.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/score/synthetic-runs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "e2e/widget-gauntlet.spec.ts",
@@ -663,6 +843,7 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-054-contract_terms_honest_outcome/changeset.json",
     ".spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md",
     ".spec-lite/plan_do_workflow_reliability.md"
