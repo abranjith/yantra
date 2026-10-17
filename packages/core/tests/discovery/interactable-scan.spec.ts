@@ -2,7 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { scanInteractablesInPage } from '../../src/discovery/interactable-scan.js';
+import {
+  protectedScanOptions,
+  scanInteractablesInPage,
+} from '../../src/discovery/interactable-scan.js';
 
 function makeVisibleRect(top = 10, left = 10): DOMRect {
   return {
@@ -26,7 +29,7 @@ describe('@no-llm scanInteractablesInPage', () => {
   it('collects structural evidence while excluding help, errors and multi-control wrappers', () => {
     document.body.innerHTML =
       '<form><h2>Office</h2><div><span>City</span><input id="city" aria-describedby="help" aria-errormessage="error" autocomplete="section-work shipping address-level2" maxlength="20" required><span id="help">A long explanation</span><span role="alert" id="error">Invalid</span></div><div>Unbound<input><input></div><fieldset><legend>Options</legend><input type="radio" name="choice"><input type="radio" name="choice"></fieldset></form>';
-    const scan = scanInteractablesInPage();
+    const scan = scanInteractablesInPage(protectedScanOptions());
     expect(scan.records[0]?.field).toMatchObject({
       structural: { text: 'City' },
       section: 'Office',
@@ -40,19 +43,23 @@ describe('@no-llm scanInteractablesInPage', () => {
       section: 'Options',
     });
     document.querySelector('#error')!.textContent = 'Changed validation message';
-    expect(scanInteractablesInPage().records[0]?.field?.structural?.text).toBe('City');
+    expect(
+      scanInteractablesInPage(protectedScanOptions()).records[0]?.field?.structural?.text,
+    ).toBe('City');
   });
   it('reports the scan bound and ignores hidden-input records', () => {
     document.body.innerHTML = '<input type="hidden">' + '<input>'.repeat(450);
-    expect(scanInteractablesInPage({ max: 400 }).truncated).toBe(true);
+    expect(scanInteractablesInPage(protectedScanOptions({ max: 400 })).truncated).toBe(true);
     document.body.innerHTML = '<input type="hidden">' + '<input>'.repeat(10);
-    const scan = scanInteractablesInPage({ max: 400, elementKeys: true });
+    const scan = scanInteractablesInPage(protectedScanOptions({ max: 400, elementKeys: true }));
     expect(scan.truncated).toBe(false);
     expect(scan.records).toHaveLength(10);
     expect(scan.records.every((entry) => entry.elementKey !== null)).toBe(true);
     const markup = document.body.innerHTML;
     expect(
-      scanInteractablesInPage({ elementKeys: true }).records.map((entry) => entry.elementKey),
+      scanInteractablesInPage(protectedScanOptions({ elementKeys: true })).records.map(
+        (entry) => entry.elementKey,
+      ),
     ).toEqual(scan.records.map((entry) => entry.elementKey));
     expect(document.body.innerHTML).toBe(markup);
   });
@@ -75,7 +82,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results).toEqual([
       {
         role: 'button',
@@ -88,6 +95,7 @@ describe('@no-llm scanInteractablesInPage', () => {
         scope: 'page',
         value: null,
         valuePresent: false,
+        withheldReason: null,
         checked: null,
         expanded: null,
         selected: null,
@@ -110,7 +118,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(a);
     stubVisible(a);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results).toEqual([
       expect.objectContaining({ role: 'link', name: 'Home', kind: 'link' }),
     ]);
@@ -123,7 +131,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(day);
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('6');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('6');
   });
 
   // The offline naming path must agree with the injected runtime. A day cell
@@ -137,7 +145,9 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(day);
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Sunday, September 6, 2026');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe(
+      'Sunday, September 6, 2026',
+    );
   });
 
   it('keeps aria-label ahead of role=link text content', () => {
@@ -149,7 +159,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(link);
     stubVisible(link);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Home');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Home');
   });
 
   it('prefers the injected accessible-name engine when available', () => {
@@ -161,7 +171,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       describeAccessible: () => ({ role: 'button', name: 'Engine Name' }),
     };
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Engine Name');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Engine Name');
   });
 
   it('falls back when the injected accessible-name engine throws or returns empty', () => {
@@ -175,10 +185,10 @@ describe('@no-llm scanInteractablesInPage', () => {
         throw new Error('detached');
       },
     };
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Heuristic Name');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Heuristic Name');
 
     host.__yantra = { describeAccessible: () => ({ role: 'button', name: '' }) };
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Heuristic Name');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Heuristic Name');
   });
 
   it('keeps the scanner role map when the injected engine reports different roles', () => {
@@ -198,10 +208,9 @@ describe('@no-llm scanInteractablesInPage', () => {
       }),
     };
 
-    expect(scanInteractablesInPage().records.map(({ role }) => role)).toEqual([
-      'combobox',
-      'textbox',
-    ]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records.map(({ role }) => role)).toEqual(
+      ['combobox', 'textbox'],
+    );
   });
 
   it('ignores an <a> with no href (not a real interactable)', () => {
@@ -210,7 +219,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(a);
     stubVisible(a);
 
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
   });
 
   it('derives textbox role for a plain text input and its placeholder as name', () => {
@@ -220,7 +229,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results).toEqual([
       expect.objectContaining({ role: 'textbox', name: 'Search products', kind: 'input' }),
     ]);
@@ -239,7 +248,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(radio);
     stubVisible(radio, 60);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results.find((r) => r.role === 'checkbox')?.name).toBe('Accept terms');
     expect(results.find((r) => r.role === 'radio')?.name).toBe('Option A');
   });
@@ -251,7 +260,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(select);
     stubVisible(select);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results).toEqual([
       expect.objectContaining({
         role: 'combobox',
@@ -272,7 +281,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results[0]?.name).toBe('Submit order');
   });
 
@@ -286,7 +295,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results[0]?.name).toBe('Email address');
   });
 
@@ -299,7 +308,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(label);
     stubVisible(input);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results[0]?.name).toBe('Remember me');
   });
 
@@ -309,7 +318,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBeNull();
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBeNull();
   });
 
   it('marks an element with zero-size bounding rect as not visible', () => {
@@ -328,7 +337,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       toJSON: () => ({}),
     } as DOMRect);
 
-    expect(scanInteractablesInPage().records[0]?.visible).toBe(false);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.visible).toBe(false);
   });
 
   it('marks an element hidden via visibility:hidden as not visible', () => {
@@ -341,7 +350,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       display: 'block',
     } as CSSStyleDeclaration);
 
-    expect(scanInteractablesInPage().records[0]?.visible).toBe(false);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.visible).toBe(false);
   });
 
   it('marks a native disabled input as disabled', () => {
@@ -350,7 +359,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage().records[0]?.disabled).toBe(true);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.disabled).toBe(true);
   });
 
   it('marks aria-disabled="true" as disabled even without the native attribute', () => {
@@ -360,7 +369,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    expect(scanInteractablesInPage().records[0]?.disabled).toBe(true);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.disabled).toBe(true);
   });
 
   it('truncates an over-long accessible name to 200 chars', () => {
@@ -369,7 +378,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(btn);
     stubVisible(btn);
 
-    expect(scanInteractablesInPage().records[0]?.name).toHaveLength(200);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toHaveLength(200);
   });
 
   it('ignores an element with a matched-but-unmapped role (e.g. tab, no coarse kind)', () => {
@@ -381,7 +390,7 @@ describe('@no-llm scanInteractablesInPage', () => {
 
     // Selected by the querySelectorAll (role="tab" is in the candidate list)
     // but has no entry in KIND_BY_ROLE, so it must be filtered out entirely.
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
   });
 
   it('ignores a div with an unselected role entirely (not in the candidate query)', () => {
@@ -390,11 +399,11 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(div);
     stubVisible(div);
 
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
   });
 
   it('returns an empty array on a page with no candidates', () => {
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
   });
 
   it('scans an autocomplete option and names it from its text content', () => {
@@ -407,7 +416,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option);
 
-    expect(scanInteractablesInPage().records).toEqual([
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([
       expect.objectContaining({
         role: 'option',
         kind: 'select',
@@ -424,7 +433,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Chicago O’Hare');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Chicago O’Hare');
   });
 
   it('keeps ranking options by viewport top alongside other interactables', () => {
@@ -439,7 +448,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(option);
     stubVisible(option, 50);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results.map((r) => r.top)).toEqual([200, 50]);
     expect(results.map((r) => r.role)).toEqual(['button', 'option']);
   });
@@ -452,7 +461,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     const serialized = JSON.stringify(results);
     expect(serialized).not.toContain('hunter2');
     expect(results[0]).toEqual(
@@ -475,12 +484,14 @@ describe('@no-llm scanInteractablesInPage', () => {
     stubVisible(grid, 20);
     stubVisible(day, 50);
 
-    expect(scanInteractablesInPage().records[0]).toEqual(
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]).toEqual(
       expect.objectContaining({ group: 'August 2026', scope: 'dialog' }),
     );
 
     grid.setAttribute('aria-label', 'Departure calendar');
-    expect(scanInteractablesInPage().records[0]?.group).toBe('Departure calendar');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.group).toBe(
+      'Departure calendar',
+    );
   });
 
   it('continues past an unlabelled inner table to the labelled calendar panel', () => {
@@ -489,7 +500,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     const day = document.querySelector('button')!;
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.group).toBe('August 2026');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.group).toBe('August 2026');
   });
 
   it('uses a container preceding-sibling heading as its group label', () => {
@@ -500,7 +511,9 @@ describe('@no-llm scanInteractablesInPage', () => {
     stubVisible(grid);
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.group).toBe('September 2026');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.group).toBe(
+      'September 2026',
+    );
   });
 
   it('returns null when no labelled ancestor is found within twelve levels', () => {
@@ -518,7 +531,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(labelled);
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.group).toBeNull();
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.group).toBeNull();
   });
 
   it('prefers the nearest labelled ancestor over a farther label', () => {
@@ -527,7 +540,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     const day = document.querySelector('button')!;
     stubVisible(day);
 
-    expect(scanInteractablesInPage().records[0]?.group).toBe('Near');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.group).toBe('Near');
   });
 
   it('does not promote children of a hidden dialog to dialog scope', () => {
@@ -547,7 +560,7 @@ describe('@no-llm scanInteractablesInPage', () => {
         }) as CSSStyleDeclaration,
     );
 
-    expect(scanInteractablesInPage().records[0]?.scope).toBe('page');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.scope).toBe('page');
   });
 
   it('exposes ordinary values and state while withholding credential fields', () => {
@@ -573,12 +586,57 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(otp);
     stubVisible(otp, 130);
 
-    const results = scanInteractablesInPage().records;
+    const results = scanInteractablesInPage(protectedScanOptions()).records;
     expect(results[0]?.value).toBe('Frisco, Texas');
     expect(results[1]?.checked).toBe(true);
     expect(results[2]?.expanded).toBe(false);
     expect(results[3]).toEqual(expect.objectContaining({ value: null, valuePresent: true }));
     expect(JSON.stringify(results)).not.toContain('123456');
+  });
+
+  it('says why a password field is withheld, beside the presence flag', () => {
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.value = 'CANARY-password';
+    input.setAttribute('aria-label', 'Password');
+    document.body.appendChild(input);
+
+    const [record] = scanInteractablesInPage(protectedScanOptions()).records;
+    expect(record).toEqual(
+      expect.objectContaining({ value: null, valuePresent: true, withheldReason: 'password' }),
+    );
+    expect(JSON.stringify(record)).not.toContain('CANARY-password');
+  });
+
+  it('makes a protected field mislabelled as ordinary visible rather than silent', () => {
+    // The false-classification case: a box labelled "Name" that declares
+    // itself a one-time code. It is withheld either way; the reason is what
+    // lets a reader see why it never discloses a value.
+    document.body.innerHTML =
+      '<label for="name">Name</label><input id="name" autocomplete="one-time-code" value="Ada">';
+
+    const [record] = scanInteractablesInPage(protectedScanOptions()).records;
+    expect(record).toEqual(
+      expect.objectContaining({
+        name: 'Name',
+        value: null,
+        valuePresent: true,
+        withheldReason: 'autocomplete',
+      }),
+    );
+  });
+
+  it('reports no withheld reason for an empty protected field or an ordinary one', () => {
+    document.body.innerHTML =
+      '<input type="password" aria-label="Empty password"><input aria-label="City" value="Lyon">';
+
+    const records = scanInteractablesInPage(protectedScanOptions()).records;
+    expect(records[0]).toEqual(
+      expect.objectContaining({ value: null, valuePresent: false, withheldReason: 'password' }),
+    );
+    expect(records[1]).toEqual(
+      expect.objectContaining({ value: 'Lyon', valuePresent: false, withheldReason: null }),
+    );
   });
 
   it('normalizes and truncates exposed values to 120 characters', () => {
@@ -587,7 +645,7 @@ describe('@no-llm scanInteractablesInPage', () => {
     document.body.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage().records[0]?.value).toHaveLength(120);
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.value).toHaveLength(120);
   });
 
   describe('focus and container, derived inside the existing walk', () => {
@@ -599,7 +657,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       stubVisible(other, 60);
       focused.focus();
 
-      const records = scanInteractablesInPage().records;
+      const records = scanInteractablesInPage(protectedScanOptions()).records;
 
       expect(records.find((entry) => entry.top === 10)?.focused).toBe(true);
       expect(records.find((entry) => entry.top === 60)?.focused).toBe(false);
@@ -611,7 +669,9 @@ describe('@no-llm scanInteractablesInPage', () => {
       stubVisible(input);
       input.blur();
 
-      expect(scanInteractablesInPage().records.every((entry) => !entry.focused)).toBe(true);
+      expect(
+        scanInteractablesInPage(protectedScanOptions()).records.every((entry) => !entry.focused),
+      ).toBe(true);
     });
 
     it('names the outermost container, not the innermost one', () => {
@@ -625,7 +685,9 @@ describe('@no-llm scanInteractablesInPage', () => {
         </div>`;
       for (const element of Array.from(document.querySelectorAll('*'))) stubVisible(element);
 
-      const option = scanInteractablesInPage().records.find((entry) => entry.role === 'option');
+      const option = scanInteractablesInPage(protectedScanOptions()).records.find(
+        (entry) => entry.role === 'option',
+      );
 
       expect(option?.scope).toBe('dialog');
       expect(option?.container).toEqual({ role: 'dialog', name: 'Search flights' });
@@ -637,7 +699,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       document.body.appendChild(button);
       stubVisible(button);
 
-      const record = scanInteractablesInPage().records[0];
+      const record = scanInteractablesInPage(protectedScanOptions()).records[0];
       expect(record?.scope).toBe('page');
       expect(record?.container).toBeNull();
     });
@@ -652,7 +714,7 @@ describe('@no-llm scanInteractablesInPage', () => {
       // The dialog itself keeps jsdom's zero-size rect, so it fails the
       // existing visible-container test the scope walk already applies.
 
-      const record = scanInteractablesInPage().records[0];
+      const record = scanInteractablesInPage(protectedScanOptions()).records[0];
       expect(record?.scope).toBe('page');
       expect(record?.container).toBeNull();
     });
@@ -664,7 +726,7 @@ describe('@no-llm scanInteractablesInPage', () => {
         </div>`;
       for (const element of Array.from(document.querySelectorAll('*'))) stubVisible(element);
 
-      expect(scanInteractablesInPage().records[0]?.container).toEqual({
+      expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.container).toEqual({
         role: 'dialog',
         name: 'Consent',
       });

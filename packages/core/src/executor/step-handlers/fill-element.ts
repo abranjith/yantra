@@ -10,7 +10,11 @@ import {
 import { collectComposedInteractables } from '../../discovery/composed-handles.js';
 import { ensureLocatorRuntime } from '../../discovery/observe.js';
 import { fillField, fillSecretField, parseFillValue, type FillFailure } from '../../fill/index.js';
-import { resolveInteractable } from '../../interaction/index.js';
+import {
+  resolveInteractable,
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
+  type WithheldReason,
+} from '../../interaction/index.js';
 import { scrollContainerInPage } from '../../widgets/scroll.js';
 import {
   defaultWidgetBudget,
@@ -300,7 +304,7 @@ class ReplayWidgetPort implements WidgetPort {
         ? raw.visible
           ? projectAgentInteractable('', raw)
           : null
-        : await describe(handle).catch(() => null);
+        : await describeReplayHandle(handle).catch(() => null);
       if (!described) {
         dispose(handle);
         continue;
@@ -347,7 +351,7 @@ class ReplayWidgetPort implements WidgetPort {
   }
 
   public async adopt(handle: ElementHandle<Element>, fieldName: string): Promise<WidgetTarget> {
-    const described = (await describe(handle)) ?? { role: 'textbox', name: fieldName };
+    const described = (await describeReplayHandle(handle)) ?? { role: 'textbox', name: fieldName };
     const ref = `e${this.nextRef++}`;
     this.refs.set(ref, handle);
     return toTarget({ ref, ...described });
@@ -459,8 +463,18 @@ class ReplayWidgetPort implements WidgetPort {
   }
 }
 
-function describe(handle: ElementHandle<Element>): Promise<Omit<AgentInteractable, 'ref'> | null> {
-  return handle.evaluate((element) => {
+/**
+ * Describe a handle the scan kept no record for; exported for focused tests.
+ *
+ * Protected controls are classified with the shared token list, passed in as
+ * an argument because this function runs in the page and cannot import it.
+ * The private predicate this replaced had omitted the `data-yantra-secret`
+ * marker, so a control the agent never saw a value for disclosed one at replay.
+ */
+export function describeReplayHandle(
+  handle: ElementHandle<Element>,
+): Promise<Omit<AgentInteractable, 'ref'> | null> {
+  return handle.evaluate((element, sensitiveTokens) => {
     if (!(element instanceof HTMLElement) || !element.isConnected) return null;
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
@@ -523,11 +537,17 @@ function describe(handle: ElementHandle<Element>): Promise<Omit<AgentInteractabl
             groupElement.querySelector('h1,h2,h3')?.textContent,
         )
       : '';
-    const sensitive =
-      element.matches('input[type="password"]') ||
-      /\b(current-password|new-password|one-time-code|cc-number|cc-csc|cc-exp)\b/i.test(
-        element.getAttribute('autocomplete') ?? '',
-      );
+    const autocompleteTokens = (element.getAttribute('autocomplete') ?? '')
+      .toLowerCase()
+      .split(/\s+/u);
+    const withheld: WithheldReason | null = element.matches('input[type="password"]')
+      ? 'password'
+      : autocompleteTokens.some((token) => sensitiveTokens.includes(token))
+        ? 'autocomplete'
+        : element.hasAttribute('data-yantra-secret')
+          ? 'secret_marker'
+          : null;
+    const sensitive = withheld !== null;
     const value =
       !sensitive &&
       (element instanceof HTMLInputElement ||
@@ -543,6 +563,7 @@ function describe(handle: ElementHandle<Element>): Promise<Omit<AgentInteractabl
       ...(sensitive && element instanceof HTMLInputElement && element.value
         ? { value_present: true as const }
         : {}),
+      ...(withheld === null ? {} : { withheld }),
       ...(element instanceof HTMLInputElement && ['checkbox', 'radio'].includes(element.type)
         ? { checked: element.checked }
         : {}),
@@ -553,7 +574,7 @@ function describe(handle: ElementHandle<Element>): Promise<Omit<AgentInteractabl
         ? { selected: element.getAttribute('aria-selected') === 'true' }
         : {}),
     };
-  });
+  }, SENSITIVE_AUTOCOMPLETE_TOKENS);
 }
 
 function dispose(handle: ElementHandle<Element>): void {

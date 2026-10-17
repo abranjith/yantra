@@ -20,6 +20,7 @@ import {
   type SerializedVerdict,
   type TypingFailure,
 } from '../interaction/index.js';
+import { committedText } from '../interaction/protected-value.js';
 import {
   watchAndSelectOffered,
   type OfferedSelection,
@@ -45,7 +46,7 @@ import {
   type WidgetSuccess,
   type WidgetTarget,
 } from '../widgets/types.js';
-import { matchesCommitment, matchesIntent, readCommitted } from '../widgets/verify.js';
+import { matchesCommitment, matchesIntent, readCommittedValue } from '../widgets/verify.js';
 
 import { dismissWidget } from './dismiss.js';
 import { asPlanBudget, buildDriverPlan, buildTextPlan } from './plans.js';
@@ -594,7 +595,7 @@ async function settledCommit(
   // named. Reading the node that was actually edited is not a relaxation of
   // verification — it is verification against the right node.
   if (editee) {
-    const fromEditee = await readCommitted(port, editee);
+    const fromEditee = committedText(await readCommittedValue(port, editee)) ?? '';
     if (satisfied(fromEditee)) return fromEditee;
   }
   if (intent.kind !== 'date_range') return null;
@@ -608,8 +609,8 @@ async function settledCommit(
   for (;;) {
     const pair = await resolveDatePair(port, target);
     if (pair) {
-      const from = await readCommitted(port, pair.from);
-      const to = await readCommitted(port, pair.to);
+      const from = committedText(await readCommittedValue(port, pair.from)) ?? '';
+      const to = committedText(await readCommittedValue(port, pair.to)) ?? '';
       if (
         matchesIntent(from, { kind: 'date', date: intent.from }) &&
         matchesIntent(to, { kind: 'date', date: intent.to })

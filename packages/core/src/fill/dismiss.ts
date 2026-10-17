@@ -1,3 +1,4 @@
+import { committedText } from '../interaction/protected-value.js';
 import {
   isOpen,
   openIfClosed,
@@ -10,7 +11,7 @@ import {
   type WidgetCandidate,
 } from '../widgets/option/candidates.js';
 import type { WidgetPort, WidgetTarget } from '../widgets/types.js';
-import { readCommitted } from '../widgets/verify.js';
+import { readCommittedValue } from '../widgets/verify.js';
 
 import { fillFailure, type FillFailure } from './types.js';
 
@@ -89,7 +90,7 @@ export async function dismissWidget(
   }
   await sleep(DISMISS_SETTLE_MS);
 
-  let committed = await readCommitted(port, target);
+  let committed = committedText(await readCommittedValue(port, target)) ?? '';
   let stillOpen = await isOpen(port, target, container);
   if (usedEscape && preserved && !matches(committed)) {
     const reopened = await openIfClosed(port, target);
@@ -100,7 +101,7 @@ export async function dismissWidget(
         await clickCandidate(port, retryControl);
         actions += 1;
         await sleep(DISMISS_SETTLE_MS);
-        committed = await readCommitted(port, target);
+        committed = committedText(await readCommittedValue(port, target)) ?? '';
         stillOpen = await isOpen(port, target, reopened.container);
       } else {
         // Reopening was a probe for a commit control this widget turns out not

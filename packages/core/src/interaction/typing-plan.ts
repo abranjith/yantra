@@ -6,7 +6,13 @@ import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js
 import { locateEditee } from './editee.js';
 import { asPlanBudget } from './escalation.js';
 import type { EscalationPlan, Rung, RungOutcome } from './escalation.js';
-import type { EditeeProbeOptions, TypedText, TypingFailure, TypingStrategy } from './typing.js';
+import {
+  isTruncationOf,
+  type EditeeProbeOptions,
+  type TypedText,
+  type TypingFailure,
+  type TypingStrategy,
+} from './typing.js';
 
 /** Runtime operations injected to keep this builder declarative and cycle-free. */
 export interface TypingPlanOperations {
@@ -201,22 +207,10 @@ function failed(target: WidgetTarget, committed: string, requested: string): Typ
     message:
       committed.length === 0
         ? `The "${target.name}" control is still empty after the value was typed.`
-        : isTruncation(committed, requested)
+        : isTruncationOf(committed, requested)
           ? `The "${target.name}" control kept only "${committed}" of the value that was typed.`
           : `The "${target.name}" control changed the typed value to unrelated text "${committed}".`,
     observed: committed,
     attempted: [],
   };
-}
-
-function isTruncation(committed: string, requested: string): boolean {
-  const actual = committed.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  const wanted = requested.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  if (wanted.length === 0 || actual.length >= wanted.length) return false;
-  let cursor = 0;
-  for (const character of wanted) {
-    if (character === actual[cursor]) cursor += 1;
-    if (cursor === actual.length) return true;
-  }
-  return actual.length === 0;
 }

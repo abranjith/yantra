@@ -7,16 +7,19 @@ import { wrapPuppeteerPage } from '../../src/browser/session.js';
 import { promoteAgentTrace, type PromotableTraceStep } from '../../src/discovery/promote.js';
 import { InMemoryCaptureStore } from '../../src/executor/capture-store.js';
 import {
+  describeReplayHandle,
   driveFillElement,
   handleFillElement,
   FillElementExecutionError,
 } from '../../src/executor/step-handlers/fill-element.js';
 import { STEP_DISPATCH } from '../../src/executor/step-handlers/index.js';
 import { realClock, type ExecutionContext } from '../../src/executor/types.js';
+import { classifyWithheld } from '../../src/interaction/protected-value.js';
 import type { WidgetTarget } from '../../src/widgets/types.js';
 import { translate } from '../../src/workflow/replay/workflow-to-plan.js';
 import type { WorkflowStore } from '../../src/workflow/store.types.js';
 import { layoutBrowser } from '../helpers/layout-browser.js';
+import { protectedInputMarkup, WITHHELD_FACTS_TABLE } from '../support/protected-facts.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 describe('@no-llm fill_element replay handler', () => {
@@ -81,6 +84,37 @@ describe('@no-llm fill_element replay handler', () => {
       await browser.close();
     }
   }, 45_000);
+  it('classifies a control the scan kept no record for with the shared vocabulary', async () => {
+    // `role="tab"` keeps the scan from describing the input, so the replay
+    // port's own in-page describer answers. Its private predicate once omitted
+    // the secret marker; it now has to agree with the shared classifier on
+    // every row, in a real page where it cannot close over anything.
+    const browser = await layoutBrowser();
+    try {
+      for (const row of WITHHELD_FACTS_TABLE) {
+        await browser.page.setContent(protectedInputMarkup(row, 'CANARY-replay', 'role="tab"'));
+        const handle = (await browser.page.$('input'))!;
+        try {
+          const described = await describeReplayHandle(handle);
+          expect({ row: row.label, withheld: described?.withheld ?? null }).toEqual({
+            row: row.label,
+            withheld: classifyWithheld(row.facts),
+          });
+          if (row.expected === null) {
+            expect(described?.value).toBe('CANARY-replay');
+          } else {
+            expect(described?.value_present).toBe(true);
+            expect(JSON.stringify(described)).not.toContain('CANARY-replay');
+          }
+        } finally {
+          await handle.dispose();
+        }
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 45_000);
+
   it('is registered in the executor dispatch table', () => {
     expect(STEP_DISPATCH.has('fill_element')).toBe(true);
   });

@@ -350,4 +350,26 @@ describe('@no-llm lint boundary rules', () => {
     expect(source).toContain('fillField(');
     expect(source).not.toMatch(/llm|languageModel|generateText|chatCompletion/i);
   });
+
+  it('names the protected autocomplete tokens only in the protected-value module', () => {
+    // Three in-page copies of this list once drifted: the replay port's lacked
+    // the secret marker. The tokens now live in one module and every in-page
+    // reader receives them as an argument. The single other occurrence allowed
+    // is the scan's WHATWG autofill field-name vocabulary, which lists every
+    // field kind (these among them) to name a field, never to protect one.
+    const offenders: string[] = [];
+    for (const filePath of globSync('packages/core/src/**/*.ts', { cwd: repoRoot })) {
+      const normalized = filePath.split(sep).join('/');
+      if (normalized.endsWith('packages/core/src/interaction/protected-value.ts')) continue;
+      const lines = readFileSync(resolve(repoRoot, filePath), 'utf8').split('\n');
+      lines.forEach((line, index) => {
+        if (!/current-password|one-time-code|cc-csc/u.test(line)) return;
+        const fieldNameVocabulary =
+          normalized.endsWith('packages/core/src/discovery/interactable-scan.ts') &&
+          line.trimStart().startsWith("'name honorific-prefix given-name");
+        if (!fieldNameVocabulary) offenders.push(`${normalized}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
 });

@@ -5,6 +5,7 @@ import {
   type ChoiceSubstitution,
   type InteractionFailureCause,
 } from '../../interaction/index.js';
+import { committedText } from '../../interaction/protected-value.js';
 import { isOpen, openIfClosed, resolveContainer, type WidgetContainer } from '../open-state.js';
 import { clickCandidate } from '../option/candidates.js';
 import {
@@ -16,7 +17,7 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../types.js';
-import { matchesIntent, readCommitted } from '../verify.js';
+import { matchesIntent, readCommittedValue } from '../verify.js';
 
 import { readCalendarGrid, type CalendarGridRead } from './calendar-grid.js';
 import { resolveDatePair } from './date-pair.js';
@@ -109,7 +110,7 @@ export async function selectByOfferedCalendarLabel(
     path: choice.path,
     group: choice.group,
   });
-  const committed = await readCommitted(port, target);
+  const committed = committedText(await readCommittedValue(port, target)) ?? '';
   if (!matchesIntent(committed, { kind: 'date', date: choice.derivedDate })) {
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
@@ -270,7 +271,7 @@ export const calendarDriver: WidgetDriver = {
       if (clicked.substitution) substitution = clicked.substitution;
     }
 
-    const committed = await readCommitted(port, target);
+    const committed = committedText(await readCommittedValue(port, target)) ?? '';
     if (matchesIntent(committed, intent)) {
       return {
         ok: true,

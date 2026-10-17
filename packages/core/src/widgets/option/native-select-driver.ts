@@ -1,5 +1,6 @@
+import { committedText } from '../../interaction/protected-value.js';
 import { widgetFailure, type WidgetDriver } from '../types.js';
-import { matchesIntent, readCommitted } from '../verify.js';
+import { matchesIntent, readCommittedValue } from '../verify.js';
 
 /** Driver for native HTML select controls. */
 export const nativeSelectDriver: WidgetDriver = {
@@ -29,7 +30,7 @@ export const nativeSelectDriver: WidgetDriver = {
       const option = element.selectedOptions[0];
       return option ? { label: option.label || option.text, value: option.value } : null;
     });
-    const committed = await readCommitted(port, target);
+    const committed = committedText(await readCommittedValue(port, target)) ?? '';
     if (
       selection === null ||
       (!matchesIntent(selection.label, intent) && !matchesIntent(selection.value, intent))

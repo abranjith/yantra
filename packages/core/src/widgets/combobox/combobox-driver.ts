@@ -31,6 +31,7 @@ import {
   type InteractionFailureCause,
   type TypingFailure,
 } from '../../interaction/index.js';
+import { committedText } from '../../interaction/protected-value.js';
 import { isOpen, resolveContainer, type WidgetContainer } from '../open-state.js';
 import {
   clickCandidate,
@@ -45,7 +46,7 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../types.js';
-import { readCommitted } from '../verify.js';
+import { readCommittedValue } from '../verify.js';
 
 /**
  * Longest a typed control is given to produce and settle its suggestions.
@@ -434,7 +435,7 @@ export async function watchAndSelectOffered(
   ) {
     return {
       kind: 'no-suggestions',
-      committed: await readCommitted(port, target),
+      committed: committedText(await readCommittedValue(port, target)) ?? '',
       dismissed: false,
       actions: 0,
       container,
@@ -449,7 +450,7 @@ export async function watchAndSelectOffered(
     return {
       kind: 'ambiguous',
       offered: ranked.offered,
-      observed: await readCommitted(port, target),
+      observed: committedText(await readCommittedValue(port, target)) ?? '',
       actions: 0,
       container,
     };
@@ -457,7 +458,7 @@ export async function watchAndSelectOffered(
 
   if (ranked.kind === 'none') {
     await release(port);
-    const observed = await readCommitted(port, target);
+    const observed = committedText(await readCommittedValue(port, target)) ?? '';
     // Whether this control will hold free text is not a judgement to make about
     // its markup — it is something the page answers by either keeping the text
     // or clearing it on release.
@@ -478,7 +479,7 @@ export async function watchAndSelectOffered(
   }
 
   await clickCandidate(port, ranked.candidate);
-  const committed = await readCommitted(port, target);
+  const committed = committedText(await readCommittedValue(port, target)) ?? '';
   if (committed.trim().length === 0) {
     return {
       kind: 'not-committed',

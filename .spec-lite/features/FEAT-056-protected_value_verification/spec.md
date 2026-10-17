@@ -388,8 +388,8 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Observation reports a withheld reason from one shared classifier
-- [ ] TASK-002: Typed committed reads with an in-page match verdict
+- [x] TASK-001: Observation reports a withheld reason from one shared classifier
+- [x] TASK-002: Typed committed reads with an in-page match verdict
 - [ ] TASK-003: Caller-supplied data in protected fields verifies and succeeds (agent and replay)
 - [ ] TASK-004: Failures named by observation; release wording gated on an actual release
 - [ ] TASK-005: Run-directory leak gate for stored-secret and protected test values

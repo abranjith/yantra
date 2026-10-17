@@ -41,8 +41,8 @@ function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
     goto(url, opts) {
       return puppeteerPage.goto(url, opts as Parameters<PuppeteerPage['goto']>[1]);
     },
-    evaluate<T>(fn: () => T) {
-      return puppeteerPage.evaluate(fn);
+    evaluate<T, A>(fn: (arg: A) => T, arg?: A) {
+      return puppeteerPage.evaluate(fn as (arg: unknown) => T, arg) as Promise<T>;
     },
     close() {
       return puppeteerPage.close();

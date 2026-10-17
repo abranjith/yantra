@@ -8,6 +8,7 @@ export * from './escalation.js';
 export * from './query-plan.js';
 export * from './typing.js';
 export * from './typing-plan.js';
+export * from './protected-value.js';
 export * from './resolution.js';
 export * from './messages.js';
 export * from './protected-actions.js';

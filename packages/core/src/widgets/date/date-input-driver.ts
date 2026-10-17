@@ -1,5 +1,6 @@
+import { committedText } from '../../interaction/protected-value.js';
 import { widgetFailure, type WidgetDriver, type WidgetPort, type WidgetTarget } from '../types.js';
-import { readCommitted } from '../verify.js';
+import { readCommittedValue } from '../verify.js';
 
 import { resolveDatePair } from './date-pair.js';
 
@@ -108,7 +109,7 @@ async function fillDateInput(
     element.dispatchEvent(new EventCtor('input', { bubbles: true }));
     element.dispatchEvent(new EventCtor('change', { bubbles: true }));
   });
-  const committed = await readCommitted(port, target);
+  const committed = committedText(await readCommittedValue(port, target)) ?? '';
   if (parseCommitted(committed, format) !== isoDate) {
     return {
       ok: false,
