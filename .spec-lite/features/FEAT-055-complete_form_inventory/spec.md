@@ -478,6 +478,9 @@ An unlabeled field with a structural label:
 > Implementation note: the existing fill-plan `FieldIdentity` was renamed `FillFieldIdentity` to distinguish it from the new shared semantic identity. Not-found characterization expectations now exclude buttons and links, as TASK-007 requires.
 
 > Verification repair: the previously formatted migration replay baseline was restored to the compact JSON emitted by its unchanged characterization test and excluded from Prettier. The suite was explicitly enabled against local Chrome.
+> Clean-checkout repair: tracked the existing nullable legacy-ledger fixture (previously hidden by the broad `artifacts/` ignore) and updated the composed-handle mock for the additive `truncated` property. Both focused suites pass.
+
+> Integration coordination: activated FEAT-055 targets in the task-fidelity owner ratchet. The scripted radio fill uses the supported section-qualified option name (`Plan Standard`, `checked`), while full-form fulfillment belongs to FEAT-056 because protected/date commits remain deliberately unverified until that feature lands. The historical run now gates the actual filled-field count.
 
 ## 6. Cross-Cutting Concerns
 

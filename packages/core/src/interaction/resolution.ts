@@ -218,10 +218,12 @@ function narrow(
   );
   const firstRole = pool[0]!.role;
   const firstGroup = pool[0]!.group ?? null;
+  const firstSection = pool[0]!.field?.section ?? null;
   const copiesOfOneControl = pool.every(
     (entry) =>
       normalizeText(entry.name.trim() ? entry.name : (entry.field?.label ?? '')) === firstName &&
       entry.role === firstRole &&
+      (entry.field?.section ?? null) === firstSection &&
       (entry.group ?? null) === firstGroup,
   );
   const matchesPreferredIdentity =

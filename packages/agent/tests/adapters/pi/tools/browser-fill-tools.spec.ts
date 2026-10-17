@@ -378,7 +378,13 @@ describe('@no-llm browser_fill_element contract', () => {
     expect(trace.steps()).toEqual([
       expect.objectContaining({
         kind: 'fill_element',
-        field: { role: 'textbox', name: 'Search', group: null },
+        field: {
+          role: 'textbox',
+          name: 'Search',
+          group: null,
+          label: 'Search',
+          label_origin: 'explicit',
+        },
         value: { kind: 'literal', value: 'quiet room' },
       }),
     ]);

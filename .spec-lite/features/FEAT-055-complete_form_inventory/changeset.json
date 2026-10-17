@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": ".gitignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": ".prettierignore",
       "status": "M",
       "role": "implement",
@@ -33,6 +39,24 @@
     },
     {
       "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/expectations.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-complete.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-form-historical.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-008"
@@ -230,6 +254,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/tests/discovery/composed-handles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/discovery/interactable-scan.spec.ts",
       "status": "M",
       "role": "implement",
@@ -262,6 +292,12 @@
     {
       "path": "packages/core/tests/executor/fill-element.spec.ts",
       "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/fixtures/artifacts/legacy-attempt-ledger.json",
+      "status": "U",
       "role": "implement",
       "task": "TASK-008"
     },

@@ -34,6 +34,20 @@ describe('@no-llm resolveInteractable tiers', () => {
       },
     ];
     expect(resolveInteractable('City', entries).kind).toBe('ambiguous');
+    expect(
+      resolveInteractable('City', entries, {
+        preferred: {
+          ref: 'e2',
+          role: 'textbox',
+          name: '',
+          label: 'City',
+          labelOrigin: 'structural',
+          group: null,
+          value: null,
+        },
+        allowEquivalentCopies: true,
+      }).kind,
+    ).toBe('ambiguous');
     expect(resolveInteractable('Shipping City', entries)).toMatchObject({
       kind: 'match',
       tier: 'exact',

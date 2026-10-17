@@ -161,11 +161,12 @@ function overlap(query: string, names: readonly string[]): number {
   );
 }
 
-function candidateDetails(entry: AgentInteractable): Record<string, string | null> {
+function candidateDetails(entry: AgentInteractable): Record<string, unknown> {
   return {
     ref: entry.ref,
     name: entry.name.trim(),
     role: entry.role,
     group: entry.group ?? null,
+    ...(entry.field ? { field: entry.field } : {}),
   };
 }

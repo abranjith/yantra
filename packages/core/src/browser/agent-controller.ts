@@ -675,6 +675,12 @@ export class AgentBrowserController implements WidgetPort {
         total: inventory.total,
         omitted: inventory.omitted,
         scanBounded: inventory.scanBounded,
+        labelOrigins: Object.fromEntries(
+          (['explicit', 'structural', 'placeholder', 'title', 'none'] as const).map((origin) => [
+            origin,
+            [...identities.values()].filter((identity) => identity.origin === origin).length,
+          ]),
+        ),
         openShadow: records.filter((record) => record.composedScope === 'open-shadow').length,
       },
       'observed interactables',

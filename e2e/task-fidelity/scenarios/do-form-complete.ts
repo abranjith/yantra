@@ -4,9 +4,9 @@
  * of ten, captures the viewport after the last fill (Vision Assist granted,
  * with an image-capable model), and publishes without submitting.
  *
- * `fulfilled` needs FEAT-055 TASK-001's census of the whole form as the fill
- * item's denominator; until it lands the fill is honestly "not counted" and
- * the run is `partial`. FEAT-058 later moves the capture to `browser_capture`
+ * FEAT-055 supplies the whole-form denominator. `fulfilled` additionally needs
+ * FEAT-056's verified protected/date commits; until then the run is honestly
+ * `partial`. FEAT-058 later moves the capture to `browser_capture`
  * with no grant.
  */
 
@@ -51,7 +51,7 @@ const VALUES: readonly (readonly [string, string])[] = [
     (_, index) => [`Answer ${index + 1}`, `Sample answer ${index + 1}`] as const,
   ),
   ['Preferred contact time', 'Evening'],
-  ['Plan', 'Standard'],
+  ['Plan Standard', 'checked'],
   ['Subscribe to the newsletter', 'checked'],
   ['I accept the terms', 'checked'],
   ['Start date', '2026-11-01'],
@@ -76,7 +76,7 @@ function fillBatches(): ScriptStep[] {
 
 const PROTECTED_FIELDS = ['Password', 'Confirm password'] as const;
 const DATE_FIELDS = ['Date of birth', 'Start date'] as const;
-const GROUP_FIELDS = ['Plan'] as const;
+const GROUP_FIELDS = ['Plan Standard'] as const;
 
 /** Failed fills as `<field>: <code>`, limited to `fields` (all when null). */
 function failuresFor(run: ScenarioRun, fields: readonly string[] | null): string[] {
@@ -92,11 +92,11 @@ const expectations: readonly Expectation[] = [
   ...formExpectations(),
   {
     id: 'fulfilled',
-    owner: 'FEAT-055',
+    owner: 'FEAT-056',
     measure: (run) => ({ outcome: taskOutcomeOf(run), exit: exitCodeOf(run) }),
     target: equals({ outcome: 'fulfilled', exit: 0 }),
     baseline: equals({ outcome: 'partial', exit: 2 }),
-    note: 'Plan §12: a fully filled form with its capture is fulfilled once the census counts it.',
+    note: 'A counted form with its capture is fulfilled once protected and date fields verify.',
   },
   {
     id: 'screenshot-met',
@@ -133,8 +133,7 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-055',
     measure: (run) => failuresFor(run, GROUP_FIELDS),
     target: equals([]),
-    baseline: equals(['Plan: FORM_FIELD_NOT_FOUND']),
-    note: 'Plan §12 FEAT-055 Part B: a radio group is named by its fieldset legend.',
+    note: 'FEAT-055 Part B: the fieldset section qualifies the radio option, without guessing among group members.',
   },
   {
     id: 'other-fields-commit',
