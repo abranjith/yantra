@@ -14,6 +14,7 @@ import type {
   ConfirmationGateway,
   ConfirmationStore,
   ContentFetcher,
+  FillCensusSource,
   DocumentStore,
   EthicsGate,
   PageExtractor,
@@ -38,7 +39,10 @@ import type {
   TemplatedReport,
 } from '@yantra/protocol';
 
+import type { ActionLedger } from './action-ledger.js';
 import type { BudgetTracker } from './budget.js';
+import type { ContractCapabilityResolver } from './contract-capabilities.js';
+import type { FulfillmentRecord } from './fulfillment.js';
 import type { WorkflowToolMode } from './profiles.js';
 import type { RunHealthLedger } from './run-health.js';
 import type { TaskContractStore } from './task-contract.js';
@@ -242,6 +246,20 @@ export interface WorkflowToolDeps {
   listCatalog(): Promise<readonly WorkflowCatalogEntry[]>;
   /** Execute a saved workflow deterministically in its own nested run directory. */
   run(input: WorkflowRunInput, ctx: WorkflowRunContext): Promise<WorkflowRunToolOutcome>;
+  /**
+   * The validated steps of a saved workflow (verb plus, for `call_workflow`,
+   * the callee), or null when it cannot be loaded. Read only under
+   * `effects.submit: forbidden` (FEAT-054 S8) to refuse a clicking workflow
+   * before it runs; absent means the plan cannot be checked, so such a run is
+   * refused.
+   */
+  loadSteps?(name: string): Promise<readonly WorkflowStepShape[] | null>;
+}
+
+/** The part of a workflow step the no-submit check reads. */
+export interface WorkflowStepShape {
+  readonly verb: string;
+  readonly workflow_name?: string;
 }
 
 /** Browser tool dependencies for the run's single ephemeral controller. */
@@ -497,6 +515,31 @@ export interface RunServices {
    * would silently drop the missing-contract notice.
    */
   readonly contract: TaskContractStore;
+  /**
+   * The run's record of verified action outcomes (FEAT-054): committed fills,
+   * executed and refused clicks, and captures. Fulfillment is judged from it.
+   * Required, not optional, for the same reason as `urlProvenance`: a
+   * construction site that forgot it would silently judge every action unmet.
+   */
+  readonly actionLedger: ActionLedger;
+  /**
+   * The evaluation of the run's publication against its contract (FEAT-054),
+   * set by `result_publish` or the runtime-assembled fallback. Required for
+   * the same reason as {@link actionLedger}.
+   */
+  readonly fulfillment: FulfillmentRecord;
+  /**
+   * Where `fill.coverage: 'all_eligible'` reads its denominator: a census of
+   * the current form (FEAT-055 TASK-001). STUB until that producer lands:
+   * absent means no census, so a declared fill is never `met`. Read only when
+   * the contract declares a fill.
+   */
+  readonly fillCensus?: FillCensusSource;
+  /**
+   * Which declared contract items the run can deliver (FEAT-054). Absent means
+   * the default Vision-Assist-backed resolver over {@link vision}.
+   */
+  readonly contractCapabilities?: ContractCapabilityResolver;
 }
 
 export type { SearchProviderName, SearchResult };

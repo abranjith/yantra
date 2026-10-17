@@ -29,7 +29,7 @@ export interface ContractFilter {
  * key would measure nothing.
  */
 export interface ScenarioContract {
-  readonly deliverable: 'table' | 'answer' | 'report';
+  readonly deliverable: 'table' | 'answer' | 'report' | 'actions';
   /** Truth fields every delivered row (or the answer) must carry. */
   readonly requiredFields: readonly string[];
   readonly filters: readonly ContractFilter[];
@@ -69,6 +69,17 @@ export interface Scenario {
    * Defaults to `true`, the product default (FEAT-052).
    */
   readonly browse?: boolean;
+  /**
+   * Grants Vision Assist (`context.screenshots`) with an image-capable model,
+   * so `browser_screenshot` is registered (FEAT-054). Defaults to false.
+   */
+  readonly visionAssist?: boolean;
+  /**
+   * The deterministic tier's allowance for this scenario, when it needs more
+   * than the default: real-Chrome form fills cost seconds per field until
+   * FEAT-057 lands.
+   */
+  readonly timeoutMs?: number;
   /** The deterministic tier's script. */
   readonly script: readonly ScriptStep[];
   /** The deterministic tier's expectations. */

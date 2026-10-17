@@ -71,6 +71,8 @@ function fakeController(error: unknown) {
     url: vi.fn().mockReturnValue('https://example.com/page'),
     host: vi.fn().mockReturnValue('example.com'),
     describeRef: vi.fn().mockReturnValue({ ref: 'e1', role: 'button', name: 'Apply filters' }),
+    // A plain button: not submit-class (FEAT-054 reads this before every click).
+    submitFacts: vi.fn().mockResolvedValue(null),
     locatorFor: vi.fn().mockResolvedValue([]),
     beginToolCall: vi.fn(),
   };

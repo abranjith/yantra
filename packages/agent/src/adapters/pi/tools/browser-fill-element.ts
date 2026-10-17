@@ -203,13 +203,27 @@ export interface FailedBrowserFill extends DomainFailure {
   readonly target?: WidgetTarget;
 }
 
-/** Apply one field without taking the caller-owned post-action observation. */
+/** Which tool a verified fill is recorded under, and how many caller fields it stands for. */
+export interface FillAttribution {
+  readonly tool: 'browser_fill_form' | 'browser_fill_element';
+  readonly covers: number;
+}
+
+const SINGLE_FIELD: FillAttribution = { tool: 'browser_fill_element', covers: 1 };
+
+/**
+ * Apply one field without taking the caller-owned post-action observation.
+ *
+ * A verified commit is recorded in the run's action ledger (FEAT-054) under
+ * `attribution`; a failed fill records nothing.
+ */
 export async function applyBrowserFill(
   field: string,
   value: BrowserFillValue,
   services: RunServices,
   preresolved?: ResolvedFillField,
   sink?: ActionMetadataSink,
+  attribution: FillAttribution = SINGLE_FIELD,
 ): Promise<AppliedBrowserFill | FailedBrowserFill> {
   const deps = services.domain.browser;
   const controller = browserController(services);
@@ -252,6 +266,7 @@ export async function applyBrowserFill(
       { kind: 'literal', value: services.userInput?.mask(literal) ?? literal },
       services,
     );
+    recordFillCommitted(services, field, target, attribution);
     return {
       field,
       ref: target.ref,
@@ -322,6 +337,7 @@ export async function applyBrowserFill(
     );
     if (!outcome.ok) return mapFillFailure(outcome);
     await appendSemanticTrace(controller, target, { kind: 'secret_ref', key: value.key }, services);
+    recordFillCommitted(services, field, target, attribution);
     return {
       field,
       ref: target.ref,
@@ -334,6 +350,26 @@ export async function applyBrowserFill(
   } finally {
     resolved.dispose();
   }
+}
+
+/**
+ * Records one verified commit: the resolved field name (or the caller's, for
+ * an unnamed control), its ref and widget group. Never the value.
+ */
+function recordFillCommitted(
+  services: RunServices,
+  field: string,
+  target: WidgetTarget,
+  attribution: FillAttribution,
+): void {
+  services.actionLedger.record({
+    kind: 'fill_committed',
+    tool: attribution.tool,
+    ref: target.ref,
+    field: target.name.trim().length > 0 ? target.name : field,
+    groupKey: target.group,
+    covers: attribution.covers,
+  });
 }
 
 export function isSecretRef(

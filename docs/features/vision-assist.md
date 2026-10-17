@@ -24,6 +24,8 @@ Every screenshot is subject to dedicated, fail-closed limits: at most 3 capture 
 
 Accepted captures are stored under the run directory as `screenshots/<sequence>-<sha256-prefix>.png`. `tool-calls.jsonl` and generated report projections contain capture metadata only: relative path, SHA-256, MIME type, dimensions, and byte count. They do not embed pixels. The raw provider session log under `agent/` contains the inline image sent to the model and is therefore a capture-bearing, sensitive local artifact. `yantra audit` calls this out and lists each image the model saw with its originating tool call and consumed capture budget.
 
+`browser_screenshot` is also the only producer of the screenshot a `do` task contract can request in `artifacts`. Each accepted capture is recorded in the run's action ledger with its scope (`viewport` with no reference, `element` with one), and the requirement is judged from those records; see [Judging a `do` result](agentic-tasks.md#judging-a-do-result). When Vision Assist is unavailable, `task_contract` reports a requested viewport or element screenshot as a capability gap whose reason names the first gate that keeps it off: `zero_llm`, `suppressed_by_flag`, `no_browser_tools`, `grant_missing`, or `model_text_only`. A `full_page` screenshot is never possible through this tool and reports `scope_unsupported`.
+
 ## How to Use It
 
 Grant screenshot access with the preference command:

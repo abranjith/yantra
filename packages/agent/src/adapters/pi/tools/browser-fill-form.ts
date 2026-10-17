@@ -164,7 +164,10 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       }
     }
 
-    const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved, sink);
+    const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved, sink, {
+      tool: 'browser_fill_form',
+      covers: spec.covers.length,
+    });
     if (isDomainFailure(outcome)) {
       const details = asDetails(outcome.details);
       // Only the date driver knows which range leg failed, and its failure

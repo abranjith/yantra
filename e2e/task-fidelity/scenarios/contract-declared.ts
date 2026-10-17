@@ -45,6 +45,10 @@ const NORMALIZED = {
   ranking: null,
   limit: null,
   notes: null,
+  // The action terms (FEAT-054) normalize to their neutral defaults.
+  fill: null,
+  artifacts: [],
+  effects: { submit: 'allowed' },
 };
 
 const script: readonly ScriptStep[] = [

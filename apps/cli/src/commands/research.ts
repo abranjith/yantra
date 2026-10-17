@@ -4,7 +4,6 @@ import {
   resolveCommandTaskProfile,
   type runAgenticTask,
   type ActiveReportTemplate,
-  type AgenticTaskOutcome,
 } from '@yantra/agent';
 import {
   BlocklistImpl,
@@ -52,7 +51,7 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO } from '../connector-io.js';
+import { CLIConnectorIO, agentFailureLine } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import {
@@ -467,7 +466,7 @@ async function runAgenticResearch(
     },
   );
   if (outcome.kind !== 'published') {
-    throw new Error(agentFailureMessage(outcome));
+    throw new Error(agentFailureLine(outcome));
   }
   const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
   if (outcome.brief.kind === 'templated_report') {
@@ -497,14 +496,6 @@ async function runAgenticResearch(
   }
   await runtime.recordHistory(outcome.runId);
   if (options.open === true) openArtifact(outcome.brief.htmlPath);
-}
-
-function agentFailureMessage(
-  outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>,
-): string {
-  return outcome.kind === 'handoff'
-    ? `${outcome.blocker}: ${outcome.safestNextAction}`
-    : `${outcome.error.code}: ${outcome.error.message}`;
 }
 
 function buildInvocation(

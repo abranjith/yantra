@@ -575,17 +575,17 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Protocol action terms, outcome vocabulary, Brief requirements, `requirements_unmet`
-- [ ] TASK-002: `task_contract` action terms, carry-forward, plain-word echo, wind-down exemption, `agent-v11`
-- [ ] TASK-003: Engine-enforced no-submit (`SUBMIT_FORBIDDEN`) before any prompt
-- [ ] TASK-004: Run action ledger with epoch-stamped verified commits, clicks, refusals, captures
-- [ ] TASK-005: Per-item fulfillment from evidence, Brief requirements, disagreement notice
-- [ ] TASK-006: `fill` coverage against the engine census with classified exemptions (STUB census until FEAT-055 TASK-001)
-- [ ] TASK-007: `CONTRACT_REQUIRED` on `do` publish; salvaged no-contract run is `partial`
-- [ ] TASK-008: One outcome mapping table: outcome, termination reason, manifest, event, report, exit code
-- [ ] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
-- [ ] TASK-010: `run`, history, and listings show outcome words
-- [ ] TASK-011: Promotion gated on `fulfilled`; omitted capture step named
-- [ ] TASK-012: Task-fidelity scenarios pin FEAT-054
+- [x] TASK-001: Protocol action terms, outcome vocabulary, Brief requirements, `requirements_unmet`
+- [x] TASK-002: `task_contract` action terms, carry-forward, plain-word echo, wind-down exemption, `agent-v11`
+- [x] TASK-003: Engine-enforced no-submit (`SUBMIT_FORBIDDEN`) before any prompt
+- [x] TASK-004: Run action ledger with epoch-stamped verified commits, clicks, refusals, captures
+- [x] TASK-005: Per-item fulfillment from evidence, Brief requirements, disagreement notice
+- [x] TASK-006: `fill` coverage against the engine census with classified exemptions (STUB census until FEAT-055 TASK-001) — STUB: production wires no `RunServices.fillCensus`, so a declared `fill` reports `inventory_unavailable` until FEAT-055 TASK-001 supplies the producer
+- [x] TASK-007: `CONTRACT_REQUIRED` on `do` publish; salvaged no-contract run is `partial`
+- [x] TASK-008: One outcome mapping table: outcome, termination reason, manifest, event, report, exit code
+- [x] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
+- [x] TASK-010: `run`, history, and listings show outcome words
+- [x] TASK-011: Promotion gated on `fulfilled`; omitted capture step named
+- [x] TASK-012: Task-fidelity scenarios pin FEAT-054 — `do-form-complete` is pending: `fulfilled` waits on FEAT-055 (census, fieldset group names) and the password and native-date commits on FEAT-056, each pinned at its observed baseline
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

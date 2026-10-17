@@ -72,7 +72,7 @@ async function fixture(
     }),
   });
   const tool = wrapTool(browserScreenshotSpec(services), services);
-  return { runDir, latch, controller, tool };
+  return { runDir, latch, controller, tool, services };
 }
 
 describe('@no-llm browser_screenshot', () => {
@@ -136,5 +136,37 @@ describe('@no-llm browser_screenshot', () => {
     const { tool } = await fixture();
     expect(tool.description).toContain('fallback visual evidence');
     expect(tool.description.toLowerCase()).not.toContain('see the page');
+  });
+});
+
+describe('@no-llm browser_screenshot records captures in the action ledger (FEAT-054)', () => {
+  it('records one capture with the audit path, hash, bytes, scope, and epoch', async () => {
+    const { tool, services } = await fixture();
+
+    const result = await tool.execute({}, undefined);
+
+    const audit = (result.details as { captures: Record<string, unknown>[] }).captures[0]!;
+    expect(services.actionLedger.entries()).toEqual([
+      expect.objectContaining({
+        kind: 'capture',
+        scope: 'viewport',
+        path: audit.path,
+        sha256: audit.sha256,
+        bytes: audit.bytes,
+        producer: 'browser_screenshot',
+        epoch: 1,
+        host: 'example.test',
+      }),
+    ]);
+  });
+
+  it('records nothing when the capture is refused', async () => {
+    const { tool, latch, services } = await fixture();
+    latch.latch(1);
+
+    const result = await tool.execute({}, undefined);
+
+    expect(result.error_code).toBe('SCREENSHOT_SENSITIVE_SCREEN');
+    expect(services.actionLedger.entries()).toEqual([]);
   });
 });

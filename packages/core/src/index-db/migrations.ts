@@ -22,7 +22,7 @@
 import type { DatabaseSync } from './sqlite.js';
 
 /** The latest schema version this build knows how to produce. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** One forward-only migration step. */
 export interface Migration {
@@ -141,8 +141,29 @@ const migration003: Migration = {
   },
 };
 
+/**
+ * v4 — the task-outcome word (FEAT-054): a nullable `history.task_outcome`
+ * beside `status`. No backfill: older rows stay null, and `rebuildFromRuns`
+ * fills the column from manifests that carry `taskOutcome`.
+ */
+const migration004: Migration = {
+  version: 4,
+  up: (db) => {
+    db.exec(`
+      ALTER TABLE history ADD COLUMN task_outcome TEXT NULL
+        CHECK (task_outcome IS NULL OR
+               task_outcome IN ('fulfilled','partial','handoff','failed','aborted'));
+    `);
+  },
+};
+
 /** All migrations, ascending by version. Append-only. */
-export const MIGRATIONS: readonly Migration[] = [migration001, migration002, migration003];
+export const MIGRATIONS: readonly Migration[] = [
+  migration001,
+  migration002,
+  migration003,
+  migration004,
+];
 
 /**
  * Reads the DB's current schema version from `PRAGMA user_version`.

@@ -125,6 +125,14 @@ export interface BudgetCallOptions {
    * recorded, and per-result output bounding still applies.
    */
   readonly terminal?: boolean;
+  /**
+   * True for a call that must stay available during the exploration wind-down
+   * (`task_contract`, FEAT-054 S1). It skips only the soft wall-clock refusal:
+   * the hard wall clock, the cumulative-byte cap, and per-tool caps still bind.
+   * Without it, a `CONTRACT_REQUIRED` refusal at wind-down would name a move
+   * the engine then refuses.
+   */
+  readonly windDownExempt?: boolean;
 }
 
 /** A point-in-time snapshot of consumption, for audit/report rendering. */
@@ -168,6 +176,7 @@ export class BudgetTracker {
   private captureCount = 0;
   private capturePixels = 0;
   private captureBytes = 0;
+  private softWindDown = false;
 
   /**
    * @param limits Hard caps for this run.
@@ -291,13 +300,23 @@ export class BudgetTracker {
   }
 
   /**
+   * True once any call was reserved or refused past the soft wall-clock
+   * boundary: the run entered its exploration wind-down. The orchestrator
+   * reads it to record a `wall-clock-soft` termination reason.
+   */
+  public get softWindDownReached(): boolean {
+    return this.softWindDown;
+  }
+
+  /**
    * Reserve one tool call: checks the hard/soft wall clocks and cumulative
    * bytes, then increments the audit counters on success. Atomic —
    * either the call is fully reserved or nothing is consumed.
    *
    * @param tool The tool name being invoked.
    * @param options Set `terminal` for the run's publication call, which skips
-   *   the run-wide cumulative caps (see the module header).
+   *   the run-wide cumulative caps (see the module header); set
+   *   `windDownExempt` to skip only the soft wall-clock refusal.
    * @returns `ok()` when the call fits every budget, else `err(decision)`.
    */
   public reserveCall(tool: string, options: BudgetCallOptions = {}): Result<void, BudgetDecision> {
@@ -312,7 +331,9 @@ export class BudgetTracker {
       );
     }
     const terminal = options.terminal === true;
-    if (!terminal && this.isSoftWallClockExhausted()) {
+    const pastSoftBoundary = this.isSoftWallClockExhausted();
+    if (pastSoftBoundary) this.softWindDown = true;
+    if (!terminal && options.windDownExempt !== true && pastSoftBoundary) {
       return err(
         this.decide(
           'wall-clock-soft',

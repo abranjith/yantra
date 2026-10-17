@@ -26,11 +26,14 @@ import { err, ok, type TemplateManifest } from '@yantra/protocol';
 import type { TObject } from 'typebox';
 import { expect } from 'vitest';
 
+import { type ActionLedger, actionLedgerFor } from '../../../../src/runtime/action-ledger.js';
 import {
   BudgetTracker,
   DEFAULT_BUDGET_LIMITS,
   type BudgetLimits,
 } from '../../../../src/runtime/budget.js';
+import type { ContractCapabilityResolver } from '../../../../src/runtime/contract-capabilities.js';
+import { FulfillmentRecord } from '../../../../src/runtime/fulfillment.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
@@ -79,6 +82,10 @@ export interface BuildServicesOptions {
   readonly runtimeLogger?: Logger;
   /** The run's contract store; defaults to an unrequired, empty one. */
   readonly contract?: TaskContractStore;
+  /** The run's action ledger; a fresh one located through the browser by default. */
+  readonly actionLedger?: ActionLedger;
+  /** Contract capability resolver; absent means the vision-backed default. */
+  readonly contractCapabilities?: ContractCapabilityResolver;
 }
 
 /**
@@ -163,6 +170,17 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
         runDir,
         command: 'do',
         required: false,
+      }),
+    ...(options.contractCapabilities ? { contractCapabilities: options.contractCapabilities } : {}),
+    fulfillment: new FulfillmentRecord(),
+    actionLedger:
+      options.actionLedger ??
+      actionLedgerFor({
+        controller: domain.browser?.controller ?? null,
+        sanitizer,
+        ...(options.userInput ? { userInput: options.userInput } : {}),
+        nowIso: () => new Date().toISOString(),
+        ...(options.runtimeLogger ? { logger: options.runtimeLogger } : {}),
       }),
   };
 }

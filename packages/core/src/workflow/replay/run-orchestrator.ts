@@ -14,7 +14,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Brief, Plan, SecretRef, SecurityScope } from '@yantra/protocol';
+import type { Brief, Plan, SecretRef, SecurityScope, TaskOutcome } from '@yantra/protocol';
 
 import { runsRoot } from '../../browser/paths.js';
 import type { BrowserProvider } from '../../browser/types.js';
@@ -108,6 +108,28 @@ export function exitCodeFor(outcome: OrchestratorRunOutcome): number {
     return 2; // scope-violation, ethics-refused
   }
   return 2; // failure
+}
+
+/**
+ * The task-outcome word for a replay outcome (FEAT-054 D3), so `yantra run`
+ * speaks the same vocabulary as the agentic commands. Behavior and exit codes
+ * are unchanged: a user abort still exits 4 through {@link exitCodeFor}.
+ *
+ * - `success` → `fulfilled`
+ * - `aborted` with `user-handoff` → `handoff`; with `user-abort` → `aborted`
+ * - any other abort (scope violation, ethics refusal) and `failure` → `failed`
+ */
+export function taskOutcomeForReplay(outcome: OrchestratorRunOutcome): TaskOutcome {
+  switch (outcome.kind) {
+    case 'success':
+      return 'fulfilled';
+    case 'aborted':
+      if (outcome.reason === 'user-handoff') return 'handoff';
+      if (outcome.reason === 'user-abort') return 'aborted';
+      return 'failed';
+    case 'failure':
+      return 'failed';
+  }
 }
 
 // ---------------------------------------------------------------------------

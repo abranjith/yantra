@@ -10,7 +10,7 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
-The prompt is versioned as `agent-v10` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and adds publication guidance for cited findings, tables, conditions, and unmet requirements. Beyond the scope rules above, it tells the agent:
+The prompt is versioned as `agent-v11` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and adds publication guidance for cited findings, tables, conditions, and unmet requirements; `agent-v11` changes only the `do` completion criteria, which now teach the contract's action terms (see [Task contract](#task-contract)). Beyond the scope rules above, it tells the agent:
 
 - **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
 - **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
@@ -22,7 +22,7 @@ The per-run prompt's scope line is derived from the run's actual tool catalog, s
 - Read-only browser tools only (`research`): "Scope: web search, page reading, and read-only browsing (navigate, observe, extract); this run cannot click or fill forms — if the goal needs that, report it and name `yantra do` as the next step."
 - Any click or fill tool (`do`): "Scope: browser and web work only."
 
-The `do` completion criteria also carry the required-source rule (when the goal names a site or source, read the answer from it and present any other source only as a clearly labeled alternative, never merged into the answer) and ask the agent to call `task_contract` in the same turn as its first search or fetch. The `research` guidance is described in [Research](research.md#agentic-research).
+The `do` completion criteria also carry the required-source rule (when the goal names a site or source, read the answer from it and present any other source only as a clearly labeled alternative, never merged into the answer) and ask the agent to call `task_contract` in the same turn as its first search or fetch. They also say that when the goal changes or captures a page, the agent declares `deliverable: "actions"` and puts "every field" or the fields to fill in `fill`, a requested screenshot in `artifacts`, and "do not submit" in `effects`, never in `notes`, because nothing checks notes; and that the result is judged item by item from what the tools recorded, so it should publish even when an item is unmet and say why in `fulfillment.unmet`. The `research` guidance is described in [Research](research.md#agentic-research).
 
 The `do` profile exposes these capabilities:
 
@@ -33,9 +33,9 @@ The `do` profile exposes these capabilities:
 | Browser actions                    | Clicks observed controls and fills text, autocomplete suggestions, native choices, toggles, ISO dates, and date ranges. Multi-field forms are filled together and verified before the agent submits them separately.                                                                                                                                                                                                                                             |
 | Page extraction                    | Extracts the live page's readable content, records, links, schema.org structured data, every table, or one table by index, through the same analyzer `web_fetch` uses. Large results become run-local capture references instead of being placed fully in model context.                                                                                                                                                                                         |
 | Saved workflows                    | Lists and runs a matching saved workflow through the deterministic executor. The nested workflow gets its own run directory and opens no second model session.                                                                                                                                                                                                                                                                                                   |
-| Task contract                      | Records what the goal requires (deliverable, fields, filters, required sites) as `contract.json` and echoes it to the user. Optional; see [Task contract](#task-contract).                                                                                                                                                                                                                                                                                       |
+| Task contract                      | Records what the goal requires (deliverable, fields, filters, required sites, and the page actions to fill, capture, or not submit) as `contract.json` and echoes it to the user. Required before a `do` result can be published; see [Task contract](#task-contract).                                                                                                                                                                                           |
 | Data transformations               | Runs only the built-in, allowlisted transformations `table_normalize`, `dedupe_lines`, and `json_pick`; it cannot execute arbitrary code or shell commands.                                                                                                                                                                                                                                                                                                      |
-| Publication                        | Publishes exactly one validated Brief, including cited findings, sections, and table rows, or one report shaped by a selected template. The Brief distinguishes sources cited in the answer from pages also consulted.                                                                                                                                                                                                                                           |
+| Publication                        | Publishes exactly one validated Brief, including cited findings, sections, and table rows, or one report shaped by a selected template. The Brief distinguishes sources cited in the answer from pages also consulted. Each declared requirement is then judged from what the tools recorded; see [Judging a `do` result](#judging-a-do-result).                                                                                                                 |
 
 Browser actions return a fresh observation after the page settles, so the agent can continue without a redundant read. Opaque element references remain usable on the same document and are invalidated when a new document loads. If a site opens a same-site results tab, Yantra policy-checks it and follows it as the run's page. Cross-site or non-HTTP(S) popups are closed and reported so the agent can navigate explicitly when policy permits.
 
@@ -266,41 +266,64 @@ The run completes only with a schema-valid publication. If the model stops with 
 
 `research` and `do` register a `task_contract` tool; `ask` does not. The agent uses it to record what the user's goal requires before it gathers evidence:
 
-| Field              | Meaning                                                                                                                                                        |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deliverable`      | `table` (rows with the same fields each), `answer`, or `report`.                                                                                               |
-| `subject`          | What the rows or the answer are about (1–200 characters).                                                                                                      |
-| `required_fields`  | Every field the goal asks for (up to 12). Required, and non-empty, for a `table`.                                                                              |
-| `filters`          | Every condition the goal states, as `{name, value}` pairs (up to 12).                                                                                          |
-| `required_sources` | Every site the goal names, as a hostname (up to 5). Each entry is normalized: lowercased, with scheme, path, port, trailing dot, and a leading `www.` removed. |
-| `ranking`          | Optional `{field, direction}` (`asc` or `desc`). For a table, `field` must be one of `required_fields`.                                                        |
-| `limit`            | Optional number of results the goal asks for (1–50).                                                                                                           |
-| `notes`            | Optional free text (up to 500 characters) for anything the fields cannot express, such as a site named without its address.                                    |
+| Field              | Meaning                                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `deliverable`      | `table` (rows with the same fields each), `answer`, `report`, or `actions` (the goal changes or captures a page, and the Brief reports what was done).                                                             |
+| `subject`          | What the rows or the answer are about (1–200 characters).                                                                                                                                                          |
+| `required_fields`  | Every field the goal asks for (up to 12). Required, and non-empty, for a `table`.                                                                                                                                  |
+| `filters`          | Every condition the goal states, as `{name, value}` pairs (up to 12).                                                                                                                                              |
+| `required_sources` | Every site the goal names, as a hostname (up to 5). Each entry is normalized: lowercased, with scheme, path, port, trailing dot, and a leading `www.` removed. For `actions`, the site the actions must happen on. |
+| `ranking`          | Optional `{field, direction}` (`asc` or `desc`). For a table, `field` must be one of `required_fields`.                                                                                                            |
+| `limit`            | Optional number of results the goal asks for (1–50).                                                                                                                                                               |
+| `notes`            | Optional free text (up to 500 characters) for anything the fields cannot express, such as a site named without its address. Never a fill, screenshot, or submit requirement: those have their own fields.          |
+| `fill`             | Optional `{coverage, fields}`. `coverage: "all_eligible"` means every field the engine judges eligible and takes no `fields`; `coverage: "listed"` requires 1–40 `fields`, unique ignoring case.                   |
+| `artifacts`        | Optional list of up to 3 `{kind: "screenshot", scope}`, where `scope` is `viewport`, `full_page`, or `element`, each scope at most once.                                                                           |
+| `effects`          | Optional `{submit}`: `forbidden` makes the engine refuse any click that would submit a form (see [Engine-enforced no-submit](safety-and-privacy.md#engine-enforced-no-submit)); the default is `allowed`.          |
 
-Declaring a contract is optional: it fetches nothing, grants nothing, and no other tool requires it. The guidance asks the agent to call it in the same turn as its first search or fetch, so it costs no extra turn, and to call it again with the full corrected contract only if a later result shows the goal was misread. Every string is passed through the run's sanitizer (`public` profile), marked user values are masked back to their placeholders, and control characters are stripped before the contract is stored, written, echoed, or logged. Names are compared ignoring case.
+`fill`, `artifacts`, and `effects` are the action terms. Only `do` may declare them: `research` has no click, fill, or capture tools, so a `research` contract with `deliverable: "actions"`, a `fill`, an artifact, or `effects.submit: "forbidden"` is rejected. A contract that omits them gets the neutral values `fill: null`, `artifacts: []`, and `effects.submit: "allowed"`, which is also how a `contract.json` written before the action terms existed reads.
+
+Declaring a contract fetches nothing and grants nothing. In `research` it is optional. In `do` it is required to publish: `result_publish` refuses until a contract exists (see [Judging a `do` result](#judging-a-do-result)). The guidance asks the agent to call it in the same turn as its first search or fetch, so it costs no extra turn, and to call it again with the full corrected contract only if a later result shows the goal was misread. `task_contract` stays callable during the exploration wind-down that begins at 80% of the run duration, so a refused publish can always be recovered; the hard deadline still applies to it. Every string is passed through the run's sanitizer (`public` profile), marked user values are masked back to their placeholders, and control characters are stripped before the contract is stored, written, echoed, or logged. Names are compared ignoring case.
+
+**A revision cannot drop an action item.** For the deliverable, fields, filters, sources, ranking, limit, and notes, the last revision is current. The action terms are carried forward instead:
+
+- `fill`: the latest revision that declares a `fill` decides it; a revision that omits `fill` keeps the earlier one.
+- `artifacts`: every screenshot any revision requested stays requested, each with the revision that first asked for it.
+- `effects.submit`: once a revision says `forbidden`, a later `allowed` cannot loosen it.
+
+`contract.json` records the items in force as `requirements`, a list of `{id, declared_in}` with ids `fill`, `artifact:screenshot:<scope>`, and `effects.submit`. The field is written only when at least one action item is in force, and is absent from older files.
 
 A call fails, and nothing is recorded, in these cases:
 
-| Code                      | Cause                    | When                                                                                         |
-| ------------------------- | ------------------------ | -------------------------------------------------------------------------------------------- |
-| `INVALID_INPUT`           | `contract-source-host`   | A `required_sources` entry is not a site address; the message names it and suggests `notes`. |
-| `INVALID_INPUT`           | `contract-duplicate`     | A field, filter name, or source appears twice.                                               |
-| `INVALID_INPUT`           | `contract-table-fields`  | A `table` contract has no `required_fields`.                                                 |
-| `INVALID_INPUT`           | `contract-ranking-field` | A table's `ranking.field` is not one of its `required_fields`.                               |
-| `CONTRACT_REVISION_LIMIT` | `revisions`              | Three revisions were already declared. Not retryable.                                        |
-| `ACTION_PHASE_CLOSED`     | `published`              | The result was already published. Not retryable.                                             |
+| Code                      | Cause                      | When                                                                                         |
+| ------------------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
+| `INVALID_INPUT`           | `contract-source-host`     | A `required_sources` entry is not a site address; the message names it and suggests `notes`. |
+| `INVALID_INPUT`           | `contract-duplicate`       | A field, filter name, source, listed fill field, or screenshot scope appears twice.          |
+| `INVALID_INPUT`           | `contract-table-fields`    | A `table` contract has no `required_fields`.                                                 |
+| `INVALID_INPUT`           | `contract-ranking-field`   | A table's `ranking.field` is not one of its `required_fields`.                               |
+| `INVALID_INPUT`           | `contract-actions-command` | A `research` contract declares an action term.                                               |
+| `INVALID_INPUT`           | `contract-fill-fields`     | A `listed` fill names no fields or more than 40, or an `all_eligible` fill names fields.     |
+| `CONTRACT_REVISION_LIMIT` | `revisions`                | Three revisions were already declared. Not retryable.                                        |
+| `ACTION_PHASE_CLOSED`     | `published`                | The result was already published. Not retryable.                                             |
 
 Only the first problem is reported, so each failing call gets one cause-specific message. `INVALID_INPUT` is retryable with the corrected full contract.
 
-A successful call returns `{revision, contract, note}` with the normalized contract, rewrites `<run-dir>/contract.json` with every revision so far (at most 3; the last is current), and writes one `contract_declared` line to `runtime.jsonl` (see [Run artifacts](diagnostics-and-audit.md#run-artifacts)). In a text-mode run the CLI then prints what the run understood to stderr, beside the goal echo, so a misreading is visible in the first seconds:
+A successful call returns `{revision, contract, note}` with the normalized contract, rewrites `<run-dir>/contract.json` with every revision so far (at most 3; the last is current), and writes one `contract_declared` line to `runtime.jsonl` (see [Run artifacts](diagnostics-and-audit.md#run-artifacts)). When a requested screenshot cannot be produced in this run, the result also carries `capability_gaps`, a list of `{item, reason}` such as `{"item": "artifact:screenshot:full_page", "reason": "scope_unsupported"}`, so the agent learns it at declaration time rather than at publication. The only capture tool today is Vision Assist's `browser_screenshot`, so `viewport` and `element` are possible only when Vision Assist is available, and the reason otherwise names the gate that keeps it off (`zero_llm`, `suppressed_by_flag`, `no_browser_tools`, `grant_missing`, or `model_text_only`); `full_page` is always `scope_unsupported`. With no artifact requested, or none missing, the key is absent.
+
+In a text-mode run the CLI then prints what the run understood to stderr, beside the goal echo, so a misreading is visible in the first seconds:
 
 ```text
 understood: table of new SUV listings — fields: seller, price, exterior color, interior color; filters: drivetrain=AWD; sources: example.com
 ```
 
-A later revision prints `understood (revised): …`. The summary is built only from the normalized contract, omits empty parts, has no newlines or control characters, and is at most 400 characters. `--json` instead emits the event as an `agent_progress` record with `type: "contract_declared"`, `revision`, `summary`, and `at`, so stdout stays machine-readable.
+When action items are in force, the summary leads with them in plain words, after the deliverable and subject:
 
-A `research` or `do` run that publishes without ever declaring a contract, including one whose only declaration failed, carries one Brief notice with kind `other` and source `task-contract`, reading exactly: "No task contract was declared, so the deliverable, required fields, filters, and required sources were not recorded for this run." It leads the runtime-derived notices described under [Inputs and Outputs](#inputs-and-outputs). An `ask` run never carries it.
+```text
+understood: actions of the sign-up form — fill all eligible fields; capture a viewport screenshot; do not submit; sources: example.com
+```
+
+A listed fill reads `fill <n> listed fields`, and several screenshots are joined, as in `capture a full-page screenshot and an element screenshot`. The phrase shows every item in force through that revision, including carried-forward ones. A later revision prints `understood (revised): …`. The summary is built only from the normalized contract, omits empty parts, has no newlines or control characters, and is at most 400 characters. `--json` instead emits the event as an `agent_progress` record with `type: "contract_declared"`, `revision`, `summary`, and `at`, so stdout stays machine-readable.
+
+A `research` run that publishes without ever declaring a contract, including one whose only declaration failed, carries one Brief notice with kind `other` and source `task-contract`, reading exactly: "No task contract was declared, so the deliverable, required fields, filters, and required sources were not recorded for this run." So does a `do` run whose result the runtime assembled from a draft without a contract, which is the only way a `do` run without one can publish. It leads the runtime-derived notices described under [Inputs and Outputs](#inputs-and-outputs). An `ask` run never carries it.
 
 The contract records what the run understood and is checked when agent content becomes a Brief. Its `required_sources` never make a URL navigable (see [Safety and privacy](safety-and-privacy.md#discovered-link-provenance)).
 
@@ -308,14 +331,14 @@ The contract records what the run understood and is checked when agent content b
 
 The agent calls `result_publish` with a `brief` containing `title` and `overview`, plus the structured content below. References are the IDs returned by this run's tools: `S3` names a page and `S3#r1` names a record on that page. Copy the actual IDs from tool results; an ID from another run cannot be cited.
 
-| Field               | Content and limits                                                                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key_findings`      | Up to 20 plain strings or `{text, sources: ["S3"]}` objects. A finding with no references is editorial commentary.                                                                           |
-| `sections`          | Up to 8 `{heading, body_md, sources}` objects; headings are at most 120 characters, bodies 4,000 characters.                                                                                 |
-| `table`             | `{columns, rows, row_sources}` with 1–12 columns and 1–50 rows. Column names are at most 60 characters; cells contain strings (at most 300 characters), finite numbers, booleans, or `null`. |
-| `table.row_sources` | One non-empty reference list for each row, in the same order. Each row must have exactly as many cells as there are columns.                                                                 |
-| `constraints`       | Up to 12 `{name, value, status, sources}` objects. Status is `verified`, `unverified`, or `violated`; names and values are at most 60 and 120 characters.                                    |
-| `fulfillment`       | `{met, unmet: [{item, reason}]}` with up to 12 unmet items; item names are at most 80 characters and reasons 200 characters. Runtime checks still apply when `met` is `true`.                |
+| Field               | Content and limits                                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key_findings`      | Up to 20 plain strings or `{text, sources: ["S3"]}` objects. A finding with no references is editorial commentary.                                                                                                                               |
+| `sections`          | Up to 8 `{heading, body_md, sources}` objects; headings are at most 120 characters, bodies 4,000 characters.                                                                                                                                     |
+| `table`             | `{columns, rows, row_sources}` with 1–12 columns and 1–50 rows. Column names are at most 60 characters; cells contain strings (at most 300 characters), finite numbers, booleans, or `null`.                                                     |
+| `table.row_sources` | One non-empty reference list for each row, in the same order. Each row must have exactly as many cells as there are columns.                                                                                                                     |
+| `constraints`       | Up to 12 `{name, value, status, sources}` objects. Status is `verified`, `unverified`, or `violated`; names and values are at most 60 and 120 characters.                                                                                        |
+| `fulfillment`       | `{met, unmet: [{item, reason}]}` with up to 12 unmet items; item names are at most 80 characters and reasons 200 characters. Runtime checks still apply when `met` is `true`, and in `do` the claim never decides whether a requirement was met. |
 
 Reference lists accept up to 8 IDs. Overview, finding text, and section bodies also accept inline markers such as `[S3]` and `[S3#r1]`. Yantra resolves them into the document's numbered citations. Table references become `facets.comparison.row_citations`, and section and constraint references become their structured `citations` arrays in `brief.json`.
 
@@ -349,6 +372,54 @@ Every contract filter appears in **Conditions**, beneath the title, retaining th
 **Anchoring flags unsupported values without deleting them.** A deterministic check compares each cited non-empty string or numeric table cell, cited finding, and verified condition against its referenced evidence. Record IDs use that record's evidence; page IDs use retained page content, or the ledger title and excerpt when page content is unavailable. It checks normalized numbers and word overlap; cited sections receive a numbers-only check. Numeric normalization supports English-style comma grouping and decimal points while preserving magnitude and sign: `45000` matches `$45,000.00`, but not `$450.00`. Ambiguous separator patterns remain exact tokens. The check prepares each evidence reference's word and number sets once per pass and reuses sets for equivalent reference groups. Missing values generate an `uncited_claim_flagged` notice and remain in the published answer. `metadata.citation_verdict` records `claims_checked`, `flagged`, and `stripped: 0`. This is a heuristic check of evidence presence, not proof of truth, entailment, units, or freshness.
 
 Model-authored publication text passes the public sanitizer before composition. Marked user values remain masked during checking and resolve to their original values in the published artifact. A successful publication's tool response summarizes cited and consulted sources, main-table and alternative row counts, condition statuses, contract gaps, and flagged values. Its `brief_composed` entry in `runtime.jsonl` records counts only; cell text, page text, and URLs are excluded. The sanitized tool audit retains the publication parameters and their evidence references.
+
+### Judging a `do` result
+
+A `do` run is done only when the evidence shows it did what its contract declared. Publishing a Brief is no longer enough on its own.
+
+**A contract is required to publish.** In `do`, `result_publish` on either the Brief or the template path refuses with the retryable `CONTRACT_REQUIRED` until the run has declared a contract, and writes no Brief. The message names the move: call `task_contract` with the deliverable and every requirement the goal states, including `fill`, `artifacts`, and `effects` for page actions, then publish again. `research` and `ask` publish without a contract as before.
+
+**What the tools recorded is the evidence.** Each `do` run keeps an action ledger of verified outcomes only:
+
+- a field `browser_fill_form` or `browser_fill_element` committed and verified, by its resolved field name, ref, and widget group (a fused date range counts as the fields it covers);
+- a `browser_click` that executed, and whether its target was submit-class;
+- a submit-class click or nested workflow the engine refused under `effects.submit: forbidden`; and
+- a `browser_screenshot` capture written to the run directory, with its scope.
+
+A failed fill or click records nothing. Each entry is stamped with the page's host and the top-level document it happened on, so a capture can be tied to the page the last action left behind. The ledger stores identities only, never a typed value, selector, or secret reference.
+
+**Each declared item is judged on its own.** At publication the runtime evaluates every item as `met`, `unmet`, or `not_applicable`:
+
+| Item                               | Met when                                                                                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `deliverable` (`table`)            | The published content has no table, field, or source delivery gap.                                                                                                                                                                                     |
+| `deliverable` (`answer`, `report`) | A Brief is published and, when the contract names required sources, something in it is cited from them.                                                                                                                                                |
+| `deliverable` (`actions`)          | At least one fill or click was recorded and, when the contract names required sources, every one happened on one of those hosts or their subdomains. Otherwise unmet with `no page action was recorded` or `actions happened on <host>, not <source>`. |
+| `filter:<name>`                    | The condition is `verified`. `unverified` is unmet as `not confirmed`; `violated` is unmet as `not met: …`.                                                                                                                                            |
+| `fill` (`listed`)                  | Every listed name matches a committed field's name, compared ignoring case and punctuation. Otherwise the reason counts them and names the rest: `fields 2 of 3 filled; not filled: Email`.                                                            |
+| `fill` (`all_eligible`)            | Every eligible control on the form was committed on the same page. Today this item is never met; see below.                                                                                                                                            |
+| `artifact:screenshot:<scope>`      | A capture of a satisfying scope was taken after the last recorded fill or click, on the same page; with no recorded action, any matching capture counts. A `full_page` capture also satisfies a `viewport` request.                                    |
+| `effects.submit`                   | No submit-class click executed. Refused attempts keep it met and are counted in the reason, such as `2 submit attempts refused`.                                                                                                                       |
+
+An unmet screenshot reads `not captured`, `not captured (<gap reason>)` with the same reason codes as `capability_gaps`, `captured before the last page action`, or `captured on a different page than the last action`.
+
+**`all_eligible` waits on a form census.** The engine, not the model, decides which controls count: a control that is part of a human-verification widget, hidden or not rendered, disabled, read-only, or a file upload is exempt, and password and other sensitive-`autocomplete` fields are eligible. A radio or checkbox group counts once. Exempt controls are listed on the item, at most 20 plus an overflow count. Measuring coverage needs a census of the whole form, which no run supplies yet, so a declared `all_eligible` fill is always `unmet` with reason `fields not counted (inventory_unavailable)`. A `listed` fill does not need the census and is judged today.
+
+**The model's claim is compared, not trusted.** When `fulfillment.met` is `true` and any item is unmet, the Brief gains one `contract_gap` notice from source `fulfillment` that begins "The agent reported every requirement met; evidence shows:" and lists up to five unmet items. A `false` or absent claim adds no notice, and the items are evaluated either way.
+
+**The Brief records the result.** A `do` Brief carries `requirements`, one entry per item with `id`, `label`, `status`, `reason`, `declared_in`, and any `exemptions`, and `brief.md` and `brief.html` render them as a **Requirements** list. An item declared in a later revision says so, for example `(declared in revision 2)`. The successful `result_publish` response tells the agent the same thing in one line, such as `requirements: "2 of 3 met; viewport screenshot not captured"`, and `runtime.jsonl` gains one `fulfillment_evaluated` line with counts only. A templated report carries no Requirements block, but its run is judged the same way. `ask` and `research` Briefs carry no `requirements` and are unchanged. A Brief the runtime assembles from a draft is judged the same way as a published one.
+
+**The run's outcome follows from the items.** A published `do` run is `fulfilled` when it declared a contract and every judged item is met, and `partial` otherwise. A published `ask` or `research` run is always `fulfilled`, so their criteria are unchanged. Every command uses the same five outcome words:
+
+| Outcome     | Meaning                                                                                      |  Exit | Manifest `status` |
+| ----------- | -------------------------------------------------------------------------------------------- | ----: | ----------------- |
+| `fulfilled` | A result was published and every declared requirement was met.                               |   `0` | `completed`       |
+| `partial`   | A result was published, but a requirement is unmet or no contract was declared.              |   `2` | `failed`          |
+| `handoff`   | The run needs the user, for example for a CAPTCHA, a bot wall, or a denied protected action. |   `4` | `failed`          |
+| `failed`    | Nothing usable was published.                                                                |   `2` | `failed`          |
+| `aborted`   | The user interrupted the run.                                                                | `130` | `aborted`         |
+
+A partial run's failure class is `budget_exhausted` when its termination reason is `wall-clock-soft`, `wall-clock-hard`, `provider-tokens`, or `tool-budget`, and `requirements_unmet` otherwise. A handoff is classed `captcha_detected`, `mfa_required`, or `unexpected` from its blocker. Why the run stopped is recorded separately as its termination reason: `model_finished`, `wall-clock-soft` (the model finished after the 80% wind-down began), `wall-clock-hard`, `provider-tokens`, `tool-budget`, `repeated-tool-failure`, `handoff`, `user_abort`, or `provider_failed`. A user abort always wins. Otherwise a validated published result decides the outcome even when a budget or the repeated-failure breaker fired after it, so a run that published and then hit its deadline is `fulfilled` or `partial`, not `failed`.
 
 ## How to Use It
 
@@ -386,7 +457,13 @@ Use a reusable report template:
 yantra do "prepare the launch review" --template ./templates/launch.md
 ```
 
-Promote the successful browser trace to a saved workflow:
+Fill a form and capture it without submitting. The agent declares the fill, the screenshot, and the no-submit term in its contract, and the engine refuses any submitting click:
+
+```console
+yantra do "fill every field of the form at https://example.com/apply with test data and take a screenshot, but do not submit it"
+```
+
+Promote a fulfilled run's browser trace to a saved workflow:
 
 ```console
 yantra do "look up the current order status" --save-as order-status
@@ -403,22 +480,22 @@ yantra do "check the public status page" --json
 
 ### Options
 
-| Option                         | Meaning                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--provider <name>`            | Select the model provider.                                                                                                                            |
-| `--model <id>`                 | Select a provider-scoped model id.                                                                                                                    |
-| `--thinking <level>`           | Request a supported provider reasoning level.                                                                                                         |
-| `--auth-secret <ref>`          | Use an OS-keychain secret reference as a runtime-only model key.                                                                                      |
-| `--max-duration <duration>`    | Set the hard wall-clock duration for the whole run.                                                                                                   |
-| `--max-tokens <n>`             | Set the cumulative provider-token ceiling.                                                                                                            |
-| `--tool-timeout <duration>`    | Set the timeout for one tool attempt.                                                                                                                 |
-| `--tool-retries <n>`           | Bound identical failures of one tool: the run stops when one tool fails with the same error `n + 1` times without succeeding in between.              |
-| `--confirm-timeout <duration>` | Set the maximum live consent wait.                                                                                                                    |
-| `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                             |
-| `--save-as <name>`             | After successful publication, attempt to promote the browser trace to a saved workflow. Promotion failure does not change the successful run outcome. |
-| `--template <name\|tag\|path>` | Render into a saved template, tag, or Markdown template path instead of the default Brief.                                                            |
-| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes the run non-interactive.                                              |
-| `--no-llm`                     | Shared agent-option veto. `do` has no deterministic task executor, so this option exits with validation guidance instead of running the goal.         |
+| Option                         | Meaning                                                                                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--provider <name>`            | Select the model provider.                                                                                                                                            |
+| `--model <id>`                 | Select a provider-scoped model id.                                                                                                                                    |
+| `--thinking <level>`           | Request a supported provider reasoning level.                                                                                                                         |
+| `--auth-secret <ref>`          | Use an OS-keychain secret reference as a runtime-only model key.                                                                                                      |
+| `--max-duration <duration>`    | Set the hard wall-clock duration for the whole run.                                                                                                                   |
+| `--max-tokens <n>`             | Set the cumulative provider-token ceiling.                                                                                                                            |
+| `--tool-timeout <duration>`    | Set the timeout for one tool attempt.                                                                                                                                 |
+| `--tool-retries <n>`           | Bound identical failures of one tool: the run stops when one tool fails with the same error `n + 1` times without succeeding in between.                              |
+| `--confirm-timeout <duration>` | Set the maximum live consent wait.                                                                                                                                    |
+| `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                                             |
+| `--save-as <name>`             | After a `fulfilled` run, attempt to promote the browser trace to a saved workflow. A `partial` run is not saved. Promotion failure does not change the run's outcome. |
+| `--template <name\|tag\|path>` | Render into a saved template, tag, or Markdown template path instead of the default Brief.                                                                            |
+| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes the run non-interactive.                                                              |
+| `--no-llm`                     | Shared agent-option veto. `do` has no deterministic task executor, so this option exits with validation guidance instead of running the goal.                         |
 
 Durations are positive integers with an optional `ms`, `s`, `m`, or `h` suffix; a bare integer means milliseconds. See [Shared flags and output behavior](../usage.md#shared-flags-and-output-behavior) for defaults, preference and environment equivalents, and precedence.
 
@@ -430,7 +507,19 @@ Use `@{value}` or a supported tagged marker such as `@password{value}` whenever 
 
 A location-dependent goal such as "hotels near me" requires a configured, granted user location. When none is available, Yantra creates an auditable run but stops before opening a provider session, launching Chrome, or spending tokens. The handoff explains whether to set `locale.city`, re-enable `context.location`, or name the location directly. Yantra does not infer a location from timezone or locale.
 
-During a human-readable run, stdout contains bounded assistant progress, compact tool status lines, and the published artifact path and run id; the `understood:` contract echo goes to stderr. Raw tool parameters and results are not streamed. `--json` emits independently parseable NDJSON records and never opens an interactive consent prompt.
+During a human-readable run, stdout contains bounded assistant progress, compact tool status lines, and, once a result is published, an outcome line and the run id; the `understood:` contract echo goes to stderr. Raw tool parameters and results are not streamed. The outcome line leads with the outcome word, counts the requirements, names at most two unmet items followed by `+N more`, and ends with the artifact path:
+
+```text
+Fulfilled: 4 of 4 requirements met. Brief: <run-dir>/brief.html
+Partial: 2 of 4 requirements met; fields not counted (inventory_unavailable); viewport screenshot not captured. Brief: <run-dir>/brief.html
+Partial: no task contract was declared. Brief: <run-dir>/brief.html
+```
+
+A templated run says `report:` in place of `Brief:`. The text before the path is at most 240 characters. Handoff and failure output is unchanged.
+
+`--json` emits independently parseable NDJSON records and never opens an interactive consent prompt. Its terminal `agent_outcome` record carries `task_outcome` and `termination_reason` beside the full `outcome` object.
+
+With `--save-as`, a line after the outcome reports the promotion. A saved run that met a screenshot item reads `✓ Saved workflow "<name>" without its viewport screenshot step (no replay step captures a screenshot yet). Replay it with: yantra run <name>`. A partial run reads `⚠ Could not save workflow "<name>": Not saved: the run was partial (2 of 4 requirements met). Only a fulfilled run is saved as a workflow.`
 
 A normal successful run writes a validated task Brief:
 
@@ -454,7 +543,7 @@ A normal successful run writes a validated task Brief:
 
 Template mode writes `document.json`, `document.md`, and `document.html` in place of `brief.*`. The authored Markdown structure remains engine-controlled while the model fills declared slots; see [Controlled publication and rendering](report-templates.md#controlled-publication-and-rendering). A failed publication may additionally write `result.md`, which is diagnostic and does not turn the failed run into a successful result.
 
-`manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, and tool-catalog hash without credential material. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
+`manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, tool-catalog hash, the Yantra version, and the effective budgets without credential material, plus the run's `taskOutcome` and `terminationReason`. A partial run's `report.md` shows status `failed` with the outcome line as its message, and its `task_failed` event in `events.jsonl` carries `task_outcome`. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
 
 `runtime.jsonl` is local operator diagnostics for the run: which browser and driver it used, why that browser was selected, whether the compatibility evidence came from cache or a fresh probe, the safe class of any browser startup failure or unexpected tool failure, the search provider the run selected, and, by hostname only, each fetch escalated to the browser and each challenge page. It is never sent to the model, never part of the published result, and never an evidence source, and it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` only when it exists; a run that hands off before building an environment, such as the location pre-flight described above, has none. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
 
@@ -473,14 +562,14 @@ A read answered from an earlier failure adds no second notice, and a challenge p
 
 ### Exit codes and failures
 
-|  Exit | Meaning for `do`                                                                                                                                                                         |
-| ----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|   `0` | A validated Brief or templated report was published.                                                                                                                                     |
-|   `1` | Invalid command input, option, host, template/no-model combination, or user-input marker. Explicit `--no-llm` and `LLM_PROVIDER=none` also take this path because `do` requires a model. |
-|   `2` | The started task failed, exhausted a fatal budget, or could not produce a valid publication.                                                                                             |
-|   `3` | Model credentials were unavailable during the command's offline preflight. No agent session is opened.                                                                                   |
-|   `4` | Yantra needs a user handoff, for example a missing required location, CAPTCHA, bot wall, ethics refusal, or denied protected action.                                                     |
-| `130` | The run was interrupted with Ctrl+C.                                                                                                                                                     |
+|  Exit | Meaning for `do`                                                                                                                                                                          |
+| ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   `0` | The run was `fulfilled`: a validated Brief or templated report was published and every declared requirement was met.                                                                      |
+|   `1` | Invalid command input, option, host, template/no-model combination, or user-input marker. Explicit `--no-llm` and `LLM_PROVIDER=none` also take this path because `do` requires a model.  |
+|   `2` | The run was `partial` (a result was published, but a requirement is unmet or no contract was declared), or it failed, exhausted a fatal budget, or could not produce a valid publication. |
+|   `3` | Model credentials were unavailable during the command's offline preflight. No agent session is opened.                                                                                    |
+|   `4` | Yantra needs a user handoff, for example a missing required location, CAPTCHA, bot wall, ethics refusal, or denied protected action.                                                      |
+| `130` | The run was interrupted with Ctrl+C.                                                                                                                                                      |
 
 Startup and runtime errors use stable codes such as `AGENT_MODEL_NOT_FOUND`, `AGENT_AUTH_UNAVAILABLE`, `AGENT_PROVIDER_UNAVAILABLE`, `AGENT_SESSION_START_FAILED`, `AGENT_TOOL_FAILED`, `AGENT_BUDGET_EXHAUSTED`, and `AGENT_COMPLETION_MISSING`. Messages are sanitized and name a corrective action without exposing credentials. See [Errors and exit codes](diagnostics-and-audit.md#errors-and-exit-codes).
 
@@ -488,7 +577,7 @@ Startup and runtime errors use stable codes such as `AGENT_MODEL_NOT_FOUND`, `AG
 
 Model settings resolve in this order: explicit flag, `YANTRA_AGENT_*` environment variable, `profile.yaml` `agent.*` preference, then the pinned default. Current defaults are Anthropic with `claude-haiku-4-5`, a 15-minute hard deadline, a 2,000,000-token ceiling, three-minute tool and confirmation timeouts, and a `--tool-retries` value of 3 (the run stops when one tool fails with the same error four times without succeeding in between). At 80% of the run duration, non-terminal exploration stops so the agent can publish gathered evidence.
 
-Additional enforced defaults bound one model-visible tool result to 24 KB, cumulative model-visible tool output to 512 KB, browser navigations to 30, and distinct outbound hosts to 20. Publication remains available after the soft wind-down or cumulative-byte limit, but not after the hard deadline. Tool-call counts are recorded for audit and are not a cap.
+Additional enforced defaults bound one model-visible tool result to 24 KB, cumulative model-visible tool output to 512 KB, browser navigations to 30, and distinct outbound hosts to 20. Publication remains available after the soft wind-down or cumulative-byte limit, but not after the hard deadline. `task_contract` also remains available after the soft wind-down, so a `do` run can still declare the contract its publication needs. Tool-call counts are recorded for audit and are not a cap.
 
 Model credentials can come from Yantra-managed Pi auth, `--auth-secret`/`YANTRA_AGENT_AUTH_SECRET` as an OS-keychain reference, a supported provider environment variable, or custom-model configuration. Credential values are never written to prompts, logs, or run artifacts. `do` does not silently fall back when model auth is unavailable; use `yantra doctor` to inspect the effective model, credential source, and budgets without contacting a provider, or `yantra doctor --agent-smoke` for a live check.
 
@@ -498,7 +587,7 @@ Outbound URLs are length-capped, HTTPS-only by default, scanned for credential-s
 
 Search, fetch, and navigation honor robots rules, the blocklist, rate limits, and site refusals. Yantra reports CAPTCHAs, bot walls, paywalls, and ethics blocks rather than evading them. Page and search content is always treated as untrusted data, not as instructions.
 
-Protected clicks such as buy, pay, purchase, book, order, submit, or confirm actions require consent. Filling a host-bound website secret also requires consent. An attended TTY run displays the action, host, and consequence and defaults to deny; the wait is bounded by `--confirm-timeout` and the remaining run duration. `--json`, piped/non-TTY execution, timeout, or absence of a consent surface fails closed. Decisions and tool calls retain confirmation linkage in the run audit.
+Protected clicks such as buy, pay, purchase, book, order, submit, or confirm actions require consent. Filling a host-bound website secret also requires consent. An attended TTY run displays the action, host, and consequence and defaults to deny; the wait is bounded by `--confirm-timeout` and the remaining run duration. `--json`, piped/non-TTY execution, timeout, or absence of a consent surface fails closed. Decisions and tool calls retain confirmation linkage in the run audit. When the contract declares `effects.submit: "forbidden"`, a click that would submit a form is refused with `SUBMIT_FORBIDDEN` before any confirmation is requested; see [Engine-enforced no-submit](safety-and-privacy.md#engine-enforced-no-submit).
 
 Website secrets must carry trusted host metadata before `browser_fill_element` will resolve them. The plaintext exists only during that fill and is never returned to the model or audit output. For one-off values, explicit input markers offer run-scoped separation; for durable credentials, use keychain-backed secret references.
 
@@ -520,6 +609,8 @@ Personalization includes only approved, sanitized preferences. Date, timezone, a
 - Challenge detection relies on a documented list of generic widget markers and phrases. A human-verification page that carries none of them is not recognized as one.
 - Evidence-ledger sources distinguish cited pages from pages also consulted. The anchoring check can flag unsupported cited values but does not prove that every model-authored statement is entailed, correct, or current. Inspect consequential claims, conditions, and notices against the linked sources.
 - Report-template runs require a valid model-authored slot payload. The runtime cannot safely assemble a missing templated report from free-form draft prose, so an invalid or missing template publication remains a failure.
-- `--save-as` promotes only the successful browser trace. It cannot preserve transient login state or run-scoped marked values, and later replay may still need workflow parameters, stored website secrets, confirmation, and a compatible page structure.
+- `--save-as` promotes only a `fulfilled` run's successful browser trace. It cannot preserve transient login state or run-scoped marked values, and later replay may still need workflow parameters, stored website secrets, confirmation, and a compatible page structure. No workflow step captures a screenshot, so a met screenshot item is saved without its step.
+- A declared `fill` with `coverage: "all_eligible"` is never met yet: no run supplies the form census it is measured against, so it reports `fields not counted (inventory_unavailable)` and the run is `partial`. A `listed` fill is judged today.
+- Screenshots come only from Vision Assist's `browser_screenshot`, which needs the `context.screenshots` grant and an image-capable model and captures the viewport or one element. A `full_page` screenshot item is always unmet with `scope_unsupported`.
 
 For the detailed runtime and safety contracts, see [Agentic task architecture](../architecture.md#agentic-task) and [browser, URL, and web safety](safety-and-privacy.md#browser-url-and-web-safety).

@@ -123,6 +123,15 @@ run ID, task type (`ask`, `research`, `run`, or `do`), intent text, document ID,
 terminal status, start/end time, duration, provider, and cost when available.
 Intent text remains local history and is not an input to personalization.
 
+Index schema version 4 adds a nullable `task_outcome` column: the run's
+outcome word (`fulfilled`, `partial`, `handoff`, `failed`, or `aborted`; see
+[Judging a `do` result](agentic-tasks.md#judging-a-do-result)). It is filled
+from the `taskOutcome` an agentic run's `manifest.json` records, both when the
+run is recorded and when history is rebuilt from the run tree. An index created
+before version 4 is migrated in place with no backfill, so older rows, runs
+written before the field existed, and saved-workflow replays keep a null
+outcome.
+
 `yantra list runs` merges two deliberately different sources. Its filesystem
 component lists workflow-run manifests only; it skips legacy task artifacts,
 whose manifests use a different schema. The indexed history is the compatibility
@@ -261,6 +270,13 @@ yantra usage --since 2026-08-01 --json
 `list` defaults to `runs` and a limit of 20. Limits above 500 are capped at
 500; an invalid or non-positive value falls back to 20. `--workflow` and
 `--status` are exact string filters applied after file/index merging.
+
+When a run recorded an outcome word, `list runs` shows it beside the status,
+for example `failed partial` for a `do` run that published a Brief but left a
+requirement unmet, and `--json` items carry it as `taskOutcome`. Runs without
+one show only their status. `--status` still filters on the status alone, so a
+partial or handoff agentic run matches `--status failed`, and a new handoff run
+no longer matches `--status aborted`.
 
 `show` auto-detects a compact timestamp-prefixed target as a run ID. Use
 `--run` or `--workflow` to override detection. A run display contains the full

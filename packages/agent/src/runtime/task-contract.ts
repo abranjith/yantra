@@ -10,6 +10,12 @@
  * notice saying so.
  *
  * The host helpers are pure so delivery checking (FEAT-053) can call them.
+ *
+ * FEAT-054 adds the action terms a `do` run declares (`fill`, `artifacts`,
+ * `effects`). Unlike the FEAT-052/053 terms, where the last revision is
+ * current, an action item a later revision omits is carried forward and still
+ * evaluated, and `effects.submit: forbidden` can never be loosened
+ * ({@link TaskContractStore.effectiveActionTerms}).
  */
 
 import { rename, writeFile } from 'node:fs/promises';
@@ -17,14 +23,18 @@ import { join } from 'node:path';
 
 import type { PayloadSanitizer } from '@yantra/core';
 import {
+  CONTRACT_FILL_MAX_FIELDS,
   SOURCE_HOST_PATTERN,
   TASK_CONTRACT_MAX_REVISIONS,
   TASK_CONTRACT_SCHEMA_VERSION,
   TaskContractBody,
   TaskContractRecord,
+  artifactRequirementId,
   err,
   ok,
+  type ArtifactScope,
   type BriefNotice,
+  type ContractRequirementOrigin,
   type Result,
 } from '@yantra/protocol';
 
@@ -43,7 +53,7 @@ export const MISSING_CONTRACT_REASON =
 
 /** The raw `task_contract` parameters, as the model sent them. */
 export interface TaskContractParams {
-  readonly deliverable: 'table' | 'answer' | 'report';
+  readonly deliverable: 'table' | 'answer' | 'report' | 'actions';
   readonly subject: string;
   readonly required_fields?: readonly string[];
   readonly filters?: readonly { readonly name: string; readonly value: string }[];
@@ -51,6 +61,12 @@ export interface TaskContractParams {
   readonly ranking?: { readonly field: string; readonly direction: 'asc' | 'desc' };
   readonly limit?: number;
   readonly notes?: string;
+  readonly fill?: {
+    readonly coverage: 'all_eligible' | 'listed';
+    readonly fields?: readonly string[];
+  };
+  readonly artifacts?: readonly { readonly kind: 'screenshot'; readonly scope: ArtifactScope }[];
+  readonly effects?: { readonly submit: 'forbidden' | 'allowed' };
 }
 
 /** The first problem found in a contract; each cause has its own message. */
@@ -58,14 +74,54 @@ export type ContractIssue =
   | { readonly cause: 'contract-source-host'; readonly entry: string }
   | { readonly cause: 'contract-duplicate'; readonly name: string }
   | { readonly cause: 'contract-table-fields' }
-  | { readonly cause: 'contract-ranking-field'; readonly field: string };
+  | { readonly cause: 'contract-ranking-field'; readonly field: string }
+  | { readonly cause: 'contract-actions-command' }
+  | { readonly cause: 'contract-fill-fields'; readonly coverage: 'all_eligible' | 'listed' };
 
 /** How contract text is made safe to keep: sanitizer plus the run's input vault. */
 export interface ContractTextCleaning {
   readonly sanitizer: PayloadSanitizer;
   /** Masks the user's own marked values back to placeholders before persistence. */
   readonly mask?: (text: string) => string;
+  /**
+   * The declaring command. `research` has no interaction tools, so it rejects
+   * every action term (FEAT-054 S3). Absent means "not research".
+   */
+  readonly command?: AgenticCommand;
 }
+
+/** An action item in force, with the revision that first declared it. */
+interface Declared {
+  readonly declaredIn: number;
+}
+
+/**
+ * The action terms in force across every revision (FEAT-054 S2): the latest
+ * declared `fill`, the union of every requested artifact, and `forbidden` once
+ * any revision forbade submission. Derived, never persisted on its own.
+ */
+export interface EffectiveActionTerms {
+  readonly fill:
+    | (Declared & {
+        readonly coverage: 'all_eligible' | 'listed';
+        readonly fields: readonly string[];
+      })
+    | null;
+  readonly artifacts: readonly (Declared & {
+    readonly kind: 'screenshot';
+    readonly scope: ArtifactScope;
+  })[];
+  readonly submit:
+    | { readonly value: 'forbidden'; readonly declaredIn: number }
+    | { readonly value: 'allowed'; readonly declaredIn: null };
+}
+
+/** The neutral terms of a run that declared no action item. */
+export const NO_ACTION_TERMS: EffectiveActionTerms = {
+  fill: null,
+  artifacts: [],
+  submit: { value: 'allowed', declaredIn: null },
+};
 
 // C0 and C1 control characters, DEL included.
 // eslint-disable-next-line no-control-regex
@@ -119,6 +175,36 @@ export function normalizeContract(
     return err({ cause: 'contract-ranking-field', field: ranking.field });
   }
 
+  const actionTerms =
+    params.deliverable === 'actions' ||
+    params.fill !== undefined ||
+    (params.artifacts?.length ?? 0) > 0 ||
+    params.effects?.submit === 'forbidden';
+  if (actionTerms && cleaning.command === 'research') {
+    return err({ cause: 'contract-actions-command' });
+  }
+  let fill: { coverage: 'all_eligible' | 'listed'; fields?: string[] } | null = null;
+  if (params.fill !== undefined) {
+    const listed = (params.fill.fields ?? []).map((field) => clean(field, 60));
+    const wantsFields = params.fill.coverage === 'listed';
+    if (wantsFields !== listed.length > 0 || listed.length > CONTRACT_FILL_MAX_FIELDS) {
+      return err({ cause: 'contract-fill-fields', coverage: params.fill.coverage });
+    }
+    const repeated = firstDuplicate(listed);
+    if (repeated !== null) return err({ cause: 'contract-duplicate', name: repeated });
+    fill = wantsFields ? { coverage: 'listed', fields: listed } : { coverage: 'all_eligible' };
+  }
+  const artifacts = (params.artifacts ?? []).map((artifact) => ({
+    kind: artifact.kind,
+    scope: artifact.scope,
+  }));
+  const repeatedArtifact = firstDuplicate(
+    artifacts.map((artifact) => artifactLabel(artifact.scope)),
+  );
+  if (repeatedArtifact !== null) {
+    return err({ cause: 'contract-duplicate', name: repeatedArtifact });
+  }
+
   const notes = params.notes === undefined ? '' : clean(params.notes, 500);
   // The input schema already bounds every value, and cleaning only shortens or
   // redacts it, so a failure here is a defect in this function, not bad input.
@@ -132,8 +218,107 @@ export function normalizeContract(
       ranking,
       limit: params.limit ?? null,
       notes: notes.length === 0 ? null : notes,
+      fill,
+      artifacts,
+      effects: { submit: params.effects?.submit ?? 'allowed' },
     }),
   );
+}
+
+/** Plain words for a screenshot of `scope`: "viewport screenshot". */
+export function artifactLabel(scope: ArtifactScope): string {
+  switch (scope) {
+    case 'viewport':
+      return 'viewport screenshot';
+    case 'full_page':
+      return 'full-page screenshot';
+    case 'element':
+      return 'element screenshot';
+  }
+}
+
+/**
+ * Derives the action terms in force from `revisions` (FEAT-054 S2).
+ *
+ * - `fill`: the latest non-null `fill`; its `declaredIn` is the first revision
+ *   of the unbroken run of revisions declaring that same fill.
+ * - `artifacts`: the union over every revision, keyed by kind and scope, each
+ *   with the first revision that requested it.
+ * - `submit`: `forbidden` once any revision forbade it; a later `allowed`
+ *   cannot loosen it.
+ */
+export function effectiveActionTermsOf(
+  revisions: readonly { readonly revision: number; readonly contract: TaskContractBody }[],
+): EffectiveActionTerms {
+  let fill = NO_ACTION_TERMS.fill;
+  const artifacts = new Map<string, EffectiveActionTerms['artifacts'][number]>();
+  let submit = NO_ACTION_TERMS.submit;
+  for (const { revision, contract } of revisions) {
+    if (contract.fill !== null) {
+      const fields = contract.fill.fields ?? [];
+      const next = { coverage: contract.fill.coverage, fields };
+      fill = { ...next, declaredIn: sameFill(fill, next) ? fill.declaredIn : revision };
+    }
+    for (const artifact of contract.artifacts) {
+      const key = `${artifact.kind}:${artifact.scope}`;
+      if (!artifacts.has(key)) artifacts.set(key, { ...artifact, declaredIn: revision });
+    }
+    if (contract.effects.submit === 'forbidden' && submit.value === 'allowed') {
+      submit = { value: 'forbidden', declaredIn: revision };
+    }
+  }
+  return { fill, artifacts: [...artifacts.values()], submit };
+}
+
+/** True when `previous` declares exactly `next`'s coverage and fields. */
+function sameFill(
+  previous: EffectiveActionTerms['fill'],
+  next: { readonly coverage: string; readonly fields: readonly string[] },
+): previous is NonNullable<EffectiveActionTerms['fill']> {
+  return (
+    previous !== null &&
+    previous.coverage === next.coverage &&
+    previous.fields.length === next.fields.length &&
+    previous.fields.every((field, index) => field === next.fields[index])
+  );
+}
+
+/** The `contract.json` `requirements` list for `terms`: every action item in force. */
+export function requirementOrigins(terms: EffectiveActionTerms): ContractRequirementOrigin[] {
+  const origins: ContractRequirementOrigin[] = [];
+  if (terms.fill !== null) origins.push({ id: 'fill', declared_in: terms.fill.declaredIn });
+  for (const artifact of terms.artifacts) {
+    origins.push({ id: artifactRequirementId(artifact.scope), declared_in: artifact.declaredIn });
+  }
+  if (terms.submit.value === 'forbidden') {
+    origins.push({ id: 'effects.submit', declared_in: terms.submit.declaredIn });
+  }
+  return origins;
+}
+
+/**
+ * The plain-words phrase for the action terms in force, such as
+ * `fill all eligible fields; capture a viewport screenshot; do not submit`,
+ * or null when no action item is declared.
+ */
+export function renderActionPhrase(terms: EffectiveActionTerms): string | null {
+  const phrases: string[] = [];
+  if (terms.fill !== null) {
+    const count = terms.fill.fields.length;
+    phrases.push(
+      terms.fill.coverage === 'all_eligible'
+        ? 'fill all eligible fields'
+        : `fill ${count} listed field${count === 1 ? '' : 's'}`,
+    );
+  }
+  if (terms.artifacts.length > 0) {
+    const captures = terms.artifacts.map(
+      (artifact) => `${artifact.scope === 'element' ? 'an' : 'a'} ${artifactLabel(artifact.scope)}`,
+    );
+    phrases.push(`capture ${captures.join(' and ')}`);
+  }
+  if (terms.submit.value === 'forbidden') phrases.push('do not submit');
+  return phrases.length === 0 ? null : phrases.join('; ');
 }
 
 /**
@@ -179,8 +364,15 @@ export function hostSatisfiesRequiredSource(url: string, contract: TaskContractB
  * normalized contract: no newlines or control characters, at most
  * {@link CONTRACT_ECHO_MAX} characters.
  */
-export function renderContractEcho(body: TaskContractBody): string {
+export function renderContractEcho(
+  body: TaskContractBody,
+  terms: EffectiveActionTerms = effectiveActionTermsOf([{ revision: 1, contract: body }]),
+): string {
   const parts: string[] = [];
+  // The CLI already leads the echo with "understood:", so the action phrase
+  // joins the other parts without repeating it.
+  const actions = renderActionPhrase(terms);
+  if (actions !== null) parts.push(actions);
   if (body.required_fields.length > 0) parts.push(`fields: ${body.required_fields.join(', ')}`);
   if (body.filters.length > 0) {
     parts.push(
@@ -218,6 +410,11 @@ export interface TaskContractStoreOptions {
   readonly command: AgenticCommand;
   /** True for `research`/`do`: a run that never declares one gets a notice. */
   readonly required: boolean;
+  /**
+   * True for `do` only (FEAT-054 D4): `result_publish` refuses with
+   * `CONTRACT_REQUIRED` until a contract is declared. Defaults to false.
+   */
+  readonly requiredToPublish?: boolean;
 }
 
 /**
@@ -236,6 +433,26 @@ export class TaskContractStore {
   /** Whether this run's command is expected to declare a contract. */
   public get required(): boolean {
     return this.options.required;
+  }
+
+  /** Whether publishing is refused until a contract is declared (`do` only). */
+  public get requiredToPublish(): boolean {
+    return this.options.requiredToPublish === true;
+  }
+
+  /** The declaring command. */
+  public get command(): AgenticCommand {
+    return this.options.command;
+  }
+
+  /** The action terms in force across every revision (carry-forward, S2). */
+  public effectiveActionTerms(): EffectiveActionTerms {
+    return this.revisions.length === 0 ? NO_ACTION_TERMS : effectiveActionTermsOf(this.revisions);
+  }
+
+  /** The action terms that were in force once 1-based `revision` was declared. */
+  public effectiveActionTermsThrough(revision: number): EffectiveActionTerms {
+    return effectiveActionTermsOf(this.revisions.slice(0, Math.max(0, revision)));
   }
 
   /**
@@ -284,11 +501,13 @@ export class TaskContractStore {
     }
     const revision = this.revisions.length + 1;
     const revisions = [...this.revisions, { revision, declared_at: at, contract: body }];
+    const requirements = requirementOrigins(effectiveActionTermsOf(revisions));
     const record = TaskContractRecord.parse({
       schema_version: TASK_CONTRACT_SCHEMA_VERSION,
       run_id: this.options.runId,
       command,
       revisions,
+      ...(requirements.length === 0 ? {} : { requirements }),
     });
     const path = join(this.options.runDir, CONTRACT_FILE);
     const tmp = `${path}.tmp`;

@@ -58,11 +58,15 @@ function populatedTrace(): AgentTrace {
   return trace;
 }
 
+/** A fulfilled `ask`/`research`-shaped publication, as the orchestrator settles it. */
 const published: AgenticTaskOutcome = {
   kind: 'published',
   runId: 'run-1',
   runDir: '/runs/run-1',
   brief: { briefId: 'b1', jsonPath: '/runs/run-1/brief.json' } as never,
+  taskOutcome: 'fulfilled',
+  requirements: null,
+  terminationReason: 'model_finished',
 };
 
 function request(overrides: Partial<AgenticTaskRequest> = {}): AgenticTaskRequest {
@@ -216,5 +220,105 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
     });
 
     expect(store.saved[0]?.synthesis?.goal).toBe('padded goal');
+  });
+});
+
+describe('@no-llm maybePromoteTrace saves only a fulfilled run (FEAT-054 D5)', () => {
+  const doOutcome = (
+    taskOutcome: 'fulfilled' | 'partial',
+    satisfied: readonly { id: string; label: string }[],
+    met: number,
+    total: number,
+  ): AgenticTaskOutcome => ({
+    ...published,
+    taskOutcome,
+    requirements: { met, total, unmet: [], satisfied, contractDeclared: true },
+  });
+
+  it('refuses a partial run without touching the store', async () => {
+    const store = recordingStore();
+
+    const outcome = await maybePromoteTrace({
+      request: request({ saveAs: 'form-fill' }),
+      environment: environment(store),
+      trace: populatedTrace(),
+      outcome: doOutcome('partial', [], 2, 4),
+      persistenceGoal: 'Fill the form',
+    });
+
+    expect(outcome).toMatchObject({
+      kind: 'published',
+      taskOutcome: 'partial',
+      promotion: {
+        saved: false,
+        workflowName: 'form-fill',
+        error:
+          'Not saved: the run was partial (2 of 4 requirements met). Only a fulfilled run is saved as a workflow.',
+      },
+    });
+    expect(store.save).not.toHaveBeenCalled();
+  });
+
+  it('names a partial run with no contract', async () => {
+    const outcome = await maybePromoteTrace({
+      request: request({ saveAs: 'form-fill' }),
+      environment: environment(recordingStore()),
+      trace: populatedTrace(),
+      outcome: {
+        ...published,
+        taskOutcome: 'partial',
+        requirements: { met: 0, total: 0, unmet: [], satisfied: [], contractDeclared: false },
+      },
+      persistenceGoal: 'Fill the form',
+    });
+
+    expect(outcome).toMatchObject({
+      promotion: { saved: false, error: expect.stringContaining('no task contract was declared') },
+    });
+  });
+
+  it('saves a fulfilled run without its met screenshot, and names it', async () => {
+    const store = recordingStore();
+
+    const outcome = await maybePromoteTrace({
+      request: request({ saveAs: 'form-fill' }),
+      environment: environment(store),
+      trace: populatedTrace(),
+      outcome: doOutcome(
+        'fulfilled',
+        [
+          { id: 'deliverable', label: 'actions of the form' },
+          { id: 'artifact:screenshot:viewport', label: 'viewport screenshot' },
+        ],
+        2,
+        2,
+      ),
+      persistenceGoal: 'Fill the form',
+    });
+
+    expect(outcome).toMatchObject({
+      promotion: { saved: true, omitted: ['viewport screenshot'] },
+    });
+    expect(store.saved).toHaveLength(1);
+  });
+
+  it('omits nothing for a fulfilled run without artifacts, and saves research as today', async () => {
+    const fulfilled = await maybePromoteTrace({
+      request: request({ saveAs: 'form-fill' }),
+      environment: environment(recordingStore()),
+      trace: populatedTrace(),
+      outcome: doOutcome('fulfilled', [{ id: 'deliverable', label: 'actions' }], 1, 1),
+      persistenceGoal: 'Fill the form',
+    });
+    expect(fulfilled).toMatchObject({ promotion: { saved: true, omitted: [] } });
+
+    const research = await maybePromoteTrace({
+      request: request({ saveAs: 'package-eta' }),
+      environment: environment(recordingStore()),
+      trace: populatedTrace(),
+      outcome: published,
+      persistenceGoal: 'When will my package arrive?',
+    });
+    expect(research).toMatchObject({ promotion: { saved: true, omitted: [] } });
   });
 });

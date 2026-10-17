@@ -26,7 +26,13 @@
 
 import { createInterface } from 'node:readline/promises';
 
-import type { AgentProgressEvent, AgentTaskConnector, AgenticTaskOutcome } from '@yantra/agent';
+import {
+  outcomeFirstLine,
+  taskOutcomeOf,
+  type AgentProgressEvent,
+  type AgentTaskConnector,
+  type AgenticTaskOutcome,
+} from '@yantra/agent';
 import type { Brief, ConfirmationRequest, TaskEvent, TemplatedReport } from '@yantra/protocol';
 import { SCHEMA_VERSION } from '@yantra/protocol';
 
@@ -237,16 +243,21 @@ export class CLIConnectorIO implements ConnectorIO {
       return;
     }
     if (opts.json) {
-      opts.stream.write(
-        `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_outcome', outcome })}\n`,
-      );
+      const record = {
+        schemaVersion: SCHEMA_VERSION,
+        kind: 'agent_outcome',
+        task_outcome: taskOutcomeOf(outcome),
+        termination_reason: outcome.terminationReason,
+        outcome,
+      };
+      opts.stream.write(`${JSON.stringify(record)}\n`);
       return;
     }
     switch (outcome.kind) {
       case 'published':
-        opts.stream.write(
-          `\nPublished ${outcome.brief.kind === 'templated_report' ? 'report' : 'Brief'}: ${outcome.brief.htmlPath}\nRun: ${outcome.runId}\n`,
-        );
+        // FEAT-054: the first line says whether the task was done, not only
+        // that a Brief was saved.
+        opts.stream.write(`\n${outcomeFirstLine(outcome)}\nRun: ${outcome.runId}\n`);
         return;
       case 'handoff':
         opts.errStream.write(
@@ -271,6 +282,26 @@ export class CLIConnectorIO implements ConnectorIO {
         errStream: process.stderr,
       }
     );
+  }
+}
+
+/**
+ * The one-line failure message `ask` and `research` raise for an outcome that
+ * published nothing, led by its outcome word (FEAT-054 S9):
+ * `Handoff: <blocker>: <next action>`, `Failed: <CODE>: <message>`, or
+ * `Aborted: <CODE>: <message>`.
+ */
+export function agentFailureLine(
+  outcome: Exclude<AgenticTaskOutcome, { readonly kind: 'published' }>,
+): string {
+  switch (outcome.kind) {
+    case 'handoff':
+      return `Handoff: ${outcome.blocker}: ${outcome.safestNextAction}`;
+    case 'aborted':
+      return `Aborted: ${outcome.error.code}: ${outcome.error.message}`;
+    case 'failed':
+    case 'budget_exhausted':
+      return `Failed: ${outcome.error.code}: ${outcome.error.message}`;
   }
 }
 

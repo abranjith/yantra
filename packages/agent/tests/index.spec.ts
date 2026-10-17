@@ -14,11 +14,22 @@ describe('@yantra/agent barrel exports', () => {
   });
 
   it('exports runtime outcome helpers', () => {
-    expect(
-      exitCodeForAgenticOutcome({
-        kind: 'published',
-        brief: { jsonPath: 'brief.json', markdownPath: 'brief.md', htmlPath: 'brief.html' },
-      }),
-    ).toBe(0);
+    const outcome = {
+      kind: 'published',
+      runId: 'r',
+      runDir: '/runs/r',
+      brief: {
+        kind: 'brief',
+        briefId: 'b',
+        jsonPath: 'brief.json',
+        markdownPath: 'brief.md',
+        htmlPath: 'brief.html',
+      },
+      taskOutcome: 'fulfilled',
+      requirements: null,
+      terminationReason: 'model_finished',
+    } as const;
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(0);
+    expect(exitCodeForAgenticOutcome({ ...outcome, taskOutcome: 'partial' })).toBe(2);
   });
 });

@@ -11,9 +11,11 @@ import { readFile } from 'node:fs/promises';
 import {
   exitCodeForAgenticOutcome,
   resolveCommandTaskProfile,
+  taskOutcomeOf,
   type runAgenticTask,
   type ActiveReportTemplate,
   type AgenticTaskOutcome,
+  type PromotionResult,
 } from '@yantra/agent';
 import {
   InteractiveInstallOfferGateway,
@@ -102,6 +104,21 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
 
 /** Map a closed agentic result to the documented CLI contract. */
 export const exitCodeForDoOutcome = exitCodeForAgenticOutcome;
+
+/**
+ * The `--save-as` result line. A saved workflow names any fulfilled item it
+ * could not keep (FEAT-054 D5); an unsaved one keeps its warning form.
+ */
+export function promotionLine(promotion: PromotionResult): string {
+  if (!promotion.saved) {
+    return `⚠ Could not save workflow "${promotion.workflowName}": ${promotion.error}\n`;
+  }
+  const omitted =
+    promotion.omitted.length === 0
+      ? ''
+      : ` without its ${promotion.omitted.join(' and ')} step (no replay step captures a screenshot yet)`;
+  return `✓ Saved workflow "${promotion.workflowName}"${omitted}. Replay it with: yantra run ${promotion.workflowName}\n`;
+}
 
 async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
   // A conflicting `--browser` pair is a validation failure, resolved before any
@@ -216,15 +233,14 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
       await runtime.recordHistory(outcome.runId);
     }
     if (!json && outcome.kind === 'published' && outcome.promotion) {
-      const line = outcome.promotion.saved
-        ? `✓ Saved workflow "${outcome.promotion.workflowName}". Replay it with: yantra run ${outcome.promotion.workflowName}\n`
-        : `⚠ Could not save workflow "${outcome.promotion.workflowName}": ${outcome.promotion.error}\n`;
+      const line = promotionLine(outcome.promotion);
       runtime.stdout.write(line);
     }
     if (options.open === true && outcome.kind === 'published') openArtifact(outcome.brief.htmlPath);
     const exitCode = exitCodeForDoOutcome(outcome);
     if (exitCode !== 0) {
-      throw new CommanderError(exitCode, `yantra.do.${outcome.kind}`, outcome.kind);
+      const word = taskOutcomeOf(outcome);
+      throw new CommanderError(exitCode, `yantra.do.${word}`, word);
     }
   } catch (error) {
     if (error instanceof UserInputMarkerError) {

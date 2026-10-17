@@ -1,4 +1,5 @@
 import {
+  classifySubmitTarget,
   normalizeText,
   resolveInteractable,
   runEscalationPlan,
@@ -15,6 +16,7 @@ import {
   type ToolWrapperSpec,
 } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
+import { submitForbidden, submitRefusal } from '../../../runtime/submit-policy.js';
 import { toCandidateChain } from '../../../runtime/trace.js';
 
 import {
@@ -107,6 +109,16 @@ export function browserClickSpec(
     parameters: BrowserClickParams,
     sanitizationProfile: 'public',
     mutating: true,
+    // FEAT-054: under `effects.submit: forbidden` a submit-class target is
+    // refused here, before the confirmation gate, so no prompt is ever built.
+    policy: async (params: Params, ctx) => {
+      if (!submitForbidden(ctx.services)) return null;
+      const controller = ctx.services.domain.browser?.controller;
+      if (controller === undefined) return null;
+      const name = controller.describeRef(params.ref)?.name ?? '';
+      const signal = classifySubmitTarget(await controller.submitFacts(params.ref), name);
+      return signal === null ? null : submitRefusal(ctx.services, signal, name, params.ref);
+    },
     requiresConfirmation: (params: Params) =>
       PROTECTED_ACTION_RE.test(
         services.domain.browser?.controller.describeRef(params.ref)?.name ?? '',
@@ -126,6 +138,10 @@ export function browserClickSpec(
       const described = controller.describeRef(params.ref);
       const host = controller.host();
       const name = described?.name ?? '';
+      // Read before the click for the same reason: a click that submits or
+      // navigates leaves no element to read afterwards. One read-only
+      // evaluation; the `effects.submit` evidence needs it on every click.
+      const submitClass = classifySubmitTarget(await controller.submitFacts(params.ref), name);
 
       let activeRef = params.ref;
       let ranked = await safeLocatorFor(controller, activeRef);
@@ -165,6 +181,12 @@ export function browserClickSpec(
       // produced it, so it is attested. Attesting BEFORE following the tab is
       // what lets the follow re-check it like any other navigation target.
       recordActionProvenance(ctx.services, clicked, 'browser_click');
+      ctx.services.actionLedger.record({
+        kind: 'click_executed',
+        ref: activeRef,
+        name,
+        submitClass,
+      });
       const result = await followSiteOpenedTab(ctx.services, controller, clicked);
       ctx.services.trace?.append({
         kind: 'click',

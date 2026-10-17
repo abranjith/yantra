@@ -126,6 +126,11 @@ class DeltaController {
     return diffFingerprints(this.callBaseline, this.lastScan);
   }
 
+  /** Synthetic controls carry no DOM facts; classification falls back to the name. */
+  public submitFacts(_ref: string): Promise<null> {
+    return Promise.resolve(null);
+  }
+
   public describeRef(ref: string): AgentInteractable | undefined {
     const index = Number(ref.slice(1)) - 1;
     const control = this.frame.controls[index];

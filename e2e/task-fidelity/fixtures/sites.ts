@@ -43,6 +43,12 @@ import {
   STRUCTURED_LISTING_ROUTES,
   renderStructuredListing,
 } from './structured-listing.js';
+import {
+  TEST_FORM_PATTERN,
+  TEST_FORM_PROVENANCE,
+  TEST_FORM_ROUTES,
+  renderTestForm,
+} from './test-form.js';
 
 /** The reserved second-level domain every fixture host lives under. */
 export const FIXTURE_DOMAIN = 'yantra.test';
@@ -73,6 +79,7 @@ export const SITE_NAMES = [
   'challenge-interstitial',
   'article',
   'multi-table',
+  'test-form',
 ] as const;
 
 export type SiteName = (typeof SITE_NAMES)[number];
@@ -114,6 +121,7 @@ export const TASK_SITES: readonly TaskSite[] = Object.freeze([
     MULTI_TABLE_ROUTES,
     renderMultiTable,
   ),
+  site('test-form', TEST_FORM_PATTERN, TEST_FORM_PROVENANCE, TEST_FORM_ROUTES, renderTestForm),
 ]);
 
 /** The site served at `host`, or undefined when no fixture owns it. */

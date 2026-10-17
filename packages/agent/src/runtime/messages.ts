@@ -640,6 +640,73 @@ export const AGENT_INTERACTION_MESSAGES = [
     ['field'],
     'task_contract',
   ),
+  // FEAT-054 action terms.
+  tool(
+    'INVALID_INPUT',
+    'contract-actions-command',
+    () =>
+      'research cannot fill forms, take screenshots, or submit, so its contract cannot declare ' +
+      'deliverable "actions", fill, artifacts, or effects. Remove them, then call ' +
+      'task_contract again with the full contract.',
+    [],
+    'task_contract',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'contract-fill-fields',
+    (details) =>
+      details.coverage === 'listed'
+        ? 'fill.coverage "listed" needs the field names to fill in fill.fields. Name them, or ' +
+          'use coverage "all_eligible" for every field, then call task_contract again with the ' +
+          'full contract.'
+        : 'fill.coverage "all_eligible" means every eligible field, so it takes no fill.fields. ' +
+          'Remove fill.fields, or use coverage "listed", then call task_contract again with the ' +
+          'full contract.',
+    ['coverage'],
+    'task_contract',
+  ),
+  // `effects.submit: forbidden` (FEAT-054). Refused before any prompt; the
+  // engineered next move is to leave the form unsubmitted and finish.
+  tool(
+    'SUBMIT_FORBIDDEN',
+    'structural',
+    (details) =>
+      `Not clicked: "${text(details.name).slice(0, 80)}" would submit the form, and the task ` +
+      'contract says effects.submit is forbidden. Leave the form unsubmitted; continue with the ' +
+      'remaining items or finish with result_publish.',
+    ['name'],
+    'result_publish',
+  ),
+  tool(
+    'SUBMIT_FORBIDDEN',
+    'name',
+    (details) =>
+      `Not clicked: "${text(details.name).slice(0, 80)}" reads as a submit action, and the ` +
+      'task contract says effects.submit is forbidden. Leave the form unsubmitted; continue ' +
+      'with the remaining items or finish with result_publish.',
+    ['name'],
+    'result_publish',
+  ),
+  tool(
+    'SUBMIT_FORBIDDEN',
+    'nested-workflow',
+    (details) =>
+      `Not run: the saved workflow "${text(details.name).slice(0, 64)}" clicks, and the task ` +
+      'contract says effects.submit is forbidden, so it could submit a form. Do the remaining ' +
+      'items with the browser tools or finish with result_publish.',
+    ['name'],
+    'result_publish',
+  ),
+  tool(
+    'CONTRACT_REQUIRED',
+    'missing',
+    () =>
+      'This task has no declared contract, so its result cannot be judged. Call task_contract ' +
+      'with the deliverable and every requirement the goal states, including fill, artifacts, ' +
+      'and effects for page actions, then call result_publish again.',
+    [],
+    'task_contract',
+  ),
   tool(
     'CONTRACT_REVISION_LIMIT',
     'revisions',

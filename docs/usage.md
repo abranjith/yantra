@@ -545,6 +545,54 @@ required to clear that protection.
 [Safety and Privacy](features/safety-and-privacy.md) before using browser
 mutation or sensitive input.
 
+### Read the task outcome
+
+Every agentic run ends with one outcome word, which says whether the task was
+done rather than only whether a result was saved:
+
+| Word        | Meaning                                                                                                   | `do` exit |
+| ----------- | --------------------------------------------------------------------------------------------------------- | --------- |
+| `fulfilled` | A result was published and, for `do`, every requirement in the declared task contract was met             | `0`       |
+| `partial`   | A `do` result was published, but a requirement is unmet or no task contract was declared; the Brief stays | `2`       |
+| `handoff`   | The run stopped because it needs you, for example a CAPTCHA, MFA, or denied consent                       | `4`       |
+| `failed`    | The run published nothing usable, including when a budget or the repeated-failure breaker ended it        | `2`       |
+| `aborted`   | You interrupted the run with Ctrl+C                                                                       | `130`     |
+
+`ask` and `research` keep their own criteria: a published result is
+`fulfilled`, so they never end `partial`. Their exit codes are unchanged: `0`
+when they publish and `2` when a run ends without publishing, whatever its word.
+
+A `do` run that publishes prints its result line on stdout, followed by the run
+ID:
+
+```text
+Fulfilled: 3 of 3 requirements met. Brief: <path>
+Partial: 1 of 3 requirements met; viewport screenshot not captured; fields 10 of 48 filled. Brief: <path>
+Partial: no task contract was declared. Brief: <path>
+```
+
+The line names at most two unmet items, then `+N more`. A templated run says
+`report:` instead of `Brief:`. The Brief's **Requirements** block lists every
+declared item as met, unmet with its reason, or not applicable. With `--json`,
+the `agent_outcome` record carries `task_outcome` (one of the five words) and
+`termination_reason`, which records separately why the run stopped:
+`model_finished`, `wall-clock-soft`, `wall-clock-hard`, `provider-tokens`,
+`tool-budget`, `repeated-tool-failure`, `handoff`, `user_abort`, or
+`provider_failed`.
+
+When an agentic `ask` or `research` run publishes nothing, its stderr failure
+message leads with the outcome word, for example
+`ask failed: Handoff: <blocker>: <next action>`,
+`research failed: Failed: <CODE>: <message>`, or
+`ask failed: Aborted: <CODE>: <message>`.
+
+`--save-as` saves only a `fulfilled` run. A `partial` run keeps its Brief and
+prints
+`⚠ Could not save workflow "<name>": Not saved: the run was partial (1 of 3 requirements met). Only a fulfilled run is saved as a workflow.`
+No replay step captures a screenshot yet, so a saved workflow names any
+screenshot it leaves out:
+`✓ Saved workflow "<name>" without its viewport screenshot step (no replay step captures a screenshot yet). Replay it with: yantra run <name>`.
+
 ### Check the goal Yantra received
 
 `ask`, `research` (with or without `--no-llm`), and `do` print the goal exactly
@@ -590,7 +638,17 @@ Agentic `research` and `do` runs also show what the agent understood the task
 to be. When the agent declares its task contract, stderr gets one line:
 
 ```text
-understood: <contract summary>
+understood: <deliverable> of <subject> — <terms>
+```
+
+The terms are joined with `; ` and appear only when declared: the action
+phrase (such as `fill all eligible fields; capture a viewport screenshot; do
+not submit`), then `fields: …`, `filters: name=value, …`, `sources: …`,
+`ranked by <field> ascending|descending`, `top <n>`, and `note: …`. For
+example:
+
+```text
+understood: actions of the public demo form — fill all eligible fields; capture a viewport screenshot; do not submit
 ```
 
 A later revision of the contract prints `understood (revised): <contract summary>`.
@@ -687,6 +745,11 @@ yantra run order-status --params order_id=A123
 yantra run order-status --params-file ./params.yaml
 yantra run order-status --params-file ./params.yaml --params order_id=A123 --json
 ```
+
+A replay reports its result with the same outcome words as the agentic
+commands, such as `✓ Run <run-id>: fulfilled`, `⤺ Run <run-id>: handoff`, or
+`✗ Run <run-id>: failed`; `--json` adds `task_outcome` to the outcome object.
+`run` exit codes are unchanged.
 
 Explicit `--params` values override the parameter file. Parameters are not a
 secret channel; credential-shaped values are rejected. Workflows live in
@@ -786,6 +849,10 @@ yantra list runs --limit 5 --status failed
 yantra show <run-id> --events 50
 yantra usage --type ask --since 7d
 ```
+
+`list runs` shows a run's outcome word beside its status, such as
+`failed partial`, when the run recorded one; `--json` carries it as
+`taskOutcome`. Runs recorded before outcome words existed show the status alone.
 
 `usage --since` accepts `YYYY-MM-DD`, whole days such as `7d`, or whole hours
 such as `24h`. The history index is a rebuildable cache; run directories remain
@@ -1245,14 +1312,14 @@ tie-break.
 
 ## Exit codes
 
-|  Exit | Meaning                                                                                   |
-| ----: | ----------------------------------------------------------------------------------------- |
-|   `0` | Success; doctor warnings and partial deterministic results with notices can still succeed |
-|   `1` | Invalid command input, option, YAML, template, or local lookup                            |
-|   `2` | A started task failed, hit a fatal execution budget, or could not publish a valid result  |
-|   `3` | Environment failure, failed doctor check, or unavailable required model setup             |
-|   `4` | Human handoff, including CAPTCHA, MFA, missing required location, or denied consent       |
-| `130` | An agentic run or live smoke was interrupted with Ctrl+C                                  |
+|  Exit | Meaning                                                                                                        |
+| ----: | -------------------------------------------------------------------------------------------------------------- |
+|   `0` | Success; doctor warnings and partial deterministic results with notices can still succeed                      |
+|   `1` | Invalid command input, option, YAML, template, or local lookup                                                 |
+|   `2` | A started task failed, hit a fatal execution budget, or could not publish a valid result; a `partial` `do` run |
+|   `3` | Environment failure, failed doctor check, or unavailable required model setup                                  |
+|   `4` | Human handoff, including CAPTCHA, MFA, missing required location, or denied consent                            |
+| `130` | An agentic run or live smoke was interrupted with Ctrl+C                                                       |
 
 ## Browser runtime and migration testing
 

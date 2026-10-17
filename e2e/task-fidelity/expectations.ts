@@ -23,6 +23,9 @@ export const OWNERS = [
   'FEAT-051',
   'FEAT-052',
   'FEAT-053',
+  'FEAT-054',
+  'FEAT-055',
+  'FEAT-056',
 ] as const;
 
 export type Owner = (typeof OWNERS)[number];
@@ -35,7 +38,14 @@ export type Owner = (typeof OWNERS)[number];
  * deterministic tier. A target that then fails is fixed in the owner's code,
  * never by editing the expectation.
  */
-export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>();
+export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>([
+  // FEAT-055 TASK-001 supplies the form census `fill.coverage: all_eligible`
+  // is measured against; until it lands a declared fill is never met.
+  'FEAT-055',
+  // FEAT-056 verifies protected and other controls whose readback differs
+  // from the typed value; until it lands they report not committed.
+  'FEAT-056',
+]);
 
 /** The verdict of one matcher on one measured value. */
 export interface MatchResult {

@@ -137,7 +137,8 @@
                 "user_aborted",
                 "unexpected",
                 "resume_drift",
-                "locator_miss_in_unrecorded_frame"
+                "locator_miss_in_unrecorded_frame",
+                "requirements_unmet"
               ],
               "description": "Retry reason class."
             }
@@ -355,7 +356,8 @@
                 "user_aborted",
                 "unexpected",
                 "resume_drift",
-                "locator_miss_in_unrecorded_frame"
+                "locator_miss_in_unrecorded_frame",
+                "requirements_unmet"
               ],
               "description": "Failure class."
             },
@@ -363,6 +365,17 @@
               "type": "string",
               "minLength": 1,
               "description": "Path to generated report artifact."
+            },
+            "task_outcome": {
+              "type": "string",
+              "enum": [
+                "fulfilled",
+                "partial",
+                "handoff",
+                "failed",
+                "aborted"
+              ],
+              "description": "The task outcome (partial, handoff, failed, aborted); absent on older events."
             }
           },
           "required": [

@@ -19,6 +19,7 @@ import {
   type ObservationFingerprint,
   type PageDelta,
 } from '../interaction/page-delta.js';
+import type { SubmitFacts } from '../interaction/submit-class.js';
 import type { AttemptRecord } from '../interaction/types.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
 import type { ElementDescription } from '../locator/types.js';
@@ -633,6 +634,34 @@ export class AgentBrowserController implements WidgetPort {
       ...(ref === undefined ? {} : { ref }),
       marks: marks.length,
     };
+  }
+
+  /**
+   * The facts submit-class classification reads from a ref's element
+   * (FEAT-054): its tag, its resolved `type` property, and whether it has a
+   * form owner. One read-only evaluation: no mutation, no focus change, no
+   * event dispatched.
+   *
+   * @returns The facts, or null when the ref is unknown, stale, or unreadable.
+   */
+  public async submitFacts(ref: string): Promise<SubmitFacts | null> {
+    const record = this.refs.get(ref);
+    if (!record) return null;
+    try {
+      return await evaluateOnRef(record.handle, ref, (element) => {
+        const owned = element as Element & { readonly type?: unknown; readonly form?: unknown };
+        return {
+          tag: element.tagName.toLowerCase(),
+          resolvedType: typeof owned.type === 'string' ? owned.type.toLowerCase() : null,
+          hasFormOwner:
+            (element instanceof HTMLButtonElement || element instanceof HTMLInputElement) &&
+            element.form !== null,
+        };
+      });
+    } catch {
+      // swallow-ok: unreadable facts classify by name alone; the caller still decides
+      return null;
+    }
   }
 
   /** Return model-safe ref metadata for policy classification. */

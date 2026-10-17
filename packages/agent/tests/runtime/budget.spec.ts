@@ -263,3 +263,56 @@ describe('@no-llm BudgetTracker byte, navigation, and host boundaries', () => {
     if (!over.isOk) expect(over.error.limit).toBe('hosts');
   });
 });
+
+describe('@no-llm BudgetTracker wind-down exemption (FEAT-054 S1)', () => {
+  it('reserves a wind-down-exempt call after the soft boundary while exploration is refused', () => {
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+    clock.advance(800);
+
+    expect(budgets.reserveCall('task_contract', { windDownExempt: true }).isOk).toBe(true);
+    const fetch = budgets.reserveCall('web_fetch');
+    expect(fetch.isOk).toBe(false);
+    if (!fetch.isOk) expect(fetch.error.limit).toBe('wall-clock-soft');
+  });
+
+  it('still refuses a wind-down-exempt call after the hard boundary', () => {
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+    clock.advance(1_000);
+
+    const refused = budgets.reserveCall('task_contract', { windDownExempt: true });
+    expect(refused.isOk).toBe(false);
+    if (!refused.isOk) expect(refused.error.limit).toBe('wall-clock');
+  });
+
+  it('does not exempt a wind-down-exempt call from the cumulative-byte cap', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    budgets.accountResultBytes(250);
+
+    const refused = budgets.reserveCall('task_contract', { windDownExempt: true });
+    expect(refused.isOk).toBe(false);
+    if (!refused.isOk) expect(refused.error.limit).toBe('cumulative-bytes');
+  });
+
+  it('records softWindDownReached once a call meets the soft boundary, not before', () => {
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+    budgets.reserveCall('web_search');
+    expect(budgets.softWindDownReached).toBe(false);
+
+    clock.advance(800);
+    expect(budgets.softWindDownReached).toBe(false);
+    expect(budgets.reserveCall('web_search').isOk).toBe(false);
+    expect(budgets.softWindDownReached).toBe(true);
+  });
+
+  it('records softWindDownReached when only the terminal call crosses the boundary', () => {
+    const clock = fakeClock();
+    const budgets = new BudgetTracker(TIGHT_LIMITS, clock.now);
+    clock.advance(900);
+
+    expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+    expect(budgets.softWindDownReached).toBe(true);
+  });
+});

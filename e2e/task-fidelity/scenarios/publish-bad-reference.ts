@@ -32,12 +32,12 @@ const publish = (bad: boolean): ScriptStep => ({
 const expectations: readonly Expectation[] = [
   ...crossCuttingExpectations(),
   {
-    id: 'fresh-manifest-agent-v10',
+    id: 'fresh-manifest-agent-v11',
     owner: 'FEAT-053',
     measure: (run) =>
       (run.artifacts.manifest as { agent?: { prompt_version?: string } } | null)?.agent
         ?.prompt_version,
-    target: equals('agent-v10'),
+    target: equals('agent-v11'),
     note: 'The real run recorder stamps the current publish-guidance version.',
   },
   {

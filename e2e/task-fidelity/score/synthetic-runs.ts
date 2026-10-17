@@ -152,6 +152,7 @@ export function syntheticRun(input: {
     registeredTools: [],
     prompt: null,
     progress: [],
+    confirmationRequests: 0,
     requests: input.requests ?? [],
     searchCalls: input.searchCalls ?? [],
     searchPeakConcurrency: 0,

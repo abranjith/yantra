@@ -38,7 +38,7 @@ import {
   type EffectivePreferences,
 } from '@yantra/core';
 import type { BriefRunArtifacts, RunRequest } from '@yantra/core/workflow/replay';
-import { exitCodeFor } from '@yantra/core/workflow/replay';
+import { exitCodeFor, taskOutcomeForReplay } from '@yantra/core/workflow/replay';
 import type { Brief } from '@yantra/protocol';
 import { validateBrief } from '@yantra/protocol';
 import { Command } from 'commander';
@@ -233,17 +233,21 @@ export function makeRunCommand(): Command {
         const briefArtifacts = outcome.kind === 'success' ? outcome.brief : undefined;
         const brief = briefArtifacts === undefined ? null : await readBrief(briefArtifacts);
 
+        // FEAT-054: the same outcome words as the agentic commands; exit codes
+        // and behavior are unchanged.
+        const taskOutcome = taskOutcomeForReplay(outcome);
         if (options.json === true) {
+          const record = { ...outcome, task_outcome: taskOutcome };
           process.stdout.write(
             `${JSON.stringify(
-              brief === null ? outcome : { ...outcome, briefDocument: brief },
+              brief === null ? record : { ...record, briefDocument: brief },
               null,
               2,
             )}\n`,
           );
         } else {
           const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
-          process.stdout.write(`${icon} Run ${outcome.runId}: ${outcome.kind}\n`);
+          process.stdout.write(`${icon} Run ${outcome.runId}: ${taskOutcome}\n`);
           if (outcome.kind === 'success') {
             if (brief === null) {
               process.stdout.write(renderOutputs(outcome.outputs));
@@ -378,7 +382,7 @@ const MAX_OUTPUT_CHARS = 4_000;
 /**
  * Renders a successful run's outputs beneath the status line.
  *
- * A run that completes and prints only `✓ Run <id>: success` is
+ * A run that completes and prints only `✓ Run <id>: fulfilled` is
  * indistinguishable from one that did nothing — the whole point of replaying a
  * workflow is the data it collects, and until now that data was reachable only
  * by opening `outputs.json` or re-running with `--json`.

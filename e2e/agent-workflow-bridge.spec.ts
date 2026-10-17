@@ -303,7 +303,7 @@ describe('@no-llm FEAT-027 workflow bridge', () => {
     // The run published and promotion saved a workflow.
     expect(outcome.kind).toBe('published');
     if (outcome.kind !== 'published') return;
-    expect(outcome.promotion).toEqual({ saved: true, workflowName: 'fixture-login' });
+    expect(outcome.promotion).toEqual({ saved: true, workflowName: 'fixture-login', omitted: [] });
 
     // trace.json is the raw record of what the run did, observations included:
     // promotion needs them to tell whether a run *ended* by reading the page.
@@ -493,6 +493,13 @@ function catalogTrace(): PromotableTraceStep[] {
 }
 
 async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
+  // A `do` result is judged against its contract, so it declares one first
+  // (FEAT-054 D4); without it result_publish returns CONTRACT_REQUIRED.
+  const declared = await session.call('task_contract', {
+    deliverable: 'report',
+    subject: 'the fixture task',
+  });
+  expect(declared.status).toBe('ok');
   const citations = refs.map((ref) => `[${ref}]`).join('');
   const brief = {
     title: 'Bridge result',

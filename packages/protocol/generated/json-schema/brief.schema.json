@@ -343,6 +343,108 @@
           "maxItems": 24,
           "description": "Declared conditions and their delivery statuses; absent on older artifacts."
         },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^(?:deliverable|fill|effects\\.submit|artifact:screenshot:(?:viewport|full_page|element)|filter:\\S(?:.{0,58}\\S)?)$",
+                "description": "Requirement id: deliverable, filter:<name>, fill, artifact:screenshot:<scope>, or effects.submit."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "description": "Plain-words name of the requirement."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "met",
+                  "unmet",
+                  "not_applicable"
+                ],
+                "description": "Whether evidence shows the requirement met, unmet, or not applicable."
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What the evidence showed, or null when nothing needs saying."
+              },
+              "declared_in": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The contract revision that declared the requirement, or null when not tracked."
+              },
+              "exemptions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "description": "Field label."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "disabled",
+                        "read_only",
+                        "hidden",
+                        "file_input",
+                        "human_verification"
+                      ],
+                      "description": "Why the engine left a form control out of \"fill every eligible field\"."
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "reason"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A form control the engine left out of \"fill every eligible field\"."
+                },
+                "maxItems": 20,
+                "description": "Controls the engine judged exempt from the fill requirement."
+              },
+              "exempt_overflow": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "How many more exempt controls exist beyond the listed ones."
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "status",
+              "reason",
+              "declared_in"
+            ],
+            "additionalProperties": false,
+            "description": "One declared requirement of the task contract and its evidence-judged status."
+          },
+          "maxItems": 16,
+          "description": "Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs."
+        },
         "metadata": {
           "type": "object",
           "properties": {

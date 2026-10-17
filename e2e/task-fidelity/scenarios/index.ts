@@ -17,6 +17,13 @@ import { challengeSmall } from './challenge-small.js';
 import { contractDeclared } from './contract-declared.js';
 import { contractInvalid } from './contract-invalid.js';
 import { contractMissing } from './contract-missing.js';
+import { doClaimsMetContrary } from './do-claims-met-contrary.js';
+import { doContractMissing } from './do-contract-missing.js';
+import { doFormComplete } from './do-form-complete.js';
+import { doFormHistorical } from './do-form-historical.js';
+import { doFulfillmentOmitted } from './do-fulfillment-omitted.js';
+import { doRevisionDropsScreenshot } from './do-revision-drops-screenshot.js';
+import { doSubmitForbidden } from './do-submit-forbidden.js';
 import { handAssembledUrl } from './hand-assembled-url.js';
 import { listingClientRendered } from './listing-client-rendered.js';
 import { listingStructured } from './listing-structured.js';
@@ -35,7 +42,12 @@ import { searchConcurrency } from './search-concurrency.js';
 import { searchEmptyTimeout } from './search-empty-timeout.js';
 
 /** Modules in this directory that hold shared code, not a scenario. */
-export const HELPER_MODULES: readonly string[] = Object.freeze(['index', 'common', 'challenge']);
+export const HELPER_MODULES: readonly string[] = Object.freeze([
+  'index',
+  'common',
+  'challenge',
+  'do-form',
+]);
 
 export const SCENARIOS: readonly Scenario[] = Object.freeze([
   listingTable,
@@ -57,6 +69,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
   handAssembledUrl,
   contractDeclared,
   contractMissing,
+  doFormHistorical,
+  doFormComplete,
+  doClaimsMetContrary,
+  doFulfillmentOmitted,
+  doRevisionDropsScreenshot,
+  doSubmitForbidden,
+  doContractMissing,
   contractInvalid,
   researchBrowse,
   researchNoBrowse,

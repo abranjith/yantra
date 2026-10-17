@@ -10,6 +10,8 @@ import type {
   Brief,
   FailureClass,
   Plan,
+  TaskOutcome,
+  TerminationReason,
   WorkflowSynthesis,
 } from '@yantra/protocol';
 
@@ -17,7 +19,7 @@ import type { ProfileSpec } from '../../browser/types.js';
 import type { Checkpoint } from '../../executor/types.js';
 import type { EngineLocatorChain } from '../../locator/types.js';
 
-export type { FailureClass };
+export type { FailureClass, TaskOutcome, TerminationReason };
 
 // ---------------------------------------------------------------------------
 // Run request (constructed by CLI from argv)
@@ -217,6 +219,13 @@ export interface RunManifest {
   synthesis?: RunSynthesisRecord;
   /** Active report-template revision, when the agent published `document.*`. */
   template?: RunTemplateRecord;
+  /**
+   * Whether the task was done (FEAT-054): `fulfilled`, `partial`, `handoff`,
+   * `failed`, or `aborted`. Absent on runs written before it existed.
+   */
+  taskOutcome?: TaskOutcome;
+  /** Why the run stopped, recorded beside the outcome; absent on older runs. */
+  terminationReason?: TerminationReason;
 }
 
 /** Stable agent startup codes persisted without importing the agent package into core. */
@@ -273,6 +282,8 @@ export interface RunSummary {
   readonly endedAt: string | undefined;
   readonly durationMs: number | undefined;
   readonly failureClass: FailureClass | undefined;
+  /** The task outcome the run recorded (FEAT-054); absent on older runs. */
+  readonly taskOutcome?: TaskOutcome;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +354,8 @@ export interface RunStore {
       endedAt?: string;
       failureClass?: FailureClass;
       lastCheckpointStepId?: string;
+      taskOutcome?: TaskOutcome;
+      terminationReason?: TerminationReason;
     },
   ): Promise<void>;
   releaseLock(runId: string): Promise<void>;

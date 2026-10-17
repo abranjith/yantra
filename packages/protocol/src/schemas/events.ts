@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ConfirmationRequest } from './confirmation.js';
 import { DiscoveryCycle, DiscoveryOutcome } from './discovery.js';
 import { FailureClass, SecurityScope, STEP_VERBS } from './security.js';
+import { TaskOutcome } from './task-outcome.js';
 
 const StepVerbSchema = z.enum(STEP_VERBS);
 
@@ -78,6 +79,9 @@ export const TaskEvent = z
       kind: z.literal('task_failed').describe('Task execution failed.'),
       failure_class: FailureClass.describe('Failure class.'),
       report_path: z.string().min(1).describe('Path to generated report artifact.'),
+      task_outcome: TaskOutcome.optional().describe(
+        'The task outcome (partial, handoff, failed, aborted); absent on older events.',
+      ),
     }),
     z.object({
       ...TaskEventBase,

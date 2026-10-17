@@ -47,6 +47,7 @@ import {
   editorialMarkIsInformative,
   type Brief,
   type BriefNotice,
+  type BriefRequirement,
   type BriefSource,
   type KeyFinding,
   type Section,
@@ -59,6 +60,7 @@ import {
   inertDocument,
   safeHref,
 } from './html-shell.js';
+import { FILL_EXEMPTION_WORDS } from './to-markdown.js';
 
 /**
  * Renders a {@link Brief} as a self-contained, inert HTML document.
@@ -82,6 +84,10 @@ export function briefToHtml(brief: Brief): string {
     body.push(
       `<p class="constraints"><strong>Conditions:</strong> ${brief.constraints.map((condition) => `${escapeHtml(condition.name)} = ${escapeHtml(condition.value)} <span class="${condition.status}">${condition.status === 'verified' ? '✓ verified' : condition.status === 'violated' ? '✗ not met' : '— unverified'}</span>${citationSuperscripts(condition.citations)}`).join(' · ')}</p>`,
     );
+  }
+
+  if (brief.requirements !== undefined && brief.requirements.length > 0) {
+    body.push(requirementsHtml(brief.requirements));
   }
 
   const overview = brief.overview.trim();
@@ -118,10 +124,16 @@ export function briefToHtml(brief: Brief): string {
     body.push(noticesHtml(brief.notices));
   }
 
-  const extraStyles =
+  const extraStyles = [
     brief.constraints === undefined
       ? ''
-      : '.constraints .verified { color: var(--accent); }\n.constraints .unverified { color: var(--warn); }\n.constraints .violated { color: var(--danger); }';
+      : '.constraints .verified { color: var(--accent); }\n.constraints .unverified { color: var(--warn); }\n.constraints .violated { color: var(--danger); }',
+    brief.requirements === undefined
+      ? ''
+      : '.requirements .met { color: var(--accent); }\n.requirements .unmet { color: var(--danger); }\n.requirements .not_applicable { color: var(--warn); }',
+  ]
+    .filter((style) => style.length > 0)
+    .join('\n');
   return inertDocument(brief.title, body.join('\n'), extraStyles);
 }
 
@@ -337,4 +349,33 @@ function cell(value: string | number | boolean | null): string {
     return value ? '<span class="yes">✓</span>' : '<span class="no">✗</span>';
   }
   return escapeHtml(String(value));
+}
+
+/** The status glyph and word for one requirement. */
+const REQUIREMENT_STATUS_HTML: Readonly<Record<BriefRequirement['status'], string>> = {
+  met: '✓ met',
+  unmet: '✗ unmet',
+  not_applicable: '– not applicable',
+};
+
+/** The Requirements block: one item per requirement, exemptions nested. */
+function requirementsHtml(requirements: readonly BriefRequirement[]): string {
+  const items = requirements.map((requirement) => {
+    const reason = requirement.reason === null ? '' : ` — ${escapeHtml(requirement.reason)}`;
+    const declared =
+      requirement.declared_in !== null && requirement.declared_in > 1
+        ? ` <small>(declared in revision ${requirement.declared_in})</small>`
+        : '';
+    const exemptions = requirement.exemptions ?? [];
+    const more =
+      requirement.exempt_overflow === undefined ? '' : ` (+${requirement.exempt_overflow} more)`;
+    const exempt =
+      exemptions.length === 0
+        ? ''
+        : `<ul><li>Exempt: ${exemptions
+            .map((entry) => `${escapeHtml(entry.label)} (${FILL_EXEMPTION_WORDS[entry.reason]})`)
+            .join(', ')}${more}</li></ul>`;
+    return `<li><span class="${requirement.status}">${REQUIREMENT_STATUS_HTML[requirement.status]}</span>: ${escapeHtml(requirement.label)}${reason}${declared}${exempt}</li>`;
+  });
+  return `<section class="requirements"><h2>Requirements</h2><ul>${items.join('')}</ul></section>`;
 }

@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 import { FileUsageWriter, ToolCallWriter, type ToolAuditEntryInput } from '@yantra/core';
 import { readManifest, writeManifest, type RunManifest } from '@yantra/core/workflow/replay';
-import { AgentManifestSection, type AgentManifestSectionType } from '@yantra/protocol';
+import {
+  AgentManifestSection,
+  type AgentManifestSectionType,
+  type AgentRunBudgets,
+} from '@yantra/protocol';
 import pino from 'pino';
 
 import type {
@@ -28,6 +32,10 @@ export interface RunRecorderOptions {
   readonly tools: readonly HashableToolDefinition[];
   /** Test/embedding override; production resolves the installed SDK package. */
   readonly sdkVersion?: string;
+  /** Test/embedding override; production reads `@yantra/agent`'s package version. */
+  readonly yantraVersion?: string;
+  /** The run's effective budgets, recorded for provenance (FEAT-054 S10). */
+  readonly budgets?: AgentRunBudgets;
   /** Test/embedding override for capture-metadata logging. */
   readonly logger?: RunRecorderLogger;
   /** Clock for the first turn's latency baseline (tests); defaults to `new Date()`. */
@@ -77,6 +85,7 @@ export class RunRecorder {
    */
   public static async open(options: RunRecorderOptions): Promise<RunRecorder> {
     const sdkVersion = options.sdkVersion ?? (await resolvePiSdkVersion());
+    const yantraVersion = options.yantraVersion ?? (await resolveYantraVersion());
     const sessionFile = toRunRelativePath(options.runDir, options.session.logPath);
     const agent = AgentManifestSection.parse({
       adapter: 'pi-coding-agent',
@@ -90,6 +99,8 @@ export class RunRecorder {
       prompt_version: PROMPT_VERSION,
       prompt_hash: sha256Text(options.systemPrompt),
       tool_catalog_hash: hashToolCatalog(options.tools),
+      ...(yantraVersion === null ? {} : { yantra_version: yantraVersion }),
+      ...(options.budgets === undefined ? {} : { budgets: options.budgets }),
     });
     const recorder = new RunRecorder(
       options,
@@ -297,6 +308,23 @@ function projectOutputForAudit(output: unknown, captures: readonly AuditCapture[
       return { type: 'image', artifact };
     }),
   };
+}
+
+/**
+ * Resolves the running `@yantra/agent` package version from its own package
+ * metadata, the same way {@link resolvePiSdkVersion} reads the SDK's. Null
+ * when the metadata cannot be read: provenance is best-effort and never fails
+ * a run.
+ */
+export async function resolveYantraVersion(): Promise<string | null> {
+  try {
+    const packagePath = fileURLToPath(new URL('../../package.json', import.meta.url));
+    const parsed = JSON.parse(await readFile(packagePath, 'utf8')) as { version?: unknown };
+    return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : null;
+  } catch {
+    // swallow-ok: provenance is best-effort; the manifest simply omits the version
+    return null;
+  }
 }
 
 /** Resolves the installed Pi SDK version from its package metadata at runtime. */

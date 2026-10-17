@@ -38,6 +38,7 @@ export const FailureClass = z
     'unexpected',
     'resume_drift',
     'locator_miss_in_unrecorded_frame',
+    'requirements_unmet',
   ])
   .describe('Failure category emitted in task_failed and retry events.');
 

@@ -22,32 +22,69 @@ function capture(): { stream: Writable; value: () => string } {
   };
 }
 
-function outcome(kind: AgenticTaskOutcome['kind']): AgenticTaskOutcome {
+/** Outcomes in the exact shape `runAgenticTask` returns them. */
+function outcome(kind: AgenticTaskOutcome['kind'] | 'partial'): AgenticTaskOutcome {
   const base = { runId: 'run-1', runDir: '/runs/run-1' };
   switch (kind) {
     case 'published':
+    case 'partial':
       return {
-        kind,
+        kind: 'published',
         ...base,
         brief: {
+          kind: 'brief',
           briefId: 'brief-1',
           jsonPath: '/runs/run-1/brief.json',
           markdownPath: '/runs/run-1/brief.md',
           htmlPath: '/runs/run-1/brief.html',
         },
+        taskOutcome: kind === 'partial' ? 'partial' : 'fulfilled',
+        requirements:
+          kind === 'partial'
+            ? {
+                met: 1,
+                total: 2,
+                unmet: [
+                  {
+                    id: 'artifact:screenshot:viewport',
+                    label: 'viewport screenshot',
+                    reason: 'not captured',
+                  },
+                ],
+                contractDeclared: true,
+              }
+            : { met: 2, total: 2, unmet: [], contractDeclared: true },
+        terminationReason: 'model_finished',
       };
     case 'handoff':
-      return { kind, ...base, blocker: 'CAPTCHA', safestNextAction: 'Complete it manually.' };
+      return {
+        kind,
+        ...base,
+        blocker: 'CAPTCHA',
+        safestNextAction: 'Complete it manually.',
+        terminationReason: 'handoff',
+      };
     case 'failed':
       return {
         kind,
         ...base,
         error: { code: 'AGENT_AUTH_UNAVAILABLE', message: 'Configure auth.' },
+        terminationReason: 'provider_failed',
       };
     case 'budget_exhausted':
-      return { kind, ...base, error: { code: 'AGENT_BUDGET_EXHAUSTED', message: 'Budget used.' } };
+      return {
+        kind,
+        ...base,
+        error: { code: 'AGENT_BUDGET_EXHAUSTED', message: 'Budget used.' },
+        terminationReason: 'tool-budget',
+      };
     case 'aborted':
-      return { kind, ...base, error: { code: 'AGENT_ABORTED', message: 'Interrupted.' } };
+      return {
+        kind,
+        ...base,
+        error: { code: 'AGENT_ABORTED', message: 'Interrupted.' },
+        terminationReason: 'user_abort',
+      };
   }
 }
 
@@ -63,6 +100,7 @@ async function invoke(
   } = {},
 ): Promise<{
   readonly exitCode: number;
+  readonly code: string | undefined;
   readonly request: AgenticTaskRequest;
   readonly stdout: string;
   readonly stderr: string;
@@ -90,12 +128,14 @@ async function invoke(
       }),
   });
   let exitCode = 0;
+  let code: string | undefined;
   try {
     await program.parseAsync([...argv], { from: 'user' });
   } catch (error) {
     exitCode = (error as { exitCode?: number }).exitCode ?? 2;
+    code = (error as { code?: string }).code;
   }
-  return { exitCode, request: captured!, stdout: stdout.value(), stderr: stderr.value() };
+  return { exitCode, code, request: captured!, stdout: stdout.value(), stderr: stderr.value() };
 }
 
 describe('@no-llm yantra do cutover', () => {
@@ -167,12 +207,24 @@ describe('@no-llm yantra do cutover', () => {
 
   it.each([
     ['published', 0],
+    ['partial', 2],
     ['failed', 2],
     ['budget_exhausted', 2],
     ['handoff', 4],
     ['aborted', 130],
   ] as const)('maps %s to exit %i', async (kind, expected) => {
     expect((await invoke(['do', 'goal'], outcome(kind))).exitCode).toBe(expected);
+  });
+
+  it('names the task outcome in the error code: partial exits 2 with yantra.do.partial', async () => {
+    const partial = await invoke(['do', 'goal'], outcome('partial'));
+    expect(partial).toMatchObject({ exitCode: 2, code: 'yantra.do.partial' });
+    expect(await invoke(['do', 'goal'], outcome('failed'))).toMatchObject({
+      exitCode: 2,
+      code: 'yantra.do.failed',
+    });
+    const fulfilled = await invoke(['do', 'goal'], outcome('published'));
+    expect(fulfilled).toMatchObject({ exitCode: 0, code: undefined });
   });
 
   it('passes the explicit least-privilege do profile, not the runtime default', async () => {

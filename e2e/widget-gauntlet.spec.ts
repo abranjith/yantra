@@ -19,6 +19,8 @@ import {
   EvidenceLedger,
   EvidencePhase,
   TaskContractStore,
+  FulfillmentRecord,
+  actionLedgerFor,
   UrlPolicy,
   RunHealthLedger,
   UrlProvenance,
@@ -354,6 +356,12 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
     evidence: new EvidenceLedger(sanitizer),
     evidencePhase: new EvidencePhase(),
     contract: new TaskContractStore({ runId: 'run', runDir: '.', command: 'do', required: false }),
+    fulfillment: new FulfillmentRecord(),
+    actionLedger: actionLedgerFor({
+      controller,
+      sanitizer,
+      nowIso: () => new Date().toISOString(),
+    }),
     trace: null,
     abortSignal: new AbortController().signal,
     // The fill engine's stability bounds use this injected clock. Advancing it

@@ -185,6 +185,12 @@ const TURNS: readonly (readonly Step[])[] = [
     { tool: 'web_search', params: { query: 'santa fe calligraphy awd price' } },
   ],
   [
+    // A `do` result is judged against its contract, so it is declared first
+    // (FEAT-054 D4).
+    {
+      tool: 'task_contract',
+      params: { deliverable: 'report', subject: 'Santa Fe Calligraphy offers' },
+    },
     {
       tool: 'result_publish',
       params: {
@@ -370,7 +376,8 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
 
     // G8: every audit record re-parses, including double-encoded content text.
     const toolCalls = await readJsonl(runDir, 'tool-calls.jsonl');
-    expect(toolCalls).toHaveLength(16);
+    // Nine calls (eight searches, the contract, the publish), each start and end.
+    expect(toolCalls).toHaveLength(18);
     for (const line of toolCalls.filter((entry) => entry.phase === 'end')) {
       const output = line.output_sanitized as { content?: { type: string; text: string }[] };
       expect(typeof output).toBe('object');
@@ -403,9 +410,12 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
     expect(brief.isOk).toBe(true);
     if (!brief.isOk) return;
     expect(brief.value.metadata.search_provider).toBe('duckduckgo');
+    // The run declared its contract (a `do` publish requires one, FEAT-054), so
+    // no missing-contract notice leads the runtime facts.
+    expect(brief.value.notices.some((notice) => notice.reason === MISSING_CONTRACT_REASON)).toBe(
+      false,
+    );
     expect(brief.value.notices).toEqual([
-      // The run declared no task contract, which leads the runtime facts (FEAT-052).
-      { kind: 'other', source: 'task-contract', reason: MISSING_CONTRACT_REASON },
       {
         kind: 'search_failed',
         source: 'search:duckduckgo',
@@ -450,7 +460,7 @@ describe('@no-llm FEAT-048 integrated contract — the G4/G6/G8 fault mix', () =
       source_failures: { fetch: 0, extract: 0, blocked: 0, budget: 2, policy: 0 },
       budgets: { navigations_used: 5, navigations_limit: 5, exhausted: ['navigations'] },
       tool_failures: { total: 4 },
-      notices: 4,
+      notices: 3,
     });
     expect(await readText(runDir, 'report.md')).toContain('## Run Health');
 

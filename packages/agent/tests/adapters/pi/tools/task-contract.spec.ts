@@ -29,7 +29,12 @@ const VALID = {
   notes: 'listing pages only',
 } as const;
 
-async function setup(): Promise<{
+async function setup(
+  options: {
+    readonly command?: 'research' | 'do';
+    readonly overrides?: Omit<Parameters<typeof buildServices>[0] & object, 'contract'>;
+  } = {},
+): Promise<{
   readonly services: RunServices;
   readonly tool: WrappedTool;
   readonly dir: string;
@@ -41,10 +46,11 @@ async function setup(): Promise<{
   const services = buildServices({
     runDir: dir,
     runtimeLogger: logger,
+    ...options.overrides,
     contract: new TaskContractStore({
       runId: 'run-1',
       runDir: dir,
-      command: 'research',
+      command: options.command ?? 'research',
       required: true,
     }),
   });
@@ -167,6 +173,9 @@ describe('@no-llm task_contract tool', () => {
         field_count: 3,
         filter_count: 1,
         source_hosts: ['faceted-listing.yantra.test'],
+        fill_coverage: null,
+        artifact_count: 0,
+        submit: 'allowed',
       },
     ]);
     const serialized = JSON.stringify(logger.lines);
@@ -179,5 +188,152 @@ describe('@no-llm task_contract tool', () => {
     const { services, tool } = await setup();
     await tool.execute(VALID, undefined);
     expect(services.urlProvenance.has('https://faceted-listing.yantra.test/')).toBe(false);
+  });
+});
+
+describe('@no-llm task_contract action terms (FEAT-054)', () => {
+  const ACTIONS = {
+    deliverable: 'actions',
+    subject: 'the sign-up form',
+    required_sources: ['forms.example.test'],
+    fill: { coverage: 'all_eligible' },
+    artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+    effects: { submit: 'forbidden' },
+  } as const;
+
+  const VISION_ON = {
+    grantEnabled: true,
+    hasBrowserTools: true,
+    modelImageInput: true,
+    available: true,
+    capability: { imageInput: true, resolvedAt: 'pre-catalog' as const },
+  };
+
+  it('records action terms in do and logs counts only', async () => {
+    const { tool, dir, logger } = await setup({ command: 'do' });
+
+    const result = await tool.execute(ACTIONS, undefined);
+
+    expect(result.status).toBe('ok');
+    const record = await readRecord(dir);
+    expect(record.revisions[0]?.contract).toMatchObject({
+      deliverable: 'actions',
+      fill: { coverage: 'all_eligible' },
+      artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+      effects: { submit: 'forbidden' },
+    });
+    expect(record.requirements).toEqual([
+      { id: 'fill', declared_in: 1 },
+      { id: 'artifact:screenshot:viewport', declared_in: 1 },
+      { id: 'effects.submit', declared_in: 1 },
+    ]);
+    const line = logger.lines.find((entry) => entry.event === 'contract_declared');
+    expect(line).toMatchObject({
+      fill_coverage: 'all_eligible',
+      artifact_count: 1,
+      submit: 'forbidden',
+    });
+    expect(JSON.stringify(logger.lines)).not.toContain('sign-up form');
+  });
+
+  it('discloses a capability gap with the vision reason when Vision Assist is off', async () => {
+    const { tool } = await setup({ command: 'do' });
+
+    const result = await tool.execute(ACTIONS, undefined);
+
+    const payload = JSON.parse(result.modelText) as { capability_gaps?: unknown };
+    expect(payload.capability_gaps).toEqual([
+      { item: 'artifact:screenshot:viewport', reason: 'no_browser_tools' },
+    ]);
+    expect((result.details as { capability_gaps?: unknown }).capability_gaps).toEqual(
+      payload.capability_gaps,
+    );
+  });
+
+  it('reports full_page as scope_unsupported even with Vision Assist available', async () => {
+    const { tool } = await setup({ command: 'do', overrides: { vision: VISION_ON } });
+
+    const result = await tool.execute(
+      {
+        ...ACTIONS,
+        artifacts: [
+          { kind: 'screenshot', scope: 'viewport' },
+          { kind: 'screenshot', scope: 'full_page' },
+        ],
+      },
+      undefined,
+    );
+
+    const payload = JSON.parse(result.modelText) as { capability_gaps?: unknown };
+    expect(payload.capability_gaps).toEqual([
+      { item: 'artifact:screenshot:full_page', reason: 'scope_unsupported' },
+    ]);
+  });
+
+  it('omits capability_gaps when no artifact is declared', async () => {
+    const { tool } = await setup({ command: 'do' });
+
+    const result = await tool.execute(
+      { deliverable: 'actions', subject: 'the form', effects: { submit: 'forbidden' } },
+      undefined,
+    );
+
+    expect(result.status).toBe('ok');
+    expect('capability_gaps' in (JSON.parse(result.modelText) as object)).toBe(false);
+    expect('capability_gaps' in (result.details as object)).toBe(false);
+  });
+
+  it('uses an injected capability resolver over the vision default', async () => {
+    const { tool } = await setup({
+      command: 'do',
+      overrides: { contractCapabilities: { captureGap: () => null } },
+    });
+
+    const result = await tool.execute(ACTIONS, undefined);
+
+    expect('capability_gaps' in (JSON.parse(result.modelText) as object)).toBe(false);
+  });
+
+  it.each([
+    [{ ...VALID, fill: { coverage: 'all_eligible' } }, /research cannot fill forms/u],
+    [{ ...VALID, deliverable: 'actions' }, /research cannot fill forms/u],
+  ])('refuses action terms in research with contract-actions-command', async (input, message) => {
+    const { tool, dir } = await setup({ command: 'research' });
+
+    const result = await tool.execute(input, undefined);
+
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.modelText).toMatch(message);
+    expect(await exists(join(dir, 'contract.json'))).toBe(false);
+  });
+
+  it.each([
+    [{ coverage: 'listed' }, /needs the field names/u],
+    [{ coverage: 'all_eligible', fields: ['Email'] }, /takes no fill.fields/u],
+  ])('refuses an inconsistent fill with contract-fill-fields', async (fill, message) => {
+    const { tool } = await setup({ command: 'do' });
+
+    const result = await tool.execute({ ...ACTIONS, fill }, undefined);
+
+    expect(result.error_code).toBe('INVALID_INPUT');
+    expect(result.modelText).toMatch(message);
+  });
+
+  it('stays callable after the soft wall-clock boundary but not after the hard one', async () => {
+    const soft = await setup({
+      command: 'do',
+      overrides: { limits: { softWallClockFraction: 0 } },
+    });
+    const declared = await soft.tool.execute(ACTIONS, undefined);
+    expect(declared.status).toBe('ok');
+    expect(soft.services.budgets.softWindDownReached).toBe(true);
+
+    const hard = await setup({
+      command: 'do',
+      overrides: { limits: { wallClockMs: 0 } },
+    });
+    const refused = await hard.tool.execute(ACTIONS, undefined);
+    expect(refused.error_code).toBe('BUDGET_EXHAUSTED');
+    expect(await exists(join(hard.dir, 'contract.json'))).toBe(false);
   });
 });

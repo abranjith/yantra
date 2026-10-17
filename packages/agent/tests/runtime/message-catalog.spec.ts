@@ -15,7 +15,9 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { buildYantraWrappedTools, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
+import { actionLedgerFor } from '../../src/runtime/action-ledger.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
+import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from '../../src/runtime/messages.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import {
@@ -211,6 +213,12 @@ function buildServices(): RunServices {
     evidence: new EvidenceLedger(sanitizer),
     evidencePhase: new EvidencePhase(),
     contract: new TaskContractStore({ runId: 'run', runDir: '.', command: 'do', required: false }),
+    fulfillment: new FulfillmentRecord(),
+    actionLedger: actionLedgerFor({
+      controller: null,
+      sanitizer,
+      nowIso: () => new Date().toISOString(),
+    }),
     trace: null,
     abortSignal: new AbortController().signal,
     now: () => Date.now(),

@@ -9,6 +9,7 @@ import {
   type AgentBrowserObservation,
   type AgentInteractable,
   type BrowserActionResult,
+  DefaultSanitizer,
   diffFingerprints,
   fillFailure,
   fingerprintFromScan,
@@ -33,6 +34,7 @@ import {
 } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserFillFormSpec } from '../../../../src/adapters/pi/tools/browser-fill-form.js';
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
+import { ActionLedger } from '../../../../src/runtime/action-ledger.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps } from '../../../../src/runtime/run-services.js';
 import { AgentTrace } from '../../../../src/runtime/trace.js';
@@ -1352,7 +1354,12 @@ function expectNothingEmpty(records: readonly Record<string, unknown>[]): void {
   }
 }
 
-async function run(controller: FormController, params: unknown, trace = new AgentTrace()) {
+async function run(
+  controller: FormController,
+  params: unknown,
+  trace = new AgentTrace(),
+  actionLedger?: ActionLedger,
+) {
   const browser: BrowserToolDeps = {
     controller: controller as unknown as AgentBrowserController,
     ethics: allowingEthics(),
@@ -1361,7 +1368,11 @@ async function run(controller: FormController, params: unknown, trace = new Agen
     secretHosts: () => Promise.resolve([]),
     captureThresholdBytes: 16_384,
   };
-  const services = buildServices({ trace, domain: { browser } });
+  const services = buildServices({
+    trace,
+    domain: { browser },
+    ...(actionLedger ? { actionLedger } : {}),
+  });
   return wrapTool(browserFillFormSpec(services), services).execute(params, undefined);
 }
 
@@ -1563,6 +1574,20 @@ class FormController {
     return diffFingerprints(this.deltaCallBaseline, this.lastScanFingerprint);
   }
 
+  /** The same facts the real controller reads, from the JSDOM element. */
+  public submitFacts(
+    ref: string,
+  ): Promise<{ tag: string; resolvedType: string | null; hasFormOwner: boolean } | null> {
+    const element = this.elementsByRef.get(ref);
+    if (!element) return Promise.resolve(null);
+    const owned = element as Element & { readonly type?: unknown; readonly form?: unknown };
+    return Promise.resolve({
+      tag: element.tagName.toLowerCase(),
+      resolvedType: typeof owned.type === 'string' ? owned.type.toLowerCase() : null,
+      hasFormOwner: owned.form !== null && owned.form !== undefined,
+    });
+  }
+
   public describeRef(ref: string): AgentInteractable | undefined {
     const element = this.elementsByRef.get(ref);
     return element
@@ -1733,3 +1758,126 @@ class FormController {
     }
   }
 }
+
+describe('@no-llm fill tools record verified commits in the action ledger (FEAT-054)', () => {
+  function ledger(): {
+    readonly ledger: ActionLedger;
+    readonly lines: Record<string, unknown>[];
+  } {
+    const lines: Record<string, unknown>[] = [];
+    const record = (obj: Record<string, unknown> | string) => {
+      if (typeof obj !== 'string') lines.push(obj);
+    };
+    return {
+      lines,
+      ledger: new ActionLedger({
+        nowIso: () => '2026-10-15T12:00:00.000Z',
+        locate: () => ({ epoch: 7, host: 'example.test' }),
+        sanitizer: new DefaultSanitizer(),
+        logger: { info: record, warn: record, error: record, debug: record },
+      }),
+    };
+  }
+
+  it('records exactly one fill_committed per applied field and none for the failure', async () => {
+    const { ledger: actions } = ledger();
+    const controller = new FormController(
+      '<input id="first" aria-label="First"><button id="toggle" aria-label="Toggle">Toggle</button>' +
+        '<input id="third" aria-label="Third">',
+    );
+
+    await run(
+      controller,
+      {
+        fields: [
+          { field: 'First', value: 'one' },
+          { field: 'Toggle', value: 'two' },
+          { field: 'Third', value: 'three' },
+        ],
+      },
+      new AgentTrace(),
+      actions,
+    );
+
+    expect(actions.entries()).toEqual([
+      expect.objectContaining({
+        kind: 'fill_committed',
+        tool: 'browser_fill_form',
+        field: 'First',
+        covers: 1,
+        epoch: 7,
+        host: 'example.test',
+      }),
+      expect.objectContaining({ kind: 'fill_committed', field: 'Third', covers: 1 }),
+    ]);
+    // Plain-text fills each wait out the late-suggestion window.
+  }, 30_000);
+
+  it('records a fused date range as one entry covering both fields', async () => {
+    const { ledger: actions } = ledger();
+
+    await run(
+      rangePickerController(),
+      {
+        fields: [
+          { field: 'Check-in', value: '2026-09-06' },
+          { field: 'Check-out', value: '2026-09-12' },
+        ],
+      },
+      new AgentTrace(),
+      actions,
+    );
+
+    const fills = actions.entries().filter((entry) => entry.kind === 'fill_committed');
+    expect(fills).toHaveLength(1);
+    expect(fills[0]).toMatchObject({ covers: 2 });
+  });
+
+  it('records browser_fill_element commits under its own name', async () => {
+    const controller = new FormController('<input id="email" aria-label="Email">');
+    const { services } = await runElement(controller, { field: 'Email', value: 'a@example.test' });
+
+    expect(services.actionLedger.entries()).toEqual([
+      expect.objectContaining({ kind: 'fill_committed', tool: 'browser_fill_element', covers: 1 }),
+    ]);
+  }, 30_000);
+
+  it('keeps no typed value or stored-secret canary in entries or the runtime log', async () => {
+    const { ledger: actions, lines } = ledger();
+    await run(
+      new FormController('<input id="first" aria-label="First">'),
+      { fields: [{ field: 'First', value: 'CANARY-user-typed-7f3a' }] },
+      new AgentTrace(),
+      actions,
+    );
+    const controller = new FormController(
+      '<input id="password" type="password" aria-label="Password">',
+    );
+    const resolver: OpaqueRefResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        value: 'CANARY-super-secret',
+        isSecret: true,
+        source: 'secret',
+        sourceKey: 'site.password',
+        dispose: vi.fn(),
+      }),
+    };
+    const { services } = await runElement(
+      controller,
+      { field: 'Password', value: { kind: 'secret_ref', key: 'site.password' } },
+      new AgentTrace(),
+      { secretResolver: resolver, secretHosts: () => Promise.resolve(['example.test']) },
+      true,
+    );
+
+    expect(actions.entries()).toHaveLength(1);
+    expect(services.actionLedger.entries()).toHaveLength(1);
+    const bytes = JSON.stringify([actions.entries(), services.actionLedger.entries(), lines]);
+    for (const canary of ['CANARY-user-typed-7f3a', 'CANARY-super-secret', 'site.password']) {
+      expect(bytes).not.toContain(canary);
+    }
+    expect(lines).toEqual([
+      expect.objectContaining({ event: 'action_recorded', kind: 'fill_committed', covers: 1 }),
+    ]);
+  }, 30_000);
+});

@@ -94,7 +94,7 @@ Terminal output uses progressive disclosure. Markdown is portable full-detail ou
 
 A deterministic run writes a run directory under the Yantra data directory with `manifest.json`, `events.jsonl`, fetched-page files, and atomically written `brief.json`, `brief.md`, and `brief.html`. Artifact writes are best-effort: terminal output can still succeed if those three files cannot be persisted. Agentic runs additionally retain the provider session, stable tool-call audit, usage, captures, and operational report. See [Diagnostics, Audit, and Run Inspection](diagnostics-and-audit.md#run-artifacts) for the full layout.
 
-Per-source ethics refusal, timeout, HTTP failure, oversized response, or extraction failure normally produces a notice and allows the remaining evidence to be published. A pipeline deadline produces a partial Brief with a `budget_exhausted` notice. Search-provider startup/search failures, invalid options, invalid publication, or an unavailable required artifact fail the command with an actionable message.
+Per-source ethics refusal, timeout, HTTP failure, oversized response, or extraction failure normally produces a notice and allows the remaining evidence to be published. A pipeline deadline produces a partial Brief with a `budget_exhausted` notice. Search-provider startup/search failures, invalid options, invalid publication, or an unavailable required artifact fail the command with an actionable message. An agentic run that publishes nothing leads that message with its outcome word: `Failed: <CODE>: <message>`, `Handoff: <blocker>: <next action>`, or `Aborted: <CODE>: <message>`. Exit codes and successful output are unchanged.
 
 ## Configuration and Permissions
 

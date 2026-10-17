@@ -14,7 +14,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { err, ok, type Result } from '@yantra/protocol';
+import { TaskOutcome, err, ok, type Result } from '@yantra/protocol';
 
 import { runsRoot } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
@@ -44,6 +44,8 @@ export interface HistoryEntry {
   readonly costUsd: number | null;
   /** Search or LLM provider label for usage rollups, or null. */
   readonly provider: string | null;
+  /** The task-outcome word the run recorded (FEAT-054), or null for older runs. */
+  readonly taskOutcome: TaskOutcome | null;
 }
 
 /** Filter for {@link HistoryStore.list}. */
@@ -114,8 +116,8 @@ const DEFAULT_LIST_LIMIT = 50;
 const UPSERT_SQL = `
   INSERT INTO history
     (run_id, task_type, intent_text, brief_id, status,
-     started_at, finished_at, duration_ms, cost_usd, provider)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     started_at, finished_at, duration_ms, cost_usd, provider, task_outcome)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(run_id) DO UPDATE SET
     task_type   = excluded.task_type,
     intent_text = excluded.intent_text,
@@ -125,7 +127,8 @@ const UPSERT_SQL = `
     finished_at = excluded.finished_at,
     duration_ms = excluded.duration_ms,
     cost_usd    = excluded.cost_usd,
-    provider    = excluded.provider
+    provider    = excluded.provider,
+    task_outcome = excluded.task_outcome
 `;
 
 /** SQLite-backed {@link HistoryStore}. */
@@ -196,7 +199,7 @@ export class SqliteHistoryStore implements HistoryStore {
       const rows = this.db
         .prepare(
           `SELECT run_id, task_type, intent_text, brief_id, status,
-                  started_at, finished_at, duration_ms, cost_usd, provider
+                  started_at, finished_at, duration_ms, cost_usd, provider, task_outcome
              FROM history
              ${where}
              ORDER BY started_at DESC
@@ -313,6 +316,7 @@ export class SqliteHistoryStore implements HistoryStore {
         entry.durationMs,
         entry.costUsd,
         entry.provider,
+        entry.taskOutcome ?? null,
       );
   }
 
@@ -396,6 +400,7 @@ interface HistoryRow {
   readonly duration_ms: number | null;
   readonly cost_usd: number | null;
   readonly provider: string | null;
+  readonly task_outcome: TaskOutcome | null;
 }
 
 interface UsageRow {
@@ -417,6 +422,7 @@ function rowToEntry(row: HistoryRow): HistoryEntry {
     durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
     costUsd: row.cost_usd === null ? null : Number(row.cost_usd),
     provider: row.provider,
+    taskOutcome: row.task_outcome ?? null,
   };
 }
 
@@ -451,6 +457,7 @@ export function deriveHistoryEntry(
       durationMs: durationBetween(startedAt, finishedAt),
       costUsd: briefMeta?.costUsd ?? null,
       provider: asString(raw.search_provider),
+      taskOutcome: null,
     };
   }
 
@@ -488,10 +495,18 @@ export function deriveHistoryEntry(
                 ? (raw.agent as Record<string, unknown>).provider
                 : null,
             ),
+      taskOutcome: taskOutcomeOf(raw.taskOutcome),
     };
   }
 
   return null;
+}
+
+const TASK_OUTCOMES: ReadonlySet<string> = new Set(TaskOutcome.options);
+
+/** A manifest's `taskOutcome`, or null when absent or not a known word. */
+function taskOutcomeOf(value: unknown): TaskOutcome | null {
+  return typeof value === 'string' && TASK_OUTCOMES.has(value) ? (value as TaskOutcome) : null;
 }
 
 /** Maps ask-pipeline status (`ok`/`partial`/`failed`) to a history status. */

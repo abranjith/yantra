@@ -73,6 +73,8 @@ export type ListItem =
       readonly status: string;
       readonly startedAt: string;
       readonly durationMs: number | null;
+      /** The task-outcome word (FEAT-054); present only on runs that recorded one. */
+      readonly taskOutcome?: string;
     };
 
 /** A payload accepted by `OutputRenderer.renderShow`. */

@@ -110,6 +110,8 @@ export interface ScenarioRun {
   readonly requests: readonly RequestLogEntry[];
   readonly searchCalls: readonly SearchCallRecord[];
   readonly searchPeakConcurrency: number;
+  /** Confirmation requests the run raised (the harness denies every one). */
+  readonly confirmationRequests: number;
   /** Browser launches, counted by the host-mapping decorator. */
   readonly browserLaunches: number;
   readonly rankSignals: readonly DomainRankSignal[];
@@ -210,6 +212,11 @@ export async function runScenario(
       resolveSearchProvider: scriptedSearchLeaf(search),
     };
 
+    // The run's budget clock: real time plus whatever a script's
+    // `advance-clock` steps add, so a soft boundary can be crossed
+    // deterministically.
+    let clockOffsetMs = 0;
+    const budgetNow = (): number => Date.now() + clockOffsetMs;
     const started = performance.now();
     const outcome = await runAgenticTask(
       {
@@ -221,7 +228,7 @@ export async function runScenario(
           ? {}
           : { budgets: { ...options.budgets, ...scenario.budgets } }),
         ambient: {
-          grants: { location: true, screenshots: false },
+          grants: { location: true, screenshots: scenario.visionAssist === true },
           userLocation: locationOf(scenario.userLocation),
         },
         connector,
@@ -233,9 +240,12 @@ export async function runScenario(
         rankSink,
         ...(scripted
           ? {
-              resolveModelImageInput: () => false,
+              budgetNow,
+              resolveModelImageInput: () => scenario.visionAssist === true,
               createProvider: (services) => {
-                agent = new ScriptedAgentProvider(services, scenario.script, profile);
+                agent = new ScriptedAgentProvider(services, scenario.script, profile, (ms) => {
+                  clockOffsetMs += ms;
+                });
                 return agent;
               },
             }
@@ -258,6 +268,7 @@ export async function runScenario(
       registeredTools: report?.registeredTools ?? [],
       prompt: report?.prompt ?? null,
       progress: connector.progress(),
+      confirmationRequests: connector.confirmationRequests(),
       requests: server.requests(),
       searchCalls: search.calls(),
       searchPeakConcurrency: search.peakConcurrency(),
@@ -322,12 +333,20 @@ function locationOf(location: string | null): Sanitized<string> | null {
 class SilentConnector implements AgentTaskConnector {
   public readonly interactive = false;
 
+  private requests = 0;
+
   public requestConfirmation(
     _request: ConfirmationRequest,
     _signal: AbortSignal,
   ): Promise<'denied'> {
     // The harness never approves a protected action on a user's behalf.
+    this.requests += 1;
     return Promise.resolve('denied');
+  }
+
+  /** How many confirmation requests the run raised. */
+  public confirmationRequests(): number {
+    return this.requests;
   }
 
   private readonly events: AgentProgressEvent[] = [];

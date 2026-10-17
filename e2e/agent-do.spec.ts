@@ -266,7 +266,8 @@ describe('@no-llm yantra do release scenarios', () => {
     });
 
     expect(result.outcome.kind).toBe('published');
-    expect(result.toolCalls.filter((entry) => entry.phase === 'end')).toHaveLength(7);
+    // Seven page and publish calls plus the contract declaration (FEAT-054).
+    expect(result.toolCalls.filter((entry) => entry.phase === 'end')).toHaveLength(8);
     expect(await readFile(join(result.outcome.runDir, 'brief.json'), 'utf8')).toContain(
       'Fixture evidence',
     );
@@ -423,6 +424,13 @@ function formScenario(publishOnSuccess: boolean): Scenario {
 }
 
 async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
+  // A `do` result is judged against its contract, so it declares one first
+  // (FEAT-054 D4); without it result_publish returns CONTRACT_REQUIRED.
+  const declared = await session.call('task_contract', {
+    deliverable: 'report',
+    subject: 'the fixture task',
+  });
+  expect(declared.status).toBe('ok');
   const citations = refs.map((ref) => `[${ref}]`).join('');
   const brief = {
     title: 'Fixture result',
