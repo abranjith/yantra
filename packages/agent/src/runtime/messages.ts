@@ -10,6 +10,22 @@ const REFUSED_AGAIN =
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
+    'FORM_FIELD_NOT_FOUND',
+    'no-match',
+    (d) =>
+      `No field named "${text(d.query)}" is present. Fields available: ${text(d.candidates)}. browser_observe with kinds: ["field"] lists them all.`,
+    ['query', 'candidates'],
+    'browser_observe',
+  ),
+  tool(
+    'FORM_FIELD_AMBIGUOUS',
+    'same-tier',
+    (d) =>
+      `"${text(d.query)}" matches different fields: ${text(d.candidates)}. Re-issue with a section-qualified name shown here or an eNN ref.`,
+    ['query', 'candidates'],
+    'browser_fill_element',
+  ),
+  tool(
     'STALE_ELEMENT_REF',
     'continuation-cursor',
     (d) =>

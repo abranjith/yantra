@@ -475,6 +475,8 @@ An unlabeled field with a structural label:
 - **Verify**: `cd packages/protocol && npx vitest run`; `npx turbo run build --filter=@yantra/core`; `cd packages/core && npx vitest run tests/discovery/promote-agent-trace.spec.ts tests/executor/fill-element.spec.ts tests/workflow/replay/fill-element-workflow.spec.ts`; finally `npx turbo run lint typecheck` and `npx turbo run build && cd e2e && npx vitest run`.
 - **Depends on**: TASK-005, TASK-006
 
+> Implementation note: the existing fill-plan `FieldIdentity` was renamed `FillFieldIdentity` to distinguish it from the new shared semantic identity. Not-found characterization expectations now exclude buttons and links, as TASK-007 requires.
+
 ## 6. Cross-Cutting Concerns
 
 - **Auth**: N/A. Secret fills keep their host binding and secret-latch behaviour. Field identity never reads values: `RawFieldEvidence` holds no value, and withheld controls stay withheld.
@@ -507,7 +509,7 @@ An unlabeled field with a structural label:
 - [x] TASK-003: Synthetic layout matrix, safety gate, and coverage baseline
 - [x] TASK-004: Shared field-identity module (evidence order, structural labels, origin, confidence, section, constraints)
 - [x] TASK-005: Model-visible field identity within byte budgets; label and section-qualified resolution; matrix coverage gate
-- [ ] TASK-006: Element-keyed refs and verified re-identification
+- [x] TASK-006: Element-keyed refs and verified re-identification
 - [ ] TASK-007: Fillable-control not-found and ambiguity feedback in the model-visible message
 - [ ] TASK-008: `field_label_origin` promotion and shared-identity replay
 

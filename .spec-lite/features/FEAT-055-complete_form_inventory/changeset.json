@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": "packages/agent/src/adapters/pi/tools/browser-click.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
       "status": "M",
       "role": "implement",
@@ -26,6 +32,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/form-field-resolve.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/src/runtime/messages.ts",
       "status": "M",
       "role": "implement",
@@ -48,6 +60,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/form-field-resolve.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/browser/actionability-errors.ts",
@@ -132,6 +150,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller-ref-stability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/browser/observation-shape.spec.ts",

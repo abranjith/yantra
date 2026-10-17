@@ -254,6 +254,8 @@ interface InteractableRecord extends AgentInteractable {
 }
 
 interface ElementIdentity {
+  readonly fieldIdentity?: FieldIdentity;
+  readonly elementKey?: number | null;
   readonly role: string;
   readonly name: string;
   readonly group: string | null;
@@ -334,6 +336,7 @@ export class AgentBrowserController implements WidgetPort {
   private refs = new Map<string, InteractableRecord>();
   private modelVisibleRefs = new Set<string>();
   private refIdByIdentity = new Map<string, string>();
+  private refByElementKey = new Map<number, string>();
   private identityByRef = new Map<string, ElementIdentity>();
   private settler: PageSettler | null = null;
   private popupUrls: string[] = [];
@@ -544,10 +547,19 @@ export class AgentBrowserController implements WidgetPort {
     const superseded = this.refs;
     this.refs = new Map();
     const interactables: AgentInteractable[] = [];
-    // Identity is role + name + ordinal among same-role/name elements in
-    // observation order. It is a heuristic: if same-named elements are
-    // inserted or reordered between observations, their ids can trade
-    // places, but each id always resolves to a currently observed element.
+    // Elements keep refs by object identity. A replacement must prove a unique
+    // semantic identity while the old element is absent from the entire scan.
+    const identities = new Map<RawInteractable, FieldIdentity>();
+    const identityCounts = new Map<string, number>();
+    const presentKeys = new Set(
+      records.flatMap((raw) => (raw.elementKey === null ? [] : [raw.elementKey])),
+    );
+    for (const raw of records) {
+      if (!raw.field) continue;
+      const identity = deriveFieldIdentity(raw.role, raw.field);
+      identities.set(raw, identity);
+      identityCounts.set(identity.identityKey, (identityCounts.get(identity.identityKey) ?? 0) + 1);
+    }
     const ordinals = new Map<string, number>();
     const claimed = new Set<ElementHandle<Element>>();
     const refByIndex = new Map<number, string>();
@@ -562,14 +574,32 @@ export class AgentBrowserController implements WidgetPort {
       const ordinalKey = `${role}\u0000${name}`;
       const ordinal = ordinals.get(ordinalKey) ?? 0;
       ordinals.set(ordinalKey, ordinal + 1);
-      const identity = `${ordinalKey}\u0000${ordinal}`;
-      let ref = this.refIdByIdentity.get(identity);
+      const fieldIdentity = identities.get(raw);
+      const identity = fieldIdentity
+        ? `field:${fieldIdentity.identityKey}`
+        : `${ordinalKey}\u0000${ordinal}`;
+      let ref = raw.elementKey === null ? undefined : this.refByElementKey.get(raw.elementKey);
       if (!ref) {
-        ref = `e${this.nextRef++}`;
-        this.refIdByIdentity.set(identity, ref);
+        const previousRef = this.refIdByIdentity.get(identity);
+        const previous = previousRef ? this.identityByRef.get(previousRef) : undefined;
+        if (
+          !fieldIdentity ||
+          (fieldIdentity.origin !== 'none' &&
+            identityCounts.get(fieldIdentity.identityKey) === 1 &&
+            previous &&
+            !presentKeys.has(previous.elementKey ?? -1))
+        )
+          ref = previousRef;
+      }
+      if (ref && this.refs.has(ref)) ref = undefined;
+      ref ??= `e${this.nextRef++}`;
+      this.refIdByIdentity.set(identity, ref);
+      if (raw.elementKey !== null) {
+        for (const [key, mapped] of this.refByElementKey)
+          if (mapped === ref && key !== raw.elementKey) this.refByElementKey.delete(key);
+        this.refByElementKey.set(raw.elementKey, ref);
       }
       claimed.add(handle);
-      const fieldIdentity = raw.field ? deriveFieldIdentity(raw.role, raw.field) : undefined;
       const projected = projectAgentInteractable(ref, raw, fieldIdentity);
       this.refs.set(ref, {
         ...projected,
@@ -580,6 +610,8 @@ export class AgentBrowserController implements WidgetPort {
       });
       refByIndex.set(raw.elementIndex, ref);
       this.identityByRef.set(ref, {
+        ...(fieldIdentity ? { fieldIdentity } : {}),
+        elementKey: raw.elementKey,
         role: projected.role,
         name: projected.name,
         group: projected.group ?? null,
@@ -658,6 +690,7 @@ export class AgentBrowserController implements WidgetPort {
         cap: MAX_RESOLUTION_INTERACTABLES,
         trackDigest: false,
       });
+
       return {
         epoch: this.topLevelDocumentEpoch(),
         host: this.host(),
@@ -1413,6 +1446,7 @@ export class AgentBrowserController implements WidgetPort {
       onNavigationCommitted: () => {
         this.invalidateObservation();
         this.refIdByIdentity.clear();
+        this.refByElementKey.clear();
         // `identityByRef` deliberately survives: this event cannot tell a
         // history-API navigation from a real one, and single-page sites fire it
         // while every element stays put. Healing checks the document marker
@@ -1609,6 +1643,7 @@ export class AgentBrowserController implements WidgetPort {
     this.pendingPopup = null;
     this.invalidateObservation();
     this.refIdByIdentity.clear();
+    this.refByElementKey.clear();
     this.identityByRef.clear();
     this.documentMarker = null;
     this.lastDigestHash = null;
@@ -1717,6 +1752,27 @@ export class AgentBrowserController implements WidgetPort {
         cap: MAX_RESOLUTION_INTERACTABLES,
         trackDigest: false,
       });
+      if (identity.fieldIdentity) {
+        const sameElement = [...this.refs.values()].find(
+          (entry) => entry.raw?.elementKey === identity.elementKey,
+        );
+        const candidates = [...this.refs.values()].filter(
+          (entry) => entry.fieldIdentity?.identityKey === identity.fieldIdentity!.identityKey,
+        );
+        const chosen =
+          sameElement ??
+          (identity.fieldIdentity.origin !== 'none' && candidates.length === 1
+            ? candidates[0]
+            : undefined);
+        if (!chosen)
+          throw new StaleElementRefError(
+            ref,
+            'unverified-replacement',
+            candidates.map((entry) => entry.ref),
+          );
+        this.rebindRef(ref, chosen.ref, this.identityByRef.get(chosen.ref)!);
+        return operation();
+      }
       const named = observation.interactables.filter(
         (entry) => entry.role === identity.role && entry.name === identity.name,
       );
@@ -1746,6 +1802,8 @@ export class AgentBrowserController implements WidgetPort {
       for (const [key, mappedRef] of this.refIdByIdentity) {
         if (mappedRef === liveRef) this.refIdByIdentity.set(key, ref);
       }
+      for (const [key, mappedRef] of this.refByElementKey)
+        if (mappedRef === liveRef) this.refByElementKey.set(key, ref);
     }
     this.refs.set(ref, { ...live, ref });
     this.identityByRef.set(ref, identity);
@@ -1821,6 +1879,7 @@ export class AgentBrowserController implements WidgetPort {
     await Promise.allSettled([...this.popupCaptureTasks]);
     this.invalidateObservation();
     this.refIdByIdentity.clear();
+    this.refByElementKey.clear();
     this.identityByRef.clear();
     this.lastDigestHash = null;
     await this.discardPendingPopup();

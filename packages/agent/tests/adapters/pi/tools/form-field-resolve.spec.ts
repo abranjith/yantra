@@ -30,6 +30,53 @@ const KAYAK = observation(
 );
 
 describe('@no-llm resolveFormField', () => {
+  it('offers unlabeled fields rather than navigation links, and ranks misspelled labels', () => {
+    const page = observation(
+      ...Array.from({ length: 40 }, (_, i) => [`e${i + 1}`, 'textbox', ''] as const),
+      ...Array.from({ length: 10 }, (_, i) => [`e${i + 41}`, 'link', `Navigation ${i}`] as const),
+    );
+    const result = resolveFormField('Email', page);
+    if (!isFailure(result)) throw new Error('Expected failure');
+    expect(result.message).toContain('e1 textbox (no label');
+    expect(result.message).toContain('(+32 more)');
+    expect(result.message).not.toContain('Navigation');
+    expect(Buffer.byteLength(result.message)).toBeLessThanOrEqual(4096);
+    const labelled = {
+      ...page,
+      interactables: page.interactables.map((entry, i) => ({
+        ...entry,
+        ...(i === 20 ? { field: { origin: 'structural' as const, label: 'Email' } } : {}),
+      })),
+    };
+    const typo = resolveFormField('Emial', labelled);
+    if (!isFailure(typo)) throw new Error('Expected failure');
+    expect(typo.message.indexOf('e21 textbox')).toBeLessThan(typo.message.indexOf('e1 textbox'));
+  });
+
+  it('offers section-qualified names that the same resolver accepts', () => {
+    const page = {
+      ...observation(),
+      interactables: [
+        {
+          ref: 'e1',
+          role: 'textbox',
+          name: '',
+          field: { label: 'City', origin: 'structural' as const, section: 'Billing' },
+        },
+        {
+          ref: 'e2',
+          role: 'textbox',
+          name: '',
+          field: { label: 'City', origin: 'structural' as const, section: 'Shipping' },
+        },
+      ],
+    };
+    const result = resolveFormField('City', page);
+    if (!isFailure(result)) throw new Error('Expected ambiguity');
+    expect(result.message).toContain('Billing City');
+    expect(result.message).toContain('Shipping City');
+    expect(resolveFormField('Shipping City', page)).toMatchObject({ ref: 'e2' });
+  });
   it('resolves a literal eNN ref directly', () => {
     expect(resolveFormField('e14', KAYAK)).toMatchObject({ ref: 'e14', name: 'Where to?' });
   });
@@ -90,25 +137,25 @@ describe('@no-llm resolveFormField', () => {
     expect(isFailure(result) && result.errorCode).toBe('FORM_FIELD_NOT_FOUND');
     if (!isFailure(result)) throw new Error('expected a failure');
     expect(result.message).toContain('Where to?');
-    expect(result.message).toContain('Search');
+    expect(result.message).not.toContain('View more deals');
     expect(result.retryable).toBe(true);
   });
 
   it('lists at most eight candidates and counts the rest', () => {
     const page = observation(
-      ...Array.from({ length: 12 }, (_, i) => [`e${i}`, 'button', `Field ${i}`] as const),
+      ...Array.from({ length: 12 }, (_, i) => [`e${i}`, 'textbox', `Field ${i}`] as const),
     );
     const result = resolveFormField('nothing here', page);
     if (!isFailure(result)) throw new Error('expected a failure');
     expect(result.message).toContain('(+4 more)');
   });
 
-  it('ignores unnamed elements when matching and when listing candidates', () => {
+  it('offers unnamed fillable fields without suggesting buttons', () => {
     const page = observation(['e1', 'button', ''], ['e2', 'button', '   '], ['e3', 'button', 'Go']);
     expect(resolveFormField('Go', page)).toMatchObject({ ref: 'e3' });
     const result = resolveFormField('absent', page);
     if (!isFailure(result)) throw new Error('expected a failure');
-    expect(result.message).toContain('"Go"');
+    expect(result.message).not.toContain('"Go"');
   });
 
   it('reports (none) when the page has no named fields at all', () => {
