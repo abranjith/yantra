@@ -182,6 +182,11 @@ class ToolDrivingProvider implements AgentProvider {
           runs++ === 0
             ? plan
             : [
+                // A `do` result is declared before it is published (FEAT-054 D4).
+                {
+                  tool: 'task_contract',
+                  params: { deliverable: 'report', subject: 'the fixture page' },
+                },
                 {
                   tool: 'result_publish',
                   params: {

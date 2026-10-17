@@ -20,6 +20,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "e2e/agent-do.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/agent-workflow-bridge.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
       "status": "M",
       "role": "implement",
@@ -212,6 +224,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/contract-required.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
       "status": "A",
       "role": "implement",
@@ -248,6 +266,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
       "status": "A",
       "role": "implement",
@@ -266,6 +290,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
       "status": "M",
       "role": "implement",
@@ -276,6 +306,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-observability.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/agent/tests/runtime/task-contract.spec.ts",
@@ -303,7 +339,7 @@
     },
     {
       "path": "packages/core/src/interaction/fill-eligibility.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -339,7 +375,7 @@
     },
     {
       "path": "packages/core/tests/interaction/fill-eligibility.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },

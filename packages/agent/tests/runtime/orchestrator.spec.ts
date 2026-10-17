@@ -2022,10 +2022,24 @@ describe('@no-llm runAgenticTask missing-contract notice (FEAT-052)', () => {
     expect(notices.map((notice) => notice.source)).toEqual(['task-contract', 'search:duckduckgo']);
   });
 
-  it('gives an undeclared do run the notice too', async () => {
-    const { outcome } = await scriptedRun({ command: 'do', calls: [PUBLISH_CALL] });
+  it('refuses an undeclared do publish, and a salvaged undeclared do run carries the notice', async () => {
+    // FEAT-054 D4: the publish itself returns CONTRACT_REQUIRED, so the only
+    // Brief such a run can have is the runtime-assembled one.
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [PUBLISH_CALL],
+      draft: 'Evidence [S1].',
+      beforeCalls: (services) =>
+        services.evidence.add(evidenceEntry('https://example-listings.test/a', 'Listing A')),
+    });
 
-    expect((await briefNotices(outcome)).map((notice) => notice.source)).toEqual(['task-contract']);
+    expect(outcome.kind).toBe('published');
+    expect((await briefNotices(outcome)).map((notice) => notice.source)).toEqual([
+      'runtime',
+      'task-contract',
+    ]);
+    const toolCalls = await readFile(join(outcome.runDir, 'tool-calls.jsonl'), 'utf8');
+    expect(toolCalls).toContain('CONTRACT_REQUIRED');
   });
 
   it('gives a declared run no missing-contract notice', async () => {

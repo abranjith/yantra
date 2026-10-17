@@ -663,6 +663,9 @@ export async function runAgenticTask(
       runDir: created.runDir,
       command: profile.command,
       required: profile.command === 'research' || profile.command === 'do',
+      // FEAT-054 D4: a `do` result is judged against its contract, so it
+      // cannot be published without one.
+      requiredToPublish: profile.command === 'do',
     });
     const services: RunServices = {
       runId: created.runId,

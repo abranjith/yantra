@@ -232,6 +232,19 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     };
   }
 
+  // FEAT-054 D4: a `do` result is judged against its contract, so publishing
+  // without one is refused on both the Brief and the template path. The
+  // remedy names the one engineered move: declare it, then publish again.
+  if (services.contract.requiredToPublish && services.contract.current() === null) {
+    return {
+      ok: false,
+      errorCode: 'CONTRACT_REQUIRED',
+      message: renderAgentMessage('tool', 'CONTRACT_REQUIRED', 'missing'),
+      retryable: true,
+      diagnostic: { cause: 'missing' },
+    };
+  }
+
   const paramsRecord = asRecord(params) ?? {};
   // The run's own facts (search failures, budget exhaustion, read failures,
   // provider), computed once at publish time and attached by the publisher.

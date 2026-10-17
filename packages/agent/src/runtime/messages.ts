@@ -698,6 +698,16 @@ export const AGENT_INTERACTION_MESSAGES = [
     'result_publish',
   ),
   tool(
+    'CONTRACT_REQUIRED',
+    'missing',
+    () =>
+      'This task has no declared contract, so its result cannot be judged. Call task_contract ' +
+      'with the deliverable and every requirement the goal states, including fill, artifacts, ' +
+      'and effects for page actions, then call result_publish again.',
+    [],
+    'task_contract',
+  ),
+  tool(
     'CONTRACT_REVISION_LIMIT',
     'revisions',
     () =>

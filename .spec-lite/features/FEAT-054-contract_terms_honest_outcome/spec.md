@@ -581,7 +581,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-004: Run action ledger with epoch-stamped verified commits, clicks, refusals, captures
 - [x] TASK-005: Per-item fulfillment from evidence, Brief requirements, disagreement notice
 - [x] TASK-006: `fill` coverage against the engine census with classified exemptions (STUB census until FEAT-055 TASK-001) — STUB: production wires no `RunServices.fillCensus`, so a declared `fill` reports `inventory_unavailable` until FEAT-055 TASK-001 supplies the producer
-- [ ] TASK-007: `CONTRACT_REQUIRED` on `do` publish; salvaged no-contract run is `partial`
+- [x] TASK-007: `CONTRACT_REQUIRED` on `do` publish; salvaged no-contract run is `partial`
 - [ ] TASK-008: One outcome mapping table: outcome, termination reason, manifest, event, report, exit code
 - [ ] TASK-009: `do` first line and `--json` `task_outcome`; `ask`/`research` failure word
 - [ ] TASK-010: `run`, history, and listings show outcome words
