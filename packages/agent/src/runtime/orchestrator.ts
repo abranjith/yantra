@@ -715,6 +715,12 @@ export async function runAgenticTask(
       ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
       contract,
       fulfillment: new FulfillmentRecord(),
+      fillCensus: {
+        census: async () => {
+          const controller = domain.browser?.controller;
+          return controller?.launched ? controller.fillCensus() : null;
+        },
+      },
       actionLedger: actionLedgerFor({
         controller: domain.browser?.controller ?? null,
         sanitizer,

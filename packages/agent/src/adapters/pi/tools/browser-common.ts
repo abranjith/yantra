@@ -90,6 +90,19 @@ export function browserFailure(error: unknown, services?: RunServices): DomainFa
       details,
     };
   }
+  if (
+    error instanceof StaleElementRefError &&
+    (error.reason === 'continuation-cursor' || error.reason === 'unverified-replacement')
+  ) {
+    const details = { ref: error.ref, candidates: error.candidates.join(', ') };
+    return {
+      ok: false,
+      errorCode: error.code,
+      message: renderAgentMessage('tool', error.code, error.reason, details),
+      retryable: true,
+      details,
+    };
+  }
   if (error instanceof StaleElementRefError || error instanceof BrowserActionabilityError) {
     return { ok: false, errorCode: error.code, message: error.message, retryable: true };
   }
@@ -592,6 +605,7 @@ export function modelDelta(delta: PageDelta): PageDelta {
 
 /** Convert the controller's internal camelCase digest state to the tool shape. */
 export function modelObservation(observation: AgentBrowserObservation): {
+  readonly inventory?: Record<string, unknown>;
   readonly url: string;
   readonly title: string;
   readonly digest?: string;
@@ -599,6 +613,7 @@ export function modelObservation(observation: AgentBrowserObservation): {
   readonly interactables: AgentBrowserObservation['interactables'];
 } {
   const model: {
+    inventory?: Record<string, unknown>;
     url: string;
     title: string;
     digest?: string;
@@ -611,5 +626,22 @@ export function modelObservation(observation: AgentBrowserObservation): {
   };
   if (observation.digestUnchanged) model.digest_unchanged = true;
   else if (observation.digest.length > 0) model.digest = observation.digest;
+  const inventory = observation.inventory;
+  if (
+    inventory &&
+    (Object.keys(inventory.omitted).length > 0 ||
+      inventory.skippedBefore > 0 ||
+      inventory.scanBounded)
+  ) {
+    model.inventory = {
+      total: inventory.total,
+      shown: inventory.shown,
+      ...(inventory.skippedBefore > 0 ? { skipped_before: inventory.skippedBefore } : {}),
+      ...(Object.keys(inventory.omitted).length > 0 ? { omitted: inventory.omitted } : {}),
+      ...(inventory.continueAfter ? { continue_after: inventory.continueAfter } : {}),
+      ...(inventory.scanBounded ? { scan_bounded: true } : {}),
+      ...(observation.window ? { window: observation.window } : {}),
+    };
+  }
   return model;
 }

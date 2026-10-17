@@ -101,6 +101,32 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
 }
 
 describe('@no-llm panel-major agent interactable ordering', () => {
+  it('counts the full inventory and omitted kinds before capping', async () => {
+    const records = Array.from({ length: 98 }, (_, i) =>
+      raw({
+        role: i < 60 ? 'textbox' : i < 80 ? 'button' : 'link',
+        kind: i < 60 ? 'input' : i < 80 ? 'button' : 'link',
+        top: i,
+      }),
+    );
+    const snapshot = await buildAgentPageSnapshot(
+      makePage(),
+      { extractor: new FakeExtractor() },
+      { records, maxDigestBytes: 1000, maxInteractables: 50 },
+    );
+    expect(snapshot.ordered).toHaveLength(98);
+    expect(snapshot.inventory).toMatchObject({
+      total: 98,
+      shown: 50,
+      omitted: { field: 10, button: 20, link: 18 },
+    });
+    const small = await buildAgentPageSnapshot(
+      makePage(),
+      { extractor: new FakeExtractor() },
+      { records: records.slice(0, 30), maxDigestBytes: 1000, maxInteractables: 50 },
+    );
+    expect(small.inventory.omitted).toEqual({});
+  });
   it('keeps side-by-side calendar panels contiguous', () => {
     const ordered = orderAgentInteractables([
       raw({ name: 'Aug 1', group: 'August 2026', scope: 'dialog', top: 100, left: 100 }),

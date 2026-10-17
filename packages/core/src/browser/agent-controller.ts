@@ -5,14 +5,23 @@ import type { Dialog, ElementHandle, KeyInput, Page as PuppeteerPage } from 'pup
 
 import { collectComposedInteractables } from '../discovery/composed-handles.js';
 import type { RawInteractable } from '../discovery/interactable-scan.js';
-import { buildAgentPageSnapshot, ensureLocatorRuntime } from '../discovery/observe.js';
+import {
+  buildAgentPageSnapshot,
+  ensureLocatorRuntime,
+  inventoryForWindow,
+  inventoryKind,
+  type AgentInventory,
+  type InventoryKind,
+} from '../discovery/observe.js';
 import {
   DEFAULT_MAX_BODY_BYTES,
   ReadabilityExtractor,
   normalizeExtractedText,
   type Extractor,
 } from '../extraction/index.js';
+import { CHALLENGE_MARKERS } from '../extraction/response-classifier.js';
 import { assertReceivable } from '../interaction/capabilities.js';
+import { classifyFillExemption, type FillCensus } from '../interaction/fill-eligibility.js';
 import { renderInteractionMessage } from '../interaction/messages.js';
 import {
   diffFingerprints,
@@ -165,6 +174,8 @@ export interface AgentInteractable {
 }
 
 export interface AgentBrowserObservation {
+  readonly inventory: AgentInventory;
+  readonly window?: { readonly after?: string; readonly kinds?: readonly InventoryKind[] };
   readonly url: string;
   readonly title: string;
   readonly digest: string;
@@ -214,6 +225,7 @@ export interface BrowserActionResult {
 }
 
 interface InteractableRecord extends AgentInteractable {
+  readonly raw?: RawInteractable;
   readonly handle: ElementHandle<Element>;
   /**
    * Where the element's root node is — internal diagnostics only.
@@ -311,6 +323,7 @@ export class AgentBrowserController implements WidgetPort {
   private page: PuppeteerPage | null = null;
   private nextRef = 1;
   private refs = new Map<string, InteractableRecord>();
+  private modelVisibleRefs = new Set<string>();
   private refIdByIdentity = new Map<string, string>();
   private identityByRef = new Map<string, ElementIdentity>();
   private settler: PageSettler | null = null;
@@ -464,11 +477,15 @@ export class AgentBrowserController implements WidgetPort {
    *   because they must not consume a digest the model has never received.
    */
   public async observe(
-    options: { readonly cap?: number; readonly trackDigest?: boolean } = {},
+    options: {
+      readonly cap?: number;
+      readonly trackDigest?: boolean;
+      readonly window?: { readonly after?: string; readonly kinds?: readonly InventoryKind[] };
+    } = {},
   ): Promise<AgentBrowserObservation> {
     this.assertLaunched();
     await this.awaitReadable();
-    const trackDigest = options.trackDigest ?? true;
+    const trackDigest = options.window === undefined && (options.trackDigest ?? true);
     const cap = Math.max(
       1,
       Math.min(Math.floor(options.cap ?? this.maxInteractables), MAX_RESOLUTION_INTERACTABLES),
@@ -480,8 +497,17 @@ export class AgentBrowserController implements WidgetPort {
     // Injection first, because the scan's accessible-name step prefers the
     // locator runtime and falls back to its smaller offline computation.
     await ensureLocatorRuntime(this.pageFacade!);
-    const { records, elements: scanned } = await collectComposedInteractables(this.page!, {
+    const {
+      records,
+      elements: scanned,
+      truncated,
+    } = await collectComposedInteractables(this.page!, {
       max: MAX_RESOLUTION_INTERACTABLES,
+      elementKeys: true,
+      challengeTokens: [
+        ...CHALLENGE_MARKERS.widgets.map((marker) => marker.token),
+        CHALLENGE_MARKERS.formCaptcha.token,
+      ],
     });
     const snapshot = await buildAgentPageSnapshot(
       this.pageFacade!,
@@ -490,6 +516,7 @@ export class AgentBrowserController implements WidgetPort {
         maxDigestBytes: this.maxDigestBytes,
         maxInteractables: cap,
         records,
+        scanBounded: truncated,
       },
     );
     // Stamp the document these identities are being read from, so a later heal
@@ -504,7 +531,7 @@ export class AgentBrowserController implements WidgetPort {
       epoch: this.documentMarker,
     };
     this.lastScanFingerprint = fingerprint;
-    if (trackDigest) this.deltaBaseline = fingerprint;
+    if (trackDigest || options.window !== undefined) this.deltaBaseline = fingerprint;
     const superseded = this.refs;
     this.refs = new Map();
     const interactables: AgentInteractable[] = [];
@@ -514,7 +541,11 @@ export class AgentBrowserController implements WidgetPort {
     // places, but each id always resolves to a currently observed element.
     const ordinals = new Map<string, number>();
     const claimed = new Set<ElementHandle<Element>>();
-    for (const raw of snapshot.interactables) {
+    const refByIndex = new Map<number, string>();
+    for (const raw of [
+      ...snapshot.ordered,
+      ...records.filter((entry) => !entry.visible && entry.field),
+    ]) {
       const handle = scanned[raw.elementIndex];
       if (!handle || claimed.has(handle)) continue;
       const role = raw.role;
@@ -530,24 +561,63 @@ export class AgentBrowserController implements WidgetPort {
       }
       claimed.add(handle);
       const projected = projectAgentInteractable(ref, raw);
-      this.refs.set(ref, { ...projected, handle, composedScope: raw.composedScope });
+      this.refs.set(ref, { ...projected, handle, raw, composedScope: raw.composedScope });
+      refByIndex.set(raw.elementIndex, ref);
       this.identityByRef.set(ref, {
         role: projected.role,
         name: projected.name,
         group: projected.group ?? null,
       });
-      interactables.push(projected);
+      if (snapshot.interactables.includes(raw)) interactables.push(projected);
     }
     for (const record of superseded.values()) disposeHandle(record.handle);
     for (const handle of scanned) {
       if (handle && !claimed.has(handle)) disposeHandle(handle);
     }
+    let ordered = snapshot.ordered;
+    let skippedBefore = 0;
+    if (
+      options.window?.after &&
+      !ordered.some((raw) => refByIndex.get(raw.elementIndex) === options.window!.after)
+    ) {
+      throw new StaleElementRefError(options.window.after, 'continuation-cursor');
+    }
+    if (options.window?.kinds) {
+      ordered = ordered.filter((raw) => options.window!.kinds!.includes(inventoryKind(raw)));
+    }
+    if (options.window?.after) {
+      const cursorIndex = snapshot.ordered.findIndex(
+        (raw) => refByIndex.get(raw.elementIndex) === options.window!.after,
+      );
+      skippedBefore = ordered.filter((raw) => snapshot.ordered.indexOf(raw) <= cursorIndex).length;
+    }
+    const window = ordered.slice(skippedBefore, skippedBefore + cap);
+    interactables.splice(
+      0,
+      interactables.length,
+      ...window.flatMap((raw) => {
+        const ref = refByIndex.get(raw.elementIndex);
+        return ref ? [projectAgentInteractable(ref, raw)] : [];
+      }),
+    );
+    const inventory = inventoryForWindow(
+      ordered,
+      window,
+      skippedBefore,
+      truncated,
+      ordered.length > skippedBefore + window.length ? (interactables.at(-1)?.ref ?? null) : null,
+    );
+    if (trackDigest || options.window !== undefined)
+      this.modelVisibleRefs = new Set(interactables.map((entry) => entry.ref));
     // Structural scope only, and by construction: the token is a literal and
     // the value is a count, so no host, brand, or page text can reach the log.
     this.logger?.debug?.(
       {
         runId: this.runId,
         interactables: interactables.length,
+        total: inventory.total,
+        omitted: inventory.omitted,
+        scanBounded: inventory.scanBounded,
         openShadow: records.filter((record) => record.composedScope === 'open-shadow').length,
       },
       'observed interactables',
@@ -557,10 +627,56 @@ export class AgentBrowserController implements WidgetPort {
     if (trackDigest && !digestUnchanged) this.lastDigestHash = digestHash;
     return {
       ...snapshot,
-      digest: digestUnchanged ? '' : snapshot.digest,
+      digest: options.window || digestUnchanged ? '' : snapshot.digest,
       digestUnchanged,
       interactables,
+      inventory,
+      ...(options.window ? { window: options.window } : {}),
     };
+  }
+
+  /** Read the current document's fill denominator once, without consuming model state. */
+  public async fillCensus(): Promise<FillCensus> {
+    try {
+      const observation = await this.observe({
+        cap: MAX_RESOLUTION_INTERACTABLES,
+        trackDigest: false,
+      });
+      return {
+        epoch: this.topLevelDocumentEpoch(),
+        host: this.host(),
+        complete: !observation.inventory.scanBounded,
+        controls: [...this.refs.values()].flatMap((entry) => {
+          const raw = entry.raw;
+          if (!raw?.field) return [];
+          const facts = raw.field;
+          return [
+            {
+              ref: entry.ref,
+              groupKey: facts.radioGroup
+                ? `radio:${facts.radioGroup}`
+                : facts.checkboxSet
+                  ? `checkbox:${facts.checkboxSet}`
+                  : null,
+              label: entry.name || `(unlabeled ${entry.role})`,
+              exemption: classifyFillExemption({
+                ...facts,
+                hidden: !raw.visible,
+                markerText: facts.humanVerification ? 'captcha' : '',
+              }),
+            },
+          ];
+        }),
+      };
+    } catch {
+      // A failed inventory cannot establish coverage; publication must remain partial.
+      return {
+        epoch: this.topLevelDocumentEpoch(),
+        host: this.host(),
+        complete: false,
+        controls: [],
+      };
+    }
   }
 
   /**
@@ -591,6 +707,7 @@ export class AgentBrowserController implements WidgetPort {
     const target = ref === undefined ? null : this.resolveRef(ref);
     const marks: SetOfMarksMark[] = [];
     for (const [markRef, record] of this.refs) {
+      if (!this.modelVisibleRefs.has(markRef)) continue;
       const box = await record.handle.boundingBox();
       if (box !== null) {
         marks.push({ ref: markRef, left: box.x, top: box.y, width: box.width, height: box.height });
@@ -668,7 +785,7 @@ export class AgentBrowserController implements WidgetPort {
   public describeRef(ref: string): AgentInteractable | undefined {
     const record = this.refs.get(ref);
     if (!record) return undefined;
-    const { handle: _handle, composedScope: _composedScope, ...described } = record;
+    const { handle: _handle, raw: _raw, composedScope: _composedScope, ...described } = record;
     return described;
   }
 

@@ -10,6 +10,22 @@ const REFUSED_AGAIN =
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
+    'STALE_ELEMENT_REF',
+    'continuation-cursor',
+    (d) =>
+      `Inventory cursor ${text(d.ref)} is no longer visible. Call browser_observe without after to restart the inventory.`,
+    ['ref'],
+    'browser_observe',
+  ),
+  tool(
+    'STALE_ELEMENT_REF',
+    'unverified-replacement',
+    (d) =>
+      `Field ${text(d.ref)} was replaced and its identity could not be verified. Candidates: ${text(d.candidates)}. Call browser_observe to choose a current ref.`,
+    ['ref', 'candidates'],
+    'browser_observe',
+  ),
+  tool(
     'BRIEF_INVALID',
     'contract-table-missing',
     () =>

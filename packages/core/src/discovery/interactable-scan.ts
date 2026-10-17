@@ -1,7 +1,20 @@
 /// <reference lib="dom" />
 
 /** One candidate element's raw signal, before ranking/capping. */
+export interface RawFieldEvidence {
+  readonly inputType: string | null;
+  readonly readOnly: boolean;
+  readonly disabled: boolean;
+  readonly required: boolean;
+  readonly radioGroup: string | null;
+  readonly checkboxSet: string | null;
+  readonly humanVerification: boolean;
+  readonly hiddenInput: boolean;
+}
+
 export interface RawInteractable {
+  readonly elementKey: number | null;
+  readonly field: RawFieldEvidence | null;
   readonly role: string;
   readonly name: string | null;
   readonly kind: 'button' | 'link' | 'input' | 'select';
@@ -66,6 +79,7 @@ export interface RawInteractable {
 
 /** Result of one composed-tree pass: records and, optionally, their elements. */
 export interface InteractableScan {
+  readonly truncated: boolean;
   readonly records: RawInteractable[];
   /**
    * Every candidate element the walk reached, indexed by `elementIndex`.
@@ -114,6 +128,8 @@ export function scanInteractablesInPage(
   options: {
     readonly withElements?: boolean;
     readonly max?: number;
+    readonly elementKeys?: boolean;
+    readonly challengeTokens?: readonly string[];
     /**
      * Membership override for a caller asking a different question.
      *
@@ -168,6 +184,20 @@ export function scanInteractablesInPage(
   ).__yantra;
 
   const seen = new Set<Element>();
+  const memoHost = window as unknown as Record<
+    symbol,
+    { keys: WeakMap<Element, number>; next: number }
+  >;
+  const memoSymbol = Symbol.for('yantra.elementKeys');
+  const memo = options.elementKeys
+    ? (memoHost[memoSymbol] ??= { keys: new WeakMap(), next: 1 })
+    : null;
+  const groupIndexes = new Map<Element, number>();
+  function groupIndex(element: Element | null): number {
+    if (!element) return -1;
+    if (!groupIndexes.has(element)) groupIndexes.set(element, groupIndexes.size);
+    return groupIndexes.get(element)!;
+  }
   /** Per-scan memo for container identities; see `describeContainer`. */
   const containerIdentities = new Map<
     HTMLElement,
@@ -209,10 +239,11 @@ export function scanInteractablesInPage(
     }
   }
 
-  return { records: results, elements };
+  return { records: results, elements, truncated: stack.length > 0 };
 
   function record(element: HTMLElement, depth: number): void {
     if (!element.matches(candidateSelector)) return;
+    if (element instanceof HTMLInputElement && element.type === 'hidden') return;
     // Collected before it is described: an addressable element the record
     // projection has no kind for is still addressable, and a caller that
     // describes handles itself must be able to reach it.
@@ -226,13 +257,19 @@ export function scanInteractablesInPage(
     const style = window.getComputedStyle(element);
     const currentValue = computeValue(element);
     const enclosing = computeScope(element);
+    const field = ['textbox', 'searchbox', 'combobox', 'listbox', 'checkbox', 'radio'].includes(
+      role,
+    )
+      ? fieldEvidence(element)
+      : null;
+    if (memo && !memo.keys.has(element)) memo.keys.set(element, memo.next++);
     results.push({
+      elementKey: memo?.keys.get(element) ?? null,
+      field,
       role,
       name: computeName(element),
       kind,
-      disabled:
-        ('disabled' in element && Boolean((element as HTMLInputElement).disabled)) ||
-        element.getAttribute('aria-disabled') === 'true',
+      disabled: element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true',
       top: rect.top,
       left: rect.left,
       group: computeGroup(element),
@@ -253,6 +290,67 @@ export function scanInteractablesInPage(
       composedScope: depth > 0 ? 'open-shadow' : 'document',
       rootNodeDepth: depth,
     });
+  }
+
+  function fieldEvidence(element: HTMLElement): RawFieldEvidence {
+    const input = element instanceof HTMLInputElement ? element : null;
+    const owner = (element as HTMLInputElement).form ?? null;
+    const name = element.getAttribute('name');
+    const fieldset = element.closest('fieldset');
+    const radioRoot = element.closest('[role="radiogroup"]');
+    let humanVerification = false;
+    let ancestor: HTMLElement | null = element;
+    for (let depth = 0; ancestor && depth < 20; depth += 1) {
+      const markers = [
+        ancestor.id,
+        ancestor.className,
+        ancestor.getAttribute('name') ?? '',
+        ...ancestor.getAttributeNames(),
+      ]
+        .join(' ')
+        .toLowerCase();
+      if (options.challengeTokens?.some((token) => markers.includes(token)))
+        humanVerification = true;
+      if (ancestor === owner) break;
+      ancestor = composedParent(ancestor);
+    }
+    const checkboxScope = fieldset ?? owner ?? rootOf(element);
+    const checkboxes = Array.from(
+      checkboxScope.querySelectorAll('input[type="checkbox"], [role="checkbox"]'),
+    );
+    const checkboxSet =
+      checkboxes.filter(
+        (item) => fieldset !== null || (name !== null && item.getAttribute('name') === name),
+      ).length >= 2
+        ? fieldset
+          ? `fieldset:${groupIndex(fieldset)}`
+          : `${groupIndex(owner)}:${name}`
+        : null;
+    return {
+      inputType: input
+        ? input.type.toLowerCase()
+        : element.matches('textarea,select')
+          ? element.tagName.toLowerCase()
+          : null,
+      readOnly:
+        ('readOnly' in element && Boolean((element as HTMLInputElement).readOnly)) ||
+        element.getAttribute('aria-readonly') === 'true',
+      disabled: element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true',
+      required:
+        ('required' in element && Boolean((element as HTMLInputElement).required)) ||
+        element.getAttribute('aria-required') === 'true',
+      radioGroup:
+        input?.type === 'radio' && name
+          ? `${groupIndex(owner)}:${name}`
+          : radioRoot
+            ? `aria:${groupIndex(radioRoot)}`
+            : null,
+      checkboxSet: element.matches('input[type="checkbox"], [role="checkbox"]')
+        ? checkboxSet
+        : null,
+      humanVerification,
+      hiddenInput: input?.type === 'hidden',
+    };
   }
 
   /**

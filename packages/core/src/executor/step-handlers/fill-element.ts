@@ -292,6 +292,14 @@ class ReplayWidgetPort implements WidgetPort {
       title: await this.page.title().catch(() => ''),
       digest: '',
       digestUnchanged: false,
+      inventory: {
+        total: interactables.length,
+        shown: interactables.length,
+        skippedBefore: 0,
+        omitted: {},
+        continueAfter: null,
+        scanBounded: false,
+      },
       interactables,
     };
   }
