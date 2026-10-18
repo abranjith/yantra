@@ -397,6 +397,7 @@ export class AgentBrowserController implements WidgetPort {
    */
   private lastScanFingerprint: ObservationFingerprint | null = null;
   private observedCensus: FillCensus | null = null;
+  private fillObservation: AgentBrowserObservation | null = null;
   /**
    * The fingerprint of the frame the **model** last saw.
    *
@@ -697,6 +698,17 @@ export class AgentBrowserController implements WidgetPort {
     );
     const digestHash = createHash('sha256').update(snapshot.digest).digest('hex').slice(0, 16);
     this.observedCensus = this.buildFillCensus(!truncated);
+    // Keep the complete before-picture for ref-driven typing recovery. Reusing
+    // a ref must not discard the editee evidence that name resolution supplies.
+    this.fillObservation = {
+      ...snapshot,
+      digestUnchanged: false,
+      interactables: snapshot.ordered.flatMap((raw) => {
+        const ref = refByIndex.get(raw.elementIndex);
+        return ref ? [this.describeRef(ref)!] : [];
+      }),
+      inventory,
+    };
     const digestUnchanged = trackDigest && digestHash === this.lastDigestHash;
     if (trackDigest && !digestUnchanged) this.lastDigestHash = digestHash;
     return {
@@ -712,6 +724,11 @@ export class AgentBrowserController implements WidgetPort {
   /** Return the latest observation's census without reading the page. */
   public latestFillCensus(): FillCensus | null {
     return this.observedCensus?.epoch === this.topLevelDocumentEpoch() ? this.observedCensus : null;
+  }
+
+  /** Reuse the latest complete before-picture for ref-driven fill recovery. */
+  public latestFillObservation(): AgentBrowserObservation | null {
+    return this.latestFillCensus() ? this.fillObservation : null;
   }
 
   /** Shared census projection from the observation's complete ref registry. */
@@ -1723,6 +1740,7 @@ export class AgentBrowserController implements WidgetPort {
 
   private invalidateObservation(): void {
     this.observedCensus = null;
+    this.fillObservation = null;
     for (const record of this.refs.values()) disposeHandle(record.handle);
     this.refs.clear();
   }

@@ -2129,6 +2129,41 @@ describe('@no-llm explicit fill batch limit', () => {
 });
 
 describe('@no-llm fill progress from the existing observation', () => {
+  it('reuses the before-picture for a ref whose undeclared control delegates the edit', async () => {
+    const controller = new FormController(
+      '<input id="trigger" aria-label="Trigger"><input id="editor" aria-label="Editor">',
+    );
+    const before = await controller.observe();
+    const controls = before.interactables.map((entry) => ({
+      ref: entry.ref,
+      label: entry.name,
+      groupKey: null,
+      exemption: null,
+    }));
+    Object.assign(controller, {
+      latestFillCensus: () => ({ epoch: 7, host: 'example.test', complete: true, controls }),
+      latestFillObservation: () => before,
+    });
+    const trigger = controller.document.querySelector<HTMLInputElement>('#trigger')!;
+    const editor = controller.document.querySelector<HTMLInputElement>('#editor')!;
+    trigger.addEventListener('input', () => {
+      editor.value = trigger.value;
+      trigger.value = '';
+      editor.focus();
+    });
+    const fill = vi.spyOn(controller, 'fill');
+    const result = await run(controller, {
+      fields: [{ field: before.interactables[0]!.ref, value: 'Blue' }],
+    });
+    expect(result.status).toBe('ok');
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      applied: [{ committed: 'Blue', editee: { name: 'Editor' } }],
+    });
+    expect(fill).toHaveBeenCalledTimes(2);
+    expect(fill.mock.calls.map((call) => call[0])).toEqual(
+      before.interactables.map((entry) => entry.ref),
+    );
+  });
   it('continues fifteen fields, omits committed refs, and adds no observation for progress', async () => {
     const controller = new FormController(
       Array.from({ length: 15 }, (_, i) => `<input aria-label="Field ${i}">`).join(''),

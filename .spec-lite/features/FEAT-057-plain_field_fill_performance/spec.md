@@ -399,6 +399,8 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
 - The fixture has **40 physical controls and 38 eligible units**: its three radios form one unit. Continuation fills four bounded batches, followed by one correction call. Tests count semantic sends separately from engine-owned mutations: the refused number control can use its existing typing recovery internally, while no committed field is resent or re-driven. Ordinary ten-field batches have the fifteen-second gate; the batch containing the intentional refusal also pays for recovery.
 - The number control rejects invalid native validity states through its input listener; HTML max/step alone mark invalidity but do not prevent a value from being stored. Short, valid synthetic values isolate interaction cost; historical baseline timings are informational and used longer synthetic email/URL/text values. Operation-count and compact-byte comparisons are pinned independently of that timing difference.
 - `agent-v12` is added to the manifest's accepted prompt versions and generated protocol artifacts; older versions remain valid.
+- Ref reuse retains the complete cached before-picture for the editee recovery rung. A regression test fills an undeclared delegating control by ref and proves the edit still lands in the discovered editor without retrying the trigger through other typing strategies.
+- Validation environment: a clean install of the existing lockfile resolves transitive `pi-ai@0.80.10`, whose OAuth entry point lacks `getOAuthApiKey` required by the pinned `pi-coding-agent@0.80.6`. Tests use the main checkout's working installation of the same pinned SDK (`pi-ai@0.80.6` transitively). No dependency or lockfile change is part of FEAT-057.
 
 ## 7. Changeset
 

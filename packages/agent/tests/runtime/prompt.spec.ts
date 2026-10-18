@@ -704,6 +704,16 @@ describe('@no-llm agent-v9 source fidelity and capability-true scope (FEAT-052)'
 });
 
 describe('@no-llm bounded shape-neutral fill guidance', () => {
+  it('keeps the ask and research addenda byte-identical to the pre-feature source', () => {
+    const hashes = {
+      ask: 'ee8fe1634fd2a09ad7c9c78ffb3da050121a74648082e62d16649adb0b85f40b',
+      research: '6d1a9c72d4984541c2215d4f2400349d8ab51139bbd814e40f8bc1fc587ab194',
+    };
+    for (const command of ['ask', 'research'] as const)
+      expect(
+        createHash('sha256').update(COMMAND_TASK_PROFILES[command].promptAddendum).digest('hex'),
+      ).toBe(hashes[command]);
+  });
   it('states the one schema cap in both tools and the do addendum', () => {
     const form = browserFillFormSpec(buildServices());
     for (const text of [

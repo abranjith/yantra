@@ -26,5 +26,6 @@
     "total_tool_ms": 53873
   },
   "reaction_reads_per_plain_field": 27,
-  "ten_field_applied_bytes": 9272
+  "ten_field_applied_bytes": 9272,
+  "timing_note": "Historical timing used longer synthetic email, URL and text values; timing comparisons are informational. Final gates use short valid values to isolate interaction cost. Reaction-read and applied-byte baselines were measured independently on original source."
 }

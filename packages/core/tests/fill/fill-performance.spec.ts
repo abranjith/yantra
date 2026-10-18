@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import { fortyControls, fortyControlValue } from '@yantra/test-helpers/layout-matrix';
 import { describe, expect, it, vi } from 'vitest';
@@ -84,8 +84,7 @@ describe('@no-llm plain-field performance', () => {
         evaluate_on: reads.mock.calls.length,
         full_watch_entries: fullWatch,
       };
-      mkdirSync('tests/fixtures/fill-performance', { recursive: true });
-      const path = 'tests/fixtures/fill-performance/baseline.json';
+      const path = new URL('../fixtures/fill-performance/baseline.json', import.meta.url);
       if (process.env.UPDATE_FILL_AFTER === '1') {
         const baseline = JSON.parse(readFileSync(path, 'utf8'));
         writeFileSync(path, JSON.stringify({ ...baseline, after: measurement }, null, 2) + '\n');

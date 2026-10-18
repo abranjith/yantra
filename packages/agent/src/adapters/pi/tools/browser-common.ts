@@ -187,7 +187,10 @@ export async function resolveFillField(
   // needs a fresh census. Linked widgets take their own baseline when needed.
   if (/^e[0-9]+$/.test(field.trim()) && controller.latestFillCensus?.()) {
     const entry = controller.describeRef(field.trim());
-    if (entry) return { target: toWidgetTarget(entry) };
+    if (entry) {
+      const observation = controller.latestFillObservation?.();
+      return { target: toWidgetTarget(entry), ...(observation ? { observation } : {}) };
+    }
   }
   const observation = await controller.observe({
     cap: FILL_RESOLUTION_CAP,
