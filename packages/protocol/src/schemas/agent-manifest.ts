@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { CaptureCapabilityRecord } from './capture-capability.js';
+
 const RelativeSessionFile = z
   .string()
   .min(1)
@@ -68,6 +70,7 @@ export const AgentManifestSection = z
         'agent-v10',
         'agent-v11',
         'agent-v12',
+        'agent-v13',
       ])
       .describe('Version of the authoritative agent prompt.'),
     prompt_hash: z
@@ -85,6 +88,9 @@ export const AgentManifestSection = z
       .describe('Version of the Yantra agent package that ran; absent on older manifests.'),
     budgets: AgentRunBudgets.optional().describe(
       'Effective run budgets; absent on older manifests.',
+    ),
+    capture: CaptureCapabilityRecord.optional().describe(
+      'Both capture capabilities with reason codes, resolved before the first tool call; absent on older manifests.',
     ),
   })
   .strict()

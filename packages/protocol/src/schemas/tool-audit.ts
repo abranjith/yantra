@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ArtifactRef } from './artifact-ref.js';
+
 const UtcTimestamp = z
   .string()
   .datetime()
@@ -57,7 +59,15 @@ export const ToolAuditEntry = z
           .strict(),
       )
       .optional()
-      .describe('Private capture artifact metadata; never image bytes or a data URI.'),
+      .describe(
+        'Legacy Vision Assist capture metadata written before FEAT-058; read through artifactRefsOf. Never image bytes or a data URI.',
+      ),
+    artifacts: z
+      .array(ArtifactRef)
+      .optional()
+      .describe(
+        'Files this call wrote to the run directory (FEAT-058); metadata only, never image bytes or a data URI.',
+      ),
   })
   .strict()
   .describe('Stable append-only tool lifecycle entry stored in tool-calls.jsonl.');

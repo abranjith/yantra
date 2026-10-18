@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { DeliverableCaptureCapability, VisionAssistCapability } from './capture-capability.js';
+
 /**
  * `run-health.json` (FEAT-048): an agentic run's own account of what happened
  * to it — searches by outcome and failure code, network fetches by mode, per-
@@ -136,6 +138,19 @@ export const RunHealth = z
       })
       .optional()
       .describe('Shape-aware extraction (FEAT-051): pages by shape, records, and links.'),
+    capture: z
+      .object({
+        vision_assist: VisionAssistCapability,
+        deliverable: DeliverableCaptureCapability,
+        deliverable_calls: Count.describe('Successful browser_capture calls.'),
+        deliverable_files: Count.describe('PNG files browser_capture wrote.'),
+        deliverable_bytes: Count.describe('Bytes browser_capture wrote.'),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Both capture capabilities with reason codes, and what deliverable capture wrote (FEAT-058).',
+      ),
   })
   .superRefine((health, ctx) => {
     const failed = Object.values(health.searches.failed_by_code).reduce((sum, n) => sum + n, 0);

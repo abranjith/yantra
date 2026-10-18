@@ -3,8 +3,12 @@ export { emitProtocolSpecDoc } from './emit/spec-doc.js';
 export {
   BRIEF_SCHEMA_VERSION,
   Brief,
+  BRIEF_MAX_ARTIFACTS,
   BRIEF_MAX_EXEMPTIONS,
   BRIEF_MAX_REQUIREMENTS,
+  BriefArtifact,
+  CAPTURE_MAX_PARTS,
+  CaptureLabel,
   BriefConstraint,
   BriefRequirement,
   BriefFacets,
@@ -41,6 +45,20 @@ export { AgentManifestSection, AgentRunBudgets } from './schemas/agent-manifest.
 export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';
 export { ToolAuditEntry } from './schemas/tool-audit.js';
 export type { ToolAuditEntry as ToolAuditEntryType } from './schemas/tool-audit.js';
+export {
+  ArtifactKind,
+  ArtifactRef,
+  SCREENSHOT_ARTIFACT_PATH_PATTERN,
+  ScreenshotArtifactPath,
+  artifactRefsOf,
+} from './schemas/artifact-ref.js';
+export {
+  CaptureCapabilityRecord,
+  DeliverableCaptureCapability,
+  DeliverableCaptureReason,
+  VisionAssistCapability,
+  VisionAssistReason,
+} from './schemas/capture-capability.js';
 export {
   CONFIRMABLE_ACTION_KINDS,
   ConfirmationDecidedBy,

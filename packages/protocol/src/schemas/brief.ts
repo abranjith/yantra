@@ -18,7 +18,8 @@ import { z } from 'zod';
 
 import { ULID_PATTERN } from '../utils/ulid.js';
 
-import { CONTRACT_REQUIREMENT_ID_PATTERN, FillExemption } from './task-contract.js';
+import { ScreenshotArtifactPath } from './artifact-ref.js';
+import { ArtifactScope, CONTRACT_REQUIREMENT_ID_PATTERN, FillExemption } from './task-contract.js';
 
 /**
  * Schema version Briefs are written under. Briefs are introduced by the
@@ -281,6 +282,53 @@ export const BriefRequirement = z
 
 export type BriefRequirement = z.infer<typeof BriefRequirement>;
 
+/** Most capture files one Brief links. */
+export const BRIEF_MAX_ARTIFACTS = 12;
+
+/** Most files one capture set holds. */
+export const CAPTURE_MAX_PARTS = 6;
+
+/**
+ * Why a capture set is not a plain picture of what was asked: the page was
+ * wider than a tile (`clipped_width`), taller than the set holds
+ * (`truncated`), or the element sat outside the visible area
+ * (`beyond_viewport`). The first two make the set incomplete.
+ */
+export const CaptureLabel = z
+  .enum(['clipped_width', 'truncated', 'beyond_viewport'])
+  .describe('A label on a capture set: clipped_width, truncated, or beyond_viewport.');
+
+export type CaptureLabel = z.infer<typeof CaptureLabel>;
+
+export const BriefArtifact = z
+  .object({
+    kind: z.literal('screenshot').describe('The artifact kind.'),
+    scope: ArtifactScope,
+    path: ScreenshotArtifactPath,
+    sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .describe('Lowercase hex SHA-256 of the file bytes.'),
+    bytes: z.number().int().nonnegative().describe('File size in bytes.'),
+    width: z.number().int().positive().describe('Image width in pixels.'),
+    height: z.number().int().positive().describe('Image height in pixels.'),
+    part: z.number().int().min(1).describe('1-based position of this file in its capture set.'),
+    parts: z
+      .number()
+      .int()
+      .min(1)
+      .max(CAPTURE_MAX_PARTS)
+      .describe('How many files the capture set holds.'),
+    complete: z
+      .boolean()
+      .describe('False when the set was clipped or truncated and does not show the whole target.'),
+    labels: z.array(CaptureLabel).max(3).describe('Labels on the capture set.'),
+  })
+  .strict()
+  .describe('One saved capture file the run produced, linked relative to the run directory.');
+
+export type BriefArtifact = z.infer<typeof BriefArtifact>;
+
 export const BriefMetadata = z
   .object({
     search_provider: z
@@ -413,6 +461,13 @@ export const Brief = z
       .describe(
         'Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs.',
       ),
+    artifacts: z
+      .array(BriefArtifact)
+      .max(BRIEF_MAX_ARTIFACTS)
+      .optional()
+      .describe(
+        'Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs.',
+      ),
     metadata: BriefMetadata.describe('Provenance and quality signals.'),
     notices: z
       .array(BriefNotice)
@@ -528,6 +583,22 @@ export const Brief = z
           message: 'requirement ids must be unique within a Brief',
         });
       requirementIds.add(requirement.id);
+    });
+    const artifactPaths = new Set<string>();
+    brief.artifacts?.forEach((artifact, index) => {
+      if (artifactPaths.has(artifact.path))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['artifacts', index, 'path'],
+          message: 'artifact paths must be unique within a Brief',
+        });
+      artifactPaths.add(artifact.path);
+      if (artifact.part > artifact.parts)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['artifacts', index, 'part'],
+          message: `part ${artifact.part} exceeds parts ${artifact.parts}`,
+        });
     });
   })
   .describe(

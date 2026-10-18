@@ -9,21 +9,22 @@ The 0.2 bump is additive: it introduces the Brief document type; Plan and workfl
 
 Stable agent metadata embedded in manifest.json for one run-local session.
 
-| Field             | Description                                                              |
-| ----------------- | ------------------------------------------------------------------------ |
-| adapter           | Agent adapter used for this run.                                         |
-| sdk_version       | Installed provider SDK version resolved at runtime.                      |
-| provider          | Effective model provider identifier.                                     |
-| model             | Effective provider-scoped model identifier.                              |
-| thinking          | Effective model thinking or reasoning level.                             |
-| auth_source       | Credential source used to open the session; never credential material.   |
-| session_id        | Provider-assigned session identifier.                                    |
-| session_file      | Relative path from the run directory to the provider session JSONL.      |
-| prompt_version    | Version of the authoritative agent prompt.                               |
-| prompt_hash       | SHA-256 of the exact system prompt.                                      |
-| tool_catalog_hash | SHA-256 of the canonical tool catalog serialization.                     |
-| yantra_version    | Version of the Yantra agent package that ran; absent on older manifests. |
-| budgets           | Effective run budgets; absent on older manifests.                        |
+| Field             | Description                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| adapter           | Agent adapter used for this run.                                                                             |
+| sdk_version       | Installed provider SDK version resolved at runtime.                                                          |
+| provider          | Effective model provider identifier.                                                                         |
+| model             | Effective provider-scoped model identifier.                                                                  |
+| thinking          | Effective model thinking or reasoning level.                                                                 |
+| auth_source       | Credential source used to open the session; never credential material.                                       |
+| session_id        | Provider-assigned session identifier.                                                                        |
+| session_file      | Relative path from the run directory to the provider session JSONL.                                          |
+| prompt_version    | Version of the authoritative agent prompt.                                                                   |
+| prompt_hash       | SHA-256 of the exact system prompt.                                                                          |
+| tool_catalog_hash | SHA-256 of the canonical tool catalog serialization.                                                         |
+| yantra_version    | Version of the Yantra agent package that ran; absent on older manifests.                                     |
+| budgets           | Effective run budgets; absent on older manifests.                                                            |
+| capture           | Both capture capabilities with reason codes, resolved before the first tool call; absent on older manifests. |
 
 Example:
 
@@ -41,7 +42,8 @@ Example:
   "prompt_hash": "<prompt_hash>",
   "tool_catalog_hash": "<tool_catalog_hash>",
   "yantra_version": "<yantra_version>",
-  "budgets": "<budgets>"
+  "budgets": "<budgets>",
+  "capture": "<capture>"
 }
 ```
 
@@ -90,6 +92,46 @@ Example:
   "input_tokens": "<input_tokens>",
   "output_tokens": "<output_tokens>",
   "cost_usd": "<cost_usd>"
+}
+```
+
+## ArtifactKind
+
+What kind of file the artifact is.
+
+Example:
+
+```json
+"screenshot"
+```
+
+## ArtifactRef
+
+One file a tool call wrote to the run directory: metadata only, never image bytes or a data URI.
+
+| Field         | Description                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| kind          | What kind of file the artifact is.                                                                                   |
+| path          | Run-relative path of the artifact file, using forward slashes.                                                       |
+| sha256        | Lowercase hex SHA-256 of the file bytes.                                                                             |
+| mime_type     | Media type of the file.                                                                                              |
+| bytes         | File size in bytes.                                                                                                  |
+| width         | Image width in pixels.                                                                                               |
+| height        | Image height in pixels.                                                                                              |
+| sent_to_model | True only when the image was shown to the model provider (Vision Assist); false for a capture kept on this computer. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "path": "<path>",
+  "sha256": "<sha256>",
+  "mime_type": "<mime_type>",
+  "bytes": "<bytes>",
+  "width": "<width>",
+  "height": "<height>",
+  "sent_to_model": "<sent_to_model>"
 }
 ```
 
@@ -194,6 +236,7 @@ The universal synthesized output document: answer-first overview, key findings, 
 | sources        | Numbered, deduplicated source references.                                                                                        |
 | constraints    | Declared conditions and their delivery statuses; absent on older artifacts.                                                      |
 | requirements   | Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs. |
+| artifacts      | Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs. |
 | metadata       | Provenance and quality signals.                                                                                                  |
 | notices        | Honest per-source failures and validator flags; may be empty.                                                                    |
 
@@ -212,8 +255,45 @@ Example:
   "sources": "<sources>",
   "constraints": "<constraints>",
   "requirements": "<requirements>",
+  "artifacts": "<artifacts>",
   "metadata": "<metadata>",
   "notices": "<notices>"
+}
+```
+
+## BriefArtifact
+
+One saved capture file the run produced, linked relative to the run directory.
+
+| Field    | Description                                                                     |
+| -------- | ------------------------------------------------------------------------------- |
+| kind     | The artifact kind.                                                              |
+| scope    | What a screenshot covers: the visible viewport, the full page, or one element.  |
+| path     | Run-relative path of the artifact file, using forward slashes.                  |
+| sha256   | Lowercase hex SHA-256 of the file bytes.                                        |
+| bytes    | File size in bytes.                                                             |
+| width    | Image width in pixels.                                                          |
+| height   | Image height in pixels.                                                         |
+| part     | 1-based position of this file in its capture set.                               |
+| parts    | How many files the capture set holds.                                           |
+| complete | False when the set was clipped or truncated and does not show the whole target. |
+| labels   | Labels on the capture set.                                                      |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "scope": "<scope>",
+  "path": "<path>",
+  "sha256": "<sha256>",
+  "bytes": "<bytes>",
+  "width": "<width>",
+  "height": "<height>",
+  "part": "<part>",
+  "parts": "<parts>",
+  "complete": "<complete>",
+  "labels": "<labels>"
 }
 ```
 
@@ -433,6 +513,34 @@ Example:
   "params": "<params>",
   "capture_as": "<capture_as>"
 }
+```
+
+## CaptureCapabilityRecord
+
+The run's two capture capabilities, resolved before the first tool call.
+
+| Field         | Description                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| vision_assist | Whether Vision Assist (screenshots sent to the model) is available, and why not.           |
+| deliverable   | Whether deliverable capture (screenshots kept on this computer) is available, and why not. |
+
+Example:
+
+```json
+{
+  "vision_assist": "<vision_assist>",
+  "deliverable": "<deliverable>"
+}
+```
+
+## CaptureLabel
+
+A label on a capture set: clipped_width, truncated, or beyond_viewport.
+
+Example:
+
+```json
+"clipped_width"
 ```
 
 ## CaptureRef
@@ -655,6 +763,34 @@ Example:
   "id": "<id>",
   "declared_in": "<declared_in>"
 }
+```
+
+## DeliverableCaptureCapability
+
+Whether deliverable capture (screenshots kept on this computer) is available, and why not.
+
+| Field     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| available | Whether the capability is registered for this run.               |
+| reasons   | Every condition that keeps it off; empty exactly when available. |
+
+Example:
+
+```json
+{
+  "available": "<available>",
+  "reasons": "<reasons>"
+}
+```
+
+## DeliverableCaptureReason
+
+A condition that keeps deliverable capture off.
+
+Example:
+
+```json
+"suppressed_by_flag"
 ```
 
 ## DiscoveryBudget
@@ -917,10 +1053,10 @@ Example:
 
 Row-level extraction error envelope.
 
-| Field   | Description                                 |
-| ------- | ------------------------------------------- |
-| __error | Coercion failure reason for this row.       |
-| __raw   | Original raw row payload prior to coercion. |
+| Field     | Description                                 |
+| --------- | ------------------------------------------- |
+| \_\_error | Coercion failure reason for this row.       |
+| \_\_raw   | Original raw row payload prior to coercion. |
 
 Example:
 
@@ -1195,7 +1331,7 @@ Example:
 
 ## LocatorCandidate
 
-Candidate locator entry in workflow _locators block.
+Candidate locator entry in workflow \_locators block.
 
 Example:
 
@@ -1531,18 +1667,19 @@ Example:
 
 An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only.
 
-| Field           | Description                                                                               |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| schema_version  | Run-health schema version.                                                                |
-| run_id          | Owning run id.                                                                            |
-| searches        | Web searches by outcome.                                                                  |
-| fetches         | Network page fetches.                                                                     |
-| source_failures | Per-site read failures inside multi-source tools, by stage.                               |
-| browser         | Browser processes.                                                                        |
-| budgets         | Run budget consumption.                                                                   |
-| tool_failures   | Tool failures across every tool.                                                          |
-| notices         | Runtime-derived notices attached to the published document; 0 when nothing was published. |
-| extraction      | Shape-aware extraction (FEAT-051): pages by shape, records, and links.                    |
+| Field           | Description                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| schema_version  | Run-health schema version.                                                                  |
+| run_id          | Owning run id.                                                                              |
+| searches        | Web searches by outcome.                                                                    |
+| fetches         | Network page fetches.                                                                       |
+| source_failures | Per-site read failures inside multi-source tools, by stage.                                 |
+| browser         | Browser processes.                                                                          |
+| budgets         | Run budget consumption.                                                                     |
+| tool_failures   | Tool failures across every tool.                                                            |
+| notices         | Runtime-derived notices attached to the published document; 0 when nothing was published.   |
+| extraction      | Shape-aware extraction (FEAT-051): pages by shape, records, and links.                      |
+| capture         | Both capture capabilities with reason codes, and what deliverable capture wrote (FEAT-058). |
 
 Example:
 
@@ -1557,13 +1694,24 @@ Example:
   "budgets": "<budgets>",
   "tool_failures": "<tool_failures>",
   "notices": "<notices>",
-  "extraction": "<extraction>"
+  "extraction": "<extraction>",
+  "capture": "<capture>"
 }
 ```
 
 ## ScalarValue
 
 Scalar value for task params.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ScreenshotArtifactPath
+
+Run-relative path of the artifact file, using forward slashes.
 
 Example:
 
@@ -1935,22 +2083,23 @@ Example:
 
 Stable append-only tool lifecycle entry stored in tool-calls.jsonl.
 
-| Field            | Description                                                         |
-| ---------------- | ------------------------------------------------------------------- |
-| ts               | ISO-8601 UTC timestamp for this lifecycle phase.                    |
-| seq              | Monotonic sequence number within the run.                           |
-| run_id           | Owning Yantra run identifier.                                       |
-| session_id       | Owning provider session identifier.                                 |
-| call_id          | Provider tool-call identifier pairing start and end.                |
-| tool             | Stable registered tool name.                                        |
-| phase            | Tool-call lifecycle phase.                                          |
-| input_sanitized  | Sanitized tool input, or null on end entries.                       |
-| output_sanitized | Sanitized tool output, or null on start entries.                    |
-| status           | Terminal tool status, or null on start entries.                     |
-| duration_ms      | Elapsed tool time in milliseconds, or null on start entries.        |
-| error_code       | Stable error code when present, otherwise null.                     |
-| confirmation_id  | Linked confirmation identifier when present, otherwise null.        |
-| captures         | Private capture artifact metadata; never image bytes or a data URI. |
+| Field            | Description                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| ts               | ISO-8601 UTC timestamp for this lifecycle phase.                                                                             |
+| seq              | Monotonic sequence number within the run.                                                                                    |
+| run_id           | Owning Yantra run identifier.                                                                                                |
+| session_id       | Owning provider session identifier.                                                                                          |
+| call_id          | Provider tool-call identifier pairing start and end.                                                                         |
+| tool             | Stable registered tool name.                                                                                                 |
+| phase            | Tool-call lifecycle phase.                                                                                                   |
+| input_sanitized  | Sanitized tool input, or null on end entries.                                                                                |
+| output_sanitized | Sanitized tool output, or null on start entries.                                                                             |
+| status           | Terminal tool status, or null on start entries.                                                                              |
+| duration_ms      | Elapsed tool time in milliseconds, or null on start entries.                                                                 |
+| error_code       | Stable error code when present, otherwise null.                                                                              |
+| confirmation_id  | Linked confirmation identifier when present, otherwise null.                                                                 |
+| captures         | Legacy Vision Assist capture metadata written before FEAT-058; read through artifactRefsOf. Never image bytes or a data URI. |
+| artifacts        | Files this call wrote to the run directory (FEAT-058); metadata only, never image bytes or a data URI.                       |
 
 Example:
 
@@ -1969,7 +2118,8 @@ Example:
   "duration_ms": "<duration_ms>",
   "error_code": "<error_code>",
   "confirmation_id": "<confirmation_id>",
-  "captures": "<captures>"
+  "captures": "<captures>",
+  "artifacts": "<artifacts>"
 }
 ```
 
@@ -2045,6 +2195,34 @@ Example:
 "<value>"
 ```
 
+## VisionAssistCapability
+
+Whether Vision Assist (screenshots sent to the model) is available, and why not.
+
+| Field     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| available | Whether the capability is registered for this run.               |
+| reasons   | Every condition that keeps it off; empty exactly when available. |
+
+Example:
+
+```json
+{
+  "available": "<available>",
+  "reasons": "<reasons>"
+}
+```
+
+## VisionAssistReason
+
+A condition that keeps Vision Assist off.
+
+Example:
+
+```json
+"grant_missing"
+```
+
 ## WaitActionSchema
 
 A wait/dwell event between user actions
@@ -2101,22 +2279,22 @@ Example:
 
 Workflow YAML schema source used by parser, linter, and editor integrations.
 
-| Field              | Description                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| version            | Workflow format major version.                                                                                |
-| name               | Workflow slug name.                                                                                           |
-| description        | Optional workflow description.                                                                                |
-| security_class     | Workflow security class.                                                                                      |
-| recorded_with      | Optional recording metadata.                                                                                  |
-| params             | Workflow parameter declarations.                                                                              |
-| secrets            | Declared workflow secret keys.                                                                                |
-| cookies            | Cookie/profile handling mode.                                                                                 |
-| steps              | Ordered workflow steps.                                                                                       |
-| outputs            | Workflow output declarations.                                                                                 |
-| synthesis          | Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only. |
-| outputs_unredacted | Whether outputs bypass redaction safeguards.                                                                  |
-| _unrecorded_frames | Cross-origin frames not instrumented at record time.                                                          |
-| _locators          | Named locator chains captured or authored for replay.                                                         |
+| Field               | Description                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| version             | Workflow format major version.                                                                                |
+| name                | Workflow slug name.                                                                                           |
+| description         | Optional workflow description.                                                                                |
+| security_class      | Workflow security class.                                                                                      |
+| recorded_with       | Optional recording metadata.                                                                                  |
+| params              | Workflow parameter declarations.                                                                              |
+| secrets             | Declared workflow secret keys.                                                                                |
+| cookies             | Cookie/profile handling mode.                                                                                 |
+| steps               | Ordered workflow steps.                                                                                       |
+| outputs             | Workflow output declarations.                                                                                 |
+| synthesis           | Optional post-execution synthesis intent; null (the default) means the run reports its declared outputs only. |
+| outputs_unredacted  | Whether outputs bypass redaction safeguards.                                                                  |
+| \_unrecorded_frames | Cross-origin frames not instrumented at record time.                                                          |
+| \_locators          | Named locator chains captured or authored for replay.                                                         |
 
 Example:
 

@@ -337,6 +337,93 @@
           ],
           "additionalProperties": false,
           "description": "Shape-aware extraction (FEAT-051): pages by shape, records, and links."
+        },
+        "capture": {
+          "type": "object",
+          "properties": {
+            "vision_assist": {
+              "type": "object",
+              "properties": {
+                "available": {
+                  "type": "boolean",
+                  "description": "Whether the capability is registered for this run."
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "grant_missing",
+                      "model_no_image_input",
+                      "no_browser_tools",
+                      "suppressed_by_flag",
+                      "zero_llm"
+                    ],
+                    "description": "A condition that keeps Vision Assist off."
+                  },
+                  "description": "Every condition that keeps it off; empty exactly when available."
+                }
+              },
+              "required": [
+                "available",
+                "reasons"
+              ],
+              "additionalProperties": false,
+              "description": "Whether Vision Assist (screenshots sent to the model) is available, and why not."
+            },
+            "deliverable": {
+              "type": "object",
+              "properties": {
+                "available": {
+                  "type": "boolean",
+                  "description": "Whether the capability is registered for this run."
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "suppressed_by_flag",
+                      "no_browser",
+                      "no_interaction_tools"
+                    ],
+                    "description": "A condition that keeps deliverable capture off."
+                  },
+                  "description": "Every condition that keeps it off; empty exactly when available."
+                }
+              },
+              "required": [
+                "available",
+                "reasons"
+              ],
+              "additionalProperties": false,
+              "description": "Whether deliverable capture (screenshots kept on this computer) is available, and why not."
+            },
+            "deliverable_calls": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Successful browser_capture calls."
+            },
+            "deliverable_files": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "PNG files browser_capture wrote."
+            },
+            "deliverable_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Bytes browser_capture wrote."
+            }
+          },
+          "required": [
+            "vision_assist",
+            "deliverable",
+            "deliverable_calls",
+            "deliverable_files",
+            "deliverable_bytes"
+          ],
+          "additionalProperties": false,
+          "description": "Both capture capabilities with reason codes, and what deliverable capture wrote (FEAT-058)."
         }
       },
       "required": [
