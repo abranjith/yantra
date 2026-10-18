@@ -1,5 +1,5 @@
 /**
- * `yantra do "<goal>"` â€” the CLI shell around the agentic runtime.
+ * `yantra do "<goal>"` — the CLI shell around the agentic runtime.
  *
  * The command owns argument parsing, model/auth selection, connector rendering,
  * and exit-code mapping only. The reasoning/tool loop lives exclusively in
@@ -25,7 +25,12 @@ import {
 import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, Option, type Command } from 'commander';
 
-import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import {
+  addAgentTurnOptions,
+  addAgentOptions,
+  resolveAgentInvocation,
+  type AgentOptions,
+} from '../agent-options.js';
 import {
   addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
@@ -77,7 +82,7 @@ export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>
     .alias('discover')
     .description('Run a multi-turn web agent that uses Yantra tools and publishes a Brief.')
     .argument('<goal>', 'browser or web goal to accomplish');
-  addBrowserSelectionOptions(addAgentOptions(command))
+  addBrowserSelectionOptions(addAgentTurnOptions(addAgentOptions(command)))
     .addOption(
       new Option('--allow-host <host>', 'restrict outbound work to a host (repeatable)')
         .argParser(collect)
@@ -183,6 +188,7 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
         goal,
         profile,
         model: agent.model,
+        ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
         auth: agent.auth,
         budgets: agent.budgets,
         allowedHosts: normalizeHosts(options.allowHost ?? []),

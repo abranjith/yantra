@@ -289,9 +289,10 @@ stands where the model would. It does nothing a model could not do:
   `buildYantraWrappedTools(services, profile)`. It can therefore call only tools
   the command profile registers, through the full middleware. A step that names
   an unregistered tool is recorded as `<label> (tool not registered)`.
-- On the first prompt, it plays the script. A later prompt, such as the
-  completion nudge, does nothing, so a script has to publish on its own. An
-  unpublished script stays unpublished, and that is a measurement too.
+- It plays the script with a retained cursor. If a thinking turn is aborted,
+  a recovery prompt resumes at the next step in the same session. Once the
+  script is exhausted, later prompts do nothing; an unpublished script stays
+  unpublished, and that is a measurement too.
 - For each call, it emits `tool_started` with the input sanitized the way the Pi
   seam sanitizes it. It then emits `tool_finished` with `output` set to
   `auditProjectionOf(result)`, the exact projection a real Pi session records.
@@ -301,6 +302,13 @@ stands where the model would. It does nothing a model could not do:
   multi-tool turn. Events interleave in real completion order.
 - An `advance-clock` step stands for time a long model turn spends: it adds
   its `ms` to the run's budget clock, calls no tool, and counts no turn.
+- A `think` step emits `turn_started` and waits for its `ms` without producing
+  output. `abort()` ends the wait early, exercising the production thinking
+  timer and re-prompt path. Tool steps emit `output_started` before dispatch,
+  so tool execution is outside that timer.
+- `steer(text)` records steering received while the session is running and
+  reports `queued`; an idle session reports `idle`. Script guards and parameter
+  resolvers can inspect received messages through `ctx.steers()`.
 - A `latch-sensitive-screen` step stands for a stored-secret fill. It sets the
   run's sensitive-screen latch on the current document, exactly where
   `browser_fill_element` sets it before dispatching a resolved secret. It calls
@@ -320,6 +328,7 @@ A step's parameters are either fixed or resolved from the evidence so far.
 | `urlFromSearch(host?)` | The first URL a successful `web_search` offers in `sites`, `results`, or `more_results` |
 | `linksOfKind(kind)`    | The result's `links[]` entries of that kind                                             |
 | `recordsFrom()`        | The result's `records[]`                                                                |
+| `steers()`             | Runtime steering messages queued while the scripted session was running                 |
 
 A resolver never invents a URL. When it finds nothing to act on, it returns
 `null`. The step is then recorded as **unreachable**, and no tool call is made.
@@ -422,12 +431,14 @@ The ledger census, `expectationCensus`, fails the catalogue in these cases:
 ### Runs the deterministic scenario catalogue
 
 `e2e/task-fidelity.spec.ts` runs every scenario whose tiers include
-`deterministic`: 36 scenarios. Each scenario runs once in a `beforeAll` with a
+`deterministic`: 45 scenarios. Each scenario runs once in a `beforeAll` with a
 90-second contention-sized timeout, unless the scenario sets its own
-`timeoutMs`, and then its expectations are asserted. The `do-*` scenarios use
-the `do` command, with real-Chrome form fills that need 180 to 600 seconds. The
+`timeoutMs`, and then its expectations are asserted. The original form `do-*`
+scenarios use the `do` command, with real-Chrome form fills that need 180 to 600 seconds. The
 `capture-*` scenarios also use `do`, on `tall-page`, within the default
-timeout. Every other scenario uses `research`.
+timeout. The FEAT-059 progress and turn-limit scenarios use their own 90-second
+allowance, with `do` except for `research-progress-observe`. Other scenarios use
+`research`.
 
 Every scenario also carries four cross-cutting expectations:
 
@@ -477,12 +488,32 @@ Every scenario also carries four cross-cutting expectations:
 | `research-browse`              | The goal names `faceted-listing.yantra.test` bare: `browser_navigate` to its root, `browser_extract {kind: links}`, navigate to the offered "Shop new" link, `browser_extract {kind: records}`, then publish                               | `current` 1 (every move offered, published); FEAT-052 5 (browse tools and `task_contract` registered, no click or fill tool, the root navigation succeeds with provenance `goal`, at least one record, the read-only scope line)                                                                                                                                                                                                                                                              |
 | `research-no-browse`           | `browse: false`; `browser_navigate` to the root, then publish                                                                                                                                                                              | `current` 1 (no browser launch); FEAT-052 3 (the call is unreachable as an unregistered tool, no `browser_*` tool in the catalog, the "no live browser" scope line)                                                                                                                                                                                                                                                                                                                           |
 
-Every scenario includes the cross-cutting four. Every `do-*` scenario also
-carries the FEAT-054 `no-submission` expectation: the request log holds zero
+The nine FEAT-059 scenarios add these production-runtime checks:
+
+| Scenario                       | Script and asserted behavior                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `do-progress-stall-recovers`   | Unchanged extracts over a 125-second clock advance trigger one steer; its offered refs drive a fill, another batch increases coverage, then the script captures and publishes. |
+| `do-progress-stall-ignored`    | Two no-progress windows reach steer and freeze; two more refused extracts stop with `AGENT_STALLED`.                                                                           |
+| `do-progress-freeze-publishes` | The same two windows reach freeze; publication retains a partial Brief with termination reason `stalled`.                                                                      |
+| `do-progress-partial-batch`    | Nine commits and one absent field are followed by another batch; fill counts rise and no recovery rung fires.                                                                  |
+| `do-progress-autocomplete`     | Fill a declared autocomplete, observe, confirm its selection, observe, and publish with no recovery rung.                                                                      |
+| `do-progress-clickthrough`     | Follow the observed Continue control to another page, then repeat extracts over a stall window; non-form work receives one steer.                                              |
+| `do-turn-limit-recovers`       | A 12-second `think` exceeds a 10-second limit; the same session resumes and publishes, with one recorded turn-limit abort.                                                     |
+| `do-turn-limit-stops`          | Three overlong thinking turns advance steer, freeze, and stop, ending with `AGENT_TURN_TIMEOUT`.                                                                               |
+| `research-progress-observe`    | Repeated extracts over a stall window remain in observe mode with no recovery rung.                                                                                            |
+
+Their shared expectations also check the progress mode and zero fixture submissions.
+They replay emitted progress and recovery events through the real CLI connector
+in text and JSON modes: JSON must preserve the events as `agent_progress`
+records, and text must stay on stderr without control bytes or corrupt
+punctuation. The shared setup and measures live in `progress-support.ts`.
+
+Every scenario includes the cross-cutting four. The original form `do-*` scenarios also
+carry the FEAT-054 `no-submission` expectation: the request log holds zero
 requests to `/apply/submitted` or `/apply/submit-event`. Only
 `native-date-entry` carries pinned baselines, both in `do-form-complete`. The
 catalogue census checks this alongside scenario
-registration. The `do-*` scenarios measure what the engine recorded, not
+registration. The original form scenarios measure what the engine recorded, not
 content, so their `truth()` is empty and their scoring contract is an
 `actions` deliverable on `test-form.yantra.test`. The `capture-*` scenarios
 (owner `FEAT-058`) work the same way on `tall-page.yantra.test`. They judge a

@@ -10,6 +10,20 @@ const REFUSED_AGAIN =
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
+    'AGENT_STALLED',
+    'stopped',
+    (d) =>
+      `Stopped: no task progress after one recovery message (${text(d.progress)}). Nothing was published.`,
+    ['progress'],
+  ),
+  tool(
+    'AGENT_TURN_TIMEOUT',
+    'thinking-limit',
+    (d) =>
+      `Stopped: provider turns kept exceeding the ${text(d.limit)} thinking limit. Raise --turn-timeout or lower --thinking.`,
+    ['limit'],
+  ),
+  tool(
     'INVALID_INPUT',
     'batch-limit',
     (d) =>
@@ -851,6 +865,14 @@ export const AGENT_INTERACTION_MESSAGES = [
     'CONFIRMATION_DENIED',
     'denied',
     () => 'Confirmation was denied; the action was not taken.',
+  ),
+  middleware(
+    'BUDGET_EXHAUSTED',
+    'stalled',
+    () =>
+      'No task progress after the recovery message. Exploration is closed for this run: call result_publish now, and list each unmet requirement with its reason.',
+    [],
+    'result_publish',
   ),
   middleware('BUDGET_EXHAUSTED', 'budget-decision', passThrough, ['message'], 'result_publish'),
   middleware(

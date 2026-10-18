@@ -423,3 +423,32 @@ describe('@no-llm BudgetTracker deliverable capture budget (FEAT-058 S4)', () =>
     });
   });
 });
+
+describe('@no-llm FEAT-059 exploration reservation', () => {
+  it('separates exploration from fixed publication headroom and handles infinity', () => {
+    const clock = fakeClock(0);
+    const budget = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, wallClockMs: 900000 }, clock.now);
+    clock.advance(300000);
+    expect(budget.explorationRemainingMs()).toBe(420000);
+    expect(budget.publicationHeadroomMs()).toBe(180000);
+    clock.advance(480000);
+    expect(budget.explorationRemainingMs()).toBe(0);
+    const unbounded = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, wallClockMs: Infinity });
+    expect(unbounded.explorationRemainingMs()).toBeNull();
+    expect(unbounded.publicationHeadroomMs()).toBeNull();
+  });
+  it('freezes exploration idempotently, counts refusals, and preserves terminal and exempt calls', () => {
+    const budget = new BudgetTracker(DEFAULT_BUDGET_LIMITS);
+    budget.freezeExploration();
+    budget.freezeExploration();
+    for (let i = 1; i <= 2; i++) {
+      const result = budget.reserveCall('web_fetch');
+      expect(result.isOk).toBe(false);
+      if (!result.isOk)
+        expect(result.error).toMatchObject({ limit: 'stalled', carriesPublishRemedy: true });
+      expect(budget.refusedAfterFreeze()).toBe(i);
+    }
+    expect(budget.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
+    expect(budget.reserveCall('task_contract', { windDownExempt: true }).isOk).toBe(true);
+  });
+});

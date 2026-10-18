@@ -26,7 +26,7 @@ const DATE_PATTERN =
  * Reduces number claims into deterministic figure/context/citation rows.
  *
  * @param claims - Number-kind claims in display order.
- * @returns Reducible, de-duplicated rows whose context is 12â€“90 characters.
+ * @returns Reducible, de-duplicated rows whose context is 12–90 characters.
  * @example deriveKeyFigures([{ text: 'Attendance reached 3,605,357 spectators.', citations: [1] }]);
  */
 export function deriveKeyFigures(claims: readonly FigureClaim[]): KeyFigure[] {
@@ -40,7 +40,7 @@ export function deriveKeyFigures(claims: readonly FigureClaim[]): KeyFigure[] {
       .replace(match.text, ' ')
       .replace(/\[\d+\]/gu, ' ')
       .replace(/\s+/gu, ' ')
-      .replace(/^[,.;:â€”\s]+|[,;:â€”\s]+$/gu, '')
+      .replace(/^[,.;:—\s]+|[,;:—\s]+$/gu, '')
       .trim();
     if (context.length < 12 || context.length > 90) continue;
     const key = `${match.text.toLowerCase().replace(/\s+/gu, '')}\u0000${context.toLowerCase()}`;
@@ -74,7 +74,7 @@ function firstPriorityFigure(text: string): { text: string; index: number } | un
 }
 
 function clauseContaining(text: string, index: number, figureLength: number): string {
-  const separators = /[,;â€”:]/gu;
+  const separators = /[,;—:]/gu;
   let start = 0;
   let end = text.length;
   for (const match of text.matchAll(separators)) {

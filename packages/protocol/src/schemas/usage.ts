@@ -28,6 +28,24 @@ export const UsageCall = z
       .nonnegative()
       .nullable()
       .describe('Nullable estimated cost in USD.'),
+    reasoning_tokens: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Reasoning tokens (a subset of output), when reported.'),
+    thinking_ms: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Turn start to first output, excluding tool time.'),
+    provider_ms: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Turn start to assistant message end, excluding tool time.'),
     latency_ms: z.number().int().nonnegative().describe('Call latency in milliseconds.'),
     at: z.string().datetime().describe('ISO-8601 UTC timestamp.'),
   })
@@ -37,6 +55,13 @@ export type UsageCall = z.infer<typeof UsageCall>;
 
 export const AgentUsageTotals = z
   .object({
+    reasoning_tokens: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .describe('Reasoning tokens, or null when unreported.'),
     turns: z.number().int().nonnegative().describe('Completed provider turns.'),
     input_tokens: z
       .number()

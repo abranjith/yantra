@@ -219,6 +219,7 @@ export function taskContractSpec(
 ): ToolWrapperSpec<typeof TaskContractParams> {
   return {
     name: 'task_contract',
+    progressRole: 'bookkeeping',
     label: 'Task Contract',
     description:
       "Record what the user's goal requires before gathering evidence: the deliverable, the " +
@@ -304,6 +305,10 @@ async function declareContract(
     model: {
       revision,
       contract,
+      time: {
+        exploration_remaining_s: seconds(services.budgets.explorationRemainingMs()),
+        publication_headroom_s: seconds(services.budgets.publicationHeadroomMs()),
+      },
       ...(gaps.length === 0 ? {} : { capability_gaps: gaps }),
       note: RECORDED_NOTE,
     },
@@ -347,4 +352,8 @@ function issueDetails(issue: ContractIssue): Record<string, unknown> {
     case 'contract-actions-command':
       return {};
   }
+}
+
+function seconds(ms: number | null): number | null {
+  return ms === null ? null : Math.floor(ms / 1000);
 }

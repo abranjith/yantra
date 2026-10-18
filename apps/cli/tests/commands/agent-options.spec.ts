@@ -1,3 +1,4 @@
+import { AGENT_INTERACTION_MESSAGES } from '@yantra/agent';
 import type { EffectivePreference, EffectivePreferences } from '@yantra/core';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
@@ -358,4 +359,58 @@ describe('@no-llm shared agent options', () => {
 
     expect(result).toMatchObject({ mode: 'no-llm', reason: 'unavailable' });
   });
+});
+
+describe('@no-llm FEAT-059 thinking limit surface', () => {
+  it('resolves the do thinking limit and source through the common precedence', async () => {
+    const result = await resolveAgentInvocation(
+      'do',
+      { turnTimeout: '3m', thinking: 'low' },
+      { YANTRA_AGENT_TURN_TIMEOUT: '4m' },
+      prefs({ 'agent.turn_timeout': '5m' }),
+      available,
+    );
+    expect(result).toMatchObject({
+      mode: 'llm',
+      budgets: { turnTimeoutMs: 180000 },
+      thinkingSource: 'flag',
+    });
+    await expect(
+      resolveAgentInvocation('do', { turnTimeout: '5s' }, {}, new Map(), available),
+    ).rejects.toThrow('--turn-timeout');
+    expect(
+      await resolveAgentInvocation('do', {}, {}, prefs({ 'agent.thinking': 'medium' }), available),
+    ).toMatchObject({ thinkingSource: 'preference' });
+    expect(await resolveAgentInvocation('do', {}, {}, new Map(), available)).toMatchObject({
+      thinkingSource: 'default',
+    });
+  });
+  it('registers turn-timeout only on do', () => {
+    const program = new Command();
+    registerDoCommand(program);
+    registerResearchCommand(program);
+    expect(
+      program.commands
+        .find((c) => c.name() === 'do')
+        ?.options.some((o) => o.long === '--turn-timeout'),
+    ).toBe(true);
+    expect(
+      program.commands
+        .find((c) => c.name() === 'research')
+        ?.options.some((o) => o.long === '--turn-timeout'),
+    ).toBe(false);
+  });
+});
+
+it('FEAT-059 timeout remedies name flags that do actually registers', () => {
+  const program = new Command();
+  registerDoCommand(program);
+  const flags = new Set(
+    program.commands.find((c) => c.name() === 'do')!.options.map((o) => o.long),
+  );
+  const template = AGENT_INTERACTION_MESSAGES.find((t) => t.code === 'AGENT_TURN_TIMEOUT')!;
+  const text = template.message({ limit: '2m' });
+  for (const flag of text.match(/--[a-z-]+/gu) ?? []) expect(flags.has(flag)).toBe(true);
+  expect(text).toContain('--turn-timeout');
+  expect(text).toContain('--thinking');
 });

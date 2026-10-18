@@ -951,6 +951,30 @@ describe('@no-llm task-fidelity runner', () => {
     expect(result.runtimeLogFindings).toEqual([]);
   }, 60_000);
 
+  it('aborts a scripted thinking step early, then publishes in the same session', async () => {
+    const result = await run({
+      command: 'do',
+      budgets: { turnTimeoutMs: 10000 },
+      script: [
+        {
+          kind: 'call',
+          tool: 'task_contract',
+          params: { deliverable: 'report', subject: 'the thinking fixture' },
+        },
+        { kind: 'think', ms: 60000 },
+        publishStep,
+      ],
+    });
+    expect(result.outcome.kind).toBe('published');
+    expect(result.progress.filter((e) => e.type === 'recovery').map((e) => e.trigger)).toEqual([
+      'turn-timeout',
+    ]);
+    expect(result.wallMs).toBeLessThan(60000);
+    expect(result.artifacts.runHealth).toMatchObject({
+      progress: { turns: { turn_limit_aborts: 1 } },
+    });
+  }, 45000);
+
   it('issues a parallel step concurrently: the two searches overlap in the call log', async () => {
     const result = await run({
       // A keyed API provider: FEAT-050's politeness gate lets it take two

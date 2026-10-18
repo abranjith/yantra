@@ -62,6 +62,7 @@ export function browserCaptureSpec(
 ): ToolWrapperSpec<typeof BrowserCaptureParams> {
   return {
     name: 'browser_capture',
+    windDownExempt: (s, params) => s.progress.captureExemptionAvailable(params.scope),
     label: 'Browser Capture',
     description:
       'Save a clean screenshot of the page to the run directory as a deliverable the user ' +
@@ -73,7 +74,6 @@ export function browserCaptureSpec(
     // A capture is local, cheap, bounded, and delivers a declared item, so it
     // stays callable during the exploration wind-down (S8). The hard deadline,
     // the per-tool timeout, and the capture budget still bind.
-    windDownExempt: true,
     run: (params): Promise<DomainResult> => runCapture(params, services),
   };
 }

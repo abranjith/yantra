@@ -1,4 +1,4 @@
-/** `yantra template` â€” local report-template library management. */
+/** `yantra template` — local report-template library management. */
 
 import { readFile } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';

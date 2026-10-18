@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { withRunProgress } from '@yantra/agent';
 import {
   ActionPhase,
   BudgetTracker,
@@ -73,7 +74,7 @@ describe('@no-llm real Chrome browser tools', () => {
     // page on them is reachable while an assembled URL elsewhere is not.
     const provenance = new UrlProvenance();
     provenance.seed({ allowedHosts: ['127.0.0.1', 'localhost'] });
-    const services: RunServices = {
+    const services: RunServices = withRunProgress({
       template: null,
       runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       runDir,
@@ -143,7 +144,7 @@ describe('@no-llm real Chrome browser tools', () => {
         },
         rank: null,
       },
-    };
+    });
     tools = buildYantraWrappedTools(services);
   }, 30_000);
 

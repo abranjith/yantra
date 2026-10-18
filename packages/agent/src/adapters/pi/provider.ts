@@ -70,6 +70,7 @@ export interface PiSessionLike {
   readonly sessionId: string;
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, options?: { expandPromptTemplates?: boolean }): Promise<void>;
+  steer(text: string): Promise<void>;
   abort(): Promise<void>;
   dispose(): void;
 }
@@ -251,6 +252,10 @@ interface RunTracker {
   turns: number;
   inputTokens: number | undefined;
   outputTokens: number | undefined;
+  reasoningTokens: number | undefined;
+  turnStartedMs?: number;
+  outputStartedMs?: number;
+  messageEndMs?: number;
   costUsd: number | undefined;
   failed: AgentError | undefined;
   terminal: PiTerminalState | undefined;
@@ -280,6 +285,7 @@ class PiSession implements AgentSession {
     private readonly runId: string,
     public readonly authSource: 'managed' | 'runtime-key' | 'environment',
   ) {
+    this.ctx = { ...ctx };
     this.id = piSession.sessionId;
     this.logPath = runLocal.logPath();
     this.unsubscribeInternal = piSession.subscribe((event) => this.handleRawEvent(event));
@@ -294,6 +300,7 @@ class PiSession implements AgentSession {
       turns: 0,
       inputTokens: undefined,
       outputTokens: undefined,
+      reasoningTokens: undefined,
       costUsd: undefined,
       failed: undefined,
       terminal: undefined,
@@ -328,6 +335,9 @@ class PiSession implements AgentSession {
       turns: tracker.turns,
       ...(tracker.inputTokens !== undefined ? { inputTokens: tracker.inputTokens } : {}),
       ...(tracker.outputTokens !== undefined ? { outputTokens: tracker.outputTokens } : {}),
+      ...(tracker.reasoningTokens !== undefined
+        ? { reasoningTokens: tracker.reasoningTokens }
+        : {}),
       ...(tracker.costUsd !== undefined ? { costUsd: tracker.costUsd } : {}),
     };
 
@@ -343,6 +353,13 @@ class PiSession implements AgentSession {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public async steer(text: string): Promise<'queued' | 'idle'> {
+    if (text.startsWith('/')) throw new Error('Recovery steering cannot start with /');
+    if (this.currentRun === undefined) return 'idle';
+    await this.piSession.steer(text);
+    return 'queued';
   }
 
   public async abort(): Promise<void> {
@@ -371,7 +388,29 @@ class PiSession implements AgentSession {
       this.currentRun.terminal = extractTerminalState(raw.messages, this.ctx);
     }
 
-    for (const event of mapPiEvent(raw, this.ctx)) {
+    const tracker = this.currentRun;
+    const now = Date.parse(this.ctx.now());
+    if (tracker !== undefined) {
+      if (raw.type === 'turn_start') {
+        tracker.turnStartedMs = now;
+        delete tracker.outputStartedMs;
+        delete tracker.messageEndMs;
+      }
+      if (raw.type === 'message_end' && raw.message.role === 'assistant')
+        tracker.messageEndMs = now;
+    }
+    for (let event of mapPiEvent(raw, this.ctx)) {
+      if (event.type === 'output_started' && tracker !== undefined) tracker.outputStartedMs ??= now;
+      if (event.type === 'turn_finished' && tracker?.turnStartedMs !== undefined) {
+        const end = tracker.messageEndMs ?? now;
+        event = {
+          ...event,
+          timing: {
+            thinkingMs: Math.max(0, (tracker.outputStartedMs ?? end) - tracker.turnStartedMs),
+            providerMs: Math.max(0, end - tracker.turnStartedMs),
+          },
+        };
+      }
       if (this.currentRun !== undefined) {
         if (event.type === 'turn_finished') {
           this.currentRun.turns += event.usage.turns;
@@ -382,6 +421,10 @@ class PiSession implements AgentSession {
           this.currentRun.outputTokens = addOptional(
             this.currentRun.outputTokens,
             event.usage.outputTokens,
+          );
+          this.currentRun.reasoningTokens = addOptional(
+            this.currentRun.reasoningTokens,
+            event.usage.reasoningTokens,
           );
           this.currentRun.costUsd = addOptional(this.currentRun.costUsd, event.usage.costUsd);
         } else if (event.type === 'failed') {

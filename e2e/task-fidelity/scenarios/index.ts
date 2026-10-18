@@ -29,8 +29,16 @@ import { doContractMissing } from './do-contract-missing.js';
 import { doFormComplete } from './do-form-complete.js';
 import { doFormHistorical } from './do-form-historical.js';
 import { doFulfillmentOmitted } from './do-fulfillment-omitted.js';
+import { doProgressAutocomplete } from './do-progress-autocomplete.js';
+import { doProgressClickthrough } from './do-progress-clickthrough.js';
+import { doProgressFreezePublishes } from './do-progress-freeze-publishes.js';
+import { doProgressPartialBatch } from './do-progress-partial-batch.js';
+import { doProgressStallIgnored } from './do-progress-stall-ignored.js';
+import { doProgressStallRecovers } from './do-progress-stall-recovers.js';
 import { doRevisionDropsScreenshot } from './do-revision-drops-screenshot.js';
 import { doSubmitForbidden } from './do-submit-forbidden.js';
+import { doTurnLimitRecovers } from './do-turn-limit-recovers.js';
+import { doTurnLimitStops } from './do-turn-limit-stops.js';
 import { handAssembledUrl } from './hand-assembled-url.js';
 import { listingClientRendered } from './listing-client-rendered.js';
 import { listingStructured } from './listing-structured.js';
@@ -44,6 +52,7 @@ import { publishUnverifiedFilter } from './publish-unverified-filter.js';
 import { repeatRead } from './repeat-read.js';
 import { researchBrowse } from './research-browse.js';
 import { researchNoBrowse } from './research-no-browse.js';
+import { researchProgressObserve } from './research-progress-observe.js';
 import { searchBreaker } from './search-breaker.js';
 import { searchConcurrency } from './search-concurrency.js';
 import { searchEmptyTimeout } from './search-empty-timeout.js';
@@ -58,6 +67,15 @@ export const HELPER_MODULES: readonly string[] = Object.freeze([
 ]);
 
 export const SCENARIOS: readonly Scenario[] = Object.freeze([
+  doProgressStallRecovers,
+  doProgressStallIgnored,
+  doProgressFreezePublishes,
+  doProgressPartialBatch,
+  doProgressAutocomplete,
+  doProgressClickthrough,
+  doTurnLimitRecovers,
+  doTurnLimitStops,
+  researchProgressObserve,
   listingTable,
   listingStructured,
   listingClientRendered,

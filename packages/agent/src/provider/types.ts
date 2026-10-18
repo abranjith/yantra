@@ -4,8 +4,10 @@
  * This file defines the ONLY session operations and normalized events Yantra
  * consumes from an agent SDK. It deliberately excludes provider messages,
  * thinking deltas, session trees, resource loaders, tool engines, model
- * registries, compaction, steering queues, and provider response objects —
+ * registries, compaction, and provider response objects —
  * none of those may be added without a demonstrated Yantra consumer.
+ *
+ * FEAT-059 consumes steering and turn timing; thinking text stays excluded.
  *
  * IMPORTANT: nothing in this file may import from a provider SDK. Provider
  * types must never leak through the seam; adapters translate in both
@@ -62,6 +64,9 @@ export interface AgentSession {
    *   rejections; rejections are reserved for misuse (e.g. run after close).
    */
   run(prompt: string): Promise<AgentRunResult>;
+
+  /** Queue sanitized recovery text before the next provider call, or report an idle session. */
+  steer(text: string): Promise<'queued' | 'idle'>;
 
   /**
    * Subscribe to normalized session events.
@@ -129,6 +134,7 @@ export type AgentAuthSelection =
  * adapter never forwards raw provider payloads across the seam.
  */
 export type AgentEvent =
+  | { readonly type: 'turn_started' | 'output_started'; readonly at: string }
   | {
       /** A tool invocation started. */
       readonly type: 'tool_started';
@@ -166,6 +172,7 @@ export type AgentEvent =
   | {
       /** One provider turn completed (consumed by run-level usage aggregation). */
       readonly type: 'turn_finished';
+      readonly timing?: { readonly thinkingMs: number; readonly providerMs: number };
       /** Usage for this turn (turns === 1). */
       readonly usage: AgentUsage;
       /** ISO-8601 timestamp. */
@@ -198,6 +205,8 @@ export interface AgentUsage {
   readonly inputTokens?: number;
   /** Output tokens, when reported. */
   readonly outputTokens?: number;
+  /** Reasoning tokens reported by the provider (a subset of output). */
+  readonly reasoningTokens?: number;
   /** Estimated cost in USD, when reported. */
   readonly costUsd?: number;
 }

@@ -43,6 +43,7 @@ function makeSession(
     emit: (event) => {
       for (const listener of listeners) listener(event);
     },
+    steer: () => Promise.resolve('idle'),
     abort: () => Promise.resolve(),
     close: () => Promise.resolve(),
   };
@@ -127,7 +128,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       expect(AgentManifestSection.parse(manifest.agent)).toMatchObject({
         auth_source: authSource,
         session_file: `agent/session-${authSource}.jsonl`,
-        prompt_version: 'agent-v13',
+        prompt_version: 'agent-v14',
       });
       expect(text).not.toContain(SECRET_CANARY);
     },
@@ -388,6 +389,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       agent: Record<string, unknown>;
     };
     expect(usage.agent).toEqual({
+      reasoning_tokens: null,
       turns: 2,
       input_tokens: 17,
       output_tokens: 7,
@@ -417,6 +419,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       agent: Record<string, unknown>;
     };
     expect(usage.agent).toEqual({
+      reasoning_tokens: null,
       turns: 1,
       input_tokens: null,
       output_tokens: null,
@@ -492,6 +495,39 @@ describe('@no-llm run recorder — one usage call per provider turn (FEAT-048)',
   async function readLedger(): Promise<UsageLedgerType> {
     return UsageLedger.parse(JSON.parse(await readFile(join(runDir, 'usage.json'), 'utf8')));
   }
+
+  it('records provider-only timing and reasoning separately from tool-inclusive latency', async () => {
+    const { session, recorder } = await openRecorder('anthropic');
+    session.emit({ type: 'turn_started', at: '2026-07-14T12:00:00.000Z' });
+    session.emit({ type: 'output_started', at: '2026-07-14T12:00:00.900Z' });
+    session.emit({
+      type: 'turn_finished',
+      usage: { turns: 1, reasoningTokens: 900 },
+      timing: { thinkingMs: 900, providerMs: 1000 },
+      at: '2026-07-14T12:00:04.000Z',
+    });
+    await recorder.close();
+    const ledger = await readLedger();
+    expect(ledger.calls[0]).toMatchObject({
+      reasoning_tokens: 900,
+      thinking_ms: 900,
+      provider_ms: 1000,
+      latency_ms: 4000,
+    });
+    expect(ledger.agent?.reasoning_tokens).toBe(900);
+    expect(recorder.turnSummary()).toEqual({
+      count: 1,
+      with_timing: 1,
+      thinking_ms_total: 900,
+      thinking_ms_max: 900,
+      provider_ms_total: 1000,
+      reasoning_tokens: 900,
+    });
+    const manifest = JSON.parse(await readFile(join(runDir, 'manifest.json'), 'utf8')) as {
+      agent: { thinking: string; thinking_source: string };
+    };
+    expect(manifest.agent).toMatchObject({ thinking: 'high', thinking_source: 'default' });
+  });
 
   it('writes one call per turn whose totals agree with the agent block', async () => {
     const { session, recorder } = await openRecorder('anthropic');

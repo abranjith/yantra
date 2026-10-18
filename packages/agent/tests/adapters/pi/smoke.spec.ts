@@ -170,6 +170,7 @@ describe('@no-llm runAgentSmoke', () => {
         }
         return Promise.resolve();
       },
+      steer: () => Promise.resolve(),
       abort: () => Promise.resolve(),
       dispose: () => undefined,
     };
@@ -226,6 +227,7 @@ describe('@no-llm runAgentSmoke', () => {
           // Simulate Ctrl+C arriving while the provider is streaming.
           queueMicrotask(() => controller.abort());
         }),
+      steer: () => Promise.resolve(),
       abort: () => {
         abortCalls += 1;
         releasePrompt();

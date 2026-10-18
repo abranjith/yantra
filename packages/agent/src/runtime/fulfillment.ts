@@ -205,12 +205,25 @@ export function fillCoverage(
   };
 }
 
+/** Count only declared names using the same verified-commit grammar as publication. */
+export function listedFillCoverage(
+  fields: readonly string[],
+  ledger: readonly ActionLedgerEntry[],
+) {
+  const filled = new Set(
+    ledger
+      .filter((entry): entry is FillCommittedEntry => entry.kind === 'fill_committed')
+      .map((entry) => normalizeDeliveryName(entry.field)),
+  );
+  const missing = fields.filter((field) => !filled.has(normalizeDeliveryName(field)));
+  return { filled: fields.length - missing.length, eligible: fields.length, missing };
+}
+
 function listedFill(
   fields: readonly string[],
   commits: readonly FillCommittedEntry[],
 ): Omit<RequirementStatus, 'id' | 'label' | 'declaredIn'> {
-  const filled = new Set(commits.map((entry) => normalizeDeliveryName(entry.field)));
-  const missing = fields.filter((field) => !filled.has(normalizeDeliveryName(field)));
+  const { missing } = listedFillCoverage(fields, commits);
   return missing.length === 0
     ? { status: 'met', reason: `fields ${fields.length} of ${fields.length} filled` }
     : {
@@ -352,7 +365,7 @@ function deliverableItem(input: FulfillmentInput, contract: TaskContractBody): R
   }
 }
 
-function actionsStatus(
+export function actionsStatus(
   ledger: readonly ActionLedgerEntry[],
   contract: TaskContractBody,
 ): Pick<RequirementStatus, 'status' | 'reason'> {
@@ -410,6 +423,19 @@ function satisfies(requested: ArtifactScope, captured: ArtifactScope): boolean {
 /** The only producer whose captures meet a screenshot item (FEAT-058 S7). */
 const DELIVERABLE_PRODUCER = 'browser_capture';
 
+/** Captures whose producer and scope can satisfy this artifact requirement. */
+export function artifactCaptures(
+  scope: ArtifactScope,
+  ledger: readonly ActionLedgerEntry[],
+): readonly CaptureEntry[] {
+  return ledger.filter(
+    (entry): entry is CaptureEntry =>
+      entry.kind === 'capture' &&
+      entry.producer === DELIVERABLE_PRODUCER &&
+      satisfies(scope, entry.scope),
+  );
+}
+
 /**
  * A screenshot item is met by a clean `browser_capture` of a satisfying
  * scope, taken after the last committed page action on the same document.
@@ -418,16 +444,11 @@ const DELIVERABLE_PRODUCER = 'browser_capture';
  * not the page the user asked for (S6), though its first tile still covers
  * the top of the page and so meets a `viewport` item.
  */
-function artifactStatus(
+export function artifactStatus(
   scope: ArtifactScope,
-  input: FulfillmentInput,
+  input: Pick<FulfillmentInput, 'ledger' | 'captureGap'>,
 ): Pick<RequirementStatus, 'status' | 'reason'> {
-  const captures = input.ledger.filter(
-    (entry): entry is CaptureEntry =>
-      entry.kind === 'capture' &&
-      entry.producer === DELIVERABLE_PRODUCER &&
-      satisfies(scope, entry.scope),
-  );
+  const captures = artifactCaptures(scope, input.ledger);
   if (captures.length === 0) {
     const gap = input.captureGap(scope);
     return {
@@ -453,7 +474,7 @@ function artifactStatus(
   return { status: 'met', reason: null };
 }
 
-function submitStatus(
+export function submitStatus(
   ledger: readonly ActionLedgerEntry[],
 ): Pick<RequirementStatus, 'status' | 'reason'> {
   const executed = ledger.filter(

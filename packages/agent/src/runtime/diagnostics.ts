@@ -17,6 +17,7 @@ import {
   formatAgentDuration,
   parseAgentCount,
   parseAgentDurationMs,
+  parseAgentTurnTimeoutMs,
   type EffectivePreferences,
   type KeychainProvider,
 } from '@yantra/core';
@@ -160,6 +161,11 @@ export async function runAgentDiagnostics(
     preference(prefs, 'agent.tool_timeout'),
     formatAgentDuration(DEFAULT_AGENT_BUDGETS.perToolTimeoutMs),
   );
+  const turnTimeout = resolveStoredValue(
+    env.YANTRA_AGENT_TURN_TIMEOUT,
+    preference(prefs, 'agent.turn_timeout'),
+    formatAgentDuration(DEFAULT_AGENT_BUDGETS.turnTimeoutMs),
+  );
   const retries = resolveStoredValue(
     env.YANTRA_AGENT_TOOL_RETRIES,
     preference(prefs, 'agent.tool_retries'),
@@ -174,6 +180,7 @@ export async function runAgentDiagnostics(
     duration,
     tokens,
     toolTimeout,
+    turnTimeout,
     retries,
     confirmTimeout,
   });
@@ -207,6 +214,7 @@ export async function runAgentDiagnostics(
           ? `Agent budgets: duration=${scalarText(duration.value)}(${duration.source}), ` +
             `tokens=${scalarText(tokens.value)}(${tokens.source}), ` +
             `tool-timeout=${scalarText(toolTimeout.value)}(${toolTimeout.source}), ` +
+            `turn-timeout=${scalarText(turnTimeout.value)}(${turnTimeout.source}), ` +
             `retries=${scalarText(retries.value)}(${retries.source}), ` +
             `confirm-timeout=${scalarText(confirmTimeout.value)}(${confirmTimeout.source}).`
           : `Invalid agent budget ${invalidBudgets.length === 1 ? 'setting' : 'settings'}: ` +
@@ -221,6 +229,7 @@ export async function runAgentDiagnostics(
         duration,
         tokens,
         toolTimeout,
+        turnTimeout,
         retries,
         confirmTimeout,
         ...(invalidBudgets.length === 0 ? {} : { invalid: invalidBudgets }),
@@ -291,6 +300,7 @@ function invalidBudgetSettings(resolved: {
   readonly duration: ResolvedValue;
   readonly tokens: ResolvedValue;
   readonly toolTimeout: ResolvedValue;
+  readonly turnTimeout: ResolvedValue;
   readonly retries: ResolvedValue;
   readonly confirmTimeout: ResolvedValue;
 }): readonly InvalidBudgetSetting[] {
@@ -311,6 +321,14 @@ function invalidBudgetSettings(resolved: {
       expected: 'a positive integer',
       envVar: 'YANTRA_AGENT_MAX_TOKENS',
       preferenceKey: 'agent.max_tokens',
+    },
+    {
+      setting: 'turn_timeout',
+      resolved: resolved.turnTimeout,
+      valid: parseAgentTurnTimeoutMs(resolved.turnTimeout.value) !== null,
+      expected: 'a duration of at least 10s',
+      envVar: 'YANTRA_AGENT_TURN_TIMEOUT',
+      preferenceKey: 'agent.turn_timeout',
     },
     {
       setting: 'tool_timeout',

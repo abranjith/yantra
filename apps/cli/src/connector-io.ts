@@ -187,7 +187,7 @@ export class CLIConnectorIO implements ConnectorIO {
         return;
       case 'tool_finished':
         opts.stream.write(
-          `[${event.tool}] ${event.status} â€” ${event.summary}` +
+          `[${event.tool}] ${event.status} — ${event.summary}` +
             `${event.durationMs === null ? '' : ` (${event.durationMs}ms)`}\n`,
         );
         return;
@@ -199,6 +199,10 @@ export class CLIConnectorIO implements ConnectorIO {
           `${event.revision === 1 ? 'understood' : 'understood (revised)'}: ` +
             `${stripControlCharacters(event.summary)}\n`,
         );
+        return;
+      case 'progress':
+      case 'recovery':
+        opts.errStream.write(`${event.type}: ${stripControlCharacters(event.summary)}\n`);
         return;
       case 'capability_gap':
         // FEAT-058: a declared item the run cannot deliver, disclosed right

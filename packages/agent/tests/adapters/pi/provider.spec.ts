@@ -16,6 +16,10 @@ import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import { defaultConfig, type YantraConfig } from '@yantra/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import {
+  createDefaultPiEventMapContext,
+  type PiEventMapContext,
+} from '../../../src/adapters/pi/event-map.js';
 import { PiAgentProvider, type PiSessionLike } from '../../../src/adapters/pi/provider.js';
 import {
   AgentAuthUnavailableError,
@@ -48,6 +52,11 @@ afterEach(async () => {
 class StubPiSession implements PiSessionLike {
   public readonly sessionId = 'pi-stub-session';
   public abortCount = 0;
+  public steers: string[] = [];
+  public steer(text: string): Promise<void> {
+    this.steers.push(text);
+    return Promise.resolve();
+  }
   public disposeCount = 0;
   public promptScript: (emit: (event: AgentSessionEvent) => void) => Promise<void> | void = () =>
     undefined;
@@ -138,7 +147,7 @@ interface Harness {
 }
 
 /** Build a provider against a hermetic custom model with runtime-key auth. */
-async function makeHarness(): Promise<Harness> {
+async function makeHarness(mapContext?: PiEventMapContext): Promise<Harness> {
   const dataDir = await makeTempDir('yantra-prov-data-');
   const runDir = await makeTempDir('yantra-prov-run-');
   const cwd = await makeTempDir('yantra-prov-cwd-');
@@ -147,6 +156,7 @@ async function makeHarness(): Promise<Harness> {
   let captured: unknown;
   let calls = 0;
   const provider = new PiAgentProvider({
+    ...(mapContext === undefined ? {} : { mapContext }),
     dataDir,
     config: hermeticConfig(),
     resolveSecret: () => Promise.resolve('sk-runtimeKEY0123456789abcdef'),
@@ -452,5 +462,82 @@ describe('@no-llm PiAgentProvider — abort and close', () => {
 
     await expect(session.abort()).resolves.toBeUndefined();
     await expect(session.run('go')).rejects.toBeInstanceOf(AgentSessionStartFailedError);
+  });
+});
+
+describe('@no-llm FEAT-059 steering and timing', () => {
+  it.each([true, false])(
+    'excludes tool execution from provider timing, output=%s',
+    async (output) => {
+      let time = 0;
+      const h = await makeHarness({
+        ...createDefaultPiEventMapContext(),
+        now: () => new Date(time).toISOString(),
+      });
+      const session = await h.provider.open(h.options);
+      const events: AgentEvent[] = [];
+      session.subscribe((e) => events.push(e));
+      h.stub.promptScript = (emit) => {
+        emit({ type: 'turn_start' } as AgentSessionEvent);
+        if (output) {
+          time = 900;
+          emit({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'toolcall_start' },
+          } as AgentSessionEvent);
+        }
+        time = 1000;
+        emit({ type: 'message_end', message: makeAssistantMessage('stop') } as AgentSessionEvent);
+        time = 4000;
+        emit({
+          type: 'turn_end',
+          message: {
+            ...makeAssistantMessage('stop'),
+            usage: { ...makeAssistantMessage('stop').usage, reasoning: 412 },
+          },
+          toolResults: [],
+        } as AgentSessionEvent);
+      };
+      const result = await session.run('act');
+      expect(events.find((e) => e.type === 'turn_finished')).toMatchObject({
+        timing: { thinkingMs: output ? 900 : 1000, providerMs: 1000 },
+        usage: { reasoningTokens: 412 },
+      });
+      expect(result.usage.reasoningTokens).toBe(412);
+      await session.close();
+    },
+  );
+  it('queues only while running, rejects commands, and measures provider time without tools', async () => {
+    const h = await makeHarness();
+    const session = await h.provider.open(h.options);
+    const events: AgentEvent[] = [];
+    session.subscribe((e) => events.push(e));
+    expect(await session.steer('Next: publish')).toBe('idle');
+    await expect(session.steer('/command')).rejects.toThrow();
+    h.stub.promptScript = async (emit) => {
+      expect(await session.steer('Next: publish')).toBe('queued');
+      emit({ type: 'turn_start' } as AgentSessionEvent);
+      emit({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_delta', delta: 'CANARY-THOUGHT-7f3a' },
+      } as AgentSessionEvent);
+      emit({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'toolcall_start' },
+      } as AgentSessionEvent);
+      emit({ type: 'message_end', message: makeAssistantMessage('stop') } as AgentSessionEvent);
+      emit({
+        type: 'turn_end',
+        message: makeAssistantMessage('stop'),
+        toolResults: [],
+      } as AgentSessionEvent);
+    };
+    await session.run('act');
+    expect(h.stub.steers).toEqual(['Next: publish']);
+    expect(events.filter((e) => e.type === 'turn_started')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'output_started')).toHaveLength(1);
+    expect(events.find((e) => e.type === 'turn_finished')).toHaveProperty('timing');
+    expect(JSON.stringify(events)).not.toContain('CANARY-THOUGHT-7f3a');
+    await session.close();
   });
 });

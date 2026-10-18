@@ -53,6 +53,21 @@
                 ],
                 "description": "Nullable estimated cost in USD."
               },
+              "reasoning_tokens": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Reasoning tokens (a subset of output), when reported."
+              },
+              "thinking_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Turn start to first output, excluding tool time."
+              },
+              "provider_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Turn start to assistant message end, excluding tool time."
+              },
               "latency_ms": {
                 "type": "integer",
                 "minimum": 0,
@@ -122,6 +137,18 @@
         "agent": {
           "type": "object",
           "properties": {
+            "reasoning_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reasoning tokens, or null when unreported."
+            },
             "turns": {
               "type": "integer",
               "minimum": 0,

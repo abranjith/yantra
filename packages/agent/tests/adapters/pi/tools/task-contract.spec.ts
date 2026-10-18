@@ -6,6 +6,7 @@ import { TaskContractRecord } from '@yantra/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { taskContractSpec } from '../../../../src/adapters/pi/tools/task-contract.js';
+import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../../../src/runtime/budget.js';
 import { wrapTool, type WrappedTool } from '../../../../src/runtime/middleware.js';
 import type { RunServices } from '../../../../src/runtime/run-services.js';
 import { TaskContractStore } from '../../../../src/runtime/task-contract.js';
@@ -365,3 +366,21 @@ describe('@no-llm task_contract action terms (FEAT-054)', () => {
     expect(await exists(join(hard.dir, 'contract.json'))).toBe(false);
   });
 });
+
+it.each([900000, Infinity])(
+  'FEAT-059 reports exploration and publication seconds for %s ms',
+  async (wallClockMs) => {
+    const { services: base } = await setup();
+    const services = {
+      ...base,
+      budgets: new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, wallClockMs }, () => 0),
+    };
+    const result = await wrapTool(taskContractSpec(services), services).execute(VALID, undefined);
+    const model = JSON.parse(result.modelText) as { time: unknown };
+    expect(model.time).toEqual(
+      wallClockMs === Infinity
+        ? { exploration_remaining_s: null, publication_headroom_s: null }
+        : { exploration_remaining_s: 720, publication_headroom_s: 180 },
+    );
+  },
+);

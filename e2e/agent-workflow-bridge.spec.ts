@@ -139,6 +139,10 @@ class ScenarioSession implements AgentSession {
     this.tools = new Map(buildYantraWrappedTools(services).map((tool) => [tool.name, tool]));
   }
 
+  public steer(_text: string): Promise<'queued' | 'idle'> {
+    return Promise.resolve('queued');
+  }
+
   public async run(_prompt: string): Promise<AgentRunResult> {
     if (this.runIndex === 0) await this.scenario(this);
     this.runIndex += 1;

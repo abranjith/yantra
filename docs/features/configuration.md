@@ -422,6 +422,7 @@ YANTRA_AGENT_PROVIDER
 YANTRA_AGENT_THINKING
 YANTRA_AGENT_TOOL_RETRIES
 YANTRA_AGENT_TOOL_TIMEOUT
+YANTRA_AGENT_TURN_TIMEOUT
 YANTRA_CACHE_DIR
 YANTRA_DATA_DIR
 YANTRA_HOME
@@ -443,6 +444,7 @@ YANTRA_LOG_LEVEL
 | `YANTRA_AGENT_MAX_DURATION`    | Below `--max-duration`, above the profile value and default `15m`; accepts a positive integer with `ms`, `s`, `m`, or `h`, or bare milliseconds. |
 | `YANTRA_AGENT_MAX_TOKENS`      | Below `--max-tokens`, above the profile value and default `2000000`; must be a positive integer.                                                 |
 | `YANTRA_AGENT_TOOL_TIMEOUT`    | Below `--tool-timeout`, above the profile value and default `3m`; uses the duration grammar above.                                               |
+| `YANTRA_AGENT_TURN_TIMEOUT`    | For `do`, below `--turn-timeout`, above `agent.turn_timeout` and default `2m`; uses the duration grammar above with a minimum of `10s`.          |
 | `YANTRA_AGENT_TOOL_RETRIES`    | Below `--tool-retries`, above the profile value and default `3`; must be a non-negative integer.                                                 |
 | `YANTRA_AGENT_CONFIRM_TIMEOUT` | Below `--confirm-timeout`, above the profile value and default `3m`; uses the duration grammar above.                                            |
 
@@ -454,8 +456,15 @@ not an environment setting: it is the `agent.research_browse` preference in
 `profile.yaml` (see [Profiles and history](profiles-and-history.md)),
 overridden for one run by `research --no-browse`.
 
+`agent.turn_timeout` is a `profile.yaml` preference. Set it with
+`yantra prefs set agent.turn_timeout 3m`, or override it for one run with
+`yantra do --turn-timeout 3m "<goal>"`. It bounds thinking before the first output
+of each provider turn in `do`; output clears that timer, while the hard run
+deadline still applies. `ask` and `research` observe progress without enforcing
+this limit and do not register `--turn-timeout`.
+
 Unlike `profile.yaml`, these variables are not schema-validated when they are
-set, so a typo in one of the five budget variables would otherwise only surface
+set, so a typo in one of the six budget variables would otherwise only surface
 when an agentic command refused to start. `yantra doctor` validates them
 against the same grammar and fails the `agent.budgets` check, naming the
 variable to correct.

@@ -220,7 +220,7 @@ Out of scope:
 
 ### TASK-001: The provider seam can steer a running session and reports turn start, first output, per-turn timing, and reasoning tokens, without carrying thought text
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `provider/types.ts`:
     - add `steer`, the two events, `reasoningTokens`, and `turn_finished.timing` (§2);
     - update the header so steering is no longer listed as excluded, naming FEAT-059 as its consumer. Thinking deltas stay excluded.
@@ -241,7 +241,7 @@ Out of scope:
     - emit `turn_started` before and `output_started` at each call step;
     - add `{ kind: 'think'; ms: number }`, which emits `turn_started` and then waits `ms` unless `abort()` resolves first (then the run ends `aborted`);
     - record steers, and expose `ScriptContext.steers(): readonly string[]` so a `when` guard can follow a steer.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Event map table: `turn_start` → one `turn_started`. `thinking_start`/`thinking_delta` → none. The first `toolcall_start` → one `output_started`, and a second `text_start` in the same turn → none. A new `turn_start` resets the latch. `usage.reasoning: 412` → `reasoningTokens: 412`; absent → key absent.
   - Adapter with a stub `PiSessionLike`:
     - `steer` while idle → `'idle'` and 0 SDK calls;
@@ -252,30 +252,30 @@ Out of scope:
   - Canary: a raw `thinking_delta` carrying `CANARY-THOUGHT-7f3a` never appears in any emitted seam event (serialize all and scan).
   - Seam type test (`tests/provider/types.spec.ts`): the fake and the real session both satisfy `AgentSession` (compile-time plus a runtime `typeof session.steer === 'function'`).
   - Boundary test (`tests/boundaries/imports.spec.ts`) still passes: no SDK import outside `adapters/pi/`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the provider seam now carries steering and turn timing; thinking text stays excluded).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the provider seam now carries steering and turn timing; thinking text stays excluded).
 - **Verify**: `cd packages/agent && npx vitest run tests/adapters/pi tests/provider tests/boundaries`; `npm run typecheck` in `packages/agent` (it covers `tests/provider` and `tests/adapters`, per memory).
 
 ### TASK-002: The protocol carries the new termination reasons, the run-health progress block, per-turn timing, and the thinking source, and every older artifact still parses
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `task-outcome.ts`: add `stalled` and `turn-timeout` to `TerminationReason`, with `.describe()` text.
   - `run-health.ts`: optional `progress` (§2) with `.describe()` on every field, and a refinement that `recovery.rungs` is a prefix of the ladder order.
   - `usage.ts`: optional `UsageCall.reasoning_tokens`, `thinking_ms`, and `provider_ms`; optional `AgentUsageTotals.reasoning_tokens` (nullable).
   - `agent-manifest.ts`: optional `thinking_source` enum and `budgets.turn_timeout_ms`.
   - Regenerate JSON Schema and commit the generated files.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - A `run-health.json`, a `usage.json`, and a manifest written before this feature (copy real FEAT-048-era fixtures) parse unchanged.
   - `progress` with `rungs: ['freeze']` rejects (not a prefix). `rungs: ['steer', 'freeze']` parses.
   - `progress.items` with a `label` key rejects (strict object), which pins "counts and codes only".
   - `TerminationReason.parse('turn-timeout')` and `parse('stalled')` succeed.
   - Generated-schema drift test passes.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (run-health `progress`, usage timing fields, the new termination reasons, `thinking_source`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (run-health `progress`, usage timing fields, the new termination reasons, `thinking_source`).
 - **Verify**: `cd packages/protocol && npx vitest run`; `npx turbo run build --filter=@yantra/protocol`; `git diff --stat packages/protocol/generated` lists only the four schemas.
 - **Depends on**: FEAT-054 TASK-001
 
 ### TASK-003: A run-scoped progress ledger turns in-memory run state into progress signals and live contract items, and writes its summary to `run-health.json` for every command
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - New `runtime/progress-ledger.ts`: `ProgressLedger` constructed with `ProgressSources`, a `NowMs` clock, and `mode`.
     - `checkpoint(boundary: { tool; role: 'counted' | 'bookkeeping'; at })`:
       - a `bookkeeping` boundary returns `{ advanced: false, signals: [] }` and touches no counter;
@@ -291,7 +291,7 @@ Out of scope:
   - `orchestrator.ts`: on every `tool_finished`, call `services.progress.checkpoint` with the spec's role (looked up from the run's registered spec table, never from the tool name string). Pass `services.progress.summary()` into `runHealth.summary` as `progress`.
   - `run-health.ts`: `summary()` accepts `progress` and emits it when present.
   - Log one `progress_checkpoint` runtime line per **advancing** checkpoint only (signals, counts; no labels, no URLs).
-- [ ] **Unit Tests** (`progress-ledger.spec.ts`, factories for sources):
+- [x] **Unit Tests** (`progress-ledger.spec.ts`, factories for sources):
   - Re-extracting a known URL (document count unchanged, same page URL) → no signal, `noProgressCalls` 1 → 2.
   - A `workflow_run` listing with no ledger, document, or page change → no signal.
   - A refused navigation (page unchanged) → no signal.
@@ -304,13 +304,13 @@ Out of scope:
   - STUB path: no `fillCoverage` → fill item `pending`, `done: null`, and progress still registers via `action_verified`.
   - `summary()` passes `RunHealth.shape.progress` parsing and contains no label text (scan for the fixture's labels → none).
   - Observe mode: a `research` run's `run-health.json` carries `progress.mode: 'observe'`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (what counts as progress; the run-health `progress` block).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (what counts as progress; the run-health `progress` block).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/progress-ledger.spec.ts tests/runtime/run-health.spec.ts`; also run `tests/runtime` in full, because runtime suites are not typechecked (memory).
 - **Depends on**: TASK-002, FEAT-054 TASK-004/TASK-005
 
 ### TASK-004: The budget exposes exploration time separately from publication headroom, can freeze exploration, and keeps the requested capture callable late in the run
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `budget.ts`:
     - `explorationRemainingMs()` = max(0, soft boundary − elapsed); `publicationHeadroomMs()` = wall clock × (1 − soft fraction). Both are `Infinity`-safe for unbounded runs: they return `null`, rendered as "unbounded".
     - `freezeExploration()`: after it, `reserveCall` refuses every non-terminal call that is not wind-down-exempt with a `BudgetDecision` whose `limit` is `'stalled'`. The message reads: "No task progress after the recovery message. Exploration is closed for this run: call result_publish now, and list each unmet requirement with its reason." `carriesPublishRemedy: true`. Idempotent. `isFrozen()`.
@@ -320,20 +320,20 @@ Out of scope:
   - `orchestrator.ts`: `RUN_FATAL_BUDGET_LIMITS` stays `{'wall-clock'}`, so `stalled` is not run-fatal.
   - `adapters/pi/tools/task-contract.ts`: add `time: { exploration_remaining_s, publication_headroom_s }` (ints or null) to the model result (S9).
   - `messages.ts`: catalog entry `BUDGET_EXHAUSTED / stalled` with capability `result_publish`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Injectable clock, 15-minute wall clock, 0.8 soft fraction: at 5 min, exploration remaining 7 min and headroom 3 min; at 13 min, 0 and 3 min; unbounded → both null.
   - After `freezeExploration()`: `web_fetch` is refused with limit `stalled`; `result_publish` and `task_contract` are reserved; `refusedAfterFreeze()` counts 1 then 2.
   - S8: with one unmet viewport artifact, after the soft boundary, the first capture is reserved and the second is refused (`wall-clock-soft`); with the artifact met → the first capture is refused; past the hard boundary → refused.
   - The `task_contract` result carries `time` with the expected integers.
   - `isRunFatalBudget('stalled') === false`.
   - The hint-capability catalog test resolves `result_publish` for `stalled`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (exploration time vs publication headroom; why a requested screenshot is still allowed during wind-down).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (exploration time vs publication headroom; why a requested screenshot is still allowed during wind-down).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/budget.spec.ts tests/runtime/middleware.spec.ts tests/adapters/pi/tools/task-contract.spec.ts tests/runtime/message-catalog.spec.ts`.
 - **Depends on**: TASK-003, FEAT-054 TASK-002
 
 ### TASK-005: In `do`, a semantic stall triggers one recovery steer naming a supported next move, then a freeze, then an honest stop
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - New `runtime/recovery.ts`:
     - `STALL_POLICY = { noProgressCalls: 6, minCallsForTime: 2, noProgressMs: 120_000 }` and pure `isStalled(checkpoint, softReached)` (S3).
     - `RECOVERY_LADDER` (S4) and `RecoveryRunner`:
@@ -364,7 +364,7 @@ Out of scope:
     - runtime log lines: `stall_detected` (calls, ms, live-item counts), `recovery_rung` (rung, trigger, move id), `exploration_frozen`.
   - `profiles.ts`: the `do` addendum gains one sentence: "If Yantra sends a progress check, follow its Next step or publish what you have; it is sent at most once." Bump `PROMPT_VERSION` to the next version.
   - The identical-failure breaker is unchanged and still checked first.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `isStalled` table:
     - 6 calls in 20 s → stalled;
     - 5 calls in 20 s → not stalled;
@@ -386,13 +386,13 @@ Out of scope:
     - autocomplete settling: fill an autocomplete field, observe, click the option (verified), and observe → no steer;
     - a click-through task (navigate, click into a new URL, extract 4 times over 3 minutes) → one steer naming `result_publish` (non-form protection);
     - `research` profile with the same empty-call sequence → 0 steers, `progress.mode: 'observe'`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/recovery-as-declarative-data.md` (the run-level recovery ladder) and `docs/features/agentic-tasks.md` (what a progress check is and when a run is stopped).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/recovery-as-declarative-data.md` (the run-level recovery ladder) and `docs/features/agentic-tasks.md` (what a progress check is and when a run is stopped).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/recovery.spec.ts tests/runtime/orchestrator-progress.spec.ts tests/runtime/message-catalog.spec.ts tests/runtime/profiles.spec.ts`.
 - **Depends on**: TASK-001, TASK-003, TASK-004
 
 ### TASK-006: A `do` provider turn that thinks longer than `turn_timeout` is aborted through the SDK and the same session is re-prompted with the recovery message
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Budget plumbing (S5):
     - `AgentBudgetConfig.turnTimeoutMs` (default 120,000);
     - core `profile-file.ts`: `agent.turn_timeout: agentDurationSchema.default('2m')` and its key-list and listing rows;
@@ -412,7 +412,7 @@ Out of scope:
     - a user abort or the wall clock during the re-prompt behaves exactly as today;
     - `ExecutionState.turnTimeout: { thinkingMs } | undefined` is set on `stop`.
   - The recorder counts `turn_limit_aborts` for `run-health.json`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Duration grammar: `2m` → 120,000; `5s` → rejected by the floor; the schema and the parser accept exactly the same strings (memory: pin agreement).
   - CLI: `do --turn-timeout 3m` resolves 180,000 from the flag. `research --turn-timeout 3m` fails as an unknown option. Doctor reports the value and source.
   - Orchestrator with the fake provider and a fake timer (`orchestrator-turn-limit.spec.ts`):
@@ -424,30 +424,30 @@ Out of scope:
     - `research` with a 5-minute thinking turn → no abort (observe mode);
     - a user abort during the re-prompt → `aborted`.
   - `prompt.spec.ts`: the thinking line is present for `do` and absent for `research`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (`--turn-timeout`) and `docs/features/configuration.md` (`agent.turn_timeout`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (`--turn-timeout`) and `docs/features/configuration.md` (`agent.turn_timeout`).
 - **Verify**: `npx turbo run build --filter=@yantra/core`; `cd packages/core && npx vitest run tests/profile`; `cd packages/agent && npx vitest run tests/runtime/orchestrator-turn-limit.spec.ts tests/runtime/diagnostics.spec.ts tests/runtime/prompt.spec.ts`; `cd apps/cli && npx vitest run tests/agent-options.spec.ts tests/commands/do.spec.ts`. Manually, `yantra do --turn-timeout 15s "<goal>" --thinking high` against a real model shows `recovery: thinking exceeded 15s; …` on stderr when a turn runs long.
 - **Depends on**: TASK-001, TASK-005
 
 ### TASK-007: A run stopped by the ladder ends with a truthful outcome, termination reason, failure class, and first line
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `orchestrator.ts` `resolveTerminalOutcome`:
     - after the existing breaker check and FEAT-054's published-Brief precedence (S4), `state.stalled` → `failed` with `{ code: 'AGENT_STALLED', message }`. The message is built from the ledger: "Stopped: no task progress after one recovery message (fields 10/48 filled; viewport screenshot not captured). Nothing was published."
     - `state.turnTimeout` → `failed` with `AGENT_TURN_TIMEOUT`: "Stopped: provider turns kept exceeding the 2m thinking limit. Raise --turn-timeout or lower --thinking."
   - Termination reason: `stalled` or `turn-timeout` when the respective interrupt fired. A published Brief keeps the reason, so a `partial` reads `Partial: … (stopped: no progress after recovery)`.
   - `outcome.ts` (FEAT-054): `failureClassFor` maps per S7. `outcomeFirstLine` appends `(stopped: no progress after recovery)` or `(stopped: thinking limit)` to a `partial` line when the reason is one of these.
   - `messages.ts`: `AGENT_STALLED` and `AGENT_TURN_TIMEOUT` entries. The turn-timeout remedy names the two flags that exist (`--turn-timeout`, `--thinking`), and the hint-capability test checks both are registered on `do`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The table over `{stalled, turn-timeout} × {Brief published, none}` → outcome, exit code (2 for all), manifest status, failure class, termination reason, and first line.
   - Precedence: a repeated identical failure and a stall in the same run → the breaker's failure (unchanged); a user abort after a stall → `aborted`.
   - First-line goldens stay ≤ 240 chars plus the path.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (what `stopped: no progress after recovery` and `stopped: thinking limit` mean).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (what `stopped: no progress after recovery` and `stopped: thinking limit` mean).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/outcome.spec.ts tests/runtime/orchestrator-progress.spec.ts tests/runtime/orchestrator-turn-limit.spec.ts tests/runtime/message-catalog.spec.ts`.
 - **Depends on**: TASK-005, TASK-006, FEAT-054 TASK-008
 
 ### TASK-008: Progress and recovery are visible on stderr and in `--json`, and no source file carries the double-encoded em dash
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `connector.ts`: the `progress` and `recovery` variants (§2).
   - `orchestrator.ts`:
     - after each checkpoint, emit `progress` when `changedItems` is non-empty, i.e. when a live item's state or count changed, and at most once per checkpoint;
@@ -460,36 +460,36 @@ Out of scope:
   - S10: fix the same byte sequence in `apps/cli/src/commands/do.ts`, `apps/cli/src/commands/template.ts`, `packages/core/src/synthesis/evidence/figures.ts` (3 occurrences), `apps/cli/tests/connector-io.spec.ts`, and `e2e/golden-briefs.spec.ts` (2 occurrences). Write with an editor or a script using `newline=''` (memory: Python edits write CRLF on Windows; never a bash heredoc), then check `git ls-files --eol` for those files.
   - New `packages/agent/tests/boundaries/encoding.spec.ts`: walk the repository (`.ts`, `.md`, `.json`, `.yaml`; skipping `node_modules`, `dist`, `.turbo`, `coverage`) and fail on the byte sequence `[0xC3, 0xA2, 0xE2, 0x82, 0xAC]`. The pattern is built with `Buffer.from([...])`, never written as raw bytes (memory: escape notation only).
   - Update TODO line 323 to resolved, naming FEAT-059.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `renderProgressLine` goldens: fill only, fill plus artifact plus effects, 5 items → `+2 more`, null counts → `fields pending`.
   - Connector: the stderr lines are byte-exact; `--json` records contain `type: 'progress'` with `items[].done`; nothing goes to stdout.
   - Emission: a checkpoint with no item change emits no `progress`; 9 commits then 10 more emit two events (`9/48`, `19/48`).
   - The encoding boundary test passes after the fix, and fails on a temporary fixture string containing the sequence built from bytes (in-test, not committed).
   - Rebuilt Brief goldens: `figures.ts` output and `golden-briefs.spec.ts` agree byte for byte.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (`progress:` and `recovery:` stderr lines; `--json` progress events).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/usage.md` (`progress:` and `recovery:` stderr lines; `--json` progress events).
 - **Verify**: `npx turbo run build --filter=@yantra/core --filter=@yantra/agent`; `cd apps/cli && npx vitest run tests/connector-io.spec.ts`; `cd packages/agent && npx vitest run tests/boundaries`; the `e2e` suite (golden Briefs and `format.spec.ts`).
 - **Depends on**: TASK-003, TASK-005
 
 ### TASK-009: Every provider turn records reasoning tokens, thinking time, and provider time, and the thinking level's source is recorded, without persisting thought text
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `run-recorder.ts`:
     - on `turn_finished`, add `reasoning_tokens` (when reported), `thinking_ms`, and `provider_ms` (when `timing` is present) to the `usage.json` call. `latency_ms` is unchanged, and its comment is updated to name the new fields as the provider-only split;
     - the agent totals add `reasoning_tokens` (null when no turn reported it);
     - write `agent.thinking_source` and `agent.budgets.turn_timeout_ms` into the manifest.
   - `apps/cli/src/agent-options.ts` / the invocation resolver: return the source of the effective thinking level (`flag`, `environment`, `preference`, or `default`) beside the level; the orchestrator request carries it to the recorder. The level itself is resolved exactly as today.
   - `run-health.ts`: `progress.turns` from the recorder's per-turn records (count, with timing, thinking totals and max, provider total, reasoning tokens, turn-limit aborts).
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Recorder: a turn with `reasoningTokens: 900` and timing → the `usage.json` call carries all three fields; a provider without reasoning → the key is absent and totals `reasoning_tokens: null`; an old-shape `turn_finished` (no timing) → the call is unchanged from today's shape.
   - `thinking_source`: `--thinking low` → `flag`; profile `agent.thinking: medium` → `preference`; nothing → `default`, and the level is still `high` (unchanged default).
   - Privacy: a fake session whose raw provider events include a thinking canary → after the run, a byte scan of `usage.json`, `run-health.json`, `manifest.json`, `runtime.jsonl`, `tool-calls.jsonl`, `events.jsonl`, and `report.md` finds 0 hits. The raw provider session file is excluded, as it legitimately holds the transcript.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (per-turn reasoning and timing in `usage.json`; `thinking_source`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (per-turn reasoning and timing in `usage.json`; `thinking_source`).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/run-recorder.spec.ts tests/runtime/run-health.spec.ts`; `cd apps/cli && npx vitest run tests/agent-options.spec.ts`.
 - **Depends on**: TASK-001, TASK-002
 
 ### TASK-010: The task-fidelity harness pins FEAT-059 on form and non-form `do` tasks
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Scenarios (`command: 'do'` unless stated; deterministic tier; owner `FEAT-059`; synthetic fixtures only, reusing FEAT-054's `test-form` and FEAT-057's `forty-controls` where present):
     1. `do-progress-stall-recovers`: navigate to the form; extract twice; run `workflow_run` listing (empty); navigate to a disallowed URL (refused); with the harness clock advanced past 120 s → a steer received. A `when: ctx.steers().length > 0` step fills the refs the steer names, captures, and publishes. Expect one `recovery` event (`steer`), `progress` events with rising fill counts, and `progress.recovery.rungs: ['steer']` in run health.
     2. `do-progress-stall-ignored`: the same start; the script ignores the steer and keeps extracting → freeze → 2 refused calls → stop. Expect `failed`, `AGENT_STALLED`, termination reason `stalled`, exit 2, and 0 submissions.
@@ -502,11 +502,11 @@ Out of scope:
     9. `research-progress-observe`: the scenario-1 empty-call pattern under `research`. Expect 0 steers, the outcome unchanged from today's baseline, and `progress.mode: 'observe'`.
   - Every scenario asserts `--json` progress records and a byte scan of captured stderr (no `0xC3 0xA2 0xE2 0x82 0xAC`, no raw control byte).
   - Add `'FEAT-059'` to `OWNERS`; keep it in `PENDING_OWNERS` until TASK-001–TASK-009 land. Scenarios needing FEAT-057's `fillCoverage` (1, 4) stay pending under FEAT-057 until it lands.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Each scenario's expectations run under the harness's deterministic spec.
   - A byte scan over the new scenario and fixture sources finds no control bytes (memory).
   - The scripted provider's `think` step resolves early on `abort()` (unit-tested in the harness's own spec, Vitest-free modules per memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the FEAT-059 progress and turn-limit scenarios; the `think` step and `steers()`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the FEAT-059 progress and turn-limit scenarios; the `think` step and `steers()`).
 - **Verify**: `npx turbo run build`; `pnpm eval:tasks` (deterministic tier) green with FEAT-059 live; `npx turbo run lint typecheck`; the full `e2e` suite (memory: the repo-wide gate, not a per-package subset).
 - **Depends on**: TASK-001 through TASK-009
 
@@ -546,17 +546,38 @@ Out of scope:
 
 > Captured by hooks (`capture-baseline` / `capture-changeset`), not hand-maintained. See `.spec-lite/features/FEAT-059-contract_item_progress/changeset.json`, which is the authoritative deterministic review scope.
 
+### Implementation clarifications
+
+- FEAT-057 and FEAT-058 are implemented: live fill counts use the real cached census and the producer is browser_capture; no fill stub remains.
+- Late capture reservations are keyed by declared artifact identity and requested scope rather than a single aggregate counter. This preserves the one-attempt-per-item bound when one of several requested scopes becomes met.
+- Recovery offers capture for viewport/full_page only: an element capture also requires an observed target ref that the declared artifact does not identify. It safely falls back to publication instead of recommending an incomplete tool call.
+- The existing pnpm eval:tasks command is the live-provider tier. Deterministic verification uses e2e/task-fidelity.spec.ts; it does not start a paid model benchmark.
+- The schema generator emits run-health and usage-ledger as standalone roots. Manifest and outcome additions are verified in their source schemas and compatibility tests; no new generated root is introduced.
+- Fresh-run scorecard and manifest expectations now use agent-v14; historical agent-v13 fixtures remain valid.
+- The repository byte guard also found existing corrupt punctuation in two older planning documents and test-helper package metadata. Those punctuation bytes were corrected so the repository-wide scan can pass.
+
 ## 8. State Tracking
 
-- [ ] TASK-001: Provider seam steering, turn events, timing, reasoning tokens (no thought text)
-- [ ] TASK-002: Protocol: termination reasons, run-health `progress`, usage timing, `thinking_source`
-- [ ] TASK-003: Progress ledger from in-memory signals; run-health summary for every command (STUB fill counts until FEAT-057 TASK-005)
-- [ ] TASK-004: Exploration time vs publication headroom, exploration freeze, capture reservation
-- [ ] TASK-005: Semantic stall detection and the steer, freeze, stop ladder in `do`
-- [ ] TASK-006: Provider-turn thinking limit (`--turn-timeout`, `agent.turn_timeout`) with SDK abort and re-prompt
-- [ ] TASK-007: Truthful outcomes for `stalled` and `turn-timeout`
-- [ ] TASK-008: `progress`/`recovery` events on stderr and `--json`; em-dash fix and byte-scan boundary
-- [ ] TASK-009: Per-turn reasoning and timing telemetry; `thinking_source`
-- [ ] TASK-010: Task-fidelity scenarios pin FEAT-059
+- [x] TASK-001: Provider seam steering, turn events, timing, reasoning tokens (no thought text)
+- [x] TASK-002: Protocol: termination reasons, run-health `progress`, usage timing, `thinking_source`
+- [x] TASK-003: Progress ledger from in-memory signals; run-health summary for every command
+- [x] TASK-004: Exploration time vs publication headroom, exploration freeze, capture reservation
+- [x] TASK-005: Semantic stall detection and the steer, freeze, stop ladder in `do`
+- [x] TASK-006: Provider-turn thinking limit (`--turn-timeout`, `agent.turn_timeout`) with SDK abort and re-prompt
+- [x] TASK-007: Truthful outcomes for `stalled` and `turn-timeout`
+- [x] TASK-008: `progress`/`recovery` events on stderr and `--json`; em-dash fix and byte-scan boundary
+- [x] TASK-009: Per-turn reasoning and timing telemetry; `thinking_source`
+- [x] TASK-010: Task-fidelity scenarios pin FEAT-059
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Implementation Verification
+
+- Workspace build: 6 tasks passed. Workspace lint and typecheck: 12 tasks passed.
+- Full offline suite: protocol 351, test helpers 10, core 3,688, agent 1,419, and CLI 604 tests passed (existing skips retained).
+- Full end-to-end run: 607 tests passed with one existing skip. Three failures identified the fresh prompt-version fixtures and listed-field progress counts. All three passed on the focused rerun (19 tests), after rebuilding the workspace.
+- Final runtime checks: 117 tests passed across fulfillment, progress, budgets, messages, and recovery; the additional listed-field regression and shared fulfillment suite passed 53 tests. Listed-field counts now share publication's verified-name matching and ignore duplicate or unrelated commits.
+- All nine FEAT-059 scenarios are live. Recovery keeps the full all-fields contract and can publish an honest partial result; its steer names observed refs. Research remains observe-only.
+- Documentation update completed for architecture, feature docs, usage, and README. Generated protocol output and the repository encoding guard are current.
+- The manual live-model timeout check was not run: the local doctor reports no configured provider credential. Scripted same-session abort/re-prompt and turn-limit termination are covered by unit and deterministic end-to-end tests.
+- No new durable memory instructions qualified for capture.

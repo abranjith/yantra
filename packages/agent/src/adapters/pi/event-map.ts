@@ -17,6 +17,8 @@ import type { AgentError, AgentEvent, AgentUsage } from '../../provider/types.js
  * Sanitization/clock dependencies, injectable for tests.
  */
 export interface PiEventMapContext {
+  /** Per-session first-output latch, reset at each turn. */
+  outputSeen?: boolean;
   /** Sanitize an arbitrary payload for seam emission. */
   readonly sanitizePayload: (payload: unknown) => unknown;
   /** Sanitize a text fragment for seam emission. */
@@ -71,6 +73,8 @@ export function createDefaultPiEventMapContext(): PiEventMapContext {
  *
  * | Pi event                | Seam event        | Notes                                    |
  * | ----------------------- | ----------------- | ---------------------------------------- |
+ * | `turn_start`            | `turn_started`    | reset the first-output latch             |
+ * | `message_update`        | `output_started`  | first text/tool-call start of the turn   |
  * | `tool_execution_start`  | `tool_started`    | args sanitized                           |
  * | `tool_execution_end`    | `tool_finished`   | result sanitized, `isError` passthrough  |
  * | `message_update`        | `assistant_text`  | `text_delta` fragments only              |
@@ -95,6 +99,9 @@ export function createDefaultPiEventMapContext(): PiEventMapContext {
  */
 export function mapPiEvent(event: AgentSessionEvent, ctx: PiEventMapContext): AgentEvent[] {
   switch (event.type) {
+    case 'turn_start':
+      ctx.outputSeen = false;
+      return [{ type: 'turn_started', at: ctx.now() }];
     case 'tool_execution_start':
       return [
         {
@@ -124,6 +131,13 @@ export function mapPiEvent(event: AgentSessionEvent, ctx: PiEventMapContext): Ag
       // detection here; the authoritative guarantee is that secrets never
       // enter the model in the first place (opaque refs + tool middleware).
       const streamEvent = event.assistantMessageEvent;
+      if (
+        (streamEvent.type === 'text_start' || streamEvent.type === 'toolcall_start') &&
+        !ctx.outputSeen
+      ) {
+        ctx.outputSeen = true;
+        return [{ type: 'output_started', at: ctx.now() }];
+      }
       if (streamEvent.type === 'text_delta') {
         return [
           { type: 'assistant_text', text: ctx.sanitizeText(streamEvent.delta), at: ctx.now() },
@@ -202,6 +216,7 @@ function usageOfTurn(message: unknown): AgentUsage {
     turns: 1,
     ...(typeof usage.input === 'number' ? { inputTokens: usage.input } : {}),
     ...(typeof usage.output === 'number' ? { outputTokens: usage.output } : {}),
+    ...(typeof usage.reasoning === 'number' ? { reasoningTokens: usage.reasoning } : {}),
     ...(typeof usage.cost?.total === 'number' ? { costUsd: usage.cost.total } : {}),
   };
 }
@@ -213,6 +228,7 @@ interface AssistantMessageShape {
   readonly usage?: {
     readonly input?: unknown;
     readonly output?: unknown;
+    readonly reasoning?: unknown;
     readonly cost?: { readonly total?: unknown };
   };
 }

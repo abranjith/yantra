@@ -16,6 +16,7 @@ Stable agent metadata embedded in manifest.json for one run-local session.
 | provider          | Effective model provider identifier.                                                                         |
 | model             | Effective provider-scoped model identifier.                                                                  |
 | thinking          | Effective model thinking or reasoning level.                                                                 |
+| thinking_source   | Origin of the effective thinking level.                                                                      |
 | auth_source       | Credential source used to open the session; never credential material.                                       |
 | session_id        | Provider-assigned session identifier.                                                                        |
 | session_file      | Relative path from the run directory to the provider session JSONL.                                          |
@@ -35,6 +36,7 @@ Example:
   "provider": "<provider>",
   "model": "<model>",
   "thinking": "<thinking>",
+  "thinking_source": "<thinking_source>",
   "auth_source": "<auth_source>",
   "session_id": "<session_id>",
   "session_file": "<session_file>",
@@ -53,6 +55,7 @@ Effective budgets for one agentic run.
 
 | Field                    | Description                                                    |
 | ------------------------ | -------------------------------------------------------------- |
+| turn_timeout_ms          | Maximum thinking time per provider turn in milliseconds.       |
 | wall_clock_ms            | Run wall-clock budget, or null if unbounded.                   |
 | soft_wall_clock_fraction | Fraction of the wall clock after which exploration winds down. |
 | max_provider_tokens      | Provider-token budget, or null if unbounded.                   |
@@ -64,6 +67,7 @@ Example:
 
 ```json
 {
+  "turn_timeout_ms": "<turn_timeout_ms>",
   "wall_clock_ms": "<wall_clock_ms>",
   "soft_wall_clock_fraction": "<soft_wall_clock_fraction>",
   "max_provider_tokens": "<max_provider_tokens>",
@@ -77,17 +81,19 @@ Example:
 
 Aggregated provider usage for an agentic run.
 
-| Field         | Description                                                          |
-| ------------- | -------------------------------------------------------------------- |
-| turns         | Completed provider turns.                                            |
-| input_tokens  | Agent input tokens, or null when the provider does not report them.  |
-| output_tokens | Agent output tokens, or null when the provider does not report them. |
-| cost_usd      | Agent cost in USD, or null when the provider does not report it.     |
+| Field            | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| reasoning_tokens | Reasoning tokens, or null when unreported.                           |
+| turns            | Completed provider turns.                                            |
+| input_tokens     | Agent input tokens, or null when the provider does not report them.  |
+| output_tokens    | Agent output tokens, or null when the provider does not report them. |
+| cost_usd         | Agent cost in USD, or null when the provider does not report it.     |
 
 Example:
 
 ```json
 {
+  "reasoning_tokens": "<reasoning_tokens>",
   "turns": "<turns>",
   "input_tokens": "<input_tokens>",
   "output_tokens": "<output_tokens>",
@@ -1677,6 +1683,7 @@ An agentic run's own health summary (run-health.json): searches, fetches, source
 | browser         | Browser processes.                                                                          |
 | budgets         | Run budget consumption.                                                                     |
 | tool_failures   | Tool failures across every tool.                                                            |
+| progress        | Semantic progress, recovery and turn telemetry; absent on older runs.                       |
 | notices         | Runtime-derived notices attached to the published document; 0 when nothing was published.   |
 | extraction      | Shape-aware extraction (FEAT-051): pages by shape, records, and links.                      |
 | capture         | Both capture capabilities with reason codes, and what deliverable capture wrote (FEAT-058). |
@@ -1693,6 +1700,7 @@ Example:
   "browser": "<browser>",
   "budgets": "<budgets>",
   "tool_failures": "<tool_failures>",
+  "progress": "<progress>",
   "notices": "<notices>",
   "extraction": "<extraction>",
   "capture": "<capture>"
@@ -2071,7 +2079,7 @@ Example:
 
 ## TerminationReason
 
-Why the run stopped: the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.
+Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.
 
 Example:
 
@@ -2127,16 +2135,19 @@ Example:
 
 Single LLM usage call record.
 
-| Field             | Description                                     |
-| ----------------- | ----------------------------------------------- |
-| step_id           | Owning step id, null for plan-generation calls. |
-| model             | Model identifier.                               |
-| provider          | Provider identifier.                            |
-| input_tokens      | Input token count.                              |
-| output_tokens     | Output token count.                             |
-| cost_estimate_usd | Nullable estimated cost in USD.                 |
-| latency_ms        | Call latency in milliseconds.                   |
-| at                | ISO-8601 UTC timestamp.                         |
+| Field             | Description                                               |
+| ----------------- | --------------------------------------------------------- |
+| step_id           | Owning step id, null for plan-generation calls.           |
+| model             | Model identifier.                                         |
+| provider          | Provider identifier.                                      |
+| input_tokens      | Input token count.                                        |
+| output_tokens     | Output token count.                                       |
+| cost_estimate_usd | Nullable estimated cost in USD.                           |
+| reasoning_tokens  | Reasoning tokens (a subset of output), when reported.     |
+| thinking_ms       | Turn start to first output, excluding tool time.          |
+| provider_ms       | Turn start to assistant message end, excluding tool time. |
+| latency_ms        | Call latency in milliseconds.                             |
+| at                | ISO-8601 UTC timestamp.                                   |
 
 Example:
 
@@ -2148,6 +2159,9 @@ Example:
   "input_tokens": "<input_tokens>",
   "output_tokens": "<output_tokens>",
   "cost_estimate_usd": "<cost_estimate_usd>",
+  "reasoning_tokens": "<reasoning_tokens>",
+  "thinking_ms": "<thinking_ms>",
+  "provider_ms": "<provider_ms>",
   "latency_ms": "<latency_ms>",
   "at": "<at>"
 }

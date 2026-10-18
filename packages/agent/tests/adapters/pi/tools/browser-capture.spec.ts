@@ -19,6 +19,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { browserCaptureSpec } from '../../../../src/adapters/pi/tools/browser-capture.js';
 import { browserScreenshotSpec } from '../../../../src/adapters/pi/tools/browser-screenshot.js';
+import { taskContractSpec } from '../../../../src/adapters/pi/tools/task-contract.js';
+import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../../../src/runtime/budget.js';
 import { renderAgentMessage } from '../../../../src/runtime/messages.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps } from '../../../../src/runtime/run-services.js';
@@ -478,10 +480,64 @@ describe('@no-llm browser_capture', () => {
     const { tool } = await fixture();
     const spec = browserCaptureSpec(buildServices());
 
-    expect(spec.windDownExempt).toBe(true);
+    expect(typeof spec.windDownExempt).toBe('function');
+    if (typeof spec.windDownExempt === 'function')
+      expect(spec.windDownExempt(buildServices(), { scope: 'viewport' })).toBe(false);
     expect(spec.terminal).toBeUndefined();
     expect(tool.description).toContain('NOT shown to you');
   });
+  it('does not fail a capture when its advisory progress source fails', async () => {
+    const { services } = await fixture();
+    vi.spyOn(services.progress, 'captureExemptionAvailable').mockImplementation(() => {
+      throw new TypeError('fixture ledger unavailable');
+    });
+    services.budgets.freezeExploration();
+    const result = await wrapTool(browserCaptureSpec(services), services).execute(
+      { scope: 'viewport' },
+      undefined,
+    );
+    expect(result.status).toBe('ok');
+    expect(services.budgets.isFrozen()).toBe(false);
+    expect(services.progress.summary()).toMatchObject({ mode: 'observe', progress_error: true });
+  });
+
+  it.each(['soft', 'freeze'] as const)(
+    'reserves a requested capture once during %s closure',
+    async (closure) => {
+      const { services: base } = await fixture();
+      let clock = 0;
+      const services = {
+        ...base,
+        budgets: new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, wallClockMs: 1000 }, () => clock),
+      };
+      const declare = wrapTool(taskContractSpec(services), services);
+      expect(
+        (
+          await declare.execute(
+            {
+              deliverable: 'actions',
+              subject: 'a saved screenshot',
+              artifacts: [{ kind: 'screenshot', scope: 'viewport' }],
+            },
+            undefined,
+          )
+        ).status,
+      ).toBe('ok');
+      if (closure === 'soft') clock = 850;
+      else services.budgets.freezeExploration();
+      const tool = wrapTool(browserCaptureSpec(services), services);
+      expect((await tool.execute({ scope: 'viewport' }, undefined)).status).toBe('ok');
+      const again = await tool.execute({ scope: 'viewport' }, undefined);
+      expect(again.error_code).toBe('BUDGET_EXHAUSTED');
+      expect(again.details).toMatchObject({
+        budget_limit: closure === 'soft' ? 'wall-clock-soft' : 'stalled',
+      });
+      clock = 1000;
+      expect((await tool.execute({ scope: 'viewport' }, undefined)).details).toMatchObject({
+        budget_limit: 'wall-clock',
+      });
+    },
+  );
 
   it('keeps a canary out of every artifact when a secret fill latched the screen', async () => {
     const { runDir, latch, tool } = await fixture();

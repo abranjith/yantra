@@ -21,6 +21,90 @@ const CountsByCode = z
   .record(z.string().min(1), Count)
   .describe('Counts keyed by stable error code.');
 
+/** Semantic progress; counts and closed codes only, never page-derived text. */
+export const RunProgress = z
+  .object({
+    mode: z
+      .enum(['enforce', 'observe'])
+      .describe('Whether stall and thinking limits are enforced.'),
+    progress_error: z
+      .boolean()
+      .optional()
+      .describe('Progress tracking failed open to observe mode.'),
+    items: z
+      .array(
+        z
+          .object({
+            kind: z
+              .enum(['fill', 'artifact', 'effects', 'deliverable'])
+              .describe('Contract requirement kind.'),
+            state: z.enum(['pending', 'advancing', 'met']).describe('Live evidence state.'),
+          })
+          .strict(),
+      )
+      .max(6)
+      .describe('Live contract items without labels or identities.'),
+    fill: z
+      .object({
+        done: Count.describe('Verified eligible fields.'),
+        total: Count.describe('Eligible fields in the census.'),
+      })
+      .strict()
+      .nullable()
+      .describe('Fill coverage, or null without inventory.'),
+    signals: z
+      .object({
+        new_document: Count.describe('New document checkpoints.'),
+        new_page: Count.describe('New canonical page checkpoints.'),
+        action_verified: Count.describe('Verified action checkpoints.'),
+        artifact_saved: Count.describe('Saved artifact checkpoints.'),
+        item_advanced: Count.describe('Advancing contract item checkpoints.'),
+      })
+      .strict()
+      .describe('Progress signals observed.'),
+    counted_calls: Count.describe('Counted tool boundaries.'),
+    no_progress_calls: Count.describe('Consecutive calls without progress.'),
+    longest_no_progress_ms: Count.describe('Longest observed no-progress window.'),
+    recovery: z
+      .object({
+        rungs: z
+          .array(z.enum(['steer', 'freeze', 'stop']))
+          .max(3)
+          .describe('Fired ladder prefix.'),
+        triggers: z
+          .array(z.enum(['stalled', 'turn-timeout']))
+          .max(3)
+          .describe('Triggers for fired rungs.'),
+        refused_after_freeze: Count.describe('Calls refused after exploration closed.'),
+        steer_idle: Count.describe('Steers held for the next prompt.'),
+      })
+      .strict()
+      .describe('Bounded recovery history.'),
+    turns: z
+      .object({
+        count: Count.describe('Provider turns.'),
+        with_timing: Count.describe('Turns reporting timing.'),
+        thinking_ms_total: Count.describe('Total thinking time.'),
+        thinking_ms_max: Count.describe('Longest thinking phase.'),
+        provider_ms_total: Count.describe('Total provider time.'),
+        reasoning_tokens: Count.nullable().describe('Reported reasoning tokens or null.'),
+        turn_limit_aborts: Count.describe('Thinking phases aborted at the limit.'),
+      })
+      .strict()
+      .describe('Provider-only turn telemetry.'),
+  })
+  .strict()
+  .superRefine((progress, ctx) => {
+    const ladder = ['steer', 'freeze', 'stop'];
+    if (progress.recovery.rungs.some((r, i) => r !== ladder[i]))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['recovery', 'rungs'],
+        message: 'Recovery rungs must be a prefix of steer, freeze, stop.',
+      });
+  })
+  .describe('Contract-item progress and bounded recovery (FEAT-059).');
+
 export const RUN_HEALTH_SCHEMA_VERSION = 1 as const;
 
 export const RunHealth = z
@@ -110,6 +194,9 @@ export const RunHealth = z
         by_code: CountsByCode.describe('Failed tool calls by stable error code.'),
       })
       .describe('Tool failures across every tool.'),
+    progress: RunProgress.optional().describe(
+      'Semantic progress, recovery and turn telemetry; absent on older runs.',
+    ),
     notices: Count.describe(
       'Runtime-derived notices attached to the published document; 0 when nothing was published.',
     ),

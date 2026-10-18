@@ -1,9 +1,24 @@
 import type { DeliverableReason } from './capture-capability.js';
 import type { ConfirmationConnector } from './confirmation-bridge.js';
 import type { AgenticTaskOutcome } from './outcome.js';
+import type { LiveItem } from './progress-ledger.js';
 
 /** Bounded, render-safe progress sent from the provider seam to a connector. */
 export type AgentProgressEvent =
+  | {
+      readonly type: 'recovery';
+      readonly rung: 'steer' | 'freeze' | 'stop';
+      readonly trigger: 'stalled' | 'turn-timeout';
+      readonly move: 'fill-remaining' | 'list-fields' | 'capture' | 'publish' | null;
+      readonly summary: string;
+      readonly at: string;
+    }
+  | {
+      readonly type: 'progress';
+      readonly items: readonly LiveItem[];
+      readonly summary: string;
+      readonly at: string;
+    }
   | { readonly type: 'assistant_text'; readonly text: string; readonly at: string }
   | {
       readonly type: 'tool_started';

@@ -47,6 +47,8 @@ export class FakeAgentSession implements AgentSession {
 
   public runPrompts: string[] = [];
   public abortCount = 0;
+  public steers: string[] = [];
+  private running = false;
   public closeCount = 0;
 
   private readonly listeners = new Set<(event: AgentEvent) => void>();
@@ -59,13 +61,18 @@ export class FakeAgentSession implements AgentSession {
   }
 
   public async run(prompt: string): Promise<AgentRunResult> {
-    const runIndex = this.runPrompts.length;
-    this.runPrompts.push(prompt);
-    await this.script.onRun?.(prompt, runIndex, this);
-    for (const event of this.script.eventsByRun?.[runIndex] ?? this.script.eventsOnRun ?? []) {
-      this.emit(event);
+    this.running = true;
+    try {
+      const runIndex = this.runPrompts.length;
+      this.runPrompts.push(prompt);
+      await this.script.onRun?.(prompt, runIndex, this);
+      for (const event of this.script.eventsByRun?.[runIndex] ?? this.script.eventsOnRun ?? []) {
+        this.emit(event);
+      }
+      return this.script.resultsByRun?.[runIndex] ?? this.script.runResult ?? DEFAULT_RUN_RESULT;
+    } finally {
+      this.running = false;
     }
-    return this.script.resultsByRun?.[runIndex] ?? this.script.runResult ?? DEFAULT_RUN_RESULT;
   }
 
   public subscribe(listener: (event: AgentEvent) => void): () => void {
@@ -73,6 +80,12 @@ export class FakeAgentSession implements AgentSession {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public steer(text: string): Promise<'queued' | 'idle'> {
+    if (!this.running) return Promise.resolve('idle');
+    this.steers.push(text);
+    return Promise.resolve('queued');
   }
 
   public abort(): Promise<void> {

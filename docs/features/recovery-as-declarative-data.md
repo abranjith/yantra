@@ -6,8 +6,8 @@ Yantra handles browser interaction recovery as a bounded, inspectable sequence o
 and click operations can recover from common structural changes without asking the model to repeat
 work, while the result explains which strategies ran, failed, succeeded, or were skipped.
 
-This feature changes the recovery and diagnostic contract; it adds no CLI command, flag, or stable
-error code.
+Browser interaction plans use the existing tool surface. Task-level progress recovery also bounds
+stalls and thinking turns in `yantra do`, as described below.
 
 ## What It Does
 
@@ -104,6 +104,31 @@ terminal, and a failure whose reason is `budget` or `disabled` is terminal even 
 would otherwise be retryable. The deterministic saved-workflow path continues to use the same core
 fill engine without an LLM.
 
+### Task-level progress recovery
+
+`yantra do` uses a separate declarative ladder for semantic stalls and provider thinking timeouts.
+Both trigger kinds share one runner and advance through `steer`, `freeze`, and `stop`; switching
+trigger kinds does not restart the allowance. Each rung rebases the no-progress window. After the
+freeze, two refused exploration calls can advance directly to the stop rung.
+
+A stall means six counted calls without semantic progress, or at least two such calls over two
+minutes, before the normal exploration wind-down. New acquired documents, first visits to canonical
+URLs, verified actions, saved artifacts, and advancing contract items count as progress. A partial
+batch that commits fields therefore counts even when another field fails. Unchanged reads and
+empty catalogs do not. Bookkeeping tools do not consume this counter.
+
+Recovery advice is selected from registered tools and current requirements: fill known remaining
+controls, list fields when coverage is incomplete, save a requested screenshot, or publish the
+result with explicit unmet requirements. The freeze removes exploration capability while preserving
+publication, contract declaration, and a bounded allowance for unmet declared screenshots. It grants
+no host access, consent, or extra capture budget.
+
+The default thinking limit is `2m`, configurable with `do --turn-timeout` or
+`agent.turn_timeout` (minimum `10s`). It applies before a provider turn's first output; the runtime
+stops an overlong turn and re-prompts the same session. `ask` and `research` record progress in
+observe mode without this enforcement. See [Progress and bounded recovery](agentic-tasks.md#progress-and-bounded-recovery)
+for terminal outcomes and CLI output.
+
 ## How to Use It
 
 No new syntax is required. Use the existing browser task command, and let Yantra own the interaction
@@ -196,9 +221,10 @@ where the controller's obstruction-clearing record is the one remaining legacy p
 
 ## Configuration and Permissions
 
-None. The feature uses the existing widget budget, browser permissions, consent gates, host policy,
-and audit configuration. It neither broadens permitted actions nor bypasses protected-action
-confirmation.
+Interaction recovery uses the existing widget budget, browser permissions, consent gates, host
+policy, and audit configuration. Task-level thinking time uses `--turn-timeout`,
+`YANTRA_AGENT_TURN_TIMEOUT`, or the `agent.turn_timeout` preference, in that precedence order.
+Recovery neither broadens permitted actions nor bypasses protected-action confirmation.
 
 ## Limitations
 

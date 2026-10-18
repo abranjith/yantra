@@ -11,6 +11,7 @@ import {
   artifactRefsOf,
   type AgentManifestSectionType,
   type AgentRunBudgets,
+  type RunHealth,
 } from '@yantra/protocol';
 import pino from 'pino';
 
@@ -32,6 +33,7 @@ export interface RunRecorderOptions {
   readonly runDir: string;
   readonly session: AgentSession;
   readonly model: AgentModelSelection;
+  readonly thinkingSource?: 'flag' | 'environment' | 'preference' | 'default';
   readonly systemPrompt: string;
   readonly tools: readonly HashableToolDefinition[];
   /** Test/embedding override; production resolves the installed SDK package. */
@@ -69,6 +71,7 @@ const defaultLogger: RunRecorderLogger = pino({
 export class RunRecorder {
   private readonly startedCalls = new Map<string, number>();
   private readonly turnUsage: AgentUsage[] = [];
+  private readonly timings: { readonly thinkingMs: number; readonly providerMs: number }[] = [];
   private readonly unsubscribe: () => void;
   /** End of the previous turn (or recorder open), the baseline for turn latency. */
   private lastTurnEndMs: number;
@@ -101,7 +104,8 @@ export class RunRecorder {
       sdk_version: sdkVersion,
       provider: options.model.provider,
       model: options.model.id,
-      thinking: options.model.thinking ?? 'off',
+      thinking: options.model.thinking ?? 'high',
+      thinking_source: options.thinkingSource ?? 'default',
       auth_source: options.session.authSource,
       session_id: options.session.id,
       session_file: sessionFile,
@@ -144,6 +148,20 @@ export class RunRecorder {
       }
     })();
     return this.closePromise;
+  }
+
+  /** Provider-only telemetry from recorded turn events; abort count is owned by the runtime. */
+  public turnSummary(): Omit<NonNullable<RunHealth['progress']>['turns'], 'turn_limit_aborts'> {
+    const reasoning = this.turnUsage.filter((u) => u.reasoningTokens !== undefined);
+    return {
+      count: this.turnUsage.length,
+      with_timing: this.timings.length,
+      thinking_ms_total: this.timings.reduce((s, t) => s + t.thinkingMs, 0),
+      thinking_ms_max: Math.max(0, ...this.timings.map((t) => t.thinkingMs)),
+      provider_ms_total: this.timings.reduce((s, t) => s + t.providerMs, 0),
+      reasoning_tokens:
+        reasoning.length === 0 ? null : reasoning.reduce((s, u) => s + (u.reasoningTokens ?? 0), 0),
+    };
   }
 
   private async writeAgentSection(): Promise<void> {
@@ -219,6 +237,7 @@ export class RunRecorder {
       }
       case 'turn_finished': {
         this.turnUsage.push(event.usage);
+        if (event.timing !== undefined) this.timings.push(event.timing);
         // One `usage.json` call per provider turn, so agentic `calls`/`totals`
         // agree with the `agent` block whenever the provider reports per-turn
         // usage. `latency_ms` is the turn's wall time measured from the
@@ -236,11 +255,19 @@ export class RunRecorder {
           input_tokens: event.usage.inputTokens ?? 0,
           output_tokens: event.usage.outputTokens ?? 0,
           cost_estimate_usd: event.usage.costUsd ?? null,
+          ...(event.usage.reasoningTokens === undefined
+            ? {}
+            : { reasoning_tokens: event.usage.reasoningTokens }),
+          ...(event.timing === undefined
+            ? {}
+            : { thinking_ms: event.timing.thinkingMs, provider_ms: event.timing.providerMs }),
           latency_ms: latency,
           at: event.at,
         });
         return;
       }
+      case 'turn_started':
+      case 'output_started':
       case 'assistant_text':
       case 'failed':
         return;
@@ -394,6 +421,7 @@ function reconcileAgentUsage(
   readonly turns: number;
   readonly input_tokens: number | null;
   readonly output_tokens: number | null;
+  readonly reasoning_tokens: number | null;
   readonly cost_usd: number | null;
 } {
   return {
@@ -403,6 +431,9 @@ function reconcileAgentUsage(
         : (finalUsage?.turns ?? 0),
     input_tokens: sumReported(turns, 'inputTokens') ?? finalUsage?.inputTokens ?? null,
     output_tokens: sumReported(turns, 'outputTokens') ?? finalUsage?.outputTokens ?? null,
+    reasoning_tokens: turns.some((u) => u.reasoningTokens !== undefined)
+      ? turns.reduce((s, u) => s + (u.reasoningTokens ?? 0), 0)
+      : (finalUsage?.reasoningTokens ?? null),
     cost_usd: sumReported(turns, 'costUsd') ?? finalUsage?.costUsd ?? null,
   };
 }

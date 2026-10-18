@@ -33,9 +33,11 @@ export const TerminationReason = z
     'handoff',
     'user_abort',
     'provider_failed',
+    'stalled',
+    'turn-timeout',
   ])
   .describe(
-    'Why the run stopped: the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.',
+    'Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.',
   );
 
 export type TerminationReason = z.infer<typeof TerminationReason>;

@@ -42,6 +42,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-059 — Contract-Item Progress** _(updated: 2026-10-18 by implement)_
+Source spec: [spec.md](features/FEAT-059-contract_item_progress/spec.md)
+Runs measure progress from new evidence, canonical pages, verified actions, saved artifacts, and live contract items without reading the browser again. In `do`, unchanged calls trigger one supported recovery steer, then exploration closes while publication and a bounded requested capture remain available, and continued stalling stops with an honest partial or failure. A configurable thinking limit (`--turn-timeout`, `agent.turn_timeout`, default two minutes, minimum ten seconds) aborts only a provider turn before output and re-prompts the same session through the shared ladder; `ask` and `research` observe progress without enforcing these limits. Terminal and JSON events show contract progress and recovery, while run health and usage record counts, reasoning tokens, provider timing, and thinking provenance without thought text.
+
 **FEAT-058 — Local Deliverable Capture** _(updated: 2026-10-18 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-058-local_deliverable_capture/spec.md)
 `browser_capture` saves a clean, unmarked PNG of the `viewport`, the `full_page`, or one `element` (by ref) under `screenshots/capture-<seq>-<sha12>[-p<i>].png` and returns only metadata (paths, sizes, labels, remaining captures), never pixels or a hash. It needs no grant and works with a text-only model: it is registered whenever a run has a browser and interaction tools and `--no-screenshots` is absent. A full page is tiled at most 1920×4096 px per file and six files per call, labeled `clipped_width` or `truncated` when it cannot show the whole page; an element outside the viewport is captured without scrolling and labeled `beyond_viewport`. It has its own budget (4 calls, 8 MiB per file, 40 MiB per run), refuses a latched secret screen with `SCREENSHOT_SENSITIVE_SCREEN`, writes owner-only files all-or-nothing, and stays callable during the soft wind-down. Both capture capabilities are resolved before the catalog and recorded with reason codes; a declared screenshot the run cannot deliver is disclosed right after the contract echo, and only a `browser_capture` after the last page action on the same document meets a screenshot item (an incomplete set does not meet `full_page`: `capture_incomplete`).
@@ -262,6 +266,10 @@ Turns N extracted articles into **one** synthesized `Brief` behind a single `Syn
 
 ## Protocol
 
+**FEAT-059 — Progress and Turn Telemetry** _(updated: 2026-10-18 by implement)_
+Source spec: [spec.md](features/FEAT-059-contract_item_progress/spec.md)
+Run health optionally records progress, recovery history, and provider-turn totals using counts and closed codes only. Usage calls optionally carry reasoning tokens and thinking/provider milliseconds, and manifests record thinking provenance and the effective turn limit; older artifacts still parse.
+
 **FEAT-058 — Generic Artifact Reference and Capture Capability** _(updated: 2026-10-18 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-058-local_deliverable_capture/spec.md)
 `ArtifactRef` `{kind, path, sha256, mime_type, bytes, width?, height?, sent_to_model}` is written to `tool-calls.jsonl` `artifacts` by both capture tools; `artifactRefsOf` reads it, or an older run's `captures` as sent-to-model screenshots. Paths must match the capture-file grammar and stay inside the run directory. The Brief gains optional `artifacts` (at most 12 files, unique paths, `part ≤ parts`), the manifest `agent.capture` and `run-health.json` `capture` record both capture capabilities with closed reason codes (`reasons` empty exactly when available), and `prompt_version` accepts `agent-v13`. Every older artifact parses unchanged.
@@ -419,6 +427,10 @@ The **redactor** (`DefaultCaptureRedactor`) is the only code that reads `raw_val
 `runGeneratePlan()` implements the full generation loop: sanitizer guard → system-prompt assembly (tools sorted by name for canonical SHA-256 hash) → provider call → Zod schema validation → semantic validation (FEAT-002's `validateSemantics`) → bounded re-prompt (max `budget.maxCalls` retries, errors serialized as JSON-pointer paths). On repeated failure `dominantErrorCode()` picks the most-frequent validation error code and `resolveUserFacingHint()` maps it to an actionable message. `wrapWithAudit()` wraps any `LLMClient` to emit two `AgentJsonlEntry` records per call (request + response) with fields including `run_id`, `provider_id`, `system_prompt_hash`, `tool_calls`, token counts, `cost_estimate_usd`, `attempt`, and `outcome`. `estimateCostUsd()` covers Claude 4 and 3.5 model families. `Sanitized<T>` brand type plus LRU-registry `assertSanitized()` enforce runtime sanitization at the LLM call boundary. `InMemoryAuditWriter` and `InMemoryUsageWriter` are provided for testing without I/O.
 
 ## CLI Surface
+
+**FEAT-059 — Visible Progress and Thinking Limits** _(updated: 2026-10-18 by implement)_
+Source spec: [spec.md](features/FEAT-059-contract_item_progress/spec.md)
+The terminal shows bounded progress and recovery lines on stderr, and JSON output carries the corresponding structured events. Only `do` exposes `--turn-timeout`; its value resolves from flag, environment, preference, then the two-minute default, with a ten-second minimum. Partial results retain the reason that recovery stopped work, and failures distinguish semantic stalls from thinking limits.
 
 **FEAT-058 — Saved Screenshots on the Terminal and in Audit** _(updated: 2026-10-18 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-058-local_deliverable_capture/spec.md)

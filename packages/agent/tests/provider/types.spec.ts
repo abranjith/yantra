@@ -36,6 +36,9 @@ function describeEvent(event: AgentEvent): string {
       return `${event.tool}:${event.callId} started at ${event.at}`;
     case 'tool_finished':
       return `${event.tool}:${event.callId} finished (error=${String(event.isError)})`;
+    case 'turn_started':
+    case 'output_started':
+      return event.type;
     case 'assistant_text':
       return `text(${event.text.length})`;
     case 'turn_finished':

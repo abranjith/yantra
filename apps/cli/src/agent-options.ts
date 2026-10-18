@@ -29,6 +29,7 @@ import {
   loadConfig,
   parseAgentCount,
   parseAgentDurationMs,
+  parseAgentTurnTimeoutMs,
   preferenceValue,
   type EffectivePreferences,
 } from '@yantra/core';
@@ -49,6 +50,7 @@ export interface AgentModelOptions {
 /** Parsed values registered by {@link addAgentBudgetOptions}. */
 export interface AgentBudgetOptions {
   readonly maxDuration?: string;
+  readonly turnTimeout?: string;
   readonly maxTokens?: string;
   readonly toolTimeout?: string;
   readonly toolRetries?: string;
@@ -79,6 +81,7 @@ export type AgentInvocation =
     }
   | {
       readonly mode: 'llm';
+      readonly thinkingSource?: 'flag' | 'environment' | 'preference' | 'default';
       readonly model: AgenticTaskRequest['model'];
       readonly auth: AgenticTaskRequest['auth'];
       readonly budgets: AgentBudgetConfig;
@@ -124,6 +127,13 @@ export function addAgentModelOptions(command: Command): Command {
  * execute an agentic run and hand these to the orchestrator — a command that
  * cannot spend a budget must not offer to set one.
  */
+/** Register only on commands that enforce a thinking limit. */
+export function addAgentTurnOptions(command: Command): Command {
+  return command.addOption(
+    new Option('--turn-timeout <duration>', 'thinking time allowed in one provider turn'),
+  );
+}
+
 export function addAgentBudgetOptions(command: Command): Command {
   return command
     .addOption(new Option('--max-duration <duration>', 'whole-run wall-clock duration'))
@@ -256,6 +266,17 @@ export async function resolveAgentInvocation(
       ),
       '--tool-timeout',
     ),
+    turnTimeoutMs:
+      command === 'do'
+        ? turnDuration(
+            firstValue(
+              options.turnTimeout,
+              env.YANTRA_AGENT_TURN_TIMEOUT,
+              preferenceValue<unknown>(prefs, 'agent.turn_timeout', null),
+              '2m',
+            ),
+          )
+        : DEFAULT_AGENT_BUDGETS.turnTimeoutMs,
     toolRetries: nonnegativeInteger(
       firstValue(
         options.toolRetries,
@@ -304,6 +325,14 @@ export async function resolveAgentInvocation(
 
   return {
     mode: 'llm',
+    thinkingSource:
+      options.thinking !== undefined
+        ? 'flag'
+        : env.YANTRA_AGENT_THINKING !== undefined
+          ? 'environment'
+          : preferenceValue<unknown>(prefs, 'agent.thinking', null) !== null
+            ? 'preference'
+            : 'default',
     model,
     auth,
     budgets,
@@ -366,4 +395,14 @@ function nonnegativeInteger(value: unknown, flag: string): number {
     );
   }
   return parsed;
+}
+
+function turnDuration(value: unknown): number {
+  const ms = parseAgentTurnTimeoutMs(value);
+  if (ms !== null) return ms;
+  throw new CommanderError(
+    1,
+    'yantra.agent.invalid-duration',
+    '--turn-timeout (agent.turn_timeout) must be a duration of at least 10s.',
+  );
 }

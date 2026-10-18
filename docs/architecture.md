@@ -1366,7 +1366,7 @@ derives `interact` when any click or fill tool is present, `read` for any other 
 and `none` otherwise. The orchestrator passes that value to `buildAgentUserPrompt`
 (`packages/agent/src/runtime/prompt.ts`), which renders the matching scope line. The `read` line
 tells the model to report a goal that needs clicking or filling and to name `yantra do` as the next
-step. The recorded prompt version is `agent-v13`; the system text retains v9's `Scope` section,
+step. The recorded prompt version is `agent-v14`; the system text retains v9's `Scope` section,
 which makes a source the goal names the place the answer comes from, requires a stated condition
 to be confirmed or reported as unconfirmed, and
 forbids explaining missing data with a cause no tool reported. It also treats following a link a
@@ -1571,7 +1571,7 @@ carry it.
   any executed click was submit-class. `censusFillEvaluator(census)` measures the fill: `listed`
   matches committed field names by FEAT-053's name grammar; `all_eligible` needs a commit for every
   eligible control or group on the census epoch. With no census, the fill item is `unmet` with
-  `inventory_unavailable`, and production wires no census source today. When the model claimed
+  `inventory_unavailable`; production supplies the controller's cached census. When the model claimed
   `fulfillment.met: true` and an item is unmet, the evaluation carries one `contract_gap` notice from
   source `fulfillment`; the claim never changes a status. A run with no contract has no items and
   `contractDeclared: false`.
@@ -1597,7 +1597,7 @@ the draft lacks. A published `do` run is `fulfilled` only when it declared a con
 judged item was met; otherwise it is `partial`. A published `ask` or `research` run is always
 `fulfilled`. `terminationReasonFor` records why the run stopped, separately from the outcome:
 `user_abort`, an interrupt reason (`wall-clock-hard`, `provider-tokens`, `tool-budget`,
-`repeated-tool-failure`), `handoff`, `provider_failed`, or, for a model that finished, `wall-clock-soft`
+`repeated-tool-failure`, `stalled`, `turn-timeout`), `handoff`, `provider_failed`, or, for a model that finished, `wall-clock-soft`
 when `BudgetTracker.softWindDownReached` and `model_finished` otherwise.
 
 `TASK_OUTCOME_TABLE` in `runtime/outcome.ts` is the one mapping every consumer reads:
@@ -1639,7 +1639,7 @@ flowchart TD
   Ledger --> Evaluate
   Delivery[FEAT-053 delivery gaps and conditions] --> Evaluate
   Caps[contractCapabilities] --> Evaluate
-  Census[fillCensus, absent today] -.-> Evaluate
+  Census[Cached fillCensus] --> Evaluate
   Publish[result_publish in do] -->|no contract: CONTRACT_REQUIRED| Contract
   Publish --> Evaluate
   Evaluate --> Brief[Brief requirements and disagreement notice]
@@ -1648,6 +1648,105 @@ flowchart TD
   Settle --> Table[TASK_OUTCOME_TABLE]
   Table --> Artifacts[Exit code, manifest, task event, report.md, first line]
 ```
+
+#### Contract-item progress and bounded recovery
+
+Every agentic run owns one `ProgressLedger` (`runtime/progress-ledger.ts`), attached to
+`RunServices` by `withRunProgress`. The command profile chooses its authority: `do` uses
+`enforce`; `ask` and `research` use `observe`, collecting the same progress and turn telemetry
+without steering, freezing, or imposing a thinking limit. These controls belong to live agent
+execution; deterministic workflow replay does not acquire a provider session to use them.
+
+The ledger reads only state the run already holds: the `DocumentStore` entry count, the
+launched controller's current URL and document epoch, the `ActionLedger`, the cached fill census,
+and the effective contract terms. It performs no observation, extraction, fetch, or browser
+operation. A counted `tool_finished` checkpoint advances when it sees a new document, a canonical
+top-level URL not previously seen in the run, a newly verified action or capture, or a live item
+moving toward met. `submit_refused` does not advance action progress. Successful unchanged reads,
+empty listings, and refused exploration therefore cannot hide a stall. Tool specs mark
+`task_contract` and `result_publish` as `progressRole: 'bookkeeping'`: their calls neither advance
+nor reset the no-progress window.
+
+Live items cover fill, screenshot artifacts, the no-submit requirement, and an actions
+deliverable. They reuse the publication evaluators, including census-based fill coverage and
+epoch-sensitive artifact checks. A missing census leaves fill counts unknown. Answer, table,
+filter, and report requirements remain publication-time checks. Item state or count changes emit
+a structured `progress` event with a bounded summary; recovery transitions emit `recovery` events.
+The CLI renders these on stderr and preserves their structured form in JSON mode.
+
+`runtime/recovery.ts` keeps recovery policy outside tool business logic. A stall requires six
+consecutive counted calls without progress, or at least two such calls and 120 seconds since
+progress. The orchestrator checks it at tool completion, before soft wall-clock wind-down, and
+preserves the existing identical-failure breaker's precedence. Both semantic stalls and thinking
+timeouts consume the same run-wide `RECOVERY_LADDER`, through one `RecoveryRunner`:
+
+1. `steer` sends a bounded, sanitized message containing current requirements, exploration time,
+   publication headroom, and one supported next move. `NEXT_MOVES` declares each move's tool and
+   detail keys: fill up to ten remaining refs, request a field inventory, save a deliverable
+   capture when fill is complete, or publish with precise unmet requirements. Selection checks
+   the registered capabilities.
+2. `freeze` closes exploration through `BudgetTracker`; ordinary calls receive
+   `BUDGET_EXHAUSTED` with `budget_limit: stalled` and publication guidance. Terminal publication
+   and wind-down-exempt calls remain available. `browser_capture` has a conditional, bounded
+   exemption while declared artifacts remain unmet; the hard deadline, capture limits, and
+   sensitive-screen latch still apply.
+3. `stop` interrupts on the next trigger, or after two calls refused by the freeze. Each rung
+   rebases the no-progress window; progress never replenishes the run's recovery allowance.
+
+The provider seam exposes `steer(text): Promise<'queued' | 'idle'>`, `turn_started`,
+`output_started`, optional reasoning-token usage, and optional turn timing. The Pi adapter queues
+steering through the SDK only while a prompt run is active, rejects slash-prefixed steering,
+and reports `idle` otherwise. An idle or rejected steer is held for a subsequent prompt on the
+same session. No SDK message or thinking delta crosses the normalized seam.
+
+The thinking timer starts at `turn_started` and clears at the first assistant `text_start` or
+`toolcall_start`, mapped once per turn to `output_started`. It therefore bounds pre-output time,
+including model prefill, rather than tool execution or a long publication payload. In enforce
+mode, expiry advances the shared ladder, aborts the current prompt through the supported SDK
+`abort()`, waits for it to become idle, and re-prompts the same session with the recovery message.
+No second provider session is opened. The default is 120 seconds; `agent.turn_timeout` and the
+`do`-only `--turn-timeout` resolve into `AgentBudgetConfig.turnTimeoutMs`, with a ten-second minimum.
+Explicit thinking choices remain unchanged by recovery.
+
+```mermaid
+flowchart TD
+  State[Existing documents, browser state, actions, census, contract] --> Ledger[ProgressLedger]
+  ToolEnd[Counted tool_finished] --> Ledger
+  Ledger --> Check{Semantic stall before wind-down?}
+  TurnStart[turn_started] --> Timer[Enforce-mode thinking timer]
+  Output[First output_started] -->|clear| Timer
+  Check -->|enforce mode| Recovery[One RecoveryRunner]
+  Timer -->|expiry| Recovery
+  Recovery --> Steer[First trigger: supported next move]
+  Steer --> Queue[SDK steer or same-session re-prompt]
+  Recovery --> Freeze[Second trigger: freeze exploration]
+  Freeze --> Publish[result_publish and bounded exemptions remain]
+  Recovery --> Stop[Third trigger or two frozen refusals: interrupt]
+  Ledger --> Health[run-health.json progress summary]
+  Ledger --> Events[Structured progress events]
+```
+
+Progress faults fail open to `observe`, record `progress_error` with only an error class, and
+leave the independent budgets and safety gates active. A stopped run without a Brief fails as
+`AGENT_STALLED` or `AGENT_TURN_TIMEOUT`; an already saved Brief retains the existing publication
+precedence and is judged against its contract. `stalled` and `turn-timeout` remain separate
+termination reasons, so publishing alone cannot turn unmet work into success.
+
+`RunRecorder` writes optional `reasoning_tokens`, `thinking_ms`, and `provider_ms` per completed
+turn in `usage.json`. The Pi adapter measures thinking until first output and provider time until
+assistant `message_end`, excluding subsequent tool execution. The older `latency_ms` still
+includes in-turn tool execution. Reasoning tokens are a reported subset of output tokens, never
+added again to the provider-token budget. Missing reasoning usage stays absent per turn and
+`null` in aggregate. `run-health.json.progress.turns` holds totals, maximum thinking time, timing
+coverage, and timeout-abort count; manifest provenance records effective budgets and
+`thinking_source`.
+
+Stable progress telemetry contains counts, item kinds and states, signal codes, and bounded
+recovery history. It excludes URLs, refs, labels, field values, model prose, and thought text.
+Recovery messages use the user-input mask and sanitizer before the provider seam and stay
+bounded. Operator-only `progress_checkpoint`, `stall_detected`, `recovery_rung`,
+`exploration_frozen`, and `progress_error` projections in `runtime.jsonl` contain closed fields;
+they never become model input. The sensitive raw Pi session remains a separate audit artifact.
 
 #### Run facts and run health
 
@@ -2778,6 +2877,14 @@ is present only when a shape-aware view was returned or a discovered link was fo
 startup failure before the environment exists writes neither. Every reader treats the file as
 optional, so older run directories validate and render unchanged.
 
+Contract progress adds no artifact or table. Its optional `run-health.json.progress` block keeps
+`schema_version: 1` and stores mode, up to six item kind/state pairs, nullable fill counts,
+semantic signal counts, no-progress windows, the fired prefix of `steer`, `freeze`, `stop`, and
+provider-turn aggregates. The schema rejects a recovery history that skips or reorders rungs.
+Labels, requirement identities, refs, URLs, values, and provider text are excluded. `usage.json`
+adds optional per-turn reasoning-token and timing fields, and the manifest's optional agent
+fields record thinking provenance and the resolved turn timeout. Older artifacts remain valid.
+
 The task contract adds one optional run artifact and no table. `<runDir>/contract.json` is a
 protocol `TaskContractRecord` at `schema_version: 1` whose JSON Schema is emitted with the other
 protocol artifacts. It holds the run ID, the declaring command (`research` or `do`), and one to
@@ -3217,10 +3324,16 @@ update` is the only surface that contacts a version server, and only when a huma
   line, so no consumer keeps its own copy. The termination reason is recorded beside the outcome
   rather than folded into it. A saved Brief outranks a later budget interrupt, because `failed`
   means no Brief was saved. The costs are that a handoff records manifest status `failed`, which a
-  `--status aborted` listing filter does not match, and that `fill: all_eligible` can never be met
-  until a form-census
-  producer exists. That is conservative by construction: no census means "not counted", never
+  `--status aborted` listing filter does not match, and that `fill: all_eligible` requires a
+  current census. That is conservative by construction: no census means "not counted", never
   "met".
+- **Recovery spends one run-wide allowance.** Semantic stalls and pre-output provider timeouts
+  share a declarative `steer`, `freeze`, `stop` ladder. A successful unchanged read cannot reset
+  it, and fresh evidence does not grant another steer. Reusing the provider session's supported
+  steering and abort operations preserves one session owner, at the cost of a time threshold
+  that includes local-model prefill. Command profiles limit enforcement to `do`; observing the
+  same counters for `ask` and `research` adds diagnostics without changing their synthesis time.
+  Progress tracking faults disable that enforcement while independent budgets remain active.
 - **No-submit is a removed capability, enforced before consent.** A contract that says "do not
   submit" is honored by the tool, not the prompt. `browser_click`'s pre-domain policy hook refuses
   a submit-class target before the confirmation gate, so no prompt is built and no handler fires.
