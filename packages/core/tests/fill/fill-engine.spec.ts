@@ -97,6 +97,37 @@ describe('@no-llm unified fill intent parsing', () => {
 });
 
 describe('@no-llm unified fill engine routing', () => {
+  it.each(['status', 'alert'])(
+    'does not watch an aria-controls %s region as suggestions',
+    async (role) => {
+      vi.useFakeTimers();
+      try {
+        const port = new WidgetTestPort(
+          `<input id="field" aria-controls="notice"><div id="notice" role="${role}"><span>Ready</span></div>`,
+        );
+        const limits = budget(port);
+        const run = createRunState({ ...limits, maxReacquisitions: 1 }, port.now());
+        const pending = fillField(
+          port,
+          { field: 'Field', target: target(port, '#field', 'textbox', 'Field') },
+          { kind: 'text', text: 'Blue' },
+          { ...limits, run },
+        );
+        await vi.runAllTimersAsync();
+        expect(await pending).toMatchObject({ ok: true, committed: 'Blue', resolution: 'exact' });
+        expect(run.verdicts).toContainEqual(
+          expect.objectContaining({
+            rungId: 'watch-and-select',
+            kind: 'skipped',
+            unmet: 'no-suggestion-signal',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('routes an offered calendar label back to the date family without typing or pressing', async () => {
     const port = new WidgetTestPort(
       '<button id="date" aria-controls="calendar" aria-haspopup="grid" aria-expanded="true"></button>' +

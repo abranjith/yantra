@@ -8,6 +8,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "docs/features/recovery-as-declarative-data.md",
       "status": "M",
       "role": "implement",
@@ -42,6 +48,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "e2e/widget-gauntlet.spec.ts",
@@ -128,6 +146,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
       "status": "M",
       "role": "implement",
@@ -164,10 +188,22 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/widgets/open-state.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/core/tests/browser/agent-controller-inventory.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix-baseline.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/executor/fill-element.spec.ts",

@@ -97,7 +97,13 @@ export async function resolveContainer(
       // panel's content as a sibling, so an element with nothing inside it is a
       // label for the popup, not the popup — keep looking.
       const controlled = byId('aria-controls') ?? byId('aria-owns');
-      if (controlled && controlled.childElementCount > 0) return toPath(controlled);
+      // A linked live-status/error region is not a field popup. Treating it
+      // as one both starts a suggestion watch and tries to dismiss page text.
+      const statusRegion = controlled?.matches(
+        '[role="status"],[role="alert"],[role="log"],[role="progressbar"],[role="timer"]',
+      );
+      if (controlled && !statusRegion && controlled.childElementCount > 0)
+        return toPath(controlled);
       if (element.hasAttribute('aria-haspopup')) {
         let sibling = element.nextElementSibling;
         while (sibling) {

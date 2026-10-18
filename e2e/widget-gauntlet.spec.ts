@@ -101,6 +101,39 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
     30_000,
   );
 
+  it('does not mistake a linked status region for a popup in real Chrome', async () => {
+    await call('browser_navigate', {
+      url: `${fixture.baseUrl}/protocol-widgets/native-datalist.html`,
+    });
+    await baseController.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>('#q')!;
+      input.removeAttribute('list');
+      input.setAttribute('aria-controls', 'notice');
+      const notice = document.createElement('div');
+      notice.id = 'notice';
+      notice.setAttribute('role', 'status');
+      notice.innerHTML = '<span>Ready</span>';
+      document.body.append(notice);
+    });
+    const services = buildServices(runDir, baseController);
+    const tool = buildYantraWrappedTools({ ...services, now: () => Date.now() }).find(
+      (entry) => entry.name === 'browser_fill_element',
+    )!;
+    const result = await tool.execute({ field: 'Choice', value: 'Blue' }, undefined);
+    expect(result.status).toBe('ok');
+    const applied = (
+      result.details as { applied: { committed: string; attempted: Record<string, unknown>[] }[] }
+    ).applied[0]!;
+    expect(applied.committed).toBe('Blue');
+    expect(applied.attempted).toContainEqual(
+      expect.objectContaining({
+        strategy: 'watch-and-select',
+        verdict: 'skipped',
+        unmet: 'no-suggestion-signal',
+      }),
+    );
+  }, 30_000);
+
   const fills = AGENT_GAUNTLET.filter(
     (entry): entry is AgentFillFixture => entry.exercise === 'fill',
   );

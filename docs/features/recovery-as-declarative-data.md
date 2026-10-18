@@ -75,6 +75,10 @@ the text plan is needed. A native `<datalist>` alone does not declare a DOM popu
 suggestions cannot be observed by the DOM watcher, so it uses the short check and verifies the typed
 text. A custom DOM popup on that input can still trigger the full watch.
 
+An `aria-controls` or `aria-owns` link alone does not declare suggestions. Linked `status`, `alert`,
+`log`, `progressbar`, and `timer` regions are excluded from popup resolution, so status or error text
+does not start the full watch or get dismissed as a popup.
+
 Declared or observed suggestions retain the existing four-second settling window and candidate
 selection rules. The engine never presses Enter. An ordinary successful text fill keeps its verdicts
 in the run ledger but omits `attempted` when there was no recovery or substitution.
