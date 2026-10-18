@@ -25,6 +25,8 @@
 import type { Result } from '@yantra/protocol';
 import { err, ok } from '@yantra/protocol';
 
+import { renderAgentMessage } from './messages.js';
+
 /**
  * Whether a refusal message already carries the publish instruction.
  *
@@ -40,6 +42,7 @@ export type NowMs = () => number;
 export type BudgetLimit =
   | 'wall-clock'
   | 'wall-clock-soft'
+  | 'stalled'
   | 'cumulative-bytes'
   | 'navigations'
   | 'hosts'
@@ -215,6 +218,8 @@ export class BudgetTracker {
   private deliverableCaptureCount = 0;
   private deliverableCaptureBytes = 0;
   private softWindDown = false;
+  private frozen = false;
+  private frozenRefusals = 0;
 
   /**
    * @param limits Hard caps for this run.
@@ -226,6 +231,36 @@ export class BudgetTracker {
   ) {
     this.now = now;
     this.startedAt = now();
+  }
+
+  /** Time reserved for exploration; null means unbounded. */
+  public explorationRemainingMs(): number | null {
+    return Number.isFinite(this.limits.wallClockMs)
+      ? Math.max(
+          0,
+          this.limits.wallClockMs * this.limits.softWallClockFraction -
+            (this.now() - this.startedAt),
+        )
+      : null;
+  }
+  /** Fixed publication headroom, independent of elapsed time. */
+  public publicationHeadroomMs(): number | null {
+    return Number.isFinite(this.limits.wallClockMs)
+      ? Math.round(this.limits.wallClockMs * (1 - this.limits.softWallClockFraction))
+      : null;
+  }
+  public freezeExploration(): void {
+    this.frozen = true;
+  }
+  /** Restore ordinary budgets if the advisory progress subsystem fails open. */
+  public clearProgressFreeze(): void {
+    this.frozen = false;
+  }
+  public isFrozen(): boolean {
+    return this.frozen;
+  }
+  public refusedAfterFreeze(): number {
+    return this.frozenRefusals;
   }
 
   /** Per-tool execution timeout (milliseconds). */
@@ -466,6 +501,12 @@ export class BudgetTracker {
       );
     }
     const terminal = options.terminal === true;
+    if (this.frozen && !terminal && options.windDownExempt !== true) {
+      this.frozenRefusals += 1;
+      return err(
+        this.decide('stalled', renderAgentMessage('middleware', 'BUDGET_EXHAUSTED', 'stalled')),
+      );
+    }
     const pastSoftBoundary = this.isSoftWallClockExhausted();
     if (pastSoftBoundary) this.softWindDown = true;
     if (!terminal && options.windDownExempt !== true && pastSoftBoundary) {
@@ -572,7 +613,7 @@ export class BudgetTracker {
       code: 'BUDGET_EXHAUSTED',
       limit,
       message,
-      carriesPublishRemedy: PUBLISH_REMEDY_RE.test(message),
+      carriesPublishRemedy: limit === 'stalled' || PUBLISH_REMEDY_RE.test(message),
     };
   }
 }

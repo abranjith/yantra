@@ -87,3 +87,9 @@ export function formatAgentDuration(milliseconds: number): string {
   if (milliseconds % 1_000 === 0) return `${milliseconds / 1_000}s`;
   return `${milliseconds}ms`;
 }
+
+/** Thinking limits share the duration grammar and require at least ten seconds. */
+export function parseAgentTurnTimeoutMs(raw: unknown): number | null {
+  const ms = parseAgentDurationMs(raw);
+  return ms !== null && ms >= 10_000 ? ms : null;
+}

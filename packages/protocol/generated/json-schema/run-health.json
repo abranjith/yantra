@@ -277,6 +277,257 @@
           "additionalProperties": false,
           "description": "Tool failures across every tool."
         },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "enforce",
+                "observe"
+              ],
+              "description": "Whether stall and thinking limits are enforced."
+            },
+            "progress_error": {
+              "type": "boolean",
+              "description": "Progress tracking failed open to observe mode."
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "fill",
+                      "artifact",
+                      "effects",
+                      "deliverable"
+                    ],
+                    "description": "Contract requirement kind."
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "advancing",
+                      "met"
+                    ],
+                    "description": "Live evidence state."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 6,
+              "description": "Live contract items without labels or identities."
+            },
+            "fill": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "done": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Verified eligible fields."
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Eligible fields in the census."
+                    }
+                  },
+                  "required": [
+                    "done",
+                    "total"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fill coverage, or null without inventory."
+            },
+            "signals": {
+              "type": "object",
+              "properties": {
+                "new_document": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "New document checkpoints."
+                },
+                "new_page": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "New canonical page checkpoints."
+                },
+                "action_verified": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Verified action checkpoints."
+                },
+                "artifact_saved": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Saved artifact checkpoints."
+                },
+                "item_advanced": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Advancing contract item checkpoints."
+                }
+              },
+              "required": [
+                "new_document",
+                "new_page",
+                "action_verified",
+                "artifact_saved",
+                "item_advanced"
+              ],
+              "additionalProperties": false,
+              "description": "Progress signals observed."
+            },
+            "counted_calls": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Counted tool boundaries."
+            },
+            "no_progress_calls": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Consecutive calls without progress."
+            },
+            "longest_no_progress_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Longest observed no-progress window."
+            },
+            "recovery": {
+              "type": "object",
+              "properties": {
+                "rungs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "steer",
+                      "freeze",
+                      "stop"
+                    ]
+                  },
+                  "maxItems": 3,
+                  "description": "Fired ladder prefix."
+                },
+                "triggers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "stalled",
+                      "turn-timeout"
+                    ]
+                  },
+                  "maxItems": 3,
+                  "description": "Triggers for fired rungs."
+                },
+                "refused_after_freeze": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Calls refused after exploration closed."
+                },
+                "steer_idle": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Steers held for the next prompt."
+                }
+              },
+              "required": [
+                "rungs",
+                "triggers",
+                "refused_after_freeze",
+                "steer_idle"
+              ],
+              "additionalProperties": false,
+              "description": "Bounded recovery history."
+            },
+            "turns": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Provider turns."
+                },
+                "with_timing": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Turns reporting timing."
+                },
+                "thinking_ms_total": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Total thinking time."
+                },
+                "thinking_ms_max": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Longest thinking phase."
+                },
+                "provider_ms_total": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Total provider time."
+                },
+                "reasoning_tokens": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/RunHealth/properties/searches/properties/failed_by_code/additionalProperties"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reported reasoning tokens or null."
+                },
+                "turn_limit_aborts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Thinking phases aborted at the limit."
+                }
+              },
+              "required": [
+                "count",
+                "with_timing",
+                "thinking_ms_total",
+                "thinking_ms_max",
+                "provider_ms_total",
+                "reasoning_tokens",
+                "turn_limit_aborts"
+              ],
+              "additionalProperties": false,
+              "description": "Provider-only turn telemetry."
+            }
+          },
+          "required": [
+            "mode",
+            "items",
+            "fill",
+            "signals",
+            "counted_calls",
+            "no_progress_calls",
+            "longest_no_progress_ms",
+            "recovery",
+            "turns"
+          ],
+          "additionalProperties": false,
+          "description": "Semantic progress, recovery and turn telemetry; absent on older runs."
+        },
         "notices": {
           "type": "integer",
           "minimum": 0,

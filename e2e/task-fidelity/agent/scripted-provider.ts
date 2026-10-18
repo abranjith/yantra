@@ -54,6 +54,7 @@ export type ScriptStep =
    * is counted. Only meaningful when the runner wires a harness clock.
    */
   | { readonly kind: 'advance-clock'; readonly ms: number }
+  | { readonly kind: 'think'; readonly ms: number }
   /**
    * Stands in for a stored-secret fill (FEAT-058): sets the run's
    * sensitive-screen latch on the current document, exactly where
@@ -102,6 +103,7 @@ export interface OfferedRecord {
  * read only fields a result actually carries.
  */
 export interface ScriptContext {
+  readonly steers: () => readonly string[];
   readonly results: readonly ReceivedResult[];
   /** The most recent result of `tool` (or of any tool), if any. */
   last(tool?: string): ReceivedResult | undefined;
@@ -181,8 +183,27 @@ export class ScriptedAgentProvider implements AgentProvider {
     };
     let prompts = 0;
     let calls = 0;
+    let cursor = 0;
+    let running = false;
+    let aborted = false;
+    let endThinking: (() => void) | undefined;
 
     const execute = async (step: ScriptStep): Promise<void> => {
+      if (step.kind === 'think') {
+        emit({ type: 'turn_started', at: new Date().toISOString() });
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            endThinking = undefined;
+            resolve();
+          }, step.ms);
+          endThinking = () => {
+            clearTimeout(timer);
+            endThinking = undefined;
+            resolve();
+          };
+        });
+        return;
+      }
       if (step.kind === 'advance-clock') {
         this.advanceClock(step.ms);
         return;
@@ -215,6 +236,8 @@ export class ScriptedAgentProvider implements AgentProvider {
         this.unreachableSteps.push(`${label} (tool not registered)`);
         return;
       }
+      emit({ type: 'turn_started', at: new Date().toISOString() });
+      emit({ type: 'output_started', at: new Date().toISOString() });
       const callId = `scripted-${(calls += 1)}`;
       emit({
         type: 'tool_started',
@@ -261,35 +284,57 @@ export class ScriptedAgentProvider implements AgentProvider {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      abort: () => Promise.resolve(),
+      steer: (text) => {
+        if (!running) return Promise.resolve('idle');
+        this.steering.push(text);
+        return Promise.resolve('queued');
+      },
+      abort: () => {
+        aborted = true;
+        endThinking?.();
+        return Promise.resolve();
+      },
       close: () => Promise.resolve(),
       run: async (prompt: string): Promise<AgentRunResult> => {
-        // Only the first prompt plays the script. A later prompt is the
-        // completion nudge: the script must publish on its own, and an
-        // unpublished script stays unpublished — that is a measurement too.
-        if (prompts++ > 0) return { outcome: 'completed', stopReason: 'stop', usage: { turns: 0 } };
-        this.firstPrompt = prompt;
-        for (const step of this.script) {
-          await execute(step);
-          if (step.kind === 'advance-clock' || step.kind === 'latch-sensitive-screen') continue;
-          this.turnCount += 1;
-          emit({ type: 'turn_finished', usage: SCRIPTED_TURN_USAGE, at: new Date().toISOString() });
+        // Re-prompts resume after an aborted thinking step in this same
+        // session. Once the script is spent, a completion nudge cannot invent
+        // a publication or replay earlier calls.
+        if (prompts++ === 0) this.firstPrompt = prompt;
+        running = true;
+        aborted = false;
+        try {
+          while (cursor < this.script.length && !aborted) {
+            const step = this.script[cursor++]!;
+            await execute(step);
+            if (step.kind === 'advance-clock' || step.kind === 'latch-sensitive-screen') continue;
+            this.turnCount += 1;
+            emit({
+              type: 'turn_finished',
+              usage: SCRIPTED_TURN_USAGE,
+              at: new Date().toISOString(),
+            });
+          }
+          return {
+            outcome: aborted ? 'aborted' : 'completed',
+            stopReason: aborted ? 'aborted' : 'stop',
+            usage: { ...SCRIPTED_TURN_USAGE, turns: this.turnCount },
+          };
+        } finally {
+          running = false;
         }
-        return {
-          outcome: 'completed',
-          stopReason: 'stop',
-          usage: { ...SCRIPTED_TURN_USAGE, turns: this.turnCount },
-        };
       },
     };
     return Promise.resolve(session);
   }
+
+  private readonly steering: string[] = [];
 
   private context(): ScriptContext {
     const results = [...this.received];
     const last = (tool?: string): ReceivedResult | undefined =>
       [...results].reverse().find((result) => tool === undefined || result.tool === tool);
     return {
+      steers: () => [...this.steering],
       results,
       last,
       labelled: (label) => results.filter((result) => result.label === label),

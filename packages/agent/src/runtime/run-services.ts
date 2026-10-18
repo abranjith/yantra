@@ -45,6 +45,7 @@ import type { CaptureCapability } from './capture-capability.js';
 import type { ContractCapabilityResolver } from './contract-capabilities.js';
 import type { FulfillmentRecord } from './fulfillment.js';
 import type { WorkflowToolMode } from './profiles.js';
+import { ProgressLedger } from './progress-ledger.js';
 import type { RunHealthLedger } from './run-health.js';
 import type { TaskContractStore } from './task-contract.js';
 import type { AgentTrace } from './trace.js';
@@ -423,6 +424,8 @@ export class ActionPhase {
 
 /** The immutable per-run dependency bundle handed to `createYantraTools`. */
 export interface RunServices {
+  /** Run-scoped semantic progress, measured without browser reads. */
+  readonly progress: ProgressLedger;
   /** Owning run id. */
   readonly runId: string;
   /** Absolute path of the owning run directory. */
@@ -552,3 +555,28 @@ export interface RunServices {
 }
 
 export type { SearchProviderName, SearchResult };
+
+/** Attach one ledger with lazy, memory-only views of the completed service bundle. */
+export function withRunProgress(
+  services: Omit<RunServices, 'progress'>,
+  mode: 'enforce' | 'observe' = 'observe',
+  now: () => number = services.now,
+): RunServices {
+  const controller = services.domain.browser?.controller;
+  const progress = new ProgressLedger(
+    {
+      documentCount: () => services.documents?.entries().length ?? 0,
+      page: () =>
+        controller?.launched
+          ? { epoch: controller.topLevelDocumentEpoch(), url: controller.url() }
+          : null,
+      ledger: services.actionLedger,
+      census: () => controller?.latestFillCensus?.() ?? null,
+      terms: () => services.contract.effectiveActionTerms(),
+      contract: () => services.contract.current(),
+    },
+    now,
+    mode,
+  );
+  return { ...services, progress };
+}

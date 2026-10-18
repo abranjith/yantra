@@ -73,6 +73,8 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 
 Ordinary agentic Briefs can include cited findings, sections, and comparison tables with row citations. When a task contract is declared, **Conditions** shows each filter as verified, unverified, or not met, and results citing only hosts outside the required sources appear under **Alternatives**. **Sources** lists cited pages; **Also consulted** lists pages read without a citation. Yantra flags values its evidence check cannot anchor; see [Reading an attributed Brief](docs/usage.md#read-an-attributed-brief).
 
+During `do`, Yantra reports task-contract progress and uses bounded recovery when work stalls. Adjust its per-turn thinking limit (default `2m`) with `--turn-timeout`; see [Progress and recovery](docs/usage.md#follow-progress-and-recover-from-stalls).
+
 ## Safety and current boundaries
 
 Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Managed-browser downloads require per-operation consent, stay in Yantra-owned storage, and are never initiated by unattended execution. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories (including saved screenshots, which are unmasked pixels) and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.

@@ -163,8 +163,8 @@ describe('@no-llm golden briefs — deterministic synthesizer', () => {
         ).size,
       ).toBe(brief.notices.length);
       for (const text of findings) {
-        expect(text).toMatch(/^["'â€œâ€˜(]?[A-Z0-9]/u);
-        expect(text).toMatch(/[.!?â€¦]["'â€â€™)\]]?$/u);
+        expect(text).toMatch(/^["'“‘(]?[A-Z0-9]/u);
+        expect(text).toMatch(/[.!?…]["'”’)\]]?$/u);
       }
     }
   });

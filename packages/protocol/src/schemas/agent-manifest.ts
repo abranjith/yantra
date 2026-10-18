@@ -23,6 +23,9 @@ const BudgetCount = z.number().int().nonnegative();
  */
 export const AgentRunBudgets = z
   .object({
+    turn_timeout_ms: BudgetCount.optional().describe(
+      'Maximum thinking time per provider turn in milliseconds.',
+    ),
     wall_clock_ms: BudgetCount.nullable().describe('Run wall-clock budget, or null if unbounded.'),
     soft_wall_clock_fraction: z
       .number()
@@ -49,6 +52,10 @@ export const AgentManifestSection = z
     provider: z.string().min(1).describe('Effective model provider identifier.'),
     model: z.string().min(1).describe('Effective provider-scoped model identifier.'),
     thinking: z.string().min(1).describe('Effective model thinking or reasoning level.'),
+    thinking_source: z
+      .enum(['flag', 'environment', 'preference', 'default'])
+      .optional()
+      .describe('Origin of the effective thinking level.'),
     auth_source: z
       .enum(['managed', 'runtime-key', 'environment'])
       .describe('Credential source used to open the session; never credential material.'),
@@ -71,6 +78,7 @@ export const AgentManifestSection = z
         'agent-v11',
         'agent-v12',
         'agent-v13',
+        'agent-v14',
       ])
       .describe('Version of the authoritative agent prompt.'),
     prompt_hash: z

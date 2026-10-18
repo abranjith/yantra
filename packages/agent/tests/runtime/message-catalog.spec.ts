@@ -22,6 +22,7 @@ import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from '../../src/runtime/messages.js';
 import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
+import { withRunProgress } from '../../src/runtime/run-services.js';
 import {
   ActionPhase,
   EvidenceLedger,
@@ -208,7 +209,7 @@ function buildServices(): RunServices {
     suppressedByFlag: false,
     zeroLlm: true,
   });
-  return {
+  return withRunProgress({
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir: '.',
@@ -273,5 +274,5 @@ function buildServices(): RunServices {
       browser: null,
       rank: null,
     },
-  };
+  });
 }

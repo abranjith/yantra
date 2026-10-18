@@ -557,6 +557,42 @@ for scopes, limits, and failure codes.
 [Safety and Privacy](features/safety-and-privacy.md) before using browser
 mutation or sensitive input.
 
+### Follow progress and recover from stalls
+
+As live contract items change, `do` writes bounded `progress:` lines to stderr
+with field counts and requirement states. Repeated successful reads of the same
+page do not count as progress. After six counted tool calls without progress,
+or two calls spanning at least two minutes without progress, Yantra sends one
+supported next step. Further stalls close exploration so the agent can publish
+an honest result, then stop the run if recovery still makes no progress.
+`recovery:` lines on stderr describe these transitions. These are event-driven
+updates; there is no timed heartbeat while the provider is thinking.
+
+`do` also limits the thinking phase before a provider turn starts text or a tool
+call. The default is `2m`, with a minimum of `10s`. For a slow local model or
+long prompt prefill, override it for one invocation:
+
+```console
+yantra do "check the public status page" --turn-timeout 3m
+```
+
+This example requires the same configured model and browser access as other
+`do` tasks. The limit excludes tool execution and output streaming; the whole-run
+and tool deadlines still apply. On expiry, Yantra interrupts the current prompt
+and uses the same bounded recovery sequence. Resolve the setting in this order:
+`--turn-timeout`, `YANTRA_AGENT_TURN_TIMEOUT`, `agent.turn_timeout` in the effective
+profile/preferences, then `2m`. Set a persistent preference with
+`yantra prefs set agent.turn_timeout 3m`. The flag is offered only by `do` and
+its `discover` alias; `ask` and `research` record progress without enforcing
+this stall or thinking limit.
+
+With `--json`, these updates are NDJSON `agent_progress` records on stdout;
+their `event.type` is `progress` or `recovery`. Progress events carry `items`
+and a bounded `summary`; recovery events carry `rung` (`steer`, `freeze`, or
+`stop`), `trigger` (`stalled` or `turn-timeout`), `move`, and `summary`.
+The run's `run-health.json` retains progress counts, recovery history, and
+turn timing summaries. It contains no contract-item labels or field values.
+
 ### Read the task outcome
 
 Every agentic run ends with one outcome word, which says whether the task was
@@ -608,8 +644,14 @@ five words), `artifacts` (each saved capture as a run-relative reference with
 `height`, and `sent_to_model: false`; empty when nothing was saved), and
 `termination_reason`, which records separately why the run stopped:
 `model_finished`, `wall-clock-soft`, `wall-clock-hard`, `provider-tokens`,
-`tool-budget`, `repeated-tool-failure`, `handoff`, `user_abort`, or
+`tool-budget`, `repeated-tool-failure`, `stalled`, `turn-timeout`, `handoff`, `user_abort`, or
 `provider_failed`.
+
+If stall or thinking-limit recovery ends the run, a validated Brief is retained
+as `partial` with exit `2`; its result line identifies no progress after recovery
+or the thinking limit. Without a validated Brief, the outcome is `failed`, also
+exit `2`, with `AGENT_STALLED` or `AGENT_TURN_TIMEOUT`. A partial result does not
+become fulfilled because recovery ended.
 
 When an agentic `ask` or `research` run publishes nothing, its stderr failure
 message leads with the outcome word, for example
@@ -962,8 +1004,8 @@ yantra report <run-id> --open
 ```
 
 Ordinary `doctor` is offline. It reports the health of what is _configured_:
-the `agent.budgets` check validates the wall-clock, token, tool-timeout, retry,
-and confirmation-wait values stored in your environment and `profile.yaml`, and
+the `agent.budgets` check validates the wall-clock, token, tool-timeout, thinking-timeout,
+retry, and confirmation-wait values stored in your environment and `profile.yaml`, and
 **fails** (exit `3`) on a value no agentic command could parse — a malformed
 `YANTRA_AGENT_*` variable is the usual cause, since `profile.yaml` is validated
 when written. `--refresh` re-probes the cached environment checks only; the
@@ -1062,6 +1104,10 @@ surface:
 tool: the run stops when a tool fails with the same error `n + 1` times without
 succeeding in between. A success of that tool resets its count, a different
 error restarts it, and other tools' results do not affect it.
+
+`do` and `discover` additionally offer `--turn-timeout <duration>` (default
+`2m`, minimum `10s`) for thinking before the first text or tool call in a provider
+turn. See [Progress and recovery](#follow-progress-and-recover-from-stalls).
 
 `ask`, `research`, `do`, `run`, `resume`, and `browser check` additionally share
 the browser-selection group:

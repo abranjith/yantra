@@ -173,6 +173,7 @@ export interface PolicyContext {
  * stable error codes, cancellation behaviour.
  */
 export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
+  readonly progressRole?: 'bookkeeping';
   /** Stable snake_case name (unique within the catalog). */
   readonly name: string;
   /** Concise UI label. */
@@ -200,7 +201,7 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
    * (`task_contract`, FEAT-054). Skips only the soft wall-clock refusal; the
    * hard deadline, byte caps, and every security gate still apply.
    */
-  readonly windDownExempt?: boolean;
+  readonly windDownExempt?: boolean | ((services: RunServices, params: Static<TParams>) => boolean);
   /**
    * True for tools that gather new web evidence (`web_search`, `web_fetch`).
    * Once the orchestrator freezes the evidence phase at completion-nudge time,
@@ -237,6 +238,7 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
 
 /** The provider-neutral wrapped tool `createYantraTools` turns into Pi defs. */
 export interface WrappedTool {
+  readonly progressRole?: 'bookkeeping';
   readonly name: string;
   readonly label: string;
   readonly description: string;
@@ -260,6 +262,7 @@ export function wrapTool<TParams extends TSchema>(
   services: RunServices,
 ): WrappedTool {
   return {
+    ...(spec.progressRole === undefined ? {} : { progressRole: spec.progressRole }),
     name: spec.name,
     label: spec.label,
     description: spec.description,
@@ -366,9 +369,21 @@ async function runStages<TParams extends TSchema>(
       return { result: abortedResult(spec, services), cause: 'run-aborted' };
     }
     const terminal = spec.terminal === true;
+    let conditionalExemption = false;
+    try {
+      conditionalExemption =
+        typeof spec.windDownExempt === 'function' && spec.windDownExempt(services, params);
+    } catch (error) {
+      noteProgressFailure(services, error);
+      // A broken advisory ledger restores the pre-progress capture exemption.
+      conditionalExemption = true;
+    }
+    const lateExemption =
+      conditionalExemption &&
+      (services.budgets.isFrozen() || services.budgets.isSoftWallClockExhausted());
     const reserved = services.budgets.reserveCall(spec.name, {
       terminal,
-      windDownExempt: spec.windDownExempt === true,
+      windDownExempt: spec.windDownExempt === true || conditionalExemption,
     });
     if (!reserved.isOk) {
       // The remedy only makes sense for the tools that can be starved; the
@@ -396,6 +411,14 @@ async function runStages<TParams extends TSchema>(
         ),
         cause: `budget:${reserved.error.limit}`,
       };
+    }
+
+    if (reserved.isOk && lateExemption) {
+      try {
+        services.progress.reserveExemptCapture(asDetailsRecord(params).scope);
+      } catch (error) {
+        noteProgressFailure(services, error);
+      }
     }
 
     // 3. Host + ethics + scope policy, plus the action-phase latch: after a
@@ -1077,4 +1100,18 @@ function truncateToBytes(text: string, maxBytes: number): { text: string; trunca
 /** Compact JSON for a failure/status result the model can parse. */
 function jsonText(value: unknown): string {
   return JSON.stringify(value);
+}
+
+/** Progress is advisory: a failed measurement cannot prevent the underlying tool. */
+function noteProgressFailure(services: RunServices, error: unknown): void {
+  services.progress.failOpen();
+  services.budgets.clearProgressFreeze();
+  services.runtimeLogger?.warn(
+    {
+      schema_version: 1,
+      event: 'progress_error',
+      error_class: error instanceof Error ? error.name : 'UnknownError',
+    },
+    'progress enforcement disabled',
+  );
 }

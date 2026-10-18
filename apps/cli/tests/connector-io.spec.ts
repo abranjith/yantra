@@ -240,7 +240,7 @@ describe('@no-llm cli/connector-io', () => {
     expect(stdout.value()).toMatchInlineSnapshot(`
       "Checking sources. 
       [web_fetch] fields: url
-      [web_fetch] ok â€” ok (25ms)
+      [web_fetch] ok — ok (25ms)
       "
     `);
     expect(stdout.value()).not.toContain('secret-value');
@@ -674,5 +674,49 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
         terminationReason: 'user_abort',
       }),
     ).toBe('Aborted: AGENT_ABORTED: Interrupted.');
+  });
+});
+
+describe('@no-llm FEAT-059 visible progress', () => {
+  it.each([false, true])('renders progress and recovery, json=%s', (json) => {
+    const stdout = capture(),
+      stderr = capture();
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      renderOpts: { ...makeOpts(stdout.stream, json), errStream: stderr.stream },
+      interactive: false,
+    });
+    connector.emitAgentEvent({
+      type: 'progress',
+      items: [
+        { id: 'fill', kind: 'fill', label: 'fields', state: 'advancing', done: 20, total: 48 },
+      ],
+      summary: 'fields 20/48',
+      at: '2026-10-18T12:00:00.000Z',
+    });
+    connector.emitAgentEvent({
+      type: 'recovery',
+      rung: 'freeze',
+      trigger: 'stalled',
+      move: 'publish',
+      summary: 'exploration closed, publish only',
+      at: '2026-10-18T12:00:00.000Z',
+    });
+    if (json) {
+      expect(stderr.value()).toBe('');
+      const records = stdout
+        .value()
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(records[0]).toMatchObject({
+        kind: 'agent_progress',
+        event: { type: 'progress', items: [{ done: 20 }] },
+      });
+    } else {
+      expect(stdout.value()).toBe('');
+      expect(stderr.value()).toBe(
+        'progress: fields 20/48\nrecovery: exploration closed, publish only\n',
+      );
+    }
   });
 });

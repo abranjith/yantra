@@ -499,6 +499,7 @@ export class RunHealthLedger {
    */
   public summary(input: {
     readonly runId: string;
+    readonly progress?: RunHealth['progress'];
     readonly snapshot: Pick<BudgetSnapshot, 'navigations' | 'hosts'>;
     readonly limits: { readonly maxNavigations: number; readonly maxHosts: number };
     readonly noticeCount: number;
@@ -528,6 +529,7 @@ export class RunHealthLedger {
     return {
       schema_version: RUN_HEALTH_SCHEMA_VERSION,
       run_id: input.runId,
+      ...(input.progress === undefined ? {} : { progress: input.progress }),
       searches: {
         total: searches.length,
         ok: searches.filter((outcome) => outcome.status === 'ok').length,

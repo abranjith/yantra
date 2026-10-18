@@ -185,3 +185,33 @@ describe('@no-llm auditProjectionOf — the seam’s tool_finished output withou
     expect(projected.content[0]?.type).toBe('text');
   });
 });
+
+describe('@no-llm FEAT-059 turn events', () => {
+  it('latches first output, resets each turn, and never forwards thinking', () => {
+    const ctx = createDefaultPiEventMapContext();
+    const map = (event: unknown) => mapPiEvent(event as AgentSessionEvent, ctx);
+    expect(map({ type: 'turn_start' })[0]?.type).toBe('turn_started');
+    expect(
+      map({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_delta', delta: 'CANARY-THOUGHT-7f3a' },
+      }),
+    ).toEqual([]);
+    expect(
+      map({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_start' } })[0]?.type,
+    ).toBe('output_started');
+    expect(map({ type: 'message_update', assistantMessageEvent: { type: 'text_start' } })).toEqual(
+      [],
+    );
+    map({ type: 'turn_start' });
+    expect(
+      map({ type: 'message_update', assistantMessageEvent: { type: 'text_start' } })[0]?.type,
+    ).toBe('output_started');
+    expect(
+      map({ type: 'turn_end', message: { role: 'assistant', usage: { reasoning: 412 } } })[0],
+    ).toMatchObject({ usage: { reasoningTokens: 412 } });
+    expect(
+      map({ type: 'turn_end', message: { role: 'assistant', usage: {} } })[0],
+    ).not.toHaveProperty('usage.reasoningTokens');
+  });
+});

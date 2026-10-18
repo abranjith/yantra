@@ -192,6 +192,7 @@ export function resultPublishSpec(services: RunServices): ToolWrapperSpec<TObjec
     services.template === null ? ResultPublishParams : templateParamsFor(services.template);
   return {
     name: 'result_publish',
+    progressRole: 'bookkeeping',
     label: 'Publish Result',
     description:
       services.template === null

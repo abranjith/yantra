@@ -106,3 +106,55 @@ describe('@no-llm RunHealth schema', () => {
     expect(JSON_SCHEMA_ARTIFACTS['run-health.json']?.name).toBe('RunHealth');
   });
 });
+
+describe('@no-llm FEAT-059 progress artifact', () => {
+  const progress: NonNullable<RunHealthType['progress']> = {
+    mode: 'enforce',
+    items: [{ kind: 'fill', state: 'advancing' }],
+    fill: { done: 9, total: 48 },
+    signals: {
+      new_document: 0,
+      new_page: 1,
+      action_verified: 1,
+      artifact_saved: 0,
+      item_advanced: 1,
+    },
+    counted_calls: 3,
+    no_progress_calls: 0,
+    longest_no_progress_ms: 1000,
+    recovery: {
+      rungs: ['steer', 'freeze'],
+      triggers: ['stalled', 'stalled'],
+      refused_after_freeze: 0,
+      steer_idle: 0,
+    },
+    turns: {
+      count: 1,
+      with_timing: 1,
+      thinking_ms_total: 900,
+      thinking_ms_max: 900,
+      provider_ms_total: 1000,
+      reasoning_tokens: 412,
+      turn_limit_aborts: 0,
+    },
+  };
+  it('accepts old runs and a ladder prefix', () => {
+    expect(RunHealth.safeParse(health()).success).toBe(true);
+    expect(RunHealth.parse(health({ progress })).progress).toEqual(progress);
+  });
+  it('refuses a skipped rung and page-derived labels', () => {
+    expect(
+      RunHealth.safeParse(
+        health({
+          progress: { ...progress, recovery: { ...progress.recovery, rungs: ['freeze'] } },
+        }),
+      ).success,
+    ).toBe(false);
+    expect(
+      RunHealth.safeParse({
+        ...health({ progress }),
+        progress: { ...progress, items: [{ kind: 'fill', state: 'pending', label: 'private' }] },
+      }).success,
+    ).toBe(false);
+  });
+});

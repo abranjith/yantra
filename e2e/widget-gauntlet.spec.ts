@@ -13,6 +13,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { withRunProgress } from '@yantra/agent';
 import {
   ActionPhase,
   BudgetTracker,
@@ -388,7 +389,7 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
   provenance.seed({ allowedHosts: ['127.0.0.1', 'localhost'] });
   const ethics = { check: () => Promise.resolve() };
   let interactionClockMs = 0;
-  return {
+  return withRunProgress({
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
@@ -469,5 +470,5 @@ function buildServices(runDir: string, controller: AgentBrowserController): RunS
       },
       rank: null,
     },
-  };
+  });
 }

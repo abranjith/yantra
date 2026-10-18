@@ -127,6 +127,7 @@ const BUDGET_TERMINATIONS: ReadonlySet<TerminationReason> = new Set<TerminationR
   'wall-clock-hard',
   'provider-tokens',
   'tool-budget',
+  'turn-timeout',
 ]);
 
 /**
@@ -170,6 +171,8 @@ export function failureClassFor(outcome: AgenticTaskOutcome): FailureClass | und
     case 'aborted':
       return 'user_aborted';
     case 'failed':
+      if (outcome.terminationReason === 'stalled') return 'requirements_unmet';
+      if (outcome.terminationReason === 'turn-timeout') return 'budget_exhausted';
       // A missing/unvalidated publication is a validation-contract failure,
       // not an unexpected crash: keep manifest/events consistent with the
       // AGENT_COMPLETION_MISSING code report.md already shows.
@@ -242,5 +245,14 @@ export function outcomeSummary(
     const more = requirements.unmet.length - named.length;
     body = [`${word}: ${count}`, ...named, ...(more > 0 ? [`+${more} more`] : [])].join('; ');
   }
-  return body.length <= FIRST_LINE_MAX ? body : `${body.slice(0, FIRST_LINE_MAX - 1)}…`;
+  const suffix =
+    outcome.taskOutcome === 'partial'
+      ? outcome.terminationReason === 'stalled'
+        ? ' (stopped: no progress after recovery)'
+        : outcome.terminationReason === 'turn-timeout'
+          ? ' (stopped: thinking limit)'
+          : ''
+      : '';
+  const max = FIRST_LINE_MAX - suffix.length;
+  return (body.length <= max ? body : `${body.slice(0, max - 1)}…`) + suffix;
 }

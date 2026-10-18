@@ -27,6 +27,30 @@ const available = {
 };
 
 describe('agent runtime diagnostics', () => {
+  it('reports and validates the thinking timeout and its source', async () => {
+    const checks = await runAgentDiagnostics(
+      { YANTRA_AGENT_TURN_TIMEOUT: '3m' },
+      prefs({ 'agent.turn_timeout': '4m' }),
+      {},
+      available,
+    );
+    expect(checks.find((c) => c.id === 'agent.budgets')).toMatchObject({
+      status: 'ok',
+      details: { turnTimeout: { value: '3m', source: 'env' } },
+    });
+    const invalid = await runAgentDiagnostics(
+      { YANTRA_AGENT_TURN_TIMEOUT: '5s' },
+      new Map(),
+      {},
+      available,
+    );
+    expect(invalid.find((c) => c.id === 'agent.budgets')).toMatchObject({
+      status: 'error',
+      details: {
+        invalid: expect.arrayContaining([expect.objectContaining({ setting: 'turn_timeout' })]),
+      },
+    });
+  });
   it('reports flag > environment > profile > default model precedence and sources', async () => {
     const profile = prefs({
       'agent.provider': 'profile-provider',

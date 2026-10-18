@@ -31,6 +31,7 @@ export type BriefKind = 'answer' | 'research' | 'task';
 /** Immutable preset governing one command's agentic session. */
 export interface CommandTaskProfile {
   readonly command: AgenticCommand;
+  readonly progress: 'enforce' | 'observe';
   readonly toolNames: readonly YantraToolName[];
   readonly workflowToolMode: WorkflowToolMode;
   /** Appended only to the per-run user prompt, never the system prompt. */
@@ -108,6 +109,7 @@ const ALL_TOOLS = [
 export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskProfile>> = {
   ask: {
     command: 'ask',
+    progress: 'observe',
     toolNames: [...READ_TOOLS, 'workflow_run'],
     workflowToolMode: 'list',
     promptAddendum:
@@ -121,6 +123,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
   },
   research: {
     command: 'research',
+    progress: 'observe',
     toolNames: [...READ_TOOLS, 'workflow_run', 'task_contract'],
     workflowToolMode: 'run',
     // The stable default is the no-browse catalog; `resolveCommandTaskProfile`
@@ -130,10 +133,11 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
   },
   do: {
     command: 'do',
+    progress: 'enforce',
     toolNames: ALL_TOOLS,
     workflowToolMode: 'run',
     promptAddendum:
-      `Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
+      `If Yantra sends a progress check, follow its Next step or publish what you have; it is sent at most once. Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
       `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ${CAPTURE_DELIVERABLE} ` +
       `When a form needs more than one field set, use browser_fill_form: up to ${FILL_FORM_MAX_FIELDS} fields per call, ` +
       'in page order, never one call per field. A longer form takes several calls; after each one, read its ' +

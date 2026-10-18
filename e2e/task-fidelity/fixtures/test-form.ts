@@ -57,6 +57,9 @@ export const TEST_FORM_ROUTES: readonly string[] = Object.freeze([
   TEST_FORM_PATH,
   TEST_FORM_SUBMITTED_PATH,
   TEST_FORM_SHORT_PATH,
+  '/progress/start',
+  '/progress/next',
+  '/progress/autocomplete',
 ]);
 
 /** One labeled text-like input. */
@@ -134,6 +137,30 @@ export const TEST_FORM_ADD_ANOTHER_NAME = 'Add another reference';
  * @param _query URL search parameters (unused).
  */
 export function renderTestForm(path: string, _query: URLSearchParams): RenderedPage | null {
+  if (path === '/progress/start')
+    return htmlPage(
+      htmlDocument({
+        header: header(),
+        title: 'Step one',
+        body: '<main><h1>Step one</h1><a href="/progress/next">Continue</a></main>',
+      }),
+    );
+  if (path === '/progress/next')
+    return htmlPage(
+      htmlDocument({
+        header: header(),
+        title: 'Step two',
+        body: '<main><h1>Step two</h1><p>The next page was reached.</p></main>',
+      }),
+    );
+  if (path === '/progress/autocomplete')
+    return htmlPage(
+      htmlDocument({
+        header: header(),
+        title: 'Destination selection',
+        body: autocompleteFixture(),
+      }),
+    );
   if (path === TEST_FORM_PATH) return htmlPage(formPage());
   if (path === TEST_FORM_SUBMITTED_PATH) return htmlPage(submittedPage());
   if (path === TEST_FORM_SHORT_PATH) return htmlPage(shortFormPage());
@@ -272,4 +299,12 @@ function submittedPage(): string {
     title: 'Application received',
     body: '<main><h1>Application received</h1><p>Thank you.</p></main>',
   });
+}
+
+/** A generic ARIA autocomplete whose delayed option commits a canonical label. */
+function autocompleteFixture(): string {
+  return (
+    '<main><h1>Destination selection</h1><label>Destination <input id="destination" role="combobox" aria-autocomplete="list" aria-controls="destinations" aria-expanded="false"></label><ul role="listbox" id="destinations" hidden></ul><button type="button" id="confirm">Confirm selection</button><output id="verified"></output></main>' +
+    '<script>const field=document.getElementById("destination"), list=document.getElementById("destinations"); let pending; field.addEventListener("input",()=>{clearTimeout(pending);pending=setTimeout(()=>{if(!field.value)return;list.hidden=false;field.setAttribute("aria-expanded","true");list.innerHTML="<li role=option>North Region</li>";list.firstElementChild.addEventListener("click",()=>{field.value="North Region";field.setAttribute("aria-expanded","false");list.hidden=true;field.dispatchEvent(new Event("change",{bubbles:true}));});},100);});document.getElementById("confirm").onclick=()=>{document.getElementById("verified").textContent=field.value?"Selection verified":"No selection";};</script>'
+  );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseAgentTurnTimeoutMs } from '../../src/profile/agent-budgets.js';
 import {
   AGENT_DURATION_PATTERN,
   formatAgentDuration,
@@ -96,4 +97,15 @@ describe('@no-llm agent budget grammar', () => {
     expect(validatePreference('agent.max_duration', '15m').isOk).toBe(true);
     expect(validatePreference('agent.max_duration', 'soon').isOk).toBe(false);
   });
+});
+
+describe('@no-llm thinking timeout grammar', () => {
+  it.each(['2m', ' 2m ', '10s', '10000', '5s', '0', 'soon', '999999999999999h'])(
+    'agrees with the preference schema for %s',
+    (raw) => {
+      expect(validatePreference('agent.turn_timeout', raw).isOk).toBe(
+        parseAgentTurnTimeoutMs(raw) !== null,
+      );
+    },
+  );
 });

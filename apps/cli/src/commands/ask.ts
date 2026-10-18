@@ -463,6 +463,7 @@ async function runAgenticAsk(
     {
       goal: question,
       model: agent.model,
+      ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,
       profile,
       budgets: agent.budgets,

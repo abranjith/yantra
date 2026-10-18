@@ -86,6 +86,7 @@ import {
   withRequirements,
   yantraToolCatalog,
 } from '../adapters/pi/tools/index.js';
+import { buildYantraWrappedTools } from '../adapters/pi/tools/index.js';
 import { AgentStartupError, AgentSessionStartFailedError } from '../errors.js';
 import type {
   AgentAuthSelection,
@@ -115,9 +116,12 @@ import {
   deliverableContractCapabilities,
   type ContractCapabilityResolver,
 } from './contract-capabilities.js';
+import { normalizeDeliveryName } from './contract-delivery.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
+import { fillCoverage } from './fulfillment.js';
 import { FulfillmentRecord, type FulfillmentEvaluation } from './fulfillment.js';
 import { locationHandoffFor } from './location-gate.js';
+import { renderAgentMessage } from './messages.js';
 import type { ToolStatus } from './middleware.js';
 import {
   TASK_OUTCOME_TABLE,
@@ -135,9 +139,18 @@ import {
   promptAddendumFor,
   type CommandTaskProfile,
 } from './profiles.js';
+import { renderProgressLine, type ProgressLedger } from './progress-ledger.js';
 import { AGENT_SYSTEM_PROMPT, buildAgentUserPrompt, type AgentPromptBudgets } from './prompt.js';
+import {
+  RecoveryRunner,
+  buildRecoveryMessage,
+  isStalled,
+  type RecoveryRung,
+  type RecoveryTrigger,
+} from './recovery.js';
 import { countingBrowserProvider, recordFetchTierEvent, RunHealthLedger } from './run-health.js';
 import { RunRecorder } from './run-recorder.js';
+import { withRunProgress } from './run-services.js';
 import {
   ActionPhase,
   EvidenceLedger,
@@ -267,6 +280,7 @@ export interface AgentBudgetConfig extends BudgetLimits, AgentPromptBudgets {
   readonly maxProviderTokens: number;
   readonly toolRetries: number;
   readonly confirmationWaitMs: number;
+  readonly turnTimeoutMs: number;
 }
 
 /** Production defaults for the one shared agentic budget surface. */
@@ -285,6 +299,7 @@ export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
   // usually win, discarding its more specific result.
   perToolTimeoutMs: 3 * 60 * 1000,
   maxProviderTokens: 2_000_000,
+  turnTimeoutMs: 120_000,
   toolRetries: 3,
   confirmationWaitMs: 3 * 60 * 1000,
 };
@@ -295,6 +310,7 @@ export interface AgenticTaskRequest {
   /** Least-privilege command preset; defaults to the existing `do` behavior. */
   readonly profile?: CommandTaskProfile;
   readonly model: AgentModelSelection;
+  readonly thinkingSource?: 'flag' | 'environment' | 'preference' | 'default';
   readonly auth: AgentAuthSelection;
   readonly budgets?: Partial<AgentBudgetConfig>;
   readonly allowedHosts?: readonly string[];
@@ -591,6 +607,7 @@ export async function runAgenticTask(
   let startupFinalized = false;
   let terminal: AgenticTaskOutcome | undefined;
   let budgetTracker: BudgetTracker | undefined;
+  let progress: ProgressLedger | undefined;
   const trace = new AgentTrace();
   const teardownErrors: Error[] = [];
   // The run's own record of what happened to it: every runtime-derived
@@ -700,55 +717,60 @@ export async function runAgenticTask(
       // cannot be published without one.
       requiredToPublish: profile.command === 'do',
     });
-    const services: RunServices = {
-      runId: created.runId,
-      runDir: created.runDir,
-      template: request.template?.manifest ?? null,
-      vision,
-      capture,
-      budgets: runBudget,
-      sanitizer,
-      userInput,
-      modelValues,
-      urlPolicy: new UrlPolicy(runBudget, {
-        maxUrlLength: dependencies.urlPolicyConfig?.maxUrlLength ?? 2048,
-        requireHttps: dependencies.urlPolicyConfig?.requireHttps ?? true,
-        ...(request.allowedHosts && request.allowedHosts.length > 0
-          ? { allowedHosts: request.allowedHosts }
-          : dependencies.urlPolicyConfig?.allowedHosts
-            ? { allowedHosts: dependencies.urlPolicyConfig.allowedHosts }
-            : {}),
-      }),
-      urlProvenance,
-      runHealth,
-      documents,
-      confirmation: { gateway: confirmationBridge, store: null },
-      actionPhase,
-      evidence,
-      evidencePhase: new EvidencePhase(),
-      trace,
-      abortSignal: runAbort.signal,
-      now: () => now().getTime(),
-      nowIso: () => now().toISOString(),
-      domain,
-      workflowToolMode: profile.workflowToolMode,
-      ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
-      contract,
-      fulfillment: new FulfillmentRecord(),
-      fillCensus: {
-        census: async () => {
-          const controller = domain.browser?.controller;
-          return controller?.launched ? controller.fillCensus() : null;
-        },
-      },
-      actionLedger: actionLedgerFor({
-        controller: domain.browser?.controller ?? null,
+    const services: RunServices = withRunProgress(
+      {
+        runId: created.runId,
+        runDir: created.runDir,
+        template: request.template?.manifest ?? null,
+        vision,
+        capture,
+        budgets: runBudget,
         sanitizer,
         userInput,
+        modelValues,
+        urlPolicy: new UrlPolicy(runBudget, {
+          maxUrlLength: dependencies.urlPolicyConfig?.maxUrlLength ?? 2048,
+          requireHttps: dependencies.urlPolicyConfig?.requireHttps ?? true,
+          ...(request.allowedHosts && request.allowedHosts.length > 0
+            ? { allowedHosts: request.allowedHosts }
+            : dependencies.urlPolicyConfig?.allowedHosts
+              ? { allowedHosts: dependencies.urlPolicyConfig.allowedHosts }
+              : {}),
+        }),
+        urlProvenance,
+        runHealth,
+        documents,
+        confirmation: { gateway: confirmationBridge, store: null },
+        actionPhase,
+        evidence,
+        evidencePhase: new EvidencePhase(),
+        trace,
+        abortSignal: runAbort.signal,
+        now: () => now().getTime(),
         nowIso: () => now().toISOString(),
-        ...(environment.runtimeLogger ? { logger: environment.runtimeLogger } : {}),
-      }),
-    };
+        domain,
+        workflowToolMode: profile.workflowToolMode,
+        ...(environment.runtimeLogger ? { runtimeLogger: environment.runtimeLogger } : {}),
+        contract,
+        fulfillment: new FulfillmentRecord(),
+        fillCensus: {
+          census: async () => {
+            const controller = domain.browser?.controller;
+            return controller?.launched ? controller.fillCensus() : null;
+          },
+        },
+        actionLedger: actionLedgerFor({
+          controller: domain.browser?.controller ?? null,
+          sanitizer,
+          userInput,
+          nowIso: () => now().toISOString(),
+          ...(environment.runtimeLogger ? { logger: environment.runtimeLogger } : {}),
+        }),
+      },
+      profile.progress,
+      dependencies.budgetNow,
+    );
+    progress = services.progress;
     const tools = createYantraTools(services, profile);
     const provider =
       dependencies.createProvider?.(services, environment) ??
@@ -777,6 +799,7 @@ export async function runAgenticTask(
         attended: request.interactive === true,
         browserCapability: browserCapabilityOf(profile.toolNames),
         promptAddendum: promptAddendumFor(profile, services.template),
+        progress: profile.progress,
       },
       userInput,
     );
@@ -794,6 +817,7 @@ export async function runAgenticTask(
       runDir: created.runDir,
       session,
       model: request.model,
+      thinkingSource: request.thinkingSource ?? 'default',
       systemPrompt: AGENT_SYSTEM_PROMPT,
       tools: yantraToolCatalog(services, profile),
       budgets: manifestBudgets(budgetsConfig),
@@ -812,6 +836,8 @@ export async function runAgenticTask(
       runId: created.runId,
       runDir: created.runDir,
       contract,
+      services,
+      registeredTools: buildYantraWrappedTools(services, profile),
       capabilities:
         services.contractCapabilities ?? deliverableContractCapabilities(capture.deliverable),
     });
@@ -897,6 +923,14 @@ export async function runAgenticTask(
         snapshot: budgetTracker?.snapshot() ?? { navigations: 0, hosts: 0 },
         limits: budgetsConfig,
         noticeCount: runHealth.publishedNoticeCount(),
+        ...(progress === undefined
+          ? {}
+          : {
+              progress: {
+                ...progress.summary(),
+                turns: { ...progress.turns, ...recorder?.turnSummary() },
+              },
+            }),
         ...(environment?.pagePool === undefined ? {} : { pagePool: environment.pagePool.stats() }),
         ...(environment === undefined ? {} : { search: environment.domain.search.service.stats() }),
       });
@@ -960,6 +994,9 @@ interface ExecutionState {
   readonly lastError: AgentError | undefined;
   readonly handoff: { blocker: string; safestNextAction: string } | undefined;
   /** Set when the stuck-loop breaker stopped the run on repeated identical failures. */
+  readonly stalled: { calls: number; ms: number } | undefined;
+  readonly turnTimeout: { thinkingMs: number } | undefined;
+  readonly recoveryReason: 'stalled' | 'turn-timeout' | undefined;
   readonly repeatedFailure: { tool: string; errorCode: string } | undefined;
   /** Accumulated (post-sanitizer) assistant text of the most recent prompt run. */
   readonly lastResponseText: string;
@@ -980,6 +1017,12 @@ function createExecutionState(input: {
   /** The run's contract store; each new revision is echoed once to the connector. */
   readonly contract: TaskContractStore;
   /** What the run can deliver; each undeliverable declared item is disclosed once. */
+  readonly services: RunServices;
+  readonly registeredTools: readonly {
+    readonly name: string;
+    readonly progressRole?: 'bookkeeping';
+    readonly parameters?: unknown;
+  }[];
   readonly capabilities: ContractCapabilityResolver;
 }): ExecutionState {
   const starts = new Map<string, number>();
@@ -1046,8 +1089,172 @@ function createExecutionState(input: {
     }
   };
 
+  const progress = input.services.progress;
+  const recovery = new RecoveryRunner(progress.recovery, () => progress.rebase());
+  let stalled: { calls: number; ms: number } | undefined;
+  let turnTimeout: { thinkingMs: number } | undefined;
+  let recoveryReason: 'stalled' | 'turn-timeout' | undefined;
+  let pendingRecovery: string | undefined;
+  let turnTimer: ReturnType<typeof setTimeout> | undefined;
+  let turnAbortPending = false;
+  let turnAbortPromise: Promise<void> | undefined;
+  const clearTurnTimer = (): void => {
+    clearTimeout(turnTimer);
+    turnTimer = undefined;
+  };
+  const disableProgress = (error: unknown): void => {
+    progress.failOpen();
+    input.budgetTracker.clearProgressFreeze();
+    clearTurnTimer();
+    input.services.runtimeLogger?.warn(
+      {
+        schema_version: 1,
+        event: 'progress_error',
+        error_class: error instanceof Error ? error.name : 'UnknownError',
+      },
+      'progress enforcement disabled',
+    );
+  };
+  let steeringTail: Promise<void> = Promise.resolve();
+  const cleanRecovery = (text: string): string =>
+    input.services.sanitizer
+      .sanitize(input.services.userInput?.mask(text) ?? text, 'public')
+      // Strip terminal control characters from runtime-authored advice.
+      // eslint-disable-next-line no-control-regex
+      .text.replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/gu, '');
+  const fireRecovery = (rung: RecoveryRung, trigger: RecoveryTrigger): string => {
+    const census = progress.sources.census();
+    const terms = progress.sources.terms();
+    let coverage =
+      census === null ? null : fillCoverage(census, input.services.actionLedger.entries());
+    if (coverage !== null && terms.fill?.coverage === 'listed') {
+      const names = new Set(terms.fill.fields.map(normalizeDeliveryName));
+      coverage = {
+        ...coverage,
+        remaining: coverage.remaining.filter((c) => names.has(normalizeDeliveryName(c.label))),
+      };
+    }
+    const built = buildRecoveryMessage({
+      rung: rung.id,
+      trigger,
+      state: {
+        explorationOpen:
+          !input.budgetTracker.isFrozen() && !input.budgetTracker.isSoftWallClockExhausted(),
+        items: progress.liveItems(),
+        coverage,
+        tools: new Set(input.registeredTools.map((t) => t.name)),
+        fieldKinds: input.registeredTools.some(
+          (t) =>
+            t.name === 'browser_observe' &&
+            asRecord(asRecord(t.parameters)?.properties)?.kinds !== undefined,
+        ),
+        captureScopes:
+          input.services.capture.deliverable.available &&
+          input.budgetTracker.remainingDeliverableCaptures() > 0
+            ? (['viewport', 'full_page'] as const).filter(
+                (scope) =>
+                  (!input.budgetTracker.isFrozen() &&
+                    !input.budgetTracker.isSoftWallClockExhausted()) ||
+                  progress.captureExemptionAvailable(scope),
+              )
+            : [],
+        clean: cleanRecovery,
+      },
+      explorationMs: input.budgetTracker.explorationRemainingMs(),
+      publicationMs: input.budgetTracker.publicationHeadroomMs(),
+    });
+    if (rung.id === 'freeze') {
+      recoveryReason = trigger.kind;
+      input.budgetTracker.freezeExploration();
+      input.services.runtimeLogger?.info(
+        { schema_version: 1, event: 'exploration_frozen' },
+        'exploration closed',
+      );
+    }
+    input.services.runtimeLogger?.info(
+      {
+        schema_version: 1,
+        event: 'recovery_rung',
+        rung: rung.id,
+        trigger: trigger.kind,
+        move: rung.id === 'stop' ? null : built.move.id,
+      },
+      'recovery rung',
+    );
+    input.connector.emitAgentEvent({
+      type: 'recovery',
+      rung: rung.id,
+      trigger: trigger.kind,
+      move: rung.id === 'stop' ? null : built.move.id,
+      summary:
+        trigger.kind === 'turn-timeout'
+          ? `thinking exceeded ${Math.round(trigger.thinkingMs / 1000)}s; ${rung.id === 'steer' ? 'act on the next step' : rung.id === 'freeze' ? 'exploration closed, publish only' : 'run stopped'}`
+          : rung.id === 'steer'
+            ? 'no task progress; try the next supported step'
+            : rung.id === 'freeze'
+              ? 'still no progress; exploration closed, publish only'
+              : 'still no progress; run stopped',
+      at: input.services.nowIso(),
+    });
+    if (rung.id === 'stop') {
+      if (trigger.kind === 'stalled') stalled = { calls: trigger.calls, ms: trigger.ms };
+      else turnTimeout = { thinkingMs: trigger.thinkingMs };
+      interrupt(trigger.kind);
+    }
+    return built.message;
+  };
+  const steer = (message: string): void => {
+    let queued: Promise<'queued' | 'idle'>;
+    try {
+      queued = input.session.steer(message);
+    } catch (error) {
+      disableProgress(error);
+      progress.recovery.steer_idle += 1;
+      pendingRecovery = message;
+      return;
+    }
+    steeringTail = steeringTail.then(async () => {
+      try {
+        if ((await queued) === 'queued') return;
+      } catch (error) {
+        disableProgress(error);
+      }
+      progress.recovery.steer_idle += 1;
+      pendingRecovery = message;
+    });
+  };
+
   const onEvent = (event: AgentEvent): void => {
     switch (event.type) {
+      case 'turn_started':
+        clearTurnTimer();
+        if (progress.enforcing() && !input.runAbort.signal.aborted) {
+          turnTimer = setTimeout(() => {
+            try {
+              const trigger: RecoveryTrigger = {
+                kind: 'turn-timeout',
+                thinkingMs: input.budgets.turnTimeoutMs,
+              };
+              const rung = recovery.onTrigger(trigger);
+              if (rung === null) return;
+              const message = fireRecovery(rung, trigger);
+              if (rung.id === 'stop') return;
+              progress.turns.turn_limit_aborts += 1;
+              pendingRecovery = `Your last turn exceeded the ${input.budgets.turnTimeoutMs / 1000}s thinking limit and was stopped.\n${message}`;
+              turnAbortPending = true;
+              turnAbortPromise = input.session.abort().catch((error) => {
+                disableProgress(error);
+              });
+            } catch (error) {
+              disableProgress(error);
+            }
+          }, input.budgets.turnTimeoutMs);
+          turnTimer.unref?.();
+        }
+        return;
+      case 'output_started':
+        clearTurnTimer();
+        return;
       case 'assistant_text':
         lastResponseText += event.text;
         input.connector.emitAgentEvent(event);
@@ -1124,9 +1331,82 @@ function createExecutionState(input: {
           };
         }
         trackFailureStreak(event.tool, metadata);
+        try {
+          const role =
+            input.registeredTools.find((tool) => tool.name === event.tool)?.progressRole ??
+            'counted';
+          const checkpoint = input.services.progress.checkpoint({
+            tool: event.tool,
+            role,
+            at: event.at,
+          });
+          if (checkpoint.advanced)
+            input.services.runtimeLogger?.info(
+              {
+                schema_version: 1,
+                event: 'progress_checkpoint',
+                signals: checkpoint.signals,
+                no_progress_calls: checkpoint.noProgressCalls,
+              },
+              'task progress',
+            );
+          if (checkpoint.changedItems.length > 0) {
+            const items = input.services.progress.liveItems();
+            input.connector.emitAgentEvent({
+              type: 'progress',
+              items,
+              summary: renderProgressLine(items),
+              at: event.at,
+            });
+          }
+          if (
+            progress.enforcing() &&
+            repeatedFailure === undefined &&
+            !input.runAbort.signal.aborted
+          ) {
+            const refusalRung =
+              metadata.budgetLimit === 'stalled'
+                ? recovery.onRefusalAfterFreeze(input.budgetTracker.refusedAfterFreeze())
+                : null;
+            if (refusalRung !== null)
+              fireRecovery(refusalRung, {
+                kind: 'stalled',
+                calls: checkpoint.noProgressCalls,
+                ms: checkpoint.msSinceProgress,
+              });
+            else if (
+              role === 'counted' &&
+              isStalled(checkpoint, input.budgetTracker.isSoftWallClockExhausted())
+            ) {
+              const trigger: RecoveryTrigger = {
+                kind: 'stalled',
+                calls: checkpoint.noProgressCalls,
+                ms: checkpoint.msSinceProgress,
+              };
+              input.services.runtimeLogger?.info(
+                {
+                  schema_version: 1,
+                  event: 'stall_detected',
+                  calls: trigger.calls,
+                  ms: trigger.ms,
+                  item_count: progress.liveItems().length,
+                },
+                'semantic stall',
+              );
+              const rung = recovery.onTrigger(trigger);
+              if (rung !== null) {
+                const message = fireRecovery(rung, trigger);
+                if (rung.id !== 'stop') steer(message);
+              }
+            }
+          }
+        } catch (error) {
+          disableProgress(error);
+        }
         return;
       }
       case 'turn_finished':
+        clearTurnTimer();
         providerTokens += (event.usage.inputTokens ?? 0) + (event.usage.outputTokens ?? 0);
         if (providerTokens >= input.budgets.maxProviderTokens) {
           interrupt('provider-tokens');
@@ -1148,9 +1428,20 @@ function createExecutionState(input: {
       input.runAbort.signal.addEventListener('abort', () => resolve(undefined), { once: true });
     });
     const result = await Promise.race([runPromise, interrupted]);
+    await steeringTail;
     if (result === undefined) {
       void runPromise.catch(() => undefined);
       await abortPromise;
+    }
+    clearTurnTimer();
+    if (turnAbortPending) {
+      await turnAbortPromise;
+      turnAbortPending = false;
+    }
+    if (pendingRecovery !== undefined && !input.runAbort.signal.aborted && !published) {
+      const message = pendingRecovery;
+      pendingRecovery = undefined;
+      return runPrompt(message);
     }
     return result;
   };
@@ -1174,6 +1465,15 @@ function createExecutionState(input: {
     get handoff() {
       return handoff;
     },
+    get stalled() {
+      return stalled;
+    },
+    get turnTimeout() {
+      return turnTimeout;
+    },
+    get recoveryReason() {
+      return recoveryReason;
+    },
     get repeatedFailure() {
       return repeatedFailure;
     },
@@ -1184,6 +1484,7 @@ function createExecutionState(input: {
     runPrompt,
     dispose: () => {
       clearTimeout(wallTimer);
+      clearTurnTimer();
       input.request.signal?.removeEventListener('abort', onUserAbort);
     },
   };
@@ -1302,6 +1603,20 @@ async function resolveTerminalOutcome(
         `progress. Re-run once the underlying cause is resolved.`,
     });
   }
+  if (state.stalled !== undefined)
+    return failed(runId, runDir, {
+      code: 'AGENT_STALLED',
+      message: renderAgentMessage('tool', 'AGENT_STALLED', 'stopped', {
+        progress: renderProgressLine(services.progress.liveItems()) || 'requirements unmet',
+      }),
+    });
+  if (state.turnTimeout !== undefined)
+    return failed(runId, runDir, {
+      code: 'AGENT_TURN_TIMEOUT',
+      message: renderAgentMessage('tool', 'AGENT_TURN_TIMEOUT', 'thinking-limit', {
+        limit: `${state.turnTimeout.thinkingMs / 1000}s`,
+      }),
+    });
   if (state.budgetReason !== undefined) {
     return {
       kind: 'budget_exhausted',
@@ -1558,6 +1873,7 @@ function manifestBudgets(budgets: AgentBudgetConfig): AgentRunBudgets {
     Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
   return {
     wall_clock_ms: bounded(budgets.wallClockMs),
+    turn_timeout_ms: budgets.turnTimeoutMs,
     soft_wall_clock_fraction: budgets.softWallClockFraction,
     max_provider_tokens: bounded(budgets.maxProviderTokens),
     max_navigations: Math.max(0, Math.round(budgets.maxNavigations)),
@@ -1571,6 +1887,8 @@ const INTERRUPT_TERMINATIONS: Readonly<Record<string, TerminationReason>> = {
   'wall-clock': 'wall-clock-hard',
   'provider-tokens': 'provider-tokens',
   'tool-budget': 'tool-budget',
+  stalled: 'stalled',
+  'turn-timeout': 'turn-timeout',
   'repeated-tool-failure': 'repeated-tool-failure',
 };
 
@@ -1592,7 +1910,9 @@ function terminationReasonFor(
     if (state.handoff !== undefined) return 'handoff';
     if (result?.outcome === 'failed' || state.lastError !== undefined) return 'provider_failed';
   }
-  return budgets.softWindDownReached ? 'wall-clock-soft' : 'model_finished';
+  return (
+    state.recoveryReason ?? (budgets.softWindDownReached ? 'wall-clock-soft' : 'model_finished')
+  );
 }
 
 /**
@@ -1947,6 +2267,8 @@ function normalizeBudgets(overrides: Partial<AgentBudgetConfig> | undefined): Ag
       throw new Error(`Agent budget "${key}" must be a positive finite number.`);
     }
   }
+  if (merged.turnTimeoutMs < 10000)
+    throw new Error('Agent budget "turnTimeoutMs" must be at least 10000 ms.');
   if (merged.softWallClockFraction > 1) {
     throw new Error('Agent budget "softWallClockFraction" must be at most 1.');
   }

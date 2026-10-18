@@ -24,6 +24,7 @@ import {
 import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { wrapTool, type DomainResult, type ToolWrapperSpec } from '../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
+import { withRunProgress } from '../../src/runtime/run-services.js';
 import { ActionPhase, type RunServices } from '../../src/runtime/run-services.js';
 import { TaskContractStore } from '../../src/runtime/task-contract.js';
 import { UrlPolicy } from '../../src/runtime/url-policy.js';
@@ -46,7 +47,7 @@ interface ServicesOverrides {
 function makeServices(overrides: ServicesOverrides = {}): RunServices {
   const budgets = new BudgetTracker({ ...DEFAULT_BUDGET_LIMITS, ...overrides.limits });
   const sanitizer = new DefaultSanitizer();
-  return {
+  return withRunProgress({
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir: overrides.runDir ?? '/tmp/run',
     template: null,
@@ -102,7 +103,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       sanitizer,
       nowIso: () => new Date().toISOString(),
     }),
-  };
+  });
 }
 
 /** A {@link Logger} that keeps every structured payload it was handed. */

@@ -41,6 +41,7 @@ import { FulfillmentRecord } from '../../../../src/runtime/fulfillment.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import { RunHealthLedger } from '../../../../src/runtime/run-health.js';
+import { withRunProgress } from '../../../../src/runtime/run-services.js';
 import {
   ActionPhase,
   EvidenceLedger,
@@ -152,7 +153,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
     capability: { imageInput: false, resolvedAt: 'pre-catalog' },
     ...options.vision,
   };
-  return {
+  return withRunProgress({
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
     template: options.template ?? null,
@@ -201,7 +202,7 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
         nowIso: () => new Date().toISOString(),
         ...(options.runtimeLogger ? { logger: options.runtimeLogger } : {}),
       }),
-  };
+  });
 }
 
 /** A {@link Logger} that keeps every structured payload it was handed. */

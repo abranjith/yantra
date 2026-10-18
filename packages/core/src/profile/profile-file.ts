@@ -24,7 +24,11 @@ import { z } from 'zod';
 
 import { configDir } from '../browser/paths.js';
 
-import { AGENT_DURATION_HINT, AGENT_DURATION_PATTERN } from './agent-budgets.js';
+import {
+  AGENT_DURATION_HINT,
+  AGENT_DURATION_PATTERN,
+  parseAgentTurnTimeoutMs,
+} from './agent-budgets.js';
 
 /** Returns the path to `profile.yaml`. */
 export function profilePath(): string {
@@ -39,6 +43,14 @@ const nullableAgentStringSchema = z.string().trim().min(1).nullable();
 const agentDurationSchema = z
   .string()
   .regex(AGENT_DURATION_PATTERN, `expected ${AGENT_DURATION_HINT}`);
+
+const agentTurnDurationSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => parseAgentTurnTimeoutMs(value) !== null,
+    'agent.turn_timeout must be a duration of at least 10s',
+  );
 
 /**
  * The profile.yaml schema. Every block and leaf has a default so a partial (or
@@ -88,6 +100,7 @@ export const profileSchema = z
         max_duration: agentDurationSchema.default('15m'),
         max_tokens: z.number().int().positive().default(2_000_000),
         tool_timeout: agentDurationSchema.default('3m'),
+        turn_timeout: agentTurnDurationSchema.default('2m'),
         tool_retries: z.number().int().nonnegative().default(3),
         confirm_timeout: agentDurationSchema.default('3m'),
         // `research` browses read-only (navigate, observe, extract) unless the
@@ -125,6 +138,7 @@ export const KNOWN_PREFERENCE_KEYS = [
   'agent.max_duration',
   'agent.max_tokens',
   'agent.tool_timeout',
+  'agent.turn_timeout',
   'agent.tool_retries',
   'agent.confirm_timeout',
   'agent.research_browse',
@@ -208,6 +222,7 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['agent.max_duration', profile.agent.max_duration],
     ['agent.max_tokens', profile.agent.max_tokens],
     ['agent.tool_timeout', profile.agent.tool_timeout],
+    ['agent.turn_timeout', profile.agent.turn_timeout],
     ['agent.tool_retries', profile.agent.tool_retries],
     ['agent.confirm_timeout', profile.agent.confirm_timeout],
     ['agent.research_browse', profile.agent.research_browse],
@@ -233,6 +248,7 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'agent.max_duration': agentDurationSchema,
   'agent.max_tokens': z.number().int().positive(),
   'agent.tool_timeout': agentDurationSchema,
+  'agent.turn_timeout': agentTurnDurationSchema,
   'agent.tool_retries': z.number().int().nonnegative(),
   'agent.confirm_timeout': agentDurationSchema,
   'agent.research_browse': z.boolean(),

@@ -9,6 +9,8 @@ import type { BrowserCapability } from './profiles.js';
  */
 
 /**
+ * agent-v14 (FEAT-059) adds the do recovery instruction and thinking budget.
+ * The system prompt and the default thinking level remain unchanged.
  * agent-v13 (FEAT-058) adds one `do` addendum sentence: a requested screenshot
  * is declared in artifacts and saved with browser_capture after the last page
  * action, and the model is told its path, not shown it. The system prompt is
@@ -28,7 +30,7 @@ import type { BrowserCapability } from './profiles.js';
  * than a fallback. `agent-v8` added the governed `Scope` section itself.
  * The system prompt text itself intentionally remains output-shape agnostic.
  */
-export const PROMPT_VERSION = 'agent-v13' as const;
+export const PROMPT_VERSION = 'agent-v14' as const;
 
 /**
  * The complete production system prompt for agentic Yantra runs.
@@ -60,6 +62,7 @@ Do not stall waiting for input: if the goal is broad or ambiguous, choose the mo
 export interface AgentPromptBudgets {
   readonly wallClockMs: number;
   readonly perToolTimeoutMs: number;
+  readonly turnTimeoutMs?: number;
   readonly toolRetries: number;
   readonly maxProviderTokens: number;
   readonly maxNavigations: number;
@@ -103,6 +106,7 @@ export interface AgentAmbientContext {
 /** Input accepted by {@link buildAgentUserPrompt}. */
 export interface AgentUserPromptInput {
   readonly goal: string;
+  readonly progress?: 'enforce' | 'observe';
   readonly budgets: AgentPromptBudgets;
   /** Ambient facts block; omitted entirely when absent. */
   readonly ambient?: AgentAmbientContext;
@@ -160,6 +164,11 @@ export function buildAgentUserPrompt(
     ...(input.ambient ? [...ambientLines(input.ambient), ''] : []),
     'Run constraints:',
     `- duration: ${input.budgets.wallClockMs} ms`,
+    ...(input.progress === 'enforce'
+      ? [
+          `- thinking per turn: ${input.budgets.turnTimeoutMs ?? 120000} ms (a longer turn is stopped and you are asked to act)`,
+        ]
+      : []),
     `- tool timeout: ${input.budgets.perToolTimeoutMs} ms`,
     `- repeated identical failures: a tool failing with the same error ${input.budgets.toolRetries + 1} times without succeeding in between stops the run`,
     `- provider token ceiling: ${input.budgets.maxProviderTokens} tokens`,
