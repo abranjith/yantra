@@ -11,6 +11,13 @@ import type { Scenario, Tier } from '../scenario.js';
 import { articleQuestion } from './article-question.js';
 import { article } from './article.js';
 import { budgetExhaustion } from './budget-exhaustion.js';
+import { captureElementBelowFold } from './capture-element-below-fold.js';
+import { captureFullPageTall } from './capture-full-page-tall.js';
+import { captureFullPageTruncated } from './capture-full-page-truncated.js';
+import { captureLatched } from './capture-latched.js';
+import { captureSuppressed } from './capture-suppressed.js';
+import { captureTextOnly } from './capture-text-only.js';
+import { captureVisionUnchanged } from './capture-vision-unchanged.js';
 import { challengeLargeMain } from './challenge-large-main.js';
 import { challengeRequiredSource } from './challenge-required-source.js';
 import { challengeSmall } from './challenge-small.js';
@@ -47,6 +54,7 @@ export const HELPER_MODULES: readonly string[] = Object.freeze([
   'common',
   'challenge',
   'do-form',
+  'capture-common',
 ]);
 
 export const SCENARIOS: readonly Scenario[] = Object.freeze([
@@ -76,6 +84,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
   doRevisionDropsScreenshot,
   doSubmitForbidden,
   doContractMissing,
+  captureTextOnly,
+  captureSuppressed,
+  captureLatched,
+  captureFullPageTall,
+  captureFullPageTruncated,
+  captureElementBelowFold,
+  captureVisionUnchanged,
   contractInvalid,
   researchBrowse,
   researchNoBrowse,

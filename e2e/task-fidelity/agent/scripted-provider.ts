@@ -53,7 +53,16 @@ export type ScriptStep =
    * the run's budget clock by `ms` (FEAT-054). No tool is called and no turn
    * is counted. Only meaningful when the runner wires a harness clock.
    */
-  | { readonly kind: 'advance-clock'; readonly ms: number };
+  | { readonly kind: 'advance-clock'; readonly ms: number }
+  /**
+   * Stands in for a stored-secret fill (FEAT-058): sets the run's
+   * sensitive-screen latch on the current document, exactly where
+   * `browser_fill_element` sets it before dispatching a resolved secret. The
+   * fill itself cannot run here, because the harness denies every
+   * confirmation and a secret fill always asks. No tool is called and no turn
+   * is counted.
+   */
+  | { readonly kind: 'latch-sensitive-screen' };
 
 /** One tool call the scripted agent made, as it received the result. */
 export interface ReceivedResult {
@@ -178,6 +187,11 @@ export class ScriptedAgentProvider implements AgentProvider {
         this.advanceClock(step.ms);
         return;
       }
+      if (step.kind === 'latch-sensitive-screen') {
+        const browser = this.services.domain.browser;
+        browser?.sensitiveScreenLatch?.latch(browser.controller.topLevelDocumentEpoch?.() ?? null);
+        return;
+      }
       if (step.kind === 'parallel') {
         // Pi issues a multi-tool turn concurrently; events interleave in real
         // completion order because each call emits its own pair.
@@ -257,7 +271,7 @@ export class ScriptedAgentProvider implements AgentProvider {
         this.firstPrompt = prompt;
         for (const step of this.script) {
           await execute(step);
-          if (step.kind === 'advance-clock') continue;
+          if (step.kind === 'advance-clock' || step.kind === 'latch-sensitive-screen') continue;
           this.turnCount += 1;
           emit({ type: 'turn_finished', usage: SCRIPTED_TURN_USAGE, at: new Date().toISOString() });
         }

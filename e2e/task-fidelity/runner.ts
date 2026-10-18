@@ -231,6 +231,7 @@ export async function runScenario(
           grants: { location: true, screenshots: scenario.visionAssist === true },
           userLocation: locationOf(scenario.userLocation),
         },
+        ...(scenario.screenshotsSuppressed === true ? { screenshotsSuppressed: true } : {}),
         connector,
       },
       {

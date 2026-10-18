@@ -458,6 +458,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity`; then the repo-wide gate `npx turbo run lint typecheck` and the `e2e` suite (memory: a green targeted run is not the gate).
 - **Depends on**: TASK-007
 
+> DEVIATION (implement, 2026-10-18): `capture-latched` cannot fill the stored-secret control through `browser_fill_element`, because a secret fill always asks for confirmation and the harness denies every confirmation (and production `secretHosts` is empty). The scripted provider gains a `latch-sensitive-screen` step that sets the run's latch exactly where the fill sets it before dispatch; the refusal, the no-file check, the canary scan, and the capture after a new document are measured as specified. Scenario 4 is split into `capture-full-page-tall` (fulfilled) and `capture-full-page-truncated` (partial), since one run cannot end both ways. Shared steps live in the `capture-common` helper module. `FEAT-058` was never pending: FEAT-054 had already landed.
+
 ## 6. Cross-Cutting Concerns
 
 - **Auth / grants**:
@@ -495,6 +497,6 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
 - [x] TASK-006: Early gap disclosure, ledger producer, clean-and-complete capture rule
 - [x] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
-- [ ] TASK-008: Task-fidelity capture scenarios
+- [x] TASK-008: Task-fidelity capture scenarios
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -44,6 +44,12 @@ import {
   renderStructuredListing,
 } from './structured-listing.js';
 import {
+  TALL_PAGE_PATTERN,
+  TALL_PAGE_PROVENANCE,
+  TALL_PAGE_ROUTES,
+  renderTallPage,
+} from './tall-page.js';
+import {
   TEST_FORM_PATTERN,
   TEST_FORM_PROVENANCE,
   TEST_FORM_ROUTES,
@@ -54,7 +60,7 @@ import {
 export const FIXTURE_DOMAIN = 'yantra.test';
 
 /** A plan gap identifier, cited as provenance only. */
-export type GapId = 'G2' | 'G3' | 'G4' | 'G5' | 'G10';
+export type GapId = 'G2' | 'G3' | 'G4' | 'G5' | 'G7' | 'G8' | 'G10';
 
 /** One fixture site. */
 export interface TaskSite {
@@ -80,6 +86,7 @@ export const SITE_NAMES = [
   'article',
   'multi-table',
   'test-form',
+  'tall-page',
 ] as const;
 
 export type SiteName = (typeof SITE_NAMES)[number];
@@ -122,6 +129,7 @@ export const TASK_SITES: readonly TaskSite[] = Object.freeze([
     renderMultiTable,
   ),
   site('test-form', TEST_FORM_PATTERN, TEST_FORM_PROVENANCE, TEST_FORM_ROUTES, renderTestForm),
+  site('tall-page', TALL_PAGE_PATTERN, TALL_PAGE_PROVENANCE, TALL_PAGE_ROUTES, renderTallPage),
 ]);
 
 /** The site served at `host`, or undefined when no fixture owns it. */
