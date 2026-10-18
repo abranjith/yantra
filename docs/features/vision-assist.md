@@ -20,11 +20,30 @@ Two commands have browser tools: `do`, and agentic `research`, which browses rea
 
 If any registration condition is false or uncertain, the tool is absent from the model's catalog. Vision is never required for deterministic replay or for Yantra's browser interaction layer.
 
+The decision is made once, before the run's tool catalog exists, and recorded with every condition that failed. `manifest.json` stores it as `agent.capture.vision_assist` and `run-health.json` as `capture.vision_assist`, each `{available, reasons}`. The reason codes are listed in a fixed order: `grant_missing`, `model_no_image_input`, `no_browser_tools`, `suppressed_by_flag`, and `zero_llm`. `reasons` is empty exactly when Vision Assist is available. A run whose screenshot tool is missing therefore shows which condition kept it off. The same record carries the decision for the local deliverable capture (`deliverable`, see below).
+
 Every screenshot is subject to dedicated, fail-closed limits: at most 3 capture reservations per run, PNG only, no more than 1600 by 1200 pixels, and no more than 5 MiB of encoded PNG bytes per capture. A resolved website secret also latches the current top-level document against capture. Ordinary clicks, DOM changes, dialogs, subframe navigations, and same-document route changes do not clear that latch; capture becomes eligible only after a new top-level document loads or the browser is torn down.
 
-Accepted captures are stored under the run directory as `screenshots/<sequence>-<sha256-prefix>.png`. `tool-calls.jsonl` and generated report projections contain capture metadata only: relative path, SHA-256, MIME type, dimensions, and byte count. They do not embed pixels. The raw provider session log under `agent/` contains the inline image sent to the model and is therefore a capture-bearing, sensitive local artifact. `yantra audit` calls this out and lists each image the model saw with its originating tool call and consumed capture budget.
+A capture is kept only if the top-level page stayed on one document from before the overlay was drawn until after the pixels were taken. If the document changed, or its identity could not be read, the image is discarded. The local deliverable capture uses the same document check, so both tools agree on what "the page changed" means.
 
-`browser_screenshot` is also the only producer of the screenshot a `do` task contract can request in `artifacts`. Each accepted capture is recorded in the run's action ledger with its scope (`viewport` with no reference, `element` with one), and the requirement is judged from those records; see [Judging a `do` result](agentic-tasks.md#judging-a-do-result). When Vision Assist is unavailable, `task_contract` reports a requested viewport or element screenshot as a capability gap whose reason names the first gate that keeps it off: `zero_llm`, `suppressed_by_flag`, `no_browser_tools`, `grant_missing`, or `model_text_only`. A `full_page` screenshot is never possible through this tool and reports `scope_unsupported`.
+Accepted captures are stored under the run directory as `screenshots/<sequence>-<sha256-prefix>.png`. `tool-calls.jsonl` and generated report projections contain capture metadata only. Each capture is recorded on the tool call's `artifacts` list as a generic artifact reference with `kind: "screenshot"` and `sent_to_model: true` (see the table below); no pixels are embedded. The raw provider session log under `agent/` contains the inline image sent to the model and is therefore a capture-bearing, sensitive local artifact. `yantra audit` calls this out and lists each image the model saw under `The model saw these images:`, with its originating tool call and consumed capture budget, separately from captures that were kept locally.
+
+**A Vision Assist image is evidence only.** It carries Yantra's `eNN` marks, so it is never a clean deliverable, and it never meets a screenshot that a `do` task contract requests in `artifacts`. Each accepted capture still goes into the run's action ledger with its scope, but only for evidence. A requested screenshot is met only by the local deliverable capture, `browser_capture`; see [Requesting a screenshot](agentic-tasks.md#requesting-a-screenshot). Whether Vision Assist is available therefore has no effect on the `capability_gaps` that `task_contract` reports.
+
+**How Vision Assist differs from `browser_capture`.** The two tools share a browser and the same secret-screen latch, but they have different authority:
+
+|                  | `browser_screenshot` (Vision Assist)                      | `browser_capture` (deliverable capture)                                  |
+| ---------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Purpose          | Shows the model the page when text evidence is not enough | Saves a picture the user asked for                                       |
+| Pixels           | Sent to the model provider, with Yantra's ref marks drawn | Kept on this computer, clean (no marks); the model gets metadata only    |
+| Registered when  | All five conditions above hold                            | The run has a browser and click or fill tools, and no `--no-screenshots` |
+| Grant            | `context.screenshots: true` and an image-capable model    | None                                                                     |
+| Scopes           | Viewport, or one element                                  | `viewport`, `full_page`, or `element`                                    |
+| Budget           | 3 captures, 1600 x 1200 px, 5 MiB per image               | Its own: 4 calls, 1920 x 4096 px and 8 MiB per file, 40 MiB per run      |
+| Files            | `screenshots/<sequence>-<sha256-prefix>.png`              | `screenshots/capture-<sequence>-<sha256-prefix>[-p<part>].png`           |
+| Meets a contract | Never                                                     | Yes, when captured after the last page action on the same document       |
+
+`browser_capture` refuses while Yantra's marks overlay is on the page, so marks never land in a saved picture.
 
 ## How to Use It
 
@@ -48,7 +67,7 @@ Suppress screenshots for one invocation without changing the stored grant:
 yantra do 'complete the requested browser task' --no-screenshots
 ```
 
-The same downward-only option is accepted by `ask` and `research`, and suppresses the screenshot tool in a browsing `research` run exactly as it does in `do`; it cannot enable Vision Assist on a command that has no browser capability. There is deliberately no `--screenshots` opt-in flag.
+`--no-screenshots` means no screenshots of any kind for that run (its help text reads `no screenshots this run (vision assist and saved captures)`). It removes `browser_screenshot` and the local `browser_capture`, and both decisions record `suppressed_by_flag`. In `do`, a screenshot the contract requests is then reported as undeliverable as soon as it is declared, and the run ends `partial`; see [Requesting a screenshot](agentic-tasks.md#requesting-a-screenshot). The same downward-only option is accepted by `ask` and `research`, and suppresses the screenshot tool in a browsing `research` run exactly as it does in `do`; it cannot enable either capture tool on a command that has no browser capability. There is deliberately no `--screenshots` opt-in flag.
 
 Revoke the grant by setting it to false or forgetting the preference:
 
@@ -66,19 +85,23 @@ yantra audit <run-id> --json
 
 ## Inputs and Outputs
 
-The stored user input is the boolean preference `context.screenshots`. Only an approved value exactly equal to `true` grants access; absent, false, malformed, or unapproved values deny it. `--no-screenshots` can only suppress the saved grant for the current `do`, `ask`, or `research` invocation.
+The stored user input is the boolean preference `context.screenshots`. Only an approved value exactly equal to `true` grants access; absent, false, malformed, or unapproved values deny it. The grant governs model transmission only: it allows Vision Assist to send raw, unmasked screenshots to the model provider, and a deliverable capture that stays on this computer needs no grant. `--no-screenshots` can only suppress the saved grant for the current `do`, `ask`, or `research` invocation.
 
 `browser_screenshot` accepts one optional `ref` matching Yantra's `eNN` element-reference format. With no reference, it captures the bounded viewport. With a reference, it captures that current element or returns `STALE_ELEMENT_REF` if the reference cannot be resolved.
 
-A successful tool result gives the model bounded text metadata plus one PNG image. The persisted audit metadata for each capture is:
+A successful tool result gives the model bounded text metadata plus one PNG image. Each capture is persisted in `tool-calls.jsonl` as one entry in the call's `artifacts` list:
 
-| Field             | Meaning                                |
-| ----------------- | -------------------------------------- |
-| `path`            | Run-relative path under `screenshots/` |
-| `sha256`          | Digest used to verify the stored bytes |
-| `mime_type`       | Always `image/png`                     |
-| `width`, `height` | Captured dimensions in pixels          |
-| `bytes`           | Encoded PNG size                       |
+| Field             | Meaning                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `kind`            | Always `screenshot`                                                |
+| `path`            | Run-relative path under `screenshots/`                             |
+| `sha256`          | Digest used to verify the stored bytes                             |
+| `mime_type`       | Always `image/png`                                                 |
+| `bytes`           | Encoded PNG size                                                   |
+| `width`, `height` | Captured dimensions in pixels                                      |
+| `sent_to_model`   | Always `true` for Vision Assist; `browser_capture` records `false` |
+
+Runs recorded before this reference existed list their Vision Assist images in a `captures` field with the same metadata, and `yantra audit` and `report.md` still read it, as images the model saw.
 
 Capture can fail with `SCREENSHOT_SENSITIVE_SCREEN` while a secret-bearing document is latched, `STALE_ELEMENT_REF` for a no-longer-current element, `SCREENSHOT_UNAVAILABLE` when the page or capture cannot produce a complete valid artifact, or a capture-specific `BUDGET_EXHAUSTED` result when count, dimensions, pixels, bytes, or MIME checks fail. Validation mismatches fail closed and the image is not forwarded.
 

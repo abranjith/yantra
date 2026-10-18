@@ -80,9 +80,11 @@ describe('@no-llm browser_screenshot', () => {
     const { runDir, tool } = await fixture();
     const result = await tool.execute({}, undefined);
     expect(result.status).toBe('ok');
-    const captures = (result.details as { captures: Record<string, unknown>[] }).captures;
-    expect(captures).toHaveLength(1);
-    const metadata = captures[0]!;
+    const artifacts = (result.details as { artifacts: Record<string, unknown>[] }).artifacts;
+    expect(artifacts).toHaveLength(1);
+    const metadata = artifacts[0]!;
+    expect(metadata).toMatchObject({ kind: 'screenshot', sent_to_model: true });
+    expect('captures' in (result.details as object)).toBe(false);
     const files = await readdir(join(runDir, 'screenshots'));
     expect(files).toHaveLength(1);
     const bytes = await readFile(join(runDir, metadata.path as string));
@@ -102,7 +104,7 @@ describe('@no-llm browser_screenshot', () => {
   it.skipIf(process.platform === 'win32')('uses owner-only POSIX modes', async () => {
     const { runDir, tool } = await fixture();
     const result = await tool.execute({}, undefined);
-    const metadata = (result.details as { captures: { path: string }[] }).captures[0]!;
+    const metadata = (result.details as { artifacts: { path: string }[] }).artifacts[0]!;
     expect((await stat(join(runDir, 'screenshots'))).mode & 0o777).toBe(0o700);
     expect((await stat(join(runDir, metadata.path))).mode & 0o777).toBe(0o600);
   });
@@ -145,7 +147,7 @@ describe('@no-llm browser_screenshot records captures in the action ledger (FEAT
 
     const result = await tool.execute({}, undefined);
 
-    const audit = (result.details as { captures: Record<string, unknown>[] }).captures[0]!;
+    const audit = (result.details as { artifacts: Record<string, unknown>[] }).artifacts[0]!;
     expect(services.actionLedger.entries()).toEqual([
       expect.objectContaining({
         kind: 'capture',

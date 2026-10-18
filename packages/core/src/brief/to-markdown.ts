@@ -19,11 +19,14 @@
 import {
   editorialMarkIsInformative,
   type Brief,
+  type BriefArtifact,
   type BriefRequirement,
   type BriefSource,
   type KeyFinding,
   type Section,
 } from '@yantra/protocol';
+
+import { captureLabels, captureTitle, isCaptureArtifactPath } from './captures.js';
 
 /**
  * Renders a {@link Brief} as a portable, full-detail Markdown document.
@@ -56,6 +59,10 @@ export function briefToMarkdown(brief: Brief): string {
 
   if (brief.requirements !== undefined && brief.requirements.length > 0) {
     blocks.push(['## Requirements', '', ...brief.requirements.map(requirementLines)].join('\n'));
+  }
+
+  if (brief.artifacts !== undefined && brief.artifacts.length > 0) {
+    blocks.push(['## Captures', '', ...brief.artifacts.map(captureLine)].join('\n'));
   }
 
   const overview = brief.overview.trim();
@@ -266,6 +273,20 @@ export const FILL_EXEMPTION_WORDS: Readonly<
   file_input: 'file upload',
   human_verification: 'human verification',
 };
+
+/**
+ * One saved capture as a list item, linked relatively: `brief.md` sits in the
+ * run directory beside `screenshots/`. A path outside the capture grammar is
+ * shown as text, never linked.
+ */
+function captureLine(artifact: BriefArtifact): string {
+  const title = captureTitle(artifact);
+  const labels = captureLabels(artifact);
+  const target = isCaptureArtifactPath(artifact.path)
+    ? `[${title}](${artifact.path})`
+    : `${title} (${inline(artifact.path)})`;
+  return `- ${target}, ${artifact.width}x${artifact.height}${labels.length > 0 ? ` ${labels}` : ''}`;
+}
 
 /** One requirement as a list item, its exemptions as a nested line. */
 function requirementLines(requirement: BriefRequirement): string {

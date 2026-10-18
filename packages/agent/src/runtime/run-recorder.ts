@@ -6,6 +6,9 @@ import { FileUsageWriter, ToolCallWriter, type ToolAuditEntryInput } from '@yant
 import { readManifest, writeManifest, type RunManifest } from '@yantra/core/workflow/replay';
 import {
   AgentManifestSection,
+  ArtifactRef,
+  ToolAuditEntry,
+  artifactRefsOf,
   type AgentManifestSectionType,
   type AgentRunBudgets,
 } from '@yantra/protocol';
@@ -19,6 +22,7 @@ import type {
   AgentUsage,
 } from '../provider/types.js';
 
+import { captureCapabilityRecord, type CaptureCapability } from './capture-capability.js';
 import { hashToolCatalog, sha256Text, type HashableToolDefinition } from './catalog-hash.js';
 import { PROMPT_VERSION } from './prompt.js';
 
@@ -36,6 +40,11 @@ export interface RunRecorderOptions {
   readonly yantraVersion?: string;
   /** The run's effective budgets, recorded for provenance (FEAT-054 S10). */
   readonly budgets?: AgentRunBudgets;
+  /**
+   * Both capture capabilities (FEAT-058), written with the rest of the agent
+   * section when the session opens, before the first tool call.
+   */
+  readonly capture?: CaptureCapability;
   /** Test/embedding override for capture-metadata logging. */
   readonly logger?: RunRecorderLogger;
   /** Clock for the first turn's latency baseline (tests); defaults to `new Date()`. */
@@ -101,6 +110,9 @@ export class RunRecorder {
       tool_catalog_hash: hashToolCatalog(options.tools),
       ...(yantraVersion === null ? {} : { yantra_version: yantraVersion }),
       ...(options.budgets === undefined ? {} : { budgets: options.budgets }),
+      ...(options.capture === undefined
+        ? {}
+        : { capture: captureCapabilityRecord(options.capture) }),
     });
     const recorder = new RunRecorder(
       options,
@@ -173,8 +185,8 @@ export class RunRecorder {
         const startedAt = this.startedCalls.get(event.callId);
         this.startedCalls.delete(event.callId);
         const metadata = readToolResultMetadata(event.output);
-        const captures = readCaptures(event.output);
-        const output = projectOutputForAudit(event.output, captures);
+        const artifacts = readArtifacts(event.output);
+        const output = projectOutputForAudit(event.output, artifacts);
         const endAt = Date.parse(event.at);
         const duration =
           startedAt === undefined || Number.isNaN(startedAt) || Number.isNaN(endAt)
@@ -189,18 +201,18 @@ export class RunRecorder {
             duration_ms: duration,
             error_code: metadata.errorCode,
             confirmation_id: metadata.confirmationId,
-            ...(captures.length > 0 ? { captures } : {}),
+            ...(artifacts.length > 0 ? { artifacts } : {}),
           }),
         );
-        if (captures.length > 0) {
+        if (artifacts.length > 0) {
           (this.options.logger ?? defaultLogger).info(
             {
               run_id: this.options.runId,
               call_id: event.callId,
               tool: event.tool,
-              captures,
+              artifacts,
             },
-            'capture artifacts recorded',
+            'run artifacts recorded',
           );
         }
         return;
@@ -254,49 +266,52 @@ export class RunRecorder {
   }
 }
 
-interface AuditCapture {
-  readonly path: string;
-  readonly sha256: string;
-  readonly mime_type: 'image/png';
-  readonly width: number;
-  readonly height: number;
-  readonly bytes: number;
-}
-
-function readCaptures(output: unknown): AuditCapture[] {
+/**
+ * The artifact references a tool result carries (FEAT-058 S9), from the
+ * top-level `artifacts` the Pi projection lifts or from `details.artifacts`.
+ * A producer that still emits the older `captures` projection is read through
+ * {@link artifactRefsOf}, the one normalizer every reader uses. Anything that
+ * fails the protocol schema is dropped rather than persisted.
+ */
+function readArtifacts(output: unknown): ArtifactRef[] {
   if (output === null || typeof output !== 'object' || Array.isArray(output)) return [];
   const record = output as Readonly<Record<string, unknown>>;
   const details =
     record.details !== null && typeof record.details === 'object' && !Array.isArray(record.details)
       ? (record.details as Readonly<Record<string, unknown>>)
       : null;
-  const value = record.captures ?? details?.captures;
-  if (!Array.isArray(value)) return [];
-  return value.filter(isAuditCapture);
+  const artifacts = record.artifacts ?? details?.artifacts;
+  if (Array.isArray(artifacts)) return validArtifacts(artifacts);
+  const captures = record.captures ?? details?.captures;
+  if (!Array.isArray(captures)) return [];
+  const legacy = captures.flatMap((capture) => {
+    const parsed = LegacyCapture.safeParse(capture);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return validArtifacts(artifactRefsOf({ captures: legacy }));
 }
 
-function isAuditCapture(value: unknown): value is AuditCapture {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const capture = value as Readonly<Record<string, unknown>>;
-  return (
-    typeof capture.path === 'string' &&
-    /^[a-f0-9]{64}$/u.test(String(capture.sha256)) &&
-    capture.mime_type === 'image/png' &&
-    Number.isSafeInteger(capture.width) &&
-    Number(capture.width) > 0 &&
-    Number.isSafeInteger(capture.height) &&
-    Number(capture.height) > 0 &&
-    Number.isSafeInteger(capture.bytes) &&
-    Number(capture.bytes) >= 0
-  );
+function validArtifacts(values: readonly unknown[]): ArtifactRef[] {
+  return values.flatMap((value) => {
+    const parsed = ArtifactRef.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
-/** Replaces provider image blocks with metadata before stable audit persistence. */
-function projectOutputForAudit(output: unknown, captures: readonly AuditCapture[]): unknown {
+/** The legacy `captures` element shape, as `tool-calls.jsonl` defines it. */
+const LegacyCapture = ToolAuditEntry.shape.captures.unwrap().element;
+
+/**
+ * Replaces provider image blocks with metadata before stable audit
+ * persistence. Image blocks pair only with references the model was sent: a
+ * local capture never has an image block to pair with.
+ */
+function projectOutputForAudit(output: unknown, artifacts: readonly ArtifactRef[]): unknown {
   if (output === null || typeof output !== 'object' || Array.isArray(output)) return output;
   const record = output as Readonly<Record<string, unknown>>;
   if (!Array.isArray(record.content)) return output;
   const content: readonly unknown[] = record.content;
+  const sent = artifacts.filter((artifact) => artifact.sent_to_model);
   let imageIndex = 0;
   return {
     ...record,
@@ -304,7 +319,7 @@ function projectOutputForAudit(output: unknown, captures: readonly AuditCapture[
       if (part === null || typeof part !== 'object' || Array.isArray(part)) return part;
       const block = part as Readonly<Record<string, unknown>>;
       if (block.type !== 'image') return block;
-      const artifact = captures[imageIndex++] ?? null;
+      const artifact = sent[imageIndex++] ?? null;
       return { type: 'image', artifact };
     }),
   };

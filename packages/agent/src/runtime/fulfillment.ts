@@ -28,7 +28,7 @@ import type {
   CommittedActionEntry,
   FillCommittedEntry,
 } from './action-ledger.js';
-import type { CaptureGapReason } from './contract-capabilities.js';
+import { captureGapPhrase, type CaptureGapReason } from './contract-capabilities.js';
 import {
   boundedNotice,
   normalizeDeliveryName,
@@ -407,26 +407,50 @@ function satisfies(requested: ArtifactScope, captured: ArtifactScope): boolean {
     : captured === requested;
 }
 
+/** The only producer whose captures meet a screenshot item (FEAT-058 S7). */
+const DELIVERABLE_PRODUCER = 'browser_capture';
+
+/**
+ * A screenshot item is met by a clean `browser_capture` of a satisfying
+ * scope, taken after the last committed page action on the same document.
+ * Vision Assist images carry Yantra's marks and are evidence only (S7). A
+ * `full_page` item also needs a complete set: a clipped or truncated page is
+ * not the page the user asked for (S6), though its first tile still covers
+ * the top of the page and so meets a `viewport` item.
+ */
 function artifactStatus(
   scope: ArtifactScope,
   input: FulfillmentInput,
 ): Pick<RequirementStatus, 'status' | 'reason'> {
   const captures = input.ledger.filter(
-    (entry): entry is CaptureEntry => entry.kind === 'capture' && satisfies(scope, entry.scope),
+    (entry): entry is CaptureEntry =>
+      entry.kind === 'capture' &&
+      entry.producer === DELIVERABLE_PRODUCER &&
+      satisfies(scope, entry.scope),
   );
   if (captures.length === 0) {
     const gap = input.captureGap(scope);
-    return { status: 'unmet', reason: gap === null ? 'not captured' : `not captured (${gap})` };
+    return {
+      status: 'unmet',
+      reason: gap === null ? 'not captured' : `not captured (${captureGapPhrase(gap)})`,
+    };
   }
   const last = lastCommitted(input.ledger);
-  if (last === null) return { status: 'met', reason: null };
-  const after = captures.filter((entry) => entry.seq > last.seq);
-  if (after.length === 0) {
-    return { status: 'unmet', reason: 'captured before the last page action' };
+  let timely = captures;
+  if (last !== null) {
+    const after = captures.filter((entry) => entry.seq > last.seq);
+    if (after.length === 0) {
+      return { status: 'unmet', reason: 'captured before the last page action' };
+    }
+    timely = after.filter((entry) => entry.epoch === last.epoch);
+    if (timely.length === 0) {
+      return { status: 'unmet', reason: 'captured on a different page than the last action' };
+    }
   }
-  return after.some((entry) => entry.epoch === last.epoch)
-    ? { status: 'met', reason: null }
-    : { status: 'unmet', reason: 'captured on a different page than the last action' };
+  if (scope === 'full_page' && timely.every((entry) => entry.complete === false)) {
+    return { status: 'unmet', reason: 'capture_incomplete' };
+  }
+  return { status: 'met', reason: null };
 }
 
 function submitStatus(

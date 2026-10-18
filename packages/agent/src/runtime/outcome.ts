@@ -1,7 +1,8 @@
-import type { FailureClass, TaskOutcome, TerminationReason } from '@yantra/protocol';
+import type { ArtifactRef, FailureClass, TaskOutcome, TerminationReason } from '@yantra/protocol';
 
 import type { AgentError } from '../provider/types.js';
 
+import type { CaptureArtifactSet } from './capture-artifacts.js';
 import { unmetPhrase } from './fulfillment.js';
 
 /** Stable reference to the validated Brief created by `result_publish`. */
@@ -57,6 +58,13 @@ export type AgenticTaskOutcome =
       readonly taskOutcome: 'fulfilled' | 'partial';
       /** The per-item summary for `do`; null for `ask` and `research`. */
       readonly requirements: RequirementsSummary | null;
+      /**
+       * The saved deliverable captures (FEAT-058), one generic reference per
+       * file in capture order, run-relative; empty for `ask` and `research`.
+       */
+      readonly artifacts: readonly ArtifactRef[];
+      /** The same captures grouped by `browser_capture` call, with their labels. */
+      readonly captureSets: readonly CaptureArtifactSet[];
       readonly terminationReason: TerminationReason;
       /** Present when `--save-as` requested workflow promotion. */
       readonly promotion?: PromotionResult;

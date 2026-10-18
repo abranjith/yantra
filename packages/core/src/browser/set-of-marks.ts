@@ -1,6 +1,18 @@
 import type { Page } from 'puppeteer-core';
 
-const CONTAINER_ID = '__yantra_set_of_marks__';
+import { assertEpochUnchanged, readInitialEpoch, SetOfMarksError } from './epoch-guard.js';
+
+// Re-exported so every existing `instanceof SetOfMarksError` import site is unchanged.
+export { SetOfMarksError } from './epoch-guard.js';
+
+/**
+ * The element id of Yantra's set-of-marks overlay root. A clean deliverable
+ * capture refuses while it is in the document, so Yantra's marks never land in
+ * a picture saved for the user.
+ */
+export const SET_OF_MARKS_OVERLAY_ID = '__yantra_set_of_marks__';
+
+const CONTAINER_ID = SET_OF_MARKS_OVERLAY_ID;
 
 export interface SetOfMarksMark {
   readonly ref: string;
@@ -24,25 +36,9 @@ export interface SetOfMarksCaptureOptions<T> {
   readonly discard?: (captured: T) => Promise<void> | void;
 }
 
-export class SetOfMarksError extends Error {
-  public constructor(
-    public readonly code: 'SET_OF_MARKS_EPOCH_CHANGED' | 'SET_OF_MARKS_REMOVAL_FAILED',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'SetOfMarksError';
-  }
-}
-
 /** Injects only Yantra refs, captures once, and verifies mandatory cleanup. */
 export async function withSetOfMarksCapture<T>(options: SetOfMarksCaptureOptions<T>): Promise<T> {
-  const initialEpoch = options.readTopLevelEpoch();
-  if (!validEpoch(initialEpoch)) {
-    throw new SetOfMarksError(
-      'SET_OF_MARKS_EPOCH_CHANGED',
-      'Cannot verify the top-level document epoch before screenshot capture.',
-    );
-  }
+  const initialEpoch = readInitialEpoch(options.readTopLevelEpoch);
   let captured: T | undefined;
   let captureCompleted = false;
   let primaryError: unknown;
@@ -52,10 +48,10 @@ export async function withSetOfMarksCapture<T>(options: SetOfMarksCaptureOptions
     // Mark cleanup as necessary before awaiting injection: a partial injection
     // that throws must still enter the same removal path.
     await options.port.inject(options.marks.filter(validMark));
-    assertEpoch(options.readTopLevelEpoch(), initialEpoch, 'before capture');
+    assertEpochUnchanged(options.readTopLevelEpoch(), initialEpoch, 'before capture');
     captured = await options.capture();
     captureCompleted = true;
-    assertEpoch(options.readTopLevelEpoch(), initialEpoch, 'after capture');
+    assertEpochUnchanged(options.readTopLevelEpoch(), initialEpoch, 'after capture');
   } catch (error) {
     primaryError = error;
     if (captureCompleted) await options.discard?.(captured as T);
@@ -134,19 +130,6 @@ export function puppeteerSetOfMarksPort(page: Page): SetOfMarksPort {
     remove: () => page.evaluate((id) => document.getElementById(id)?.remove(), CONTAINER_ID),
     present: () => page.evaluate((id) => document.getElementById(id) !== null, CONTAINER_ID),
   };
-}
-
-function assertEpoch(current: number | null, expected: number, stage: string): void {
-  if (current !== expected) {
-    throw new SetOfMarksError(
-      'SET_OF_MARKS_EPOCH_CHANGED',
-      `The top-level document changed ${stage}; the screenshot was discarded.`,
-    );
-  }
-}
-
-function validEpoch(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function validMark(mark: SetOfMarksMark): boolean {

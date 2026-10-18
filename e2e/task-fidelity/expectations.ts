@@ -26,6 +26,7 @@ export const OWNERS = [
   'FEAT-054',
   'FEAT-055',
   'FEAT-056',
+  'FEAT-058',
   // Not a feature yet: native `<input type="date">` never takes the typed
   // value in real Chrome (TODO: "Native <input type="date"> reports
   // WIDGET_NOT_COMMITTED"). Named for the capability so the expectations it

@@ -1,14 +1,14 @@
 /**
  * `do-form-complete`: a faithful run of the form goal (FEAT-054). It fills
  * every eligible field of a form larger than the observation cap in batches
- * of ten, captures the viewport after the last fill (Vision Assist granted,
- * with an image-capable model), and publishes without submitting.
+ * of ten, saves a clean viewport capture with `browser_capture` after the last
+ * fill (no screenshot grant, a text-only model: FEAT-058), and publishes
+ * without submitting.
  *
  * FEAT-055 supplies the whole-form denominator and FEAT-056 verifies the
  * protected fields in page. `fulfilled` additionally needs the native date
  * fields to commit (owner `native-date-entry`); until then the run is honestly
- * `partial`. FEAT-058 later moves the capture to `browser_capture`
- * with no grant.
+ * `partial`.
  */
 
 import type { ScriptStep } from '../agent/scripted-provider.js';
@@ -104,7 +104,7 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-054',
     measure: (run) => requirementsOf(run)?.['artifact:screenshot:viewport']?.status ?? null,
     target: equals('met'),
-    note: 'A capture after the last fill, on the same document, meets the viewport item.',
+    note: 'A clean browser_capture after the last fill, on the same document, meets the viewport item (FEAT-058 S7).',
   },
   {
     id: 'submit-item-met',
@@ -158,12 +158,11 @@ export const doFormComplete: Scenario = {
   contract: FORM_CONTRACT,
   userLocation: null,
   serps: [],
-  visionAssist: true,
   script: [
     contractStep(FULL_ACTIONS_CONTRACT),
     NAVIGATE_STEP,
     ...fillBatches(),
-    { kind: 'call', tool: 'browser_screenshot', label: 'capture', params: {} },
+    { kind: 'call', tool: 'browser_capture', label: 'capture', params: { scope: 'viewport' } },
     publishFormStep({ met: true, unmet: [] }),
   ],
   expectations,

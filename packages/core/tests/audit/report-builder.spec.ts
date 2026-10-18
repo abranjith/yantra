@@ -404,6 +404,59 @@ describe('@no-llm report builder — agentic runs', () => {
     await rm(runDir, { recursive: true, force: true });
   });
 
+  it('says which captures the model saw, for new artifacts and legacy captures (FEAT-058)', async () => {
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-captures-'));
+    const sha = 'e'.repeat(64);
+    await writeAgenticRun(runDir, [
+      toolCallLine({
+        seq: 1,
+        tool: 'browser_screenshot',
+        phase: 'end',
+        status: 'ok',
+        captures: [
+          {
+            path: 'screenshots/1-eeeeeeeeeeee.png',
+            sha256: sha,
+            mime_type: 'image/png',
+            width: 800,
+            height: 600,
+            bytes: 500,
+          },
+        ],
+      }),
+      toolCallLine({
+        seq: 2,
+        call_id: 'c2',
+        tool: 'browser_capture',
+        phase: 'end',
+        status: 'ok',
+        artifacts: [
+          {
+            kind: 'screenshot',
+            path: 'screenshots/capture-1-eeeeeeeeeeee.png',
+            sha256: sha,
+            mime_type: 'image/png',
+            bytes: 700,
+            width: 1280,
+            height: 720,
+            sent_to_model: false,
+          },
+        ],
+      }),
+    ]);
+
+    const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+    expect(markdown).toContain(
+      `- [1] screenshots/1-eeeeeeeeeeee.png - 800x600, 500 bytes, image/png, sha256=${sha}, sent to model: yes\n`,
+    );
+    expect(markdown).toContain(
+      `- [2] screenshots/capture-1-eeeeeeeeeeee.png - 1280x720, 700 bytes, image/png, sha256=${sha}, sent to model: no\n`,
+    );
+
+    await rm(runDir, { recursive: true, force: true });
+  });
+
   it('renders an old run without run-health.json byte-identically to before', async () => {
     const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-no-run-health-'));
     await writeAgenticRun(runDir, []);

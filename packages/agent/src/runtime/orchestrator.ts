@@ -62,6 +62,7 @@ import {
 } from '@yantra/core/workflow/replay';
 import {
   RunHealth,
+  artifactRequirementId,
   generateUlid,
   validateBrief,
   validateTemplatedReport,
@@ -96,16 +97,24 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
-import { actionLedgerFor } from './action-ledger.js';
+import { actionLedgerFor, type ActionLedgerEntry } from './action-ledger.js';
 import {
   composeAgentBrief,
   logBriefComposition,
   mapPublishText,
   sanitizePublishContent,
+  withArtifacts,
 } from './brief-composer.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
+import { artifactRefsOfSet, type CaptureArtifactSet } from './capture-artifacts.js';
+import { resolveCaptureCapability } from './capture-capability.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
+import {
+  capabilityGapLine,
+  deliverableContractCapabilities,
+  type ContractCapabilityResolver,
+} from './contract-capabilities.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
 import { FulfillmentRecord, type FulfillmentEvaluation } from './fulfillment.js';
 import { locationHandoffFor } from './location-gate.js';
@@ -121,6 +130,7 @@ import {
 } from './outcome.js';
 import {
   COMMAND_TASK_PROFILES,
+  INTERACT_TOOLS,
   browserCapabilityOf,
   promptAddendumFor,
   type CommandTaskProfile,
@@ -670,6 +680,15 @@ export async function runAgenticTask(
       suppressedByFlag: request.screenshotsSuppressed === true,
       zeroLlm: false,
     });
+    // FEAT-058 D2: deliverable capture is resolved beside Vision Assist, before
+    // the catalog exists, and recorded before the first tool call.
+    const capture = resolveCaptureCapability({
+      vision,
+      hasBrowser: domain.browser !== null,
+      hasInteractionTools: profile.toolNames.some((name) => INTERACT_TOOLS.has(name)),
+      suppressedByFlag: request.screenshotsSuppressed === true,
+    });
+    runHealth.recordCaptureCapability(capture);
     // The run's declared contract (FEAT-052). `research` and `do` are expected
     // to declare one; `ask` has no contract tool and never carries the notice.
     const contract = new TaskContractStore({
@@ -686,6 +705,7 @@ export async function runAgenticTask(
       runDir: created.runDir,
       template: request.template?.manifest ?? null,
       vision,
+      capture,
       budgets: runBudget,
       sanitizer,
       userInput,
@@ -777,6 +797,7 @@ export async function runAgenticTask(
       systemPrompt: AGENT_SYSTEM_PROMPT,
       tools: yantraToolCatalog(services, profile),
       budgets: manifestBudgets(budgetsConfig),
+      capture,
     });
     events = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
     events.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
@@ -791,6 +812,8 @@ export async function runAgenticTask(
       runId: created.runId,
       runDir: created.runDir,
       contract,
+      capabilities:
+        services.contractCapabilities ?? deliverableContractCapabilities(capture.deliverable),
     });
     executionState = state;
     unsubscribe = session.subscribe((event) => state.onEvent(event));
@@ -956,9 +979,14 @@ function createExecutionState(input: {
   readonly runDir: string;
   /** The run's contract store; each new revision is echoed once to the connector. */
   readonly contract: TaskContractStore;
+  /** What the run can deliver; each undeliverable declared item is disclosed once. */
+  readonly capabilities: ContractCapabilityResolver;
 }): ExecutionState {
   const starts = new Map<string, number>();
   let echoedRevisions = 0;
+  // Declared items already disclosed as undeliverable (FEAT-058): a later
+  // revision repeating the item does not repeat the disclosure.
+  const disclosedGaps = new Set<string>();
   let providerTokens = 0;
   let published = false;
   let budgetReason: string | undefined;
@@ -1066,6 +1094,22 @@ function createExecutionState(input: {
                 body,
                 input.contract.effectiveActionTermsThrough(echoedRevisions),
               ),
+              at: event.at,
+            });
+          }
+          // FEAT-058: disclose each declared screenshot the run cannot deliver
+          // right after the echo, once per item, and keep running.
+          for (const artifact of input.contract.effectiveActionTerms().artifacts) {
+            const item = artifactRequirementId(artifact.scope);
+            if (disclosedGaps.has(item)) continue;
+            const reason = input.capabilities.captureGap(artifact.scope);
+            if (reason === null) continue;
+            disclosedGaps.add(item);
+            input.connector.emitAgentEvent({
+              type: 'capability_gap',
+              item,
+              reason,
+              summary: capabilityGapLine(artifact.scope, reason),
               at: event.at,
             });
           }
@@ -1188,12 +1232,13 @@ async function maybeAssembleUnpublishedResult(
   // Judged like a tool publication (FEAT-054); a salvaged `do` run with no
   // contract is evaluated as undeclared and ends partial.
   const evaluation = await evaluatePublication(services, composed.value.evidence);
-  const withItems = withRequirements(composed.value.content, evaluation);
+  const captured = withArtifacts(withRequirements(composed.value.content, evaluation), services);
+  const withItems = captured.content;
   const content =
     services.userInput === undefined
       ? withItems
       : mapPublishText(withItems, (text) => services.userInput!.resolve(text));
-  const runtimeFacts = runtimeFactsFor(services, composed.value.notices);
+  const runtimeFacts = runtimeFactsFor(services, [...composed.value.notices, ...captured.notices]);
   const published = await services.domain.publish.publish(content, {
     assembledByRuntime: true,
     runtimeFacts,
@@ -1438,7 +1483,7 @@ function reportFailure(
 type OutcomeDraft =
   | Omit<
       Extract<AgenticTaskOutcome, { kind: 'published' }>,
-      'taskOutcome' | 'requirements' | 'terminationReason'
+      'taskOutcome' | 'requirements' | 'terminationReason' | 'artifacts' | 'captureSets'
     >
   | DistributiveOmit<Exclude<AgenticTaskOutcome, { kind: 'published' }>, 'terminationReason'>;
 
@@ -1453,20 +1498,41 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 function settleOutcome(
   draft: OutcomeDraft,
   terminationReason: TerminationReason,
-  services: Pick<RunServices, 'contract' | 'fulfillment'>,
+  services: Pick<RunServices, 'contract' | 'fulfillment' | 'actionLedger'>,
 ): AgenticTaskOutcome {
   if (draft.kind !== 'published') return { ...draft, terminationReason };
   if (services.contract.command !== 'do') {
-    return { ...draft, taskOutcome: 'fulfilled', requirements: null, terminationReason };
+    return {
+      ...draft,
+      taskOutcome: 'fulfilled',
+      requirements: null,
+      artifacts: [],
+      captureSets: [],
+      terminationReason,
+    };
   }
   const requirements = requirementsSummary(services.fulfillment.current());
   const fulfilled = requirements.contractDeclared && requirements.met === requirements.total;
+  const captureSets = deliverableCaptureSets(services.actionLedger.entries());
   return {
     ...draft,
     taskOutcome: fulfilled ? 'fulfilled' : 'partial',
     requirements,
+    artifacts: captureSets.flatMap(artifactRefsOfSet),
+    captureSets,
     terminationReason,
   };
+}
+
+/** Every `browser_capture` set the run saved, in capture order (FEAT-058). */
+function deliverableCaptureSets(ledger: readonly ActionLedgerEntry[]): CaptureArtifactSet[] {
+  return ledger.flatMap((entry) =>
+    entry.kind === 'capture' &&
+    entry.producer === 'browser_capture' &&
+    entry.captureSet !== undefined
+      ? [entry.captureSet]
+      : [],
+  );
 }
 
 function requirementsSummary(evaluation: FulfillmentEvaluation | null): RequirementsSummary {

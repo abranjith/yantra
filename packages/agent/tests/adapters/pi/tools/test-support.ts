@@ -32,6 +32,10 @@ import {
   DEFAULT_BUDGET_LIMITS,
   type BudgetLimits,
 } from '../../../../src/runtime/budget.js';
+import {
+  resolveCaptureCapability,
+  type CaptureCapability,
+} from '../../../../src/runtime/capture-capability.js';
 import type { ContractCapabilityResolver } from '../../../../src/runtime/contract-capabilities.js';
 import { FulfillmentRecord } from '../../../../src/runtime/fulfillment.js';
 import type { ToolWrapperSpec, WrappedTool } from '../../../../src/runtime/middleware.js';
@@ -86,6 +90,11 @@ export interface BuildServicesOptions {
   readonly actionLedger?: ActionLedger;
   /** Contract capability resolver; absent means the vision-backed default. */
   readonly contractCapabilities?: ContractCapabilityResolver;
+  /**
+   * Both capture capabilities; by default resolved like a real run from the
+   * vision decision and whether `domain.browser` is set.
+   */
+  readonly capture?: CaptureCapability;
 }
 
 /**
@@ -132,20 +141,30 @@ export function buildServices(options: BuildServicesOptions = {}): RunServices {
   };
 
   const sanitizer = new DefaultSanitizer();
+  const vision: VisionAvailability = {
+    grantEnabled: false,
+    hasBrowserTools: false,
+    modelImageInput: false,
+    suppressedByFlag: false,
+    zeroLlm: false,
+    available: false,
+    reasons: ['grant_missing', 'model_no_image_input', 'no_browser_tools'],
+    capability: { imageInput: false, resolvedAt: 'pre-catalog' },
+    ...options.vision,
+  };
   return {
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir,
     template: options.template ?? null,
-    vision: {
-      grantEnabled: false,
-      hasBrowserTools: false,
-      modelImageInput: false,
-      suppressedByFlag: false,
-      zeroLlm: false,
-      available: false,
-      capability: { imageInput: false, resolvedAt: 'pre-catalog' },
-      ...options.vision,
-    },
+    vision,
+    capture:
+      options.capture ??
+      resolveCaptureCapability({
+        vision,
+        hasBrowser: domain.browser !== null,
+        hasInteractionTools: true,
+        suppressedByFlag: vision.suppressedByFlag,
+      }),
     budgets,
     sanitizer,
     ...(options.userInput ? { userInput: options.userInput } : {}),

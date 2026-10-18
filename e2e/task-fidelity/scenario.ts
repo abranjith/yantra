@@ -75,6 +75,12 @@ export interface Scenario {
    */
   readonly visionAssist?: boolean;
   /**
+   * Runs with `--no-screenshots` (FEAT-058): neither capture tool is
+   * registered, and a declared screenshot is disclosed as a gap. Defaults to
+   * false.
+   */
+  readonly screenshotsSuppressed?: boolean;
+  /**
    * The deterministic tier's allowance for this scenario, when it needs more
    * than the default: real-Chrome form fills cost seconds per field until
    * FEAT-057 lands.

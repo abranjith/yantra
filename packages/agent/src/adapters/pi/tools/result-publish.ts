@@ -43,6 +43,7 @@ import {
   type Brief,
   type BriefFacets,
   type BriefConstraint,
+  type BriefArtifact,
   type BriefRequirement,
   type Section,
   type BriefNotice,
@@ -62,9 +63,10 @@ import {
   logBriefComposition,
   mapPublishText,
   sanitizePublishContent,
+  withArtifacts,
   type ComposedEvidence,
 } from '../../../runtime/brief-composer.js';
-import { visionContractCapabilities } from '../../../runtime/contract-capabilities.js';
+import { deliverableContractCapabilities } from '../../../runtime/contract-capabilities.js';
 import {
   censusFillEvaluator,
   evaluateFulfillment,
@@ -313,7 +315,8 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     };
   }
   const evaluation = await evaluatePublication(services, composed.value.evidence);
-  const composedContent = withRequirements(composed.value.content, evaluation);
+  const captured = withArtifacts(withRequirements(composed.value.content, evaluation), services);
+  const composedContent = captured.content;
   const content =
     services.userInput === undefined
       ? composedContent
@@ -321,6 +324,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   const publishFacts = runtimeFactsFor(services, [
     ...composed.value.notices,
     ...(evaluation?.disagreement ? [evaluation.disagreement] : []),
+    ...captured.notices,
   ]);
   const result = await services.domain.publish.publish(content, {
     runtimeFacts: publishFacts,
@@ -374,12 +378,13 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
 export async function evaluatePublication(
   services: Pick<
     RunServices,
-    'contract' | 'actionLedger' | 'contractCapabilities' | 'vision' | 'fillCensus'
+    'contract' | 'actionLedger' | 'contractCapabilities' | 'capture' | 'fillCensus'
   >,
   evidence: ComposedEvidence | null,
 ): Promise<FulfillmentEvaluation | null> {
   if (services.contract.command !== 'do') return null;
-  const capabilities = services.contractCapabilities ?? visionContractCapabilities(services.vision);
+  const capabilities =
+    services.contractCapabilities ?? deliverableContractCapabilities(services.capture.deliverable);
   const terms = services.contract.effectiveActionTerms();
   // The census is a page read, paid only when the contract declares a fill.
   const census =
@@ -749,6 +754,7 @@ function buildBriefFromAgentContent(
     ...(Array.isArray(record.requirements)
       ? { requirements: record.requirements as BriefRequirement[] }
       : {}),
+    ...(Array.isArray(record.artifacts) ? { artifacts: record.artifacts as BriefArtifact[] } : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {
       synthesis: 'llm',

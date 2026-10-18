@@ -215,14 +215,19 @@ export interface AuditRenderReport {
     readonly confirmationDecision: string | null;
     readonly incomplete: boolean;
   }[];
-  /** Capture artifacts the model received, projected without image bytes. */
+  /**
+   * Every capture the run wrote, projected without image bytes: images the
+   * model saw (`sentToModel`) and captures kept on this computer.
+   */
   readonly captures: readonly {
     readonly path: string;
     readonly sha256: string;
     readonly mimeType: 'image/png';
-    readonly width: number;
-    readonly height: number;
+    readonly width: number | null;
+    readonly height: number | null;
     readonly bytes: number;
+    /** True when the image was shown to the model provider (Vision Assist). */
+    readonly sentToModel: boolean;
     readonly toolCall: {
       readonly seq: number;
       readonly callId: string;

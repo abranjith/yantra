@@ -1,6 +1,7 @@
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
-import type { AgentProgressEvent, AgenticTaskOutcome } from '@yantra/agent';
+import { capabilityGapLine, type AgentProgressEvent, type AgenticTaskOutcome } from '@yantra/agent';
 import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -152,6 +153,7 @@ describe('@no-llm cli/connector-io', () => {
           width: 640,
           height: 480,
           bytes: 8192,
+          sentToModel: true,
           toolCall: { seq: 1, callId: 'capture-call', tool: 'browser_screenshot' },
           budgetConsumed: { captures: 1, pixels: 307_200, bytes: 8192 },
         },
@@ -370,6 +372,76 @@ describe('@no-llm cli/connector-io task-contract echo (FEAT-052)', () => {
   });
 });
 
+describe('@no-llm cli/connector-io capability gap disclosure (FEAT-058)', () => {
+  const gap = (
+    scope: 'viewport' | 'full_page',
+    reason: 'suppressed_by_flag' | 'no_browser',
+  ): AgentProgressEvent => ({
+    type: 'capability_gap',
+    item: `artifact:screenshot:${scope}`,
+    reason,
+    summary: capabilityGapLine(scope, reason),
+    at: '2026-10-16T12:00:00.000Z',
+  });
+
+  function connectorFor(json: boolean) {
+    const stdout = capture();
+    const stderr = capture();
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      renderOpts: { ...makeOpts(stdout.stream, json), errStream: stderr.stream },
+      interactive: true,
+    });
+    return { connector, stdout, stderr };
+  }
+
+  it('writes the suppressed line to stderr, byte-exact, and nothing to stdout', () => {
+    const { connector, stdout, stderr } = connectorFor(false);
+
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+
+    expect(stderr.value()).toBe(
+      'Cannot deliver: viewport screenshot. Screenshots are off for this run (--no-screenshots); continuing with the other requirements.\n',
+    );
+    expect(stdout.value()).toBe('');
+  });
+
+  it('writes the no-browser line byte-exact', () => {
+    const { connector, stderr } = connectorFor(false);
+
+    connector.emitAgentEvent(gap('full_page', 'no_browser'));
+
+    expect(stderr.value()).toBe(
+      'Cannot deliver: full-page screenshot. No browser is available in this run; continuing with the other requirements.\n',
+    );
+  });
+
+  it('renders only ASCII bytes: no mojibake sequence and no control byte but the newline', () => {
+    const { connector, stderr } = connectorFor(false);
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+    connector.emitAgentEvent(gap('full_page', 'no_browser'));
+
+    const bytes = Buffer.from(stderr.value(), 'utf8');
+    expect(bytes.includes(Buffer.from([0xc3, 0xa2]))).toBe(false);
+    expect([...bytes].every((byte) => byte === 0x0a || (byte >= 0x20 && byte < 0x7f))).toBe(true);
+  });
+
+  it('emits a structured event under --json', () => {
+    const { connector, stdout, stderr } = connectorFor(true);
+
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+
+    expect(stderr.value()).toBe('');
+    expect(JSON.parse(stdout.value().trim())).toMatchObject({
+      kind: 'agent_progress',
+      event: {
+        type: 'capability_gap',
+        item: 'artifact:screenshot:viewport',
+        reason: 'suppressed_by_flag',
+      },
+    });
+  });
+});
+
 describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
   const brief = {
     kind: 'brief' as const,
@@ -385,6 +457,8 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
     brief,
     taskOutcome: 'fulfilled',
     requirements: { met: 3, total: 3, unmet: [], contractDeclared: true },
+    artifacts: [],
+    captureSets: [],
     terminationReason: 'model_finished',
   };
   const partial: AgenticTaskOutcome = {
@@ -398,7 +472,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
         {
           id: 'artifact:screenshot:viewport',
           label: 'viewport screenshot',
-          reason: 'not captured (grant_missing)',
+          reason: 'not captured (no browser was available)',
         },
       ],
       contractDeclared: true,
@@ -427,7 +501,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
 
   it('prints the partial first line naming the unmet items', () => {
     expect(render(partial).stdout).toBe(
-      '\nPartial: 2 of 4 requirements met; fields 10 of 48 filled; viewport screenshot not captured (grant_missing). Brief: /runs/run-1/brief.html\nRun: run-1\n',
+      '\nPartial: 2 of 4 requirements met; fields 10 of 48 filled; viewport screenshot not captured (no browser was available). Brief: /runs/run-1/brief.html\nRun: run-1\n',
     );
   });
 
@@ -435,6 +509,93 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
     expect(render({ ...fulfilled, requirements: null }).stdout).toBe(
       '\nFulfilled. Brief: /runs/run-1/brief.html\nRun: run-1\n',
     );
+  });
+
+  const SHA = 'f'.repeat(64);
+  function captureSet(
+    seq: number,
+    parts = 1,
+    extra: Partial<{
+      complete: boolean;
+      labels: ('truncated' | 'clipped_width' | 'beyond_viewport')[];
+    }> = {},
+  ) {
+    return {
+      scope: parts > 1 ? ('full_page' as const) : ('viewport' as const),
+      parts: Array.from({ length: parts }, (_, index) => ({
+        path: `screenshots/capture-${seq}-${SHA.slice(0, 12)}${parts > 1 ? `-p${index + 1}` : ''}.png`,
+        sha256: SHA,
+        bytes: 100,
+        width: 1280,
+        height: parts > 1 ? 4096 : 720,
+        part: index + 1,
+      })),
+      complete: extra.complete ?? true,
+      labels: extra.labels ?? [],
+    };
+  }
+  function withSets(sets: ReturnType<typeof captureSet>[]): AgenticTaskOutcome {
+    return {
+      ...fulfilled,
+      captureSets: sets,
+      artifacts: sets.flatMap((set) =>
+        set.parts.map((part) => ({
+          kind: 'screenshot' as const,
+          path: part.path,
+          sha256: part.sha256,
+          mime_type: 'image/png' as const,
+          bytes: part.bytes,
+          width: part.width,
+          height: part.height,
+          sent_to_model: false,
+        })),
+      ),
+    };
+  }
+  const shot = (seq: number, suffix = '') =>
+    join('/runs/run-1', 'screenshots', `capture-${seq}-${SHA.slice(0, 12)}${suffix}.png`);
+
+  it('prints one Screenshot line under the first line for a fulfilled capture', () => {
+    expect(render(withSets([captureSet(1)])).stdout).toBe(
+      '\nFulfilled: 3 of 3 requirements met. Brief: /runs/run-1/brief.html\n' +
+        `Screenshot: ${shot(1)}\n` +
+        'Run: run-1\n',
+    );
+  });
+
+  it('labels a tiled, truncated set as part 1 of n and incomplete', () => {
+    const out = render(
+      withSets([captureSet(1, 6, { complete: false, labels: ['truncated'] })]),
+    ).stdout;
+    expect(out).toContain(`Screenshot: ${shot(1, '-p1')} (part 1 of 6) (incomplete: truncated)\n`);
+  });
+
+  it('prints at most three Screenshot lines, then counts the rest', () => {
+    const out = render(withSets([1, 2, 3, 4, 5].map((seq) => captureSet(seq)))).stdout;
+    const lines = out.split('\n').filter((line) => line.startsWith('Screenshot: '));
+    expect(lines).toEqual([1, 2, 3].map((seq) => `Screenshot: ${shot(seq)}`));
+    expect(out).toContain(`+2 more in ${join('/runs/run-1', 'screenshots')}\n`);
+  });
+
+  it('adds run-relative artifact references to the JSON record', () => {
+    const record = JSON.parse(render(withSets([captureSet(1, 2)]), true).stdout) as {
+      artifacts: { path: string; sent_to_model: boolean }[];
+    };
+    expect(record.artifacts.map((artifact) => artifact.path)).toEqual([
+      `screenshots/capture-1-${SHA.slice(0, 12)}-p1.png`,
+      `screenshots/capture-1-${SHA.slice(0, 12)}-p2.png`,
+    ]);
+    expect(record.artifacts.every((artifact) => !artifact.sent_to_model)).toBe(true);
+  });
+
+  it('renders the capture lines in printable ASCII only', () => {
+    const out = render(
+      withSets([captureSet(1, 3, { complete: false, labels: ['clipped_width'] }), captureSet(2)]),
+    ).stdout;
+    const lines = out.split('\n').filter((line) => line.startsWith('Screenshot: '));
+    const bytes = Buffer.from(lines.join('\n'), 'utf8');
+    expect(bytes.includes(Buffer.from([0xc3, 0xa2]))).toBe(false);
+    expect([...bytes].every((byte) => byte === 0x0a || (byte >= 0x20 && byte < 0x7f))).toBe(true);
   });
 
   it('keeps handoff and failure text on stderr unchanged', () => {
@@ -460,6 +621,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
       'kind',
       'task_outcome',
       'termination_reason',
+      'artifacts',
       'outcome',
     ]);
     expect(record).toMatchObject({

@@ -34,7 +34,8 @@ const expectations: readonly Expectation[] = [
       const brief = briefOf(run);
       const facets = brief?.facets as { comparison?: { rows?: unknown[][] } } | undefined;
       const metadata = brief?.metadata as
-        { citation_verdict?: { flagged?: number; stripped?: number } } | undefined;
+        | { citation_verdict?: { flagged?: number; stripped?: number } }
+        | undefined;
       return {
         price: facets?.comparison?.rows?.[0]?.[1],
         flagged: metadata?.citation_verdict?.flagged,

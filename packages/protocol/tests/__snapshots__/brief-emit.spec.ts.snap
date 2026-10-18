@@ -9,6 +9,99 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
       "additionalProperties": false,
       "description": "The universal synthesized output document: answer-first overview, key findings, sections, facets, numbered sources, notices, and metadata. Every citation resolves to a declared source (no uncited claims).",
       "properties": {
+        "artifacts": {
+          "description": "Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs.",
+          "items": {
+            "additionalProperties": false,
+            "description": "One saved capture file the run produced, linked relative to the run directory.",
+            "properties": {
+              "bytes": {
+                "description": "File size in bytes.",
+                "minimum": 0,
+                "type": "integer",
+              },
+              "complete": {
+                "description": "False when the set was clipped or truncated and does not show the whole target.",
+                "type": "boolean",
+              },
+              "height": {
+                "description": "Image height in pixels.",
+                "exclusiveMinimum": 0,
+                "type": "integer",
+              },
+              "kind": {
+                "const": "screenshot",
+                "description": "The artifact kind.",
+                "type": "string",
+              },
+              "labels": {
+                "description": "Labels on the capture set.",
+                "items": {
+                  "description": "A label on a capture set: clipped_width, truncated, or beyond_viewport.",
+                  "enum": [
+                    "clipped_width",
+                    "truncated",
+                    "beyond_viewport",
+                  ],
+                  "type": "string",
+                },
+                "maxItems": 3,
+                "type": "array",
+              },
+              "part": {
+                "description": "1-based position of this file in its capture set.",
+                "minimum": 1,
+                "type": "integer",
+              },
+              "parts": {
+                "description": "How many files the capture set holds.",
+                "maximum": 6,
+                "minimum": 1,
+                "type": "integer",
+              },
+              "path": {
+                "description": "Run-relative path of the artifact file, using forward slashes.",
+                "minLength": 1,
+                "type": "string",
+              },
+              "scope": {
+                "description": "What a screenshot covers: the visible viewport, the full page, or one element.",
+                "enum": [
+                  "viewport",
+                  "full_page",
+                  "element",
+                ],
+                "type": "string",
+              },
+              "sha256": {
+                "description": "Lowercase hex SHA-256 of the file bytes.",
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string",
+              },
+              "width": {
+                "description": "Image width in pixels.",
+                "exclusiveMinimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "kind",
+              "scope",
+              "path",
+              "sha256",
+              "bytes",
+              "width",
+              "height",
+              "part",
+              "parts",
+              "complete",
+              "labels",
+            ],
+            "type": "object",
+          },
+          "maxItems": 12,
+          "type": "array",
+        },
         "brief_id": {
           "description": "Unique Brief document id (ULID).",
           "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",

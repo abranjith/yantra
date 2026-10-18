@@ -295,11 +295,28 @@ describe('@no-llm shared agent options', () => {
       const option = command?.options.find((candidate) => candidate.long === '--no-screenshots');
       expect(option).toMatchObject({
         long: '--no-screenshots',
-        description: 'suppress vision assist for this run',
+        description: 'no screenshots this run (vision assist and saved captures)',
       });
       expect(command?.options.some((candidate) => candidate.long === '--screenshots')).toBe(false);
     },
   );
+
+  it('spells --no-screenshots identically on ask, research, and do', () => {
+    const parent = new Command();
+    registerAskCommand(parent);
+    registerResearchCommand(parent);
+    registerDoCommand(parent);
+    const help = ['ask', 'research', 'do'].map((name) => {
+      const command = parent.commands.find((candidate) => candidate.name() === name);
+      const option = command?.options.find((candidate) => candidate.long === '--no-screenshots');
+      return `${option?.flags ?? ''}|${option?.description ?? ''}`;
+    });
+
+    expect(new Set(help).size).toBe(1);
+    expect(help[0]).toBe(
+      '--no-screenshots|no screenshots this run (vision assist and saved captures)',
+    );
+  });
 
   it('stores --no-screenshots using Commander negation semantics and leaves absence unset', () => {
     const absent = addAgentOptions(new Command('probe').exitOverride());

@@ -66,6 +66,8 @@ const published: AgenticTaskOutcome = {
   brief: { briefId: 'b1', jsonPath: '/runs/run-1/brief.json' } as never,
   taskOutcome: 'fulfilled',
   requirements: null,
+  artifacts: [],
+  captureSets: [],
   terminationReason: 'model_finished',
 };
 

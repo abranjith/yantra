@@ -285,7 +285,10 @@ function browserProvenance(
       source: text(selection.details.source) ?? text(selection.details.selection) ?? 'auto',
       origin:
         (text(selection.details.selectionOrigin) as
-          'invocation' | 'config' | 'default' | undefined) ?? 'default',
+          | 'invocation'
+          | 'config'
+          | 'default'
+          | undefined) ?? 'default',
       ...(ownership === 'managed' || ownership === 'external' ? { ownership } : {}),
       ...(text(selection.details.path) === undefined
         ? {}

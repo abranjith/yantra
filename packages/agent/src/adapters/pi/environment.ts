@@ -66,7 +66,11 @@ async function projectRegisteredModels(
  * Recorded by FEAT-023 as the manifest `auth_source` field.
  */
 export type PiAuthSource =
-  'managed' | 'runtime-key' | 'environment' | 'models-config' | 'unavailable';
+  | 'managed'
+  | 'runtime-key'
+  | 'environment'
+  | 'models-config'
+  | 'unavailable';
 
 /** Options for {@link createPiEnvironment}. */
 export interface PiEnvironmentOptions {

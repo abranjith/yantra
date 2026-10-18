@@ -82,7 +82,8 @@ function applyPragmas(db: DatabaseSync): void {
 function isHealthy(db: DatabaseSync): boolean {
   try {
     const row = db.prepare('PRAGMA integrity_check').get() as
-      { integrity_check?: string } | undefined;
+      | { integrity_check?: string }
+      | undefined;
     return row?.integrity_check === 'ok';
   } catch {
     return false;
@@ -199,7 +200,8 @@ async function hardenPerms(path: string, logger?: Logger): Promise<void> {
  */
 export function getMeta(db: DatabaseSync, key: string): string | null {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
-    { value: string | null } | undefined;
+    | { value: string | null }
+    | undefined;
   return row?.value ?? null;
 }
 

@@ -11,7 +11,10 @@ import type {
 } from './types.js';
 
 export type PopupHandlerEvent =
-  PopupAttachedEvent | PopupClosedEvent | UnrecordedFrameEvent | RecordingDegradedEvent;
+  | PopupAttachedEvent
+  | PopupClosedEvent
+  | UnrecordedFrameEvent
+  | RecordingDegradedEvent;
 
 export interface PopupHandlerCallbacks {
   onEvent(event: PopupHandlerEvent): void;

@@ -324,7 +324,8 @@ async function runStages<TParams extends TSchema>(
       // older releases used `path`. Without it the model cannot tell WHICH
       // field failed, so a weak model has no structured retry path.
       const first = Errors(spec.parameters, rawParams)[0] as
-        { path?: string; instancePath?: string; message?: string } | undefined;
+        | { path?: string; instancePath?: string; message?: string }
+        | undefined;
       const pointer = first?.instancePath ?? first?.path;
       const where = pointer !== undefined && pointer.length > 0 ? ` at "${pointer}"` : '';
       const invalidMessage = `Invalid tool input${where}: ${first?.message ?? 'schema validation failed'}.`;

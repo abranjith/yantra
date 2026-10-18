@@ -24,6 +24,7 @@
  * @see .spec-lite/features/feature_scheduling_runner.md
  */
 
+import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
 import {
@@ -199,6 +200,11 @@ export class CLIConnectorIO implements ConnectorIO {
             `${stripControlCharacters(event.summary)}\n`,
         );
         return;
+      case 'capability_gap':
+        // FEAT-058: a declared item the run cannot deliver, disclosed right
+        // after the echo above, in ASCII punctuation; the run keeps going.
+        opts.errStream.write(`${stripControlCharacters(event.summary)}\n`);
+        return;
     }
   }
 
@@ -248,6 +254,8 @@ export class CLIConnectorIO implements ConnectorIO {
         kind: 'agent_outcome',
         task_outcome: taskOutcomeOf(outcome),
         termination_reason: outcome.terminationReason,
+        // FEAT-058: the saved captures as run-relative artifact references.
+        artifacts: outcome.kind === 'published' ? outcome.artifacts : [],
         outcome,
       };
       opts.stream.write(`${JSON.stringify(record)}\n`);
@@ -257,7 +265,11 @@ export class CLIConnectorIO implements ConnectorIO {
       case 'published':
         // FEAT-054: the first line says whether the task was done, not only
         // that a Brief was saved.
-        opts.stream.write(`\n${outcomeFirstLine(outcome)}\nRun: ${outcome.runId}\n`);
+        opts.stream.write(
+          `\n${outcomeFirstLine(outcome)}\n` +
+            screenshotLines(outcome.runDir, outcome.captureSets) +
+            `Run: ${outcome.runId}\n`,
+        );
         return;
       case 'handoff':
         opts.errStream.write(
@@ -283,6 +295,34 @@ export class CLIConnectorIO implements ConnectorIO {
       }
     );
   }
+}
+
+/** Most `Screenshot:` lines printed before the rest are counted (FEAT-058 S10). */
+const MAX_SCREENSHOT_LINES = 3;
+
+/**
+ * One `Screenshot: <absolute path>` line per saved capture set, under the
+ * outcome's first line so that line stays bounded and greppable (S10): the
+ * set's first file, `(part 1 of n)` for a tiled set, and `(incomplete:
+ * <label>)` for a clipped or truncated one. At most three, then
+ * `+N more in <run dir>/screenshots`.
+ */
+export function screenshotLines(
+  runDir: string,
+  sets: Extract<AgenticTaskOutcome, { readonly kind: 'published' }>['captureSets'],
+): string {
+  const shown = sets.slice(0, MAX_SCREENSHOT_LINES).map((set) => {
+    const first = set.parts[0];
+    if (first === undefined) return '';
+    const absolute = join(runDir, ...first.path.split('/'));
+    const tiled = set.parts.length > 1 ? ` (part 1 of ${set.parts.length})` : '';
+    const missing = set.labels.filter((label) => label !== 'beyond_viewport');
+    const incomplete = set.complete ? '' : ` (incomplete: ${missing.join(', ') || 'partial'})`;
+    return `Screenshot: ${stripControlCharacters(absolute)}${tiled}${incomplete}\n`;
+  });
+  const more = sets.length - MAX_SCREENSHOT_LINES;
+  const tail = more > 0 ? `+${more} more in ${join(runDir, 'screenshots')}\n` : '';
+  return shown.join('') + tail;
 }
 
 /**

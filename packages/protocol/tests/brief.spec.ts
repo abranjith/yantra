@@ -467,3 +467,76 @@ describe('@no-llm editorialMarkIsInformative', () => {
     expect(editorialMarkIsInformative([])).toBe(false);
   });
 });
+
+describe('@no-llm brief schema — saved capture artifacts (FEAT-058)', () => {
+  const SHA = 'cd'.repeat(32);
+  const artifact = (part: number, parts: number, overrides: Record<string, unknown> = {}) => ({
+    kind: 'screenshot' as const,
+    scope: 'full_page' as const,
+    path: `screenshots/capture-1-${SHA.slice(0, 12)}${parts > 1 ? `-p${part}` : ''}.png`,
+    sha256: SHA,
+    bytes: 1000,
+    width: 1280,
+    height: 4096,
+    part,
+    parts,
+    complete: true,
+    labels: [],
+    ...overrides,
+  });
+
+  it('parses a Brief without artifacts exactly as before', () => {
+    const brief = makeBrief();
+    expect(Brief.parse(brief)).toEqual(brief);
+    expect('artifacts' in Brief.parse(brief)).toBe(false);
+  });
+
+  it('parses a three-part capture set', () => {
+    const artifacts = [artifact(1, 3), artifact(2, 3), artifact(3, 3)];
+    expect(Brief.safeParse(makeBrief({ artifacts })).success).toBe(true);
+  });
+
+  it('parses an incomplete, labeled set and an element below the fold', () => {
+    const truncated = artifact(1, 6, { complete: false, labels: ['truncated'] });
+    const element = artifact(1, 1, {
+      scope: 'element',
+      path: `screenshots/capture-2-${SHA.slice(0, 12)}.png`,
+      labels: ['beyond_viewport'],
+    });
+    expect(Brief.safeParse(makeBrief({ artifacts: [truncated, element] })).success).toBe(true);
+  });
+
+  it('rejects more than 12 entries', () => {
+    const artifacts = Array.from({ length: 13 }, (_, index) =>
+      artifact(1, 1, { path: `screenshots/capture-${index + 1}-${SHA.slice(0, 12)}.png` }),
+    );
+    expect(Brief.safeParse(makeBrief({ artifacts })).success).toBe(false);
+    expect(Brief.safeParse(makeBrief({ artifacts: artifacts.slice(0, 12) })).success).toBe(true);
+  });
+
+  it('rejects a duplicate path', () => {
+    const result = Brief.safeParse(makeBrief({ artifacts: [artifact(1, 1), artifact(1, 1)] }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.message.includes('unique'))).toBe(true);
+  });
+
+  it('rejects a part beyond parts and a set larger than six', () => {
+    expect(Brief.safeParse(makeBrief({ artifacts: [artifact(4, 3)] })).success).toBe(false);
+    expect(Brief.safeParse(makeBrief({ artifacts: [artifact(1, 7)] })).success).toBe(false);
+    expect(Brief.safeParse(makeBrief({ artifacts: [artifact(0, 1)] })).success).toBe(false);
+  });
+
+  it('rejects a path outside the capture grammar, an unknown label, and unknown keys', () => {
+    const bad = [
+      artifact(1, 1, { path: 'javascript:alert(1)' }),
+      artifact(1, 1, { path: '../x.png' }),
+      artifact(1, 1, { path: `screenshots/1-${SHA.slice(0, 12)}.png${ESC}[31m` }),
+      artifact(1, 1, { labels: ['blurry'] }),
+      artifact(1, 1, { url: 'https://example.com' }),
+      artifact(1, 1, { kind: 'video' }),
+    ];
+    for (const entry of bad) {
+      expect(Brief.safeParse(makeBrief({ artifacts: [entry] })).success).toBe(false);
+    }
+  });
+});

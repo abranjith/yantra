@@ -445,6 +445,99 @@
           "maxItems": 16,
           "description": "Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs."
         },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "screenshot",
+                "description": "The artifact kind."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "viewport",
+                  "full_page",
+                  "element"
+                ],
+                "description": "What a screenshot covers: the visible viewport, the full page, or one element."
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run-relative path of the artifact file, using forward slashes."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "Lowercase hex SHA-256 of the file bytes."
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "File size in bytes."
+              },
+              "width": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Image width in pixels."
+              },
+              "height": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Image height in pixels."
+              },
+              "part": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based position of this file in its capture set."
+              },
+              "parts": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6,
+                "description": "How many files the capture set holds."
+              },
+              "complete": {
+                "type": "boolean",
+                "description": "False when the set was clipped or truncated and does not show the whole target."
+              },
+              "labels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "clipped_width",
+                    "truncated",
+                    "beyond_viewport"
+                  ],
+                  "description": "A label on a capture set: clipped_width, truncated, or beyond_viewport."
+                },
+                "maxItems": 3,
+                "description": "Labels on the capture set."
+              }
+            },
+            "required": [
+              "kind",
+              "scope",
+              "path",
+              "sha256",
+              "bytes",
+              "width",
+              "height",
+              "part",
+              "parts",
+              "complete",
+              "labels"
+            ],
+            "additionalProperties": false,
+            "description": "One saved capture file the run produced, linked relative to the run directory."
+          },
+          "maxItems": 12,
+          "description": "Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs."
+        },
         "metadata": {
           "type": "object",
           "properties": {

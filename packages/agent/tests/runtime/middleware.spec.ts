@@ -57,10 +57,18 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       suppressedByFlag: false,
       zeroLlm: false,
       available: overrides.visionAvailable === true,
+      reasons: overrides.visionAvailable === true ? [] : ['grant_missing'],
       capability: {
         imageInput: overrides.visionAvailable === true,
         resolvedAt: 'pre-catalog',
       },
+    },
+    capture: {
+      visionAssist: {
+        available: overrides.visionAvailable === true,
+        reasons: overrides.visionAvailable === true ? [] : ['grant_missing'],
+      },
+      deliverable: { available: false, reasons: ['no_browser'] },
     },
     budgets,
     sanitizer,
@@ -184,6 +192,31 @@ describe('@no-llm middleware screenshot content exception', () => {
       ).execute({ q: 'a' }, undefined);
       expect(result.status).toBe('error');
       expect(result.content).toBeUndefined();
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses image content from browser_capture with capture-mime, even with Vision Assist on (FEAT-058)', async () => {
+    const { runDir, bytes, artifact } = await fixture();
+    try {
+      const result = await wrapTool(
+        spec(
+          async () => ({
+            ok: true,
+            model: { saved_locally: true },
+            content: [
+              { kind: 'image', mimeType: 'image/png', base64: bytes.toString('base64'), artifact },
+            ],
+          }),
+          { name: 'browser_capture' },
+        ),
+        makeServices({ runDir, visionAvailable: true }),
+      ).execute({ q: 'a' }, undefined);
+      expect(result.status).toBe('error');
+      expect(result.content).toBeUndefined();
+      expect(result.details).toMatchObject({ budget_limit: 'capture-mime' });
+      expect(result.modelText).not.toContain(bytes.toString('base64').slice(0, 24));
     } finally {
       await rm(runDir, { recursive: true, force: true });
     }
@@ -765,10 +798,12 @@ describe('@no-llm middleware model-supplied value preservation', () => {
     await navigate.execute({ q: `https://example.com/track?id=${TRACKING}` }, undefined);
 
     const observe = wrapTool(
-      spec(async (): Promise<DomainResult> => ({
-        ok: true,
-        model: { digest: `Package ${TRACKING} was delivered.` },
-      })),
+      spec(
+        async (): Promise<DomainResult> => ({
+          ok: true,
+          model: { digest: `Package ${TRACKING} was delivered.` },
+        }),
+      ),
       services,
     );
     const result = await observe.execute({ q: 'observe' }, undefined);

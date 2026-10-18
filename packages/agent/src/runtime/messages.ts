@@ -608,6 +608,73 @@ export const AGENT_INTERACTION_MESSAGES = [
       'Screenshot capture was denied because a resolved secret may still be visible. Capture resumes only after the top-level page navigates to a new document.',
   ),
   tool('SCREENSHOT_UNAVAILABLE', 'capture-failed', passThrough, ['message']),
+  // `browser_capture` (FEAT-058): a clean screenshot saved for the user and
+  // never shown to the model. Each cause names its own next move.
+  tool(
+    'CAPTURE_UNAVAILABLE',
+    'no-browser',
+    () =>
+      'No browser is open in this run, so nothing can be captured. Finish with result_publish ' +
+      'and list the screenshot in fulfillment.unmet.',
+    [],
+    'result_publish',
+  ),
+  tool(
+    'CAPTURE_UNAVAILABLE',
+    'capture-failed',
+    () =>
+      'The screenshot could not be captured and nothing was saved. Call browser_capture once ' +
+      'more; if it fails again, finish with result_publish and list the screenshot in ' +
+      'fulfillment.unmet.',
+    [],
+    'browser_capture',
+  ),
+  tool(
+    'CAPTURE_UNAVAILABLE',
+    'epoch-changed',
+    () =>
+      'The page moved to a new document while it was being captured, so the capture was ' +
+      'discarded and nothing was saved. Call browser_capture again now that the page has settled.',
+    [],
+    'browser_capture',
+  ),
+  tool(
+    'CAPTURE_UNAVAILABLE',
+    'overlay-present',
+    () =>
+      "Yantra's screenshot marks were still drawn on the page, so a clean capture was refused " +
+      'and nothing was saved. Call browser_capture again.',
+    [],
+    'browser_capture',
+  ),
+  tool(
+    'CAPTURE_UNAVAILABLE',
+    'bounds-exceeded',
+    () =>
+      'The captured image was larger than the allowed pixel size, so nothing was saved. ' +
+      'Capture a smaller area: call browser_capture with scope element and the ref of the part ' +
+      'you need.',
+    [],
+    'browser_capture',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'capture-ref-required',
+    () =>
+      'scope element needs the ref of the element to capture. Call browser_observe to get the ' +
+      "element's ref, then call browser_capture with scope element and that ref.",
+    [],
+    'browser_observe',
+  ),
+  tool(
+    'INVALID_INPUT',
+    'capture-ref-forbidden',
+    () =>
+      'A ref is used only with scope element. Call browser_capture again without ref for ' +
+      'viewport or full_page, or with scope element to capture that element.',
+    [],
+    'browser_capture',
+  ),
   tool('SECRET_HOST_MISMATCH', 'host-binding', passThrough, ['message']),
   tool(
     'EXTRACTION_SCHEMA_INVALID',

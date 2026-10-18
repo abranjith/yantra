@@ -334,7 +334,12 @@ export interface DoctorCheck {
 }
 
 export type DoctorCategory =
-  'binaries' | 'filesystem' | 'keychain' | 'providers' | 'search' | 'compatibility';
+  | 'binaries'
+  | 'filesystem'
+  | 'keychain'
+  | 'providers'
+  | 'search'
+  | 'compatibility';
 
 export type DoctorCheckId =
   // From FEAT-003 v0 (carried forward):

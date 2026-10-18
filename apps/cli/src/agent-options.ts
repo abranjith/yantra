@@ -153,7 +153,7 @@ export function addNoLlmOption(command: Command): Command {
  */
 export function addAgentOptions(command: Command): Command {
   return addNoLlmOption(addAgentBudgetOptions(addAgentModelOptions(command))).addOption(
-    new Option('--no-screenshots', 'suppress vision assist for this run'),
+    new Option('--no-screenshots', 'no screenshots this run (vision assist and saved captures)'),
   );
 }
 

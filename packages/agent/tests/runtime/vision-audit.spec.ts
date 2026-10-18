@@ -93,13 +93,15 @@ describe('@no-llm vision audit projection', () => {
 
     for (let index = 1; index <= 3; index += 1) {
       const callId = `capture-${index}`;
-      const capture = {
-        path: `screenshots/${index}-abcdef.png`,
+      const artifact = {
+        kind: 'screenshot' as const,
+        path: `screenshots/${index}-abcdef012345.png`,
         sha256: 'a'.repeat(64),
         mime_type: 'image/png' as const,
+        bytes: pngBytes.byteLength,
         width: 800,
         height: 600,
-        bytes: pngBytes.byteLength,
+        sent_to_model: true,
       };
       session.emit({
         type: 'tool_started',
@@ -114,8 +116,8 @@ describe('@no-llm vision audit projection', () => {
         tool: 'browser_screenshot',
         output: {
           status: 'ok',
-          details: { captures: [capture] },
-          captures: [capture],
+          details: { artifacts: [artifact] },
+          artifacts: [artifact],
           content: [
             { type: 'text', text: `Capture ${index}` },
             { type: 'image', data: base64, mimeType: 'image/png' },
@@ -136,23 +138,30 @@ describe('@no-llm vision audit projection', () => {
       .map((line) => ToolAuditEntry.parse(JSON.parse(line) as unknown));
     const ends = entries.filter((entry) => entry.phase === 'end');
     expect(ends).toHaveLength(3);
-    expect(ends.every((entry) => entry.captures?.[0]?.bytes === pngBytes.byteLength)).toBe(true);
-    expect(ends[0]?.captures?.[0]).toEqual({
-      path: 'screenshots/1-abcdef.png',
+    expect(ends.every((entry) => entry.artifacts?.[0]?.bytes === pngBytes.byteLength)).toBe(true);
+    expect(ends.every((entry) => entry.captures === undefined)).toBe(true);
+    expect(ends[0]?.artifacts?.[0]).toEqual({
+      kind: 'screenshot',
+      path: 'screenshots/1-abcdef012345.png',
       sha256: 'a'.repeat(64),
       mime_type: 'image/png',
+      bytes: pngBytes.byteLength,
       width: 800,
       height: 600,
-      bytes: pngBytes.byteLength,
+      sent_to_model: true,
     });
+    // The image block is replaced by the reference it was paired with.
+    expect(JSON.stringify(ends[0]?.output_sanitized)).toContain('"type":"image","artifact"');
     expect(stableText).not.toContain(base64);
     expect(stableText).not.toContain('data:image/');
     expect(Buffer.from(stableText, 'utf8').includes(pngBytes)).toBe(false);
-    expect(pinoText).toContain('screenshots/1-abcdef.png');
+    expect(pinoText).toContain('screenshots/1-abcdef012345.png');
+    expect(pinoText).toContain('run artifacts recorded');
     expect(pinoText).not.toContain(base64);
     expect(pinoText).not.toContain('data:image/');
     expect(Buffer.from(pinoText, 'utf8').includes(pngBytes)).toBe(false);
-    expect(report).toContain('screenshots/1-abcdef.png');
+    expect(report).toContain('screenshots/1-abcdef012345.png');
+    expect(report).toContain('sent to model: yes');
     expect(report).not.toContain(base64);
     expect(report).not.toContain('data:image/');
     expect(Buffer.from(report, 'utf8').includes(pngBytes)).toBe(false);

@@ -99,7 +99,9 @@ export interface ObstructionCandidate {
 
 /** Why no clearance press happened. `null` when one did. */
 export type ClearanceSkipReason =
-  'no-eligible-candidate' | 'already-spent-this-call' | 'never-dismissed-kind';
+  | 'no-eligible-candidate'
+  | 'already-spent-this-call'
+  | 'never-dismissed-kind';
 
 /**
  * Outcome of the one clearance press, re-checked at the original coordinate.

@@ -10,7 +10,7 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
-The prompt is versioned as `agent-v12` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)); `agent-v12` adds the ten-field batch limit, page-order batching, and continuation through the fill result's `progress`. Beyond the scope rules above, it tells the agent:
+The prompt is versioned as `agent-v13` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)), the ten-field batch limit, page-order batching, and continuation through the fill result's `progress`; `agent-v13` adds how to deliver a requested screenshot (see [Requesting a screenshot](#requesting-a-screenshot)). Beyond the scope rules above, it tells the agent:
 
 - **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
 - **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
@@ -22,7 +22,7 @@ The per-run prompt's scope line is derived from the run's actual tool catalog, s
 - Read-only browser tools only (`research`): "Scope: web search, page reading, and read-only browsing (navigate, observe, extract); this run cannot click or fill forms — if the goal needs that, report it and name `yantra do` as the next step."
 - Any click or fill tool (`do`): "Scope: browser and web work only."
 
-The `do` completion criteria also carry the required-source rule (when the goal names a site or source, read the answer from it and present any other source only as a clearly labeled alternative, never merged into the answer) and ask the agent to call `task_contract` in the same turn as its first search or fetch. They also say that when the goal changes or captures a page, the agent declares `deliverable: "actions"` and puts "every field" or the fields to fill in `fill`, a requested screenshot in `artifacts`, and "do not submit" in `effects`, never in `notes`, because nothing checks notes; and that the result is judged item by item from what the tools recorded, so it should publish even when an item is unmet and say why in `fulfillment.unmet`. The `research` guidance is described in [Research](research.md#agentic-research).
+The `do` completion criteria also carry the required-source rule (when the goal names a site or source, read the answer from it and present any other source only as a clearly labeled alternative, never merged into the answer) and ask the agent to call `task_contract` in the same turn as its first search or fetch. They also say that when the goal changes or captures a page, the agent declares `deliverable: "actions"` and puts "every field" or the fields to fill in `fill`, a requested screenshot in `artifacts`, and "do not submit" in `effects`, never in `notes`, because nothing checks notes; and that the result is judged item by item from what the tools recorded, so it should publish even when an item is unmet and say why in `fulfillment.unmet`. When the task asks for a screenshot, they tell the agent to declare it in `artifacts` and call `browser_capture` after its last page action, and that the image is saved for the user and the agent is told its path, not shown it. The `research` guidance is described in [Research](research.md#agentic-research).
 
 The `do` profile exposes these capabilities:
 
@@ -31,6 +31,7 @@ The `do` profile exposes these capabilities:
 | Public-web research                | Searches the web and fetches readable content from the top results, or with `limit: 0` returns only titles, URLs, and snippets. It can fetch one specific public link already supplied, returned by a search, or offered by a page already read, subject to URL and ethics policy. Every read reports the page's shape and returns its records, tables, fields, structured data, and links. Each page is fetched at most once per run and keeps one evidence ID. |
 | Browser navigation and observation | Lazily opens system Chrome in a fresh run-scoped profile, follows policy-approved URLs, and returns bounded page text plus opaque references for visible controls.                                                                                                                                                                                                                                                                                               |
 | Browser actions                    | Clicks observed controls and fills text, autocomplete suggestions, native choices, toggles, ISO dates, and date ranges. Multi-field forms are filled together and verified before the agent submits them separately.                                                                                                                                                                                                                                             |
+| Saved screenshots                  | Saves a clean PNG of the viewport, the whole page, or one element to the run directory with `browser_capture`, when the goal asks for a screenshot. The pixels stay on this computer: the model receives only paths and sizes, and no grant or image-capable model is needed. See [Requesting a screenshot](#requesting-a-screenshot).                                                                                                                           |
 | Page extraction                    | Extracts the live page's readable content, records, links, schema.org structured data, every table, or one table by index, through the same analyzer `web_fetch` uses. Large results become run-local capture references instead of being placed fully in model context.                                                                                                                                                                                         |
 | Saved workflows                    | Lists and runs a matching saved workflow through the deterministic executor. The nested workflow gets its own run directory and opens no second model session.                                                                                                                                                                                                                                                                                                   |
 | Task contract                      | Records what the goal requires (deliverable, fields, filters, required sites, and the page actions to fill, capture, or not submit) as `contract.json` and echoes it to the user. Required before a `do` result can be published; see [Task contract](#task-contract).                                                                                                                                                                                           |
@@ -124,7 +125,7 @@ Field names are resolved conservatively against the accessible name, the derived
 
 `verdict` is `exact` when the control holds byte for byte what was sent, or `reformatted` when it holds the same letters and digits with only case, spacing, or punctuation changed, as a card-number mask that inserts spaces produces. `exact` is a raw comparison, not the folded one disclosed text uses, so `passw0rd` for a sent `Passw0rd!` is `reformatted`, never `exact`. Those are the only verdicts a success carries: a control that merely holds something is not proof that it holds the caller's value. `resolution` equals the verdict, `reason` is the same reason the observation entry reports for that control, and `ref` names the control the verdict was taken on — the editee when the page routed the edit elsewhere. When the verdict was taken on the named control itself, the entry also carries the field's `label` when it has one. A stored-secret fill is committed blind with no readback, and its result carries neither `committed` nor `withheld`.
 
-The agent-facing guidance for `do` states this contract directly: a successful result whose `committed` value differs from what was sent is backed by an offered selection or a formatting-equivalent rewrite and must be accepted rather than re-filled; an `editee` means the value landed in a control the page chose, so the named field staying empty is expected; `attempted` is an ordered list of recovery verdicts, each read by its `verdict` — `succeeded` and `failed` name steps the tool already performed and must not be repeated, while a `skipped` entry names a step the tool did **not** take and says why in `unmet`, which is information rather than a prohibition; when `offered` is present, one of its labels can be re-issued verbatim through the interaction family that emitted it; a batch's `applied` fields are set and must not be re-sent; and a `skipped` field waits for the field named in its `blocked_by`. The completion criteria also teach bounded batches in page order and continuation from `progress.next`. This guidance lives in the command's completion criteria and tool descriptions; its current prompt version is `agent-v12`, and the tool catalog is recorded separately by `tool_catalog_hash`.
+The agent-facing guidance for `do` states this contract directly: a successful result whose `committed` value differs from what was sent is backed by an offered selection or a formatting-equivalent rewrite and must be accepted rather than re-filled; an `editee` means the value landed in a control the page chose, so the named field staying empty is expected; `attempted` is an ordered list of recovery verdicts, each read by its `verdict` — `succeeded` and `failed` name steps the tool already performed and must not be repeated, while a `skipped` entry names a step the tool did **not** take and says why in `unmet`, which is information rather than a prohibition; when `offered` is present, one of its labels can be re-issued verbatim through the interaction family that emitted it; a batch's `applied` fields are set and must not be re-sent; and a `skipped` field waits for the field named in its `blocked_by`. The completion criteria also teach bounded batches in page order and continuation from `progress.next`. This guidance lives in the command's completion criteria and tool descriptions; its current prompt version is `agent-v13`, and the tool catalog is recorded separately by `tool_catalog_hash`.
 
 `browser_click` owns one bounded declarative plan. When the page replaces the node behind a ref mid-click, the tool re-observes and finds the element again — constrained to the same accessible name **and** role it described before the click, and refusing anything ambiguous, because recovering an identity is not the same as choosing a different control. The shared recovery runner executes that plan on one deadline and action allowance, so `resolved_by: "re-resolved"` and `attempted` account for the recovery that actually occurred. A click that simply worked reports neither. A disabled element is a definite answer and is never retried. No new pass/fail gate was added: a click that legitimately changes nothing visible still succeeds.
 
@@ -345,7 +346,7 @@ A call fails, and nothing is recorded, in these cases:
 
 Only the first problem is reported, so each failing call gets one cause-specific message. `INVALID_INPUT` is retryable with the corrected full contract.
 
-A successful call returns `{revision, contract, note}` with the normalized contract, rewrites `<run-dir>/contract.json` with every revision so far (at most 3; the last is current), and writes one `contract_declared` line to `runtime.jsonl` (see [Run artifacts](diagnostics-and-audit.md#run-artifacts)). When a requested screenshot cannot be produced in this run, the result also carries `capability_gaps`, a list of `{item, reason}` such as `{"item": "artifact:screenshot:full_page", "reason": "scope_unsupported"}`, so the agent learns it at declaration time rather than at publication. The only capture tool today is Vision Assist's `browser_screenshot`, so `viewport` and `element` are possible only when Vision Assist is available, and the reason otherwise names the gate that keeps it off (`zero_llm`, `suppressed_by_flag`, `no_browser_tools`, `grant_missing`, or `model_text_only`); `full_page` is always `scope_unsupported`. With no artifact requested, or none missing, the key is absent.
+A successful call returns `{revision, contract, note}` with the normalized contract, rewrites `<run-dir>/contract.json` with every revision so far (at most 3; the last is current), and writes one `contract_declared` line to `runtime.jsonl` (see [Run artifacts](diagnostics-and-audit.md#run-artifacts)). When a requested screenshot cannot be produced in this run, the result also carries `capability_gaps`, a list of `{item, reason}` such as `{"item": "artifact:screenshot:viewport", "reason": "suppressed_by_flag"}`, so the agent learns it at declaration time rather than at publication. Screenshots come from the local deliverable capture, `browser_capture`, which handles every scope, so either every requested screenshot is possible or none is. When it is off, each requested screenshot carries the first reason that keeps it off: `suppressed_by_flag` (`--no-screenshots`), `no_browser`, or `no_interaction_tools`. Vision Assist availability plays no part. With no artifact requested, or none missing, the key is absent. The user is told at the same moment; see [Requesting a screenshot](#requesting-a-screenshot).
 
 In a text-mode run the CLI then prints what the run understood to stderr, beside the goal echo, so a misreading is visible in the first seconds:
 
@@ -422,24 +423,30 @@ A `do` run is done only when the evidence shows it did what its contract declare
 - a field `browser_fill_form` or `browser_fill_element` committed and verified, by its resolved field name, ref, and widget group (a fused date range counts as the fields it covers);
 - a `browser_click` that executed, and whether its target was submit-class;
 - a submit-class click or nested workflow the engine refused under `effects.submit: forbidden`; and
-- a `browser_screenshot` capture written to the run directory, with its scope.
+- a capture written to the run directory, with its scope and the tool that produced it. A `browser_capture` entry also records how many files the call wrote and whether the set is complete.
 
-A failed fill or click records nothing. Each entry is stamped with the page's host and the top-level document it happened on, so a capture can be tied to the page the last action left behind. The ledger stores identities only, never a typed value, selector, or secret reference.
+A Vision Assist `browser_screenshot` capture is recorded too, but only as evidence: it never meets a screenshot item. A failed fill or click records nothing. Each entry is stamped with the page's host and the top-level document it happened on, so a capture can be tied to the page the last action left behind. The ledger stores identities only, never a typed value, selector, or secret reference.
 
 **Each declared item is judged on its own.** At publication the runtime evaluates every item as `met`, `unmet`, or `not_applicable`:
 
-| Item                               | Met when                                                                                                                                                                                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `deliverable` (`table`)            | The published content has no table, field, or source delivery gap.                                                                                                                                                                                     |
-| `deliverable` (`answer`, `report`) | A Brief is published and, when the contract names required sources, something in it is cited from them.                                                                                                                                                |
-| `deliverable` (`actions`)          | At least one fill or click was recorded and, when the contract names required sources, every one happened on one of those hosts or their subdomains. Otherwise unmet with `no page action was recorded` or `actions happened on <host>, not <source>`. |
-| `filter:<name>`                    | The condition is `verified`. `unverified` is unmet as `not confirmed`; `violated` is unmet as `not met: …`.                                                                                                                                            |
-| `fill` (`listed`)                  | Every listed name matches a committed field's name, compared ignoring case and punctuation. Otherwise the reason counts them and names the rest: `fields 2 of 3 filled; not filled: Email`.                                                            |
-| `fill` (`all_eligible`)            | Every eligible control in the current document's complete form census has a verified commit on that document; see below.                                                                                                                               |
-| `artifact:screenshot:<scope>`      | A capture of a satisfying scope was taken after the last recorded fill or click, on the same page; with no recorded action, any matching capture counts. A `full_page` capture also satisfies a `viewport` request.                                    |
-| `effects.submit`                   | No submit-class click executed. Refused attempts keep it met and are counted in the reason, such as `2 submit attempts refused`.                                                                                                                       |
+| Item                               | Met when                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deliverable` (`table`)            | The published content has no table, field, or source delivery gap.                                                                                                                                                                                                                                        |
+| `deliverable` (`answer`, `report`) | A Brief is published and, when the contract names required sources, something in it is cited from them.                                                                                                                                                                                                   |
+| `deliverable` (`actions`)          | At least one fill or click was recorded and, when the contract names required sources, every one happened on one of those hosts or their subdomains. Otherwise unmet with `no page action was recorded` or `actions happened on <host>, not <source>`.                                                    |
+| `filter:<name>`                    | The condition is `verified`. `unverified` is unmet as `not confirmed`; `violated` is unmet as `not met: …`.                                                                                                                                                                                               |
+| `fill` (`listed`)                  | Every listed name matches a committed field's name, compared ignoring case and punctuation. Otherwise the reason counts them and names the rest: `fields 2 of 3 filled; not filled: Email`.                                                                                                               |
+| `fill` (`all_eligible`)            | Every eligible control in the current document's complete form census has a verified commit on that document; see below.                                                                                                                                                                                  |
+| `artifact:screenshot:<scope>`      | A `browser_capture` of a satisfying scope was taken after the last recorded fill or click, on the same page; with no recorded action, any matching capture counts. A `full_page` capture also satisfies a `viewport` request. A `full_page` request also needs a complete set (not clipped or truncated). |
+| `effects.submit`                   | No submit-class click executed. Refused attempts keep it met and are counted in the reason, such as `2 submit attempts refused`.                                                                                                                                                                          |
 
-An unmet screenshot reads `not captured`, `not captured (<gap reason>)` with the same reason codes as `capability_gaps`, `captured before the last page action`, or `captured on a different page than the last action`.
+An unmet screenshot reads one of:
+
+- `not captured`;
+- `not captured (screenshots are off for this run (--no-screenshots))`, `not captured (no browser was available)`, or `not captured (this command cannot act on pages)`, when the capture was unavailable for the whole run;
+- `captured before the last page action`;
+- `captured on a different page than the last action`; or
+- `capture_incomplete`, for a `full_page` request whose only captures were clipped or truncated. The same incomplete set still meets a `viewport` request, because its first file covers the top of the page.
 
 **`all_eligible` is measured against a read-only form census.** At publication the runtime obtains the current document's census from the browser, including fields beyond the 50-entry observation window. The engine, not the model, decides which controls count: a control that is part of a human-verification widget, hidden or not rendered, disabled, read-only, or a file upload is exempt, and password and other sensitive-`autocomplete` fields are eligible. Native `input[type=hidden]` controls are excluded entirely. A radio or checkbox group counts once; split inputs and paired date fields each count separately. Exempt controls are listed on the item, at most 20 plus an overflow count.
 
@@ -460,6 +467,68 @@ Every eligible control or group needs a verified fill on the census document, pr
 | `aborted`   | The user interrupted the run.                                                                | `130` | `aborted`         |
 
 A partial run's failure class is `budget_exhausted` when its termination reason is `wall-clock-soft`, `wall-clock-hard`, `provider-tokens`, or `tool-budget`, and `requirements_unmet` otherwise. A handoff is classed `captcha_detected`, `mfa_required`, or `unexpected` from its blocker. Why the run stopped is recorded separately as its termination reason: `model_finished`, `wall-clock-soft` (the model finished after the 80% wind-down began), `wall-clock-hard`, `provider-tokens`, `tool-budget`, `repeated-tool-failure`, `handoff`, `user_abort`, or `provider_failed`. A user abort always wins. Otherwise a validated published result decides the outcome even when a budget or the repeated-failure breaker fired after it, so a run that published and then hit its deadline is `fulfilled` or `partial`, not `failed`.
+
+### Requesting a screenshot
+
+When the goal asks for a screenshot, the agent declares it in the contract's `artifacts` with a scope and calls `browser_capture` after its last page action. The tool saves a clean PNG (without Yantra's ref marks) under the run's `screenshots/` directory. The pixels never reach the model provider: the result carries no image, only paths and sizes. That is why the tool needs no `context.screenshots` grant and works with a text-only model.
+
+`browser_capture` is registered when the run has a browser, the command has a click or fill tool (`browser_click`, `browser_fill_element`, or `browser_fill_form`), and `--no-screenshots` is absent. In practice that means `do`. `research`'s read-only browsing and `ask` never have it. The decision is recorded before the first tool call as `agent.capture.deliverable` in `manifest.json` and `capture.deliverable` in `run-health.json`, each `{available, reasons}`. Its reason codes are listed in this order: `suppressed_by_flag`, `no_browser`, and `no_interaction_tools`.
+
+It takes a required `scope` and, for `element` only, a `ref`:
+
+| Scope       | Captures                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `viewport`  | What is visible now, at the current scroll position.                                                                                                                                 |
+| `full_page` | The whole scrollable page, split top to bottom into files of at most 4,096 px tall.                                                                                                  |
+| `element`   | One element's box, given by a current `eNN` ref. An element outside the visible area is captured without scrolling. An element taller than one file is split the same way as a page. |
+
+A capture that cannot show its whole target says so with labels, and the run never claims more than was saved:
+
+- `clipped_width`: the content was wider than 1,920 px and was cut to that width.
+- `truncated`: the content needed more than 6 files, so it was cut after the sixth.
+- `beyond_viewport`: the element was not wholly inside the visible area.
+
+`clipped_width` and `truncated` make the set incomplete (`complete: false`). `beyond_viewport` describes the element's position and does not. A 9,000 px page is saved as 3 files. A 30,000 px page is saved as 6 files that cover the first 24,576 px and are labeled `truncated`.
+
+**Limits.** `browser_capture` has its own budget, separate from Vision Assist's: at most 4 calls per run, 6 files per call, 1,920 x 4,096 px and 8 MiB per file, and 40 MiB per run. These limits are fixed and are not flags. Every file of a call is checked against them before anything is written. The tool also stays callable during the 80% wind-down; the hard deadline, the per-tool timeout, and these limits still apply.
+
+**What the agent receives.** A successful result is metadata only: `scope`, `ref` (element only), `complete`, `labels`, one `parts` entry per file with `path`, `width`, `height`, `bytes`, and `part`, plus `captured_height` and `page_height` for `full_page` and `element`, `remaining_captures`, and `saved_locally: true`. It carries no image, no base64 data, and no SHA-256. Files are named `screenshots/capture-<sequence>-<sha256-prefix>.png`, with `-p<part>` added when a call writes more than one file. A call saves all of its files or none.
+
+A capture can fail with:
+
+| Code                          | Cause                   | When                                                                                         |
+| ----------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| `INVALID_INPUT`               | `capture-ref-required`  | `scope: "element"` without a `ref`. The message names `browser_observe` to get one.          |
+| `INVALID_INPUT`               | `capture-ref-forbidden` | A `ref` with `viewport` or `full_page`.                                                      |
+| `SCREENSHOT_SENSITIVE_SCREEN` | `secret-latched`        | A stored secret was filled on this document. Capture resumes after a new document loads.     |
+| `STALE_ELEMENT_REF`           |                         | The `ref` is not current. Retryable.                                                         |
+| `CAPTURE_UNAVAILABLE`         | `no-browser`            | No browser is open in this run.                                                              |
+| `CAPTURE_UNAVAILABLE`         | `epoch-changed`         | The page moved to a new document during the capture, which was discarded.                    |
+| `CAPTURE_UNAVAILABLE`         | `overlay-present`       | Yantra's Vision Assist marks were still drawn on the page.                                   |
+| `CAPTURE_UNAVAILABLE`         | `bounds-exceeded`       | A captured file was larger than the pixel bound. The message suggests capturing one element. |
+| `CAPTURE_UNAVAILABLE`         | `capture-failed`        | Any other capture or write failure. Nothing was saved.                                       |
+| `BUDGET_EXHAUSTED`            |                         | `deliverable-capture-count`, `deliverable-capture-pixels`, or `deliverable-capture-bytes`.   |
+
+A failed capture never fails the run. The screenshot item stays unmet, and the outcome follows from the items as usual.
+
+**A screenshot the run cannot take is disclosed when it is declared.** If `browser_capture` is off, the `task_contract` result carries `capability_gaps`, and a text-mode run prints one line to stderr right after the `understood:` echo, then keeps working on the other requirements:
+
+```text
+Cannot deliver: viewport screenshot. Screenshots are off for this run (--no-screenshots); continuing with the other requirements.
+Cannot deliver: full-page screenshot. No browser is available in this run; continuing with the other requirements.
+```
+
+Each requested screenshot is disclosed once, and a later revision does not repeat it. Under `--json` the same disclosure is an `agent_progress` record with `type: "capability_gap"`, `item` (such as `artifact:screenshot:viewport`), `reason`, `summary`, and `at`. The run then ends `partial`, for example `Partial: 1 of 2 requirements met; viewport screenshot not captured (screenshots are off for this run (--no-screenshots)). Brief: <run-dir>/brief.html`, with exit code `2`.
+
+**Which capture meets a screenshot item.** Only a `browser_capture` taken after the last recorded fill or click, on the same document, counts. A Vision Assist `browser_screenshot` never does, because its image carries Yantra's marks. An incomplete `full_page` set leaves a `full_page` item unmet as `capture_incomplete` but still meets a `viewport` item. See [Judging a `do` result](#judging-a-do-result).
+
+**Where saved captures appear.** Every file a `do` run saved is linked from:
+
+- The Brief, which gains a **Captures** section and an `artifacts` list in `brief.json` (at most 12 files, in capture order, with one notice naming how many more are in the run's screenshots folder). `brief.md` links each file relatively, for example `- [full-page screenshot, part 1 of 3](screenshots/capture-1-<sha256-prefix>-p1.png), 1000x4096`. Labels are added where they apply: `(incomplete: truncated)` and `(below the visible area)`. `brief.html` links only a path that matches the engine's capture-file pattern and shows any other value as text. The terminal Brief prints the same list with absolute paths.
+- The outcome lines, described under [Inputs and Outputs](#inputs-and-outputs).
+- `yantra audit`, which lists them under `Saved captures (kept on this computer, never sent to the model):`. See [Diagnostics and audit](diagnostics-and-audit.md).
+
+`ask` and `research` Briefs never carry captures.
 
 ## How to Use It
 
@@ -570,22 +639,23 @@ If `e4` instead failed in the first call while the other nine committed, progres
 
 ### Options
 
-| Option                         | Meaning                                                                                                                                                               |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--provider <name>`            | Select the model provider.                                                                                                                                            |
-| `--model <id>`                 | Select a provider-scoped model id.                                                                                                                                    |
-| `--thinking <level>`           | Request a supported provider reasoning level.                                                                                                                         |
-| `--auth-secret <ref>`          | Use an OS-keychain secret reference as a runtime-only model key.                                                                                                      |
-| `--max-duration <duration>`    | Set the hard wall-clock duration for the whole run.                                                                                                                   |
-| `--max-tokens <n>`             | Set the cumulative provider-token ceiling.                                                                                                                            |
-| `--tool-timeout <duration>`    | Set the timeout for one tool attempt.                                                                                                                                 |
-| `--tool-retries <n>`           | Bound identical failures of one tool: the run stops when one tool fails with the same error `n + 1` times without succeeding in between.                              |
-| `--confirm-timeout <duration>` | Set the maximum live consent wait.                                                                                                                                    |
-| `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                                             |
-| `--save-as <name>`             | After a `fulfilled` run, attempt to promote the browser trace to a saved workflow. A `partial` run is not saved. Promotion failure does not change the run's outcome. |
-| `--template <name\|tag\|path>` | Render into a saved template, tag, or Markdown template path instead of the default Brief.                                                                            |
-| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes the run non-interactive.                                                              |
-| `--no-llm`                     | Shared agent-option veto. `do` has no deterministic task executor, so this option exits with validation guidance instead of running the goal.                         |
+| Option                         | Meaning                                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--provider <name>`            | Select the model provider.                                                                                                                                                     |
+| `--model <id>`                 | Select a provider-scoped model id.                                                                                                                                             |
+| `--thinking <level>`           | Request a supported provider reasoning level.                                                                                                                                  |
+| `--auth-secret <ref>`          | Use an OS-keychain secret reference as a runtime-only model key.                                                                                                               |
+| `--max-duration <duration>`    | Set the hard wall-clock duration for the whole run.                                                                                                                            |
+| `--max-tokens <n>`             | Set the cumulative provider-token ceiling.                                                                                                                                     |
+| `--tool-timeout <duration>`    | Set the timeout for one tool attempt.                                                                                                                                          |
+| `--tool-retries <n>`           | Bound identical failures of one tool: the run stops when one tool fails with the same error `n + 1` times without succeeding in between.                                       |
+| `--confirm-timeout <duration>` | Set the maximum live consent wait.                                                                                                                                             |
+| `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                                                      |
+| `--save-as <name>`             | After a `fulfilled` run, attempt to promote the browser trace to a saved workflow. A `partial` run is not saved. Promotion failure does not change the run's outcome.          |
+| `--template <name\|tag\|path>` | Render into a saved template, tag, or Markdown template path instead of the default Brief.                                                                                     |
+| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes the run non-interactive.                                                                       |
+| `--no-screenshots`             | No screenshots this run: neither the local `browser_capture` nor Vision Assist is registered. A requested screenshot is disclosed as undeliverable and the run ends `partial`. |
+| `--no-llm`                     | Shared agent-option veto. `do` has no deterministic task executor, so this option exits with validation guidance instead of running the goal.                                  |
 
 Durations are positive integers with an optional `ms`, `s`, `m`, or `h` suffix; a bare integer means milliseconds. See [Shared flags and output behavior](../usage.md#shared-flags-and-output-behavior) for defaults, preference and environment equivalents, and precedence.
 
@@ -607,7 +677,18 @@ Partial: no task contract was declared. Brief: <run-dir>/brief.html
 
 A templated run says `report:` in place of `Brief:`. The text before the path is at most 240 characters. Handoff and failure output is unchanged.
 
-`--json` emits independently parseable NDJSON records and never opens an interactive consent prompt. Its terminal `agent_outcome` record carries `task_outcome` and `termination_reason` beside the full `outcome` object.
+When the run saved screenshots, one line per `browser_capture` call follows the outcome line, before `Run:`. Each line names the call's first file by absolute path. A call that wrote several files adds `(part 1 of <n>)`, and a clipped or truncated set adds `(incomplete: <label>)`. At most three lines are printed, then one line counts the rest:
+
+```text
+Fulfilled: 2 of 2 requirements met. Brief: <run-dir>/brief.html
+Screenshot: <run-dir>/screenshots/capture-1-<sha256-prefix>.png
+Screenshot: <run-dir>/screenshots/capture-2-<sha256-prefix>-p1.png (part 1 of 6) (incomplete: truncated)
+Run: <run-id>
+```
+
+With more than three captures, the third line is followed by `+<n> more in <run-dir>/screenshots`. A screenshot the run could not take at all is disclosed earlier, on stderr; see [Requesting a screenshot](#requesting-a-screenshot).
+
+`--json` emits independently parseable NDJSON records and never opens an interactive consent prompt. Its terminal `agent_outcome` record carries `task_outcome`, `termination_reason`, and `artifacts` beside the full `outcome` object. `artifacts` lists every saved capture file as a generic artifact reference `{kind: "screenshot", path, sha256, mime_type: "image/png", bytes, width, height, sent_to_model: false}`, with run-relative paths, in capture order. It is empty for `ask`, `research`, and a `do` run that saved no capture.
 
 With `--save-as`, a line after the outcome reports the promotion. A saved run that met a screenshot item reads `✓ Saved workflow "<name>" without its viewport screenshot step (no replay step captures a screenshot yet). Replay it with: yantra run <name>`. A partial run reads `⚠ Could not save workflow "<name>": Not saved: the run was partial (2 of 4 requirements met). Only a fulfilled run is saved as a workflow.`
 
@@ -624,6 +705,7 @@ A normal successful run writes a validated task Brief:
   usage.json
   contract.json             # when a task contract was declared
   captures/                 # when extracted content exceeds inline limits
+  screenshots/              # when the run saved or showed a screenshot
   trace.json
   brief.json
   brief.md
@@ -633,7 +715,7 @@ A normal successful run writes a validated task Brief:
 
 Template mode writes `document.json`, `document.md`, and `document.html` in place of `brief.*`. The authored Markdown structure remains engine-controlled while the model fills declared slots; see [Controlled publication and rendering](report-templates.md#controlled-publication-and-rendering). A failed publication may additionally write `result.md`, which is diagnostic and does not turn the failed run into a successful result.
 
-`manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, tool-catalog hash, the Yantra version, and the effective budgets without credential material, plus the run's `taskOutcome` and `terminationReason`. A partial run's `report.md` shows status `failed` with the outcome line as its message, and its `task_failed` event in `events.jsonl` carries `task_outcome`. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
+`manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, tool-catalog hash, the Yantra version, the effective budgets without credential material, and both capture decisions (`agent.capture`), plus the run's `taskOutcome` and `terminationReason`. A partial run's `report.md` shows status `failed` with the outcome line as its message, and its `task_failed` event in `events.jsonl` carries `task_outcome`. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
 
 `runtime.jsonl` is local operator diagnostics for the run: which browser and driver it used, why that browser was selected, whether the compatibility evidence came from cache or a fresh probe, the safe class of any browser startup failure or unexpected tool failure, the search provider the run selected, and, by hostname only, each fetch escalated to the browser and each challenge page. It is never sent to the model, never part of the published result, and never an evidence source, and it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` only when it exists; a run that hands off before building an environment, such as the location pre-flight described above, has none. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
 
@@ -667,7 +749,7 @@ Startup and runtime errors use stable codes such as `AGENT_MODEL_NOT_FOUND`, `AG
 
 Model settings resolve in this order: explicit flag, `YANTRA_AGENT_*` environment variable, `profile.yaml` `agent.*` preference, then the pinned default. Current defaults are Anthropic with `claude-haiku-4-5`, a 15-minute hard deadline, a 2,000,000-token ceiling, three-minute tool and confirmation timeouts, and a `--tool-retries` value of 3 (the run stops when one tool fails with the same error four times without succeeding in between). At 80% of the run duration, non-terminal exploration stops so the agent can publish gathered evidence.
 
-Additional enforced defaults bound one model-visible tool result to 24 KB, cumulative model-visible tool output to 512 KB, browser navigations to 30, and distinct outbound hosts to 20. Publication remains available after the soft wind-down or cumulative-byte limit, but not after the hard deadline. `task_contract` also remains available after the soft wind-down, so a `do` run can still declare the contract its publication needs. Tool-call counts are recorded for audit and are not a cap.
+Additional enforced defaults bound one model-visible tool result to 24 KB, cumulative model-visible tool output to 512 KB, browser navigations to 30, and distinct outbound hosts to 20. Publication remains available after the soft wind-down or cumulative-byte limit, but not after the hard deadline. `task_contract` also remains available after the soft wind-down, so a `do` run can still declare the contract its publication needs, and so does `browser_capture`, so a requested screenshot can still be saved. Tool-call counts are recorded for audit and are not a cap.
 
 Model credentials can come from Yantra-managed Pi auth, `--auth-secret`/`YANTRA_AGENT_AUTH_SECRET` as an OS-keychain reference, a supported provider environment variable, or custom-model configuration. Credential values are never written to prompts, logs, or run artifacts. `do` does not silently fall back when model auth is unavailable; use `yantra doctor` to inspect the effective model, credential source, and budgets without contacting a provider, or `yantra doctor --agent-smoke` for a live check.
 
@@ -701,6 +783,7 @@ Personalization includes only approved, sanitized preferences. Date, timezone, a
 - Report-template runs require a valid model-authored slot payload. The runtime cannot safely assemble a missing templated report from free-form draft prose, so an invalid or missing template publication remains a failure.
 - `--save-as` promotes only a `fulfilled` run's successful browser trace. It cannot preserve transient login state or run-scoped marked values, and later replay may still need workflow parameters, stored website secrets, confirmation, and a compatible page structure. No workflow step captures a screenshot, so a met screenshot item is saved without its step.
 - Form inventory and its coverage census are bounded to 400 scanned controls. A bounded or failed census cannot establish `all_eligible` coverage, and leaving the filled document before publication cannot establish coverage on the destination page. Multi-step forms do not have a cross-document census.
-- Screenshots come only from Vision Assist's `browser_screenshot`, which needs the `context.screenshots` grant and an image-capable model and captures the viewport or one element. A `full_page` screenshot item is always unmet with `scope_unsupported`.
+- A requested screenshot is met only by `browser_capture`. A full page is saved as at most 6 files of at most 1,920 x 4,096 px each, so a wider or longer page is saved in part, labeled, and leaves a `full_page` item unmet as `capture_incomplete`. A run takes at most 4 captures.
+- `browser_capture` cannot capture a page with a stored secret on it. It is refused until a new document loads, so a screenshot of a page after a secret fill must wait for the next page.
 
 For the detailed runtime and safety contracts, see [Agentic task architecture](../architecture.md#agentic-task) and [browser, URL, and web safety](safety-and-privacy.md#browser-url-and-web-safety).

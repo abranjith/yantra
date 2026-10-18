@@ -54,6 +54,8 @@ function outcome(kind: AgenticTaskOutcome['kind'] | 'partial'): AgenticTaskOutco
                 contractDeclared: true,
               }
             : { met: 2, total: 2, unmet: [], contractDeclared: true },
+        artifacts: [],
+        captureSets: [],
         terminationReason: 'model_finished',
       };
     case 'handoff':

@@ -8,6 +8,7 @@ import { yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
 import {
   COMMAND_TASK_PROFILES,
+  INTERACT_TOOLS,
   browserCapabilityOf,
   promptAddendumFor,
   resolveCommandTaskProfile,
@@ -372,7 +373,24 @@ describe('@no-llm command task profiles', () => {
       resolveCommandTaskProfile('do'),
     ]) {
       const named = new Set(profile.promptAddendum.match(toolName) ?? []);
-      for (const name of named) expect(profile.toolNames).toContain(name);
+      // browser_capture is registered by its own capability gate (FEAT-058
+      // S2), never through toolNames: whenever the profile has an interaction
+      // tool and a browser, it is in the catalog.
+      const capabilityTools = profile.toolNames.some((name) => INTERACT_TOOLS.has(name))
+        ? ['browser_capture']
+        : [];
+      for (const name of named) expect([...profile.toolNames, ...capabilityTools]).toContain(name);
+    }
+  });
+
+  it('names browser_capture only in the do addendum', () => {
+    expect(resolveCommandTaskProfile('do').promptAddendum).toContain('browser_capture');
+    for (const profile of [
+      resolveCommandTaskProfile('ask'),
+      resolveCommandTaskProfile('research'),
+      resolveCommandTaskProfile('research', { browse: false }),
+    ]) {
+      expect(profile.promptAddendum).not.toContain('browser_capture');
     }
   });
 

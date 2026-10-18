@@ -18,11 +18,13 @@ export const searchConfigSchema = z
       .transform((chain) => [...new Set(chain)]),
     fetch_top: z.number().int().min(1).max(5).default(DEFAULT_SEARCH_CONFIG.fetchTop),
   })
-  .transform((raw): SearchConfig => ({
-    provider: raw.provider,
-    fallbackChain: raw.fallback_chain,
-    fetchTop: raw.fetch_top,
-  }));
+  .transform(
+    (raw): SearchConfig => ({
+      provider: raw.provider,
+      fallbackChain: raw.fallback_chain,
+      fetchTop: raw.fetch_top,
+    }),
+  );
 
 export type SearchConfigParseResult =
   | { readonly ok: true; readonly config: SearchConfig }

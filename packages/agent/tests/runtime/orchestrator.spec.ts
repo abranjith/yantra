@@ -316,6 +316,71 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(await catalogFor(true)).not.toContain('browser_screenshot');
   });
 
+  it('records both capture capabilities in the manifest and run health before the first tool call (FEAT-058)', async () => {
+    const runFor = async (screenshotsSuppressed: boolean) => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-capture-capability-'));
+      tempDirs.push(root);
+      const profile = resolveCommandTaskProfile('do');
+      const base = buildEnvironment(vi.fn(() => Promise.resolve()));
+      const environment: AgenticRunEnvironment = {
+        ...base,
+        domain: { ...base.domain, browser: {} as NonNullable<typeof base.domain.browser> },
+      };
+      let manifestAtOpen: Record<string, unknown> | undefined;
+      let runDir = '';
+      const outcome = await runAgenticTask(
+        {
+          goal: 'Complete the fixture task',
+          profile,
+          model: { provider: 'fixture', id: 'text-model' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: true, screenshots: false }, userLocation: null },
+          screenshotsSuppressed,
+        },
+        {
+          runStore: new LocalRunStore(root),
+          createEnvironment: () => Promise.resolve(environment),
+          resolveModelImageInput: () => false,
+          createProvider: (services) => {
+            runDir = services.runDir;
+            return new FakeAgentProvider({
+              runResult: completed,
+              onRun: async () => {
+                manifestAtOpen = JSON.parse(
+                  await readFile(join(runDir, 'manifest.json'), 'utf8'),
+                ) as Record<string, unknown>;
+              },
+            });
+          },
+        },
+      );
+      const health = JSON.parse(
+        await readFile(join(outcome.runDir, 'run-health.json'), 'utf8'),
+      ) as { capture?: unknown };
+      return { manifestAtOpen, health };
+    };
+
+    const suppressed = await runFor(true);
+    expect((suppressed.manifestAtOpen?.agent as { capture?: unknown }).capture).toEqual({
+      vision_assist: {
+        available: false,
+        reasons: ['grant_missing', 'model_no_image_input', 'suppressed_by_flag'],
+      },
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+    });
+    expect(suppressed.health.capture).toMatchObject({
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+      deliverable_calls: 0,
+    });
+
+    const fresh = await runFor(false);
+    expect((fresh.manifestAtOpen?.agent as { capture?: unknown }).capture).toEqual({
+      vision_assist: { available: false, reasons: ['grant_missing', 'model_no_image_input'] },
+      deliverable: { available: true, reasons: [] },
+    });
+  });
+
   it('rejects malformed markers before creating any run state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'yantra-marker-ingress-'));
     tempDirs.push(root);
@@ -1889,6 +1954,112 @@ function contractEvents(connector: RecordingConnector): AgentProgressEvent[] {
   return connector.events.filter((entry) => entry.type === 'contract_declared');
 }
 
+describe('@no-llm runAgenticTask capability gap disclosure (FEAT-058)', () => {
+  const actions = (scopes: readonly ('viewport' | 'full_page')[]): ScriptedCall => ({
+    tool: 'task_contract',
+    params: {
+      deliverable: 'actions',
+      subject: 'the sign-up form',
+      artifacts: scopes.map((scope) => ({ kind: 'screenshot', scope })),
+    },
+  });
+
+  it('emits one capability_gap per undeliverable item, after the echo, never repeated on revision', async () => {
+    // The scripted environment has no browser, so deliverable capture is off.
+    const { connector } = await scriptedRun({
+      command: 'do',
+      calls: [actions(['viewport']), actions(['viewport', 'full_page'])],
+    });
+
+    const relevant = connector.events.filter(
+      (entry) => entry.type === 'contract_declared' || entry.type === 'capability_gap',
+    );
+    expect(relevant.map((entry) => entry.type)).toEqual([
+      'contract_declared',
+      'capability_gap',
+      'contract_declared',
+      'capability_gap',
+    ]);
+    const gaps = relevant.filter((entry) => entry.type === 'capability_gap');
+    expect(gaps).toEqual([
+      expect.objectContaining({
+        item: 'artifact:screenshot:viewport',
+        reason: 'no_browser',
+        summary:
+          'Cannot deliver: viewport screenshot. No browser is available in this run; continuing with the other requirements.',
+      }),
+      expect.objectContaining({ item: 'artifact:screenshot:full_page', reason: 'no_browser' }),
+    ]);
+  });
+
+  it('puts the saved captures on the published outcome as artifacts and sets', async () => {
+    const sha = 'e'.repeat(64);
+    const set = {
+      scope: 'viewport' as const,
+      parts: [
+        {
+          path: `screenshots/capture-1-${sha.slice(0, 12)}.png`,
+          sha256: sha,
+          bytes: 321,
+          width: 800,
+          height: 600,
+          part: 1,
+        },
+      ],
+      complete: true,
+      labels: [],
+    };
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [
+        actions(['viewport']),
+        { tool: 'result_publish', params: { brief: { title: 'Form', overview: 'Done.' } } },
+      ],
+      beforeCalls: (services) => {
+        services.actionLedger.record({
+          kind: 'capture',
+          scope: 'viewport',
+          path: set.parts[0]!.path,
+          sha256: sha,
+          bytes: 321,
+          producer: 'browser_capture',
+          parts: 1,
+          complete: true,
+          captureSet: set,
+        });
+      },
+    });
+
+    expect(outcome.kind).toBe('published');
+    if (outcome.kind !== 'published') return;
+    expect(outcome.captureSets).toEqual([set]);
+    expect(outcome.artifacts).toEqual([
+      {
+        kind: 'screenshot',
+        path: set.parts[0]!.path,
+        sha256: sha,
+        mime_type: 'image/png',
+        bytes: 321,
+        width: 800,
+        height: 600,
+        sent_to_model: false,
+      },
+    ]);
+  });
+
+  it('gives an ask outcome empty artifacts', async () => {
+    const { outcome } = await scriptedRun({ command: 'ask', calls: [PUBLISH_CALL] });
+
+    expect(outcome).toMatchObject({ kind: 'published', artifacts: [], captureSets: [] });
+  });
+
+  it('emits no capability_gap for a contract that declares no screenshot', async () => {
+    const { connector } = await scriptedRun({ command: 'do', calls: [actions([])] });
+
+    expect(connector.events.some((entry) => entry.type === 'capability_gap')).toBe(false);
+  });
+});
+
 describe('@no-llm runAgenticTask task contract echo (FEAT-052)', () => {
   it('emits exactly one contract_declared event per successful declaration', async () => {
     const { connector, services } = await scriptedRun({
@@ -2172,7 +2343,7 @@ describe('@no-llm runAgenticTask task outcome (FEAT-054)', () => {
     ]);
     // The first line names the missing screenshot and the unfilled fields.
     expect(outcomeFirstLine(outcome)).toMatch(
-      /^Partial: 2 of 4 requirements met; fields not counted \(inventory_unavailable\); viewport screenshot not captured \(no_browser_tools\)\. Brief: /u,
+      /^Partial: 2 of 4 requirements met; fields not counted \(inventory_unavailable\); viewport screenshot not captured \(no browser was available\)\. Brief: /u,
     );
     await expect(readFile(join(outcome.runDir, 'brief.json'), 'utf8')).resolves.toContain(
       '"requirements"',

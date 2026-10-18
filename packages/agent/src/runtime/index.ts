@@ -25,7 +25,15 @@ export {
   type ModelVisionCapability,
   type VisionAvailability,
   type VisionAvailabilityInput,
+  type VisionReason,
 } from './vision.js';
+export {
+  captureCapabilityRecord,
+  resolveCaptureCapability,
+  type CaptureCapability,
+  type CaptureCapabilityInput,
+  type DeliverableReason,
+} from './capture-capability.js';
 export {
   locationHandoffFor,
   requiresUserLocation,
@@ -106,7 +114,9 @@ export {
   type RequirementStatus,
 } from './fulfillment.js';
 export {
-  visionContractCapabilities,
+  capabilityGapLine,
+  captureGapPhrase,
+  deliverableContractCapabilities,
   type CaptureGapReason,
   type ContractCapabilityResolver,
 } from './contract-capabilities.js';

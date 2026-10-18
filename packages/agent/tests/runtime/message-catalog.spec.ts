@@ -17,8 +17,10 @@ import { describe, expect, it } from 'vitest';
 import { buildYantraWrappedTools, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { actionLedgerFor } from '../../src/runtime/action-ledger.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
+import { resolveCaptureCapability } from '../../src/runtime/capture-capability.js';
 import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from '../../src/runtime/messages.js';
+import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
 import {
   ActionPhase,
@@ -68,6 +70,24 @@ describe('@no-llm agent interaction message catalog', () => {
     expect(new Set(rendered).size).toBe(rendered.length);
   });
 
+  it('names only registered tools in the do addendum, browser_capture included (FEAT-058)', () => {
+    const services = buildServices();
+    const active = new Set(
+      yantraToolCatalog(services, COMMAND_TASK_PROFILES.do).map((entry) => entry.name),
+    );
+    const addendum = COMMAND_TASK_PROFILES.do.promptAddendum;
+    const named = new Set(
+      addendum.match(/\b(?:browser|web|result|task|script|workflow)_[a-z_]+\b/gu) ?? [],
+    );
+
+    expect(named.has('browser_capture')).toBe(true);
+    expect(addendum).toContain(
+      'When the task asks for a screenshot, declare it in artifacts and call browser_capture after ' +
+        'your last page action; the image is saved for the user and you are told its path, not shown it.',
+    );
+    for (const name of named) expect(active.has(name)).toBe(true);
+  });
+
   it('resolves every tool capability against the active wrapped-tool catalog', () => {
     const services = buildServices();
     const active = new Set(yantraToolCatalog(services).map((entry) => entry.name));
@@ -87,6 +107,7 @@ describe('@no-llm agent interaction message catalog', () => {
     expect(busy?.capability).toBeNull();
     expect(busy?.capabilityKind).toBeNull();
     expect(buildYantraWrappedTools(services).map((tool) => tool.name)).toEqual([
+      'browser_capture',
       'browser_click',
       'browser_extract',
       'browser_fill_element',
@@ -180,16 +201,25 @@ function buildServices(): RunServices {
   const budgets = new BudgetTracker(DEFAULT_BUDGET_LIMITS);
   const sanitizer = new DefaultSanitizer();
   const provenance = new UrlProvenance();
+  const vision = resolveVisionAvailability({
+    grantEnabled: false,
+    hasBrowserTools: true,
+    modelImageInput: false,
+    suppressedByFlag: false,
+    zeroLlm: true,
+  });
   return {
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir: '.',
-    vision: resolveVisionAvailability({
-      grantEnabled: false,
-      hasBrowserTools: true,
-      modelImageInput: false,
+    vision,
+    // A `do` run with a browser: deliverable capture is registered, so every
+    // hint naming browser_capture resolves against the catalog.
+    capture: resolveCaptureCapability({
+      vision,
+      hasBrowser: true,
+      hasInteractionTools: true,
       suppressedByFlag: false,
-      zeroLlm: true,
     }),
     budgets,
     sanitizer,

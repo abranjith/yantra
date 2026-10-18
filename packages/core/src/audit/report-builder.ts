@@ -2,6 +2,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  artifactRefsOf,
   RunHealth,
   TaskContractRecord,
   type TaskContractBody,
@@ -181,16 +182,19 @@ function renderAgenticReport(input: {
   lines.push(...renderRunHealth(input.runHealth));
 
   lines.push('## Captures');
+  // Read through the one artifact normalizer, so an older run's `captures`
+  // (always images the model saw) renders beside a new run's `artifacts`.
   const captures = input.toolCalls.flatMap((entry) =>
-    (entry.captures ?? []).map((capture) => ({ entry, capture })),
+    artifactRefsOf(entry).map((capture) => ({ entry, capture })),
   );
   if (captures.length === 0) {
     lines.push('- none');
   } else {
     for (const { entry, capture } of captures) {
       lines.push(
-        `- [${entry.seq}] ${capture.path} - ${capture.width}x${capture.height}, ` +
-          `${capture.bytes} bytes, image/png, sha256=${capture.sha256}`,
+        `- [${entry.seq}] ${capture.path} - ${capture.width ?? '?'}x${capture.height ?? '?'}, ` +
+          `${capture.bytes} bytes, image/png, sha256=${capture.sha256}, ` +
+          `sent to model: ${capture.sent_to_model ? 'yes' : 'no'}`,
       );
     }
   }

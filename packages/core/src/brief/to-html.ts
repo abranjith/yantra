@@ -46,6 +46,7 @@
 import {
   editorialMarkIsInformative,
   type Brief,
+  type BriefArtifact,
   type BriefNotice,
   type BriefRequirement,
   type BriefSource,
@@ -53,6 +54,7 @@ import {
   type Section,
 } from '@yantra/protocol';
 
+import { captureLabels, captureTitle, isCaptureArtifactPath } from './captures.js';
 import {
   escapeForMarkdown,
   escapeHtml,
@@ -88,6 +90,10 @@ export function briefToHtml(brief: Brief): string {
 
   if (brief.requirements !== undefined && brief.requirements.length > 0) {
     body.push(requirementsHtml(brief.requirements));
+  }
+
+  if (brief.artifacts !== undefined && brief.artifacts.length > 0) {
+    body.push(capturesHtml(brief.artifacts));
   }
 
   const overview = brief.overview.trim();
@@ -357,6 +363,25 @@ const REQUIREMENT_STATUS_HTML: Readonly<Record<BriefRequirement['status'], strin
   unmet: '✗ unmet',
   not_applicable: '– not applicable',
 };
+
+/**
+ * The Captures block (FEAT-058 S11), built from structured fields and never
+ * passed through Markdown. The one exception to the `http(s)`-only href rule:
+ * an engine-produced, grammar-checked relative capture path, which resolves to
+ * the PNG beside `brief.html` in the run directory. Any other value renders
+ * as escaped text with no anchor.
+ */
+function capturesHtml(artifacts: readonly BriefArtifact[]): string {
+  const items = artifacts.map((artifact) => {
+    const title = escapeHtml(captureTitle(artifact));
+    const target = isCaptureArtifactPath(artifact.path)
+      ? `<a href="${escapeHtml(artifact.path)}">${title}</a>`
+      : `${title} (${escapeHtml(artifact.path)})`;
+    const labels = captureLabels(artifact);
+    return `<li>${target}, ${artifact.width}x${artifact.height}${labels.length > 0 ? ` ${escapeHtml(labels)}` : ''}</li>`;
+  });
+  return `<section class="captures"><h2>Captures</h2><ul>${items.join('')}</ul></section>`;
+}
 
 /** The Requirements block: one item per requirement, exemptions nested. */
 function requirementsHtml(requirements: readonly BriefRequirement[]): string {

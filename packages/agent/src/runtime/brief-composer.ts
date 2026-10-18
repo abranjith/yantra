@@ -7,8 +7,17 @@ import {
   type DocumentStore,
   type PayloadSanitizer,
 } from '@yantra/core';
-import { err, ok, type BriefNotice, type Result, type TaskContractBody } from '@yantra/protocol';
+import {
+  BRIEF_MAX_ARTIFACTS,
+  err,
+  ok,
+  type BriefArtifact,
+  type BriefNotice,
+  type Result,
+  type TaskContractBody,
+} from '@yantra/protocol';
 
+import type { ActionLedgerEntry } from './action-ledger.js';
 import {
   alternativesBody,
   boundedNotice,
@@ -95,7 +104,8 @@ export interface AgentPublishContent {
   readonly title: string;
   readonly overview: string;
   readonly key_findings: readonly (
-    string | { readonly text: string; readonly sources?: readonly string[] }
+    | string
+    | { readonly text: string; readonly sources?: readonly string[] }
   )[];
   readonly sections?: readonly {
     readonly heading: string;
@@ -664,4 +674,63 @@ export function composedPublishSummary(
     clauses.push(`${summary.flagged} values not found in their cited sources`);
   const firstLine = overview.split('\n').find((line) => line.trim().length > 0) ?? '';
   return `${clauses.join('; ')}. ${firstLine}`.trim();
+}
+
+/**
+ * The Brief's saved captures (FEAT-058 S11): one entry per file written by
+ * `browser_capture`, in capture order, at most {@link BRIEF_MAX_ARTIFACTS}.
+ * Vision Assist images are never listed: they carry Yantra's marks and are
+ * evidence, not deliverables. When files are dropped, one notice says how
+ * many and where they are.
+ */
+export function briefArtifactsFrom(ledger: readonly ActionLedgerEntry[]): {
+  readonly artifacts: BriefArtifact[];
+  readonly notice: BriefNotice | null;
+} {
+  const all: BriefArtifact[] = ledger.flatMap((entry) => {
+    if (entry.kind !== 'capture' || entry.producer !== 'browser_capture') return [];
+    const set = entry.captureSet;
+    if (set === undefined) return [];
+    return set.parts.map((part) => ({
+      kind: 'screenshot' as const,
+      scope: set.scope,
+      path: part.path,
+      sha256: part.sha256,
+      bytes: part.bytes,
+      width: part.width,
+      height: part.height,
+      part: part.part,
+      parts: set.parts.length,
+      complete: set.complete,
+      labels: [...set.labels],
+    }));
+  });
+  const artifacts = all.slice(0, BRIEF_MAX_ARTIFACTS);
+  const dropped = all.length - artifacts.length;
+  return {
+    artifacts,
+    notice:
+      dropped === 0
+        ? null
+        : {
+            kind: 'other',
+            source: 'captures',
+            reason: `${dropped} further capture files are in the run's screenshots folder.`,
+          },
+  };
+}
+
+/**
+ * Content with the run's saved captures, for a `do` publication only; `ask`
+ * and `research` never produce deliverable captures, so their Briefs carry no
+ * `artifacts` key.
+ */
+export function withArtifacts(
+  content: Record<string, unknown>,
+  services: Pick<RunServices, 'contract' | 'actionLedger'>,
+): { readonly content: Record<string, unknown>; readonly notices: readonly BriefNotice[] } {
+  if (services.contract.command !== 'do') return { content, notices: [] };
+  const { artifacts, notice } = briefArtifactsFrom(services.actionLedger.entries());
+  if (artifacts.length === 0) return { content, notices: [] };
+  return { content: { ...content, artifacts }, notices: notice === null ? [] : [notice] };
 }

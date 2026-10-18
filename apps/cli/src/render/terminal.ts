@@ -11,12 +11,20 @@
  * `--no-color` / `NO_COLOR` / non-TTY conditions.
  */
 
-import { basename, dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
-import { briefToHtml, briefToMarkdown, templatedReportToHtml } from '@yantra/core';
+import {
+  briefToHtml,
+  briefToMarkdown,
+  captureLabels,
+  captureTitle,
+  isCaptureArtifactPath,
+  templatedReportToHtml,
+} from '@yantra/core';
 import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 import { renderBriefTerminal } from './brief-terminal.js';
+import { stripControlCharacters } from './goal-echo.js';
 import type {
   AuditRenderReport,
   BriefArtifactPaths,
@@ -33,6 +41,26 @@ const STATUS_ICON: Record<'ok' | 'warn' | 'fail', string> = {
   warn: '⚠',
   fail: '✗',
 };
+
+/**
+ * The Brief's saved captures for the terminal (FEAT-058 S11): the same list
+ * `brief.md` links, with absolute paths when the run directory is known.
+ */
+export function briefCaptureLines(brief: Brief, runDir: string | null): string {
+  if (brief.artifacts === undefined || brief.artifacts.length === 0) return '';
+  const lines = brief.artifacts.map((artifact) => {
+    const path =
+      runDir !== null && isCaptureArtifactPath(artifact.path)
+        ? join(runDir, ...artifact.path.split('/'))
+        : artifact.path;
+    const labels = captureLabels(artifact);
+    return (
+      `  ${captureTitle(artifact)}: ${stripControlCharacters(path)}, ` +
+      `${artifact.width}x${artifact.height}${labels.length > 0 ? ` ${labels}` : ''}\n`
+    );
+  });
+  return `\nCaptures:\n${lines.join('')}`;
+}
 
 export class TerminalRenderer implements OutputRenderer {
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void {
@@ -215,20 +243,24 @@ export class TerminalRenderer implements OutputRenderer {
         );
       }
     }
-    if (report.captures.length > 0) {
+    const seen = report.captures.filter((capture) => capture.sentToModel);
+    const kept = report.captures.filter((capture) => !capture.sentToModel);
+    const captureLine = (capture: AuditRenderReport['captures'][number]): string =>
+      `  ${capture.path} — ${capture.width ?? '?'}x${capture.height ?? '?'}, ${capture.bytes} bytes, ` +
+      `sha256=${capture.sha256}, call=#${capture.toolCall.seq} ${capture.toolCall.tool}, ` +
+      `budget=1 capture/${capture.budgetConsumed.pixels} pixels/${capture.budgetConsumed.bytes} bytes\n`;
+    if (seen.length > 0) {
       opts.stream.write('\nThe model saw these images:\n');
-      for (const capture of report.captures) {
-        opts.stream.write(
-          `  ${capture.path} — ${capture.width}x${capture.height}, ${capture.bytes} bytes, ` +
-            `sha256=${capture.sha256}, call=#${capture.toolCall.seq} ${capture.toolCall.tool}, ` +
-            `budget=1 capture/${capture.budgetConsumed.pixels} pixels/${capture.budgetConsumed.bytes} bytes\n`,
-        );
-      }
+      for (const capture of seen) opts.stream.write(captureLine(capture));
       if (report.rawSessionLogCaptureBearing && report.agent !== null) {
         opts.stream.write(
           `Raw provider session log ${report.agent.sessionFile} contains the image data itself.\n`,
         );
       }
+    }
+    if (kept.length > 0) {
+      opts.stream.write('\nSaved captures (kept on this computer, never sent to the model):\n');
+      for (const capture of kept) opts.stream.write(captureLine(capture));
     }
   }
 
@@ -257,6 +289,9 @@ export class TerminalRenderer implements OutputRenderer {
       ...(opts.width !== undefined ? { width: opts.width } : {}),
     });
     opts.stream.write(`${rendered}\n`);
+    opts.stream.write(
+      briefCaptureLines(brief, artifacts === null ? null : dirname(artifacts.htmlPath)),
+    );
 
     if (artifacts !== null) {
       opts.stream.write(`\nSaved: ${artifacts.mdPath} · ${artifacts.htmlPath}\n`);

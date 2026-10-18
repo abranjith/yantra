@@ -11,7 +11,10 @@ import type {
 } from './installation-types.js';
 
 export type ConsentSource =
-  'cli-accept-flag' | 'cli-prompt' | 'interactive-offer' | 'cli-update-prompt';
+  | 'cli-accept-flag'
+  | 'cli-prompt'
+  | 'interactive-offer'
+  | 'cli-update-prompt';
 
 /**
  * One acquisition the user accepted.

@@ -122,10 +122,11 @@ export const TemplateRef = z
   })
   .describe('Templated value with explicit typed bindings.');
 
-export const ValueRef: z.ZodType<ValueRef> = z.lazy((): z.ZodType<ValueRef> =>
-  z
-    .discriminatedUnion('kind', [LiteralValue, ParamRef, SecretRef, CaptureRef, TemplateRef])
-    .describe('Any value reference that can flow through a plan or workflow.'),
+export const ValueRef: z.ZodType<ValueRef> = z.lazy(
+  (): z.ZodType<ValueRef> =>
+    z
+      .discriminatedUnion('kind', [LiteralValue, ParamRef, SecretRef, CaptureRef, TemplateRef])
+      .describe('Any value reference that can flow through a plan or workflow.'),
 );
 
 export const RoleEnum = z

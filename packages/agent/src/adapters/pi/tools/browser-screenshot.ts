@@ -3,6 +3,7 @@ import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { SetOfMarksError, StaleElementRefError } from '@yantra/core';
+import type { ArtifactRef } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
 import type { BudgetDecision } from '../../../runtime/budget.js';
@@ -114,18 +115,22 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
       bytes: artifact.bytes,
       producer: 'browser_screenshot',
     });
-    const auditCapture = {
+    // The generic artifact reference (FEAT-058 S9): this image is shown to the
+    // model, so it is recorded as sent.
+    const auditArtifact: ArtifactRef = {
+      kind: 'screenshot',
       path: artifact.path,
       sha256: artifact.sha256,
       mime_type: artifact.mime_type,
+      bytes: artifact.bytes,
       width: artifact.width,
       height: artifact.height,
-      bytes: artifact.bytes,
+      sent_to_model: true,
     };
     return {
       ok: true,
       model: { ...artifact, remaining_captures: services.budgets.remainingCaptures() },
-      details: { captures: [auditCapture] },
+      details: { artifacts: [auditArtifact] },
       content: [
         {
           kind: 'image',

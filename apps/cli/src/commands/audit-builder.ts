@@ -14,7 +14,12 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { AgentManifestSection, ToolAuditEntry, UsageLedger } from '@yantra/protocol';
+import {
+  AgentManifestSection,
+  ToolAuditEntry,
+  UsageLedger,
+  artifactRefsOf,
+} from '@yantra/protocol';
 
 import type { AuditRenderReport } from '../render/types.js';
 
@@ -153,7 +158,9 @@ export async function buildAuditReport(
     agent,
     toolCalls,
     captures,
-    rawSessionLogCaptureBearing: captures.length > 0,
+    // Only an image the model saw is in the provider session log; a capture
+    // kept on this computer never reached it.
+    rawSessionLogCaptureBearing: captures.some((capture) => capture.sentToModel),
     usage,
     terminalError,
   };
@@ -161,32 +168,42 @@ export async function buildAuditReport(
   return { kind: 'ok', report };
 }
 
+/**
+ * Every capture a run's tool calls wrote, read through the one artifact
+ * normalizer: a new run's `artifacts`, or an older run's `captures` (which
+ * could only have been images the model saw).
+ */
 function summarizeCaptures(
   entries: readonly ReturnType<typeof ToolAuditEntry.parse>[],
 ): AuditRenderReport['captures'] {
   return [...entries]
     .sort((left, right) => left.seq - right.seq)
     .flatMap((entry) =>
-      entry.phase !== 'end' || entry.captures === undefined
+      entry.phase !== 'end'
         ? []
-        : entry.captures.map((capture) => ({
-            path: capture.path,
-            sha256: capture.sha256,
-            mimeType: capture.mime_type,
-            width: capture.width,
-            height: capture.height,
-            bytes: capture.bytes,
-            toolCall: {
-              seq: entry.seq,
-              callId: entry.call_id,
-              tool: entry.tool,
-            },
-            budgetConsumed: {
-              captures: 1 as const,
-              pixels: capture.width * capture.height,
-              bytes: capture.bytes,
-            },
-          })),
+        : artifactRefsOf(entry).map((ref) => {
+            const width = ref.width ?? null;
+            const height = ref.height ?? null;
+            return {
+              path: ref.path,
+              sha256: ref.sha256,
+              mimeType: ref.mime_type,
+              width,
+              height,
+              bytes: ref.bytes,
+              sentToModel: ref.sent_to_model,
+              toolCall: {
+                seq: entry.seq,
+                callId: entry.call_id,
+                tool: entry.tool,
+              },
+              budgetConsumed: {
+                captures: 1 as const,
+                pixels: width === null || height === null ? 0 : width * height,
+                bytes: ref.bytes,
+              },
+            };
+          }),
     );
 }
 

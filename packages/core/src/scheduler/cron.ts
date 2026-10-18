@@ -14,7 +14,8 @@ import { Cron } from 'croner';
 
 /** Result of {@link validateCron}. */
 export type CronValidation =
-  { readonly ok: true } | { readonly ok: false; readonly reason: string };
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
 
 /**
  * Validates a cron expression by attempting to parse it with croner.

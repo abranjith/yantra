@@ -1,3 +1,4 @@
+import type { DeliverableReason } from './capture-capability.js';
 import type { ConfirmationConnector } from './confirmation-bridge.js';
 import type { AgenticTaskOutcome } from './outcome.js';
 
@@ -25,6 +26,19 @@ export type AgentProgressEvent =
        */
       readonly type: 'contract_declared';
       readonly revision: number;
+      readonly summary: string;
+      readonly at: string;
+    }
+  | {
+      /**
+       * A declared item this run cannot deliver (FEAT-058), disclosed once,
+       * right after the declaration that introduced it. `summary` is the
+       * one-line, ASCII-only disclosure; the run continues with the rest.
+       */
+      readonly type: 'capability_gap';
+      /** The requirement id, such as `artifact:screenshot:viewport`. */
+      readonly item: string;
+      readonly reason: DeliverableReason;
       readonly summary: string;
       readonly at: string;
     };

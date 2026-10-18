@@ -17,6 +17,7 @@
 import type { Logger, PayloadSanitizer, SubmitSignal } from '@yantra/core';
 import type { ArtifactScope } from '@yantra/protocol';
 
+import type { CaptureArtifactSet } from './capture-artifacts.js';
 import type { SubmitRefusalSignal } from './submit-policy.js';
 
 /** Longest kept field name. */
@@ -73,17 +74,31 @@ export interface SubmitRefusedEntry extends LedgerStamp {
 export interface CaptureEntry extends LedgerStamp {
   readonly kind: 'capture';
   readonly scope: ArtifactScope;
-  /** Run-relative path of the PNG. */
+  /** Run-relative path of the PNG (part 1 of a tiled set). */
   readonly path: string;
+  /** SHA-256 of that PNG. */
   readonly sha256: string;
+  /** Bytes written, across every part. */
   readonly bytes: number;
   /** The tool that produced it. */
   readonly producer: string;
+  /** How many PNG files the capture wrote (FEAT-058); 1 when absent. */
+  readonly parts?: number;
+  /** False when the set was clipped or truncated (FEAT-058); true when absent. */
+  readonly complete?: boolean;
+  /**
+   * Every saved file of a `browser_capture` set, for the Brief and the
+   * outcome's artifact references. Kept in memory only: never logged.
+   */
+  readonly captureSet?: CaptureArtifactSet;
 }
 
 /** One verified action outcome. */
 export type ActionLedgerEntry =
-  FillCommittedEntry | ClickExecutedEntry | SubmitRefusedEntry | CaptureEntry;
+  | FillCommittedEntry
+  | ClickExecutedEntry
+  | SubmitRefusedEntry
+  | CaptureEntry;
 
 /** A committed action: what a later capture must follow. */
 export type CommittedActionEntry = FillCommittedEntry | ClickExecutedEntry;
@@ -128,6 +143,8 @@ interface ActionRecordedEvent {
   readonly signal?: SubmitRefusalSignal;
   readonly scope?: ArtifactScope;
   readonly bytes?: number;
+  readonly parts?: number;
+  readonly complete?: boolean;
 }
 
 /** The run-scoped, append-only record of verified action outcomes. */
@@ -254,6 +271,12 @@ function projection(entry: ActionLedgerEntry): ActionRecordedEvent {
     case 'submit_refused':
       return { ...base, signal: entry.signal };
     case 'capture':
-      return { ...base, scope: entry.scope, bytes: entry.bytes };
+      return {
+        ...base,
+        scope: entry.scope,
+        bytes: entry.bytes,
+        ...(entry.parts === undefined ? {} : { parts: entry.parts }),
+        ...(entry.complete === undefined ? {} : { complete: entry.complete }),
+      };
   }
 }

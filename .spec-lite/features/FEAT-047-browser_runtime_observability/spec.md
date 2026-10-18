@@ -83,7 +83,12 @@ interface BrowserStartupFailedRuntimeEvent {
   readonly schema_version: 1;
   readonly event: 'browser_startup_failed';
   readonly phase:
-    'resolution' | 'reservation' | 'compatibility' | 'profile' | 'identity-revalidation' | 'launch';
+    | 'resolution'
+    | 'reservation'
+    | 'compatibility'
+    | 'profile'
+    | 'identity-revalidation'
+    | 'launch';
   readonly error_class: string;
   readonly failure_kind:
     | 'resolution'

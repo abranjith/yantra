@@ -201,12 +201,13 @@ describe('@no-llm task_contract action terms (FEAT-054)', () => {
     effects: { submit: 'forbidden' },
   } as const;
 
-  const VISION_ON = {
-    grantEnabled: true,
-    hasBrowserTools: true,
-    modelImageInput: true,
-    available: true,
-    capability: { imageInput: true, resolvedAt: 'pre-catalog' as const },
+  const AVAILABLE = {
+    visionAssist: { available: false, reasons: ['grant_missing' as const] },
+    deliverable: { available: true, reasons: [] },
+  };
+  const SUPPRESSED = {
+    visionAssist: { available: false, reasons: ['suppressed_by_flag' as const] },
+    deliverable: { available: false, reasons: ['suppressed_by_flag' as const] },
   };
 
   it('records action terms in do and logs counts only', async () => {
@@ -236,22 +237,32 @@ describe('@no-llm task_contract action terms (FEAT-054)', () => {
     expect(JSON.stringify(logger.lines)).not.toContain('sign-up form');
   });
 
-  it('discloses a capability gap with the vision reason when Vision Assist is off', async () => {
-    const { tool } = await setup({ command: 'do' });
+  it('discloses a suppressed screenshot as a capability gap at declaration (FEAT-058)', async () => {
+    const { tool } = await setup({ command: 'do', overrides: { capture: SUPPRESSED } });
 
     const result = await tool.execute(ACTIONS, undefined);
 
     const payload = JSON.parse(result.modelText) as { capability_gaps?: unknown };
     expect(payload.capability_gaps).toEqual([
-      { item: 'artifact:screenshot:viewport', reason: 'no_browser_tools' },
+      { item: 'artifact:screenshot:viewport', reason: 'suppressed_by_flag' },
     ]);
     expect((result.details as { capability_gaps?: unknown }).capability_gaps).toEqual(
       payload.capability_gaps,
     );
   });
 
-  it('reports full_page as scope_unsupported even with Vision Assist available', async () => {
-    const { tool } = await setup({ command: 'do', overrides: { vision: VISION_ON } });
+  it('discloses no_browser for a run without a browser', async () => {
+    const { tool } = await setup({ command: 'do' });
+
+    const result = await tool.execute(ACTIONS, undefined);
+
+    expect((JSON.parse(result.modelText) as { capability_gaps?: unknown }).capability_gaps).toEqual(
+      [{ item: 'artifact:screenshot:viewport', reason: 'no_browser' }],
+    );
+  });
+
+  it('reports no gap for every scope, full_page included, when deliverable capture is available', async () => {
+    const { tool } = await setup({ command: 'do', overrides: { capture: AVAILABLE } });
 
     const result = await tool.execute(
       {
@@ -259,15 +270,32 @@ describe('@no-llm task_contract action terms (FEAT-054)', () => {
         artifacts: [
           { kind: 'screenshot', scope: 'viewport' },
           { kind: 'screenshot', scope: 'full_page' },
+          { kind: 'screenshot', scope: 'element' },
         ],
       },
       undefined,
     );
 
-    const payload = JSON.parse(result.modelText) as { capability_gaps?: unknown };
-    expect(payload.capability_gaps).toEqual([
-      { item: 'artifact:screenshot:full_page', reason: 'scope_unsupported' },
-    ]);
+    expect('capability_gaps' in (JSON.parse(result.modelText) as object)).toBe(false);
+  });
+
+  it('ignores Vision Assist: unavailable vision with deliverable available has no gap', async () => {
+    const { tool } = await setup({
+      command: 'do',
+      overrides: {
+        capture: {
+          visionAssist: {
+            available: false,
+            reasons: ['grant_missing', 'model_no_image_input'],
+          },
+          deliverable: { available: true, reasons: [] },
+        },
+      },
+    });
+
+    const result = await tool.execute(ACTIONS, undefined);
+
+    expect('capability_gaps' in (JSON.parse(result.modelText) as object)).toBe(false);
   });
 
   it('omits capability_gaps when no artifact is declared', async () => {
@@ -283,7 +311,7 @@ describe('@no-llm task_contract action terms (FEAT-054)', () => {
     expect('capability_gaps' in (result.details as object)).toBe(false);
   });
 
-  it('uses an injected capability resolver over the vision default', async () => {
+  it('uses an injected capability resolver over the deliverable default', async () => {
     const { tool } = await setup({
       command: 'do',
       overrides: { contractCapabilities: { captureGap: () => null } },

@@ -418,6 +418,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Verify**: `npx turbo run build --filter=@yantra/core --filter=@yantra/agent`; `cd packages/core && npx vitest run tests/brief`; `cd apps/cli && npx vitest run tests/connector-io.spec.ts tests/commands/do.spec.ts`. Manually, open `brief.html` from a capture run and confirm that the link opens the PNG.
 - **Depends on**: TASK-006, FEAT-054 TASK-009
 
+> DEVIATION (implement, 2026-10-18): the ledger `capture` entry also carries an in-memory `captureSet` (the call's `CaptureArtifactSet`, never logged), and `AgenticTaskOutcome` `published` carries `captureSets` beside `artifacts`. The Brief needs every part, and the `Screenshot:` line needs each set's part count and labels; flat `ArtifactRef`s and the part-1-only ledger fields carry neither. Both are internal APIs. Viewport capture also clips to the tile width with `clipped_width` when a viewport is wider than 1920 px, the same labeled rule as `full_page`.
+
 ### TASK-008: The task-fidelity harness pins local capture: a text-only model without a grant, suppression, a latched screen, a tall page, and Vision Assist unchanged
 
 - [ ] **Implementation**:
@@ -456,6 +458,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity`; then the repo-wide gate `npx turbo run lint typecheck` and the `e2e` suite (memory: a green targeted run is not the gate).
 - **Depends on**: TASK-007
 
+> DEVIATION (implement, 2026-10-18): `capture-latched` cannot fill the stored-secret control through `browser_fill_element`, because a secret fill always asks for confirmation and the harness denies every confirmation (and production `secretHosts` is empty). The scripted provider gains a `latch-sensitive-screen` step that sets the run's latch exactly where the fill sets it before dispatch; the refusal, the no-file check, the canary scan, and the capture after a new document are measured as specified. Scenario 4 is split into `capture-full-page-tall` (fulfilled) and `capture-full-page-truncated` (partial), since one run cannot end both ways. Shared steps live in the `capture-common` helper module. `FEAT-058` was never pending: FEAT-054 had already landed.
+
 ## 6. Cross-Cutting Concerns
 
 - **Auth / grants**:
@@ -486,13 +490,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Protocol: generic artifact reference, Brief artifacts, capture capability; older runs parse
-- [ ] TASK-002: Controller clean, epoch-guarded viewport/full-page/element capture with labeled tiling
-- [ ] TASK-003: Both capabilities resolved pre-catalog with reason codes in manifest and run health; `--no-screenshots` broadened
-- [ ] TASK-004: `browser_capture` tool: own budget, secret latch, owner-only files, metadata-only result
-- [ ] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
-- [ ] TASK-006: Early gap disclosure, ledger producer, clean-and-complete capture rule
-- [ ] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
-- [ ] TASK-008: Task-fidelity capture scenarios
+- [x] TASK-001: Protocol: generic artifact reference, Brief artifacts, capture capability; older runs parse
+- [x] TASK-002: Controller clean, epoch-guarded viewport/full-page/element capture with labeled tiling
+- [x] TASK-003: Both capabilities resolved pre-catalog with reason codes in manifest and run health; `--no-screenshots` broadened
+- [x] TASK-004: `browser_capture` tool: own budget, secret latch, owner-only files, metadata-only result
+- [x] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
+- [x] TASK-006: Early gap disclosure, ledger producer, clean-and-complete capture rule
+- [x] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
+- [x] TASK-008: Task-fidelity capture scenarios
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
