@@ -80,6 +80,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/src/runtime/messages.ts",
       "status": "M",
       "role": "implement",
