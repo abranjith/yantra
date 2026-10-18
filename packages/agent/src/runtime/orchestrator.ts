@@ -62,6 +62,7 @@ import {
 } from '@yantra/core/workflow/replay';
 import {
   RunHealth,
+  artifactRequirementId,
   generateUlid,
   validateBrief,
   validateTemplatedReport,
@@ -107,6 +108,11 @@ import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } f
 import { resolveCaptureCapability } from './capture-capability.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
+import {
+  capabilityGapLine,
+  deliverableContractCapabilities,
+  type ContractCapabilityResolver,
+} from './contract-capabilities.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
 import { FulfillmentRecord, type FulfillmentEvaluation } from './fulfillment.js';
 import { locationHandoffFor } from './location-gate.js';
@@ -804,6 +810,8 @@ export async function runAgenticTask(
       runId: created.runId,
       runDir: created.runDir,
       contract,
+      capabilities:
+        services.contractCapabilities ?? deliverableContractCapabilities(capture.deliverable),
     });
     executionState = state;
     unsubscribe = session.subscribe((event) => state.onEvent(event));
@@ -969,9 +977,14 @@ function createExecutionState(input: {
   readonly runDir: string;
   /** The run's contract store; each new revision is echoed once to the connector. */
   readonly contract: TaskContractStore;
+  /** What the run can deliver; each undeliverable declared item is disclosed once. */
+  readonly capabilities: ContractCapabilityResolver;
 }): ExecutionState {
   const starts = new Map<string, number>();
   let echoedRevisions = 0;
+  // Declared items already disclosed as undeliverable (FEAT-058): a later
+  // revision repeating the item does not repeat the disclosure.
+  const disclosedGaps = new Set<string>();
   let providerTokens = 0;
   let published = false;
   let budgetReason: string | undefined;
@@ -1079,6 +1092,22 @@ function createExecutionState(input: {
                 body,
                 input.contract.effectiveActionTermsThrough(echoedRevisions),
               ),
+              at: event.at,
+            });
+          }
+          // FEAT-058: disclose each declared screenshot the run cannot deliver
+          // right after the echo, once per item, and keep running.
+          for (const artifact of input.contract.effectiveActionTerms().artifacts) {
+            const item = artifactRequirementId(artifact.scope);
+            if (disclosedGaps.has(item)) continue;
+            const reason = input.capabilities.captureGap(artifact.scope);
+            if (reason === null) continue;
+            disclosedGaps.add(item);
+            input.connector.emitAgentEvent({
+              type: 'capability_gap',
+              item,
+              reason,
+              summary: capabilityGapLine(artifact.scope, reason),
               at: event.at,
             });
           }

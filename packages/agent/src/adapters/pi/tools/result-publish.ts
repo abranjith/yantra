@@ -64,7 +64,7 @@ import {
   sanitizePublishContent,
   type ComposedEvidence,
 } from '../../../runtime/brief-composer.js';
-import { visionContractCapabilities } from '../../../runtime/contract-capabilities.js';
+import { deliverableContractCapabilities } from '../../../runtime/contract-capabilities.js';
 import {
   censusFillEvaluator,
   evaluateFulfillment,
@@ -374,12 +374,13 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
 export async function evaluatePublication(
   services: Pick<
     RunServices,
-    'contract' | 'actionLedger' | 'contractCapabilities' | 'vision' | 'fillCensus'
+    'contract' | 'actionLedger' | 'contractCapabilities' | 'capture' | 'fillCensus'
   >,
   evidence: ComposedEvidence | null,
 ): Promise<FulfillmentEvaluation | null> {
   if (services.contract.command !== 'do') return null;
-  const capabilities = services.contractCapabilities ?? visionContractCapabilities(services.vision);
+  const capabilities =
+    services.contractCapabilities ?? deliverableContractCapabilities(services.capture.deliverable);
   const terms = services.contract.effectiveActionTerms();
   // The census is a page read, paid only when the contract declares a fill.
   const census =

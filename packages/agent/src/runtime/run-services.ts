@@ -546,7 +546,7 @@ export interface RunServices {
   readonly fillCensus?: FillCensusSource;
   /**
    * Which declared contract items the run can deliver (FEAT-054). Absent means
-   * the default Vision-Assist-backed resolver over {@link vision}.
+   * the default resolver over {@link capture}'s deliverable decision (FEAT-058).
    */
   readonly contractCapabilities?: ContractCapabilityResolver;
 }

@@ -105,7 +105,7 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
     expect(services.fulfillment.current()).toMatchObject({ met: 2, total: 3 });
     const payload = JSON.parse(result.modelText) as { requirements?: string };
     expect(payload.requirements).toBe(
-      '2 of 3 met; viewport screenshot not captured (no_browser_tools)',
+      '2 of 3 met; viewport screenshot not captured (no browser was available)',
     );
     expect(logger.lines.filter((line) => line.event === 'fulfillment_evaluated')).toEqual([
       expect.objectContaining({ contract_declared: true, met: 2, unmet: 1, not_applicable: 0 }),
@@ -174,7 +174,9 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
 
     const markdown = await readFile(join(runDir, 'brief.md'), 'utf8');
     expect(markdown).toContain('## Requirements');
-    expect(markdown).toContain('- ✗ unmet: viewport screenshot — not captured (no_browser_tools)');
+    expect(markdown).toContain(
+      '- ✗ unmet: viewport screenshot — not captured (no browser was available)',
+    );
     const html = await readFile(join(runDir, 'brief.html'), 'utf8');
     expect(html).toContain('<section class="requirements">');
   });
@@ -186,13 +188,14 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
 
   it('reads the form census only when the contract declares a fill, exactly once', async () => {
     const source = {
-      census: vi.fn((): Promise<FillCensus> =>
-        Promise.resolve({
-          epoch: 1,
-          host: 'forms.example.test',
-          complete: true,
-          controls: [{ ref: 'e1', groupKey: null, label: 'Email', exemption: null }],
-        }),
+      census: vi.fn(
+        (): Promise<FillCensus> =>
+          Promise.resolve({
+            epoch: 1,
+            host: 'forms.example.test',
+            complete: true,
+            controls: [{ ref: 'e1', groupKey: null, label: 'Email', exemption: null }],
+          }),
       ),
     };
     const without = await setup('do', ACTIONS, source);

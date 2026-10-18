@@ -14,7 +14,7 @@ import { TASK_CONTRACT_MAX_REVISIONS, artifactRequirementId } from '@yantra/prot
 import { Type, type Static } from 'typebox';
 
 import {
-  visionContractCapabilities,
+  deliverableContractCapabilities,
   type CaptureGapReason,
 } from '../../../runtime/contract-capabilities.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
@@ -323,7 +323,8 @@ async function declareContract(
  */
 function capabilityGaps(terms: EffectiveActionTerms, services: RunServices): CapabilityGap[] {
   if (terms.artifacts.length === 0) return [];
-  const resolver = services.contractCapabilities ?? visionContractCapabilities(services.vision);
+  const resolver =
+    services.contractCapabilities ?? deliverableContractCapabilities(services.capture.deliverable);
   const gaps: CapabilityGap[] = [];
   for (const artifact of terms.artifacts) {
     const reason = resolver.captureGap(artifact.scope);

@@ -1954,6 +1954,51 @@ function contractEvents(connector: RecordingConnector): AgentProgressEvent[] {
   return connector.events.filter((entry) => entry.type === 'contract_declared');
 }
 
+describe('@no-llm runAgenticTask capability gap disclosure (FEAT-058)', () => {
+  const actions = (scopes: readonly ('viewport' | 'full_page')[]): ScriptedCall => ({
+    tool: 'task_contract',
+    params: {
+      deliverable: 'actions',
+      subject: 'the sign-up form',
+      artifacts: scopes.map((scope) => ({ kind: 'screenshot', scope })),
+    },
+  });
+
+  it('emits one capability_gap per undeliverable item, after the echo, never repeated on revision', async () => {
+    // The scripted environment has no browser, so deliverable capture is off.
+    const { connector } = await scriptedRun({
+      command: 'do',
+      calls: [actions(['viewport']), actions(['viewport', 'full_page'])],
+    });
+
+    const relevant = connector.events.filter(
+      (entry) => entry.type === 'contract_declared' || entry.type === 'capability_gap',
+    );
+    expect(relevant.map((entry) => entry.type)).toEqual([
+      'contract_declared',
+      'capability_gap',
+      'contract_declared',
+      'capability_gap',
+    ]);
+    const gaps = relevant.filter((entry) => entry.type === 'capability_gap');
+    expect(gaps).toEqual([
+      expect.objectContaining({
+        item: 'artifact:screenshot:viewport',
+        reason: 'no_browser',
+        summary:
+          'Cannot deliver: viewport screenshot. No browser is available in this run; continuing with the other requirements.',
+      }),
+      expect.objectContaining({ item: 'artifact:screenshot:full_page', reason: 'no_browser' }),
+    ]);
+  });
+
+  it('emits no capability_gap for a contract that declares no screenshot', async () => {
+    const { connector } = await scriptedRun({ command: 'do', calls: [actions([])] });
+
+    expect(connector.events.some((entry) => entry.type === 'capability_gap')).toBe(false);
+  });
+});
+
 describe('@no-llm runAgenticTask task contract echo (FEAT-052)', () => {
   it('emits exactly one contract_declared event per successful declaration', async () => {
     const { connector, services } = await scriptedRun({
@@ -2237,7 +2282,7 @@ describe('@no-llm runAgenticTask task outcome (FEAT-054)', () => {
     ]);
     // The first line names the missing screenshot and the unfilled fields.
     expect(outcomeFirstLine(outcome)).toMatch(
-      /^Partial: 2 of 4 requirements met; fields not counted \(inventory_unavailable\); viewport screenshot not captured \(no_browser_tools\)\. Brief: /u,
+      /^Partial: 2 of 4 requirements met; fields not counted \(inventory_unavailable\); viewport screenshot not captured \(no browser was available\)\. Brief: /u,
     );
     await expect(readFile(join(outcome.runDir, 'brief.json'), 'utf8')).resolves.toContain(
       '"requirements"',

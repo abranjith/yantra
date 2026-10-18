@@ -14,6 +14,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/connector-io.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/render/terminal.ts",
       "status": "M",
       "role": "implement",
@@ -56,6 +62,18 @@
       "task": "TASK-003"
     },
     {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "e2e/widget-gauntlet.spec.ts",
       "status": "M",
       "role": "implement",
@@ -80,6 +98,24 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/agent/src/adapters/pi/tools/result-publish.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/task-contract.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/action-ledger.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/src/runtime/budget.ts",
       "status": "M",
       "role": "implement",
@@ -96,6 +132,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/connector.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-capabilities.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/src/runtime/fulfillment.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/src/runtime/index.ts",
@@ -120,6 +174,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/prompt.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/src/runtime/run-health.ts",
@@ -164,10 +224,28 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/task-contract.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/action-ledger.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/runtime/budget.spec.ts",
@@ -180,6 +258,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
@@ -198,6 +282,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/runtime/prompt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/agent/tests/runtime/run-health.spec.ts",

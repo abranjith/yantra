@@ -160,6 +160,40 @@ describe('@no-llm ActionLedger', () => {
     }
   });
 
+  it('logs a deliverable capture with parts and completeness, never its saved files', () => {
+    const { ledger, lines } = ledgerWith();
+    const entry = ledger.record({
+      kind: 'capture',
+      scope: 'full_page',
+      path: 'screenshots/capture-1-aaaaaaaaaaaa-p1.png',
+      sha256: 'a'.repeat(64),
+      bytes: 3000,
+      producer: 'browser_capture',
+      parts: 3,
+      complete: false,
+      captureSet: {
+        scope: 'full_page',
+        parts: [],
+        complete: false,
+        labels: ['truncated'],
+      },
+    });
+
+    expect(entry).toMatchObject({ parts: 3, complete: false, producer: 'browser_capture' });
+    expect(lines).toEqual([
+      expect.objectContaining({ kind: 'capture', scope: 'full_page', parts: 3, complete: false }),
+    ]);
+    expect(JSON.stringify(lines)).not.toMatch(/screenshots\/|captureSet|truncated|sha256/);
+  });
+
+  it('logs an older capture entry without parts or completeness', () => {
+    const { ledger, lines } = ledgerWith();
+    ledger.record(capture());
+
+    expect(lines[0]).not.toHaveProperty('parts');
+    expect(lines[0]).not.toHaveProperty('complete');
+  });
+
   it('locates through a controller, or stamps unknown without one', () => {
     const located = actionLedgerFor({
       controller: { topLevelDocumentEpoch: () => 4, host: () => 'forms.example.test' },

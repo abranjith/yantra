@@ -71,14 +71,18 @@ const fill = {
   groupKey: null,
   covers: 1,
 } as const;
-const capture = (scope: 'viewport' | 'full_page' | 'element') =>
+const capture = (
+  scope: 'viewport' | 'full_page' | 'element',
+  extra: { producer?: string; complete?: boolean; parts?: number } = {},
+) =>
   ({
     kind: 'capture',
     scope,
-    path: 'screenshots/1.png',
+    path: 'screenshots/capture-1-aaaaaaaaaaaa.png',
     sha256: 'a'.repeat(64),
     bytes: 10,
-    producer: 'browser_screenshot',
+    producer: 'browser_capture',
+    ...extra,
   }) as const;
 const click = (submitClass: 'structural' | 'name' | null) =>
   ({ kind: 'click_executed', ref: 'e5', name: 'Next', submitClass }) as const;
@@ -276,12 +280,114 @@ describe('@no-llm evaluateFulfillment — artifacts', () => {
     });
   });
 
-  it('names the capability gap when nothing was captured', () => {
-    expect(at({ captureGap: () => 'grant_missing' })).toMatchObject({
+  it('names the capability gap in plain words when nothing was captured', () => {
+    expect(at({ captureGap: () => 'suppressed_by_flag' })).toMatchObject({
       status: 'unmet',
-      reason: 'not captured (grant_missing)',
+      reason: 'not captured (screenshots are off for this run (--no-screenshots))',
+    });
+    expect(at({ captureGap: () => 'no_browser' })).toMatchObject({
+      reason: 'not captured (no browser was available)',
     });
     expect(at({})).toMatchObject({ status: 'unmet', reason: 'not captured' });
+  });
+
+  it('reads a suppressed screenshot on the Partial line as not captured with the flag named', () => {
+    const evaluation = evaluateFulfillment(
+      input({ terms: VIEWPORT, captureGap: () => 'suppressed_by_flag' }),
+    );
+    const unmet = evaluation.items.find((entry) => entry.status === 'unmet')!;
+
+    expect(unmetPhrase(unmet)).toBe(
+      'viewport screenshot not captured (screenshots are off for this run (--no-screenshots))',
+    );
+    expect(evaluation.met).toBeLessThan(evaluation.total);
+  });
+
+  it('ignores a Vision Assist image for a screenshot item (S7)', () => {
+    expect(
+      at({ ledger: ledger([fill, capture('viewport', { producer: 'browser_screenshot' })]) }),
+    ).toMatchObject({ status: 'unmet', reason: 'not captured' });
+  });
+
+  it('meets with a browser_capture even when a Vision image came later', () => {
+    expect(
+      at({
+        ledger: ledger([
+          fill,
+          capture('viewport'),
+          capture('viewport', { producer: 'browser_screenshot' }),
+        ]),
+      }).status,
+    ).toBe('met');
+  });
+
+  it('does not meet full_page with an incomplete set, but still meets viewport with it (S6)', () => {
+    const terms: EffectiveActionTerms = {
+      ...NO_ACTION_TERMS,
+      artifacts: [
+        { kind: 'screenshot', scope: 'viewport', declaredIn: 1 },
+        { kind: 'screenshot', scope: 'full_page', declaredIn: 1 },
+      ],
+    };
+    const evaluation = evaluateFulfillment(
+      input({
+        terms,
+        ledger: ledger([fill, capture('full_page', { complete: false, parts: 6 })]),
+      }),
+    );
+
+    expect(item(evaluation, 'artifact:screenshot:full_page')).toMatchObject({
+      status: 'unmet',
+      reason: 'capture_incomplete',
+    });
+    expect(item(evaluation, 'artifact:screenshot:viewport').status).toBe('met');
+  });
+
+  it('meets full_page once a complete set follows an incomplete one', () => {
+    const terms: EffectiveActionTerms = {
+      ...NO_ACTION_TERMS,
+      artifacts: [{ kind: 'screenshot', scope: 'full_page', declaredIn: 1 }],
+    };
+    const evaluation = evaluateFulfillment(
+      input({
+        terms,
+        ledger: ledger([
+          fill,
+          capture('full_page', { complete: false }),
+          capture('full_page', { complete: true, parts: 3 }),
+        ]),
+      }),
+    );
+
+    expect(item(evaluation, 'artifact:screenshot:full_page').status).toBe('met');
+  });
+
+  it('treats an older capture entry without a complete flag as complete', () => {
+    const terms: EffectiveActionTerms = {
+      ...NO_ACTION_TERMS,
+      artifacts: [{ kind: 'screenshot', scope: 'full_page', declaredIn: 1 }],
+    };
+    expect(
+      item(
+        evaluateFulfillment(input({ terms, ledger: ledger([fill, capture('full_page')]) })),
+        'artifact:screenshot:full_page',
+      ).status,
+    ).toBe('met');
+  });
+
+  it('judges an incomplete full_page with no committed action as incomplete', () => {
+    const terms: EffectiveActionTerms = {
+      ...NO_ACTION_TERMS,
+      artifacts: [{ kind: 'screenshot', scope: 'full_page', declaredIn: 1 }],
+    };
+    expect(
+      item(
+        evaluateFulfillment(
+          input({ terms, ledger: ledger([capture('full_page', { complete: false })]) }),
+        ),
+        'artifact:screenshot:full_page',
+      ),
+    ).toMatchObject({ status: 'unmet', reason: 'capture_incomplete' });
   });
 
   it('keeps the revision that declared the artifact', () => {

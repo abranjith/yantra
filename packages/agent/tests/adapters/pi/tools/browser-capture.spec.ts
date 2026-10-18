@@ -442,6 +442,38 @@ describe('@no-llm browser_capture', () => {
     expect(capture?.deliverable_bytes).toBeGreaterThan(0);
   });
 
+  it('records one ledger capture per call, cited by part 1 and equal to its audit ref', async () => {
+    const { tool, services } = await fixture(threeTiles);
+
+    const result = await tool.execute({ scope: 'full_page' }, undefined);
+
+    const refs = (result.details as { artifacts: ArtifactRef[] }).artifacts;
+    const entries = services.actionLedger.entries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: 'capture',
+      scope: 'full_page',
+      producer: 'browser_capture',
+      path: refs[0]!.path,
+      sha256: refs[0]!.sha256,
+      bytes: refs.reduce((sum, ref) => sum + ref.bytes, 0),
+      parts: 3,
+      complete: true,
+      epoch: 1,
+    });
+    expect(
+      entries[0]?.kind === 'capture' ? entries[0].captureSet?.parts.map((part) => part.path) : [],
+    ).toEqual(refs.map((ref) => ref.path));
+  });
+
+  it('records nothing in the ledger when a capture fails', async () => {
+    const { tool, services, latch } = await fixture();
+    latch.latch(1);
+    await tool.execute({ scope: 'viewport' }, undefined);
+
+    expect(services.actionLedger.entries()).toEqual([]);
+  });
+
   it('is exempt from the soft wind-down only', async () => {
     const { tool } = await fixture();
     const spec = browserCaptureSpec(buildServices());

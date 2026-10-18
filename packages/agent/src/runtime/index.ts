@@ -114,7 +114,9 @@ export {
   type RequirementStatus,
 } from './fulfillment.js';
 export {
-  visionContractCapabilities,
+  capabilityGapLine,
+  captureGapPhrase,
+  deliverableContractCapabilities,
   type CaptureGapReason,
   type ContractCapabilityResolver,
 } from './contract-capabilities.js';

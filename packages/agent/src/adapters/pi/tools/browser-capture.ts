@@ -142,6 +142,19 @@ async function runCapture(params: Params, services: RunServices): Promise<Domain
   };
   const bytes = parts.reduce((sum, part) => sum + part.bytes, 0);
   services.runHealth.recordDeliverableCapture({ files: parts.length, bytes });
+  // One ledger entry per call, cited by part 1: fulfillment judges screenshot
+  // items from it (FEAT-058 S6/S7), and the Brief lists its files.
+  services.actionLedger.record({
+    kind: 'capture',
+    scope: set.scope,
+    path: parts[0]!.path,
+    sha256: parts[0]!.sha256,
+    bytes,
+    producer: 'browser_capture',
+    parts: parts.length,
+    complete: set.complete,
+    captureSet: set,
+  });
   return {
     ok: true,
     model: {

@@ -54,6 +54,11 @@ const DECLARE_ACTIONS =
   'or the fields to fill in fill, a requested screenshot in artifacts, and "do not submit" in ' +
   'effects, never in notes, which nothing checks. The result is judged item by item from what ' +
   'the tools recorded, so publish even when an item is unmet and say why in fulfillment.unmet.';
+// FEAT-058: a requested screenshot is a saved deliverable, never a view the
+// model receives. `browser_capture` is registered whenever `do` has a browser.
+const CAPTURE_DELIVERABLE =
+  'When the task asks for a screenshot, declare it in artifacts and call browser_capture after ' +
+  'your last page action; the image is saved for the user and you are told its path, not shown it.';
 const PUBLISH_GUIDANCE =
   'Finish with result_publish. Cite evidence by the source_id a result showed (S3) or a record ' +
   'id (S3#r5): findings as {"text": "...", "sources": ["S3"]}, and prose as [S3]. When the ' +
@@ -129,7 +134,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     promptAddendum:
       `Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
-      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ` +
+      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ${CAPTURE_DELIVERABLE} ` +
       `When a form needs more than one field set, use browser_fill_form: up to ${FILL_FORM_MAX_FIELDS} fields per call, ` +
       'in page order, never one call per field. A longer form takes several calls; after each one, read its ' +
       'progress (how many eligible fields remain, and the next ones by ref) and send those, rather than observing again. ' +

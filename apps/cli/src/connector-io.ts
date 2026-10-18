@@ -199,6 +199,11 @@ export class CLIConnectorIO implements ConnectorIO {
             `${stripControlCharacters(event.summary)}\n`,
         );
         return;
+      case 'capability_gap':
+        // FEAT-058: a declared item the run cannot deliver, disclosed right
+        // after the echo above, in ASCII punctuation; the run keeps going.
+        opts.errStream.write(`${stripControlCharacters(event.summary)}\n`);
+        return;
     }
   }
 

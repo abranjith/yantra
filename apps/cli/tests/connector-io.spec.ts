@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 
-import type { AgentProgressEvent, AgenticTaskOutcome } from '@yantra/agent';
+import { capabilityGapLine, type AgentProgressEvent, type AgenticTaskOutcome } from '@yantra/agent';
 import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -371,6 +371,76 @@ describe('@no-llm cli/connector-io task-contract echo (FEAT-052)', () => {
   });
 });
 
+describe('@no-llm cli/connector-io capability gap disclosure (FEAT-058)', () => {
+  const gap = (
+    scope: 'viewport' | 'full_page',
+    reason: 'suppressed_by_flag' | 'no_browser',
+  ): AgentProgressEvent => ({
+    type: 'capability_gap',
+    item: `artifact:screenshot:${scope}`,
+    reason,
+    summary: capabilityGapLine(scope, reason),
+    at: '2026-10-16T12:00:00.000Z',
+  });
+
+  function connectorFor(json: boolean) {
+    const stdout = capture();
+    const stderr = capture();
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      renderOpts: { ...makeOpts(stdout.stream, json), errStream: stderr.stream },
+      interactive: true,
+    });
+    return { connector, stdout, stderr };
+  }
+
+  it('writes the suppressed line to stderr, byte-exact, and nothing to stdout', () => {
+    const { connector, stdout, stderr } = connectorFor(false);
+
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+
+    expect(stderr.value()).toBe(
+      'Cannot deliver: viewport screenshot. Screenshots are off for this run (--no-screenshots); continuing with the other requirements.\n',
+    );
+    expect(stdout.value()).toBe('');
+  });
+
+  it('writes the no-browser line byte-exact', () => {
+    const { connector, stderr } = connectorFor(false);
+
+    connector.emitAgentEvent(gap('full_page', 'no_browser'));
+
+    expect(stderr.value()).toBe(
+      'Cannot deliver: full-page screenshot. No browser is available in this run; continuing with the other requirements.\n',
+    );
+  });
+
+  it('renders only ASCII bytes: no mojibake sequence and no control byte but the newline', () => {
+    const { connector, stderr } = connectorFor(false);
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+    connector.emitAgentEvent(gap('full_page', 'no_browser'));
+
+    const bytes = Buffer.from(stderr.value(), 'utf8');
+    expect(bytes.includes(Buffer.from([0xc3, 0xa2]))).toBe(false);
+    expect([...bytes].every((byte) => byte === 0x0a || (byte >= 0x20 && byte < 0x7f))).toBe(true);
+  });
+
+  it('emits a structured event under --json', () => {
+    const { connector, stdout, stderr } = connectorFor(true);
+
+    connector.emitAgentEvent(gap('viewport', 'suppressed_by_flag'));
+
+    expect(stderr.value()).toBe('');
+    expect(JSON.parse(stdout.value().trim())).toMatchObject({
+      kind: 'agent_progress',
+      event: {
+        type: 'capability_gap',
+        item: 'artifact:screenshot:viewport',
+        reason: 'suppressed_by_flag',
+      },
+    });
+  });
+});
+
 describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
   const brief = {
     kind: 'brief' as const,
@@ -399,7 +469,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
         {
           id: 'artifact:screenshot:viewport',
           label: 'viewport screenshot',
-          reason: 'not captured (grant_missing)',
+          reason: 'not captured (no browser was available)',
         },
       ],
       contractDeclared: true,
@@ -428,7 +498,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
 
   it('prints the partial first line naming the unmet items', () => {
     expect(render(partial).stdout).toBe(
-      '\nPartial: 2 of 4 requirements met; fields 10 of 48 filled; viewport screenshot not captured (grant_missing). Brief: /runs/run-1/brief.html\nRun: run-1\n',
+      '\nPartial: 2 of 4 requirements met; fields 10 of 48 filled; viewport screenshot not captured (no browser was available). Brief: /runs/run-1/brief.html\nRun: run-1\n',
     );
   });
 
