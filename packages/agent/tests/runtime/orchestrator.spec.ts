@@ -1992,6 +1992,67 @@ describe('@no-llm runAgenticTask capability gap disclosure (FEAT-058)', () => {
     ]);
   });
 
+  it('puts the saved captures on the published outcome as artifacts and sets', async () => {
+    const sha = 'e'.repeat(64);
+    const set = {
+      scope: 'viewport' as const,
+      parts: [
+        {
+          path: `screenshots/capture-1-${sha.slice(0, 12)}.png`,
+          sha256: sha,
+          bytes: 321,
+          width: 800,
+          height: 600,
+          part: 1,
+        },
+      ],
+      complete: true,
+      labels: [],
+    };
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [
+        actions(['viewport']),
+        { tool: 'result_publish', params: { brief: { title: 'Form', overview: 'Done.' } } },
+      ],
+      beforeCalls: (services) => {
+        services.actionLedger.record({
+          kind: 'capture',
+          scope: 'viewport',
+          path: set.parts[0]!.path,
+          sha256: sha,
+          bytes: 321,
+          producer: 'browser_capture',
+          parts: 1,
+          complete: true,
+          captureSet: set,
+        });
+      },
+    });
+
+    expect(outcome.kind).toBe('published');
+    if (outcome.kind !== 'published') return;
+    expect(outcome.captureSets).toEqual([set]);
+    expect(outcome.artifacts).toEqual([
+      {
+        kind: 'screenshot',
+        path: set.parts[0]!.path,
+        sha256: sha,
+        mime_type: 'image/png',
+        bytes: 321,
+        width: 800,
+        height: 600,
+        sent_to_model: false,
+      },
+    ]);
+  });
+
+  it('gives an ask outcome empty artifacts', async () => {
+    const { outcome } = await scriptedRun({ command: 'ask', calls: [PUBLISH_CALL] });
+
+    expect(outcome).toMatchObject({ kind: 'published', artifacts: [], captureSets: [] });
+  });
+
   it('emits no capability_gap for a contract that declares no screenshot', async () => {
     const { connector } = await scriptedRun({ command: 'do', calls: [actions([])] });
 

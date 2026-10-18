@@ -44,10 +44,22 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/tests/commands/do.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/tests/connector-io.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/render/brief-captures.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -116,6 +128,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "packages/agent/src/runtime/brief-composer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/src/runtime/budget.ts",
       "status": "M",
       "role": "implement",
@@ -170,6 +188,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/src/runtime/outcome.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/src/runtime/profiles.ts",
       "status": "M",
       "role": "implement",
@@ -206,6 +230,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/brief-artifacts.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/browser-capture.spec.ts",
       "status": "A",
       "role": "implement",
@@ -240,6 +270,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/index.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/agent/tests/runtime/action-ledger.spec.ts",
@@ -284,10 +320,22 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/outcome.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/agent/tests/runtime/profiles.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/runtime/promote-synthesis.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
@@ -326,6 +374,30 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/src/brief/captures.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/brief/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/brief/to-html.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/brief/to-markdown.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/src/browser/agent-controller.ts",
       "status": "M",
       "role": "implement",
@@ -354,6 +426,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/brief/captures.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/tests/browser/deliverable-capture.spec.ts",
@@ -396,6 +474,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/brief-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/protocol/src/schemas/brief.ts",

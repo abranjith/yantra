@@ -97,14 +97,16 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
-import { actionLedgerFor } from './action-ledger.js';
+import { actionLedgerFor, type ActionLedgerEntry } from './action-ledger.js';
 import {
   composeAgentBrief,
   logBriefComposition,
   mapPublishText,
   sanitizePublishContent,
+  withArtifacts,
 } from './brief-composer.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
+import { artifactRefsOfSet, type CaptureArtifactSet } from './capture-artifacts.js';
 import { resolveCaptureCapability } from './capture-capability.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
@@ -1230,12 +1232,13 @@ async function maybeAssembleUnpublishedResult(
   // Judged like a tool publication (FEAT-054); a salvaged `do` run with no
   // contract is evaluated as undeclared and ends partial.
   const evaluation = await evaluatePublication(services, composed.value.evidence);
-  const withItems = withRequirements(composed.value.content, evaluation);
+  const captured = withArtifacts(withRequirements(composed.value.content, evaluation), services);
+  const withItems = captured.content;
   const content =
     services.userInput === undefined
       ? withItems
       : mapPublishText(withItems, (text) => services.userInput!.resolve(text));
-  const runtimeFacts = runtimeFactsFor(services, composed.value.notices);
+  const runtimeFacts = runtimeFactsFor(services, [...composed.value.notices, ...captured.notices]);
   const published = await services.domain.publish.publish(content, {
     assembledByRuntime: true,
     runtimeFacts,
@@ -1480,7 +1483,7 @@ function reportFailure(
 type OutcomeDraft =
   | Omit<
       Extract<AgenticTaskOutcome, { kind: 'published' }>,
-      'taskOutcome' | 'requirements' | 'terminationReason'
+      'taskOutcome' | 'requirements' | 'terminationReason' | 'artifacts' | 'captureSets'
     >
   | DistributiveOmit<Exclude<AgenticTaskOutcome, { kind: 'published' }>, 'terminationReason'>;
 
@@ -1495,20 +1498,41 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 function settleOutcome(
   draft: OutcomeDraft,
   terminationReason: TerminationReason,
-  services: Pick<RunServices, 'contract' | 'fulfillment'>,
+  services: Pick<RunServices, 'contract' | 'fulfillment' | 'actionLedger'>,
 ): AgenticTaskOutcome {
   if (draft.kind !== 'published') return { ...draft, terminationReason };
   if (services.contract.command !== 'do') {
-    return { ...draft, taskOutcome: 'fulfilled', requirements: null, terminationReason };
+    return {
+      ...draft,
+      taskOutcome: 'fulfilled',
+      requirements: null,
+      artifacts: [],
+      captureSets: [],
+      terminationReason,
+    };
   }
   const requirements = requirementsSummary(services.fulfillment.current());
   const fulfilled = requirements.contractDeclared && requirements.met === requirements.total;
+  const captureSets = deliverableCaptureSets(services.actionLedger.entries());
   return {
     ...draft,
     taskOutcome: fulfilled ? 'fulfilled' : 'partial',
     requirements,
+    artifacts: captureSets.flatMap(artifactRefsOfSet),
+    captureSets,
     terminationReason,
   };
+}
+
+/** Every `browser_capture` set the run saved, in capture order (FEAT-058). */
+function deliverableCaptureSets(ledger: readonly ActionLedgerEntry[]): CaptureArtifactSet[] {
+  return ledger.flatMap((entry) =>
+    entry.kind === 'capture' &&
+    entry.producer === 'browser_capture' &&
+    entry.captureSet !== undefined
+      ? [entry.captureSet]
+      : [],
+  );
 }
 
 function requirementsSummary(evaluation: FulfillmentEvaluation | null): RequirementsSummary {

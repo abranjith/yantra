@@ -27,7 +27,16 @@ function published(
   requirements: RequirementsSummary | null,
   terminationReason: TerminationReason = 'model_finished',
 ): Extract<AgenticTaskOutcome, { kind: 'published' }> {
-  return { ...base, kind: 'published', brief, taskOutcome, requirements, terminationReason };
+  return {
+    ...base,
+    kind: 'published',
+    brief,
+    taskOutcome,
+    requirements,
+    artifacts: [],
+    captureSets: [],
+    terminationReason,
+  };
 }
 
 const unmet = (n: number) =>

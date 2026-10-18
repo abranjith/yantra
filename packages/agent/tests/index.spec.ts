@@ -27,6 +27,8 @@ describe('@yantra/agent barrel exports', () => {
       },
       taskOutcome: 'fulfilled',
       requirements: null,
+      artifacts: [],
+      captureSets: [],
       terminationReason: 'model_finished',
     } as const;
     expect(exitCodeForAgenticOutcome(outcome)).toBe(0);

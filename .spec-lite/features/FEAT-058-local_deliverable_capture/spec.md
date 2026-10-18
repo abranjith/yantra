@@ -418,6 +418,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Verify**: `npx turbo run build --filter=@yantra/core --filter=@yantra/agent`; `cd packages/core && npx vitest run tests/brief`; `cd apps/cli && npx vitest run tests/connector-io.spec.ts tests/commands/do.spec.ts`. Manually, open `brief.html` from a capture run and confirm that the link opens the PNG.
 - **Depends on**: TASK-006, FEAT-054 TASK-009
 
+> DEVIATION (implement, 2026-10-18): the ledger `capture` entry also carries an in-memory `captureSet` (the call's `CaptureArtifactSet`, never logged), and `AgenticTaskOutcome` `published` carries `captureSets` beside `artifacts`. The Brief needs every part, and the `Screenshot:` line needs each set's part count and labels; flat `ArtifactRef`s and the part-1-only ledger fields carry neither. Both are internal APIs. Viewport capture also clips to the tile width with `clipped_width` when a viewport is wider than 1920 px, the same labeled rule as `full_page`.
+
 ### TASK-008: The task-fidelity harness pins local capture: a text-only model without a grant, suppression, a latched screen, a tall page, and Vision Assist unchanged
 
 - [ ] **Implementation**:
@@ -492,7 +494,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-004: `browser_capture` tool: own budget, secret latch, owner-only files, metadata-only result
 - [x] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
 - [x] TASK-006: Early gap disclosure, ledger producer, clean-and-complete capture rule
-- [ ] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
+- [x] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
 - [ ] TASK-008: Task-fidelity capture scenarios
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

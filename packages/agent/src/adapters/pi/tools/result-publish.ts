@@ -43,6 +43,7 @@ import {
   type Brief,
   type BriefFacets,
   type BriefConstraint,
+  type BriefArtifact,
   type BriefRequirement,
   type Section,
   type BriefNotice,
@@ -62,6 +63,7 @@ import {
   logBriefComposition,
   mapPublishText,
   sanitizePublishContent,
+  withArtifacts,
   type ComposedEvidence,
 } from '../../../runtime/brief-composer.js';
 import { deliverableContractCapabilities } from '../../../runtime/contract-capabilities.js';
@@ -313,7 +315,8 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
     };
   }
   const evaluation = await evaluatePublication(services, composed.value.evidence);
-  const composedContent = withRequirements(composed.value.content, evaluation);
+  const captured = withArtifacts(withRequirements(composed.value.content, evaluation), services);
+  const composedContent = captured.content;
   const content =
     services.userInput === undefined
       ? composedContent
@@ -321,6 +324,7 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
   const publishFacts = runtimeFactsFor(services, [
     ...composed.value.notices,
     ...(evaluation?.disagreement ? [evaluation.disagreement] : []),
+    ...captured.notices,
   ]);
   const result = await services.domain.publish.publish(content, {
     runtimeFacts: publishFacts,
@@ -750,6 +754,7 @@ function buildBriefFromAgentContent(
     ...(Array.isArray(record.requirements)
       ? { requirements: record.requirements as BriefRequirement[] }
       : {}),
+    ...(Array.isArray(record.artifacts) ? { artifacts: record.artifacts as BriefArtifact[] } : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {
       synthesis: 'llm',

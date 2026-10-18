@@ -13,6 +13,7 @@ import { err, ok } from '../utils/result.js';
 import { generateUlid } from '../utils/ulid.js';
 
 import type {
+  BriefArtifact,
   BriefConstraint,
   BriefRequirement,
   BriefFacets,
@@ -34,6 +35,8 @@ export interface CreateBriefInput {
   readonly constraints?: readonly BriefConstraint[];
   /** Per-item requirement statuses of a `do` task (FEAT-054); omitted elsewhere. */
   readonly requirements?: readonly BriefRequirement[];
+  /** Saved capture files of a `do` task (FEAT-058); omitted elsewhere. */
+  readonly artifacts?: readonly BriefArtifact[];
   /** Originating task id (ULID). */
   readonly task_id: string;
   /** One-line document title. */
@@ -107,6 +110,7 @@ export const createBrief = (input: CreateBriefInput): Brief => ({
   notices: [...(input.notices ?? [])],
   ...(input.constraints === undefined ? {} : { constraints: [...input.constraints] }),
   ...(input.requirements === undefined ? {} : { requirements: [...input.requirements] }),
+  ...(input.artifacts === undefined ? {} : { artifacts: [...input.artifacts] }),
 });
 
 /**
