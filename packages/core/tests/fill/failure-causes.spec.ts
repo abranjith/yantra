@@ -244,6 +244,80 @@ describe('@no-llm failures with one code and different causes read differently',
     expect(JSON.stringify(failure)).not.toContain('keystrokes-landed-elsewhere');
   });
 
+  it('names a withheld readback, a withheld mismatch, and a release loss distinctly', () => {
+    const withheld = fillFailure('WIDGET_NOT_COMMITTED', 'value-withheld', 'Withheld.', {
+      withheld: 'autocomplete',
+      match: null,
+      present: true,
+    });
+    const mismatch = fillFailure('WIDGET_NOT_COMMITTED', 'withheld-value-mismatch', 'Mismatch.', {
+      withheld: 'password',
+      match: 'truncated',
+      present: true,
+    });
+    const released = fillFailure('WIDGET_NOT_COMMITTED', 'value-rejected-on-release', 'Lost.', {
+      released: true,
+      observed: '',
+    });
+
+    expect(
+      new Set([withheld, mismatch, released].map((failure) => failure.details.hint)).size,
+    ).toBe(3);
+    expect(String(withheld.details.hint)).toContain('Send the value as plain text');
+  });
+
+  it('branches the withheld-mismatch advice on the in-page verdict alone', () => {
+    const hint = (match: string): string =>
+      hintFor('WIDGET_NOT_COMMITTED', 'withheld-value-mismatch', {
+        withheld: 'password',
+        match,
+        present: match !== 'empty',
+      });
+
+    expect(hint('truncated')).toContain('field.max_length');
+    expect(hint('different')).toContain('validation message');
+    expect(hint('empty')).toContain('empty after entry');
+    expect(new Set(['truncated', 'different', 'empty'].map(hint)).size).toBe(3);
+    // A mismatch with no verdict is dangling advice, not a generic sentence.
+    expect(() =>
+      hintFor('WIDGET_NOT_COMMITTED', 'withheld-value-mismatch', {
+        withheld: 'password',
+        match: null,
+      }),
+    ).toThrow(DanglingHintError);
+  });
+
+  it('refuses release-loss wording without evidence of a release', () => {
+    expect(() =>
+      fillFailure('WIDGET_NOT_COMMITTED', 'value-rejected-on-release', 'Lost.', { observed: '' }),
+    ).toThrow(DanglingHintError);
+    expect(missingHintDetails('WIDGET_NOT_COMMITTED', 'value-rejected-on-release', {})).toEqual([
+      'released',
+    ]);
+  });
+
+  it('refuses an overlay failure that does not name the open overlay', () => {
+    expect(() =>
+      fillFailure('WIDGET_DISMISS_FAILED', 'overlay-still-open', 'Open.', { stillOpen: null }),
+    ).toThrow(DanglingHintError);
+  });
+
+  it('quotes a budget observation only when the control disclosed one', () => {
+    const disclosed = hintFor('WIDGET_NOT_COMMITTED', 'budget', {
+      reason: 'budget',
+      observed: 'Lyo',
+    });
+    const withheld = hintFor('WIDGET_NOT_COMMITTED', 'budget', {
+      reason: 'budget',
+      withheld: 'password',
+      match: 'truncated',
+    });
+
+    expect(disclosed).toContain('"Lyo"');
+    expect(withheld).toContain('withholds its contents');
+    expect(withheld).not.toContain('""');
+  });
+
   it('reports no template for a pair the code cannot produce', () => {
     // The nested table declares only what each code can actually cause, so this
     // pair does not exist — and `fillFailure` will not type-check for it.

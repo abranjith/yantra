@@ -1,4 +1,4 @@
-import { committedText } from '../interaction/protected-value.js';
+import { observedDetails, type CommittedValue } from '../interaction/protected-value.js';
 import {
   isOpen,
   openIfClosed,
@@ -22,7 +22,7 @@ const DISMISS_SETTLE_MS = 150;
 export interface DismissSuccess {
   readonly ok: true;
   readonly dismissed: boolean;
-  readonly committed: string;
+  readonly committed: CommittedValue;
   readonly actions: number;
 }
 
@@ -45,6 +45,13 @@ export interface DismissScope {
    * release into a reported success the page had not accepted.
    */
   readonly driven?: WidgetContainer | null;
+  /**
+   * The text the control should hold after release.
+   *
+   * Passed to every read so a protected control is judged inside the page; a
+   * withheld read with no expected text has no verdict and can never match.
+   */
+  readonly expected?: string;
 }
 
 /**
@@ -61,8 +68,8 @@ export interface DismissScope {
 export async function dismissWidget(
   port: WidgetPort,
   target: WidgetTarget,
-  committedBefore: string,
-  matches: (committed: string) => boolean,
+  committedBefore: CommittedValue,
+  matches: (committed: CommittedValue) => boolean,
   scope: DismissScope = {},
 ): Promise<DismissOutcome> {
   const container = scope.driven ?? (await resolveContainer(port, target, { allowUnlinked: true }));
@@ -90,7 +97,13 @@ export async function dismissWidget(
   }
   await sleep(DISMISS_SETTLE_MS);
 
-  let committed = committedText(await readCommittedValue(port, target)) ?? '';
+  const read = (): Promise<CommittedValue> =>
+    readCommittedValue(
+      port,
+      target,
+      scope.expected === undefined ? {} : { expected: scope.expected },
+    );
+  let committed = await read();
   let stillOpen = await isOpen(port, target, container);
   if (usedEscape && preserved && !matches(committed)) {
     const reopened = await openIfClosed(port, target);
@@ -101,7 +114,7 @@ export async function dismissWidget(
         await clickCandidate(port, retryControl);
         actions += 1;
         await sleep(DISMISS_SETTLE_MS);
-        committed = committedText(await readCommittedValue(port, target)) ?? '';
+        committed = await read();
         stillOpen = await isOpen(port, target, reopened.container);
       } else {
         // Reopening was a probe for a commit control this widget turns out not
@@ -115,15 +128,28 @@ export async function dismissWidget(
     }
   }
 
-  if (stillOpen || (preserved && !matches(committed))) {
+  const disclosedCommitted = committed.kind === 'disclosed' ? { committed: committed.text } : {};
+  if (stillOpen) {
     return fillFailure(
       'WIDGET_DISMISS_FAILED',
       'overlay-still-open',
       `The value was committed, but the floating widget for "${target.name}" could not be released without losing it.`,
       {
-        stillOpen: stillOpen ? target.name : null,
-        committed,
+        stillOpen: target.name,
+        ...disclosedCommitted,
+        ...(committed.kind === 'withheld' ? observedDetails(committed) : {}),
       },
+    );
+  }
+  if (preserved && !matches(committed)) {
+    // The overlay is gone and so is the value it was showing: a verified loss
+    // on release, not an overlay problem. Reported as "the overlay is still
+    // open, the value is set", the old wording described neither fact.
+    return fillFailure(
+      'WIDGET_NOT_COMMITTED',
+      'value-rejected-on-release',
+      `The "${target.name}" control held the value while its widget was open and lost it when the widget closed.`,
+      { released: true, ...disclosedCommitted, ...observedDetails(committed) },
     );
   }
   return { ok: true, dismissed: true, committed, actions };

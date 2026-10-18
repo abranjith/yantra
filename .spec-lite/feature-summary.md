@@ -42,6 +42,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-056 — Protected-Value Verification** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-056-protected_value_verification/spec.md)
+A password, `autocomplete` credential/OTP/card field, or `data-yantra-secret` control filled with caller-supplied data is checked inside the page against the text that was sent. Only a fixed verdict comes back (`empty`/`exact`/`reformatted`/`truncated`/`different`), and the fill succeeds only on `exact` or `reformatted`. Its success reports `withheld: { reason, verdict, ref }` with `resolution`, and no `committed`, `requested`, or `note`, through `browser_fill_element`, `browser_fill_form`, and replay `fill_element`. Observation entries say `withheld: <reason>` beside `value_present`. Failures are named by what was observed. A protected value that did not land is `withheld-value-mismatch`, with advice per verdict. A date or option driver reading a protected control gets `value-withheld`, which tells the caller to send plain text. A disclosed value the control does not hold is `control-refused-value`. "Lost on release" (`value-rejected-on-release`, with `released: true`) is reported only when a widget was actually released. Every `WIDGET_NOT_COMMITTED` carries exactly one of `observed` or `withheld`.
+
 **FEAT-055 ? Complete Form Inventory & Field Identity** _(updated: 2026-10-17 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-055-complete_form_inventory/spec.md)
 Browser observations keep the default 50-entry window while registering refs for the complete bounded 400-entry scan, report omitted counts by kind, and support `browser_observe { after, kinds }` continuation without consuming digest state or creating promotion trace reads. A shared structural evidence module supplies bounded labels with origin/confidence, section, constraints, and developer hints; matching accepts labels and section-qualified names while hints remain non-resolvable, and failed lookups offer fillable controls rather than navigation links. Element-keyed refs survive DOM moves and validation messages; only uniquely verified labelled replacements inherit refs, while unlabelled or ambiguous replacements fail stale. The read-only census activates FEAT-054 all-eligible coverage and fails closed on incomplete scans. Promoted structural/placeholder/title fills persist `field_label_origin`; legacy steps retain accessible-name matching, and unlabelled fills save as locator-only `fill` with `submit: false` and a disclosure.
@@ -441,6 +445,10 @@ The `ConnectorIO` interface in `apps/cli/src/connector-io.ts` is the load-bearin
 Verification: 29 unit tests across `apps/cli/src/` (commander setup, exit-code map, global-flags parser, ConnectorIO contract, audit-builder round-trip, auto-detect for `show`); 7 e2e tests in `e2e/cli-commands.spec.ts` covering the no-args banner, `list runs|workflows --json` empty roots, `audit`/`report` not-found paths, and `init --provider {none|invalid}`. Distribution channels (npm `bin: { yantra: dist/bin.js }`, Homebrew tap, Scoop bucket) and the bundled-CLI release pipeline are deferred to the first stable release.
 
 ## Consent & Safety
+
+**FEAT-056 — Protected Values Never Leave the Page** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-056-protected_value_verification/spec.md)
+One classifier and one token list decide which controls withhold their contents. The scan, the committed read, and the replay port all receive that list, and the scan refuses to run without it rather than disclose a field. A protected control's raw value is never a return value of any read, so no result, failure detail, ledger entry, log line, or run artifact can carry it. A real-Chrome run gate scans every run file for both a stored-secret canary and a synthetic protected value. Stored secrets are unchanged: host binding, confirmation, masking, the sensitive-screen latch, and a blind single-rung commit with no readback. The model-visible stored-secret result is byte-identical.
 
 **FEAT-054 — Engine-Enforced No-Submit** _(updated: 2026-10-17 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-054-contract_terms_honest_outcome/spec.md)

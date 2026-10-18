@@ -1,4 +1,4 @@
-import { committedText } from '../../interaction/protected-value.js';
+import { isEmptyRead } from '../../interaction/protected-value.js';
 import type { WidgetPort, WidgetTarget } from '../types.js';
 import { readCommittedValue } from '../verify.js';
 
@@ -106,8 +106,7 @@ export async function pendingRangePartner(
   if (!pair) return null;
   const partner = partnerOf(pair, target);
   if (!partner) return null;
-  const committed = committedText(await readCommittedValue(port, partner)) ?? '';
-  return committed.trim().length === 0 ? partner : null;
+  return isEmptyRead(await readCommittedValue(port, partner)) ? partner : null;
 }
 
 /**

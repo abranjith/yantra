@@ -61,6 +61,23 @@ Out of scope:
 4. **CLARIFICATION: `data-yantra-secret` has no production writer.** No source file sets it; only `verify.spec.ts` does. It is kept as a reason (`secret_marker`) because the plan names it and it costs nothing. The replay port's copy, which omitted it, is fixed by using the shared classifier.
 5. **CLARIFICATION: no prompt version bump.** The two fill tool descriptions gain one sentence about `withheld`, so `tool_catalog_hash` moves. The `do` addendum is untouched: FEAT-054 owns `agent-v11`.
 
+### Implementation notes (recorded by Implement, 2026-10-17)
+
+1. **DEVIATION: the boundary rule allows one other line.** FEAT-055's scan carries the full WHATWG autofill field-name vocabulary (`autocompleteToken`), which names every field kind, these three among them, to _name_ a field rather than protect one. The rule in `boundary-rules.spec.ts` allows exactly that line and fails on any other occurrence outside `protected-value.ts`.
+2. **ADDITION: the scan refuses to run without the token list.** With the option absent, the old fallback would disclose every autocomplete-protected value, so `scanInteractablesInPage` throws instead. Every caller builds its options through `protectedScanOptions()`. The discovery observation path (`observe.ts`) calls the scan through the `Page` facade, so `Page.evaluate` gained one optional serializable argument. It is forwarded only when given, because Puppeteer refuses arguments alongside a string expression.
+3. **ADDITION: `WidgetSuccess` is a disclosed/withheld union too.** The combobox driver can succeed on a withheld control (no suggestions), so a driver success carries `committed` text or a `withheld` read, never an empty `committed`. `successValue`/`successFields` convert between the two forms.
+4. **CLARIFICATION: `TypedText.committed` is `CommittedValue | null`.** `null` exactly when the commit was blind (the stored-secret path), so the blind path never fabricates a read.
+5. **ADDITION: release and overlay gating in the catalog.** `overlay-still-open` now requires `stillOpen`, so it cannot be emitted for a closed overlay. A `value-withheld` failure is not retryable as sent, because the same call reads the same withheld control.
+6. **Changed pins (TASK-004).**
+   - `fill-engine.spec.ts` "reports a typed dismissal failure when Escape reverts the value": `WIDGET_DISMISS_FAILED / overlay-still-open` → `WIDGET_NOT_COMMITTED / value-rejected-on-release` with `released: true`. The overlay closed and the value went with it.
+   - `calendar-driver.ts` `selectByOfferedCalendarLabel`: a cell click that does not land is now `control-refused-value` (no release happened) instead of `value-rejected-on-release`. No test pinned it.
+   - The calendar's closed-picker branch keeps `value-rejected-on-release` and now declares `released: true`.
+   - No gauntlet pin moved.
+7. **DEVIATION: the TASK-005 leak gate lives in `e2e/agent-do.spec.ts`.** `agent-browser.spec.ts` calls wrapped tools with no recorder, so it writes no run artifacts. `agent-do.spec.ts` runs the real `runAgenticTask` with a scripted session. The synthetic values arrive the way a user's do: stated in the goal, redacted into the user-input vault, and sent by the model only as `{{user:…}}` placeholders. Otherwise production would record the model's own literal in `tool-calls.jsonl` inputs and in the trace. The card canary is a Luhn-valid test number, because the vault captures card-shaped values only. The scan covers `confirmations.jsonl`, `events.jsonl`, `manifest.json`, `report.md`, `run-health.json`, `tool-calls.jsonl`, `trace.json`, and `usage.json`. This harness writes no `runtime.jsonl` and no screenshots.
+8. **Test support.** The agent suite's `FormController` double gained `clear` and `type`. Without them, no agent-level test could climb past the first typing rung.
+9. **DEVIATION (user decision): task-fidelity ownership split.** The harness made FEAT-056 the owner of three `do-form-complete` expectations. Only `protected-fields-commit` belongs to this feature, and it now holds. The other two, `native-date-fields-commit` and `fulfilled`, fail because a native `<input type="date">` genuinely stays empty after entry in real Chrome (confirmed with a probe), which is an entry bug, not a readback verdict. With the user's approval, FEAT-056 is landed (removed from `PENDING_OWNERS`, with its baseline deleted). A new non-feature owner, `native-date-entry`, tied to the TODO entry for native date inputs, now owns the two date expectations, with their existing baselines.
+10. **Read-count pin is clock-driven.** The "no added page reads" test runs on a clock that steps 50 ms per reading, so the suggestion watch polls a fixed number of times. The count, 84 `evaluateOn` calls, was measured against the pre-feature source at `147dea2` and against this feature, and is identical. On a wall clock the count follows machine load.
+
 ## 2. Data Model (Granular)
 
 No relational store, and `.spec-lite/data_model.md` does not exist. This feature adds in-memory core types, one optional model-visible observation key, and optional result keys. No artifact schema changes.
@@ -390,8 +407,8 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
 
 - [x] TASK-001: Observation reports a withheld reason from one shared classifier
 - [x] TASK-002: Typed committed reads with an in-page match verdict
-- [ ] TASK-003: Caller-supplied data in protected fields verifies and succeeds (agent and replay)
-- [ ] TASK-004: Failures named by observation; release wording gated on an actual release
-- [ ] TASK-005: Run-directory leak gate for stored-secret and protected test values
+- [x] TASK-003: Caller-supplied data in protected fields verifies and succeeds (agent and replay)
+- [x] TASK-004: Failures named by observation; release wording gated on an actual release
+- [x] TASK-005: Run-directory leak gate for stored-secret and protected test values
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

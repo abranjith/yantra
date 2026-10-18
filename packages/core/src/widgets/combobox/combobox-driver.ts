@@ -31,7 +31,11 @@ import {
   type InteractionFailureCause,
   type TypingFailure,
 } from '../../interaction/index.js';
-import { committedText } from '../../interaction/protected-value.js';
+import {
+  isEmptyRead,
+  observedDetails,
+  type CommittedValue,
+} from '../../interaction/protected-value.js';
 import { isOpen, resolveContainer, type WidgetContainer } from '../open-state.js';
 import {
   clickCandidate,
@@ -40,6 +44,7 @@ import {
   type WidgetChoiceSet,
 } from '../option/candidates.js';
 import {
+  successFields,
   widgetFailure,
   type WidgetDriver,
   type WidgetOutcome,
@@ -207,7 +212,7 @@ export const comboboxDriver: WidgetDriver = {
               typingCause(entered.typed),
               entered.typed.message,
               {
-                observed: entered.typed.observed,
+                ...observedDetails(entered.typed.observed),
                 ...(entered.editee ? { editee: entered.editee.name } : {}),
                 ...(entered.typed.reason === undefined ? {} : { reason: entered.typed.reason }),
               },
@@ -288,7 +293,7 @@ export async function selectByOfferedLabel(
       typingCause(entered.typed),
       entered.typed.message,
       {
-        observed: entered.typed.observed,
+        ...observedDetails(entered.typed.observed),
         ...(entered.editee ? { editee: entered.editee.name } : {}),
       },
     );
@@ -324,7 +329,7 @@ export type OfferedSelection =
       readonly kind: 'selected';
       readonly chosen: string;
       readonly offered: readonly string[];
-      readonly committed: string;
+      readonly committed: CommittedValue;
       readonly stillOpen: boolean;
       readonly actions: number;
       readonly container: WidgetContainer | null;
@@ -335,7 +340,7 @@ export type OfferedSelection =
       readonly kind: 'not-committed';
       readonly chosen: string;
       readonly offered: readonly string[];
-      readonly committed: string;
+      readonly committed: CommittedValue;
       readonly actions: number;
       readonly container: WidgetContainer | null;
     }
@@ -343,7 +348,7 @@ export type OfferedSelection =
   | {
       readonly kind: 'ambiguous';
       readonly offered: readonly string[];
-      readonly observed: string;
+      readonly observed: CommittedValue;
       readonly actions: number;
       readonly container: WidgetContainer | null;
     }
@@ -351,7 +356,7 @@ export type OfferedSelection =
   | {
       readonly kind: 'unmatched-text-stands';
       readonly offered: readonly string[];
-      readonly committed: string;
+      readonly committed: CommittedValue;
       readonly actions: number;
       readonly container: WidgetContainer | null;
     }
@@ -359,7 +364,7 @@ export type OfferedSelection =
   | {
       readonly kind: 'text-discarded';
       readonly offered: readonly string[];
-      readonly observed: string;
+      readonly observed: CommittedValue;
       readonly actions: number;
       readonly container: WidgetContainer | null;
       readonly semantics: WidgetChoiceSet['semantics'];
@@ -367,7 +372,7 @@ export type OfferedSelection =
   /** Nothing was offered at all; whatever the control holds is what it holds. */
   | {
       readonly kind: 'no-suggestions';
-      readonly committed: string;
+      readonly committed: CommittedValue;
       readonly dismissed: boolean;
       readonly actions: number;
       readonly container: WidgetContainer | null;
@@ -435,7 +440,10 @@ export async function watchAndSelectOffered(
   ) {
     return {
       kind: 'no-suggestions',
-      committed: committedText(await readCommittedValue(port, target)) ?? '',
+      // The request is the expected text: a protected control is judged
+      // against it inside the page, which is what lets a typed password with
+      // no suggestion list verify rather than read as empty.
+      committed: await readCommittedValue(port, target, { expected: requested }),
       dismissed: false,
       actions: 0,
       container,
@@ -450,7 +458,7 @@ export async function watchAndSelectOffered(
     return {
       kind: 'ambiguous',
       offered: ranked.offered,
-      observed: committedText(await readCommittedValue(port, target)) ?? '',
+      observed: await readCommittedValue(port, target, { expected: requested }),
       actions: 0,
       container,
     };
@@ -458,11 +466,11 @@ export async function watchAndSelectOffered(
 
   if (ranked.kind === 'none') {
     await release(port);
-    const observed = committedText(await readCommittedValue(port, target)) ?? '';
+    const observed = await readCommittedValue(port, target, { expected: requested });
     // Whether this control will hold free text is not a judgement to make about
     // its markup — it is something the page answers by either keeping the text
     // or clearing it on release.
-    return observed.trim().length > 0
+    return !isEmptyRead(observed)
       ? { kind: 'unmatched-text-stands', offered, committed: observed, actions: 0, container }
       : {
           kind: 'text-discarded',
@@ -479,8 +487,11 @@ export async function watchAndSelectOffered(
   }
 
   await clickCandidate(port, ranked.candidate);
-  const committed = committedText(await readCommittedValue(port, target)) ?? '';
-  if (committed.trim().length === 0) {
+  // After a click the clicked label is what the control should hold.
+  const committed = await readCommittedValue(port, target, {
+    expected: ranked.candidate.name,
+  });
+  if (isEmptyRead(committed)) {
     return {
       kind: 'not-committed',
       chosen: ranked.candidate.name,
@@ -529,7 +540,7 @@ function toOutcome(
         // entry that reached it: this is the value the caller has read as
         // `driver` since the disclosure contract landed.
         driver: 'typeahead',
-        committed: selection.committed,
+        ...successFields(selection.committed),
         actions: context.actions,
         chosen: selection.chosen,
         offered: selection.offered,
@@ -544,7 +555,7 @@ function toOutcome(
       return {
         ok: true,
         driver: 'plain-text',
-        committed: selection.committed,
+        ...successFields(selection.committed),
         actions: context.actions,
         offered: selection.offered,
         // Nothing matched, so the list was released with Escape before the
@@ -558,7 +569,7 @@ function toOutcome(
       return {
         ok: true,
         driver: 'plain-text',
-        committed: selection.committed,
+        ...successFields(selection.committed),
         actions: context.actions,
         ...(context.editee ? { editee: context.editee } : {}),
         ...(context.reformatted ? { reformatted: true } : {}),
@@ -571,7 +582,7 @@ function toOutcome(
         `"${target.name}" offers ${selection.offered.length} suggestions matching "${requested}" equally well, so none was chosen.`,
         {
           offered: selection.offered,
-          observed: selection.observed,
+          ...observedDetails(selection.observed),
           ...editeeDetail,
         },
       );
@@ -582,7 +593,7 @@ function toOutcome(
         `"${target.name}" offers no suggestion matching "${requested}" and discarded the typed text on release, so it will not accept a free-text value.`,
         {
           ...(selection.semantics === 'declared' ? { offered: selection.offered } : {}),
-          observed: selection.observed,
+          ...observedDetails(selection.observed),
           ...editeeDetail,
         },
       );
@@ -592,8 +603,10 @@ function toOutcome(
         'control-refused-value',
         `The suggestion "${selection.chosen}" was clicked, but "${target.name}" has no committed value.`,
         {
-          committed: selection.committed,
-          observed: selection.committed,
+          ...(selection.committed.kind === 'disclosed'
+            ? { committed: selection.committed.text }
+            : {}),
+          ...observedDetails(selection.committed),
           offered: selection.offered,
           chosen: selection.chosen,
           ...editeeDetail,
@@ -648,6 +661,9 @@ async function readReaction(
 function typingCause(failure: TypingFailure): InteractionFailureCause {
   if (failure.editee !== undefined) return 'keystrokes-landed-elsewhere';
   if (failure.reason === 'budget') return 'budget';
+  // For a protected control the in-page verdict, not the mechanism, is the
+  // fact: every rung ran and the check found the wrong value.
+  if (failure.observed.kind === 'withheld') return 'withheld-value-mismatch';
   return 'typing-exhausted';
 }
 

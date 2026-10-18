@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   commitText,
@@ -13,6 +13,7 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../../src/index.js';
+import { WidgetTestPort } from '../support/widget-test-port.js';
 
 /**
  * The rungs that actually ran, in order.
@@ -254,7 +255,11 @@ describe('@no-llm commitText escalation ladder', () => {
 
     const outcome = await commitText(port, target(), 'DFW', BUDGET);
 
-    expect(outcome).toMatchObject({ ok: true, strategy: 'overtype', committed: 'DFW' });
+    expect(outcome).toMatchObject({
+      ok: true,
+      strategy: 'overtype',
+      committed: { kind: 'disclosed', text: 'DFW' },
+    });
     expect(outcome.ok && performedIn(outcome.attempted)).toHaveLength(1);
   });
 
@@ -265,7 +270,7 @@ describe('@no-llm commitText escalation ladder', () => {
     const outcome = await commitText(port, target(), 'DFW', BUDGET);
 
     expect(outcome.ok).toBe(true);
-    expect(outcome.ok && outcome.committed).toBe('DFW');
+    expect(outcome.ok && outcome.committed).toEqual({ kind: 'disclosed', text: 'DFW' });
     expect(outcome.ok && outcome.strategy).toBe('clear-then-type');
     expect(outcome.ok && performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
@@ -281,7 +286,7 @@ describe('@no-llm commitText escalation ladder', () => {
 
     expect(outcome.ok).toBe(true);
     expect(outcome.ok && outcome.strategy).toBe('native-setter');
-    expect(outcome.ok && outcome.committed).toBe('San Jose');
+    expect(outcome.ok && outcome.committed).toEqual({ kind: 'disclosed', text: 'San Jose' });
   });
 
   it('accepts a masked reformat on the first rung without fighting it', async () => {
@@ -294,7 +299,7 @@ describe('@no-llm commitText escalation ladder', () => {
     expect(outcome).toMatchObject({
       ok: true,
       strategy: 'overtype',
-      committed: '(555) 123-4567',
+      committed: { kind: 'disclosed', text: '(555) 123-4567' },
       reformatted: true,
     });
     expect(port.calls).toEqual(['fill', 'evaluateOn']);
@@ -308,7 +313,7 @@ describe('@no-llm commitText escalation ladder', () => {
     expect(outcome).toMatchObject({
       ok: false,
       errorCode: 'WIDGET_NOT_COMMITTED',
-      observed: 'xyz',
+      observed: { kind: 'disclosed', text: 'xyz' },
     });
     if (outcome.ok) return;
     expect(outcome.message).toContain('unrelated text "xyz"');
@@ -333,7 +338,7 @@ describe('@no-llm commitText escalation ladder', () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.errorCode).toBe('WIDGET_NOT_COMMITTED');
-    expect(outcome.observed).toBe('');
+    expect(outcome.observed).toEqual({ kind: 'disclosed', text: '' });
     expect(performedIn(outcome.attempted).map((record) => record.strategy)).toEqual([
       'overtype',
       'clear-then-type',
@@ -377,7 +382,7 @@ describe('@no-llm commitText escalation ladder', () => {
       allowEscalation: false,
     });
 
-    expect(outcome).toMatchObject({ ok: true, strategy: 'overtype', committed: '' });
+    expect(outcome).toMatchObject({ ok: true, strategy: 'overtype', committed: null });
     expect(port.calls).toEqual(['fill']);
     expect(JSON.stringify(outcome)).not.toContain('hunter2');
   });
@@ -462,7 +467,7 @@ describe('@no-llm commitText WHERE rung', () => {
 
     const outcome = await commitText(port, target(), 'DFW', BUDGET, observeFor(port));
 
-    expect(outcome).toMatchObject({ ok: true, committed: 'DFW' });
+    expect(outcome).toMatchObject({ ok: true, committed: { kind: 'disclosed', text: 'DFW' } });
     expect(port.observationCount).toBe(1);
   });
 
@@ -478,7 +483,7 @@ describe('@no-llm commitText WHERE rung', () => {
       editee: { observe: () => port.observe(), baseline },
     });
 
-    expect(outcome).toMatchObject({ ok: true, committed: 'DFW' });
+    expect(outcome).toMatchObject({ ok: true, committed: { kind: 'disclosed', text: 'DFW' } });
     expect(port.observationCount).toBe(observedBefore);
   });
 
@@ -546,5 +551,83 @@ describe('@no-llm typing runs on the run its caller owns', () => {
     expect(only.kind === 'succeeded' && only.evidence).toEqual({});
     expect(JSON.stringify(run.verdicts)).not.toContain('hunter2');
     expect(run.values).toEqual({});
+  });
+});
+
+describe('@no-llm commitText on a protected control', () => {
+  const protectedTarget = (port: WidgetTestPort): WidgetTarget => ({
+    ref: port.refFor('input'),
+    role: 'textbox',
+    name: 'Password',
+    group: null,
+    value: null,
+  });
+
+  it('commits on the first rung against an in-page verdict, never reading the value back', async () => {
+    const port = new WidgetTestPort('<input type="password" aria-label="Password" />');
+
+    const outcome = await commitText(port, protectedTarget(port), 'Synth3tic!pw', BUDGET);
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      strategy: 'overtype',
+      committed: { kind: 'withheld', reason: 'password', present: true, match: 'exact' },
+      reformatted: false,
+    });
+    expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
+  });
+
+  it('marks a mask the control applied as reformatted from the verdict alone', async () => {
+    const port = new WidgetTestPort('<input autocomplete="cc-number" aria-label="Card" />');
+    const input = port.document.querySelector('input')!;
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/gu, '').replace(/(\d{4})(?=\d)/gu, '$1 ');
+    });
+
+    const outcome = await commitText(port, protectedTarget(port), '4111111111111111', BUDGET);
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      committed: { kind: 'withheld', match: 'reformatted' },
+      reformatted: true,
+    });
+  });
+
+  it('climbs the whole ladder for a truncating control and reports only the verdict', async () => {
+    const port = new WidgetTestPort('<input type="password" aria-label="Password" />');
+    const input = port.document.querySelector('input')!;
+    input.addEventListener('input', () => {
+      input.value = input.value.slice(0, 4);
+    });
+
+    const outcome = await commitText(port, protectedTarget(port), 'Synth3tic!', BUDGET);
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.observed).toEqual({
+      kind: 'withheld',
+      reason: 'password',
+      present: true,
+      match: 'truncated',
+    });
+    expect(outcome.message).toBe(
+      'The "Password" control withholds its contents; a check inside the page found it kept fewer characters than were typed.',
+    );
+    expect(performedIn(outcome.attempted).map((record) => record.strategy)).toEqual(
+      expect.arrayContaining(['overtype', 'clear-then-type', 'native-setter']),
+    );
+    expect(JSON.stringify(outcome)).not.toMatch(/Synt|Synth3tic/u);
+  });
+
+  it('still performs no read at all on the blind secret path', async () => {
+    const port = new WidgetTestPort('<input type="password" aria-label="Password" />');
+    const evaluateOn = vi.spyOn(port, 'evaluateOn');
+
+    const outcome = await commitText(port, protectedTarget(port), 'CANARY-secret', BUDGET, {
+      allowEscalation: false,
+    });
+
+    expect(outcome).toMatchObject({ ok: true, committed: null });
+    expect(evaluateOn).not.toHaveBeenCalled();
   });
 });

@@ -166,6 +166,26 @@ describe('@no-llm fill_element replay handler', () => {
     expect(resolve).toHaveBeenCalledWith({ kind: 'secret', key: 'site.password' });
   });
 
+  it('replays a literal into a protected field and reports the verdict, not the value', async () => {
+    const port = new WidgetTestPort('<input id="password" type="password" aria-label="Password">');
+    const result = await driveFillElement(
+      fillStep({ kind: 'literal', value: 'Synth3tic!pw' }),
+      context(),
+      port,
+      target(port, '#password', 'Password'),
+    );
+
+    expect(result).toEqual({
+      kind: 'completed',
+      details: {
+        withheld: { reason: 'password', verdict: 'exact' },
+        driver: 'plain-text',
+        dismissed: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('Synth3tic');
+  });
+
   it('preserves the native select branch and commits the offered option value', async () => {
     const port = new WidgetTestPort(
       '<select id="country" aria-label="Country">' +

@@ -66,6 +66,18 @@ describe('@no-llm per-family interaction capability receivers', () => {
     ).not.toThrow();
   });
 
+  it('routes a withheld date or choice to the plain-text commit, and only from those families', () => {
+    for (const family of ['date', 'option'] as const) {
+      expect(() =>
+        assertReceivable('fill', 'WIDGET_NOT_COMMITTED', 'value-withheld', family),
+      ).not.toThrow();
+      expect(receiverFor('fill', family, 'commitText')).toBe('commitText');
+    }
+    expect(() =>
+      assertReceivable('fill', 'WIDGET_NOT_COMMITTED', 'value-withheld', 'combobox'),
+    ).toThrow(UnreceivableAdviceError);
+  });
+
   it('accepts capability-free templates without emitter metadata', () => {
     const template = INTERACTION_MESSAGES.find(
       (entry) => entry.surface === 'fill' && entry.cause === 'date-not-reachable',

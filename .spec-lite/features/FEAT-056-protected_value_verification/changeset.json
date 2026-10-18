@@ -2,6 +2,24 @@
   "vcs": "git",
   "files": [
     {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/src/browser/agent-controller.ts",
       "status": "M",
       "role": "implement",
@@ -56,6 +74,24 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/fill/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/interaction/capabilities.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/interaction/escalation.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/src/interaction/index.ts",
       "status": "M",
       "role": "implement",
@@ -63,15 +99,27 @@
     },
     {
       "path": "packages/core/src/interaction/protected-value.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/src/interaction/typing-plan.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/interaction/typing.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/src/widgets/combobox/combobox-driver.ts",
@@ -110,6 +158,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/widgets/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/src/widgets/verify.ts",
       "status": "M",
       "role": "implement",
@@ -126,6 +180,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/protected-fill.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/tests/discovery/composed-handles.spec.ts",
@@ -152,16 +212,40 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/fill/fill-engine.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/interaction/protected-value.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/interaction/typing.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/support/protected-facts.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/widgets/combobox-driver.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/widgets/option-drivers.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/tests/widgets/verify.spec.ts",

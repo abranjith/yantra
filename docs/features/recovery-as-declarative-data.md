@@ -81,7 +81,8 @@ recovery:
 yantra do "fill the departure airport, travel dates, and cabin, then show me the completed form"
 ```
 
-Read the returned `requested`, `committed`, `resolution`, `offered`, and `editee` fields as before.
+Read the returned `requested`, `committed`, `resolution`, `offered`, and `editee` fields as before;
+a protected control reports `withheld` with an in-page verdict in place of `committed`.
 When a result includes `details.attempted`, read each entry's `verdict` before acting on it: a
 `succeeded` or `failed` entry names a step that was performed, so repeating it wastes a turn, while
 a `skipped` entry names a step that was **not** taken and says why in `unmet` — information, not a
@@ -131,6 +132,29 @@ along with those records rather than being reported on their own.
 
 The one-rung secret fill remains blind: it performs no verification read and contributes no
 secret-derived evidence to any verdict.
+
+A failure's next step is chosen by its error code and cause together, and each pair declares the
+detail keys its wording refers to; a failure missing one is refused with `DanglingHintError` rather
+than given vaguer advice. The causes that describe what a control held after entry are:
+
+| Code / cause                                         | Emitted when                                                                                                                                                                                               | Required details    |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `WIDGET_NOT_COMMITTED` / `control-refused-value`     | A disclosed control holds something other than what was sent, and no widget was released.                                                                                                                  | `observed`          |
+| `WIDGET_NOT_COMMITTED` / `value-rejected-on-release` | This fill released a widget and the value did not survive it: at the settled read after the fill's own dismissal, or when an overlay or picker closed and took a value that had matched while it was open. | `released`          |
+| `WIDGET_NOT_COMMITTED` / `withheld-value-mismatch`   | A protected control's in-page verdict is `empty`, `truncated`, or `different` after the typing ladder, or at the settled read with no release.                                                             | `withheld`, `match` |
+| `WIDGET_NOT_COMMITTED` / `value-withheld`            | A date or option driver read a protected control, which offers no date or choice to compare.                                                                                                               | `withheld`          |
+| `WIDGET_NOT_COMMITTED` / `budget`                    | The fill ran out of allowance before the value settled.                                                                                                                                                    | `reason`            |
+| `WIDGET_DISMISS_FAILED` / `overlay-still-open`       | The overlay is still open after the dismissal pass.                                                                                                                                                        | `stillOpen`         |
+
+A failure about a protected control carries `withheld`, `match`, and `present` in place of
+`observed`, and never the control's value. The `withheld-value-mismatch` hint branches on `match`:
+check `field.max_length` and `field.pattern` for `truncated`, re-observe for a validation message
+for `different`, and re-observe before concluding the field is unusable for `empty`. A
+`value-withheld` failure is not retryable as sent, because the same call would read the same
+withheld control; its hint sends the value as plain text, which the typing ladder verifies inside
+the page. The `budget` hint quotes `observed` only when the control disclosed it, and otherwise says
+the control withholds its contents. A typing ladder that runs out on a protected control reports
+`withheld-value-mismatch` rather than `typing-exhausted`, with `attempted` still carried.
 
 Run reports accept both the verdict format and the previous nullable attempt-record format. A legacy
 record is normalized on read into a verdict whose measured fields are simply absent — it is never

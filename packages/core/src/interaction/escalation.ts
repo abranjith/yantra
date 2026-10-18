@@ -813,6 +813,13 @@ function isStaleRefError(error: unknown): boolean {
   );
 }
 
+/** The disclosed text of a failure's `observed`, or null for a withheld or absent read. */
+function disclosedObserved(observed: unknown): string | null {
+  if (typeof observed === 'string') return observed;
+  if (!isRecord(observed) || observed.kind !== 'disclosed') return null;
+  return typeof observed.text === 'string' ? observed.text : null;
+}
+
 function describeFailure(value: unknown): {
   readonly errorCode: string;
   readonly cause?: InteractionFailureCause;
@@ -824,13 +831,16 @@ function describeFailure(value: unknown): {
   }
   const record = value as Record<string, unknown>;
   const details = isRecord(record.details) ? record.details : {};
+  // A typing failure carries a typed read. Only disclosed text may be quoted;
+  // a withheld read falls through to its message, which names the in-page
+  // verdict and never the value.
+  const observed = disclosedObserved(record.observed);
   return {
     errorCode: typeof record.errorCode === 'string' ? record.errorCode : 'UNKNOWN_FAILURE',
     ...(typeof record.cause === 'string' ? { cause: record.cause as InteractionFailureCause } : {}),
-    ...(typeof record.observed === 'string'
+    ...(observed !== null
       ? {
-          detail:
-            record.observed.length > 0 ? `observed "${record.observed}"` : 'field stayed empty',
+          detail: observed.length > 0 ? `observed "${observed}"` : 'field stayed empty',
         }
       : typeof record.message === 'string'
         ? { detail: record.message }

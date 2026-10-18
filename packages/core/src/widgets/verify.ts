@@ -1,11 +1,19 @@
 import {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
+  withheldDetails,
   type CommitMatch,
   type CommittedValue,
   type WithheldReason,
+  type WithheldValue,
 } from '../interaction/protected-value.js';
 
-import type { WidgetIntent, WidgetPort, WidgetTarget } from './types.js';
+import {
+  widgetFailure,
+  type WidgetFailure,
+  type WidgetIntent,
+  type WidgetPort,
+  type WidgetTarget,
+} from './types.js';
 
 const MONTHS = [
   'january',
@@ -181,6 +189,45 @@ export async function readCommittedValue(
     SENSITIVE_AUTOCOMPLETE_TOKENS,
     options.expected ?? null,
     options.source ?? 'committed',
+  );
+}
+
+/** A committed read a date or option driver can compare, or why it cannot. */
+export type ComparableRead =
+  | { readonly ok: true; readonly text: string }
+  | { readonly ok: false; readonly failure: WidgetFailure };
+
+/**
+ * Read a control's committed text for comparison with a date or a choice.
+ *
+ * A protected control has no text to compare, and comparing `''` against the
+ * intent would report a value it never disclosed as lost. It fails instead,
+ * naming the withheld state and nothing of the value.
+ */
+export async function readComparable(
+  port: WidgetPort,
+  target: WidgetTarget,
+): Promise<ComparableRead> {
+  const value = await readCommittedValue(port, target);
+  return value.kind === 'disclosed'
+    ? { ok: true, text: value.text }
+    : { ok: false, failure: withheldReadFailure(target, value) };
+}
+
+/**
+ * The `value-withheld` failure: a date or choice cannot be confirmed from a
+ * control that withholds its contents.
+ *
+ * Not retryable as sent — the same call reads the same withheld control — and
+ * the hint names the move that works: sending the value as plain text.
+ */
+export function withheldReadFailure(target: WidgetTarget, value: WithheldValue): WidgetFailure {
+  return widgetFailure(
+    'WIDGET_NOT_COMMITTED',
+    'value-withheld',
+    `The "${target.name}" control withholds its contents, so the date or choice it holds cannot be confirmed.`,
+    { ...withheldDetails(value) },
+    false,
   );
 }
 

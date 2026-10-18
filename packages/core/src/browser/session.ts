@@ -42,7 +42,13 @@ function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
       return puppeteerPage.goto(url, opts as Parameters<PuppeteerPage['goto']>[1]);
     },
     evaluate<T, A>(fn: (arg: A) => T, arg?: A) {
-      return puppeteerPage.evaluate(fn as (arg: unknown) => T, arg) as Promise<T>;
+      // Forwarded only when given: Puppeteer refuses arguments alongside a
+      // string expression, which some callers of this facade pass.
+      return (
+        arg === undefined
+          ? puppeteerPage.evaluate(fn as () => T)
+          : puppeteerPage.evaluate(fn as (arg: unknown) => T, arg)
+      ) as Promise<T>;
     },
     close() {
       return puppeteerPage.close();

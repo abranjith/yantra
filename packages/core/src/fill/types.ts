@@ -1,6 +1,7 @@
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { ChoiceSubstitution } from '../interaction/choice.js';
 import type { InteractionFamily, SerializedVerdict } from '../interaction/escalation.js';
+import type { WithheldCommit } from '../interaction/protected-value.js';
 import { normalizeText, type InteractionFailureCause } from '../interaction/types.js';
 import type { WidgetBudget, WidgetTarget } from '../widgets/types.js';
 
@@ -61,16 +62,18 @@ export type FillResolution =
   /** The control rewrote the value — an input mask or its own normalization. */
   | 'reformatted';
 
-/** Verified fill result. */
-export interface FillSuccess {
+/** What every verified fill result carries, whatever the control discloses. */
+export interface FillSuccessBase {
   readonly ok: true;
   readonly driver: string;
-  readonly committed: string;
   readonly actions: number;
   readonly dismissed: boolean;
-  /** What the caller asked for, as it was expressed. */
-  readonly requested?: string;
-  /** How {@link committed} relates to {@link requested}. */
+  /**
+   * How the committed value relates to what was requested.
+   *
+   * On a withheld success it equals the in-page verdict, and it is absent for
+   * a stored secret, which is committed blind.
+   */
   readonly resolution?: FillResolution;
   /** What the widget was showing when it chose, capped at ten labels. */
   readonly offered?: readonly string[];
@@ -90,14 +93,6 @@ export interface FillSuccess {
     readonly role: string;
   };
   /**
-   * One plain sentence a caller can act on without re-deriving it.
-   *
-   * Present only when the committed value differs from the request, which is
-   * precisely when a caller would otherwise have to guess whether its fill
-   * worked.
-   */
-  readonly note?: string;
-  /**
    * What the engine tried on the way to this result.
    *
    * Present whenever recovery ran, so a caller can see that a control needed
@@ -106,6 +101,39 @@ export interface FillSuccess {
    */
   readonly attempted?: readonly SerializedVerdict[];
 }
+
+/** A verified fill of a control that discloses its value. */
+export interface DisclosedFillSuccess extends FillSuccessBase {
+  readonly committed: string;
+  /** What the caller asked for, as it was expressed. */
+  readonly requested?: string;
+  /**
+   * One plain sentence a caller can act on without re-deriving it.
+   *
+   * Present only when the committed value differs from the request, which is
+   * precisely when a caller would otherwise have to guess whether its fill
+   * worked.
+   */
+  readonly note?: string;
+  readonly withheld?: never;
+}
+
+/**
+ * A verified fill of a control that withholds its value.
+ *
+ * Reports the in-page verdict in place of `committed`, and echoes the value in
+ * none of `committed`, `requested`, or `note`: a result that cannot carry the
+ * value cannot leak it into a ledger, a log, or a model payload.
+ */
+export interface WithheldFillSuccess extends FillSuccessBase {
+  readonly withheld: WithheldCommit;
+  readonly committed?: never;
+  readonly requested?: never;
+  readonly note?: never;
+}
+
+/** Verified fill result. */
+export type FillSuccess = DisclosedFillSuccess | WithheldFillSuccess;
 
 /** Typed fill failure with model-actionable observed state. */
 export interface FillFailure {
@@ -300,16 +328,39 @@ const FAILURE_TEMPLATE_DEFINITIONS = {
       requiredDetails: ['observed'],
       capability: null,
     },
+    'value-withheld': {
+      hint: () =>
+        'This control withholds its contents, so a date or choice cannot be confirmed from it. Send the value as plain text in the format its placeholder or pattern shows.',
+      requiredDetails: ['withheld'],
+      capability: 'commitText',
+      emittedBy: ['date', 'option'],
+    },
+    'withheld-value-mismatch': {
+      // Branches on the in-page verdict, the one fact a withheld control
+      // offers. None of the three quotes, measures, or hashes the value.
+      hint: (details) =>
+        details.match === 'truncated'
+          ? 'The protected control kept fewer characters than were sent. Check field.max_length and field.pattern in the observation, then send a value that fits.'
+          : details.match === 'different'
+            ? 'The protected control holds a different value than was sent. Re-observe for a validation message before sending another value.'
+            : 'The protected control is empty after entry. Re-observe before concluding the field is unusable; another control may hold the value.',
+      requiredDetails: ['withheld', 'match'],
+      capability: null,
+    },
     'value-rejected-on-release': {
       hint: () =>
         'The value was showing while the widget was open and the page did not keep it once the widget closed. Send everything this widget commits together in a single call.',
-      requiredDetails: [],
+      // Release-loss wording is evidence-gated: only a pass that actually
+      // released a widget may claim the value was lost when it closed.
+      requiredDetails: ['released'],
       capability: null,
     },
     budget: {
       hint: (details) =>
-        `The fill ran out of time before the value settled; the control held ${quoted(details, 'observed')} when it stopped. Re-observe, then set this one field on its own.`,
-      requiredDetails: ['reason', 'observed'],
+        typeof details.observed === 'string'
+          ? `The fill ran out of time before the value settled; the control held ${quoted(details, 'observed')} when it stopped. Re-observe, then set this one field on its own.`
+          : 'The fill ran out of time before the value settled, and this control withholds its contents, so what it held cannot be shown. Re-observe, then set this one field on its own.',
+      requiredDetails: ['reason'],
       capability: null,
     },
   },
@@ -325,7 +376,7 @@ const FAILURE_TEMPLATE_DEFINITIONS = {
     'overlay-still-open': {
       hint: () =>
         'The value is set but an overlay is still open and may block the page. Press on with the next action; if a click reports the element is hidden, re-observe first.',
-      requiredDetails: [],
+      requiredDetails: ['stillOpen'],
       capability: null,
     },
   },

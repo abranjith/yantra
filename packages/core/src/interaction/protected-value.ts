@@ -145,6 +145,15 @@ export function committedText(value: CommittedValue): string | null {
   return value.kind === 'disclosed' ? value.text : null;
 }
 
+/**
+ * True when a read found nothing in the control.
+ *
+ * A protected control answers through `present`, never through its text.
+ */
+export function isEmptyRead(value: CommittedValue): boolean {
+  return value.kind === 'disclosed' ? value.text.trim().length === 0 : !value.present;
+}
+
 /** The success verdict of a withheld read, or null when it did not verify. */
 export function verifiedMatch(value: WithheldValue): 'exact' | 'reformatted' | null {
   return value.match === 'exact' || value.match === 'reformatted' ? value.match : null;

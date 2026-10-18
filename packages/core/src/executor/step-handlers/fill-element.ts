@@ -191,7 +191,11 @@ export async function driveFillElement(
   return {
     kind: 'completed',
     details: {
-      committed: outcome.committed,
+      // A protected control reports its in-page verdict; its value is never
+      // a step detail, so it never reaches the run report.
+      ...(outcome.withheld === undefined
+        ? { committed: outcome.committed }
+        : { withheld: { reason: outcome.withheld.reason, verdict: outcome.withheld.verdict } }),
       driver: outcome.driver,
       dismissed: outcome.dismissed,
     },

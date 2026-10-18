@@ -26,6 +26,11 @@ export const OWNERS = [
   'FEAT-054',
   'FEAT-055',
   'FEAT-056',
+  // Not a feature yet: native `<input type="date">` never takes the typed
+  // value in real Chrome (TODO: "Native <input type="date"> reports
+  // WIDGET_NOT_COMMITTED"). Named for the capability so the expectations it
+  // gates have an owner to flip; a planned feature ID replaces it.
+  'native-date-entry',
 ] as const;
 
 export type Owner = (typeof OWNERS)[number];
@@ -39,9 +44,9 @@ export type Owner = (typeof OWNERS)[number];
  * never by editing the expectation.
  */
 export const PENDING_OWNERS: ReadonlySet<Owner> = new Set<Owner>([
-  // FEAT-056 verifies protected and other controls whose readback differs
-  // from the typed value; until it lands they report not committed.
-  'FEAT-056',
+  // Native date inputs stay empty after entry; until that lands they report
+  // not committed and the full-form run stays partial.
+  'native-date-entry',
 ]);
 
 /** The verdict of one matcher on one measured value. */

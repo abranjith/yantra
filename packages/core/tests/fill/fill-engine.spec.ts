@@ -11,7 +11,9 @@ import {
   type WidgetTarget,
 } from '../../src/index.js';
 import { createRunState } from '../../src/interaction/escalation.js';
+import { disclosed, type CommittedValue } from '../../src/interaction/protected-value.js';
 import type { WidgetPort } from '../../src/widgets/types.js';
+import { readCommittedValue } from '../../src/widgets/verify.js';
 import { countingPort } from '../support/gauntlet.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
@@ -28,6 +30,11 @@ function fillFailureFor(cause: CauseFor<'WIDGET_NOT_COMMITTED'>, details: Record
     'The control did not commit the value.',
     details,
   );
+}
+
+/** True when a disclosed read contains `text`; a withheld read never does. */
+function holds(value: CommittedValue, text: string): boolean {
+  return value.kind === 'disclosed' && value.text.includes(text);
 }
 
 function target(port: WidgetTestPort, selector: string, role: string, name: string): WidgetTarget {
@@ -903,7 +910,7 @@ describe('@no-llm reactive suggestion handling', () => {
 
     expect(outcome).toMatchObject({
       kind: 'no-suggestions',
-      committed: 'quiet room',
+      committed: { kind: 'disclosed', text: 'quiet room' },
       dismissed: false,
     });
   });
@@ -921,11 +928,15 @@ describe('@no-llm commit-and-dismiss lifecycle', () => {
       popup.style.display = 'none';
     });
 
-    const outcome = await dismissWidget(port, field, '2026-08-21', (value) =>
-      value.includes('2026-08-21'),
+    const outcome = await dismissWidget(port, field, disclosed('2026-08-21'), (value) =>
+      holds(value, '2026-08-21'),
     );
 
-    expect(outcome).toMatchObject({ ok: true, dismissed: true, committed: '2026-08-21' });
+    expect(outcome).toMatchObject({
+      ok: true,
+      dismissed: true,
+      committed: disclosed('2026-08-21'),
+    });
   });
 
   it('reports a typed dismissal failure when Escape reverts the value', async () => {
@@ -948,11 +959,18 @@ describe('@no-llm commit-and-dismiss lifecycle', () => {
     });
     const field = target(port, '#dates', 'textbox', 'Dates');
 
-    const outcome = await dismissWidget(port, field, '2026-08-21', (value) =>
-      value.includes('2026-08-21'),
+    const outcome = await dismissWidget(port, field, disclosed('2026-08-21'), (value) =>
+      holds(value, '2026-08-21'),
     );
 
-    expect(outcome).toMatchObject({ ok: false, errorCode: 'WIDGET_DISMISS_FAILED' });
+    // Changed pin (FEAT-056 TASK-004): the overlay closed and the value went
+    // with it. That is a verified loss on release, not an overlay that is
+    // still open — the old WIDGET_DISMISS_FAILED hint said "the value is set".
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      details: { released: true, observed: '', committed: '' },
+    });
   });
 });
 
@@ -1438,8 +1456,351 @@ describe('@no-llm secret fills are excluded from editee resolution', () => {
       },
     );
 
-    expect(outcome).toMatchObject({ ok: true, driver: 'plain-text', committed: '' });
+    expect(outcome).toMatchObject({
+      ok: true,
+      driver: 'plain-text',
+      withheld: { reason: 'stored_secret', verdict: 'unchecked' },
+    });
+    expect(outcome).not.toHaveProperty('committed');
     expect(observations).toEqual([]);
     expect(JSON.stringify(outcome)).not.toContain('hunter2');
+  });
+});
+
+/** Fill one protected input with caller-supplied text through the whole engine. */
+async function fillProtected(
+  markup: string,
+  text: string,
+  setup?: (input: HTMLInputElement) => void,
+): Promise<{ readonly outcome: Awaited<ReturnType<typeof fillField>>; readonly reads: number }> {
+  const port = new WidgetTestPort(markup);
+  const input = port.document.querySelector('input')!;
+  setup?.(input);
+  const field = target(port, 'input', 'textbox', input.getAttribute('aria-label') ?? 'Field');
+  const evaluateOn = vi.spyOn(port, 'evaluateOn');
+  const outcome = await fillField(
+    port,
+    { field: field.name, target: field },
+    { kind: 'text', text },
+    budget(port),
+  );
+  return { outcome, reads: evaluateOn.mock.calls.length };
+}
+
+/** Every WIDGET_NOT_COMMITTED failure says what the control holds exactly one way. */
+function expectOneObservation(outcome: Awaited<ReturnType<typeof fillField>>): void {
+  expect(outcome.ok).toBe(false);
+  if (outcome.ok || outcome.errorCode !== 'WIDGET_NOT_COMMITTED') return;
+  const carries = ['observed', 'withheld'].filter((key) => key in outcome.details);
+  expect(carries).toHaveLength(1);
+}
+
+describe('@no-llm fill failures named by what was observed', () => {
+  it.each([
+    [
+      'truncated',
+      (input: HTMLInputElement) =>
+        input.addEventListener('input', () => {
+          input.value = input.value.slice(0, 4);
+        }),
+      'field.max_length',
+    ],
+    [
+      'different',
+      (input: HTMLInputElement) =>
+        input.addEventListener('input', () => {
+          input.value = 'rewritten-by-page';
+        }),
+      'validation message',
+    ],
+    [
+      'empty',
+      (input: HTMLInputElement) =>
+        input.addEventListener('input', () => {
+          input.value = '';
+        }),
+      'empty after entry',
+    ],
+  ] as const)(
+    'fails a protected field the page left %s by its in-page verdict',
+    async (match, setup, advice) => {
+      const { outcome } = await fillProtected(
+        '<input type="password" aria-label="Password" maxlength="4" />',
+        'Synth3tic!',
+        setup,
+      );
+
+      expect(outcome).toMatchObject({
+        ok: false,
+        errorCode: 'WIDGET_NOT_COMMITTED',
+        details: { withheld: 'password', match },
+      });
+      if (outcome.ok) return;
+      expect(outcome.details).not.toHaveProperty('observed');
+      expect(outcome.details).not.toHaveProperty('committed');
+      expect(String(outcome.details.hint)).toContain(advice);
+      // The full ladder still ran and is still reported.
+      expect(verdicts(outcome.details.attempted).map((record) => record.strategy)).toEqual(
+        expect.arrayContaining(['overtype', 'clear-then-type', 'native-setter']),
+      );
+      for (const fragment of ['Synth3tic', 'Synt', 'rewritten-by-page']) {
+        expect(JSON.stringify(outcome)).not.toContain(fragment);
+      }
+      expectOneObservation(outcome);
+    },
+    20_000,
+  );
+
+  it('names a disclosed value the page dropped with no release as refused, not lost on release', async () => {
+    // Typing verifies, then the page clears the box a beat later. Nothing was
+    // opened or closed, so "lost when the widget closed" would be fiction.
+    const { outcome } = await fillProtected('<input aria-label="Nickname" />', 'Ada', (input) =>
+      input.addEventListener('input', () => {
+        if (input.value.length > 0) setTimeout(() => (input.value = ''), 50);
+      }),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      details: { observed: '', committed: '' },
+    });
+    if (outcome.ok) return;
+    expect(outcome.details).not.toHaveProperty('released');
+    expect(String(outcome.details.hint)).toContain('rather than what was sent');
+    expectOneObservation(outcome);
+  });
+
+  it('names a withheld value the page dropped with no release by its verdict', async () => {
+    const { outcome } = await fillProtected(
+      '<input type="password" aria-label="Password" />',
+      'Synth3tic!pw',
+      (input) =>
+        input.addEventListener('input', () => {
+          if (input.value.length > 0) setTimeout(() => (input.value = ''), 50);
+        }),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      details: { withheld: 'password', match: 'empty', present: false },
+    });
+    expectOneObservation(outcome);
+    expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
+  });
+
+  it('reports a verified loss on release with the release as a declared fact', async () => {
+    const port = new WidgetTestPort(
+      '<input id="pw" type="password" aria-label="PIN" aria-controls="pad" value="4821">' +
+        '<div id="pad" role="dialog"><button>1</button><button>2</button></div>',
+    );
+    const input = port.document.querySelector<HTMLInputElement>('#pw')!;
+    const pad = port.document.querySelector<HTMLElement>('#pad')!;
+    port.document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        input.value = '';
+        pad.style.display = 'none';
+      }
+    });
+    const field = target(port, '#pw', 'textbox', 'PIN');
+    const before = await readCommittedValue(port, field, { expected: '4821' });
+
+    const outcome = await dismissWidget(
+      port,
+      field,
+      before,
+      (value) => value.kind === 'withheld' && value.match === 'exact',
+      { expected: '4821' },
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      details: { released: true, withheld: 'password', match: 'empty', present: false },
+    });
+    if (outcome.ok) return;
+    expect(outcome.details).not.toHaveProperty('observed');
+    expect(outcome.details).not.toHaveProperty('committed');
+    expect(JSON.stringify(outcome)).not.toContain('4821');
+  });
+
+  it('keeps an overlay that will not close as an overlay failure', async () => {
+    const port = new WidgetTestPort(
+      '<input id="dates" aria-label="Dates" aria-controls="picker" value="2026-08-21">' +
+        '<div id="picker" role="dialog"><button>21</button><button>22</button></div>',
+    );
+    const field = target(port, '#dates', 'textbox', 'Dates');
+
+    const outcome = await dismissWidget(port, field, disclosed('2026-08-21'), (value) =>
+      holds(value, '2026-08-21'),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_DISMISS_FAILED',
+      details: { stillOpen: 'Dates', committed: '2026-08-21' },
+    });
+  });
+
+  it('refuses to confirm a date from a withheld control, and the plain-text move works', async () => {
+    const markup = '<input autocomplete="cc-exp" placeholder="MM/YY" aria-label="Expiry" />';
+    const port = new WidgetTestPort(markup);
+    const field = target(port, 'input', 'textbox', 'Expiry');
+
+    const asDate = await fillField(
+      port,
+      { field: 'Expiry', target: field },
+      { kind: 'date', date: '2028-12-01' },
+      budget(port),
+    );
+
+    expect(asDate).toMatchObject({
+      ok: false,
+      errorCode: 'WIDGET_NOT_COMMITTED',
+      retryable: false,
+      details: { withheld: 'autocomplete' },
+    });
+    if (asDate.ok) return;
+    expect(String(asDate.details.hint)).toContain('Send the value as plain text');
+    expectOneObservation(asDate);
+
+    // The hint's move: the same value as plain text, verified in page.
+    const { outcome: asText } = await fillProtected(markup, '12/28');
+    expect(asText).toMatchObject({
+      ok: true,
+      withheld: { reason: 'autocomplete', verdict: 'exact' },
+    });
+  }, 20_000);
+});
+
+describe('@no-llm protected fields filled with caller-supplied data', () => {
+  it('verifies a plain password with no popup instead of reporting it uncommitted', async () => {
+    // G5: the typing rung passed on the raw value, then the watch-and-select
+    // rung found no suggestions and re-read the control through a projection
+    // that answered '' for every protected field — reported as a value the
+    // page dropped on release, when no widget had opened at all.
+    const { outcome } = await fillProtected(
+      '<input type="password" aria-label="Password" />',
+      'Synth3tic!pw',
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      driver: 'plain-text',
+      withheld: { reason: 'password', verdict: 'exact' },
+      resolution: 'exact',
+      dismissed: false,
+    });
+    for (const key of ['committed', 'requested', 'note']) {
+      expect(outcome).not.toHaveProperty(key);
+    }
+    // The historical shape, unchanged: watch-and-select still runs and finds
+    // no suggestions. Only its readback became honest.
+    const ran = verdicts(outcome.ok ? outcome.attempted : undefined)
+      .filter((record) => record.verdict === 'succeeded')
+      .map((record) => record.strategy);
+    expect(ran).toEqual(expect.arrayContaining(['enter-text', 'watch-and-select']));
+    expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
+  });
+
+  it.each([
+    ['new-password', 'Synth3tic!pw'],
+    ['one-time-code', '123456'],
+    ['cc-csc', '123'],
+    ['current-password', 'Pass phrase with spaces'],
+  ])('verifies an autocomplete=%s field exactly', async (token, value) => {
+    const { outcome } = await fillProtected(
+      `<input autocomplete="${token}" aria-label="Protected" />`,
+      value,
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      withheld: { reason: 'autocomplete', verdict: 'exact' },
+      resolution: 'exact',
+    });
+    expect(outcome).not.toHaveProperty('committed');
+    expect(outcome).not.toHaveProperty('requested');
+    expect(outcome).not.toHaveProperty('note');
+    expect(JSON.stringify(outcome)).not.toContain(value);
+  });
+
+  it('accepts a card-number mask that inserts spaces as reformatted', async () => {
+    const { outcome } = await fillProtected(
+      '<input autocomplete="cc-number" aria-label="Card number" />',
+      '4111111111111111',
+      (input) =>
+        input.addEventListener('input', () => {
+          const digits = input.value.replace(/\D/gu, '');
+          input.value = digits.replace(/(\d{4})(?=\d)/gu, '$1 ');
+        }),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      withheld: { reason: 'autocomplete', verdict: 'reformatted' },
+      resolution: 'reformatted',
+    });
+    expect(JSON.stringify(outcome)).not.toContain('4111');
+  });
+
+  it('never accepts a protected field that holds more than was sent', async () => {
+    // Presence is not proof: a control that keeps an old value in front of
+    // whatever is typed holds something, and it is not the caller's value.
+    const { outcome } = await fillProtected(
+      '<input type="password" aria-label="Password" />',
+      'Synth3tic!pw',
+      (input) =>
+        input.addEventListener('input', () => {
+          if (!input.value.startsWith('oldvalue')) input.value = `oldvalue${input.value}`;
+        }),
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
+    expect(JSON.stringify(outcome)).not.toContain('oldvalue');
+  });
+
+  it('keeps a disclosed plain text fill at exactly the page reads it took before', async () => {
+    // Measured against the engine as it stood before protected-value
+    // verification (84 then, under this same clock): the withheld read
+    // replaces a read and adds none. The clock steps 50 ms per reading so the
+    // suggestion watch polls a fixed number of times; on a wall clock the
+    // count follows machine load and would pin nothing.
+    let tick = 0;
+    const port = new WidgetTestPort('<input id="c" aria-label="City" />', () => (tick += 50));
+    const field = target(port, '#c', 'textbox', 'City');
+    const evaluateOn = vi.spyOn(port, 'evaluateOn');
+
+    const outcome = await fillField(
+      port,
+      { field: 'City', target: field },
+      { kind: 'text', text: 'Lyon' },
+      { deadlineMs: port.now() + 10_000, maxActions: 8 },
+    );
+
+    expect(outcome).toMatchObject({ ok: true, committed: 'Lyon', resolution: 'exact' });
+    expect(evaluateOn).toHaveBeenCalledTimes(84);
+  }, 20_000);
+
+  it('commits a stored secret blind, with no page read at all', async () => {
+    const port = new WidgetTestPort('<input id="p" type="password" aria-label="Password" />');
+    const field = target(port, '#p', 'textbox', 'Password');
+    const evaluateOn = vi.spyOn(port, 'evaluateOn');
+
+    const outcome = await fillSecretField(
+      port,
+      { field: 'Password', target: field },
+      'CANARY-super-secret',
+      budget(port),
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      withheld: { reason: 'stored_secret', verdict: 'unchecked' },
+    });
+    expect(evaluateOn).not.toHaveBeenCalled();
+    expect(JSON.stringify(outcome)).not.toContain('CANARY-super-secret');
   });
 });
