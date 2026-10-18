@@ -153,55 +153,55 @@
     },
     {
       "path": "e2e/task-fidelity/progress-support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-autocomplete.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-clickthrough.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-freeze-publishes.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-partial-batch.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-stall-ignored.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-progress-stall-recovers.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-turn-limit-recovers.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-turn-limit-stops.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -219,7 +219,7 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/research-progress-observe.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -327,7 +327,7 @@
     },
     {
       "path": "packages/agent/src/runtime/progress-ledger.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -339,7 +339,7 @@
     },
     {
       "path": "packages/agent/src/runtime/recovery.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -399,7 +399,7 @@
     },
     {
       "path": "packages/agent/tests/boundaries/encoding.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -441,25 +441,25 @@
     },
     {
       "path": "packages/agent/tests/runtime/orchestrator-progress.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "packages/agent/tests/runtime/orchestrator-turn-limit.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "packages/agent/tests/runtime/progress-ledger.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "packages/agent/tests/runtime/progress-test-support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -471,7 +471,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/recovery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
