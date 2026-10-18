@@ -129,11 +129,7 @@ export type ResolveResult =
   | {
       readonly kind: 'failure';
       readonly reason:
-        | 'not_found'
-        | 'ambiguous'
-        | 'hit_intercepted'
-        | 'not_actionable'
-        | 'frame_detached';
+        'not_found' | 'ambiguous' | 'hit_intercepted' | 'not_actionable' | 'frame_detached';
       readonly candidatesTried: readonly CandidateAttempt[];
       readonly lastError?: Error;
       readonly durationMs: number;
@@ -229,12 +225,7 @@ export interface LocatorResolutionEvent {
   readonly candidates_tried: number;
   readonly winning_index: number | null;
   readonly outcome:
-    | 'success'
-    | 'not_found'
-    | 'ambiguous'
-    | 'hit_intercepted'
-    | 'not_actionable'
-    | 'frame_detached';
+    'success' | 'not_found' | 'ambiguous' | 'hit_intercepted' | 'not_actionable' | 'frame_detached';
   readonly duration_ms: number;
   readonly frame_id: string;
 }

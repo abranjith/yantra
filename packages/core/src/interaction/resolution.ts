@@ -44,11 +44,7 @@ export const MATCH_TIERS: readonly Exclude<MatchTier, 'ref'>[] = [
  * chosen, rather than having to trust that it was.
  */
 export type TieBreakRung =
-  | 'enabled'
-  | 'within-container'
-  | 'preferred-role'
-  | 'preferred-group'
-  | 'same-name-and-role';
+  'enabled' | 'within-container' | 'preferred-role' | 'preferred-group' | 'same-name-and-role';
 
 /** Inputs that let the ladder narrow a tie without guessing at intent. */
 export interface ResolveInteractableOptions {

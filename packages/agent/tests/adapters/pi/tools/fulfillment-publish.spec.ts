@@ -186,14 +186,13 @@ describe('@no-llm result_publish judges a do run per item (FEAT-054)', () => {
 
   it('reads the form census only when the contract declares a fill, exactly once', async () => {
     const source = {
-      census: vi.fn(
-        (): Promise<FillCensus> =>
-          Promise.resolve({
-            epoch: 1,
-            host: 'forms.example.test',
-            complete: true,
-            controls: [{ ref: 'e1', groupKey: null, label: 'Email', exemption: null }],
-          }),
+      census: vi.fn((): Promise<FillCensus> =>
+        Promise.resolve({
+          epoch: 1,
+          host: 'forms.example.test',
+          complete: true,
+          controls: [{ ref: 'e1', groupKey: null, label: 'Email', exemption: null }],
+        }),
       ),
     };
     const without = await setup('do', ACTIONS, source);

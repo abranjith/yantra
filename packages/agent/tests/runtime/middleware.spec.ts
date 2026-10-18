@@ -765,12 +765,10 @@ describe('@no-llm middleware model-supplied value preservation', () => {
     await navigate.execute({ q: `https://example.com/track?id=${TRACKING}` }, undefined);
 
     const observe = wrapTool(
-      spec(
-        async (): Promise<DomainResult> => ({
-          ok: true,
-          model: { digest: `Package ${TRACKING} was delivered.` },
-        }),
-      ),
+      spec(async (): Promise<DomainResult> => ({
+        ok: true,
+        model: { digest: `Package ${TRACKING} was delivered.` },
+      })),
       services,
     );
     const result = await observe.execute({ q: 'observe' }, undefined);

@@ -95,8 +95,7 @@ export interface AgentPublishContent {
   readonly title: string;
   readonly overview: string;
   readonly key_findings: readonly (
-    | string
-    | { readonly text: string; readonly sources?: readonly string[] }
+    string | { readonly text: string; readonly sources?: readonly string[] }
   )[];
   readonly sections?: readonly {
     readonly heading: string;

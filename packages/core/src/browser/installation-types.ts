@@ -43,10 +43,7 @@ export type SelectionOrigin = 'invocation' | 'config' | 'default';
 
 /** Why the resolver picked the installation it picked. */
 export type SelectionReason =
-  | 'managed-preferred'
-  | 'managed-explicit'
-  | 'system-discovery'
-  | 'custom-path';
+  'managed-preferred' | 'managed-explicit' | 'system-discovery' | 'custom-path';
 
 // ---------------------------------------------------------------------------
 // Executable identity
@@ -251,9 +248,7 @@ export interface DriverCompatibilityDescriptor {
 // ---------------------------------------------------------------------------
 
 export type ProbeFailureClass =
-  | 'missing-runtime-libraries'
-  | 'capability-failure'
-  | 'launch-environment';
+  'missing-runtime-libraries' | 'capability-failure' | 'launch-environment';
 
 export interface CapabilityEvidence {
   readonly capability: CapabilityId;
@@ -395,12 +390,7 @@ export interface BrowserReadyRuntimeEvent {
 
 /** Which startup step was in flight when a launch attempt threw. */
 export type BrowserStartupPhase =
-  | 'resolution'
-  | 'reservation'
-  | 'compatibility'
-  | 'profile'
-  | 'identity-revalidation'
-  | 'launch';
+  'resolution' | 'reservation' | 'compatibility' | 'profile' | 'identity-revalidation' | 'launch';
 
 /** Closed classification of why a startup attempt refused. */
 export type BrowserStartupFailureKind =

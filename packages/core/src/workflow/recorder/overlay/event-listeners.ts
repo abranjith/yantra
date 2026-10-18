@@ -21,15 +21,7 @@ import { buildElementDescriptor } from './descriptor-builder.js';
 // ---------------------------------------------------------------------------
 
 type InputTypeHint =
-  | 'text'
-  | 'email'
-  | 'password'
-  | 'tel'
-  | 'number'
-  | 'url'
-  | 'search'
-  | 'textarea'
-  | 'other';
+  'text' | 'email' | 'password' | 'tel' | 'number' | 'url' | 'search' | 'textarea' | 'other';
 
 interface RawEventPayload {
   kind: 'click' | 'fill' | 'navigate' | 'keydown_enter';

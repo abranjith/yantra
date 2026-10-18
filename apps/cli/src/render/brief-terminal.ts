@@ -225,7 +225,7 @@ function sectionsBlock(sections: readonly Section[], c: ChalkInstance, width: nu
 function renderSectionBody(bodyMd: string, md: Marked): string {
   const lines = bodyMd.split(/\r?\n/u);
   const output: string[] = [];
-  for (let index = 0; index < lines.length; ) {
+  for (let index = 0; index < lines.length;) {
     if (lines[index]!.trim().startsWith('|')) {
       const table: string[] = [];
       while (index < lines.length && lines[index]!.trim().startsWith('|')) {
