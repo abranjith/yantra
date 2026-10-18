@@ -33,6 +33,9 @@ cannot be inspected or masked before transmission. Vision assist is therefore di
 is exposed only through a conditionally registered agent tool after explicit stored consent, and
 persists every transmitted PNG in the owning run directory. Stable logs retain only capture
 metadata; the capture file and raw provider session remain private, capture-bearing artifacts.
+A screenshot the user asks for as a deliverable is a different capability: `browser_capture` saves
+a clean PNG under the run directory and returns only its path and size, so its pixels never reach
+a model provider and it needs no stored grant.
 
 ```mermaid
 flowchart LR
@@ -1255,8 +1258,10 @@ editing tools are disabled; each session receives exactly its command-profile Ya
 allowlist.
 
 All registered tools pass through one provider-neutral middleware pipeline. Ordinary results take
-the text-only path. The screenshot tool additionally takes the single image path, where middleware
-re-opens and verifies the private artifact before the Pi adapter can construct an image block:
+the text-only path, and so does the local deliverable capture `browser_capture`, whose result is
+metadata only. The Vision Assist screenshot tool, `browser_screenshot`, additionally takes the
+single image path, where middleware re-opens and verifies the private artifact before the Pi
+adapter can construct an image block. Middleware permits image content from no other tool:
 
 ```mermaid
 flowchart LR
@@ -1361,7 +1366,7 @@ derives `interact` when any click or fill tool is present, `read` for any other 
 and `none` otherwise. The orchestrator passes that value to `buildAgentUserPrompt`
 (`packages/agent/src/runtime/prompt.ts`), which renders the matching scope line. The `read` line
 tells the model to report a goal that needs clicking or filling and to name `yantra do` as the next
-step. The recorded prompt version is `agent-v11`; the system text retains v9's `Scope` section,
+step. The recorded prompt version is `agent-v13`; the system text retains v9's `Scope` section,
 which makes a source the goal names the place the answer comes from, requires a stated condition
 to be confirmed or reported as unconfirmed, and
 forbids explaining missing data with a cause no tool reported. It also treats following a link a
@@ -1369,8 +1374,10 @@ result offered as progress rather than a fallback.
 The `research` and `do` addenda teach evidence-ID citations, tables with `row_sources`, condition
 statuses, and explicit `fulfillment.unmet` items. The `do` addendum also teaches the action terms:
 a task that changes or captures a page declares `deliverable: "actions"` and puts "every field", a
-screenshot, and "do not submit" in `fill`, `artifacts`, and `effects` rather than in `notes`.
-Older manifest prompt versions remain valid.
+screenshot, and "do not submit" in `fill`, `artifacts`, and `effects` rather than in `notes`. It
+tells the model to take a requested screenshot with `browser_capture` after its last page action,
+and that it will be told the image's path, not shown it. Older manifest prompt versions remain
+valid.
 
 `task_contract` (`packages/agent/src/adapters/pi/tools/task-contract.ts`) is registered for
 `research` and `do` only. It records what the goal requires: the deliverable (`table`, `answer`,
@@ -1388,9 +1395,15 @@ that does not order by one of its fields, and any action term in a `research` ru
 `INVALID_INPUT`. The spec sets `windDownExempt`, so `BudgetTracker.reserveCall` skips the soft
 wall-clock refusal for `task_contract` alone; the hard wall clock and every other cap still apply.
 When a declared artifact cannot be produced in this run, the result carries `capability_gaps`
-from `RunServices.contractCapabilities`, which defaults to `visionContractCapabilities` in
-`runtime/contract-capabilities.ts`: `viewport` and `element` are capturable exactly when Vision
-Assist is available, and `full_page` is always `scope_unsupported`.
+from `RunServices.contractCapabilities`, which defaults to `deliverableContractCapabilities` in
+`runtime/contract-capabilities.ts`, built over the run's deliverable capture decision. Every scope
+is capturable exactly when deliverable capture is available. Otherwise each declared screenshot
+carries that decision's first reason code (`suppressed_by_flag`, `no_browser`, or
+`no_interaction_tools`). Vision Assist availability does not affect artifact items. After the
+contract echo, the orchestrator emits one `capability_gap` progress event for each declared
+screenshot the run cannot deliver, once per item across revisions. The event carries an ASCII
+`Cannot deliver: ...; continuing with the other requirements.` line, which the CLI writes to
+stderr, and the run continues.
 
 The orchestrator constructs one `TaskContractStore` per run, and `RunServices.contract` requires
 it. A construction site that forgot the store would silently drop the missing-contract notice.
@@ -1525,7 +1538,10 @@ carry it.
   `browser_fill_form` and `browser_fill_element` through one shared helper, with ref, resolved
   field name, group key, and how many caller fields the entry covers), `click_executed` (with the
   target's `classifySubmitTarget` signal), `submit_refused`, and `capture` (from
-  `browser_screenshot`, with scope, run-relative path, SHA-256, and bytes). A failed fill or click
+  `browser_screenshot` or `browser_capture`, with the producer, scope, run-relative path and
+  SHA-256 of the first file, and total bytes). A `browser_capture` entry also carries its file
+  count, whether the set is complete, and the whole capture set, which stays in memory and is
+  never logged. A failed fill or click
   records nothing. `browser_click` reads `submitFacts` before every click, because a click that
   submits or navigates leaves no element to read afterwards. Each entry is stamped with a monotonic
   `seq`, its time, and the controller's
@@ -1545,8 +1561,13 @@ carry it.
   It judges, in order, the deliverable, each filter, the fill, each artifact, and
   `effects.submit`, each as `met`, `unmet`, or `not_applicable`. The deliverable and filters reuse
   FEAT-053's delivery gaps and reconciled conditions. An `actions` deliverable needs at least one
-  committed fill or click on a required host. An artifact needs a capture of a satisfying scope
-  recorded after the last committed action, on that action's epoch. `effects.submit` is unmet if
+  committed fill or click on a required host. An artifact needs a `browser_capture` capture of a
+  satisfying scope recorded after the last committed action, on that action's epoch. A Vision
+  Assist capture carries Yantra's marks, so it stays in the ledger as evidence but never meets an
+  artifact. A `full_page` item also needs a complete set; a clipped or truncated one leaves it
+  unmet with `capture_incomplete`, though its first tile still meets a `viewport` item. An item
+  with no capture and a capability gap gives its reason in plain words, for example
+  `not captured (screenshots are off for this run (--no-screenshots))`. `effects.submit` is unmet if
   any executed click was submit-class. `censusFillEvaluator(census)` measures the fill: `listed`
   matches committed field names by FEAT-053's name grammar; `all_eligible` needs a commit for every
   eligible control or group on the census epoch. With no census, the fill item is `unmet` with
@@ -1597,7 +1618,11 @@ budget ended it and `requirements_unmet` otherwise, and a handoff by its blocker
 and a `report.md` status, all from that row. `exitCodeForAgenticOutcome` reads the same row.
 `outcomeFirstLine` renders the bounded terminal line: `Fulfilled: N of N requirements met`, or
 `Partial:` with at most two unmet items and `+N more`, followed by the Brief or report path. A
-teardown error still demotes a published run to `failed`. `maybePromoteTrace` saves a `--save-as`
+published `do` outcome also carries the run's saved captures, read from the ledger at settlement:
+`artifacts` (one generic artifact reference per file) and `captureSets` (one per `browser_capture`
+call, with its labels). The CLI prints one `Screenshot: <absolute path>` line per set under the
+first line, at most three and then `+N more`, and `do --json` adds `artifacts` to the
+`agent_outcome` record. A teardown error still demotes a published run to `failed`. `maybePromoteTrace` saves a `--save-as`
 workflow only for a `fulfilled` run, and lists the met artifact items it left out as `omitted`,
 because no workflow step captures a screenshot.
 
@@ -1605,7 +1630,8 @@ because no workflow step captures a screenshot.
 flowchart TD
   Fill[browser_fill_form and browser_fill_element] -->|verified commits| Ledger[ActionLedger, epoch-stamped]
   Click[browser_click] -->|executed clicks with submit signal| Ledger
-  Shot[browser_screenshot] -->|captures| Ledger
+  Capture[browser_capture] -->|clean capture sets, the only artifact producer| Ledger
+  Shot[browser_screenshot] -->|marked captures, evidence only| Ledger
   Click --> Policy{effects.submit forbidden<br/>and submit-class?}
   Nested[workflow_run] --> Policy
   Policy -->|yes: SUBMIT_FORBIDDEN before consent| Ledger
@@ -1707,6 +1733,13 @@ At teardown the summary also receives `PagePool.stats()` (`browser.pool_launches
 `browser.contexts`) and `SearchService.stats()` (`searches.breaker_skipped`,
 `searches.peak_concurrency`); every one of these `RunHealth` fields is optional, so older run
 directories still validate.
+
+**Capture decisions are recorded before the first call.** The orchestrator hands the run's two
+capture decisions (see "Vision-assist boundary" and "Local deliverable capture") to the ledger
+before the tool catalog exists, and each successful `browser_capture` counts its call, files, and
+bytes. The summary then carries an optional `capture` block: each decision's `available` flag and
+closed reason codes, plus `deliverable_calls`, `deliverable_files`, and `deliverable_bytes`. Like
+the rest of the document, it holds no path or URL.
 
 **Three readers, at three moments.**
 
@@ -1986,27 +2019,102 @@ model registry declares image input for the selected provider/model; `--no-scree
 and the context is not zero-LLM. A missing or malformed preference, registry miss, text-only model,
 non-browser profile, suppression flag, scheduled/daemon execution, or nested workflow execution
 therefore removes the capability from both the provider-visible catalog and its catalog hash rather
-than returning a runtime denial. The CLI prints the raw-pixel/provider/local-retention warning before
-writing an enabled grant; Ollama changes the destination wording but does not remove the warning.
+than returning a runtime denial. The decision also lists every false condition as a reason code, in
+a fixed order (`grant_missing`, `model_no_image_input`, `no_browser_tools`, `suppressed_by_flag`,
+`zero_llm`), and the manifest and `run-health.json` record it beside the deliverable capture
+decision. The reasons are additive; the gate is the same five-condition AND. The CLI prints the
+raw-pixel/provider/local-retention warning before writing an enabled grant; Ollama changes the
+destination wording but does not remove the warning.
 
 Responsibilities stay on the existing dependency seams:
 
 - `packages/core` owns the browser-facing primitives: viewport or `eNN`-scoped CDP PNG capture,
   top-level document epochs, the `SensitiveScreenLatch`, and the temporary set-of-marks overlay.
   The overlay contains only Yantra refs, is epoch-guarded around capture, and is removed and checked
-  in mandatory cleanup.
+  in mandatory cleanup. The epoch guard lives in `browser/epoch-guard.ts`
+  (`withEpochGuardedCapture`), which the deliverable capture also uses, so both paths share one
+  definition of "the page changed".
 - `packages/agent` owns the provider-neutral five-condition availability value, conditional tool
   registration, dedicated capture accounting, private artifact creation, image-result validation,
   and stable audit projection. Only the Pi adapter translates the validated image into the provider
   SDK's image block.
 - `apps/cli` resolves the effective grant and one-run suppression, emits consent/revocation
-  messaging, and renders capture metadata from `tool-calls.jsonl` as the images the model saw.
+  messaging, and renders capture metadata from `tool-calls.jsonl` in two lists: the images the
+  model saw, and the captures kept on this computer.
 
-The controller's latch is shared by the fill and screenshot tools through the run service graph. A
-host-bound secret fill sets it immediately before the resolved value can be dispatched to the page.
-Capture then fails closed until a readable top-level document epoch differs from the latched epoch;
-clicks, DOM updates, dialogs, timers, and same-document SPA routing do not clear it. Browser teardown
-is the only other clearing path.
+The controller's latch is shared by the fill tools and both capture tools through the run service
+graph. A host-bound secret fill sets it immediately before the resolved value can be dispatched to
+the page. Capture then fails closed until a readable top-level document epoch differs from the
+latched epoch; clicks, DOM updates, dialogs, timers, and same-document SPA routing do not clear it.
+Browser teardown is the only other clearing path.
+
+### Local deliverable capture
+
+When a user asks `yantra do` for a screenshot, the deliverable is a file, not a model input.
+`browser_capture` (`packages/agent/src/adapters/pi/tools/browser-capture.ts`) saves a clean PNG set
+under the run directory and returns metadata only: scope, completeness, labels, and each file's
+run-relative path, dimensions, and bytes. The result has no image content and no SHA-256, so the
+middleware's image gate never applies to it.
+
+Availability is its own run decision, `resolveCaptureCapability` in
+`packages/agent/src/runtime/capture-capability.ts`, resolved next to the Vision decision and before
+the catalog is built. Deliverable capture is available exactly when the run has a browser, its
+profile includes a click or fill tool, and `--no-screenshots` is absent. Otherwise every failing
+condition is recorded, in the order `suppressed_by_flag`, `no_browser`, `no_interaction_tools`.
+The stored grant and the model's image support are not conditions. Only literal `true` inputs
+enable it. `RunServices.capture` carries both decisions. The tool is registered when
+`capture.deliverable.available` is true, the manifest's `agent.capture` records both decisions when
+the session opens, and `run-health.json` records them again at teardown. In practice `do` gets the
+tool, `research` with read-only browsing and `ask` do not, and `--no-screenshots` removes both
+capture tools.
+
+Responsibilities follow the same seams as Vision Assist:
+
+- `packages/core`: `AgentBrowserController.captureDeliverable({ scope, ref, bounds })` refuses with
+  `DeliverableCaptureError('overlay-present')` if the set-of-marks overlay is in the document, then
+  takes every tile inside one `withEpochGuardedCapture`, so a set always comes from one document.
+  `viewport` is the visible viewport at the current scroll offset. `full_page` covers
+  `Page.getLayoutMetrics().cssContentSize`, split into tiles. `element` takes a live ref's border
+  box with `captureBeyondViewport`, so an element below the fold needs no scroll. Content wider
+  than the tile width is clipped and labeled `clipped_width`. Content beyond the part limit is cut
+  and labeled `truncated`. An element outside the viewport is labeled `beyond_viewport`. Either of
+  the first two labels makes the set incomplete. A decoded tile larger than the bounds fails closed
+  as `bounds-exceeded`. The controller returns PNG bytes and never writes files.
+- `packages/agent`: the tool rejects a missing or misplaced ref, then checks for a browser and for
+  the sensitive-screen latch (`SCREENSHOT_SENSITIVE_SCREEN`, the code Vision uses) before reserving
+  anything. It then reserves against a budget separate from Vision's, captures, verifies each PNG
+  signature, and accounts every file's pixels and bytes before writing any of them. Files are
+  `screenshots/capture-<seq>-<sha12>[-p<i>].png`, written at mode 0600 in a 0700 directory, temp then
+  rename. A failure partway removes the files the call already wrote, so a set is all or nothing.
+  The spec sets `windDownExempt`, so the soft wall-clock wind-down does not refuse a capture; the
+  hard deadline, the per-tool timeout, and the capture budget still apply. On success it records
+  one ledger `capture` entry and the run-health counters.
+- `apps/cli`: prints the `capability_gap` line and the `Screenshot:` lines, adds `artifacts` to
+  `do --json`, lists the Brief's captures, and shows these files in `yantra audit` under "Saved
+  captures (kept on this computer, never sent to the model)".
+
+`DEFAULT_BUDGET_LIMITS` sets the deliverable limits: at most 4 calls and 40 MiB per run, 6 files per
+call, and 1,920 x 4,096 pixels and 8 MiB per file. They are refused as
+`deliverable-capture-count`, `deliverable-capture-bytes`, or `deliverable-capture-pixels`. Vision's
+limits are unchanged, and neither tool's calls count against the other's budget.
+
+Both capture tools record what they wrote as the generic artifact reference `ArtifactRef`
+(`packages/protocol/src/schemas/artifact-ref.ts`): `kind: 'screenshot'`, run-relative `path`,
+`sha256`, `mime_type`, `bytes`, optional `width` and `height`, and `sent_to_model`.
+`browser_screenshot` sets `sent_to_model: true` and `browser_capture` sets it to `false`. The
+reference goes on the call's `tool-calls.jsonl` end entry as `artifacts`. Its path must match the
+capture-file grammar and stay inside the run directory. The recorder pairs provider image blocks
+only with references the model was sent. Every reader — the recorder, `yantra audit`, and the
+`report.md` "Captures" section, which adds `sent to model: yes|no` — goes through one normalizer,
+`artifactRefsOf`. It reads an older run's `captures` as references with `sent_to_model: true`,
+because that is the only thing a legacy capture could have been.
+
+A `do` Brief lists each saved file in an optional `artifacts` array (at most 12, built from the
+ledger's `browser_capture` sets; one notice counts any files left out). Vision Assist images are
+never listed. `brief.md` links each file relatively. The inert `brief.html` renders an anchor only
+for a path that matches the capture-file grammar and shows any other value as text, the one
+relative link it allows beside its `http(s)`-only rule. The wording is shared by
+`packages/core/src/brief/captures.ts`.
 
 ### `apps/cli`
 
@@ -2499,6 +2607,43 @@ sequenceDiagram
   Note over Pi,Run: Raw provider session and PNG contain pixels; stable audit/report logs do not
 ```
 
+### Local deliverable screenshot capture
+
+A `do` goal that asks for a screenshot declares it in the contract's `artifacts`. If deliverable
+capture is unavailable, the `Cannot deliver:` line appears right after the contract echo, and the
+item ends unmet with that reason. Otherwise the model calls `browser_capture` after its last page
+action. The PNG files stay in the run directory. The model gets back paths and sizes, and the
+fulfillment evaluation, the Brief, the terminal, and the audit all cite the same files.
+
+```mermaid
+sequenceDiagram
+  participant Model as Model provider
+  participant Pi as Pi adapter and session
+  participant Tool as browser_capture
+  participant Guard as Latch and deliverable budget
+  participant Core as Browser controller
+  participant Page as Web page and Chrome CDP
+  participant Run as Run directory
+  participant Ledger as ActionLedger
+  participant Recorder as Run recorder
+
+  Model->>Pi: request viewport, full_page, or element capture
+  Pi->>Tool: invoke wrapped tool
+  Tool->>Guard: require unlatched epoch and reserve deliverable capture
+  Tool->>Core: captureDeliverable(scope, ref, bounds)
+  Core->>Page: refuse if the marks overlay is present
+  Core->>Page: capture labeled tiles in one epoch guard
+  Core-->>Tool: PNG tiles, completeness, and labels
+  Tool->>Guard: account every file's pixels and bytes
+  Tool->>Run: write all files or none, owner-only
+  Tool->>Ledger: one capture entry with the capture set
+  Tool-->>Pi: metadata only, no image block
+  Pi-->>Model: paths, sizes, labels
+  Pi->>Recorder: normalized tool-finished event
+  Recorder->>Run: tool-calls.jsonl artifacts with sent_to_model false
+  Note over Ledger,Run: At publication the ledger feeds the Brief's artifacts, the screenshot items, and the Screenshot lines
+```
+
 ### Configuration, model, and credential flow
 
 Path resolution happens before most command wiring, while full configuration validation happens at
@@ -2591,6 +2736,18 @@ granted only for an approved literal `true`. `VisionAvailability`, its dedicated
 and `SensitiveScreenLatch` are run-local memory. Accepted PNGs are filesystem artifacts under
 `runs/<run-id>/screenshots/`; the strict `ToolAuditEntry` schema has an optional, backward-compatible
 `captures` array containing only relative path, SHA-256, MIME type, dimensions, and byte length.
+
+Local deliverable capture adds no table either, and every artifact change is optional. New runs
+write the generic `ArtifactRef` to an optional `ToolAuditEntry.artifacts` array for both capture
+tools and no longer write `captures`. The `captures` field stays in the schema so older runs parse,
+and `artifactRefsOf` reads them as model-sent references. Deliverable files share
+`runs/<run-id>/screenshots/` with Vision Assist under a distinct `capture-` prefix and their own
+sequence, so the two cannot collide. A `do` Brief carries optional `artifacts` (at most 12 entries,
+unique by path, each with scope, part, part count, completeness, and labels). The manifest's
+`agent` section carries optional `capture`, and `run-health.json` an optional `capture` block, each
+with both decisions as `{ available, reasons }`; a schema refinement requires empty reasons exactly
+when the capability is available. `CaptureCapability`, the deliverable budget counters, and each
+call's capture set are run-local memory.
 
 The agentic runtime log adds no table and no migration either. `runtime.jsonl` is an append-only
 Pino JSONL file inside the run directory, owned and closed by exactly one `RunRuntimeLog`: an
@@ -2914,6 +3071,21 @@ update` is the only surface that contacts a version server, and only when a huma
   checks defend the remaining runtime path. This makes vision useful as optional fallback evidence
   without making deterministic replay, scheduled work, or the browser interaction gauntlet depend on
   it, at the cost of retaining sensitive PNGs and a capture-bearing raw provider session for audit.
+- **A requested screenshot is a local deliverable, separate from Vision Assist.** One recorded `do`
+  run asked for a screenshot and had no capture tool at all, because the only one was Vision
+  Assist's, and that needs a stored grant and an image-capable model. Its manifest did not record
+  which condition failed. Capture is therefore split by authority. `browser_screenshot` sends
+  marked pixels to the model behind the unchanged five-condition gate. `browser_capture` saves
+  clean pixels locally, needs no grant, and works with a text-only model, because nothing it
+  captures crosses the provider seam. It keeps the latch, owner-only files, and its own budget.
+  Only the clean capture meets a screenshot item, so a deliverable never depends on a grant, and a
+  marked image is never handed to the user as the page. Both decisions are recorded with reason
+  codes before execution, an undeliverable declared screenshot is disclosed at declaration rather
+  than at publication, and a clipped or truncated page is labeled and never counted as the full
+  page. One generic artifact reference with `sent_to_model` lets `yantra audit` keep saying
+  truthfully which images the model saw. The costs are a second capture budget and file-name
+  sequence, a second tool whose description must keep the model from using it to inspect pages,
+  and a Vision Assist image that no longer meets a screenshot item even when the user granted it.
 - **Deterministic selection before provider construction.** No-LLM `ask`/`research`, nested
   workflow calls, and scheduled runs do not silently open model sessions. Saved replay has a fixed
   plan before any optional post-run synthesis.

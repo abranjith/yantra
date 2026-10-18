@@ -45,8 +45,9 @@ describe('@no-llm synthetic layout matrix', () => {
         const result: string[] = [];
         const visit = (root: ParentNode): void => {
           result.push(
-            ...Array.from(root.querySelectorAll('[data-fixture-key]'), (element) =>
-              element.getAttribute('data-fixture-key')!,
+            ...Array.from(
+              root.querySelectorAll('[data-fixture-key]'),
+              (element) => element.getAttribute('data-fixture-key')!,
             ),
           );
           for (const element of root.querySelectorAll('*'))

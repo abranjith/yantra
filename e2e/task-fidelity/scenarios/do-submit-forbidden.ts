@@ -39,7 +39,8 @@ function clickStep(name: string, label: string): ScriptStep {
     label,
     params: (ctx) => {
       const observation = ctx.last('browser_observe')?.model as
-        { interactables?: { ref?: unknown; name?: unknown }[] } | undefined;
+        | { interactables?: { ref?: unknown; name?: unknown }[] }
+        | undefined;
       const ref = observation?.interactables?.find((entry) => entry.name === name)?.ref;
       return typeof ref === 'string' ? { ref } : null;
     },

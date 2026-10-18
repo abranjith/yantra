@@ -16,6 +16,7 @@ Yantra keeps browser automation inside explicit boundaries: model-visible data i
 | A value the model supplied itself               | The value remains visible                                                       | The validated tool receives it                                       | Sanitized tool projection                                                                   |
 | Password, one-time-code, or payment field state | `value_present: true`, a `withheld` reason, and after a fill an in-page verdict | The browser fill path can set the value and check it inside the page | No protected value in the tool result, trace, or other run artifact                         |
 | Protected click or stored-secret fill           | A confirmation result and opaque confirmation id                                | The operation only after a human grant                               | Request, decision, provenance, and linkage to the tool call                                 |
+| Saved screenshot (`browser_capture`)            | Its path, dimensions, byte size, and labels; never pixels or a hash             | The page's pixels, refused while a stored secret is latched          | Owner-only PNG under `screenshots/`; metadata-only reference with `sent_to_model: false`    |
 
 Marked input and keychain secrets solve different problems. A marker is a run-scoped privacy boundary; it is not a credential store, trusted-host binding, or request for confirmation. A keychain-backed website secret adds durable storage, trusted-host checking, and mandatory confirmation.
 
@@ -199,6 +200,23 @@ Denied and unconfigured location both appear to the model as `not available`. A 
 
 Personalization sends only a short, sanitized summary built from approved preferences. Operational `agent.*` settings and raw run history are not personalization context. Machine-learned values require explicit approval before they can contribute.
 
+### Screenshots and local captures
+
+Yantra has two screenshot tools with separate authority, and the grant applies to only one of them.
+
+- **Vision Assist (`browser_screenshot`)** sends raw, unmasked pixels to the model provider. It needs the stored `context.screenshots: true` grant and an image-capable model; see [Opt-In Vision Assist](vision-assist.md).
+- **Deliverable capture (`browser_capture`)** saves a clean PNG that the user asked for and never sends it. It needs no grant: `context.screenshots` governs model transmission only, and nothing reads, writes, or infers that grant for a local capture. Its result returns no image content, and the tool middleware still accepts image content only from an available `browser_screenshot` call, so a `browser_capture` result carrying an image is refused. The model receives only paths, dimensions, byte sizes, and labels, never the pixels or a SHA-256.
+
+A local capture keeps the protections a capture needs:
+
+- **Secret latch.** Filling a stored website secret latches the current document against capture. `browser_capture` checks the latch before reserving budget or taking any pixels, and refuses with `SCREENSHOT_SENSITIVE_SCREEN` (cause `secret-latched`), the same code Vision Assist uses. If the latch cannot be read, the capture is refused too. The latch clears only when a new top-level document loads.
+- **No Yantra marks.** It refuses with `CAPTURE_UNAVAILABLE` (cause `overlay-present`) while Vision Assist's marks overlay is on the page, so a saved picture never shows Yantra's labels. It also discards a capture whose page moved to a new document during the capture.
+- **Owner-only files, all or nothing.** Files are written under `screenshots/` at mode `0600` inside a `0700` directory, each through a temporary file renamed into place. A failure partway through a call removes the files that call had already written.
+- **Its own budget.** At most 4 calls per run, 6 files per call, 1,920 x 4,096 px and 8 MiB per file, and 40 MiB per run, all checked before anything is written. Vision Assist's budget is separate and unchanged.
+- **Audit.** Every file is recorded in `tool-calls.jsonl` as a metadata-only artifact reference with `sent_to_model: false`. `yantra audit` lists it under `Saved captures (kept on this computer, never sent to the model):`, separately from `The model saw these images:`. The raw-session warning appears only for images the model saw; see [Audit and report views](diagnostics-and-audit.md#audit-and-report-views).
+
+`--no-screenshots` works only downward. It removes both capture tools for one run and can never add one. A model-authored task contract grants nothing either: declaring a screenshot in `artifacts` cannot register `browser_screenshot`, change the Vision Assist gate, or bypass the latch. Both capture decisions are recorded before the first tool call, with the reasons any tool is off, in `manifest.json` (`agent.capture`) and `run-health.json` (`capture`). `browser_capture` exists only in agentic sessions. Replay, scheduled runs, and nested workflows never register it.
+
 ### Audit records and sensitive local artifacts
 
 Each run has a local directory under `<yantra-data-dir>/runs/<run-id>/`. Depending on the path taken, it can contain:
@@ -211,6 +229,7 @@ Each run has a local directory under `<yantra-data-dir>/runs/<run-id>/`. Dependi
 | `confirmations.jsonl`                                | Requested action/host/description/cost/consequence and human decision provenance                                                                                                             |
 | `trace.json`                                         | Successful browser actions with marked placeholders or secret keys, not resolved values                                                                                                      |
 | `captures/`                                          | Oversized sanitized web/browser extraction payloads                                                                                                                                          |
+| `screenshots/`                                       | Raw, unmasked PNG pixels from Vision Assist (sent to the model) and `browser_capture` (kept locally), owner-only; sensitive local material                                                   |
 | `contract.json`                                      | The declared task contract, written only after every string passed the `public` sanitizer and control characters were stripped; its action `requirements` hold ids and revision numbers only |
 | `agent/<session>.jsonl`                              | Raw provider-session format containing the model-visible conversation and model responses; sensitive local material                                                                          |
 | `report.md`, `brief.*`, `events.jsonl`, `usage.json` | Human report, published result, lifecycle, and usage data                                                                                                                                    |
@@ -300,15 +319,17 @@ See [Saved Workflows](saved-workflows.md) for workflow syntax and replay behavio
 
 ### User-visible inputs
 
-| Input                          | Constraint or effect                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------- |
-| `@{...}` / `@tag{...}`         | Run-scoped masking for model-backed agent input; 1–2048 non-whitespace characters |
-| `--allow-host <host>`          | Repeatable outbound-host restriction for `do`                                     |
-| `--confirm-timeout <duration>` | Maximum live confirmation wait; also bounded by remaining run time                |
-| `--auth-secret <ref>`          | Runtime-only **model-provider key** reference; separate from website secrets      |
-| `context.location`             | Grants or withholds the configured user location                                  |
-| `personalization.enabled`      | Enables or disables approved preference summary injection                         |
-| `requires_confirmation`        | Saved-workflow action checkpoint on supported mutating verbs                      |
+| Input                          | Constraint or effect                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `@{...}` / `@tag{...}`         | Run-scoped masking for model-backed agent input; 1–2048 non-whitespace characters                            |
+| `--allow-host <host>`          | Repeatable outbound-host restriction for `do`                                                                |
+| `--confirm-timeout <duration>` | Maximum live confirmation wait; also bounded by remaining run time                                           |
+| `--auth-secret <ref>`          | Runtime-only **model-provider key** reference; separate from website secrets                                 |
+| `context.location`             | Grants or withholds the configured user location                                                             |
+| `context.screenshots`          | Allows Vision Assist to send raw, unmasked screenshots to the model provider; not needed for a local capture |
+| `--no-screenshots`             | Removes both capture tools for one `do`, `ask`, or `research` run; never adds one                            |
+| `personalization.enabled`      | Enables or disables approved preference summary injection                                                    |
+| `requires_confirmation`        | Saved-workflow action checkpoint on supported mutating verbs                                                 |
 
 ### Common safety outcomes
 
@@ -326,6 +347,8 @@ See [Saved Workflows](saved-workflows.md) for workflow syntax and replay behavio
 | `URL_CREDENTIAL_SHAPE` / `URL_HOST_NOT_ALLOWED`                             | Outbound URL was refused by policy                                                           |
 | `ETHICS_BLOCKED`                                                            | Robots, blocklist, or rate-limit policy refused the fetch or action                          |
 | `SITE_CHALLENGE`                                                            | The page was a human-verification challenge in the standard browser; it was not read         |
+| `SCREENSHOT_SENSITIVE_SCREEN`                                               | A stored secret was filled on this document, so no screenshot of it was taken or saved       |
+| `CAPTURE_UNAVAILABLE`                                                       | A local capture could not be taken cleanly or within bounds; nothing was saved               |
 | `SEARCH_BLOCKED` with cause `circuit-open`                                  | The search provider challenged or rate-limited an earlier query, so this search was not sent |
 
 Expected failures are returned to the model as bounded, structured, retry-classified results. Unexpected exceptions are genericized in model-visible output.
@@ -336,7 +359,7 @@ Expected failures are returned to the model as bounded, structured, retry-classi
 - The sanitizer host-override loader reads `<home>/sanitizer-hosts.yaml` by default, validates its versioned host mappings, and uses them for host matching. If the file is absent, it falls back to the packaged defaults; malformed YAML, invalid entries, and other read failures are reported instead of silently replacing the active rules. Reloading rereads the active file.
 - The OS keychain stores model/search credentials and workflow secret values. If keychain support is unavailable, Yantra uses a degraded provider: reads report missing values and write/delete operations fail.
 - Browser access is command-profiled: `ask` has web tools only; `research` also has read-only browsing (`browser_navigate`, `browser_observe`, `browser_extract`, never click or fill) unless the `agent.research_browse` preference is `false` or the run passes `--no-browse`; only `do` receives browser mutation tools. Nothing in the environment changes a catalog. A goal that needs clicks or fills in `research` is reported with `yantra do` named as the next step.
-- The `task_contract` tool grants no authority: it writes no URL provenance, allowlist entry, or budget. Its text is sanitized with the `public` profile, with marked user values masked back to placeholders and control characters stripped, before it is persisted, echoed to the terminal, or logged.
+- The `task_contract` tool grants no authority: it writes no URL provenance, allowlist entry, budget, or screenshot grant, and a requested screenshot registers no capture tool. Its text is sanitized with the `public` profile, with marked user values masked back to placeholders and control characters stripped, before it is persisted, echoed to the terminal, or logged.
 - Date, timezone, and locale are always model-visible in model-backed runs. Location is visible only when granted and configured. A granted preference or marked value sent to a website is disclosed to that website when the requested tool action uses it.
 - With a remote model provider, sanitized prompts, tool results, and model-visible context leave the machine for that provider. Choosing a local provider changes that transport boundary; it does not disable Yantra's local sanitization and policy checks.
 
@@ -364,6 +387,7 @@ The focused verification for this document passed 249 tests across 19 files, plu
 - Engine-enforced no-submit recognizes native submit controls with a form owner and names in the protected-action lexicon. A control that submits only through page script, such as a `div` with `role="button"` and an unrelated name, is not recognized as submit-class.
 - Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` operates only on a request that was actually parked, and recording a grant is separate from resuming or polling the run.
 - The run directory and raw provider session are sensitive local data. Restrictive permissions are best-effort on Windows. `yantra audit` intentionally avoids the raw session, but anyone with filesystem access can open it. Treat debug/process logs as sensitive too; model-visible error genericization is not a guarantee about every local diagnostic sink.
+- A saved capture is never sent to the model, but it is still raw, unmasked pixels of whatever the page showed, written to the run directory. Treat `screenshots/` with the same care as the rest of the run directory. The secret latch covers stored website secrets only. A value typed from a goal marker is not latched, so a capture taken after such a fill can show it if the page displays it.
 - Ephemeral browser-profile cleanup runs on normal teardown paths, but no application can guarantee cleanup after abrupt machine loss or external process termination. Persistent authenticated agent profiles are not supported.
 - `script_run` executes trusted registered first-party code in a Node worker. The worker supplies resource containment, not an OS security sandbox for untrusted code.
 

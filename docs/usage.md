@@ -540,6 +540,18 @@ has browser tools, uses an image-capable model, has an approved
 be visible; navigation to a new top-level document or browser teardown is
 required to clear that protection.
 
+A screenshot your goal asks for is a separate tool. When a `do` goal requests
+one (for example `capture a viewport screenshot`), the agent saves a clean PNG
+under the run's `screenshots/` directory and the pixels are never sent to the
+model provider, so it needs no `context.screenshots` grant and works with a
+text-only model. It is available whenever the run has a browser and a click or
+fill tool, which in practice means `do`; `ask` and `research` never save
+captures. `--no-screenshots` turns it off along with vision assist. The same
+secret protection applies: a stored secret filled on the current page blocks
+capture until a new top-level document loads. See
+[Requesting a screenshot](features/agentic-tasks.md#requesting-a-screenshot)
+for scopes, limits, and failure codes.
+
 `discover` is an alias for `do`. See
 [Agentic Tasks](features/agentic-tasks.md) and
 [Safety and Privacy](features/safety-and-privacy.md) before using browser
@@ -573,8 +585,27 @@ Partial: no task contract was declared. Brief: <path>
 
 The line names at most two unmet items, then `+N more`. A templated run says
 `report:` instead of `Brief:`. The Brief's **Requirements** block lists every
-declared item as met, unmet with its reason, or not applicable. With `--json`,
-the `agent_outcome` record carries `task_outcome` (one of the five words) and
+declared item as met, unmet with its reason, or not applicable.
+
+When the run saved screenshots, one line per capture follows the outcome line,
+before `Run:`, naming the capture's first file by absolute path:
+
+```text
+Fulfilled: 2 of 2 requirements met. Brief: <path>
+Screenshot: <run-dir>/screenshots/capture-1-<sha256-prefix>.png
+Screenshot: <run-dir>/screenshots/capture-2-<sha256-prefix>-p1.png (part 1 of 6) (incomplete: truncated)
+Run: <run-id>
+```
+
+A capture split into several files adds `(part 1 of <n>)`; a clipped or
+truncated one adds `(incomplete: <label>)`. At most three lines are printed,
+then `+<n> more in <run-dir>/screenshots`. The Brief also lists every saved
+file in a **Captures** section.
+
+With `--json`, the `agent_outcome` record carries `task_outcome` (one of the
+five words), `artifacts` (each saved capture as a run-relative reference with
+`kind: "screenshot"`, `path`, `sha256`, `mime_type`, `bytes`, `width`,
+`height`, and `sent_to_model: false`; empty when nothing was saved), and
 `termination_reason`, which records separately why the run stopped:
 `model_finished`, `wall-clock-soft`, `wall-clock-hard`, `provider-tokens`,
 `tool-budget`, `repeated-tool-failure`, `handoff`, `user_abort`, or
@@ -656,6 +687,19 @@ Control characters in the summary are removed. With `--json`, the declaration
 arrives on stdout as an `agent_progress` record (event type
 `contract_declared`) instead of the stderr line. `ask` and deterministic runs
 never print it.
+
+If the contract asks for a screenshot the run cannot take, stderr gets one more
+line right after the `understood:` line, once per requested screenshot, and the
+run keeps working on its other requirements:
+
+```text
+Cannot deliver: viewport screenshot. Screenshots are off for this run (--no-screenshots); continuing with the other requirements.
+```
+
+The other reasons read `No browser is available in this run` and
+`This command cannot act on pages`. The screenshot item then stays unmet, so
+the run ends `partial`. With `--json`, the disclosure is an `agent_progress`
+record with event type `capability_gap` instead of the stderr line.
 
 ## Read an attributed Brief
 
@@ -838,7 +882,9 @@ and retained in both the run directory and raw provider session log. With
 Ollama, the destination wording identifies the configured local model runtime,
 but the pixel and retention warnings remain. Set the preference to `false` to
 deny future captures; this does not delete images from past run directories.
-Use `--no-screenshots` on one run when you want suppression without changing the
+The preference governs only vision assist, which sends pixels to the model. A
+screenshot your goal asks for is saved locally, never sent, and needs no grant.
+Use `--no-screenshots` on one run to suppress both kinds without changing the
 stored preference.
 
 There is no separate `history` command. Use the run index and artifacts:
@@ -945,11 +991,15 @@ deterministic path. It replaces the offline checks rather than adding to them.
 Both modes honor `--json`: the smoke emits a single `doctor_smoke` envelope
 (outcome, session id, log path, usage, pinned environment) instead of the
 streamed events and human summary. `audit` reconstructs a trust narrative from stable Yantra-owned
-projections and does not parse the raw provider session. For a run with vision
-captures, terminal output includes a **The model saw these images** section with
-each path, dimensions, byte count, SHA-256 digest, owning tool call, and capture
-budget cost. JSON output exposes the same metadata under `captures` and sets
-`rawSessionLogCaptureBearing` to `true`. The stable `tool-calls.jsonl` and audit
+projections and does not parse the raw provider session. For a run with
+screenshots, terminal output lists each file's path, dimensions, byte count,
+SHA-256 digest, owning tool call, and capture budget cost in two sections:
+`The model saw these images:` for vision-assist images and
+`Saved captures (kept on this computer, never sent to the model):` for
+screenshots the goal asked for. Each section appears only when it has entries.
+JSON output exposes the same metadata under `captures`, where each entry
+carries `sentToModel`, and sets `rawSessionLogCaptureBearing` to `true` only
+when the model saw an image. The stable `tool-calls.jsonl` and audit
 projection never embed image bytes, but `agent/*.jsonl` contains the image data
 sent to the provider. `report` prints the existing `report.md`; `--open` cannot
 be combined with `--json`. See
@@ -1006,7 +1056,7 @@ surface:
 | `--tool-retries <n>`           | Identical-failure limit per tool (see below) | `3`                |
 | `--confirm-timeout <duration>` | Live consent wait                            | `3m`               |
 | `--no-llm`                     | Force a deterministic path where one exists  | model enabled      |
-| `--no-screenshots`             | Suppress vision assist for this run          | grant unchanged    |
+| `--no-screenshots`             | No vision assist or saved captures this run  | grant unchanged    |
 
 `--tool-retries` is not a retry count. It bounds identical failures of one
 tool: the run stops when a tool fails with the same error `n + 1` times without
@@ -1244,11 +1294,21 @@ review the directory before sharing it. Browser profiles are ephemeral by
 default. Saved workflows may explicitly use persistent workflow-scoped browser
 profiles.
 
-Accepted vision captures are PNG files in `screenshots/`. A run can accept at
-most three; each is limited to 1600×1200 pixels and 5 MiB of encoded bytes.
-`tool-calls.jsonl` references each image only by path, SHA-256 digest, MIME type,
-dimensions, and byte count. The corresponding raw `agent/*.jsonl` session is
-capture-bearing because it contains the inline image block the model received.
+Accepted vision captures are PNG files in `screenshots/`, named
+`<sequence>-<sha256-prefix>.png`. A run can accept at most three; each is
+limited to 1600×1200 pixels and 5 MiB of encoded bytes. The corresponding raw
+`agent/*.jsonl` session is capture-bearing because it contains the inline image
+block the model received.
+
+Screenshots a `do` goal asked for are saved beside them as
+`capture-<sequence>-<sha256-prefix>.png`, with `-p<part>` added when one capture
+is split into several files. They are written owner-only and never sent to the
+model, so they make no session log capture-bearing. Their separate budget is at
+most 4 captures per run, 6 files per capture, 1,920 x 4,096 px and 8 MiB per
+file, and 40 MiB per run.
+
+`tool-calls.jsonl` references every image only by path, SHA-256 digest, MIME
+type, dimensions, byte count, and whether it was sent to the model.
 
 ### Reading browser recovery verdicts
 

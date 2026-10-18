@@ -65,7 +65,7 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 ## What you can do
 
 - Answer focused web questions with `ask`, or investigate broader topics with bounded multi-hop `research`. Both support deterministic `--no-llm` execution.
-- Run governed model-driven browser tasks with `do`, including navigation, extraction, form filling, and separately confirmed protected actions.
+- Run governed model-driven browser tasks with `do`, including navigation, extraction, form filling, separately confirmed protected actions, and requested screenshots saved locally without sending pixels to the model.
 - Promote successful browser traces or author reviewable YAML workflows, then replay them with a fixed plan that a model cannot steer.
 - Schedule saved workflows through a local daemon. Scheduled runs are always zero-LLM and pause rather than auto-confirm protected actions.
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
@@ -75,7 +75,7 @@ Ordinary agentic Briefs can include cited findings, sections, and comparison tab
 
 ## Safety and current boundaries
 
-Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Managed-browser downloads require per-operation consent, stay in Yantra-owned storage, and are never initiated by unattended execution. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.
+Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; it reports a refusal or handoff instead of evading controls. Managed-browser downloads require per-operation consent, stay in Yantra-owned storage, and are never initiated by unattended execution. Agentic browser profiles are fresh and ephemeral, while model-backed `do` tasks require configured credentials. Explicit input masking and keychain-backed secrets reduce exposure, but run directories (including saved screenshots, which are unmasked pixels) and provider-session artifacts can still contain sensitive material and should be reviewed before sharing. Sources and citations establish provenance, not correctness or freshness.
 
 ## Documentation
 
@@ -94,14 +94,14 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Explicit Managed Update](docs/features/explicit-managed-update.md) — the only update-check surface, availability-only `--dry-run`, consented replacement, and why nothing checks in the background.
 - [Ask](docs/features/ask.md) — focused public-web questions and cited, structured agentic Briefs.
 - [Research](docs/features/research.md) — multi-hop research, cited tables, conditions, and source requirements.
-- [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`, task contracts, and attributed publication.
+- [Agentic Tasks](docs/features/agentic-tasks.md) — governed browser and web tasks with `do`, task contracts, locally saved screenshots, and attributed publication.
 - [Saved Workflows](docs/features/saved-workflows.md) — workflow YAML, replay, promotion, and resume.
 - [Report Templates](docs/features/report-templates.md) — typed, user-authored report structures and their separate citation path.
 - [Profiles and History](docs/features/profiles-and-history.md) — preferences, context grants, runs, and usage.
 - [Local Site Ranking](docs/features/site-ranking.md) — local domain outcome scores and curation.
 - [Scheduling](docs/features/scheduling.md) — recurring workflow runs and the local daemon.
 - [Diagnostics and Audit](docs/features/diagnostics-and-audit.md) — environment checks and run inspection.
-- [Opt-In Vision Assist](docs/features/vision-assist.md) — consent-gated, budgeted, audited screenshots for agentic browser fallback.
+- [Opt-In Vision Assist](docs/features/vision-assist.md) — consent-gated, budgeted, audited screenshots sent to the model for agentic browser fallback, and how they differ from local saved captures.
 - [Recovery as Declarative Data](docs/features/recovery-as-declarative-data.md) — bounded fill and click recovery plans, shared accounting, and verdict diagnostics.
 - [Puppeteer 25.10 API Migration](docs/features/puppeteer-api-migration.md) — preserved browser behavior, explicit resource ownership, and migration-test coverage.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.

@@ -16,7 +16,12 @@ import { isAbsolute, win32 } from 'node:path';
 
 /** Closed set of reasons a custom path cannot be selected. */
 export type SelectionValidationReason =
-  'not-absolute' | 'empty' | 'missing' | 'not-a-file' | 'unreadable' | 'not-executable';
+  | 'not-absolute'
+  | 'empty'
+  | 'missing'
+  | 'not-a-file'
+  | 'unreadable'
+  | 'not-executable';
 
 export interface SelectionValidationFailure {
   readonly status: 'invalid';
@@ -26,7 +31,8 @@ export interface SelectionValidationFailure {
 }
 
 export type SelectionValidation =
-  { readonly status: 'valid'; readonly executablePath: string } | SelectionValidationFailure;
+  | { readonly status: 'valid'; readonly executablePath: string }
+  | SelectionValidationFailure;
 
 const ABSOLUTE_HINT =
   'Pass `--path` an absolute path to a Chrome or Chromium executable, for example `/opt/google/chrome/chrome`.';

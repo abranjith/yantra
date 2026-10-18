@@ -62,7 +62,9 @@ Per-run directory layout (subset owned by this feature; the rest is FEAT-006/FEA
       "$type": "array",
       "$len": 42,
       "$sha256": "<digest>",
-      "$inline": [/* truncated if > 64 KB */],
+      "$inline": [
+        /* truncated if > 64 KB */
+      ],
     },
   },
   "scope_chain": ["public", "public", "read-only-data"],

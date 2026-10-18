@@ -112,21 +112,23 @@ const script: readonly ScriptStep[] = [
       return url === null ? null : { url };
     },
   },
-  ...['New', 'Summit', 'AWD'].map((value, i): ScriptStep => ({
-    kind: 'call',
-    tool: 'web_fetch',
-    label: i === 2 ? 'awd-facet' : `filter-${i}`,
-    params: (ctx) => {
-      const previous = ctx.labelled(i === 0 ? 'results' : `filter-${i - 1}`)[0];
-      const link = ctx
-        .linksOfKind('facet', previous)
-        .find(
-          (entry) =>
-            entry.text.replace(/\s*\(\d+\)\s*$/u, '').toLowerCase() === value.toLowerCase(),
-        );
-      return link === undefined ? null : { url: link.url };
-    },
-  })),
+  ...['New', 'Summit', 'AWD'].map(
+    (value, i): ScriptStep => ({
+      kind: 'call',
+      tool: 'web_fetch',
+      label: i === 2 ? 'awd-facet' : `filter-${i}`,
+      params: (ctx) => {
+        const previous = ctx.labelled(i === 0 ? 'results' : `filter-${i - 1}`)[0];
+        const link = ctx
+          .linksOfKind('facet', previous)
+          .find(
+            (entry) =>
+              entry.text.replace(/\s*\(\d+\)\s*$/u, '').toLowerCase() === value.toLowerCase(),
+          );
+        return link === undefined ? null : { url: link.url };
+      },
+    }),
+  ),
   {
     kind: 'call',
     tool: 'web_fetch',

@@ -119,7 +119,8 @@ export interface AgentModelSelection {
  *   runtime-only key that is never persisted or logged.
  */
 export type AgentAuthSelection =
-  { readonly mode: 'managed' } | { readonly mode: 'runtime-key'; readonly secretRef: string };
+  | { readonly mode: 'managed' }
+  | { readonly mode: 'runtime-key'; readonly secretRef: string };
 
 /**
  * Normalized session events (closed union — plan §4).

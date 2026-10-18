@@ -97,14 +97,16 @@ const SCRIPT: readonly Step[] = [
       return facet === undefined ? null : { url: facet.url };
     },
   },
-  ...[0, 1].map((index): Step => ({
-    label: `detail-${index + 1}`,
-    tool: 'web_fetch',
-    params: (prior) => {
-      const url = recordsOf(prior.get('listing'))[index]?.url;
-      return typeof url === 'string' ? { url } : null;
-    },
-  })),
+  ...[0, 1].map(
+    (index): Step => ({
+      label: `detail-${index + 1}`,
+      tool: 'web_fetch',
+      params: (prior) => {
+        const url = recordsOf(prior.get('listing'))[index]?.url;
+        return typeof url === 'string' ? { url } : null;
+      },
+    }),
+  ),
   { label: 'guess', tool: 'web_fetch', params: () => ({ url: UNATTESTED }) },
   {
     label: 'publish',

@@ -62,10 +62,45 @@
       "task": "TASK-007"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/vision-assist.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "e2e/agent-browser.spec.ts",
@@ -75,7 +110,7 @@
     },
     {
       "path": "e2e/task-fidelity-capture.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -99,7 +134,7 @@
     },
     {
       "path": "e2e/task-fidelity/fixtures/tall-page.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -123,49 +158,49 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-common.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-element-below-fold.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-full-page-tall.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-full-page-truncated.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-latched.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-suppressed.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-text-only.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "e2e/task-fidelity/scenarios/capture-vision-unchanged.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -630,9 +665,15 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-058-local_deliverable_capture/changeset.json",
     ".spec-lite/features/FEAT-058-local_deliverable_capture/spec.md",
     ".spec-lite/plan_do_workflow_reliability.md"

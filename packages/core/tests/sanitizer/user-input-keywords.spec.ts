@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { detectKeywordValues, type InputSegment } from '../../src/sanitizer/index.js';
 
 function detect(text: string): string {
-  const segments = detectKeywordValues([{ kind: 'literal', text }], (tag, value): InputSegment => ({
-    kind: 'value',
-    tag,
-    value,
-  }));
+  const segments = detectKeywordValues(
+    [{ kind: 'literal', text }],
+    (tag, value): InputSegment => ({
+      kind: 'value',
+      tag,
+      value,
+    }),
+  );
   return segments
     .map((segment) =>
       segment.kind === 'literal' ? segment.text : `{{${segment.tag}:${segment.value}}}`,

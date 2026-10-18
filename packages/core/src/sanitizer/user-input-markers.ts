@@ -26,7 +26,11 @@ export type InputSegment =
 
 /** Marker-parse failure categories safe to expose without echoing a value. */
 export type UserInputMarkerErrorReason =
-  'unterminated' | 'unknown_tag' | 'empty_value' | 'value_too_long' | 'reserved_placeholder';
+  | 'unterminated'
+  | 'unknown_tag'
+  | 'empty_value'
+  | 'value_too_long'
+  | 'reserved_placeholder';
 
 /** Assignment callback used by segment detectors to create protected values. */
 export type AssignUserInputValue = (tag: UserInputValueTag, value: string) => InputSegment;
