@@ -2,6 +2,16 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/src/render/brief-terminal.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "docs/features/agentic-tasks.md",
       "status": "M",
       "role": "implement",
@@ -56,16 +66,41 @@
       "task": "TASK-006"
     },
     {
+      "path": "e2e/task-fidelity/scenarios/do-submit-forbidden.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
     },
     {
+      "path": "e2e/task-fidelity/scenarios/publish-flagged-value.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/search/scripted-provider.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "e2e/widget-gauntlet.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/environment.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
@@ -90,6 +125,31 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/provider/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/action-ledger.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/brief-composer.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-capabilities.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-delivery.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/agent/src/runtime/fulfillment.ts",
@@ -128,6 +188,11 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/runtime/vision.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/browser-fill-projections.spec.ts",
       "status": "A",
       "role": "implement",
@@ -140,10 +205,25 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/extraction-integration.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/agent/tests/runtime/profiles.spec.ts",
@@ -164,10 +244,40 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/browser/actionability-errors.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/core/src/browser/agent-controller.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/installation-types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/obstruction.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/selection-validation.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/extraction/search/config.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/core/src/fill/engine.ts",
@@ -182,6 +292,46 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/index-db/db.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/choice.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/messages.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/resolution.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/locator/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/sanitizer/user-input-markers.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/scheduler/cron.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/synthesis/evidence/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/core/src/widgets/combobox/combobox-driver.ts",
       "status": "M",
       "role": "implement",
@@ -194,6 +344,16 @@
       "task": "TASK-006"
     },
     {
+      "path": "packages/core/src/workflow/recorder/overlay/event-listeners.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/popup-handler.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/core/tests/browser/agent-controller-inventory.spec.ts",
       "status": "M",
       "role": "implement",
@@ -204,6 +364,11 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix.spec.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/core/tests/executor/fill-element.spec.ts",
@@ -266,6 +431,11 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/sanitizer/user-input-keywords.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/core/tests/support/gauntlet.ts",
       "status": "M",
       "role": "implement",
@@ -284,10 +454,20 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/protocol/src/schemas/refs.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "packages/protocol/tests/agent-manifest.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/arbitraries/brief.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/test-helpers/src/layout-matrix/forty-controls.ts",
@@ -304,8 +484,17 @@
   ],
   "excluded": [
     ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-007-ask_pipeline/spec.md",
+    ".spec-lite/features/FEAT-012-cli_polish_distribution/spec.md",
+    ".spec-lite/features/FEAT-033-obstruction_protocol/spec.md",
+    ".spec-lite/features/FEAT-040-accounting_activation/spec.md",
+    ".spec-lite/features/FEAT-043-browser_resolution_lifecycle/spec.md",
+    ".spec-lite/features/FEAT-047-browser_runtime_observability/spec.md",
     ".spec-lite/features/FEAT-057-plain_field_fill_performance/changeset.json",
     ".spec-lite/features/FEAT-057-plain_field_fill_performance/spec.md",
+    ".spec-lite/features/feature_plan_executor.md",
+    ".spec-lite/plan.md",
+    ".spec-lite/plan_agentic.md",
     ".spec-lite/plan_do_workflow_reliability.md"
   ],
   "baseline": {
