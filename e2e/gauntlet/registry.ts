@@ -91,7 +91,8 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     value: 'winter coat',
     expectedCommitted: 'winter coat',
     expectedMutations: 3,
-    expectedReads: 13,
+    // FEAT-057 skips the empty full watch and reuses the supplied ref.
+    expectedReads: 8,
     expectedToolCalls: 1,
     requiresVision: false,
     expectedClearances: 0,
@@ -111,7 +112,8 @@ export const AGENT_GAUNTLET: readonly AgentGauntletFixture[] = [
     // what a light-DOM one costs. An extra diagnostic read on this path — the
     // temptation whenever a new capability lands — fails the case.
     expectedMutations: 1,
-    expectedReads: 7,
+    // FEAT-057 ref resolution no longer takes a redundant observation.
+    expectedReads: 6,
     expectedToolCalls: 1,
     requiresVision: false,
     expectedClearances: 0,

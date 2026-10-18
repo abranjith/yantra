@@ -60,6 +60,11 @@ describe('@no-llm complete controller inventory', () => {
     expect(read).toHaveBeenCalledOnce();
     expect(read).toHaveBeenCalledWith({ cap: 400, trackDigest: false });
     expect(census.complete).toBe(true);
+    read.mockClear();
+    expect(controller.latestFillCensus()).toEqual(census);
+    expect(read).not.toHaveBeenCalled();
+    await controller.navigate('about:blank');
+    expect(controller.latestFillCensus()).toBeNull();
     expect(census.controls).toHaveLength(105);
     expect(census.controls.find((entry) => entry.label === 'Hidden')?.exemption).toBe('hidden');
     expect(census.controls.find((entry) => entry.label === 'Disabled')?.exemption).toBe('disabled');

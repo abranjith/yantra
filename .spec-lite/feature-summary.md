@@ -42,6 +42,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-057 — Plain-Field Fill Performance & Batch Clarity** _(updated: 2026-10-17 by implement)_
+Source spec: [spec.md](features/FEAT-057-plain_field_fill_performance/spec.md)
+Fill tools accept at most ten fields per call and explain how to split an oversized request. Ordinary exact fills return compact entries while audit details retain the full entries and recovery ledgers; remaining eligible units and the next refs are computed from the final observation and verified commits. Plain text uses a bounded 325 ms suggestion probe; declared or observed popups retain full settling, and native datalists keep typed text. Protected contents stay withheld and failed fields remain in progress without resending committed fields.
+
 **FEAT-056 — Protected-Value Verification** _(updated: 2026-10-17 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-056-protected_value_verification/spec.md)
 A password, `autocomplete` credential/OTP/card field, or `data-yantra-secret` control filled with caller-supplied data is checked inside the page against the text that was sent. Only a fixed verdict comes back (`empty`/`exact`/`reformatted`/`truncated`/`different`), and the fill succeeds only on `exact` or `reformatted`. Its success reports `withheld: { reason, verdict, ref }` with `resolution`, and no `committed`, `requested`, or `note`, through `browser_fill_element`, `browser_fill_form`, and replay `fill_element`. Observation entries say `withheld: <reason>` beside `value_present`. Failures are named by what was observed. A protected value that did not land is `withheld-value-mismatch`, with advice per verdict. A date or option driver reading a protected control gets `value-withheld`, which tells the caller to send plain text. A disclosed value the control does not hold is `control-refused-value`. "Lost on release" (`value-rejected-on-release`, with `released: true`) is reported only when a widget was actually released. Every `WIDGET_NOT_COMMITTED` carries exactly one of `observed` or `withheld`.

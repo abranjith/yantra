@@ -1,4 +1,6 @@
+import { fortyControls } from './forty-controls.js';
 import { page as page2 } from './pages/css-order-grid.js';
+export { fortyControls, fortyControlValue } from './forty-controls.js';
 import { page as page8 } from './pages/describedby-help.js';
 import { page as page11 } from './pages/dynamic-replacement.js';
 import { page as page5 } from './pages/fieldset-groups.js';
@@ -28,4 +30,5 @@ export const layoutMatrix = [
   page11,
   page12,
   page13,
+  fortyControls,
 ] as const;

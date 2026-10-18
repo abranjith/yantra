@@ -19,10 +19,13 @@ import {
 } from '@yantra/core';
 import type { LocatorCandidate } from '@yantra/protocol';
 
+import { fillCoverage, type FillCoverage } from '../../../runtime/fulfillment.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainFailure } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
 
+import type { AppliedBrowserFill } from './browser-fill-element.js';
+import { FILL_FORM_MAX_FIELDS } from './fill-limits.js';
 import { resolveFormField } from './form-field-resolve.js';
 
 /** Internal observation cap used for deterministic field resolution. */
@@ -170,7 +173,7 @@ export interface ResolvedFillField {
    * take its own would charge every fill an extra page read for a question most
    * fills never have to ask.
    */
-  readonly observation: AgentBrowserObservation;
+  readonly observation?: AgentBrowserObservation;
 }
 
 /** Resolve a fill target and keep the observation that produced it. */
@@ -179,6 +182,13 @@ export async function resolveFillField(
   controller: AgentBrowserController,
   preferred?: WidgetTarget,
 ): Promise<ResolvedFillField | DomainFailure> {
+  // An opaque ref already names a registered control on the observed document.
+  // Let the controller's epoch/identity healing guard it; only name resolution
+  // needs a fresh census. Linked widgets take their own baseline when needed.
+  if (/^e[0-9]+$/.test(field.trim()) && controller.latestFillCensus?.()) {
+    const entry = controller.describeRef(field.trim());
+    if (entry) return { target: toWidgetTarget(entry) };
+  }
   const observation = await controller.observe({
     cap: FILL_RESOLUTION_CAP,
     trackDigest: false,
@@ -647,4 +657,90 @@ export function modelObservation(observation: AgentBrowserObservation): {
     };
   }
   return model;
+}
+
+/** Keep ordinary exact results small; recovery and widget decisions remain explicit. */
+export function compactAppliedFill(entry: AppliedBrowserFill): Record<string, unknown> {
+  const typing = new Set(['overtype', 'clear-then-type', 'native-setter']);
+  const performed = (entry.attempted ?? []).filter((record) => record.verdict !== 'skipped');
+  if (
+    entry.resolution !== 'exact' ||
+    entry.editee !== undefined ||
+    entry.offered !== undefined ||
+    entry.note !== undefined ||
+    entry.substitution !== undefined ||
+    performed.some((record) => record.verdict === 'failed') ||
+    performed.filter((record) => typing.has(String(record.strategy))).length > 1
+  )
+    return { ...entry };
+  return {
+    field: entry.field,
+    ref: entry.ref,
+    resolution: 'exact',
+    ...(entry.withheld ? { withheld: entry.withheld } : {}),
+    ...(!entry.withheld && entry.committed !== undefined && entry.committed !== entry.requested
+      ? { committed: entry.committed }
+      : {}),
+    ...(entry.covers ? { covers: entry.covers } : {}),
+  };
+}
+
+/** Verified progress on one observed document, bounded to one next batch. */
+export interface ModelProgress {
+  readonly filled: number;
+  readonly eligible: number;
+  readonly remaining: number;
+  readonly next: readonly { readonly ref: string; readonly label: string }[];
+  readonly complete?: false;
+}
+
+/** Project coverage with the same authenticated sanitization used by observations. */
+export function modelProgress(
+  coverage: FillCoverage,
+  clean: (text: string) => string = (text) => text,
+): ModelProgress | undefined {
+  if (coverage.eligible === 0) return undefined;
+  const next: { ref: string; label: string }[] = [];
+  const result = {
+    filled: coverage.filled,
+    eligible: coverage.eligible,
+    remaining: coverage.remaining.length,
+    next,
+    ...(!coverage.complete ? { complete: false as const } : {}),
+  };
+  next.push(
+    ...coverage.remaining
+      .slice(0, FILL_FORM_MAX_FIELDS)
+      .map((unit) => ({ ref: unit.ref, label: [...clean(unit.label)].slice(0, 60).join('') })),
+  );
+  while (Buffer.byteLength(JSON.stringify(result), 'utf8') > 1024) {
+    const longest = next.reduce<{ ref: string; label: string } | undefined>(
+      (best, entry) =>
+        !best || Buffer.byteLength(entry.label) > Buffer.byteLength(best.label) ? entry : best,
+      undefined,
+    );
+    if (!longest || longest.label.length === 0) {
+      next.pop();
+      if (next.length === 0) break;
+    } else longest.label = [...longest.label].slice(0, -1).join('');
+  }
+  return result;
+}
+
+/** Read progress from the existing observation and action ledger; no browser I/O. */
+export function fillProgress(
+  controller: AgentBrowserController,
+  services: RunServices,
+): ModelProgress | undefined {
+  const census = controller.latestFillCensus?.();
+  if (!census || !services.actionLedger) return undefined;
+  return modelProgress(
+    fillCoverage(census, services.actionLedger.entries()),
+    (text) =>
+      services.sanitizer.sanitize(
+        services.userInput?.mask(text) ?? text,
+        'authenticated',
+        controller.host(),
+      ).text,
+  );
 }

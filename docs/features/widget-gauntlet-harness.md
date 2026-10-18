@@ -16,15 +16,18 @@ change any stable interaction error code.
 
 ## What It Does
 
-### Runs a 16-fixture protocol gauntlet
+### Runs a 19-fixture protocol gauntlet
 
-The fast tier runs 16 generic HTML fixtures through the production `fillField`
+The fast tier runs 19 generic HTML fixtures through the production `fillField`
 engine with a JSDOM-backed `WidgetPort`. Each registry entry becomes its own
 named test case and declares its semantic result and exact operation counts.
 
 | Generic pattern                                                              | Verified result                                                                            | Mutations | Reads |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------: | ----: |
-| Input drops its initial keystroke                                            | Commits `DFW`                                                                              |         3 |    34 |
+| Undeclared typeahead opens after 300 ms                                      | Commits `Blue offered` after the short probe discovers its popup                           |         2 |    23 |
+| `aria-haspopup="true"` input opens after 1.5 s                               | Commits `Blue offered` through the full suggestion watch                                   |         2 |    27 |
+| Native datalist accepts free text                                            | Commits `Blue` without a DOM suggestion wait                                               |         1 |     9 |
+| Input drops its initial keystroke                                            | Commits `DFW`                                                                              |         3 |    10 |
 | Typeahead maps a code to a display label                                     | Commits `Dallas` as a single offered match                                                 |         2 |    17 |
 | Picker mounts a duplicate trigger                                            | Commits `San Jose, CA, United States`                                                      |         2 |    17 |
 | Read-only date trigger opens a distant month                                 | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    32 |
@@ -33,7 +36,7 @@ named test case and declares its semantic result and exact operation counts.
 | Trigger routes typing to a detached overlay                                  | Commits the airport label and reports the actual editee                                    |         3 |    22 |
 | Suggestions accept only a query prefix                                       | Commits the selected offered value                                                         |         4 |    75 |
 | Calendar appears only after an open probe                                    | Commits `Dec 2, 2026` through the calendar driver                                          |         6 |    40 |
-| Input rewrites text into a display mask                                      | Commits `(555) 123-4567` as reformatted                                                    |         1 |    33 |
+| Input rewrites text into a display mask                                      | Commits `(555) 123-4567` as reformatted                                                    |         1 |     9 |
 | One date range is split across two inputs                                    | Refuses the incomplete half without changing either input, then the follow-up commits both |         4 |    40 |
 | Two range triggers share one calendar                                        | Commits both dates after opening the range once                                            |         4 |    39 |
 | Listbox mounts only its in-viewport rows                                     | Commits `Region 6` through the listbox driver                                              |         4 |    18 |
@@ -45,6 +48,14 @@ For an engineered refusal, the totals include both the refusal and its mandatory
 follow-up. A refusal is accepted only when its `(code, cause)` has a catalog
 entry and the follow-up described by its hint reaches a commit. Known
 unsupported behavior cannot be registered as a passing terminal result.
+
+The text plan bounds its initial popup probe at 325 ms, with reaction reads at
+0, 150, and 300 ms. An observed popup escalates to the full watch; declared
+suggestion controls retain that watch from the start. The
+`undeclared-haspopup.html` fixture declares `aria-haspopup="true"` despite its
+filename. Native datalist suggestions live in Chrome's UI rather than the DOM,
+so the datalist fixture verifies the typed free text. These cases preserve the
+four-second settling policy where a DOM suggestion watch applies.
 
 The port accounting policy is exhaustive at the TypeScript boundary:
 
@@ -115,7 +126,7 @@ control something else owns. Every descriptor pins exact controller mutation,
 read, top-level tool-call, and engine-initiated clearance totals.
 
 The re-mounting case verifies one top-level tool call, three controller
-mutations, and 13 controller reads. The form replaces its input while text is
+mutations, and eight controller reads. The form replaces its input while text is
 entered, forcing the engine to reacquire the element without asking the model
 for another turn. The case parses the model-visible payload, checks that
 `winter coat` was committed, resolves every ref in the returned observation,
@@ -124,7 +135,7 @@ post-action staleness assertion runs only for a fixture that declares a
 `remountSelector`, because the contract says something only about a pattern
 that remounts its controls.
 
-The shadow-tree case commits `Express` in one controller mutation and seven
+The shadow-tree case commits `Express` in one controller mutation and six
 reads: once the composed tree is walked, an encapsulated native select costs
 exactly what a light-DOM one costs. A dedicated case fills the same control by
 its accessible name, confirms on the page itself that the commit landed inside
@@ -135,7 +146,7 @@ structurally identical control, and the same case asserts that control's name
 appears nowhere in the observation.
 
 This tier is `@no-llm` and is not skipped by an environment gate. The combined
-20-fixture gate is vision-disabled: every descriptor declares that it does not
+23-fixture gate is vision-disabled: every descriptor declares that it does not
 require vision, the real-browser services run with vision unavailable, and the
 wrapped tool catalog must not contain `browser_screenshot`. Chrome discovery
 remains environment-dependent, as it is for Yantra's other real-browser tests.
@@ -161,12 +172,12 @@ Both fixture directories are compared with their registries in both
 directions. An unregistered HTML file or a registry entry with no file fails
 the census, and generic pattern names must be unique.
 
-The protocol tier is additionally pinned at 16 as a literal number, in
+The protocol tier is additionally pinned at 19 as a literal number, in
 `widget-regressions.spec.ts` (against the fixture directory listing) and in
 `recovery-characterization.spec.ts` (against `PROTOCOL_GAUNTLET`, together with
 its distinct pattern names and its vision-free declaration). With the agent
 tier's four, pinned the same way in `widget-gauntlet.spec.ts`, that is the
-20-fixture gate. Growing the gallery is therefore a deliberate edit in more
+23-fixture gate. Growing the gallery is therefore a deliberate edit in more
 than one place.
 
 Fixtures describe structural widget shapes rather than websites. If a fixture
@@ -239,6 +250,43 @@ action-evidence scenarios. Keep generic layouts and declared control ground
 truth together, preserve the historical baseline, and retain the existing
 resolution gate when adding scenario assertions. These reusable fixtures do
 not themselves establish live-provider task-completion or timing results.
+
+### Measures fill throughput and continuation on forty controls
+
+FEAT-057 extends the shared fixture package with `fortyControls` and
+`fortyControlValue`. This separate page has 40 explicitly labelled physical
+controls: ordinary inputs and textareas, four native selects, three checkboxes,
+three radio buttons, and a masked phone input. The radio buttons share one
+group, so fill progress counts 38 eligible census units. No suggestion
+declaration is present, and the submit handler counts accidental submissions.
+
+`packages/core/tests/fill/fill-performance.spec.ts` fills every physical
+control through the production engine in real Chrome. It asserts zero full
+`watch-and-select` entries, total fill time at most 60 seconds, the first ten
+ordinary fields at most 15 seconds, and zero submissions. It also counts
+`evaluateOn` calls directly on the controller, so internal calls are visible.
+`packages/core/tests/fixtures/fill-performance/baseline.json` stores measured
+before/after timings and operation counts as informational context, rather than
+requiring future runs to match those measurements. The recorded core total
+improves from about 169.7 seconds to 50.9 seconds, with full-watch entries
+falling from 30 to zero.
+
+The separate real-Chrome case in `e2e/agent-browser.spec.ts` uses wrapped
+`browser_fill_form` calls and follows `progress.next`. Its first batch reports
+10 filled of 38 eligible units. One number field deliberately rejects an
+invalid value; four batches leave that field outstanding, and a fifth call
+corrects it. Final progress is 38 filled, zero remaining, and an empty `next`.
+The test verifies every physical control's final value or checked state,
+including the mask and one selected radio sibling, and asserts zero submissions.
+
+The continuation assertions distinguish semantic resends from engine retries:
+each committed field is sent once and mutated once, while the failed field is
+sent twice and may incur additional internal recovery mutations. Tool-call
+audit durations must total at most 60 seconds, and the first ordinary ten-field
+batch must take at most 15 seconds. The recorded five-call total is 53.873
+seconds; the deliberately failing batch is not an ordinary ten-field timing
+sample. These fixture measurements do not establish live-provider completion
+targets or completion of the feature's remaining verification gates.
 
 ### Catalogs model-visible interaction messages
 
@@ -324,6 +372,21 @@ Leave `UPDATE_LAYOUT_BASELINE` unset for normal verification. Setting it to
 `1` rewrites the baseline with current counts; it does not recreate the
 historical pre-change measurement.
 
+For fill performance, build shared fixtures and core before running the
+separate core and wrapped-tool scenarios:
+
+```bash
+pnpm --filter @yantra/test-helpers build
+npx turbo run build --filter=@yantra/core
+cd packages/core && npx vitest run tests/fill/fill-performance.spec.ts
+cd e2e && npx vitest run agent-browser.spec.ts -t 'continues a forty-control form'
+```
+
+Run each `cd` command from the repository root. Leave `UPDATE_FILL_AFTER`
+unset for ordinary checks; setting it to `1` updates the informational `after`
+measurement while retaining the historical baseline. The e2e workspace uses
+built core output, so rebuild after changing core behavior.
+
 `pnpm --filter <pkg> test -- <pattern>` is not a way to run a subset: the
 pattern is silently ignored and the whole package suite runs. Use the
 `cd <workspace> && npx vitest run <path>` form above instead.
@@ -367,14 +430,19 @@ Protocol execution produces an in-memory per-fixture result with:
 - mutation, read, and top-level tool-call totals; and
 - a `byAction` per-method breakdown.
 
-The test runner is the reporting surface. The gauntlet does not create a new
-durable artifact. The real-browser tier checks the wrapped tool's existing
+The test runner is the gallery's reporting surface. The gallery does not create
+a new durable artifact. The real-browser tier checks the wrapped tool's existing
 status, error code, and JSON `modelText` payload, but it does not recreate the
 orchestrator-owned `tool-calls.jsonl` projection.
 
 The layout matrix consumes generated HTML and control expectations. Its
 per-page counts stay in memory during ordinary runs, and its checked-in
 baseline remains a historical input.
+
+The fill-performance scenarios retain a checked-in informational timing
+baseline. The continuation case writes temporary `tool-calls.jsonl` end records
+to sum tool durations and inspect existing result details; this scripted harness
+does not run the agent orchestrator.
 
 Catalog rendering returns existing model-visible message and hint text. Missing
 catalog entries or required detail values throw a typed dangling-message error
@@ -394,14 +462,22 @@ Chrome. It uses isolated temporary browser state and offline DOM fixtures.
 
 ## Limitations
 
-- The current gallery contains 20 fixtures: 16 protocol cases and four
+- The current gallery contains 23 fixtures: 19 protocol cases and four
   real-browser wrapped-tool cases (a re-mounting search form, an open
   shadow-root native select, a page-blocking consent modal, and a
   viewport-pinned band that owns a control's click point). Both halves are
   pinned as numbers, so growing the gallery is a deliberate edit.
-- The 14-page layout matrix is a separate gate from that 20-fixture gallery.
+- The original 14-page layout matrix is a separate gate from that 23-fixture gallery.
   Its matrix suite verifies field discovery and resolution; it does not click
-  the dynamic-replacement button or measure fill throughput.
+  the dynamic-replacement button. The additional `forty-controls` fixture has
+  separate fill-performance and wrapped-tool continuation checks.
+- An undeclared popup that first appears after the 325 ms probe window may be
+  missed. Declared suggestion controls retain the full watch. Native datalist
+  option selection is not exercised; the datalist case verifies free text.
+- Real-Chrome timing gates depend on machine load. The checked-in measurements
+  describe one run; ordinary batches have a 15-second gate and the deliberately
+  failing batch can take longer. These checks do not measure model latency or
+  prove autonomous task completion.
 - A control inside a _closed_ shadow root is out of scope and is never counted
   as a pass. The platform returns `null` for `host.shadowRoot` on a closed
   root, and no piercing library and no DOM tagging is used to get around that,

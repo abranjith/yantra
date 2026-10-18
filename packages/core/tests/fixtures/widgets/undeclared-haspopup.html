@@ -1,0 +1,23 @@
+<label for="q">Choice</label><input id="q" aria-haspopup="true" />
+<div id="opts" role="listbox" style="display: none"></div>
+<script>
+  (function () {
+    var input = document.getElementById('q'),
+      popup = document.getElementById('opts'),
+      timer;
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        popup.style.display = 'block';
+        popup.innerHTML = '<button role="option" type="button">Blue offered</button>';
+        popup.firstChild.addEventListener('click', function () {
+          input.value = 'Blue offered';
+          popup.style.display = 'none';
+        });
+      }, 1500);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') popup.style.display = 'none';
+    });
+  })();
+</script>

@@ -10,6 +10,14 @@ const REFUSED_AGAIN =
 /** Agent-owned tool and middleware messages in the interaction inventory. */
 export const AGENT_INTERACTION_MESSAGES = [
   tool(
+    'INVALID_INPUT',
+    'batch-limit',
+    (d) =>
+      `browser_fill_form takes at most ${text(d.limit)} fields per call and this call sent ${text(d.sent)}. Send the first ${text(d.limit)} now, then the remaining ${Number(d.sent) - Number(d.limit)} in a following browser_fill_form call.`,
+    ['sent', 'limit'],
+    'browser_fill_form',
+  ),
+  tool(
     'FORM_FIELD_NOT_FOUND',
     'no-match',
     (d) =>

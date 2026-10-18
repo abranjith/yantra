@@ -392,17 +392,25 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - undeclared popups later than `REACTION_PROBE_MS` (deviation 5);
   - native `<datalist>` option selection (deviation 2).
 
+### Implementation clarifications (2026-10-17)
+
+- The calibrated probe is **325 ms**, with reads at 0/150/300 ms. The initial 450 ms window missed the sixty-second controlled-fixture target; the 300 ms undeclared popup still commits in both the protocol and real-Chrome cases. The baseline records 27 full-watch reaction reads per ordinary field and 9,272 model-applied bytes for ten original plain fills.
+- The source still re-observed even an already registered eNN ref, contrary to the assumption in this spec. Ref resolution now reuses the current-document registry, with the controller's epoch and identity healing retained. Name resolution still observes; progress adds no page read. The constant lives in dependency-free `fill-limits.ts` and is re-exported from `browser-fill-form.ts` to avoid a profiles/tool runtime cycle.
+- The fixture has **40 physical controls and 38 eligible units**: its three radios form one unit. Continuation fills four bounded batches, followed by one correction call. Tests count semantic sends separately from engine-owned mutations: the refused number control can use its existing typing recovery internally, while no committed field is resent or re-driven. Ordinary ten-field batches have the fifteen-second gate; the batch containing the intentional refusal also pays for recovery.
+- The number control rejects invalid native validity states through its input listener; HTML max/step alone mark invalidity but do not prevent a value from being stored. Short, valid synthetic values isolate interaction cost; historical baseline timings are informational and used longer synthetic email/URL/text values. Operation-count and compact-byte comparisons are pinned independently of that timing difference.
+- `agent-v12` is added to the manifest's accepted prompt versions and generated protocol artifacts; older versions remain valid.
+
 ## 7. Changeset
 
 > Captured by hooks (`capture-baseline` / `capture-changeset`), not hand-maintained. See `.spec-lite/features/FEAT-057-plain_field_fill_performance/changeset.json`, which is the authoritative deterministic review scope.
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Measure and pin the plain-field fill cost on the `forty-controls` fixture
-- [ ] TASK-002: `reaction-check` rung; full watch only for declared or observed popups
-- [ ] TASK-003: Stated ten-field cap, `batch-limit` advice, shape-neutral guidance, prompt version bump
-- [ ] TASK-004: Compact applied entries; full ledgers in `details.applied`
-- [ ] TASK-005: `progress` with remaining counts and `next`, with no extra read
-- [ ] TASK-006: Forty controls in four batches within target, with no resends and no regressions
+- [x] TASK-001: Measure and pin the plain-field fill cost on the `forty-controls` fixture
+- [x] TASK-002: `reaction-check` rung; full watch only for declared or observed popups
+- [x] TASK-003: Stated ten-field cap, `batch-limit` advice, shape-neutral guidance, prompt version bump
+- [x] TASK-004: Compact applied entries; full ledgers in `details.applied`
+- [x] TASK-005: `progress` with remaining counts and `next`, with no extra read
+- [/] TASK-006: Forty controls in four batches within target, with no resends and no regressions
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

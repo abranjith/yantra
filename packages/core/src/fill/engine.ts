@@ -30,6 +30,7 @@ import {
   type CommittedValue,
 } from '../interaction/protected-value.js';
 import {
+  observeReaction,
   watchAndSelectOffered,
   type OfferedSelection,
 } from '../widgets/combobox/combobox-driver.js';
@@ -133,6 +134,16 @@ export async function fillField(
         tag,
         type,
         role,
+        declaresSuggestions:
+          role === 'combobox' ||
+          ['list', 'both', 'inline'].includes(
+            element.getAttribute('aria-autocomplete')?.toLowerCase() ?? '',
+          ) ||
+          (element.hasAttribute('aria-haspopup') &&
+            element.getAttribute('aria-haspopup')?.toLowerCase() !== 'false') ||
+          (element instanceof HTMLInputElement &&
+            element.list !== null &&
+            !(element.list instanceof HTMLDataListElement)),
         dateHint: type === 'date' || /(?:yyyy|mm|dd|\bdate\b)/i.test(hint),
         textLike:
           element instanceof HTMLTextAreaElement ||
@@ -295,6 +306,35 @@ export async function fillField(
         const textPlan = buildTextPlan<PlainTextReaction, FillFailure>({
           port: healed.port,
           budget,
+          declaredSuggestions: shape.declaresSuggestions,
+          runReaction: async ({ port: planPort, evidence }) => {
+            const reaction = await observeReaction(planPort, live, text, budget, {
+              ignoredContainer: performed(typingVerdicts) > 1 ? null : ignoredContainer,
+            });
+            if (reaction.popupObserved)
+              return {
+                ok: true,
+                value: {
+                  ok: true,
+                  committed: evidence.values.committed as CommittedValue,
+                  selected: false,
+                  dismissed: false,
+                  actions: 0,
+                },
+                evidence: { 'popup-observed': true },
+              };
+            return {
+              ok: true,
+              value: {
+                ok: true,
+                committed: reaction.committed,
+                selected: false,
+                dismissed: false,
+                actions: 0,
+              },
+              evidence: { 'popup-observed': false, committed: reaction.committed },
+            };
+          },
           runEnter: async ({ port: planPort }) => {
             const entered = await enterText(planPort, target, text, budget, probe);
             typingVerdicts = entered.attempted;
@@ -453,7 +493,15 @@ export async function fillField(
         : { editee: { ref: editee.ref, name: editee.name, role: editee.role } }),
       ...(offered.length > 0 ? { offered } : {}),
       ...(substitution === null ? {} : { substitution }),
-      ...(performed(allAttempts) > 1 || substitution !== null ? { attempted: allAttempts } : {}),
+      ...(allAttempts.some((record) => record.verdict === 'failed') ||
+      allAttempts.filter(
+        (record) =>
+          record.verdict !== 'skipped' &&
+          !['enter-text', 'reaction-check'].includes(String(record.strategy)),
+      ).length > 1 ||
+      substitution !== null
+        ? { attempted: allAttempts }
+        : {}),
     };
     if (settled.kind === 'withheld') {
       // `satisfied` admitted it, so the verdict is one of the two that verify.

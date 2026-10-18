@@ -6,6 +6,8 @@ import type { RunServices } from '../../../runtime/run-services.js';
 
 import {
   actionMetadataSink,
+  compactAppliedFill,
+  fillProgress,
   browserController,
   browserWidgetPort,
   deltaAfterAction,
@@ -23,6 +25,8 @@ import {
   type ResolvedFillField,
 } from './browser-common.js';
 import { applyBrowserFill, type AppliedBrowserFill } from './browser-fill-element.js';
+import { FILL_FORM_MAX_FIELDS } from './fill-limits.js';
+export { FILL_FORM_MAX_FIELDS } from './fill-limits.js';
 
 const BrowserFillFormParams = Type.Object(
   {
@@ -44,7 +48,7 @@ const BrowserFillFormParams = Type.Object(
       ),
       {
         minItems: 1,
-        maxItems: 10,
+        maxItems: FILL_FORM_MAX_FIELDS,
         description:
           'Fields to fill in order. A field that fails does not end the batch: the rest are still attempted, except any that belong to the same widget as the one that failed.',
       },
@@ -62,9 +66,22 @@ export function browserFillFormSpec(
   return {
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
-    description:
-      "Preferred way to fill a form: set every non-secret control it needs in one ordered call, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Use this whenever two or more fields need values — a search form is one call, not one call per field. Use browser_fill_element for a credential or a lone field. Each applied field reports requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed and attempted recovery verdicts, plus offered labels when genuine choices are available), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Every field sent appears in exactly one of those three sets. An entry may account for more than the field it names: a date range the page commits as one unit is one entry whose covers lists every field it stands for, in applied, failed, and skipped alike. Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.",
+    description: `Preferred way to fill a form: set non-secret controls in bounded ordered batches, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Send up to ${FILL_FORM_MAX_FIELDS} fields per call, in page order. For a longer form, send the next batch after reading this result: its progress lists the fields that remain. Use browser_fill_element for a credential or a lone field. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other fields report requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed and attempted recovery verdicts, plus offered labels when genuine choices are available), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Every field sent appears in exactly one of those three sets. An entry may account for more than the field it names: a date range the page commits as one unit is one entry whose covers lists every field it stands for, in applied, failed, and skipped alike. Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.`,
     parameters: BrowserFillFormParams,
+    inputAdvice: (raw) => {
+      if (
+        typeof raw !== 'object' ||
+        raw === null ||
+        !('fields' in raw) ||
+        !Array.isArray(raw.fields) ||
+        raw.fields.length <= FILL_FORM_MAX_FIELDS
+      )
+        return null;
+      return {
+        cause: 'batch-limit',
+        details: { sent: raw.fields.length, limit: FILL_FORM_MAX_FIELDS },
+      };
+    },
     sanitizationProfile: 'authenticated',
     mutating: true,
     run: (params: Params, ctx): Promise<DomainResult> => runFillForm(params, ctx.services),
@@ -215,6 +232,7 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
   // while resolving fields cannot narrow it to the difference from a page the
   // model was never shown.
   const delta = deltaAfterAction(controller);
+  const progress = fillProgress(controller, services);
   // Counts ride in `details` so the audit projection can see them. The
   // middleware records `status: "ok"` for any successful result, and report.md
   // renders one line per call from that projection — a partial batch that
@@ -234,14 +252,15 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       errorCode: first.error_code,
       message: first.message,
       retryable: true,
-      details: { ...counts, applied, failed, skipped },
+      details: { ...counts, applied, failed, skipped, ...(progress ? { progress } : {}) },
     };
   }
 
   return {
     ok: true,
     model: {
-      applied,
+      applied: applied.map(compactAppliedFill),
+      ...(progress ? { progress } : {}),
       ...(failed.length > 0 ? { failed } : {}),
       ...(skipped.length > 0 ? { skipped } : {}),
       ...modelActionMetadata(followed),
@@ -250,10 +269,14 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       note:
         failed.length > 0
           ? 'Nothing was submitted, and some fields did not take. The applied fields are set — do not re-send them.'
-          : 'Nothing was submitted. Activate the submit/search control with browser_click.',
+          : progress && progress.remaining > 0
+            ? `Nothing was submitted. ${progress.remaining} eligible fields remain; progress.next lists the next ones.`
+            : 'Nothing was submitted. Activate the submit/search control with browser_click.',
     },
     details: {
       fields: applied.length,
+      applied,
+      ...(progress ? { progress } : {}),
       ...counts,
       ...deltaDetails(observation, delta ?? undefined),
     },

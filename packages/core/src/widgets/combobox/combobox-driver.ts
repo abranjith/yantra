@@ -66,6 +66,13 @@ import { readCommittedValue } from '../verify.js';
 export const REACTION_WAIT_MS = 4_000;
 /** Polling cadence for post-type popup discovery. */
 export const REACTION_POLL_MS = 150;
+/**
+ * Undeclared controls get 325 ms (reads at 0/150/300 ms), enough to catch the
+ * 300 ms fixture with scheduling grace. The initial 450 ms calibration missed
+ * the forty-control time target; this bound preserves the late-popup fixture.
+ * Declared controls and observed loading popups retain the full settling wait.
+ */
+export const REACTION_PROBE_MS = 325;
 /** Consecutive identical reads before the suggestion list is called settled. */
 export const REACTION_QUIET_POLLS = 2;
 /** How many offered labels are reported back; page text, so it is capped. */
@@ -392,6 +399,42 @@ export interface SelectionScope {
    * not this pass's to read as a suggestion list.
    */
   readonly ignoredContainer?: WidgetContainer | null | undefined;
+}
+
+/** A bounded discovery read, with protected values verified inside the page. */
+export type ReactionProbe =
+  | { readonly popupObserved: true; readonly container: WidgetContainer }
+  | { readonly popupObserved: false; readonly committed: CommittedValue };
+
+/**
+ * Probe an undeclared control without acting on it. Empty loading popups count
+ * as a signal; the full selection stage then owns settling and selection.
+ * The injected reader lets operation-count tests observe each actual poll.
+ */
+export async function observeReaction(
+  port: WidgetPort,
+  target: WidgetTarget,
+  requested: string,
+  budget: Parameters<WidgetDriver['drive']>[3],
+  scope: SelectionScope = {},
+  read: typeof readReaction = readReaction,
+): Promise<ReactionProbe> {
+  const deadline = Math.min(budget.deadlineMs, port.now() + REACTION_PROBE_MS);
+  const maxReads = Math.floor(REACTION_PROBE_MS / REACTION_POLL_MS) + 1;
+  for (let poll = 0; poll < maxReads; poll += 1) {
+    if (port.now() > deadline) break;
+    const reaction = await read(port, target, scope.ignoredContainer);
+    if (!reaction.ignored && reaction.container !== null && reaction.open) {
+      return { popupObserved: true, container: reaction.container };
+    }
+    const remaining = deadline - port.now();
+    if (remaining <= 0 || poll + 1 === maxReads) break;
+    await sleep(Math.min(REACTION_POLL_MS, remaining));
+  }
+  return {
+    popupObserved: false,
+    committed: await readCommittedValue(port, target, { expected: requested }),
+  };
 }
 
 /**

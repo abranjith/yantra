@@ -1,4 +1,5 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+/// <reference lib="dom" />
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -28,10 +29,12 @@ import {
   LocalProfileStore,
   ReadabilityExtractor,
   ScriptRegistry,
+  ToolCallWriter,
   type ConfirmationGateway,
   type ConfirmationOutcome,
 } from '@yantra/core';
 import type { ConfirmationRequest } from '@yantra/protocol';
+import { fortyControlValue } from '@yantra/test-helpers/layout-matrix';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { fixtureSearchService } from './fixtures/search-service.js';
@@ -303,6 +306,155 @@ describe('@no-llm real Chrome browser tools', () => {
     expect(model.delta?.elements_appeared).toBeUndefined();
     expect(model.delta?.elements_vanished).toBeUndefined();
   }, 60_000);
+
+  it('continues a forty-control form through progress without re-driving committed fields', async () => {
+    await call('browser_navigate', { url: `${fixture.baseUrl}/performance/forty-controls.html` });
+    const first = await observe();
+    const controls = first.interactables.filter((entry) => /^Field [0-9]+$/.test(entry.name));
+    expect(controls).toHaveLength(40);
+    const indexByRef = new Map(controls.map((entry) => [entry.ref, Number(entry.name.slice(6))]));
+    const refused = controls.find((entry) => entry.name === 'Field 15')!.ref;
+    const appliedRefs = new Set<string>();
+    const sent = new Map<string, number>();
+    const mutations = new Map<string, number>();
+    const fill = controller.fill.bind(controller),
+      type = controller.type.bind(controller),
+      click = controller.click.bind(controller);
+    const fillSpy = vi.spyOn(controller, 'fill').mockImplementation((ref, value) => {
+      mutations.set(ref, (mutations.get(ref) ?? 0) + 1);
+      return fill(ref, value);
+    });
+    const typeSpy = vi.spyOn(controller, 'type').mockImplementation((ref, value, options) => {
+      mutations.set(ref, (mutations.get(ref) ?? 0) + 1);
+      return type(ref, value, options);
+    });
+    const clickSpy = vi.spyOn(controller, 'click').mockImplementation((ref) => {
+      mutations.set(ref, (mutations.get(ref) ?? 0) + 1);
+      return click(ref);
+    });
+    const auditDir = join(runDir, 'fill-performance');
+    const writer = ToolCallWriter.forRun(auditDir);
+    const batchTimes: number[] = [];
+    let next = controls.slice(0, 10).map((entry) => ({ ref: entry.ref, label: entry.name }));
+    let progress:
+      | {
+          filled: number;
+          eligible: number;
+          remaining: number;
+          next: { ref: string; label: string }[];
+        }
+      | undefined;
+    try {
+      for (let batch = 0; batch < 5; batch++) {
+        const fields = (
+          batch === 4
+            ? [{ ref: refused, label: 'Field 15' }]
+            : next.filter(
+                (entry) => !appliedRefs.has(entry.ref) && (batch === 1 || entry.ref !== refused),
+              )
+        ).map((entry) => ({
+          field: entry.ref,
+          value:
+            entry.ref === refused && batch === 1
+              ? '12.5'
+              : fortyControlValue(indexByRef.get(entry.ref)!),
+        }));
+        expect(fields.length).toBeGreaterThan(0);
+        for (const field of fields) {
+          expect(appliedRefs.has(field.field)).toBe(false);
+          sent.set(field.field, (sent.get(field.field) ?? 0) + 1);
+        }
+        const started = Date.now();
+        const result = await call('browser_fill_form', { fields });
+        const duration = Date.now() - started;
+        batchTimes.push(duration);
+        await writer.append({
+          phase: 'end',
+          call_id: `batch-${batch}`,
+          tool: 'browser_fill_form',
+          ts: new Date().toISOString(),
+          run_id: 'fill-performance',
+          session_id: 'scripted',
+          input_sanitized: null,
+          error_code: result.error_code ?? null,
+          confirmation_id: null,
+          status: result.status,
+          duration_ms: duration,
+          output_sanitized: { details: result.details },
+        });
+        expect(result.status).toBe('ok');
+        const model = JSON.parse(result.modelText) as {
+          applied: { ref: string }[];
+          progress: typeof progress;
+        };
+        for (const entry of model.applied) appliedRefs.add(entry.ref);
+        progress = model.progress;
+        expect(progress).toBeDefined();
+        expect(progress!.eligible).toBe(38);
+        expect(progress!.next.every((entry) => !appliedRefs.has(entry.ref))).toBe(true);
+        if (batch === 0)
+          expect(progress).toMatchObject({ filled: 10, eligible: 38, remaining: 28 });
+        if (batch === 3) expect(progress).toMatchObject({ remaining: 1, next: [{ ref: refused }] });
+        next = progress!.next;
+      }
+      expect(progress).toMatchObject({ filled: 38, remaining: 0, next: [] });
+      for (const [ref, count] of sent) expect(count).toBe(ref === refused ? 2 : 1);
+      for (const [ref, count] of mutations) if (ref !== refused) expect(count).toBe(1);
+      expect(mutations.get(refused)).toBeGreaterThanOrEqual(2);
+      const final = await controller.evaluate(() =>
+        Array.from(
+          document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+            '[data-fixture-key]',
+          ),
+        ).map((element) => ({
+          value: element.value,
+          checked: element instanceof HTMLInputElement ? element.checked : false,
+        })),
+      );
+      expect(final).toHaveLength(40);
+      for (let i = 0; i < 40; i++) {
+        if (i >= 31 && i < 34) expect(final[i]!.checked).toBe(true);
+        else if (i >= 34 && i < 37) expect(final[i]!.checked).toBe(i === 34);
+        else expect(final[i]!.value).toBe(i === 26 ? '(555) 123-4567' : fortyControlValue(i));
+      }
+      expect(
+        await controller.evaluate(() => (window as unknown as { __submits: number }).__submits),
+      ).toBe(0);
+      await writer.close();
+      const lines = (await readFile(join(auditDir, 'tool-calls.jsonl'), 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { duration_ms: number });
+      const total = lines.reduce((sum, entry) => sum + entry.duration_ms, 0);
+      if (process.env.UPDATE_FILL_AFTER === '1') {
+        const baselinePath = new URL(
+          '../packages/core/tests/fixtures/fill-performance/baseline.json',
+          import.meta.url,
+        );
+        const baseline = JSON.parse(await readFile(baselinePath, 'utf8')) as {
+          after?: Record<string, unknown>;
+        };
+        await writeFile(
+          baselinePath,
+          JSON.stringify(
+            {
+              ...baseline,
+              after: { ...baseline.after, tool_batches_ms: batchTimes, total_tool_ms: total },
+            },
+            null,
+            2,
+          ) + '\n',
+        );
+      }
+      expect(batchTimes[0]).toBeLessThanOrEqual(15_000);
+      expect(total).toBeLessThanOrEqual(60_000);
+    } finally {
+      fillSpy.mockRestore();
+      typeSpy.mockRestore();
+      clickSpy.mockRestore();
+      await writer.close();
+    }
+  }, 120_000);
 
   it('starts and stops the fixture harness cleanly', async () => {
     const extra = await serveFixtureSite();

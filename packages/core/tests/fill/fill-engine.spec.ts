@@ -1695,12 +1695,8 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     for (const key of ['committed', 'requested', 'note']) {
       expect(outcome).not.toHaveProperty(key);
     }
-    // The historical shape, unchanged: watch-and-select still runs and finds
-    // no suggestions. Only its readback became honest.
-    const ran = verdicts(outcome.ok ? outcome.attempted : undefined)
-      .filter((record) => record.verdict === 'succeeded')
-      .map((record) => record.strategy);
-    expect(ran).toEqual(expect.arrayContaining(['enter-text', 'watch-and-select']));
+    // FEAT-057 replaces the empty full watch with a bounded read-only probe.
+    expect(outcome).not.toHaveProperty('attempted');
     expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
   });
 
@@ -1762,7 +1758,7 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     expect(JSON.stringify(outcome)).not.toContain('oldvalue');
   });
 
-  it('keeps a disclosed plain text fill at exactly the page reads it took before', async () => {
+  it('bounds a disclosed plain text fill after replacing the full watch', async () => {
     // Measured against the engine as it stood before protected-value
     // verification (84 then, under this same clock): the withheld read
     // replaces a read and adds none. The clock steps 50 ms per reading so the
@@ -1781,7 +1777,8 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     );
 
     expect(outcome).toMatchObject({ ok: true, committed: 'Lyon', resolution: 'exact' });
-    expect(evaluateOn).toHaveBeenCalledTimes(84);
+    // FEAT-057 skips the full watch; the same stepped clock now takes 9 reads.
+    expect(evaluateOn).toHaveBeenCalledTimes(9);
   }, 20_000);
 
   it('commits a stored secret blind, with no page read at all', async () => {

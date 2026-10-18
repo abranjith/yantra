@@ -181,6 +181,10 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
   readonly description: string;
   /** Closed TypeBox input schema (additionalProperties:false) with field docs. */
   readonly parameters: TParams;
+  /** Cause-specific advice after schema rejection; never bypasses validation. */
+  readonly inputAdvice?: (
+    raw: unknown,
+  ) => { readonly cause: string; readonly details: Record<string, unknown> } | null;
   /** Sanitization profile applied to the model-visible result. */
   readonly sanitizationProfile: SanitizationProfile;
   /** True when this call must be rejected after the action phase closes. */
@@ -304,12 +308,23 @@ async function runStages<TParams extends TSchema>(
     // 1. Input validation — a closed schema rejects unknown/invalid input
     //    before any budget, policy, or domain code runs.
     if (!Check(spec.parameters, rawParams)) {
+      const advice = spec.inputAdvice?.(rawParams);
+      if (advice)
+        return {
+          result: failure(
+            spec,
+            services,
+            'INVALID_INPUT',
+            renderAgentMessage('tool', 'INVALID_INPUT', advice.cause, advice.details),
+            true,
+          ),
+          cause: advice.cause,
+        };
       // TypeBox reports the failing location as `instancePath` (JSON pointer);
       // older releases used `path`. Without it the model cannot tell WHICH
       // field failed, so a weak model has no structured retry path.
       const first = Errors(spec.parameters, rawParams)[0] as
-        | { path?: string; instancePath?: string; message?: string }
-        | undefined;
+        { path?: string; instancePath?: string; message?: string } | undefined;
       const pointer = first?.instancePath ?? first?.path;
       const where = pointer !== undefined && pointer.length > 0 ? ` at "${pointer}"` : '';
       const invalidMessage = `Invalid tool input${where}: ${first?.message ?? 'schema validation failed'}.`;

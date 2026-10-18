@@ -396,6 +396,7 @@ export class AgentBrowserController implements WidgetPort {
    * and a tool asking for one wants the page as it stands now.
    */
   private lastScanFingerprint: ObservationFingerprint | null = null;
+  private observedCensus: FillCensus | null = null;
   /**
    * The fingerprint of the frame the **model** last saw.
    *
@@ -695,6 +696,7 @@ export class AgentBrowserController implements WidgetPort {
       'observed interactables',
     );
     const digestHash = createHash('sha256').update(snapshot.digest).digest('hex').slice(0, 16);
+    this.observedCensus = this.buildFillCensus(!truncated);
     const digestUnchanged = trackDigest && digestHash === this.lastDigestHash;
     if (trackDigest && !digestUnchanged) this.lastDigestHash = digestHash;
     return {
@@ -707,6 +709,41 @@ export class AgentBrowserController implements WidgetPort {
     };
   }
 
+  /** Return the latest observation's census without reading the page. */
+  public latestFillCensus(): FillCensus | null {
+    return this.observedCensus?.epoch === this.topLevelDocumentEpoch() ? this.observedCensus : null;
+  }
+
+  /** Shared census projection from the observation's complete ref registry. */
+  private buildFillCensus(complete: boolean): FillCensus {
+    return {
+      epoch: this.topLevelDocumentEpoch(),
+      host: this.host(),
+      complete,
+      controls: [...this.refs.values()].flatMap((entry) => {
+        const raw = entry.raw;
+        if (!raw?.field) return [];
+        const facts = raw.field;
+        return [
+          {
+            ref: entry.ref,
+            groupKey: facts.radioGroup
+              ? `radio:${facts.radioGroup}`
+              : facts.checkboxSet
+                ? `checkbox:${facts.checkboxSet}`
+                : null,
+            label: entry.fieldIdentity?.label ?? (entry.name || `(unlabeled ${entry.role})`),
+            exemption: classifyFillExemption({
+              ...facts,
+              hidden: !raw.visible,
+              markerText: facts.humanVerification ? 'captcha' : '',
+            }),
+          },
+        ];
+      }),
+    };
+  }
+
   /** Read the current document's fill denominator once, without consuming model state. */
   public async fillCensus(): Promise<FillCensus> {
     try {
@@ -715,32 +752,7 @@ export class AgentBrowserController implements WidgetPort {
         trackDigest: false,
       });
 
-      return {
-        epoch: this.topLevelDocumentEpoch(),
-        host: this.host(),
-        complete: !observation.inventory.scanBounded,
-        controls: [...this.refs.values()].flatMap((entry) => {
-          const raw = entry.raw;
-          if (!raw?.field) return [];
-          const facts = raw.field;
-          return [
-            {
-              ref: entry.ref,
-              groupKey: facts.radioGroup
-                ? `radio:${facts.radioGroup}`
-                : facts.checkboxSet
-                  ? `checkbox:${facts.checkboxSet}`
-                  : null,
-              label: entry.fieldIdentity?.label ?? (entry.name || `(unlabeled ${entry.role})`),
-              exemption: classifyFillExemption({
-                ...facts,
-                hidden: !raw.visible,
-                markerText: facts.humanVerification ? 'captcha' : '',
-              }),
-            },
-          ];
-        }),
-      };
+      return this.buildFillCensus(!observation.inventory.scanBounded);
     } catch {
       // A failed inventory cannot establish coverage; publication must remain partial.
       return {
@@ -1710,6 +1722,7 @@ export class AgentBrowserController implements WidgetPort {
   }
 
   private invalidateObservation(): void {
+    this.observedCensus = null;
     for (const record of this.refs.values()) disposeHandle(record.handle);
     this.refs.clear();
   }

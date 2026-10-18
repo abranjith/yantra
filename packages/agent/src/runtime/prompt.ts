@@ -9,6 +9,8 @@ import type { BrowserCapability } from './profiles.js';
  */
 
 /**
+ * agent-v12 changes only the `do` addendum's batch guidance: states the per-call cap,
+ * shape-neutral wording, and continuation through progress.
  * The version recorded in agentic run manifests. `agent-v11` (FEAT-054)
  * changes only the do addendum, teaching the contract's action terms (fill,
  * artifacts, effects) and publishing with unmet items; the system prompt is
@@ -22,7 +24,7 @@ import type { BrowserCapability } from './profiles.js';
  * than a fallback. `agent-v8` added the governed `Scope` section itself.
  * The system prompt text itself intentionally remains output-shape agnostic.
  */
-export const PROMPT_VERSION = 'agent-v11' as const;
+export const PROMPT_VERSION = 'agent-v12' as const;
 
 /**
  * The complete production system prompt for agentic Yantra runs.
