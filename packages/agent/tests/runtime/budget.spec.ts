@@ -22,6 +22,12 @@ const TIGHT_LIMITS: BudgetLimits = {
   maxCaptures: 3,
   maxCapturePixels: 1600 * 1200,
   maxCaptureBytes: 5 * 1024 * 1024,
+  maxDeliverableCaptures: 4,
+  maxDeliverablePartsPerCall: 6,
+  maxDeliverableTileWidth: 1920,
+  maxDeliverableTileHeight: 4096,
+  maxDeliverableFileBytes: 8 * 1024 * 1024,
+  maxDeliverableBytesPerRun: 40 * 1024 * 1024,
 };
 
 describe('@no-llm BudgetTracker capture budgets', () => {
@@ -314,5 +320,106 @@ describe('@no-llm BudgetTracker wind-down exemption (FEAT-054 S1)', () => {
 
     expect(budgets.reserveCall('result_publish', { terminal: true }).isOk).toBe(true);
     expect(budgets.softWindDownReached).toBe(true);
+  });
+});
+
+describe('@no-llm BudgetTracker deliverable capture budget (FEAT-058 S4)', () => {
+  const MIB = 1024 * 1024;
+  const file = (bytes = 1000, width = 1920, height = 4096) => ({ width, height, bytes });
+
+  it('ships the S4 limits as configuration constants', () => {
+    expect(DEFAULT_BUDGET_LIMITS).toMatchObject({
+      maxDeliverableCaptures: 4,
+      maxDeliverablePartsPerCall: 6,
+      maxDeliverableTileWidth: 1920,
+      maxDeliverableTileHeight: 4096,
+      maxDeliverableFileBytes: 8 * MIB,
+      maxDeliverableBytesPerRun: 40 * MIB,
+    });
+    // Vision Assist's limits do not move.
+    expect(DEFAULT_BUDGET_LIMITS).toMatchObject({
+      maxCaptures: 3,
+      maxCapturePixels: 1600 * 1200,
+      maxCaptureBytes: 5 * MIB,
+    });
+  });
+
+  it('reserves four calls with ordinals 1 to 4 and refuses the fifth by name', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    for (let seq = 1; seq <= 4; seq += 1) {
+      const reserved = budgets.reserveDeliverableCapture();
+      expect(reserved.isOk && reserved.value).toBe(seq);
+      expect(budgets.remainingDeliverableCaptures()).toBe(4 - seq);
+    }
+    const denied = budgets.reserveDeliverableCapture();
+    expect(denied.isOk).toBe(false);
+    if (!denied.isOk) {
+      expect(denied.error.limit).toBe('deliverable-capture-count');
+      expect(denied.error.carriesPublishRemedy).toBe(true);
+    }
+  });
+
+  it('never touches the Vision Assist counters, and Vision never touches it', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    budgets.reserveDeliverableCapture();
+    budgets.accountDeliverableBytes([file()]);
+    budgets.reserveCapture();
+    expect(budgets.snapshot()).toMatchObject({
+      captureCount: 1,
+      captureBytes: 0,
+      deliverableCaptureCount: 1,
+      deliverableCaptureBytes: 1000,
+    });
+    expect(budgets.remainingCaptures()).toBe(2);
+  });
+
+  it('accepts a tile at exactly the pixel and byte bounds', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    expect(budgets.accountDeliverableBytes([file(8 * MIB)]).isOk).toBe(true);
+  });
+
+  it.each([
+    ['one pixel too wide', file(1000, 1921, 10), 'deliverable-capture-pixels'],
+    ['one pixel too tall', file(1000, 10, 4097), 'deliverable-capture-pixels'],
+    ['zero width', file(1000, 0, 10), 'deliverable-capture-pixels'],
+    ['fractional height', file(1000, 10, 1.5), 'deliverable-capture-pixels'],
+    ['one byte too large', file(8 * MIB + 1), 'deliverable-capture-bytes'],
+    ['negative bytes', file(-1), 'deliverable-capture-bytes'],
+  ] as const)('refuses a file %s and accounts nothing', (_label, measurement, limit) => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    const result = budgets.accountDeliverableBytes([file(), measurement]);
+    expect(result.isOk).toBe(false);
+    if (!result.isOk) expect(result.error.limit).toBe(limit);
+    expect(budgets.snapshot().deliverableCaptureBytes).toBe(0);
+  });
+
+  it('refuses zero files and more than six files per call', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    expect(budgets.accountDeliverableBytes([]).isOk).toBe(false);
+    expect(budgets.accountDeliverableBytes(Array.from({ length: 7 }, () => file())).isOk).toBe(
+      false,
+    );
+    expect(budgets.accountDeliverableBytes(Array.from({ length: 6 }, () => file())).isOk).toBe(
+      true,
+    );
+  });
+
+  it('refuses a call that would cross the 40 MiB run total, atomically', () => {
+    const budgets = new BudgetTracker(TIGHT_LIMITS);
+    for (let call = 0; call < 5; call += 1) {
+      expect(budgets.accountDeliverableBytes([file(8 * MIB)]).isOk).toBe(true);
+    }
+    const over = budgets.accountDeliverableBytes([file(1)]);
+    expect(over.isOk).toBe(false);
+    if (!over.isOk) expect(over.error.limit).toBe('deliverable-capture-bytes');
+    expect(budgets.snapshot().deliverableCaptureBytes).toBe(40 * MIB);
+  });
+
+  it('exposes the per-call bounds the controller obeys', () => {
+    expect(new BudgetTracker(TIGHT_LIMITS).deliverableBounds()).toEqual({
+      tileWidth: 1920,
+      tileHeight: 4096,
+      maxParts: 6,
+    });
   });
 });

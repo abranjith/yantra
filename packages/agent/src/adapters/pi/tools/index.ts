@@ -19,6 +19,7 @@ import type { CommandTaskProfile, YantraToolName } from '../../../runtime/profil
 import type { RunServices } from '../../../runtime/run-services.js';
 import { createDefaultPiEventMapContext } from '../event-map.js';
 
+import { browserCaptureSpec } from './browser-capture.js';
 import { browserClickSpec } from './browser-click.js';
 import { browserExtractSpec } from './browser-extract.js';
 import { browserFillElementSpec } from './browser-fill-element.js';
@@ -50,6 +51,7 @@ export { scriptRunSpec } from './script-run.js';
 export { resultPublishSpec } from './result-publish.js';
 export { templateParamsFor } from './template-params.js';
 export { validateSlots, type TemplateSlotIssue } from './template-validate.js';
+export { browserCaptureSpec } from './browser-capture.js';
 export { browserClickSpec } from './browser-click.js';
 export { browserExtractSpec } from './browser-extract.js';
 export { browserFillElementSpec } from './browser-fill-element.js';
@@ -98,6 +100,11 @@ export function buildYantraWrappedTools(
     : allWrapped;
   if (services.vision.available) {
     wrapped.push(wrapTool(browserScreenshotSpec(toolServices), toolServices));
+  }
+  // FEAT-058 S2: the local deliverable capture is registered by its own
+  // capability, never by the screenshot grant or the model's image support.
+  if (services.capture.deliverable.available) {
+    wrapped.push(wrapTool(browserCaptureSpec(toolServices), toolServices));
   }
   const seen = new Set<string>();
   for (const tool of wrapped) {
@@ -161,10 +168,12 @@ function toPiTool(tool: WrappedTool): ToolDefinition {
  * the run recorder can project it into `tool-calls.jsonl` without parsing text.
  */
 export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unknown> {
-  const captures =
+  const details =
     result.details !== null && typeof result.details === 'object' && !Array.isArray(result.details)
-      ? (result.details as { readonly captures?: unknown }).captures
+      ? (result.details as { readonly captures?: unknown; readonly artifacts?: unknown })
       : undefined;
+  const captures = details?.captures;
+  const artifacts = details?.artifacts;
   const out = {
     content: result.content?.map((part) =>
       part.kind === 'text'
@@ -177,6 +186,7 @@ export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unk
     ...(result.confirmation_id !== undefined ? { confirmation_id: result.confirmation_id } : {}),
     ...(result.terminate === true ? { terminate: true } : {}),
     ...(Array.isArray(captures) && captures.length > 0 ? { captures } : {}),
+    ...(Array.isArray(artifacts) && artifacts.length > 0 ? { artifacts } : {}),
   };
   // The extra audit fields are intentional (read by the FEAT-023 recorder); Pi
   // ignores unknown fields on the result object.

@@ -32,8 +32,32 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/agent/src/runtime/capture-capability.ts",
+      "path": "packages/agent/src/adapters/pi/tools/browser-capture.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/budget.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/capture-artifacts.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/capture-capability.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -42,6 +66,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/agent/src/runtime/orchestrator.ts",
@@ -80,6 +110,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-capture.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
       "status": "M",
       "role": "implement",
@@ -92,8 +128,14 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/budget.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/agent/tests/runtime/capture-capability.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },

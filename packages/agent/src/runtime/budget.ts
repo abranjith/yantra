@@ -46,7 +46,10 @@ export type BudgetLimit =
   | 'capture-count'
   | 'capture-pixels'
   | 'capture-bytes'
-  | 'capture-mime';
+  | 'capture-mime'
+  | 'deliverable-capture-count'
+  | 'deliverable-capture-bytes'
+  | 'deliverable-capture-pixels';
 
 /**
  * A typed exhaustion decision. Carries the stable machine code shared by every
@@ -96,6 +99,22 @@ export interface BudgetLimits {
   readonly maxCapturePixels: number;
   /** Maximum encoded bytes in one screenshot. */
   readonly maxCaptureBytes: number;
+  /**
+   * Deliverable capture (`browser_capture`, FEAT-058 S4) has its own budget,
+   * separate from Vision Assist's: its pixels never reach the provider, and a
+   * full page is taller than Vision's bound by design. Most calls per run.
+   */
+  readonly maxDeliverableCaptures: number;
+  /** Most PNG files one deliverable capture call writes. */
+  readonly maxDeliverablePartsPerCall: number;
+  /** Widest deliverable tile, in pixels. */
+  readonly maxDeliverableTileWidth: number;
+  /** Tallest deliverable tile, in pixels. */
+  readonly maxDeliverableTileHeight: number;
+  /** Most bytes in one deliverable PNG. */
+  readonly maxDeliverableFileBytes: number;
+  /** Most deliverable bytes written across the run. */
+  readonly maxDeliverableBytesPerRun: number;
 }
 
 /**
@@ -114,6 +133,12 @@ export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
   maxCaptures: 3,
   maxCapturePixels: 1600 * 1200,
   maxCaptureBytes: 5 * 1024 * 1024,
+  maxDeliverableCaptures: 4,
+  maxDeliverablePartsPerCall: 6,
+  maxDeliverableTileWidth: 1920,
+  maxDeliverableTileHeight: 4096,
+  maxDeliverableFileBytes: 8 * 1024 * 1024,
+  maxDeliverableBytesPerRun: 40 * 1024 * 1024,
 };
 
 /** Per-call accounting options shared by reservation and byte accounting. */
@@ -146,6 +171,17 @@ export interface BudgetSnapshot {
   readonly captureCount: number;
   readonly capturePixels: number;
   readonly captureBytes: number;
+  /** Deliverable captures reserved (FEAT-058); never counted against Vision's. */
+  readonly deliverableCaptureCount: number;
+  /** Deliverable bytes accounted. */
+  readonly deliverableCaptureBytes: number;
+}
+
+/** One deliverable PNG's measurements, checked before anything is written. */
+export interface DeliverableFileMeasurement {
+  readonly width: number;
+  readonly height: number;
+  readonly bytes: number;
 }
 
 /** Measurements checked before image data may cross the provider seam. */
@@ -176,6 +212,8 @@ export class BudgetTracker {
   private captureCount = 0;
   private capturePixels = 0;
   private captureBytes = 0;
+  private deliverableCaptureCount = 0;
+  private deliverableCaptureBytes = 0;
   private softWindDown = false;
 
   /**
@@ -276,6 +314,103 @@ export class BudgetTracker {
     }
     this.capturePixels += pixels;
     this.captureBytes += measurement.bytes;
+    return ok(undefined);
+  }
+
+  /** The pixel and part bounds one deliverable capture call obeys. */
+  public deliverableBounds(): {
+    readonly tileWidth: number;
+    readonly tileHeight: number;
+    readonly maxParts: number;
+  } {
+    return {
+      tileWidth: this.limits.maxDeliverableTileWidth,
+      tileHeight: this.limits.maxDeliverableTileHeight,
+      maxParts: this.limits.maxDeliverablePartsPerCall,
+    };
+  }
+
+  /** Deliverable captures the run may still take. */
+  public remainingDeliverableCaptures(): number {
+    return Math.max(0, this.limits.maxDeliverableCaptures - this.deliverableCaptureCount);
+  }
+
+  /**
+   * Reserves one deliverable capture against its own counter, never Vision's.
+   * The returned ordinal names the call's files (`capture-<seq>-…`).
+   */
+  public reserveDeliverableCapture(): Result<number, BudgetDecision> {
+    if (this.deliverableCaptureCount >= this.limits.maxDeliverableCaptures) {
+      return err(
+        this.decide(
+          'deliverable-capture-count',
+          `The saved-screenshot budget of ${this.limits.maxDeliverableCaptures} captures for ` +
+            'this run is spent. Publish with the captures already saved.',
+        ),
+      );
+    }
+    this.deliverableCaptureCount += 1;
+    return ok(this.deliverableCaptureCount);
+  }
+
+  /**
+   * Validates every file of one deliverable capture call — the part count,
+   * each file's pixels and bytes, and the run total — and accounts the bytes
+   * only when all of them fit. Called before anything is written, so a
+   * refused call writes nothing.
+   */
+  public accountDeliverableBytes(
+    files: readonly DeliverableFileMeasurement[],
+  ): Result<void, BudgetDecision> {
+    if (files.length === 0 || files.length > this.limits.maxDeliverablePartsPerCall) {
+      return err(
+        this.decide(
+          'deliverable-capture-pixels',
+          `A saved capture holds 1 to ${this.limits.maxDeliverablePartsPerCall} files; this one had ${files.length}.`,
+        ),
+      );
+    }
+    let total = 0;
+    for (const file of files) {
+      if (
+        !validNonnegativeInteger(file.width) ||
+        !validNonnegativeInteger(file.height) ||
+        file.width === 0 ||
+        file.height === 0 ||
+        file.width > this.limits.maxDeliverableTileWidth ||
+        file.height > this.limits.maxDeliverableTileHeight
+      ) {
+        return err(
+          this.decide(
+            'deliverable-capture-pixels',
+            `A saved capture file exceeded the ${this.limits.maxDeliverableTileWidth} by ` +
+              `${this.limits.maxDeliverableTileHeight} pixel limit.`,
+          ),
+        );
+      }
+      if (
+        !validNonnegativeInteger(file.bytes) ||
+        file.bytes > this.limits.maxDeliverableFileBytes
+      ) {
+        return err(
+          this.decide(
+            'deliverable-capture-bytes',
+            `A saved capture file exceeded the ${this.limits.maxDeliverableFileBytes} byte limit.`,
+          ),
+        );
+      }
+      total += file.bytes;
+    }
+    if (this.deliverableCaptureBytes + total > this.limits.maxDeliverableBytesPerRun) {
+      return err(
+        this.decide(
+          'deliverable-capture-bytes',
+          `Saved captures would exceed the run's ${this.limits.maxDeliverableBytesPerRun} byte ` +
+            'limit. Publish with the captures already saved.',
+        ),
+      );
+    }
+    this.deliverableCaptureBytes += total;
     return ok(undefined);
   }
 
@@ -427,6 +562,8 @@ export class BudgetTracker {
       captureCount: this.captureCount,
       capturePixels: this.capturePixels,
       captureBytes: this.captureBytes,
+      deliverableCaptureCount: this.deliverableCaptureCount,
+      deliverableCaptureBytes: this.deliverableCaptureBytes,
     };
   }
 

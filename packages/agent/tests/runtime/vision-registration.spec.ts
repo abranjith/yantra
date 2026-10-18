@@ -5,8 +5,14 @@ import {
   createYantraTools,
   yantraToolCatalog,
 } from '../../src/adapters/pi/tools/index.js';
+import { resolveCaptureCapability } from '../../src/runtime/capture-capability.js';
 import { hashToolCatalog } from '../../src/runtime/catalog-hash.js';
-import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
+import {
+  COMMAND_TASK_PROFILES,
+  INTERACT_TOOLS,
+  resolveCommandTaskProfile,
+} from '../../src/runtime/profiles.js';
+import type { BrowserToolDeps } from '../../src/runtime/run-services.js';
 import {
   resolveVisionAvailability,
   type VisionAvailabilityInput,
@@ -100,6 +106,75 @@ describe('@no-llm vision registration gate', () => {
       expect(vision.available).toBe(expected);
       expect(vision.reasons.length === 0).toBe(expected);
     }
+  });
+
+  describe('deliverable capture registration (FEAT-058)', () => {
+    // Registration reads only that a browser exists, never its methods.
+    const browser = {} as unknown as BrowserToolDeps;
+
+    function catalog(options: {
+      readonly vision: VisionAvailabilityInput;
+      readonly suppressed?: boolean;
+      readonly profile?: Parameters<typeof buildYantraWrappedTools>[1];
+      readonly hasBrowser?: boolean;
+    }): string[] {
+      const vision = resolveVisionAvailability({
+        ...options.vision,
+        suppressedByFlag: options.suppressed === true,
+      });
+      const profile = options.profile ?? COMMAND_TASK_PROFILES.do;
+      const services = buildServices({
+        vision,
+        domain: options.hasBrowser === false ? {} : { browser },
+        capture: resolveCaptureCapability({
+          vision,
+          hasBrowser: options.hasBrowser !== false,
+          hasInteractionTools: (profile?.toolNames ?? []).some((name) => INTERACT_TOOLS.has(name)),
+          suppressedByFlag: options.suppressed === true,
+        }),
+      });
+      return buildYantraWrappedTools(services, profile).map((tool) => tool.name);
+    }
+
+    const TEXT_ONLY_NO_GRANT: VisionAvailabilityInput = {
+      ...ALL_TRUE,
+      grantEnabled: false,
+      modelImageInput: false,
+    };
+
+    it('registers browser_capture and not browser_screenshot for a grant-less, text-only do run', () => {
+      const names = catalog({ vision: TEXT_ONLY_NO_GRANT });
+      expect(names).toContain('browser_capture');
+      expect(names).not.toContain('browser_screenshot');
+    });
+
+    it('registers neither under --no-screenshots', () => {
+      const names = catalog({ vision: ALL_TRUE, suppressed: true });
+      expect(names).not.toContain('browser_capture');
+      expect(names).not.toContain('browser_screenshot');
+    });
+
+    it("registers neither for research's read-only browse", () => {
+      const names = catalog({
+        vision: TEXT_ONLY_NO_GRANT,
+        profile: resolveCommandTaskProfile('research', { browse: true }),
+      });
+      expect(names).not.toContain('browser_capture');
+      expect(names).not.toContain('browser_screenshot');
+    });
+
+    it('registers neither without a browser', () => {
+      expect(catalog({ vision: TEXT_ONLY_NO_GRANT, hasBrowser: false })).not.toContain(
+        'browser_capture',
+      );
+    });
+
+    it('registers both when Vision Assist is enabled', () => {
+      const names = catalog({ vision: ALL_TRUE });
+      expect(names).toContain('browser_capture');
+      expect(names).toContain('browser_screenshot');
+      expect(names).toEqual([...names].sort());
+    });
   });
 
   it('keeps Pi tools and the hash catalog on the identical name set', () => {

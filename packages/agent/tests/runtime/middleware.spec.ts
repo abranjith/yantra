@@ -197,6 +197,31 @@ describe('@no-llm middleware screenshot content exception', () => {
     }
   });
 
+  it('refuses image content from browser_capture with capture-mime, even with Vision Assist on (FEAT-058)', async () => {
+    const { runDir, bytes, artifact } = await fixture();
+    try {
+      const result = await wrapTool(
+        spec(
+          async () => ({
+            ok: true,
+            model: { saved_locally: true },
+            content: [
+              { kind: 'image', mimeType: 'image/png', base64: bytes.toString('base64'), artifact },
+            ],
+          }),
+          { name: 'browser_capture' },
+        ),
+        makeServices({ runDir, visionAvailable: true }),
+      ).execute({ q: 'a' }, undefined);
+      expect(result.status).toBe('error');
+      expect(result.content).toBeUndefined();
+      expect(result.details).toMatchObject({ budget_limit: 'capture-mime' });
+      expect(result.modelText).not.toContain(bytes.toString('base64').slice(0, 24));
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
   it.each(['missing', 'sha', 'mime', 'oversize'] as const)(
     'fails closed and drops image content for %s artifact validation',
     async (failure) => {

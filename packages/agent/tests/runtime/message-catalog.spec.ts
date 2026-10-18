@@ -88,6 +88,7 @@ describe('@no-llm agent interaction message catalog', () => {
     expect(busy?.capability).toBeNull();
     expect(busy?.capabilityKind).toBeNull();
     expect(buildYantraWrappedTools(services).map((tool) => tool.name)).toEqual([
+      'browser_capture',
       'browser_click',
       'browser_extract',
       'browser_fill_element',
