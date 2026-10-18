@@ -487,7 +487,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 ## 8. State Tracking
 
 - [x] TASK-001: Protocol: generic artifact reference, Brief artifacts, capture capability; older runs parse
-- [ ] TASK-002: Controller clean, epoch-guarded viewport/full-page/element capture with labeled tiling
+- [x] TASK-002: Controller clean, epoch-guarded viewport/full-page/element capture with labeled tiling
 - [ ] TASK-003: Both capabilities resolved pre-catalog with reason codes in manifest and run health; `--no-screenshots` broadened
 - [ ] TASK-004: `browser_capture` tool: own budget, secret latch, owner-only files, metadata-only result
 - [ ] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures

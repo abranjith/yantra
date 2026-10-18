@@ -8,6 +8,36 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/browser/epoch-guard.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/browser/set-of-marks.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/deliverable-capture.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/browser/epoch-guard.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/protocol/generated/json-schema/brief.schema.json",
       "status": "M",
       "role": "implement",
@@ -33,7 +63,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/artifact-ref.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -45,7 +75,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/capture-capability.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -75,7 +105,7 @@
     },
     {
       "path": "packages/protocol/tests/artifact-ref.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },

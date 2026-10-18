@@ -48,6 +48,7 @@ import {
   hiddenError,
   StaleElementRefError,
 } from './actionability-errors.js';
+import { withEpochGuardedCapture } from './epoch-guard.js';
 import {
   CANDIDATE_SCAN_CAP,
   CANDIDATE_SELECTOR,
@@ -77,6 +78,7 @@ import { SensitiveScreenLatch } from './sensitive-screen-latch.js';
 import { wrapPuppeteerPage } from './session.js';
 import {
   puppeteerSetOfMarksPort,
+  SET_OF_MARKS_OVERLAY_ID,
   withSetOfMarksCapture,
   type SetOfMarksMark,
 } from './set-of-marks.js';
@@ -208,6 +210,74 @@ export interface AgentScreenshotCapture {
   readonly scope: 'viewport' | 'element';
   readonly ref?: string;
   readonly marks: number;
+}
+
+/** What a clean deliverable capture covers (FEAT-058 S5). */
+export type DeliverableCaptureScope = 'viewport' | 'full_page' | 'element';
+
+/**
+ * Why a capture set is not a plain picture of its target: wider than a tile
+ * (`clipped_width`), taller than the set holds (`truncated`), or an element
+ * outside the visible area (`beyond_viewport`). The first two make it incomplete.
+ */
+export type DeliverableCaptureLabel = 'clipped_width' | 'truncated' | 'beyond_viewport';
+
+/** Pixel bounds one deliverable capture call obeys; supplied by the caller's budget. */
+export interface DeliverableCaptureBounds {
+  /** Widest tile, in CSS pixels; wider content is clipped and labeled. */
+  readonly tileWidth: number;
+  /** Tallest tile, in CSS pixels; taller content is split into tiles. */
+  readonly tileHeight: number;
+  /** Most tiles one call returns; content beyond them is labeled `truncated`. */
+  readonly maxParts: number;
+}
+
+/** One clean capture request. */
+export interface DeliverableCaptureRequest {
+  readonly scope: DeliverableCaptureScope;
+  /** A live ref from the current document; required for `element`, ignored otherwise. */
+  readonly ref?: string;
+  readonly bounds: DeliverableCaptureBounds;
+}
+
+/** One PNG tile of a deliverable capture, with its decoded dimensions. */
+export interface DeliverableCaptureTile {
+  readonly png: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * A clean (unmarked) capture set from one document, before run-artifact
+ * persistence. The controller never writes files: core holds no run-directory
+ * knowledge.
+ */
+export interface AgentDeliverableCapture {
+  readonly scope: DeliverableCaptureScope;
+  readonly ref?: string;
+  /** 1 to `bounds.maxParts` tiles, top to bottom. */
+  readonly tiles: readonly DeliverableCaptureTile[];
+  /** False when the set was clipped or truncated. */
+  readonly complete: boolean;
+  readonly labels: readonly DeliverableCaptureLabel[];
+  /** CSS pixels of height the tiles cover (`full_page` and `element`). */
+  readonly capturedHeight?: number;
+  /** CSS pixels of height the target has (`full_page` and `element`). */
+  readonly pageHeight?: number;
+}
+
+/** Why a deliverable capture was refused. */
+export type DeliverableCaptureErrorCode = 'overlay-present' | 'bounds-exceeded';
+
+/** A deliverable capture the controller refused rather than return a dishonest picture. */
+export class DeliverableCaptureError extends Error {
+  public constructor(
+    public readonly code: DeliverableCaptureErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'DeliverableCaptureError';
+  }
 }
 
 export interface BrowserActionResult {
@@ -853,6 +923,106 @@ export class AgentBrowserController implements WidgetPort {
       ...(ref === undefined ? {} : { ref }),
       marks: marks.length,
     };
+  }
+
+  /**
+   * Capture a clean (unmarked) PNG set of the viewport, the full page, or one
+   * element, for a deliverable the user asked for (FEAT-058 S5).
+   *
+   * - `viewport`: the visible viewport at the current scroll position.
+   * - `full_page`: the top-level document's scrollable content, split into
+   *   tiles of at most `bounds.tileHeight`; wider content is clipped
+   *   (`clipped_width`), and content past `bounds.maxParts` tiles is cut
+   *   (`truncated`).
+   * - `element`: the ref's border box, captured beyond the viewport without
+   *   scrolling (`beyond_viewport` when it is not wholly visible), tiled like
+   *   a full page when larger than one tile.
+   *
+   * Every tile of one call comes from one document (one epoch guard), and
+   * each tile's decoded size is checked against the bounds, so a device scale
+   * factor can never smuggle an oversized image through.
+   *
+   * @throws DeliverableCaptureError `overlay-present` when Yantra's marks
+   *   overlay is in the document; `bounds-exceeded` when a decoded tile is
+   *   larger than the bounds.
+   * @throws StaleElementRefError when the element ref is not live.
+   * @throws SetOfMarksError (`SET_OF_MARKS_EPOCH_CHANGED`) when the document
+   *   changed during the capture; no tiles are returned.
+   */
+  public async captureDeliverable(
+    request: DeliverableCaptureRequest,
+  ): Promise<AgentDeliverableCapture> {
+    this.assertLaunched();
+    const page = this.page!;
+    const overlay = await page.evaluate(
+      (id) => document.getElementById(id) !== null,
+      SET_OF_MARKS_OVERLAY_ID,
+    );
+    if (overlay) {
+      throw new DeliverableCaptureError(
+        'overlay-present',
+        "Yantra's screenshot marks overlay is on the page, so a clean capture is not possible.",
+      );
+    }
+    const { scope, bounds } = request;
+    let target: ElementHandle<Element> | null = null;
+    if (scope === 'element') {
+      if (request.ref === undefined) throw new StaleElementRefError('(none)', 'no ref was given');
+      target = this.resolveRef(request.ref);
+    }
+    const ref = scope === 'element' ? request.ref : undefined;
+
+    const capture = await withEpochGuardedCapture({
+      readTopLevelEpoch: () => this.topLevelDocumentEpoch(),
+      capture: async () => {
+        const view = await page.evaluate(() => ({
+          left: window.visualViewport?.pageLeft ?? window.scrollX,
+          top: window.visualViewport?.pageTop ?? window.scrollY,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }));
+        // CDP clips are in document coordinates: the visible viewport starts
+        // at the visual viewport's page offset, and an element box (viewport
+        // coordinates) is shifted by the same offset.
+        let fixed: CaptureRegion | null = null;
+        if (scope === 'viewport') {
+          fixed = { x: view.left, y: view.top, width: view.width, height: view.height, labels: [] };
+        } else if (target !== null) {
+          const box = await target.boundingBox();
+          if (box === null) throw new StaleElementRefError(request.ref!, 'element is not rendered');
+          const inside =
+            box.x >= 0 &&
+            box.y >= 0 &&
+            box.x + box.width <= view.width &&
+            box.y + box.height <= view.height;
+          fixed = {
+            x: box.x + view.left,
+            y: box.y + view.top,
+            width: box.width,
+            height: box.height,
+            labels: inside ? [] : ['beyond_viewport'],
+          };
+        }
+        const session = await page.createCDPSession();
+        try {
+          const region = fixed ?? fullPageRegion(await session.send('Page.getLayoutMetrics'));
+          return await captureTiles(session, region, bounds, scope);
+        } finally {
+          // swallow-ok: detach is cleanup; the capture outcome is already decided
+          await session.detach().catch(() => undefined);
+        }
+      },
+    });
+    for (const tile of capture.tiles) {
+      if (tile.width > bounds.tileWidth || tile.height > bounds.tileHeight) {
+        throw new DeliverableCaptureError(
+          'bounds-exceeded',
+          `A captured tile measured ${tile.width} by ${tile.height} pixels, larger than the ` +
+            `${bounds.tileWidth} by ${bounds.tileHeight} pixel bound.`,
+        );
+      }
+    }
+    return { scope, ...(ref === undefined ? {} : { ref }), ...capture };
   }
 
   /**
@@ -2072,6 +2242,95 @@ async function sleep(ms: number): Promise<void> {
 
 async function settle(): Promise<void> {
   await sleep(30);
+}
+
+/** A capture target in document coordinates (CSS pixels), before tiling. */
+interface CaptureRegion {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly labels: readonly DeliverableCaptureLabel[];
+}
+
+/** The top-level document's whole scrollable content. */
+function fullPageRegion(metrics: {
+  readonly cssContentSize: { readonly width: number; readonly height: number };
+}): CaptureRegion {
+  return {
+    x: 0,
+    y: 0,
+    width: metrics.cssContentSize.width,
+    height: metrics.cssContentSize.height,
+    labels: [],
+  };
+}
+
+/** The CDP calls tiling needs; a page-scoped session satisfies it. */
+interface TileCaptureSession {
+  send(
+    method: 'Page.captureScreenshot',
+    params: {
+      readonly format: 'png';
+      readonly fromSurface: boolean;
+      readonly captureBeyondViewport: boolean;
+      readonly clip: {
+        readonly x: number;
+        readonly y: number;
+        readonly width: number;
+        readonly height: number;
+        readonly scale: number;
+      };
+    },
+  ): Promise<{ readonly data: string }>;
+}
+
+/**
+ * Captures a region as horizontal tiles of at most `bounds.tileHeight`,
+ * clipping the width to `bounds.tileWidth` and stopping after
+ * `bounds.maxParts`, labeling whatever was left out. A viewport capture stays
+ * inside the viewport; every other scope reaches beyond it without scrolling.
+ */
+async function captureTiles(
+  session: TileCaptureSession,
+  region: CaptureRegion,
+  bounds: DeliverableCaptureBounds,
+  scope: DeliverableCaptureScope,
+): Promise<Omit<AgentDeliverableCapture, 'scope' | 'ref'>> {
+  const labels = new Set<DeliverableCaptureLabel>(region.labels);
+  const x = Math.max(0, Math.round(region.x));
+  const y = Math.max(0, Math.round(region.y));
+  const fullWidth = Math.max(1, Math.round(region.width));
+  const fullHeight = Math.max(1, Math.round(region.height));
+  const width = Math.min(fullWidth, bounds.tileWidth);
+  if (fullWidth > bounds.tileWidth) labels.add('clipped_width');
+  const needed = Math.ceil(fullHeight / bounds.tileHeight);
+  const parts = Math.min(needed, bounds.maxParts);
+  if (needed > parts) labels.add('truncated');
+  const tiles: DeliverableCaptureTile[] = [];
+  let capturedHeight = 0;
+  for (let index = 0; index < parts; index += 1) {
+    const offset = index * bounds.tileHeight;
+    const height = Math.min(bounds.tileHeight, fullHeight - offset);
+    const result = await session.send('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: scope !== 'viewport',
+      clip: { x, y: y + offset, width, height, scale: 1 },
+    });
+    const png = Buffer.from(result.data, 'base64');
+    tiles.push({ png, ...pngDimensions(png) });
+    capturedHeight += height;
+  }
+  const ordered = (['clipped_width', 'truncated', 'beyond_viewport'] as const).filter((label) =>
+    labels.has(label),
+  );
+  return {
+    tiles,
+    complete: !labels.has('clipped_width') && !labels.has('truncated'),
+    labels: ordered,
+    ...(scope === 'viewport' ? {} : { capturedHeight, pageHeight: fullHeight }),
+  };
 }
 
 function pngDimensions(bytes: Uint8Array): { readonly width: number; readonly height: number } {
