@@ -696,6 +696,20 @@ depth still means `'dialog'` — and a per-scan memo names each container once h
 holds, so a modal with two hundred controls does not recompute one accessible name two hundred times.
 There is no second query, no second traversal, and no DOM mutation.
 
+Protected controls are classified in the same `computeValue` call that withholds their value, so the
+classification costs no page read. `RawInteractable.withheldReason` is the closed `WithheldReason`
+(`password`, `autocomplete`, or `secret_marker`, in that precedence), and unlike the diagnostics
+above it **is** projected: `AgentInteractable.withheld` appears beside `value_present` exactly when
+the reason is non-null, so a control protected by mistake is visible to the model rather than
+silently refusing to disclose what it holds. The scan is serialized by source and cannot import the
+token list, so `ScanOptions.sensitiveAutocompleteTokens` carries it in, and every caller builds its
+options through `protectedScanOptions()`, which fills it from `SENSITIVE_AUTOCOMPLETE_TOKENS` and
+cannot be overridden. Without it the scan throws instead of running, because the alternative would be
+to disclose every autocomplete-protected value it reached. The discovery observation path in
+`observe.ts` reaches the scan through the `Page` facade, so `Page.evaluate(fn, arg?)` takes one
+optional serializable argument, forwarded only when given because Puppeteer refuses an argument
+beside a string expression.
+
 `collectComposedInteractables(page, { max, selector? })` in
 `packages/core/src/discovery/composed-handles.ts` is the single handle-collection implementation.
 `AgentBrowserController.observe()` takes one `evaluateHandle` scan and claims handles by
@@ -714,7 +728,10 @@ as the `selector` option rather than driving a separate query, and keeps its own
 projection and cap. That selector is deliberately wider — it includes `[role="gridcell"]`, which the
 agent observation has no kind for — because the two paths are separate actionability and
 observation contracts and are not unified. Sharing the walk is what keeps a promoted workflow from
-silently losing the controls the agent could see.
+silently losing the controls the agent could see. Its fallback description of a handle the scan kept
+no record for, `describeReplayHandle`, classifies protected controls with the same precedence and
+the same token list passed in as an argument, so a `data-yantra-secret` control is withheld at
+replay exactly as it is in agent observation.
 
 #### Pointer reachability and the obstruction protocol
 
@@ -963,6 +980,98 @@ or skip, and no production path narrows a verdict to the older nullable record s
 arrays on read, and the report builder normalizes audit entries without rewriting any existing run
 directory. The one-rung secret plan remains blind: it performs no verification read and emits no
 secret-derived evidence.
+
+#### Protected-value verification
+
+"Never disclose this value" and "did this value land" are separate questions, and the fill path
+answers them separately. `packages/core/src/interaction/protected-value.ts` is the one vocabulary:
+the `WithheldReason` classifier (`classifyWithheld`, with `password` > `autocomplete` >
+`secret_marker` precedence), `SENSITIVE_AUTOCOMPLETE_TOKENS` matched as whole tokens
+case-insensitively, the `CommitMatch` verdict (`empty`, `exact`, `reformatted`, `truncated`,
+`different`, first match wins), and the typed `CommittedValue`. A function handed to the page is
+serialized by source and cannot import, so every in-page reader — the observation scan, the committed
+read, and the replay port's handle description — re-implements the predicate and receives the token
+list as an argument. The Node twins `classifyWithheld` and `classifyCommitMatch` are pinned to the
+in-page copies by parity tests, and a source-boundary rule in `boundary-rules.spec.ts` fails on any
+occurrence of the credential token literals in `packages/core/src` outside this module, except the
+scan's WHATWG autofill field-name vocabulary, which names field kinds rather than protecting them.
+
+`readCommittedValue(port, target, { expected?, source? })` in `packages/core/src/widgets/verify.ts`
+is the only in-page reader of a control's value in the fill path, and it returns a typed state rather
+than a string: `{ kind: 'disclosed', text }` or `{ kind: 'withheld', reason, present, match }`. For a
+protected `input` or `textarea`, `match` is computed **inside the page** against `expected` and is
+null exactly when no expected text was given. Only the verdict and presence come back; the raw value
+is never a return value, so no Node-side path — details, ledger evidence, a log line, a message — can
+carry it. Passing the caller's own text into the page is no new exposure, since the same text was just
+typed there. `exact` is byte equality rather than the folded comparison disclosed text uses, because
+folding would call `passw0rd` an exact match for `Passw0rd!`; `reformatted` is the typing ladder's
+formatting equivalence, which is what a card mask inserting spaces produces. `source: 'raw'` narrows a
+non-form element to its own text with no accessible-name fallback, and the typing ladder reads through
+it, so the ladder and verification share one classifier and one comparator. `committedText()` returns
+disclosed text or null and never maps a withheld state to `''`.
+
+Every consumer judges a withheld read by its verdict, and presence alone is never proof. The typing
+ladder's `read` operation takes the sent text as `expected`; `equivalent` accepts an `exact` or
+`reformatted` verdict and `truncated` an `empty` or `truncated` one, and its failure sentence
+(`withheldMessage`) names the verdict without quoting, measuring, or hashing the value.
+`watchAndSelectOffered` reads with the request as `expected`, or with the clicked label after a click,
+so a typed password with no suggestion list verifies instead of reading as empty. Date and option
+drivers read through `readComparable`, which has no date or choice to compare a withheld control
+against and returns `WIDGET_NOT_COMMITTED` / `value-withheld` instead of comparing `''` with the
+intent. In `fillField`, `satisfied` admits a withheld read only on a verified verdict, and every
+verification read — the dismissal pass and the settled read, including the editee — is given
+`expected` as the chosen option when the widget chose, the request otherwise, and never a stored
+secret.
+
+Success is a discriminated union at both layers. A driver returns `DisclosedWidgetSuccess`
+(`committed` text) or `WithheldWidgetSuccess` (the `withheld` read), converted by
+`successValue`/`successFields`. `FillSuccess` is `DisclosedFillSuccess` — `committed`, `requested`,
+and `note`, as before — or `WithheldFillSuccess`, which carries `withheld: { reason, verdict }` with
+`resolution` equal to the verdict and has no `committed`, `requested`, or `note`, so a result that
+cannot hold the value cannot leak it. `fillSecretField` reports
+`withheld: { reason: 'stored_secret', verdict: 'unchecked' }` and no `resolution`; `TypedText.committed`
+is null exactly when the commit was blind, so that path never fabricates a read. At the agent seam,
+`browser_fill_element` and `browser_fill_form` project a caller-data success as
+`withheld: { reason, verdict, ref }`, where `ref` is the control the verdict was taken on — the editee
+when the page routed the edit — plus the target's `label` when the verdict was taken on the target
+itself; a stored secret's model
+projection carries neither `committed` nor `withheld`. Replay step details carry
+`withheld: { reason, verdict }` in place of `committed`.
+
+Failures are named by what was observed, and release-loss wording requires a release. The engine's
+`unsettledFailure` reports `value-rejected-on-release` only when this fill's own dismissal released a
+widget, with `released: true` as a declared required detail; otherwise a withheld read is
+`withheld-value-mismatch`, whose hint branches on `match` (`truncated`, `different`, `empty`), and a
+disclosed one is `control-refused-value`. A typing ladder that exhausts on a withheld read maps to
+`withheld-value-mismatch` rather than `typing-exhausted`. `dismissWidget` emits
+`WIDGET_DISMISS_FAILED` / `overlay-still-open` only for an overlay that is still open (`stillOpen` is
+required), and a value lost on a closed overlay is `value-rejected-on-release` with `released: true`.
+`value-withheld` declares `commitText` for the `date` and `option` families, mapped in
+`CAPABILITY_RECEIVERS`, because sending the value as plain text goes through the ladder that does
+verify in page; it is not retryable as sent. `budget` requires only `reason` and says the control
+withholds its contents when there is no `observed` to quote. Failure details are built through
+`observedDetails`, which yields `observed` for a disclosed read and the `withheldDetails` projection
+(`withheld`, `match`, `present`) for a withheld one, never both, and the runner's failure description
+quotes only disclosed text.
+
+```mermaid
+flowchart TD
+  Tokens[SENSITIVE_AUTOCOMPLETE_TOKENS] --> Scan[Observation scan]
+  Tokens --> Read[readCommittedValue in page]
+  Tokens --> Replay[describeReplayHandle]
+  Scan --> Withheld[AgentInteractable.withheld beside value_present]
+  Expected[Sent text or chosen label] --> Read
+  Read -->|disclosed| Text[Disclosed text]
+  Read -->|withheld| Verdict[Reason, presence, CommitMatch verdict]
+  Verdict --> Satisfied[fillField satisfied]
+  Text --> Satisfied
+  Satisfied -->|exact or reformatted| WithheldSuccess[WithheldFillSuccess]
+  Satisfied -->|unsettled after release| ReleaseLoss[value-rejected-on-release]
+  Satisfied -->|unsettled, withheld| Mismatch[withheld-value-mismatch]
+  Satisfied -->|unsettled, disclosed| Refused[control-refused-value]
+  Verdict --> Comparable[readComparable in date and option drivers]
+  Comparable --> ValueWithheld[value-withheld]
+```
 
 #### Page-delta observation
 
@@ -2471,6 +2580,11 @@ tool result, and its cost — `delta_bytes`, `observation_bytes`, or `delta_omit
 existing sanitized `details` payload into `tool-calls.jsonl`, so the strict `ToolAuditEntry` schema
 gains no field. `summarizeDeltaCost` reads that projection back and writes nothing.
 
+Protected-value verification adds no relational state and no artifact schema. `CommittedValue`,
+`CommitMatch`, and the disclosed/withheld success unions are in-memory types; the durable forms are
+the optional `withheld` key on an observation entry, a `withheld` verdict on a fill result or replay
+step's details, and `withheld`/`match`/`present` on a failure's details, none of which holds the value.
+
 Vision assist likewise adds no table or migration. `context.screenshots` is one boolean in the
 existing `profile.yaml` context block and keyed JSON `preferences` namespace; the effective view is
 granted only for an approved literal `true`. `VisionAvailability`, its dedicated budget counters,
@@ -2769,6 +2883,18 @@ update` is the only surface that contacts a version server, and only when a huma
   before it can execute, and of an allowlist deciding which evidence keys may be serialized. Field
   and click plans stay in agent and inject their operations into the core runner, preserving the
   core-to-agent prohibition.
+- **A protected value is judged where it lives and never read back.** One read that returned `''`
+  for any protected control answered both "never disclose this" and "did it land", so a password
+  that typed perfectly was verified as empty and reported as lost on release. The committed read is
+  therefore typed, disclosed or withheld, and a withheld control's match against the sent text is
+  computed in the page, so only a closed verdict crosses into Node and no downstream detail, ledger,
+  log, or payload can carry the value. Presence alone is never accepted, so truncation, rewriting,
+  and clearing still fail, and each failure is named by what was observed, with release-loss wording
+  admitted only alongside a declared release. The costs are in-page copies of the classifier and
+  comparator, which a serialized page function cannot import and parity tests must pin to their Node
+  twins; a token list every scan caller must supply, which the scan enforces by refusing to run
+  without it; and date and option drivers that cannot confirm anything from a protected control and
+  say so with `value-withheld`. The stored-secret path stays blind and unverified by design.
 - **A page delta must be true, free, and modest about it.** Telling the agent what changed is only
   useful if it is not routinely wrong, so the delta is computed over an uncapped semantic fingerprint
   — `(role, name, group, scope)` as a multiset — rather than over the refs and the fifty-element list

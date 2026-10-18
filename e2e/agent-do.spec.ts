@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 import {
   buildYantraWrappedTools,
@@ -21,6 +21,7 @@ import {
 } from '@yantra/agent';
 import {
   AgentBrowserController,
+  DefaultOpaqueRefResolver,
   DefaultSanitizer,
   HttpFetcher,
   LocalBrowserProvider,
@@ -168,6 +169,9 @@ async function runScenario(options: {
   readonly connector?: FixtureConnector;
   readonly searchResults?: Awaited<ReturnType<SearchProvider['search']>>;
   readonly confirmationWaitMs?: number;
+  readonly goal?: string;
+  /** A host-bound stored secret the browser tools may resolve for 127.0.0.1. */
+  readonly storedSecret?: string;
 }): Promise<{
   readonly outcome: AgenticTaskOutcome;
   readonly connector: FixtureConnector;
@@ -180,7 +184,7 @@ async function runScenario(options: {
   let provider: ScenarioProvider | undefined;
   const outcome = await runAgenticTask(
     {
-      goal: 'Complete the fixture scenario safely',
+      goal: options.goal ?? 'Complete the fixture scenario safely',
       model: { provider: 'fixture', id: 'fixture-model' },
       auth: { mode: 'managed' },
       allowedHosts: ['127.0.0.1'],
@@ -191,7 +195,8 @@ async function runScenario(options: {
       runStore: new LocalRunStore(root),
       sanitizer: new DefaultSanitizer(),
       urlPolicyConfig: { maxUrlLength: 2048, requireHttps: false },
-      createEnvironment: (context) => createEnvironment(context, options.searchResults ?? []),
+      createEnvironment: (context) =>
+        createEnvironment(context, options.searchResults ?? [], options.storedSecret),
       createProvider: (services) => {
         provider = new ScenarioProvider(services, options.scenario);
         return provider;
@@ -210,6 +215,7 @@ async function runScenario(options: {
 function createEnvironment(
   context: { readonly runId: string; readonly runDir: string },
   searchResults: Awaited<ReturnType<SearchProvider['search']>>,
+  storedSecret?: string,
 ): Promise<AgenticRunEnvironment> {
   const browserController = new AgentBrowserController({
     runId: context.runId,
@@ -242,8 +248,20 @@ function createEnvironment(
       browser: {
         controller: browserController,
         ethics,
-        secretResolver: null,
-        secretHosts: () => Promise.resolve([]),
+        secretResolver:
+          storedSecret === undefined
+            ? null
+            : new DefaultOpaqueRefResolver({
+                keychain: {
+                  get: () => Promise.resolve(storedSecret),
+                  set: () => Promise.resolve(),
+                  delete: () => Promise.resolve(true),
+                  list: () => Promise.resolve([]),
+                  isAvailable: () => Promise.resolve(true),
+                },
+              }),
+        sensitiveScreenLatch: browserController.sensitiveScreenLatch,
+        secretHosts: () => Promise.resolve(storedSecret === undefined ? [] : ['127.0.0.1']),
         captureThresholdBytes: 16 * 1024,
       },
       rank: null,
@@ -362,6 +380,89 @@ describe('@no-llm yantra do release scenarios', () => {
     );
   }, 30_000);
 
+  it('lets neither a stored secret nor a protected test value leave the page', async () => {
+    // The synthetic values arrive the way a user's own do: stated in the goal,
+    // redacted into the user-input vault before any run state exists, and sent
+    // by the model only as placeholders the middleware resolves at the
+    // execution boundary. Anything that then reaches a run artifact got there
+    // from the page or from Yantra itself.
+    const PROTECTED = 'YANTRA-protected-synthetic-pw';
+    const CARD = '4111 1111 1111 1111';
+    const STORED = 'YANTRA-stored-secret-canary';
+    const models: Record<string, unknown>[] = [];
+    let observedAfter: Record<string, unknown> = {};
+    const result = await runScenario({
+      goal: `Fill the payment form. Use password: ${PROTECTED} and card number ${CARD}.`,
+      storedSecret: STORED,
+      scenario: async (session) => {
+        await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/protected.html` });
+        const before = parseModel(await session.call('browser_observe', {}));
+        const form = await session.call('browser_fill_form', {
+          fields: [
+            { field: refByName(before, 'Password'), value: '{{user:password:1}}' },
+            { field: refByName(before, 'Card number'), value: '{{user:credit_card:1}}' },
+          ],
+        });
+        expect(form.status).toBe('ok');
+        models.push(parseModel(form));
+        const middle = parseModel(await session.call('browser_observe', {}));
+        const secret = await session.call('browser_fill_element', {
+          field: refByName(middle, 'Confirm password'),
+          value: { kind: 'secret_ref', key: 'site.password' },
+        });
+        expect(secret.status).toBe('ok');
+        models.push(parseModel(secret));
+        const after = await session.call('browser_observe', {});
+        observedAfter = parseModel(after);
+        models.push(observedAfter);
+      },
+    });
+
+    // The fills verified in page and reported verdicts, not values.
+    const applied = (models[0]!.applied ?? []) as Record<string, unknown>[];
+    expect(applied.map((entry) => entry.withheld)).toEqual([
+      expect.objectContaining({ reason: 'password', verdict: 'exact' }),
+      expect.objectContaining({ reason: 'autocomplete' }),
+    ]);
+    expect(models[1]).not.toHaveProperty('withheld');
+    expect(models[1]).not.toHaveProperty('committed');
+
+    // Every protected field says it holds a value, and why it will not say which.
+    const interactables = observedAfter.interactables as Record<string, unknown>[];
+    for (const [name, reason] of [
+      ['Password', 'password'],
+      ['Card number', 'autocomplete'],
+      ['Confirm password', 'password'],
+    ] as const) {
+      expect(interactables.find((entry) => entry.name === name)).toMatchObject({
+        value_present: true,
+        withheld: reason,
+      });
+    }
+
+    // Nothing the model was shown carries a canary.
+    const canaries = [PROTECTED, STORED, CARD, CARD.replace(/ /gu, '')];
+    const modelText = JSON.stringify(models);
+    for (const canary of canaries) expect(modelText).not.toContain(canary);
+
+    // And no run artifact does. The provider session file is excluded: it is
+    // the model's own transcript, and the model held only placeholders anyway.
+    const runDir = result.outcome.runDir;
+    const files = (await listRunFiles(runDir)).filter(
+      (file) => !relative(runDir, file).split(sep).includes('agent'),
+    );
+    const names = files.map((file) => relative(runDir, file).split(sep).join('/'));
+    expect(names).toEqual(expect.arrayContaining(['tool-calls.jsonl', 'manifest.json']));
+    const hits: string[] = [];
+    for (const file of files) {
+      const text = (await readFile(file)).toString('latin1');
+      for (const canary of canaries) {
+        if (text.includes(canary)) hits.push(`${relative(runDir, file)}: ${canary}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  }, 90_000);
+
   it('engages credential-shape URL controls for an injection-exfil attempt', async () => {
     const result = await runScenario({
       scenario: async (session) => {
@@ -460,6 +561,17 @@ function refByName(observation: Record<string, unknown>, name: string): string {
 function safeInput(input: unknown): unknown {
   const text = JSON.stringify(input);
   return /(?:sk-|ghp_|AKIA|eyJ)/.test(text) ? { redacted: true } : input;
+}
+
+async function listRunFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const path = join(root, entry.name);
+      return entry.isDirectory() ? listRunFiles(path) : Promise.resolve([path]);
+    }),
+  );
+  return nested.flat();
 }
 
 async function jsonLines(path: string): Promise<readonly Record<string, unknown>[]> {

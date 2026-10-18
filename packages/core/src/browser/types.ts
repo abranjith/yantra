@@ -67,7 +67,11 @@ export interface Logger {
  */
 export interface Page {
   goto(url: string, opts?: { waitUntil?: string }): Promise<unknown>;
-  evaluate<T>(fn: () => T): Promise<T>;
+  /**
+   * Run `fn` in the page. At most one serializable argument, because the
+   * function is shipped by source and can close over nothing.
+   */
+  evaluate<T, A = undefined>(fn: (arg: A) => T, arg?: A): Promise<T>;
   close(): Promise<void>;
   url(): string;
   on(event: 'framenavigated', handler: (frame: unknown) => void): void;

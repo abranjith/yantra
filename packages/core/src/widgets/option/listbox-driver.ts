@@ -6,7 +6,7 @@ import {
 } from '../../interaction/index.js';
 import { openIfClosed, resolveContainer } from '../open-state.js';
 import { widgetFailure, type WidgetDriver, type WidgetOutcome } from '../types.js';
-import { matchesCommitment, matchesIntent, readCommitted } from '../verify.js';
+import { matchesCommitment, matchesIntent, readComparable } from '../verify.js';
 
 import { clickCandidate, collectChoices } from './candidates.js';
 import { scanVirtualOptions } from './virtual-list.js';
@@ -150,7 +150,9 @@ export const listboxDriver: WidgetDriver = {
         .map((candidate) => candidate.name);
     await clickCandidate(port, chosen);
     actions += 1;
-    const committed = await readCommitted(port, target);
+    const read = await readComparable(port, target);
+    if (!read.ok) return read.failure;
+    const committed = read.text;
     // Verified against the option that was clicked, not against the text used
     // to find it: a list asked for a code and offering a name has answered the
     // request, and checking the typed text instead calls that a failure.

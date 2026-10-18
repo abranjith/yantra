@@ -1,6 +1,10 @@
 import type { ElementHandle, JSHandle, Page as PuppeteerPage } from 'puppeteer-core';
 
-import { scanInteractablesInPage, type RawInteractable } from './interactable-scan.js';
+import {
+  protectedScanOptions,
+  scanInteractablesInPage,
+  type RawInteractable,
+} from './interactable-scan.js';
 
 /** One composed-tree pass, returned as live handles plus their records. */
 export interface ComposedInteractables {
@@ -49,13 +53,18 @@ export async function collectComposedInteractables(
     readonly challengeTokens?: readonly string[];
   } = { max: 400 },
 ): Promise<ComposedInteractables> {
-  const scanHandle = await page.evaluateHandle(scanInteractablesInPage, {
-    withElements: true,
-    max: options.max,
-    ...(options.elementKeys === undefined ? {} : { elementKeys: options.elementKeys }),
-    ...(options.challengeTokens === undefined ? {} : { challengeTokens: options.challengeTokens }),
-    ...(options.selector === undefined ? {} : { selector: options.selector }),
-  });
+  const scanHandle = await page.evaluateHandle(
+    scanInteractablesInPage,
+    protectedScanOptions({
+      withElements: true,
+      max: options.max,
+      ...(options.elementKeys === undefined ? {} : { elementKeys: options.elementKeys }),
+      ...(options.challengeTokens === undefined
+        ? {}
+        : { challengeTokens: options.challengeTokens }),
+      ...(options.selector === undefined ? {} : { selector: options.selector }),
+    }),
+  );
   const elements: (ElementHandle<Element> | null)[] = [];
   const owned = new Set<JSHandle<unknown>>([scanHandle]);
   const transferred = new Set<JSHandle<unknown>>();

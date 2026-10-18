@@ -3,6 +3,8 @@ import type { JSHandle, Page } from 'puppeteer-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { collectComposedInteractables } from '../../src/discovery/composed-handles.js';
+import { scanInteractablesInPage } from '../../src/discovery/interactable-scan.js';
+import { SENSITIVE_AUTOCOMPLETE_TOKENS } from '../../src/interaction/protected-value.js';
 
 describe('@no-llm composed handle ownership', () => {
   it('disposes every acquired intermediate when record conversion fails', async () => {
@@ -83,6 +85,32 @@ describe('@no-llm composed handle ownership', () => {
       'conversion failed',
     );
     expectDisposedOnce(scan, records, elements, acquired, failing, trailing);
+  });
+
+  it('always supplies the protected vocabulary, in the one page read it already took', async () => {
+    const scan = handle({
+      properties: new Map([
+        ['records', handle({ value: [] })],
+        ['elements', handle()],
+        ['truncated', handle({ value: false })],
+      ]),
+    });
+    const page = pageReturning(scan);
+
+    await collectComposedInteractables(page, { max: 50, selector: 'input' });
+
+    // Classifying protected controls costs no page read: still exactly one
+    // evaluate, and the token list rides on it whatever the caller passed.
+    const evaluateHandle = page.evaluateHandle as unknown as ReturnType<typeof vi.fn>;
+    expect(evaluateHandle).toHaveBeenCalledTimes(1);
+    expect(evaluateHandle.mock.calls[0]![0]).toBe(scanInteractablesInPage);
+    expect(evaluateHandle.mock.calls[0]![1]).toEqual(
+      expect.objectContaining({
+        max: 50,
+        selector: 'input',
+        sensitiveAutocompleteTokens: SENSITIVE_AUTOCOMPLETE_TOKENS,
+      }),
+    );
   });
 });
 

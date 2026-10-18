@@ -8,14 +8,14 @@ Yantra keeps browser automation inside explicit boundaries: model-visible data i
 
 ### The boundary at a glance
 
-| Data or action                                  | Model sees                                       | Execution boundary sees                                             | Persisted form                                                                              |
-| ----------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Explicitly marked run input                     | A token such as `{{user:password:1}}`            | The original value only when a validated tool parameter is executed | Placeholder or neutral text; not the original value                                         |
-| Keychain-backed website secret                  | The secret reference key, never its value        | The value after consent and a live-host check                       | Reference key and resolution outcome only                                                   |
-| Third-party page or document content            | Profile-sanitized, size-bounded content          | The page content needed by the operation                            | Sanitized captures and tool projections; the provider session is a sensitive local artifact |
-| A value the model supplied itself               | The value remains visible                        | The validated tool receives it                                      | Sanitized tool projection                                                                   |
-| Password, one-time-code, or payment field state | At most `value_present: true`                    | The browser fill path can set the value                             | No committed secret value in the tool result or trace                                       |
-| Protected click or stored-secret fill           | A confirmation result and opaque confirmation id | The operation only after a human grant                              | Request, decision, provenance, and linkage to the tool call                                 |
+| Data or action                                  | Model sees                                                                      | Execution boundary sees                                              | Persisted form                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Explicitly marked run input                     | A token such as `{{user:password:1}}`                                           | The original value only when a validated tool parameter is executed  | Placeholder or neutral text; not the original value                                         |
+| Keychain-backed website secret                  | The secret reference key, never its value                                       | The value after consent and a live-host check                        | Reference key and resolution outcome only                                                   |
+| Third-party page or document content            | Profile-sanitized, size-bounded content                                         | The page content needed by the operation                             | Sanitized captures and tool projections; the provider session is a sensitive local artifact |
+| A value the model supplied itself               | The value remains visible                                                       | The validated tool receives it                                       | Sanitized tool projection                                                                   |
+| Password, one-time-code, or payment field state | `value_present: true`, a `withheld` reason, and after a fill an in-page verdict | The browser fill path can set the value and check it inside the page | No protected value in the tool result, trace, or other run artifact                         |
+| Protected click or stored-secret fill           | A confirmation result and opaque confirmation id                                | The operation only after a human grant                               | Request, decision, provenance, and linkage to the tool call                                 |
 
 Marked input and keychain secrets solve different problems. A marker is a run-scoped privacy boundary; it is not a credential store, trusted-host binding, or request for confirmation. A keychain-backed website secret adds durable storage, trusted-host checking, and mandatory confirmation.
 
@@ -92,6 +92,22 @@ The value lives in the OS keychain under the `yantra` service. For a website fil
 `browser_fill_element` is the only live agent tool that accepts a stored `secret_ref`. It requires confirmation, resolves the secret after the host check, skips suggestion and committed-value readback, and returns no secret value. It also performs no editee resolution: locating the control a page routed keystrokes into means searching every observed control for the value that was sent, which for a credential would be a readback of secret-derived state compared against the whole page, so that path is structurally unavailable to a secret fill rather than merely unused. `browser_fill_form` accepts only non-secret strings and never submits.
 
 Resolution writes only the reference key, step, time, and `resolved`, `not_found`, or `error` outcome to `secrets.jsonl`. A semantic trace stores only the key. Explicit buffers are cleared after use on a best-effort basis, but JavaScript strings and runtime copies cannot be guaranteed to be erased from memory.
+
+### Protected fields
+
+Some page controls hold values that must never be read back into Yantra, whoever supplied them. A control is protected, and its contents are withheld from every read, for one of three reasons, checked in this order:
+
+| Reason          | Applies when                                                                                                                                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `password`      | The control is an `input[type="password"]`.                                                                                                                                 |
+| `autocomplete`  | Its `autocomplete` attribute contains `current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, or `cc-exp` as a whole token, matched case-insensitively. |
+| `secret_marker` | It carries Yantra's `data-yantra-secret` attribute.                                                                                                                         |
+
+Only these attribute facts decide it, never the control's value, label, or site. The observation reports a protected control with `value_present: true` when it holds anything and `withheld: <reason>` in place of `value`, so a control classified as protected by mistake is visible to the model and in the audit trail. Live observation and deterministic replay classify controls with the same reasons and the same token list. The in-page scan refuses to run when it is not given that token list, rather than fall back to disclosing every autocomplete-protected value it reaches.
+
+A value sent to a protected control — a literal or a resolved `{{user:…}}` placeholder — is checked **inside the page**: the text that was sent is passed into the page, compared with what the control holds there, and only a verdict (`exact`, `reformatted`, `truncated`, `different`, or `empty`) and whether the control holds anything come back. Passing the sent text to the page is no new exposure, because the same text was just typed into it. The protected value is therefore not available to any result, failure detail, ledger record, log line, or message to record. A successful fill reports `withheld: { reason, verdict, ref }` in place of `committed`, and a failure reports `withheld` and the verdict as `match` in place of `observed`; see [Agentic Tasks](agentic-tasks.md#what-it-does).
+
+A stored website secret stays blind. The `secret_ref` path keeps its host binding, confirmation, masking, and sensitive-screen latch, enters the value once with no readback and no in-page check, and its tool result is unchanged: no `committed` and no `withheld`. No stored secret is ever passed into the page as text to compare against.
 
 ### Consent and fail-closed behavior
 
@@ -327,6 +343,8 @@ Expected failures are returned to the model as bounded, structured, retry-classi
 ## Verification
 
 The current safety envelope is exercised by no-LLM sanitizer, marker-parser, secret resolver, host-binding, scope-enforcer, confirmation, middleware, URL-policy, location-gate, audit, protocol, CLI, and browser-fill tests. `pnpm security:static-check` also checks recognized sanitize-before-send sites, SDK/package boundaries, and that raw index-history modules are unreachable from the configured LLM-payload assembly entrypoints.
+
+A real-Chrome `do` scenario in `e2e/agent-do.spec.ts` fills a password and a card-number field from marked goal values and a third password from a host-bound stored secret, then byte-scans the model-visible tool results and every run-directory file outside the raw provider session, `tool-calls.jsonl`, `trace.json`, and `manifest.json` among them, for the synthetic values and the stored-secret canary, and requires zero hits.
 
 The focused verification for this document passed 249 tests across 19 files, plus the static check over 678 TypeScript files. The live CLI help for `do`, `ask`, `research`, `confirm`, `audit`, and `prefs` was also checked.
 

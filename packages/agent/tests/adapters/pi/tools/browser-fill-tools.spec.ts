@@ -1,6 +1,9 @@
 /// <reference lib="dom" />
 
 import { globSync, readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   MAX_SERIALIZED_VERDICTS,
@@ -18,6 +21,7 @@ import {
   type OpaqueRefResolver,
   type PageDelta,
   SensitiveScreenLatch,
+  ToolCallWriter,
   UserInputVault,
   type WidgetPort,
   type WidgetTarget,
@@ -356,6 +360,111 @@ describe('@no-llm the failure cause never crosses the tool seam', () => {
   });
 });
 
+describe('@no-llm protected fields filled with caller-supplied data', () => {
+  const SYNTHETIC = 'YANTRA-protected-synthetic-pw';
+
+  it('reports an in-page verdict for a password literal and never echoes the value', async () => {
+    const controller = new FormController(
+      '<input id="password" type="password" aria-label="Password">',
+    );
+    const { result } = await runElement(controller, { field: 'Password', value: SYNTHETIC });
+    const model = JSON.parse(result.modelText) as Record<string, unknown>;
+
+    expect(result.status).toBe('ok');
+    expect(model).toMatchObject({
+      withheld: { reason: 'password', verdict: 'exact', ref: expect.stringMatching(/^e\d+$/u) },
+      resolution: 'exact',
+      driver: 'plain-text',
+      dismissed: false,
+    });
+    for (const key of ['committed', 'requested', 'note']) expect(model).not.toHaveProperty(key);
+    expect(result.modelText).not.toContain(SYNTHETIC);
+    expect(JSON.stringify(result.details)).not.toContain(SYNTHETIC);
+  }, 30_000);
+
+  it('reports withheld entries beside committed ones in one browser_fill_form call', async () => {
+    const controller = new FormController(
+      '<input id="password" type="password" aria-label="Password">' +
+        '<input id="city" aria-label="City">',
+    );
+    const result = await run(controller, {
+      fields: [
+        { field: 'Password', value: SYNTHETIC },
+        { field: 'City', value: 'Lyon' },
+      ],
+    });
+    const model = JSON.parse(result.modelText) as {
+      readonly applied: readonly Record<string, unknown>[];
+    };
+
+    expect(result.status).toBe('ok');
+    expect(model.applied[0]).toMatchObject({
+      field: 'Password',
+      withheld: { reason: 'password', verdict: 'exact' },
+      resolution: 'exact',
+    });
+    expect(model.applied[0]).not.toHaveProperty('committed');
+    expect(model.applied[1]).toMatchObject({ field: 'City', committed: 'Lyon' });
+    expect(result.modelText).not.toContain(SYNTHETIC);
+  }, 30_000);
+
+  it('fails a truncating protected field by its verdict, with the value nowhere', async () => {
+    const controller = new FormController(
+      '<input id="password" type="password" aria-label="Password" maxlength="4">',
+    );
+    // jsdom does not enforce maxlength on programmatic writes; the page does.
+    const input = controller.document.querySelector<HTMLInputElement>('#password')!;
+    input.addEventListener('input', () => {
+      input.value = input.value.slice(0, 4);
+    });
+
+    const { result } = await runElement(controller, { field: 'Password', value: SYNTHETIC });
+
+    expect(result.status).toBe('error');
+    expect(result.error_code).toBe('WIDGET_NOT_COMMITTED');
+    expect(result.details).toMatchObject({ withheld: 'password', match: 'truncated' });
+    expect(result.details).not.toHaveProperty('observed');
+    expect(result.modelText).toContain('field.max_length');
+    for (const fragment of [SYNTHETIC, 'YANT']) {
+      expect(JSON.stringify(result)).not.toContain(fragment);
+    }
+
+    // The same failure, written through the real tool-call projection and
+    // read back, carries no value either.
+    const runDir = await mkdtemp(join(tmpdir(), 'yantra-protected-'));
+    try {
+      const writer = ToolCallWriter.forRun(runDir);
+      await writer.append({
+        ts: new Date().toISOString(),
+        run_id: 'run-protected',
+        session_id: 'session-protected',
+        call_id: 'call-1',
+        tool: 'browser_fill_element',
+        phase: 'end',
+        input_sanitized: null,
+        output_sanitized: result,
+        status: 'error',
+        duration_ms: 1,
+        error_code: result.error_code ?? null,
+        confirmation_id: null,
+      });
+      await writer.close();
+      const text = await readFile(join(runDir, 'tool-calls.jsonl'), 'utf8');
+      const record = JSON.parse(text.trim()) as {
+        readonly output_sanitized: { readonly details: Record<string, unknown> };
+      };
+      expect(record.output_sanitized.details).toMatchObject({
+        withheld: 'password',
+        match: 'truncated',
+      });
+      expect(text).not.toContain(SYNTHETIC);
+      expect(text).not.toContain('YANT');
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe('@no-llm browser_fill_element contract', () => {
   it('resolves a field name, emits one semantic trace step, and takes one post-action read', async () => {
     const controller = new FormController('<input id="search" aria-label="Search">');
@@ -465,6 +574,10 @@ describe('@no-llm browser_fill_element contract', () => {
 
     expect(result.status).toBe('ok');
     expect(model).not.toHaveProperty('committed');
+    // Byte-identical to before protected-value verification: the stored-secret
+    // path's internal `withheld` verdict never reaches the model.
+    expect(model).not.toHaveProperty('withheld');
+    expect(model).not.toHaveProperty('resolution');
     expect(JSON.stringify(result)).not.toContain('CANARY-super-secret');
     expect(dispose).toHaveBeenCalledOnce();
     expect(trace.steps()).toEqual([
@@ -1688,6 +1801,26 @@ class FormController {
     element.value = value;
     element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
     element.dispatchEvent(new this.window.Event('change', { bubbles: true }));
+    return this.actionResult();
+  }
+
+  /** Empty the input, so the typing ladder's later rungs can run against this double. */
+  public async clear(ref: string): Promise<BrowserActionResult> {
+    const element = this.element(ref);
+    if (!(element instanceof this.window.HTMLInputElement)) throw new Error('not an input');
+    element.value = '';
+    element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+    return this.actionResult();
+  }
+
+  /** Append text one character at a time, each with its own input event. */
+  public async type(ref: string, text: string): Promise<BrowserActionResult> {
+    const element = this.element(ref);
+    if (!(element instanceof this.window.HTMLInputElement)) throw new Error('not an input');
+    for (const character of text) {
+      element.value += character;
+      element.dispatchEvent(new this.window.Event('input', { bubbles: true }));
+    }
     return this.actionResult();
   }
 

@@ -2,6 +2,7 @@ import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { ChoiceSubstitution } from '../interaction/choice.js';
 import type { MutableRunState, VerdictEvidence } from '../interaction/escalation.js';
 import type { LabelOrigin } from '../interaction/field-identity.js';
+import type { CommittedValue, WithheldValue } from '../interaction/protected-value.js';
 import type { InteractionFailureCause } from '../interaction/types.js';
 
 /**
@@ -154,11 +155,10 @@ export interface WidgetContainer {
   readonly path: readonly number[];
 }
 
-/** Verified success returned by a widget driver. */
-export interface WidgetSuccess {
+/** What every verified driver success carries, whatever the control discloses. */
+export interface WidgetSuccessBase {
   readonly ok: true;
   readonly driver: string;
-  readonly committed: string;
   readonly actions: number;
   /**
    * The label of the option the driver actually clicked, when it chose one.
@@ -221,6 +221,39 @@ export interface WidgetSuccess {
    * says.
    */
   readonly container?: WidgetContainer;
+}
+
+/** A success on a control that discloses its value. */
+export interface DisclosedWidgetSuccess extends WidgetSuccessBase {
+  readonly committed: string;
+  readonly withheld?: never;
+}
+
+/**
+ * A success on a control that withholds its value.
+ *
+ * Carries the in-page verdict instead of `committed`: there is no text to
+ * report, and an empty string standing in for one is what made a typed
+ * password read as a lost value.
+ */
+export interface WithheldWidgetSuccess extends WidgetSuccessBase {
+  readonly committed?: never;
+  readonly withheld: WithheldValue;
+}
+
+/** Verified success returned by a widget driver. */
+export type WidgetSuccess = DisclosedWidgetSuccess | WithheldWidgetSuccess;
+
+/** The committed value of a driver success, as a typed read. */
+export function successValue(success: WidgetSuccess): CommittedValue {
+  return success.withheld ?? { kind: 'disclosed', text: success.committed };
+}
+
+/** The success fields a typed read contributes: `committed` text, or `withheld`. */
+export function successFields(
+  value: CommittedValue,
+): { readonly committed: string } | { readonly withheld: WithheldValue } {
+  return value.kind === 'disclosed' ? { committed: value.text } : { withheld: value };
 }
 
 /** Typed, model-actionable widget failure. */

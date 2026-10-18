@@ -16,7 +16,7 @@ import {
   type WidgetPort,
   type WidgetTarget,
 } from '../types.js';
-import { matchesIntent, readCommitted } from '../verify.js';
+import { matchesIntent, readComparable } from '../verify.js';
 
 import { readCalendarGrid, type CalendarGridRead } from './calendar-grid.js';
 import { resolveDatePair } from './date-pair.js';
@@ -109,14 +109,18 @@ export async function selectByOfferedCalendarLabel(
     path: choice.path,
     group: choice.group,
   });
-  const committed = await readCommitted(port, target);
+  const read = await readComparable(port, target);
+  if (!read.ok) return read.failure;
+  const committed = read.text;
   if (!matchesIntent(committed, { kind: 'date', date: choice.derivedDate })) {
+    // Nothing was released here — the cell click is the whole drive — so this
+    // is a control that does not hold the date, not a value lost on release.
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
-      'value-rejected-on-release',
+      'control-refused-value',
       `The calendar choice landed, but "${target.name}" does not reflect the offered date.`,
       grid,
-      { committed },
+      { committed, observed: committed },
     );
   }
 
@@ -270,7 +274,9 @@ export const calendarDriver: WidgetDriver = {
       if (clicked.substitution) substitution = clicked.substitution;
     }
 
-    const committed = await readCommitted(port, target);
+    const read = await readComparable(port, target);
+    if (!read.ok) return read.failure;
+    const committed = read.text;
     if (matchesIntent(committed, intent)) {
       return {
         ok: true,
@@ -312,12 +318,14 @@ export const calendarDriver: WidgetDriver = {
         ...(substitution ? { substitution, evidence: substitutionEvidence(substitution) } : {}),
       };
     }
+    // The picker is no longer open: the clicks released it, and the value did
+    // not survive that release.
     return calendarFailure(
       'WIDGET_NOT_COMMITTED',
       'value-rejected-on-release',
       `The calendar clicks landed, but "${target.name}" does not reflect the requested date${intent.kind === 'date_range' ? ' range' : ''}.`,
       lastRead,
-      { committed },
+      { committed, observed: committed, released: true },
       displayed,
     );
   },

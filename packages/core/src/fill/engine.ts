@@ -19,7 +19,16 @@ import {
   type MutableRunState,
   type SerializedVerdict,
   type TypingFailure,
+  withheldMessage,
 } from '../interaction/index.js';
+import {
+  committedText,
+  disclosed,
+  observedDetails,
+  verifiedMatch,
+  withheldDetails,
+  type CommittedValue,
+} from '../interaction/protected-value.js';
 import {
   watchAndSelectOffered,
   type OfferedSelection,
@@ -36,6 +45,7 @@ import { nativeSelectDriver } from '../widgets/option/native-select-driver.js';
 import type { DetectedWidgetDriver } from '../widgets/registry.js';
 import {
   defaultWidgetBudget,
+  successValue,
   widgetFailure,
   type WidgetContainer,
   type WidgetFailure,
@@ -45,7 +55,7 @@ import {
   type WidgetSuccess,
   type WidgetTarget,
 } from '../widgets/types.js';
-import { matchesCommitment, matchesIntent, readCommitted } from '../widgets/verify.js';
+import { matchesCommitment, matchesIntent, readCommittedValue } from '../widgets/verify.js';
 
 import { dismissWidget } from './dismiss.js';
 import { asPlanBudget, buildDriverPlan, buildTextPlan } from './plans.js';
@@ -84,7 +94,7 @@ export async function fillField(
   const healed = runnerPortForField(counted, entry, runState);
   const target = healed.target;
   let driver: string;
-  let committed: string;
+  let committed: CommittedValue;
   let reactionDismissed = false;
   let driven: WidgetContainer | null = null;
   /**
@@ -158,7 +168,8 @@ export async function fillField(
         budget,
       );
       if (!outcome.ok) return fromWidgetFailure(outcome, attemptedSoFar(), 'date');
-      ({ driver, committed } = outcome);
+      driver = outcome.driver;
+      committed = successValue(outcome);
       driven = outcome.container ?? null;
       chosen = outcome.chosen ?? null;
       offered = outcome.offered ?? [];
@@ -186,7 +197,7 @@ export async function fillField(
         );
       }
       driver = 'toggle';
-      committed = checked ? 'checked' : 'unchecked';
+      committed = disclosed(checked ? 'checked' : 'unchecked');
     } else if (shape.tag === 'select') {
       const optionIntent = asOptionIntent(intent);
       if (!optionIntent) return incompatible(target, intent);
@@ -195,7 +206,8 @@ export async function fillField(
         { driver: nativeSelectDriver, confidence },
       ]);
       if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'option');
-      ({ driver, committed } = attempt.outcome);
+      driver = attempt.outcome.driver;
+      committed = successValue(attempt.outcome);
       chosen = attempt.outcome.chosen ?? null;
       offered = attempt.outcome.offered ?? [];
       substitution = attempt.outcome.substitution ?? null;
@@ -206,13 +218,15 @@ export async function fillField(
       // pages away and reporting the date as uncommittable.
       const attempt = await driveFamilyPlan(healed.port, target, intent, budget, 'date');
       if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'date');
-      ({ driver, committed } = attempt.outcome);
+      driver = attempt.outcome.driver;
+      committed = successValue(attempt.outcome);
       driven = attempt.outcome.container ?? null;
       substitution = attempt.outcome.substitution ?? null;
     } else if (!shape.textLike && intent.kind === 'option') {
       const attempt = await driveFamilyPlan(healed.port, target, intent, budget, 'option');
       if (!attempt.ok) return fromWidgetFailure(attempt.failure, attemptedSoFar(), 'option');
-      ({ driver, committed } = attempt.outcome);
+      driver = attempt.outcome.driver;
+      committed = successValue(attempt.outcome);
       driven = attempt.outcome.container ?? null;
       chosen = attempt.outcome.chosen ?? null;
       offered = attempt.outcome.offered ?? [];
@@ -231,7 +245,8 @@ export async function fillField(
         : null;
       if (combobox?.tried) {
         if (!combobox.ok) return fromWidgetFailure(combobox.failure, attemptedSoFar(), 'combobox');
-        ({ driver, committed } = combobox.outcome);
+        driver = combobox.outcome.driver;
+        committed = successValue(combobox.outcome);
         driven = combobox.outcome.container ?? null;
         chosen = combobox.outcome.chosen ?? null;
         offered = combobox.outcome.offered ?? [];
@@ -243,7 +258,7 @@ export async function fillField(
         // mask that rewrote what was typed — the same rule the plain-text path
         // applies, reached through the driver's disclosure instead of its own
         // typing outcome.
-        acceptedText = chosen === null ? committed : null;
+        acceptedText = chosen === null ? committedText(committed) : null;
       } else {
         // Confirm the characters landed before anything downstream reasons about
         // them. A control that swallows the leading keystroke used to send its
@@ -289,19 +304,22 @@ export async function fillField(
             editee = entered.editee;
             live = entered.target;
             reformatted = entered.typed.reformatted;
-            acceptedText = entered.typed.committed;
+            const typed = readBack(entered.typed.committed);
+            // Only disclosed text can be the authority for a reformat; a
+            // withheld control is judged by its in-page verdict instead.
+            acceptedText = committedText(typed);
             return {
               ok: true,
               value: {
                 ok: true,
-                committed: entered.typed.committed,
+                committed: typed,
                 selected: false,
                 dismissed: false,
                 actions: 0,
               },
               evidence: {
                 'text-entered': true,
-                committed: entered.typed.committed,
+                committed: typed,
                 ...(entered.editee ? { editee: entered.editee.name } : {}),
               },
             };
@@ -359,7 +377,9 @@ export async function fillField(
     // the release then fails, so a page that does commit a one-sided range is
     // unaffected — see rangeIncomplete.
     const pendingPartner =
-      intent.kind === 'date' && matchesFillIntent(committed, intent)
+      intent.kind === 'date' &&
+      committed.kind === 'disclosed' &&
+      matchesFillIntent(committed.text, intent)
         ? await pendingRangePartner(healed.port, target)
         : null;
 
@@ -374,18 +394,26 @@ export async function fillField(
     // it accepts. An input mask turning "5551234567" into "(555) 123-4567" was
     // otherwise failed here as uncommitted, condemning a fill the page had
     // plainly taken.
-    const satisfied = (value: string): boolean => {
-      if (chosen !== null) return matchesCommitment(value, chosen);
-      if (matchesFillIntent(value, intent)) return true;
-      const requestedText =
-        intent.kind === 'text' ? intent.text : intent.kind === 'option' ? intent.value : null;
+    const requestedText =
+      intent.kind === 'text' ? intent.text : intent.kind === 'option' ? intent.value : null;
+    const satisfied = (value: CommittedValue): boolean => {
+      // A protected control is judged by the verdict taken inside the page
+      // against the same authority a disclosed value is checked against:
+      // the chosen option when the widget chose, the request otherwise.
+      // Presence alone is never proof.
+      if (value.kind === 'withheld') return verifiedMatch(value) !== null;
+      if (chosen !== null) return matchesCommitment(value.text, chosen);
+      if (matchesFillIntent(value.text, intent)) return true;
       return (
         acceptedText !== null &&
         requestedText !== null &&
         isFormattingEquivalent(acceptedText, requestedText) &&
-        matchesCommitment(value, acceptedText)
+        matchesCommitment(value.text, acceptedText)
       );
     };
+    // What every verification read is given, so a protected control can be
+    // judged in page. Never a stored secret: that path reads nothing back.
+    const expected = chosen ?? requestedText ?? undefined;
 
     // Release before the authoritative verification, not after. A picker that
     // commits on release reports its old value until it closes, and a range
@@ -394,6 +422,7 @@ export async function fillField(
     const dismissed = await dismissWidget(healed.port, target, committed, satisfied, {
       ignoredContainer,
       driven,
+      ...(expected === undefined ? {} : { expected }),
     });
     if (!dismissed.ok) return rangeIncomplete(target, intent, pendingPartner) ?? dismissed;
     const settled = await settledCommit(
@@ -403,29 +432,46 @@ export async function fillField(
       dismissed.committed,
       satisfied,
       editee,
+      expected,
     );
     if (settled === null) {
       return (
         rangeIncomplete(target, intent, pendingPartner) ??
-        fillFailure(
-          'WIDGET_NOT_COMMITTED',
-          'value-rejected-on-release',
-          `The "${target.name}" control does not reflect the requested value.`,
-          {
-            committed: dismissed.committed,
-            observed: dismissed.committed,
-            ...(offered.length > 0 ? { offered } : {}),
-            ...(chosen === null ? {} : { chosen }),
-            ...(performed(attemptedSoFar()) > 0 ? { attempted: attemptedSoFar() } : {}),
-          },
-        )
+        unsettledFailure(target, dismissed.committed, dismissed.dismissed, {
+          ...(offered.length > 0 ? { offered } : {}),
+          ...(chosen === null ? {} : { chosen }),
+          ...(performed(attemptedSoFar()) > 0 ? { attempted: attemptedSoFar() } : {}),
+        })
       );
     }
-    const requested = describeIntent(intent);
     const allAttempts = attemptedSoFar();
+    const shared = {
+      actions: healed.actions(),
+      dismissed: reactionDismissed || dismissed.dismissed,
+      ...(editee === null
+        ? {}
+        : { editee: { ref: editee.ref, name: editee.name, role: editee.role } }),
+      ...(offered.length > 0 ? { offered } : {}),
+      ...(substitution === null ? {} : { substitution }),
+      ...(performed(allAttempts) > 1 || substitution !== null ? { attempted: allAttempts } : {}),
+    };
+    if (settled.kind === 'withheld') {
+      // `satisfied` admitted it, so the verdict is one of the two that verify.
+      // The value is in no field of this result — not committed, requested,
+      // nor a note quoting either.
+      const verdict = verifiedMatch(settled)!;
+      return {
+        ok: true,
+        driver,
+        withheld: { reason: settled.reason, verdict },
+        resolution: verdict,
+        ...shared,
+      };
+    }
+    const requested = describeIntent(intent);
     const resolution = resolutionFor({
       requested,
-      committed: settled,
+      committed: settled.text,
       chosen,
       offered,
       reformatted,
@@ -433,7 +479,7 @@ export async function fillField(
     return {
       ok: true,
       driver,
-      committed: settled,
+      committed: settled.text,
       actions: healed.actions(),
       dismissed: reactionDismissed || dismissed.dismissed,
       requested,
@@ -443,7 +489,7 @@ export async function fillField(
         : { editee: { ref: editee.ref, name: editee.name, role: editee.role } }),
       ...(offered.length > 0 ? { offered } : {}),
       ...(substitution === null ? {} : { substitution }),
-      ...(noteFor(target.name, requested, settled, resolution, offered, substitution) ?? {}),
+      ...(noteFor(target.name, requested, settled.text, resolution, offered, substitution) ?? {}),
       // Only when it says something. One driver, one successful attempt is the
       // ordinary case and reporting it as recovery is noise. Skipped rungs are
       // carried once there is something to report, never on their own.
@@ -523,10 +569,12 @@ export async function fillSecretField(
       allowEscalation: false,
     });
     if (!typed.ok) return fromTypingFailure(typed);
+    // Typed, not an empty `committed`: the secret path verifies nothing and
+    // says so. No read was taken, so there is no verdict to report.
     return {
       ok: true,
       driver: 'plain-text',
-      committed: '',
+      withheld: { reason: 'stored_secret', verdict: 'unchecked' },
       actions: 1,
       dismissed: false,
       attempted: typed.attempted,
@@ -584,17 +632,22 @@ async function settledCommit(
   port: WidgetPort,
   target: WidgetTarget,
   intent: FillIntent,
-  committed: string,
-  satisfied: (value: string) => boolean,
+  committed: CommittedValue,
+  satisfied: (value: CommittedValue) => boolean,
   editee: WidgetTarget | null = null,
-): Promise<string | null> {
+  expected?: string,
+): Promise<CommittedValue | null> {
   if (satisfied(committed)) return committed;
   // A page that routed the edit into an overlay's own input sometimes leaves
   // the value there rather than writing it back to the control the caller
   // named. Reading the node that was actually edited is not a relaxation of
   // verification — it is verification against the right node.
   if (editee) {
-    const fromEditee = await readCommitted(port, editee);
+    const fromEditee = await readCommittedValue(
+      port,
+      editee,
+      expected === undefined ? {} : { expected },
+    );
     if (satisfied(fromEditee)) return fromEditee;
   }
   if (intent.kind !== 'date_range') return null;
@@ -608,13 +661,16 @@ async function settledCommit(
   for (;;) {
     const pair = await resolveDatePair(port, target);
     if (pair) {
-      const from = await readCommitted(port, pair.from);
-      const to = await readCommitted(port, pair.to);
+      // A protected end has no date to compare, so it never verifies a range.
+      const from = committedText(await readCommittedValue(port, pair.from));
+      const to = committedText(await readCommittedValue(port, pair.to));
       if (
+        from !== null &&
+        to !== null &&
         matchesIntent(from, { kind: 'date', date: intent.from }) &&
         matchesIntent(to, { kind: 'date', date: intent.to })
       ) {
-        return `${from}..${to}`;
+        return disclosed(`${from}..${to}`);
       }
     }
     if (port.now() >= deadline) return null;
@@ -624,6 +680,57 @@ async function settledCommit(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * The read the typing ladder took, on a path that always takes one.
+ *
+ * Only the secret path commits blind, and it never reaches here; a missing read
+ * is a contract break, not an empty control.
+ */
+function readBack(value: CommittedValue | null): CommittedValue {
+  if (value === null) throw new Error('A verified fill received a blind typing outcome.');
+  return value;
+}
+
+/**
+ * The failure for a value that did not verify once the widget settled, named
+ * by what was observed.
+ *
+ * Release-loss wording needs a release: only when this fill's own dismiss pass
+ * closed a widget is the loss blamed on closing it. Otherwise the control
+ * simply holds something else — named as such when it discloses, or by its
+ * in-page verdict when it does not.
+ */
+function unsettledFailure(
+  target: WidgetTarget,
+  value: CommittedValue,
+  released: boolean,
+  context: Readonly<Record<string, unknown>>,
+): FillFailure {
+  const disclosedCommitted = value.kind === 'disclosed' ? { committed: value.text } : {};
+  if (released) {
+    return fillFailure(
+      'WIDGET_NOT_COMMITTED',
+      'value-rejected-on-release',
+      `The "${target.name}" control does not reflect the requested value after its widget was released.`,
+      { released: true, ...disclosedCommitted, ...observedDetails(value), ...context },
+    );
+  }
+  if (value.kind === 'withheld') {
+    return fillFailure(
+      'WIDGET_NOT_COMMITTED',
+      'withheld-value-mismatch',
+      withheldMessage(target, value),
+      { ...withheldDetails(value), ...context },
+    );
+  }
+  return fillFailure(
+    'WIDGET_NOT_COMMITTED',
+    'control-refused-value',
+    `The "${target.name}" control does not reflect the requested value.`,
+    { committed: value.text, observed: value.text, ...context },
+  );
 }
 
 /**
@@ -909,7 +1016,7 @@ function noteFor(
 /** Successful resolution of the post-type offered-selection stage. */
 interface PlainTextReaction {
   readonly ok: true;
-  readonly committed: string;
+  readonly committed: CommittedValue;
   readonly selected: boolean;
   readonly dismissed: boolean;
   readonly actions: number;
@@ -960,7 +1067,7 @@ function resolveOfferedSelection(
         'WIDGET_AMBIGUOUS_CHOICE',
         'several-matched-equally',
         `"${target.name}" offers ${selection.offered.length} suggestions matching "${requested}" equally well, so none was chosen.`,
-        { offered: selection.offered, observed: selection.observed },
+        { offered: selection.offered, ...observedDetails(selection.observed) },
       );
     case 'text-discarded':
       assertReceivable(
@@ -975,7 +1082,7 @@ function resolveOfferedSelection(
         `"${target.name}" offers no suggestion matching "${requested}" and discarded the typed text on release, so it will not accept a free-text value.`,
         {
           ...(selection.semantics === 'declared' ? { offered: selection.offered } : {}),
-          observed: selection.observed,
+          ...observedDetails(selection.observed),
         },
       );
     case 'not-committed':
@@ -984,8 +1091,10 @@ function resolveOfferedSelection(
         'control-refused-value',
         `The suggestion "${selection.chosen}" was clicked, but "${target.name}" has no committed value.`,
         {
-          committed: selection.committed,
-          observed: selection.committed,
+          ...(selection.committed.kind === 'disclosed'
+            ? { committed: selection.committed.text }
+            : {}),
+          ...observedDetails(selection.committed),
           offered: selection.offered,
           chosen: selection.chosen,
         },
@@ -1012,7 +1121,7 @@ function fromTypingFailure(
   attempted: readonly SerializedVerdict[] = failure.attempted,
 ): FillFailure {
   const details = {
-    observed: failure.observed,
+    ...observedDetails(failure.observed),
     attempted,
     ...(failure.editee === undefined ? {} : { editee: failure.editee.name }),
     ...(failure.reason === undefined ? {} : { reason: failure.reason }),
@@ -1020,12 +1129,17 @@ function fromTypingFailure(
   // The two arms are the whole point of the cause discriminator: both carry
   // WIDGET_NOT_COMMITTED, and before this they read identically.
   if (failure.errorCode === 'WIDGET_NOT_COMMITTED') {
+    // For a protected control the in-page verdict, not the mechanism, is the
+    // fact: every rung ran and the check found the wrong value. The ladder is
+    // still carried in `attempted`.
     const cause =
       failure.editee !== undefined
         ? 'keystrokes-landed-elsewhere'
         : failure.reason === 'budget'
           ? 'budget'
-          : 'typing-exhausted';
+          : failure.observed.kind === 'withheld'
+            ? 'withheld-value-mismatch'
+            : 'typing-exhausted';
     assertReceivable('fill', 'WIDGET_NOT_COMMITTED', cause, 'text');
     return fillFailure('WIDGET_NOT_COMMITTED', cause, failure.message, details);
   }
@@ -1152,6 +1266,8 @@ function notCommittedCause(cause: FillCause): CauseFor<'WIDGET_NOT_COMMITTED'> {
     case 'keystrokes-landed-elsewhere':
     case 'typing-exhausted':
     case 'value-rejected-on-release':
+    case 'value-withheld':
+    case 'withheld-value-mismatch':
     case 'budget':
       return cause;
     default:

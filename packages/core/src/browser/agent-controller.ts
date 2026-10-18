@@ -35,6 +35,7 @@ import {
   type ObservationFingerprint,
   type PageDelta,
 } from '../interaction/page-delta.js';
+import type { WithheldReason } from '../interaction/protected-value.js';
 import type { SubmitFacts } from '../interaction/submit-class.js';
 import type { AttemptRecord } from '../interaction/types.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
@@ -176,6 +177,14 @@ export interface AgentInteractable {
   readonly value?: string;
   /** True when a sensitive field has a value that was withheld in-page. */
   readonly value_present?: true;
+  /**
+   * Why this control's value is withheld, present exactly when it is.
+   *
+   * Said beside `value_present` so a field protected by mistake — a box
+   * labelled "Name" whose autocomplete token declares a one-time code — is
+   * visible instead of silently refusing to disclose what it holds.
+   */
+  readonly withheld?: WithheldReason;
   readonly checked?: boolean;
   readonly expanded?: boolean;
   readonly selected?: boolean;
@@ -1924,6 +1933,7 @@ export function projectAgentInteractable(
     disabled?: true;
     value?: string;
     value_present?: true;
+    withheld?: WithheldReason;
     checked?: boolean;
     expanded?: boolean;
     selected?: boolean;
@@ -1932,6 +1942,7 @@ export function projectAgentInteractable(
   if (raw.disabled) projected.disabled = true;
   if (raw.value) projected.value = raw.value;
   if (raw.valuePresent) projected.value_present = true;
+  if (raw.withheldReason !== null) projected.withheld = raw.withheldReason;
   if (raw.checked) projected.checked = true;
   if (raw.expanded !== null) projected.expanded = raw.expanded;
   if (raw.selected !== null) projected.selected = raw.selected;

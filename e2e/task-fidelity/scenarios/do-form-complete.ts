@@ -4,8 +4,9 @@
  * of ten, captures the viewport after the last fill (Vision Assist granted,
  * with an image-capable model), and publishes without submitting.
  *
- * FEAT-055 supplies the whole-form denominator. `fulfilled` additionally needs
- * FEAT-056's verified protected/date commits; until then the run is honestly
+ * FEAT-055 supplies the whole-form denominator and FEAT-056 verifies the
+ * protected fields in page. `fulfilled` additionally needs the native date
+ * fields to commit (owner `native-date-entry`); until then the run is honestly
  * `partial`. FEAT-058 later moves the capture to `browser_capture`
  * with no grant.
  */
@@ -92,11 +93,11 @@ const expectations: readonly Expectation[] = [
   ...formExpectations(),
   {
     id: 'fulfilled',
-    owner: 'FEAT-056',
+    owner: 'native-date-entry',
     measure: (run) => ({ outcome: taskOutcomeOf(run), exit: exitCodeOf(run) }),
     target: equals({ outcome: 'fulfilled', exit: 0 }),
     baseline: equals({ outcome: 'partial', exit: 2 }),
-    note: 'A counted form with its capture is fulfilled once protected and date fields verify.',
+    note: 'A counted form with its capture is fulfilled once its native date fields commit; protected fields already verify (FEAT-056).',
   },
   {
     id: 'screenshot-met',
@@ -117,16 +118,15 @@ const expectations: readonly Expectation[] = [
     owner: 'FEAT-056',
     measure: (run) => failuresFor(run, PROTECTED_FIELDS),
     target: equals([]),
-    baseline: equals(['Password: WIDGET_NOT_COMMITTED', 'Confirm password: WIDGET_NOT_COMMITTED']),
-    note: 'G5: a masked control reports a false commit failure for caller-supplied test data.',
+    note: 'G5: a masked control filled with caller-supplied test data verifies in page instead of reporting a false commit failure.',
   },
   {
     id: 'native-date-fields-commit',
-    owner: 'FEAT-056',
+    owner: 'native-date-entry',
     measure: (run) => failuresFor(run, DATE_FIELDS),
     target: equals([]),
     baseline: equals(['Date of birth: WIDGET_NOT_COMMITTED', 'Start date: WIDGET_NOT_COMMITTED']),
-    note: 'A native date input reports not committed; the readback verdict is unverified (TODO).',
+    note: 'A native date input stays empty after the typed entry, so it honestly reports not committed (TODO).',
   },
   {
     id: 'fieldset-group-resolves',

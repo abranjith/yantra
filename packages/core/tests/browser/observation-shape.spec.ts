@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { projectAgentInteractable } from '../../src/browser/agent-controller.js';
 import type { RawInteractable } from '../../src/discovery/interactable-scan.js';
+import { INTERACTABLE_ENTRY_MAX_BYTES } from '../../src/interaction/field-identity.js';
 
 function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
   return {
@@ -15,6 +16,7 @@ function raw(overrides: Partial<RawInteractable> = {}): RawInteractable {
     scope: 'page',
     value: null,
     valuePresent: false,
+    withheldReason: null,
     checked: null,
     expanded: null,
     selected: null,
@@ -132,5 +134,70 @@ describe('@no-llm agent observation projection', () => {
     ]) {
       expect(JSON.stringify(projected)).not.toContain(internal);
     }
+  });
+
+  it('says why a value is withheld, beside value_present, and only when it is', () => {
+    expect(
+      projectAgentInteractable(
+        'e4',
+        raw({ role: 'textbox', name: 'Password', valuePresent: true, withheldReason: 'password' }),
+      ),
+    ).toEqual({
+      ref: 'e4',
+      role: 'textbox',
+      name: 'Password',
+      value_present: true,
+      withheld: 'password',
+    });
+    // Withheld and empty: the reason still stands, presence does not.
+    expect(
+      projectAgentInteractable('e5', raw({ role: 'textbox', withheldReason: 'autocomplete' })),
+    ).toEqual({ ref: 'e5', role: 'textbox', name: 'Go', withheld: 'autocomplete' });
+    expect(
+      projectAgentInteractable('e6', raw({ role: 'textbox', value: 'Lyon' })),
+    ).not.toHaveProperty('withheld');
+  });
+
+  it('keeps the worst-case entry carrying the longest withheld reason inside the entry budget', () => {
+    // The longest reason costs `,"withheld":"secret_marker"` — 27 bytes, inside
+    // the headroom the identity budget reserves for it.
+    expect(Buffer.byteLength(',"withheld":"secret_marker"', 'utf8')).toBe(27);
+    const entry = projectAgentInteractable(
+      'e200',
+      raw({
+        role: 'textbox',
+        name: '界'.repeat(200),
+        value: null,
+        valuePresent: true,
+        withheldReason: 'secret_marker',
+        group: '界'.repeat(60),
+        field: {
+          explicit: null,
+          structural: { text: '界'.repeat(80), source: 'wrapper', adjacent: true },
+          section: '界'.repeat(60),
+          inputType: 'password',
+          autocomplete: 'current-password',
+          required: true,
+          maxLength: 100,
+          pattern: '.'.repeat(40),
+          htmlName: 'name',
+          htmlId: 'field',
+          placeholder: null,
+          selectPlaceholder: null,
+          title: null,
+          radioGroup: null,
+          checkboxSet: null,
+          humanVerification: false,
+          hiddenInput: false,
+          disabled: false,
+          readOnly: false,
+        },
+      }),
+    );
+    expect(entry.withheld).toBe('secret_marker');
+    expect(entry.value_present).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(entry), 'utf8')).toBeLessThanOrEqual(
+      INTERACTABLE_ENTRY_MAX_BYTES,
+    );
   });
 });

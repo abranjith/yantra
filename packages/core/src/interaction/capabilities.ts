@@ -36,6 +36,10 @@ export const CAPABILITY_RECEIVERS = [
     receiver: 'rankAgainstRequested',
   },
   { surface: 'fill', family: 'date', capability: 'probeOpen', receiver: 'probeOpen' },
+  // A withheld control cannot confirm a date or a choice; the value sent as
+  // plain text goes through the typing ladder, which verifies it in page.
+  { surface: 'fill', family: 'date', capability: 'commitText', receiver: 'commitText' },
+  { surface: 'fill', family: 'option', capability: 'commitText', receiver: 'commitText' },
   { surface: 'fill', family: 'option', capability: 'probeOpen', receiver: 'probeOpen' },
   { surface: 'fill', family: 'text', capability: 'locateEditee', receiver: 'locateEditee' },
   {

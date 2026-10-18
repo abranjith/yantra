@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { matchesCommitment, matchesIntent, readCommitted } from '../../src/widgets/index.js';
+import { committedText } from '../../src/interaction/protected-value.js';
+import { matchesCommitment, matchesIntent, readCommittedValue } from '../../src/widgets/index.js';
 import { WidgetTestPort } from '../support/widget-test-port.js';
 
 describe('@no-llm widget committed-value verification', () => {
@@ -81,8 +82,12 @@ describe('@no-llm widget committed-value verification', () => {
       group: null,
       value: null,
     };
-    const committed = await readCommitted(port, target);
-    expect(committed).toBe('Select start date from calendar input Sun 9/6');
+    const read = await readCommittedValue(port, target);
+    expect(read).toEqual({
+      kind: 'disclosed',
+      text: 'Select start date from calendar input Sun 9/6',
+    });
+    const committed = committedText(read)!;
     expect(matchesIntent(committed, { kind: 'date', date: '2026-09-06' })).toBe(true);
   });
 
@@ -92,39 +97,130 @@ describe('@no-llm widget committed-value verification', () => {
     const port = new WidgetTestPort(
       '<div id="trigger" role="button" aria-label="Sep 6">Sep 6</div>',
     );
-    const committed = await readCommitted(port, {
-      ref: 'e1',
-      role: 'button',
-      name: 'Sep 6',
-      group: null,
-      value: null,
-    });
+    const committed = committedText(
+      await readCommittedValue(port, {
+        ref: 'e1',
+        role: 'button',
+        name: 'Sep 6',
+        group: null,
+        value: null,
+      }),
+    )!;
     expect(committed).toBe('Sep 6');
     expect(
       matchesIntent(committed, { kind: 'date_range', from: '2026-09-06', to: '2026-09-06' }),
     ).toBe(false);
   });
 
-  it('never reads credential, OTP, or payment input values', async () => {
-    for (const input of [
-      '<input id="trigger" type="password" value="password-canary">',
-      '<input id="trigger" autocomplete="one-time-code" value="123456">',
-      '<input id="trigger" autocomplete="cc-number" value="4111111111111111">',
-      '<input id="trigger" data-yantra-secret value="secret-canary">',
-    ]) {
+  it('never returns credential, OTP, payment, or marked input values', async () => {
+    for (const [input, reason] of [
+      ['<input id="trigger" type="password" value="CANARY-protected-value">', 'password'],
+      [
+        '<input id="trigger" autocomplete="one-time-code" value="CANARY-protected-value">',
+        'autocomplete',
+      ],
+      [
+        '<input id="trigger" autocomplete="cc-number" value="CANARY-protected-value">',
+        'autocomplete',
+      ],
+      ['<input id="trigger" data-yantra-secret value="CANARY-protected-value">', 'secret_marker'],
+    ] as const) {
       const port = new WidgetTestPort(input);
-      await expect(
-        readCommitted(port, {
-          ref: 'e1',
-          role: 'textbox',
-          name: 'Sensitive',
-          group: null,
-          value: null,
-        }),
-      ).resolves.toBe('');
+      const blind = await readCommittedValue(port, textbox);
+      expect(blind).toEqual({ kind: 'withheld', reason, present: true, match: null });
+      expect(JSON.stringify(blind)).not.toContain('CANARY-protected-value');
+      // Never the ordinary empty string a withheld read used to be.
+      expect(committedText(blind)).toBeNull();
+
+      const checked = await readCommittedValue(port, textbox, {
+        expected: 'CANARY-protected-value',
+      });
+      expect(checked).toEqual({ kind: 'withheld', reason, present: true, match: 'exact' });
+      expect(JSON.stringify(checked)).not.toContain('CANARY-protected-value');
     }
   });
+
+  it('judges a withheld value inside the page without returning it', async () => {
+    const port = new WidgetTestPort('<input id="trigger" type="password" value="Passw0">');
+    for (const [expected, match] of [
+      ['Passw0', 'exact'],
+      ['passw0', 'reformatted'],
+      ['Passw0rd!', 'truncated'],
+      ['hunter2', 'different'],
+    ] as const) {
+      expect(await readCommittedValue(port, textbox, { expected })).toEqual({
+        kind: 'withheld',
+        reason: 'password',
+        present: true,
+        match,
+      });
+    }
+    port.document.querySelector('input')!.value = '';
+    expect(await readCommittedValue(port, textbox, { expected: 'Passw0' })).toEqual({
+      kind: 'withheld',
+      reason: 'password',
+      present: false,
+      match: 'empty',
+    });
+  });
+
+  it('reads disclosed controls exactly as before', async () => {
+    const text = new WidgetTestPort('<input id="trigger" value="  Frisco,   Texas ">');
+    expect(await readCommittedValue(text, textbox)).toEqual({
+      kind: 'disclosed',
+      text: 'Frisco, Texas',
+    });
+    // An expected value changes nothing about a disclosed read.
+    expect(await readCommittedValue(text, textbox, { expected: 'Frisco' })).toEqual({
+      kind: 'disclosed',
+      text: 'Frisco, Texas',
+    });
+    const select = new WidgetTestPort(
+      '<select id="trigger"><option>Economy</option><option selected>Business</option></select>',
+    );
+    expect(await readCommittedValue(select, textbox)).toEqual({
+      kind: 'disclosed',
+      text: 'Business',
+    });
+    const slider = new WidgetTestPort(
+      '<div id="trigger" role="button" aria-valuetext="5 stars" aria-label="Rating"></div>',
+    );
+    expect(await readCommittedValue(slider, textbox)).toEqual({
+      kind: 'disclosed',
+      text: '5 stars Rating',
+    });
+  });
+
+  it('reads only the box itself on the raw source', async () => {
+    // A trigger whose accessible name differs from its text: the committed read
+    // reports both, the raw read only what is in the box.
+    const port = new WidgetTestPort(
+      '<div id="trigger" role="combobox" aria-label="Departure airport">DF</div>',
+    );
+    expect(await readCommittedValue(port, textbox)).toEqual({
+      kind: 'disclosed',
+      text: 'Departure airport DF',
+    });
+    expect(await readCommittedValue(port, textbox, { source: 'raw' })).toEqual({
+      kind: 'disclosed',
+      text: 'DF',
+    });
+    const field = new WidgetTestPort('<input id="trigger" aria-label="Code" value=" DF W ">');
+    expect(await readCommittedValue(field, textbox, { source: 'raw' })).toEqual({
+      kind: 'disclosed',
+      text: 'DF W',
+    });
+  });
+
+  it('takes the same single page read as the read it replaced', async () => {
+    const port = new WidgetTestPort('<input id="trigger" type="password" value="x">');
+    const evaluateOn = vi.spyOn(port, 'evaluateOn');
+    await readCommittedValue(port, textbox, { expected: 'x' });
+    expect(evaluateOn).toHaveBeenCalledTimes(1);
+  });
 });
+
+const textbox = { ref: 'e1', role: 'textbox', name: 'Field', group: null, value: null };
 
 describe('@no-llm commitment verification against the chosen option', () => {
   it('accepts a short display name for the option that carried the code', () => {

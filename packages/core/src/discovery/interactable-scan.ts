@@ -1,5 +1,10 @@
 /// <reference lib="dom" />
 
+import {
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
+  type WithheldReason,
+} from '../interaction/protected-value.js';
+
 /** Options for the single serialized composed-tree scan. */
 export interface ScanOptions {
   readonly withElements?: boolean;
@@ -16,6 +21,29 @@ export interface ScanOptions {
    * which is the drift this whole scan exists to remove.
    */
   readonly selector?: string;
+  /**
+   * The autofill tokens that make a control protected.
+   *
+   * Supplied by every caller from `SENSITIVE_AUTOCOMPLETE_TOKENS` and never
+   * chosen by one: the scan is serialized by source and cannot import the
+   * list, and a second literal copy here is how the replay port once forgot a
+   * reason. Absent, no autocomplete token is protected — so every caller
+   * builds its options through {@link protectedScanOptions}, and the scan
+   * refuses to run without it rather than disclose a credential field.
+   */
+  readonly sensitiveAutocompleteTokens?: readonly string[];
+}
+
+/**
+ * Scan options with the protected-control vocabulary filled in.
+ *
+ * The one way a caller builds options for the scan, so no path can observe a
+ * credential field without knowing it is one.
+ */
+export function protectedScanOptions(
+  options: Omit<ScanOptions, 'sensitiveAutocompleteTokens'> = {},
+): ScanOptions {
+  return { ...options, sensitiveAutocompleteTokens: SENSITIVE_AUTOCOMPLETE_TOKENS };
 }
 
 /** One candidate element's raw signal, before ranking/capping. */
@@ -58,6 +86,14 @@ export interface RawInteractable {
   readonly scope: 'dialog' | 'page';
   readonly value: string | null;
   readonly valuePresent: boolean;
+  /**
+   * Why this control's value is withheld, or null when it is not.
+   *
+   * Classified in the same in-page read that withholds the value, so it costs
+   * nothing, and projected beside `value_present` so a field protected by
+   * mistake is visible rather than silent.
+   */
+  readonly withheldReason: WithheldReason | null;
   readonly checked: boolean | null;
   readonly expanded: boolean | null;
   readonly selected: boolean | null;
@@ -164,6 +200,12 @@ export function scanInteractablesInPage(options: ScanOptions = {}): Interactable
       ? Math.max(0, Math.floor(options.max))
       : Number.MAX_SAFE_INTEGER;
   const maxShadowDepth = 16;
+  // Fails loudly, never open: a scan without the vocabulary would disclose the
+  // value of every autocomplete-protected field it reached.
+  if (!Array.isArray(options.sensitiveAutocompleteTokens)) {
+    throw new TypeError('scanInteractablesInPage requires sensitiveAutocompleteTokens');
+  }
+  const sensitiveTokens: readonly string[] = options.sensitiveAutocompleteTokens;
   const kindByRole: Record<string, 'button' | 'link' | 'input' | 'select'> = {
     button: 'button',
     link: 'link',
@@ -294,6 +336,7 @@ export function scanInteractablesInPage(options: ScanOptions = {}): Interactable
       focused: rootOf(element).activeElement === element,
       value: currentValue.value,
       valuePresent: currentValue.valuePresent,
+      withheldReason: currentValue.withheldReason,
       checked: computeChecked(element),
       expanded: readAriaBoolean(element, 'aria-expanded'),
       selected: computeSelected(element),
@@ -787,6 +830,7 @@ export function scanInteractablesInPage(options: ScanOptions = {}): Interactable
   function computeValue(element: HTMLElement): {
     readonly value: string | null;
     readonly valuePresent: boolean;
+    readonly withheldReason: WithheldReason | null;
   } {
     let raw: string | null = null;
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
@@ -797,19 +841,28 @@ export function scanInteractablesInPage(options: ScanOptions = {}): Interactable
     } else if (element.matches('[contenteditable]')) {
       raw = element.textContent ?? '';
     }
-    if (raw === null) return { value: null, valuePresent: false };
+    if (raw === null) return { value: null, valuePresent: false, withheldReason: null };
 
-    const autocomplete = element.getAttribute('autocomplete') ?? '';
-    const withheld =
-      element.matches('input[type="password"]') ||
-      /\b(current-password|new-password|one-time-code|cc-number|cc-csc|cc-exp)\b/i.test(
-        autocomplete,
-      ) ||
-      element.hasAttribute('data-yantra-secret');
-    if (withheld) return { value: null, valuePresent: raw.length > 0 };
+    const withheldReason = withheldReasonOf(element);
+    if (withheldReason !== null) {
+      return { value: null, valuePresent: raw.length > 0, withheldReason };
+    }
 
     const value = normalize(raw);
-    return { value: value.length > 0 ? truncateValue(value) : null, valuePresent: false };
+    return {
+      value: value.length > 0 ? truncateValue(value) : null,
+      valuePresent: false,
+      withheldReason: null,
+    };
+  }
+
+  /** The in-page twin of `classifyWithheld`; the token list arrives as an option. */
+  function withheldReasonOf(element: HTMLElement): WithheldReason | null {
+    if (element.matches('input[type="password"]')) return 'password';
+    const tokens = (element.getAttribute('autocomplete') ?? '').toLowerCase().split(/\s+/u);
+    if (tokens.some((token) => sensitiveTokens.includes(token))) return 'autocomplete';
+    if (element.hasAttribute('data-yantra-secret')) return 'secret_marker';
+    return null;
   }
 
   function computeChecked(element: HTMLElement): boolean | null {

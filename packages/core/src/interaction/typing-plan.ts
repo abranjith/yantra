@@ -6,7 +6,14 @@ import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js
 import { locateEditee } from './editee.js';
 import { asPlanBudget } from './escalation.js';
 import type { EscalationPlan, Rung, RungOutcome } from './escalation.js';
-import type { EditeeProbeOptions, TypedText, TypingFailure, TypingStrategy } from './typing.js';
+import type { CommittedValue, WithheldValue } from './protected-value.js';
+import {
+  isTruncationOf,
+  type EditeeProbeOptions,
+  type TypedText,
+  type TypingFailure,
+  type TypingStrategy,
+} from './typing.js';
 
 /** Runtime operations injected to keep this builder declarative and cycle-free. */
 export interface TypingPlanOperations {
@@ -16,10 +23,17 @@ export interface TypingPlanOperations {
     text: string,
     strategy: TypingStrategy,
   ) => Promise<void>;
-  readonly read: (port: WidgetPort, target: WidgetTarget) => Promise<string>;
+  /** Reads the box, judging a protected control against `expected` inside the page. */
+  readonly read: (
+    port: WidgetPort,
+    target: WidgetTarget,
+    expected: string,
+  ) => Promise<CommittedValue>;
   readonly targetHasFocus: (port: WidgetPort, target: WidgetTarget) => Promise<boolean>;
-  readonly equivalent: (committed: string, requested: string) => boolean;
-  readonly truncated: (committed: string, requested: string) => boolean;
+  /** Disclosed: same letters and numbers. Withheld: an `exact` or `reformatted` verdict. */
+  readonly equivalent: (committed: CommittedValue, requested: string) => boolean;
+  /** Disclosed: strictly fewer characters. Withheld: a `truncated` or `empty` verdict. */
+  readonly truncated: (committed: CommittedValue, requested: string) => boolean;
 }
 
 export interface BuildTypingPlanInput {
@@ -37,6 +51,8 @@ export interface BuildTypingPlanInput {
 export function buildTypingPlan(
   input: BuildTypingPlanInput,
 ): EscalationPlan<TypedText, TypingFailure, WidgetPort> {
+  /** The latest read, so a WHERE failure reports what the control held. */
+  let lastRead: CommittedValue = { kind: 'disclosed', text: '' };
   const strategyRung = (
     strategy: TypingStrategy,
     entry: Rung<TypedText, TypingFailure, WidgetPort>['entry'],
@@ -54,14 +70,21 @@ export function buildTypingPlan(
       if (!input.allowEscalation) {
         return {
           ok: true,
-          value: successful(strategy, '', false),
+          value: successful(strategy, null, false),
         };
       }
-      const committed = await input.operations.read(port, input.target);
+      const committed = await input.operations.read(port, input.target, input.text);
+      lastRead = committed;
       if (input.operations.equivalent(committed, input.text)) {
         return {
           ok: true,
-          value: successful(strategy, committed, committed !== input.text),
+          value: successful(
+            strategy,
+            committed,
+            committed.kind === 'disclosed'
+              ? committed.text !== input.text
+              : committed.match === 'reformatted',
+          ),
           evidence: {
             committed,
             'committed-successfully': true,
@@ -96,7 +119,7 @@ export function buildTypingPlan(
       if (evidence.values['last-strategy-failure'] !== 'overtype') {
         return { enter: false, unmet: 'no-replacement-signal' };
       }
-      if (typeof evidence.values.committed === 'string' && evidence.values.committed.length > 0) {
+      if (holdsSomething(evidence.values.committed)) {
         return { enter: false, unmet: 'control-not-empty' };
       }
       if (!input.probe || input.before === null) {
@@ -119,7 +142,7 @@ export function buildTypingPlan(
             ok: false,
             errorCode: 'WIDGET_NOT_COMMITTED',
             message: `The "${input.target.name}" control is still empty because the page routed the typed value to "${located.target.name}" instead.`,
-            observed: '',
+            observed: lastRead,
             editee: located.target,
             editeeEvidence: located.evidence,
             attempted: [],
@@ -132,7 +155,7 @@ export function buildTypingPlan(
       }
       return {
         ok: false,
-        failure: failed(input.target, '', input.text),
+        failure: failed(input.target, lastRead, input.text),
         evidence: {
           'editee-located': false,
           'editee-evidence': located.kind === 'same' ? 'none' : located.evidence,
@@ -190,33 +213,58 @@ function plan(
   };
 }
 
-function successful(strategy: TypingStrategy, committed: string, reformatted: boolean): TypedText {
+function successful(
+  strategy: TypingStrategy,
+  committed: CommittedValue | null,
+  reformatted: boolean,
+): TypedText {
   return { ok: true, strategy, committed, reformatted, attempted: [] };
 }
 
-function failed(target: WidgetTarget, committed: string, requested: string): TypingFailure {
+/**
+ * Whether the last read found anything in the control.
+ *
+ * A protected control answers through `present`, never through its text, so a
+ * withheld box that kept nothing reads as empty here exactly as a disclosed one
+ * does.
+ */
+function holdsSomething(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const read = value as CommittedValue;
+  return read.kind === 'disclosed' ? read.text.length > 0 : read.present;
+}
+
+function failed(target: WidgetTarget, committed: CommittedValue, requested: string): TypingFailure {
   return {
     ok: false,
     errorCode: 'WIDGET_NOT_COMMITTED',
     message:
-      committed.length === 0
-        ? `The "${target.name}" control is still empty after the value was typed.`
-        : isTruncation(committed, requested)
-          ? `The "${target.name}" control kept only "${committed}" of the value that was typed.`
-          : `The "${target.name}" control changed the typed value to unrelated text "${committed}".`,
+      committed.kind === 'withheld'
+        ? withheldMessage(target, committed)
+        : committed.text.length === 0
+          ? `The "${target.name}" control is still empty after the value was typed.`
+          : isTruncationOf(committed.text, requested)
+            ? `The "${target.name}" control kept only "${committed.text}" of the value that was typed.`
+            : `The "${target.name}" control changed the typed value to unrelated text "${committed.text}".`,
     observed: committed,
     attempted: [],
   };
 }
 
-function isTruncation(committed: string, requested: string): boolean {
-  const actual = committed.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  const wanted = requested.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  if (wanted.length === 0 || actual.length >= wanted.length) return false;
-  let cursor = 0;
-  for (const character of wanted) {
-    if (character === actual[cursor]) cursor += 1;
-    if (cursor === actual.length) return true;
-  }
-  return actual.length === 0;
+/**
+ * The failure sentence for a protected control. It names the in-page verdict
+ * and never quotes, measures, or hashes the value.
+ */
+export function withheldMessage(target: WidgetTarget, value: WithheldValue): string {
+  const found =
+    value.match === 'truncated'
+      ? 'kept fewer characters than were typed'
+      : value.match === 'different'
+        ? 'holds a different value'
+        : value.match === null
+          ? 'could not be compared with what was typed'
+          : value.match === 'empty'
+            ? 'is still empty'
+            : 'holds the value';
+  return `The "${target.name}" control withholds its contents; a check inside the page found it ${found}.`;
 }

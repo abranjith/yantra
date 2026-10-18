@@ -40,7 +40,7 @@ describe('@no-llm option widget drivers', () => {
 
       expect(outcome).toMatchObject({
         kind: 'selected',
-        committed: 'Frisco Texas, United States',
+        committed: { kind: 'disclosed', text: 'Frisco Texas, United States' },
         chosen: 'Frisco Texas, United States',
       });
       expect(port.clickedNames()).toEqual(['Frisco Texas, United States']);
@@ -166,13 +166,21 @@ describe('@no-llm option widget drivers', () => {
     });
     const container = await resolveContainer(port, target('Chosen'));
 
-    const pending = dismissWidget(port, target('Chosen'), 'Chosen', (value) => value === 'Chosen', {
-      driven: container,
-    });
+    const pending = dismissWidget(
+      port,
+      target('Chosen'),
+      { kind: 'disclosed', text: 'Chosen' },
+      (value) => value.kind === 'disclosed' && value.text === 'Chosen',
+      { driven: container },
+    );
     await vi.runAllTimersAsync();
     const outcome = await pending;
 
-    expect(outcome).toMatchObject({ ok: true, dismissed: true, committed: 'Chosen' });
+    expect(outcome).toMatchObject({
+      ok: true,
+      dismissed: true,
+      committed: { kind: 'disclosed', text: 'Chosen' },
+    });
     expect(port.clickedNames()).toEqual(['Done']);
   });
 
@@ -188,7 +196,10 @@ describe('@no-llm option widget drivers', () => {
       deadlineMs: Date.now() + 600,
     });
 
-    expect(outcome).toMatchObject({ kind: 'no-suggestions', committed: 'Nowhere' });
+    expect(outcome).toMatchObject({
+      kind: 'no-suggestions',
+      committed: { kind: 'disclosed', text: 'Nowhere' },
+    });
   });
 
   it('selects a native option by visible label and by value', async () => {

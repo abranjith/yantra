@@ -1,5 +1,6 @@
+import { isEmptyRead } from '../../interaction/protected-value.js';
 import type { WidgetPort, WidgetTarget } from '../types.js';
-import { readCommitted } from '../verify.js';
+import { readCommittedValue } from '../verify.js';
 
 const FROM_NAME_RE = /\b(check[ -]?in|arrival|start date|depart(?:ure|ing)?)\b/i;
 const TO_NAME_RE = /\b(check[ -]?out|return(?:ing)?|end date)\b/i;
@@ -105,8 +106,7 @@ export async function pendingRangePartner(
   if (!pair) return null;
   const partner = partnerOf(pair, target);
   if (!partner) return null;
-  const committed = await readCommitted(port, partner);
-  return committed.trim().length === 0 ? partner : null;
+  return isEmptyRead(await readCommittedValue(port, partner)) ? partner : null;
 }
 
 /**

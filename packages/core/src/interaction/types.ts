@@ -34,6 +34,13 @@ export type InteractionFailureCause =
   | 'value-rejected-on-release'
   /** The control simply does not hold what it was given. */
   | 'control-refused-value'
+  /**
+   * A protected control was read and there was no verdict to act on: a date or
+   * option driver cannot compare a withheld value with a date or a choice.
+   */
+  | 'value-withheld'
+  /** A protected control's in-page check found it empty, truncated, or different. */
+  | 'withheld-value-mismatch'
   /** A list was offered, nothing matched, and the text did not stand. */
   | 'no-suggestion-matched'
   /** The opened container exposes controls but no declared selectable options. */

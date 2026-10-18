@@ -28,7 +28,11 @@ import { fingerprintFromScan, type ScanFingerprint } from '../interaction/page-d
 import { brandSanitized, type Sanitized } from '../sanitizer/brand.js';
 import { sanitize } from '../sanitizer/index.js';
 
-import { scanInteractablesInPage, type RawInteractable } from './interactable-scan.js';
+import {
+  protectedScanOptions,
+  scanInteractablesInPage,
+  type RawInteractable,
+} from './interactable-scan.js';
 import { rankInteractables } from './interactables.js';
 
 /** Max page-digest length in characters — must match protocol's cap. */
@@ -112,7 +116,7 @@ export async function buildAgentPageSnapshot(
   if (options.records !== undefined) {
     raw = options.records;
   } else {
-    const scan = await safeEvaluate(page, scanInteractablesInPage);
+    const scan = await safeEvaluate(page, scanInteractablesInPage, protectedScanOptions());
     degraded = scan === null;
     scanBounded = scan?.truncated ?? false;
     raw = scan?.records ?? [];
@@ -204,7 +208,8 @@ export async function buildObservation(
   const sanitizedDigest = sanitize(digestText, 'public', host ?? undefined);
   const pageDigest = clampChars(sanitizedDigest.text, MAX_PAGE_DIGEST_LEN);
 
-  const rawInteractables = (await safeEvaluate(page, scanInteractablesInPage))?.records ?? [];
+  const rawInteractables =
+    (await safeEvaluate(page, scanInteractablesInPage, protectedScanOptions()))?.records ?? [];
   const interactables = rankInteractables(rawInteractables);
 
   const observation: DiscoveryObservation = {
@@ -266,10 +271,14 @@ function buildDigest(url: string, html: string, extractor: Extractor): Promise<s
   return extractLivePageText({ extractor }, { url, html });
 }
 
-/** Runs `page.evaluate(fn)`, degrading to null on any failure (best-effort). */
-async function safeEvaluate<T>(page: Page, fn: () => T): Promise<T | null> {
+/** Runs `page.evaluate(fn, arg)`, degrading to null on any failure (best-effort). */
+async function safeEvaluate<T, A = undefined>(
+  page: Page,
+  fn: (arg: A) => T,
+  arg?: A,
+): Promise<T | null> {
   try {
-    return await page.evaluate(fn);
+    return await page.evaluate(fn, arg);
   } catch {
     return null;
   }

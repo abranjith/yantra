@@ -2,7 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { scanInteractablesInPage } from '../../src/discovery/interactable-scan.js';
+import {
+  protectedScanOptions,
+  scanInteractablesInPage,
+} from '../../src/discovery/interactable-scan.js';
 
 function makeVisibleRect(top = 10, left = 10): DOMRect {
   return {
@@ -78,7 +81,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     document.body.appendChild(host);
     attachOpenSelect(host, 'Delivery region', ['North', 'South']);
 
-    const { records } = scanInteractablesInPage();
+    const { records } = scanInteractablesInPage(protectedScanOptions());
 
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
@@ -102,7 +105,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     // platform simply returns null, so the subtree is unreachable rather than
     // filtered. No piercing library and no DOM tagging is used to get around it.
     expect(host.shadowRoot).toBeNull();
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
   });
 
   it('yields exactly one record for an open and a closed shadow select that a flat query misses entirely', () => {
@@ -118,7 +121,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     // scanner used before sees neither control.
     expect(document.querySelectorAll('select')).toHaveLength(0);
 
-    const { records } = scanInteractablesInPage();
+    const { records } = scanInteractablesInPage(protectedScanOptions());
     expect(records).toHaveLength(1);
     expect(records[0]?.name).toBe('Open region');
   });
@@ -143,7 +146,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     shadow.appendChild(select);
     stubVisible(select);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Shadow label');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe('Shadow label');
   });
 
   it('resolves label[for] against the element own root', () => {
@@ -159,7 +162,9 @@ describe('@no-llm composed-tree interactable scanning', () => {
     shadow.appendChild(input);
     stubVisible(input);
 
-    expect(scanInteractablesInPage().records[0]?.name).toBe('Shadow field label');
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]?.name).toBe(
+      'Shadow field label',
+    );
   });
 
   it('walks the composed ancestor chain for group and scope, crossing the shadow boundary', () => {
@@ -175,7 +180,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
 
     // A `parentElement` walk terminates at the shadow boundary and would report
     // no group and page scope; the composed walk reaches the host's dialog.
-    expect(scanInteractablesInPage().records[0]).toMatchObject({
+    expect(scanInteractablesInPage(protectedScanOptions()).records[0]).toMatchObject({
       group: 'Checkout options',
       scope: 'dialog',
     });
@@ -197,7 +202,9 @@ describe('@no-llm composed-tree interactable scanning', () => {
     document.body.appendChild(link);
     stubVisible(link);
 
-    const { records, elements } = scanInteractablesInPage({ withElements: true });
+    const { records, elements } = scanInteractablesInPage(
+      protectedScanOptions({ withElements: true }),
+    );
 
     expect(records).toHaveLength(3);
     expect(elements).toHaveLength(records.length);
@@ -220,9 +227,13 @@ describe('@no-llm composed-tree interactable scanning', () => {
     document.body.appendChild(button);
     stubVisible(button);
 
-    expect(scanInteractablesInPage().elements).toEqual([]);
-    expect(scanInteractablesInPage({ withElements: false }).elements).toEqual([]);
-    expect(scanInteractablesInPage({ withElements: true }).elements).toHaveLength(1);
+    expect(scanInteractablesInPage(protectedScanOptions()).elements).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions({ withElements: false })).elements).toEqual(
+      [],
+    );
+    expect(
+      scanInteractablesInPage(protectedScanOptions({ withElements: true })).elements,
+    ).toHaveLength(1);
   });
 
   it('descends into nested open shadow roots and records the boundary depth', () => {
@@ -233,7 +244,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     outerShadow.appendChild(inner);
     attachOpenSelect(inner, 'Nested region', ['North']);
 
-    const { records } = scanInteractablesInPage();
+    const { records } = scanInteractablesInPage(protectedScanOptions());
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ name: 'Nested region', rootNodeDepth: 2 });
   });
@@ -252,7 +263,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     current.appendChild(deep);
     stubVisible(deep);
 
-    expect(scanInteractablesInPage().records).toEqual([]);
+    expect(scanInteractablesInPage(protectedScanOptions()).records).toEqual([]);
 
     // The same control at depth 16 is still reached, so the cap is a bound
     // rather than an off-by-one that silently loses a shallower control.
@@ -269,7 +280,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     shallow.attachShadow({ mode: 'open' }).appendChild(reachable);
     stubVisible(reachable);
 
-    const records = scanInteractablesInPage().records;
+    const records = scanInteractablesInPage(protectedScanOptions()).records;
     expect(records).toHaveLength(1);
     expect(records[0]?.rootNodeDepth).toBe(16);
   });
@@ -282,7 +293,9 @@ describe('@no-llm composed-tree interactable scanning', () => {
       stubVisible(button);
     }
 
-    const { records, elements } = scanInteractablesInPage({ withElements: true, max: 3 });
+    const { records, elements } = scanInteractablesInPage(
+      protectedScanOptions({ withElements: true, max: 3 }),
+    );
 
     expect(records).toHaveLength(3);
     expect(elements).toHaveLength(3);
@@ -301,7 +314,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     host.appendChild(slotted);
     stubVisible(slotted);
 
-    const { records } = scanInteractablesInPage();
+    const { records } = scanInteractablesInPage(protectedScanOptions());
     expect(records).toHaveLength(1);
     // Slotted content lives in the light DOM, and is reported as such.
     expect(records[0]).toMatchObject({ name: 'Slotted action', composedScope: 'document' });
@@ -316,7 +329,7 @@ describe('@no-llm composed-tree interactable scanning', () => {
     for (const element of Array.from(document.body.querySelectorAll('*'))) stubVisible(element);
 
     const before = composedMarkup(document.documentElement);
-    scanInteractablesInPage({ withElements: true });
+    scanInteractablesInPage(protectedScanOptions({ withElements: true }));
     const after = composedMarkup(document.documentElement);
 
     expect(after).toBe(before);

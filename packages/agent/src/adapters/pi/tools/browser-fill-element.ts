@@ -17,6 +17,7 @@ import {
   type FillResolution,
   type WidgetPort,
   type WidgetTarget,
+  type WithheldCommit,
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
@@ -100,6 +101,19 @@ export interface AppliedBrowserFill {
   readonly dismissed: boolean;
   readonly actions: number;
   readonly committed?: string;
+  /**
+   * The in-page verdict for a control that withholds its contents, in place of
+   * `committed`.
+   *
+   * `ref` names the control the verdict was taken on — the editee when the page
+   * routed the edit away. The value itself is in no field of this entry.
+   */
+  readonly withheld?: {
+    readonly reason: string;
+    readonly verdict: 'exact' | 'reformatted';
+    readonly ref: string;
+    readonly label?: string;
+  };
   /** What was asked for, so a differing `committed` reads as a resolution. */
   readonly requested?: string;
   /** How `committed` relates to `requested`. */
@@ -131,7 +145,7 @@ export function browserFillElementSpec(
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
     description:
-      "Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.",
+      "Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.",
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -170,6 +184,7 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
   return {
     ok: true,
     model: {
+      ...(applied.withheld === undefined ? {} : { withheld: applied.withheld }),
       ...(applied.committed === undefined ? {} : { committed: applied.committed }),
       ...(applied.requested === undefined ? {} : { requested: applied.requested }),
       ...(applied.resolution === undefined ? {} : { resolution: applied.resolution }),
@@ -271,7 +286,9 @@ export async function applyBrowserFill(
       field,
       ref: target.ref,
       driver: outcome.driver,
-      committed: outcome.committed,
+      ...(outcome.withheld === undefined
+        ? { committed: outcome.committed }
+        : { withheld: withheldVerdict(outcome.withheld, outcome.editee, target) }),
       dismissed: outcome.dismissed,
       actions: outcome.actions,
       ...(outcome.requested === undefined ? {} : { requested: outcome.requested }),
@@ -353,6 +370,32 @@ export async function applyBrowserFill(
 }
 
 /**
+ * The model-visible verdict for a protected control filled with caller data.
+ *
+ * Taken on the editee when the page routed the edit away, so `ref` names the
+ * control the in-page check actually read. A stored secret never reaches here:
+ * its projection stays exactly what it was, with neither `committed` nor
+ * `withheld`.
+ */
+function withheldVerdict(
+  withheld: WithheldCommit,
+  editee: { readonly ref: string } | undefined,
+  target: WidgetTarget,
+): NonNullable<AppliedBrowserFill['withheld']> {
+  if (withheld.verdict === 'unchecked') {
+    throw new Error('A stored-secret commit has no caller-data verdict to project.');
+  }
+  return {
+    reason: withheld.reason,
+    verdict: withheld.verdict,
+    ref: editee?.ref ?? target.ref,
+    ...(editee === undefined && typeof target.label === 'string' && target.label.length > 0
+      ? { label: target.label }
+      : {}),
+  };
+}
+
+/**
  * Records one verified commit: the resolved field name (or the caller's, for
  * an unnamed control), its ref and widget group. Never the value.
  */
@@ -408,7 +451,9 @@ async function appendSemanticTrace(
 
 async function bestEffortDismiss(port: WidgetPort, target: WidgetTarget): Promise<void> {
   // swallow-ok: dismiss-on-cleanup; the fill result is already decided
-  await dismissWidget(port, target, '', () => true).catch(() => undefined);
+  await dismissWidget(port, target, { kind: 'disclosed', text: '' }, () => true).catch(
+    () => undefined,
+  );
 }
 
 /**

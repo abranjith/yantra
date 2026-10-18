@@ -1,5 +1,5 @@
 import { widgetFailure, type WidgetDriver, type WidgetPort, type WidgetTarget } from '../types.js';
-import { readCommitted } from '../verify.js';
+import { readComparable } from '../verify.js';
 
 import { resolveDatePair } from './date-pair.js';
 
@@ -108,7 +108,9 @@ async function fillDateInput(
     element.dispatchEvent(new EventCtor('input', { bubbles: true }));
     element.dispatchEvent(new EventCtor('change', { bubbles: true }));
   });
-  const committed = await readCommitted(port, target);
+  const read = await readComparable(port, target);
+  if (!read.ok) return read;
+  const committed = read.text;
   if (parseCommitted(committed, format) !== isoDate) {
     return {
       ok: false,

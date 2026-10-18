@@ -48,6 +48,8 @@ When `fill` or `fill_element` targets a nonempty text control, replay focuses th
 
 Secret-backed fills use the same replacement behavior without reading the resulting value. Resolved plaintext is zeroed after the attempt and remains absent from completed and failed results and persisted artifacts. Existing workflow YAML and saved replay artifact formats remain compatible; the driver migration does not rewrite them.
 
+A literal or parameter value replayed into a protected control — a password input, a field whose `autocomplete` names a credential, one-time code, or card field, or one marked `data-yantra-secret` — is verified by the same in-page check as a live fill, and the value is never read back. The completed step's details carry `withheld: { reason, verdict }` in place of `committed`, for example `{ "withheld": { "reason": "password", "verdict": "exact" }, "driver": "plain-text", "dismissed": false }`, and a failed step carries `withheld`, `match`, and `present` in place of `observed`. A secret-backed step's details are unchanged: `driver` and `dismissed` only. Replay classifies protected controls with the same reasons and token list as live observation, so a `data-yantra-secret` control is withheld at replay too. See [Protected fields](safety-and-privacy.md#protected-fields).
+
 The YAML schema also accepts `call_workflow`, but its executor handler is currently a stub that fails the step. This is different from the supported agent-facing `workflow_run` tool described below.
 
 ### Confirmations and safety

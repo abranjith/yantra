@@ -12,6 +12,7 @@ import {
   fillField,
   scoreComboboxShape,
   selectByOfferedLabel,
+  watchAndSelectOffered,
   type AttemptRecord,
   type WidgetPort,
   type WidgetTarget,
@@ -361,3 +362,51 @@ function alwaysOffers(label: string): WidgetTestPort {
   });
   return port;
 }
+
+describe('@no-llm selection stage on a protected control', () => {
+  it('judges a withheld no-suggestions read against the request inside the page', async () => {
+    const port = new WidgetTestPort('<input id="p" type="password" aria-label="Password" />');
+    const field: WidgetTarget = {
+      ref: port.refFor('#p'),
+      role: 'textbox',
+      name: 'Password',
+      group: null,
+      value: null,
+    };
+    await port.fill(field.ref, 'Synth3tic!pw');
+
+    const selection = await watchAndSelectOffered(port, field, 'Synth3tic!pw', {
+      deadlineMs: port.now() + 600,
+      maxActions: 8,
+    });
+
+    expect(selection).toMatchObject({
+      kind: 'no-suggestions',
+      committed: { kind: 'withheld', reason: 'password', present: true, match: 'exact' },
+    });
+    expect(JSON.stringify(selection)).not.toContain('Synth3tic');
+  });
+
+  it('reports a withheld value that differs from the request without disclosing it', async () => {
+    const port = new WidgetTestPort('<input id="p" type="password" aria-label="Password" />');
+    const field: WidgetTarget = {
+      ref: port.refFor('#p'),
+      role: 'textbox',
+      name: 'Password',
+      group: null,
+      value: null,
+    };
+    await port.fill(field.ref, 'hunter2');
+
+    const selection = await watchAndSelectOffered(port, field, 'Synth3tic!pw', {
+      deadlineMs: port.now() + 600,
+      maxActions: 8,
+    });
+
+    expect(selection).toMatchObject({
+      kind: 'no-suggestions',
+      committed: { kind: 'withheld', match: 'different' },
+    });
+    expect(JSON.stringify(selection)).not.toContain('hunter2');
+  });
+});

@@ -20,9 +20,11 @@
 
 import type { AgentBrowserObservation } from '../browser/agent-controller.js';
 import type { WidgetBudget, WidgetPort, WidgetTarget } from '../widgets/types.js';
+import { readCommittedValue } from '../widgets/verify.js';
 
 import type { EditeeEvidence } from './editee.js';
 import { runEscalationPlan, toWireLedger, type SerializedVerdict } from './escalation.js';
+import { verifiedMatch, type CommittedValue } from './protected-value.js';
 import { normalizeText } from './types.js';
 import { buildTypingPlan } from './typing-plan.js';
 
@@ -43,8 +45,14 @@ const DELIBERATE_KEY_DELAY_MS = 60;
 export interface TypedText {
   readonly ok: true;
   readonly strategy: TypingStrategy;
-  /** What the control holds now — not necessarily what was requested. */
-  readonly committed: string;
+  /**
+   * What the control holds now — not necessarily what was requested.
+   *
+   * Null exactly when the commit was blind: the secret path reads nothing back.
+   * A protected control reports `withheld` with an in-page verdict; its value
+   * is never here.
+   */
+  readonly committed: CommittedValue | null;
   /** True when the control rewrote the value rather than truncating it. */
   readonly reformatted: boolean;
   /** The verdicts this commit contributed, already in the wire projection. */
@@ -57,8 +65,8 @@ export interface TypingFailure {
   /** Stable code the caller re-uses verbatim in its own failure vocabulary. */
   readonly errorCode: 'WIDGET_NOT_COMMITTED' | 'WIDGET_TARGET_UNREACHABLE';
   readonly message: string;
-  /** What the control actually holds now. */
-  readonly observed: string;
+  /** What the control actually holds now, as much of it as may be disclosed. */
+  readonly observed: CommittedValue;
   /** Set when the ladder never started because the budget was spent. */
   readonly reason?: 'budget';
   /**
@@ -139,7 +147,7 @@ export async function commitText(
       ok: false,
       errorCode: 'WIDGET_TARGET_UNREACHABLE',
       message: 'The fill action budget was exhausted before the value could be typed.',
-      observed: '',
+      observed: NOTHING_READ,
       reason: 'budget',
       attempted: [],
     };
@@ -161,10 +169,10 @@ export async function commitText(
     before,
     operations: {
       apply: applyStrategy,
-      read: readRawValue,
+      read: readTypedValue,
       targetHasFocus,
-      equivalent: isFormattingEquivalent,
-      truncated: isTruncationOf,
+      equivalent: holdsRequested,
+      truncated: lostCharacters,
     },
   });
   const run = await runEscalationPlan(plan);
@@ -176,7 +184,7 @@ export async function commitText(
       ok: false,
       errorCode: 'WIDGET_TARGET_UNREACHABLE',
       message: 'The fill action budget was exhausted before the value could be typed.',
-      observed: '',
+      observed: NOTHING_READ,
       reason: 'budget',
       attempted,
     };
@@ -232,7 +240,7 @@ async function applyStrategy(
   if (head.length > 0) await setNativeValue(port, target, head);
   if (tail.length > 0) {
     await port.type(target.ref, tail, { delayMs: DELIBERATE_KEY_DELAY_MS });
-    if (isTruncationOf(await readRawValue(port, target), text)) {
+    if (lostCharacters(await readTypedValue(port, target, text), text)) {
       await setNativeValue(port, target, text);
     }
   }
@@ -274,20 +282,38 @@ async function setNativeValue(
   );
 }
 
+/** The empty reading a failure reports when the ladder never reached the control. */
+const NOTHING_READ: CommittedValue = { kind: 'disclosed', text: '' };
+
 /**
  * The control's own raw value, with no accessible-name fallbacks.
  *
- * Deliberately narrower than `readCommitted`: this asks "did the characters
+ * Deliberately narrower than the committed read: this asks "did the characters
  * land in the box", and a picker's accessible label answering on the box's
- * behalf would mask exactly the truncation being looked for.
+ * behalf would mask exactly the truncation being looked for. The sent text
+ * travels with it, so a protected control is judged inside the page and its
+ * value is never pulled back into Node.
  */
-async function readRawValue(port: WidgetPort, target: WidgetTarget): Promise<string> {
-  return port.evaluateOn(target.ref, (element) => {
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-      return element.value.replace(/\s+/g, ' ').trim();
-    }
-    return (element.textContent ?? '').replace(/\s+/g, ' ').trim();
-  });
+function readTypedValue(
+  port: WidgetPort,
+  target: WidgetTarget,
+  expected: string,
+): Promise<CommittedValue> {
+  return readCommittedValue(port, target, { expected, source: 'raw' });
+}
+
+/** True when the control holds the sent letters and numbers, however formatted. */
+function holdsRequested(value: CommittedValue, requested: string): boolean {
+  return value.kind === 'disclosed'
+    ? isFormattingEquivalent(value.text, requested)
+    : verifiedMatch(value) !== null;
+}
+
+/** True when the control kept strictly less of the sent text, or none of it. */
+function lostCharacters(value: CommittedValue, requested: string): boolean {
+  return value.kind === 'disclosed'
+    ? isTruncationOf(value.text, requested)
+    : value.match === 'truncated' || value.match === 'empty';
 }
 
 /**
