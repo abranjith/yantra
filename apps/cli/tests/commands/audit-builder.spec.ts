@@ -1,10 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildAuditReport } from '../../src/commands/audit-builder.js';
+import { TerminalRenderer } from '../../src/render/terminal.js';
 
 async function makeRunDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'yantra-audit-builder-'));
@@ -206,6 +208,7 @@ describe('@no-llm cli/audit-builder', () => {
         width: 640,
         height: 480,
         bytes: 8192,
+        sentToModel: true,
         toolCall: { seq: 7, callId: 'capture-call', tool: 'browser_screenshot' },
         budgetConsumed: { captures: 1, pixels: 307_200, bytes: 8192 },
       },
@@ -493,5 +496,172 @@ describe('@no-llm cli/audit-builder', () => {
     expect(JSON.stringify(result.report)).not.toContain('sk-raw-provider-secret');
     expect(JSON.stringify(result.report)).not.toContain('sk-legacy-secret');
     expect(result.report.agent?.sessionFile).toBe('agent/session-raw.jsonl');
+  });
+});
+
+describe('@no-llm cli/audit-builder capture listings (FEAT-058)', () => {
+  let runDir: string;
+  const hash = 'a'.repeat(64);
+  const SHA = 'c'.repeat(64);
+
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-audit-captures-'));
+  });
+
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  async function writeRun(entries: readonly Record<string, unknown>[]): Promise<void> {
+    await writeFile(
+      join(runDir, 'manifest.json'),
+      JSON.stringify({
+        runId: 'capture-run',
+        workflowName: 'do',
+        status: 'completed',
+        startedAt: '2026-10-16T12:00:00.000Z',
+        agent: {
+          adapter: 'pi-coding-agent',
+          sdk_version: '0.80.6',
+          provider: 'anthropic',
+          model: 'text-model',
+          thinking: 'off',
+          auth_source: 'managed',
+          session_id: 'capture-session',
+          session_file: 'agent/capture-session.jsonl',
+          prompt_version: 'agent-v12',
+          prompt_hash: hash,
+          tool_catalog_hash: hash,
+        },
+      }),
+      'utf8',
+    );
+    await writeFile(
+      join(runDir, 'tool-calls.jsonl'),
+      entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n',
+      'utf8',
+    );
+  }
+
+  function endEntry(seq: number, tool: string, extra: Record<string, unknown>) {
+    return {
+      ts: `2026-10-16T12:00:0${seq}.000Z`,
+      seq,
+      run_id: 'capture-run',
+      session_id: 'capture-session',
+      call_id: `call-${seq}`,
+      tool,
+      phase: 'end',
+      input_sanitized: null,
+      output_sanitized: { status: 'ok' },
+      status: 'ok',
+      duration_ms: 10,
+      error_code: null,
+      confirmation_id: null,
+      ...extra,
+    };
+  }
+
+  const localRef = (part: number) => ({
+    kind: 'screenshot',
+    path: `screenshots/capture-1-${SHA.slice(0, 12)}-p${part}.png`,
+    sha256: SHA,
+    mime_type: 'image/png',
+    bytes: 4000,
+    width: 1280,
+    height: 4096,
+    sent_to_model: false,
+  });
+
+  async function rendered(): Promise<string> {
+    const result = await buildAuditReport('capture-run', runDir);
+    if (result.kind !== 'ok') throw new Error('audit failed');
+    let text = '';
+    const stream = new Writable({
+      write(chunk, _encoding, cb) {
+        text += String(chunk);
+        cb();
+      },
+    });
+    new TerminalRenderer().renderAudit(result.report, {
+      json: false,
+      debug: false,
+      noColor: true,
+      stream,
+      errStream: stream,
+    });
+    return text;
+  }
+
+  it('renders a pre-feature run with captures exactly as before', async () => {
+    await writeRun([
+      endEntry(3, 'browser_screenshot', {
+        captures: [
+          {
+            path: 'screenshots/1-0123456789ab.png',
+            sha256: 'd'.repeat(64),
+            mime_type: 'image/png',
+            width: 640,
+            height: 480,
+            bytes: 8192,
+          },
+        ],
+      }),
+    ]);
+
+    const text = await rendered();
+
+    expect(text).toContain(
+      '\nThe model saw these images:\n' +
+        `  screenshots/1-0123456789ab.png — 640x480, 8192 bytes, sha256=${'d'.repeat(64)}, ` +
+        'call=#3 browser_screenshot, budget=1 capture/307200 pixels/8192 bytes\n' +
+        'Raw provider session log agent/capture-session.jsonl contains the image data itself.\n',
+    );
+    expect(text).not.toContain('Saved captures');
+  });
+
+  it('lists a deliverable-only run under saved captures, with no model block and no raw-session warning', async () => {
+    await writeRun([endEntry(4, 'browser_capture', { artifacts: [localRef(1), localRef(2)] })]);
+
+    const result = await buildAuditReport('capture-run', runDir);
+    expect(result.kind === 'ok' && result.report.rawSessionLogCaptureBearing).toBe(false);
+    const text = await rendered();
+
+    expect(text).toContain('Saved captures (kept on this computer, never sent to the model):\n');
+    expect(text).toContain(`screenshots/capture-1-${SHA.slice(0, 12)}-p2.png — 1280x4096`);
+    expect(text).not.toContain('The model saw these images');
+    expect(text).not.toContain('contains the image data itself');
+  });
+
+  it('lists a mixed run in both blocks, with the warning only under the model block', async () => {
+    await writeRun([
+      endEntry(2, 'browser_screenshot', {
+        artifacts: [
+          {
+            kind: 'screenshot',
+            path: `screenshots/1-${SHA.slice(0, 12)}.png`,
+            sha256: SHA,
+            mime_type: 'image/png',
+            bytes: 900,
+            width: 800,
+            height: 600,
+            sent_to_model: true,
+          },
+        ],
+      }),
+      endEntry(5, 'browser_capture', { artifacts: [localRef(1)] }),
+    ]);
+
+    const text = await rendered();
+    const seenAt = text.indexOf('The model saw these images');
+    const warningAt = text.indexOf('contains the image data itself');
+    const keptAt = text.indexOf('Saved captures (kept on this computer');
+
+    expect(seenAt).toBeGreaterThan(-1);
+    expect(warningAt).toBeGreaterThan(seenAt);
+    expect(keptAt).toBeGreaterThan(warningAt);
+    expect(text.slice(seenAt, keptAt)).toContain(`screenshots/1-${SHA.slice(0, 12)}.png`);
+    expect(text.slice(keptAt)).toContain(`screenshots/capture-1-${SHA.slice(0, 12)}-p1.png`);
+    expect(text.slice(keptAt)).not.toContain(`screenshots/1-${SHA.slice(0, 12)}.png`);
   });
 });

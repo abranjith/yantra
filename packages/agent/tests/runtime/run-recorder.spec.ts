@@ -605,3 +605,155 @@ describe('@no-llm run recorder — one usage call per provider turn (FEAT-048)',
     expect(UsageLedger.safeParse(old).success).toBe(true);
   });
 });
+
+describe('@no-llm run recorder artifact references (FEAT-058)', () => {
+  let root: string;
+  let runDir: string;
+  const PNG_BASE64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lr6fWQAAAABJRU5ErkJggg==';
+  const SHA = 'b'.repeat(64);
+
+  const ref = (overrides: Record<string, unknown>) => ({
+    kind: 'screenshot',
+    path: `screenshots/1-${SHA.slice(0, 12)}.png`,
+    sha256: SHA,
+    mime_type: 'image/png',
+    bytes: 70,
+    width: 1,
+    height: 1,
+    sent_to_model: true,
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'yantra-run-artifacts-'));
+    runDir = join(root, 'run-1');
+    await seedRun(runDir, 'run-1');
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function record(
+    tool: string,
+    output: Record<string, unknown>,
+  ): Promise<{ entry: ReturnType<typeof ToolAuditEntry.parse>; text: string; logs: string[] }> {
+    const session = makeSession(runDir);
+    const logs: string[] = [];
+    const recorder = await RunRecorder.open({
+      runId: 'run-1',
+      runDir,
+      session,
+      model: { provider: 'anthropic', id: 'model' },
+      systemPrompt: 'prompt',
+      tools: [],
+      sdkVersion: '0.80.6',
+      logger: { info: (bindings, message) => logs.push(`${message} ${JSON.stringify(bindings)}`) },
+    });
+    session.emit({
+      type: 'tool_started',
+      callId: 'c1',
+      tool,
+      input: {},
+      at: '2026-10-16T12:00:00.000Z',
+    });
+    session.emit({
+      type: 'tool_finished',
+      callId: 'c1',
+      tool,
+      output,
+      isError: false,
+      at: '2026-10-16T12:00:01.000Z',
+    });
+    await recorder.close();
+    const text = await readFile(join(runDir, 'tool-calls.jsonl'), 'utf8');
+    const end = text
+      .trim()
+      .split(/\r?\n/u)
+      .map((line) => ToolAuditEntry.parse(JSON.parse(line) as unknown))
+      .find((candidate) => candidate.phase === 'end')!;
+    return { entry: end, text, logs };
+  }
+
+  it('records a Vision Assist result as a sent reference and replaces its image block', async () => {
+    const vision = ref({});
+    const { entry, text, logs } = await record('browser_screenshot', {
+      status: 'ok',
+      details: { artifacts: [vision] },
+      artifacts: [vision],
+      content: [
+        { type: 'text', text: 'shot' },
+        { type: 'image', data: PNG_BASE64, mimeType: 'image/png' },
+      ],
+    });
+
+    expect(entry.artifacts).toEqual([vision]);
+    expect(entry.captures).toBeUndefined();
+    const content = (entry.output_sanitized as { content: unknown[] }).content;
+    expect(content[1]).toEqual({ type: 'image', artifact: vision });
+    expect(text).not.toContain('iVBORw0KGgo');
+    expect(logs.some((line) => line.startsWith('run artifacts recorded'))).toBe(true);
+    expect(logs.join('\n')).not.toContain('iVBORw0KGgo');
+  });
+
+  it('records a browser_capture result as a local reference with no image block', async () => {
+    const local = ref({
+      path: `screenshots/capture-1-${SHA.slice(0, 12)}.png`,
+      sent_to_model: false,
+    });
+    const { entry, text } = await record('browser_capture', {
+      status: 'ok',
+      details: { artifacts: [local], capture_set: { scope: 'viewport' } },
+      artifacts: [local],
+      content: [{ type: 'text', text: '{"saved_locally":true}' }],
+    });
+
+    expect(entry.artifacts).toEqual([local]);
+    const content = (entry.output_sanitized as { content: { type: string }[] }).content;
+    expect(content.some((part) => part.type === 'image')).toBe(false);
+    expect(text).not.toContain('iVBORw0KGgo');
+  });
+
+  it('never pairs an image block with a local reference', async () => {
+    const local = ref({
+      path: `screenshots/capture-1-${SHA.slice(0, 12)}.png`,
+      sent_to_model: false,
+    });
+    const { entry, text } = await record('browser_capture', {
+      status: 'ok',
+      artifacts: [local],
+      content: [{ type: 'image', data: PNG_BASE64, mimeType: 'image/png' }],
+    });
+
+    const content = (entry.output_sanitized as { content: unknown[] }).content;
+    expect(content[0]).toEqual({ type: 'image', artifact: null });
+    expect(text).not.toContain('iVBORw0KGgo');
+  });
+
+  it('normalizes a producer that still emits legacy captures', async () => {
+    const legacy = {
+      path: `screenshots/2-${SHA.slice(0, 12)}.png`,
+      sha256: SHA,
+      mime_type: 'image/png',
+      width: 8,
+      height: 6,
+      bytes: 90,
+    };
+    const { entry } = await record('browser_screenshot', {
+      status: 'ok',
+      details: { captures: [legacy] },
+    });
+
+    expect(entry.artifacts).toEqual([{ kind: 'screenshot', ...legacy, sent_to_model: true }]);
+  });
+
+  it('drops references that fail the protocol schema rather than persisting them', async () => {
+    const { entry } = await record('browser_capture', {
+      status: 'ok',
+      artifacts: [ref({ path: '../escape.png' }), ref({ data: PNG_BASE64 })],
+    });
+
+    expect(entry.artifacts).toBeUndefined();
+  });
+});

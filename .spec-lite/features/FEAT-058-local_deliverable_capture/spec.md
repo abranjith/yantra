@@ -490,7 +490,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-002: Controller clean, epoch-guarded viewport/full-page/element capture with labeled tiling
 - [x] TASK-003: Both capabilities resolved pre-catalog with reason codes in manifest and run health; `--no-screenshots` broadened
 - [x] TASK-004: `browser_capture` tool: own budget, secret latch, owner-only files, metadata-only result
-- [ ] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
+- [x] TASK-005: Generic artifact audit; `yantra audit` separates model-seen images from local captures
 - [ ] TASK-006: Early gap disclosure, ledger producer, clean-and-complete capture rule
 - [ ] TASK-007: Brief, terminal outcome, and `do --json` link saved captures
 - [ ] TASK-008: Task-fidelity capture scenarios

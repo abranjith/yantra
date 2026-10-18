@@ -8,10 +8,40 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/cli/src/commands/audit-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/render/terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/render/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/cli/tests/commands/agent-options.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/commands/audit-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/connector-io.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -33,9 +63,15 @@
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/browser-capture.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-screenshot.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/src/adapters/pi/tools/index.ts",
@@ -51,7 +87,7 @@
     },
     {
       "path": "packages/agent/src/runtime/capture-artifacts.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -111,9 +147,15 @@
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/browser-capture.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-screenshot.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
@@ -170,10 +212,22 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/vision-audit.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/agent/tests/runtime/vision-registration.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/src/browser/agent-controller.ts",
@@ -198,6 +252,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/browser/deliverable-capture.spec.ts",

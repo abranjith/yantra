@@ -152,6 +152,7 @@ describe('@no-llm cli/connector-io', () => {
           width: 640,
           height: 480,
           bytes: 8192,
+          sentToModel: true,
           toolCall: { seq: 1, callId: 'capture-call', tool: 'browser_screenshot' },
           budgetConsumed: { captures: 1, pixels: 307_200, bytes: 8192 },
         },
