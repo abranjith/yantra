@@ -133,6 +133,63 @@ describe('@no-llm run recorder and catalog hashing', () => {
     },
   );
 
+  it('writes the capture capability into the manifest before any tool call', async () => {
+    const session = makeSession(runDir);
+    const recorder = await RunRecorder.open({
+      runId: 'run-1',
+      runDir,
+      session,
+      model: { provider: 'anthropic', id: 'claude-sonnet' },
+      systemPrompt: 'prompt',
+      tools: [],
+      sdkVersion: '0.80.6',
+      capture: {
+        visionAssist: { available: false, reasons: ['grant_missing', 'model_no_image_input'] },
+        deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+      },
+    });
+
+    // Read before any tool_started event is processed.
+    const opened = JSON.parse(await readFile(join(runDir, 'manifest.json'), 'utf8')) as {
+      agent: unknown;
+    };
+    expect(AgentManifestSection.parse(opened.agent).capture).toEqual({
+      vision_assist: { available: false, reasons: ['grant_missing', 'model_no_image_input'] },
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+    });
+
+    session.emit({
+      type: 'tool_started',
+      callId: 'c1',
+      tool: 'browser_navigate',
+      input: {},
+      at: '2026-07-14T12:00:01.000Z',
+    });
+    await recorder.close();
+    const closed = JSON.parse(await readFile(join(runDir, 'manifest.json'), 'utf8')) as {
+      agent: { capture?: unknown };
+    };
+    expect(closed.agent.capture).toEqual(AgentManifestSection.parse(opened.agent).capture);
+  });
+
+  it('omits capture from the manifest when the caller supplies none', async () => {
+    const recorder = await RunRecorder.open({
+      runId: 'run-1',
+      runDir,
+      session: makeSession(runDir),
+      model: { provider: 'anthropic', id: 'claude-sonnet' },
+      systemPrompt: 'prompt',
+      tools: [],
+      sdkVersion: '0.80.6',
+    });
+    await recorder.close();
+
+    const manifest = JSON.parse(await readFile(join(runDir, 'manifest.json'), 'utf8')) as {
+      agent: Record<string, unknown>;
+    };
+    expect('capture' in manifest.agent).toBe(false);
+  });
+
   it('keeps the session pointer valid when the whole run directory moves', async () => {
     const recorder = await RunRecorder.open({
       runId: 'run-1',

@@ -19,6 +19,7 @@ import type {
   AgentUsage,
 } from '../provider/types.js';
 
+import { captureCapabilityRecord, type CaptureCapability } from './capture-capability.js';
 import { hashToolCatalog, sha256Text, type HashableToolDefinition } from './catalog-hash.js';
 import { PROMPT_VERSION } from './prompt.js';
 
@@ -36,6 +37,11 @@ export interface RunRecorderOptions {
   readonly yantraVersion?: string;
   /** The run's effective budgets, recorded for provenance (FEAT-054 S10). */
   readonly budgets?: AgentRunBudgets;
+  /**
+   * Both capture capabilities (FEAT-058), written with the rest of the agent
+   * section when the session opens, before the first tool call.
+   */
+  readonly capture?: CaptureCapability;
   /** Test/embedding override for capture-metadata logging. */
   readonly logger?: RunRecorderLogger;
   /** Clock for the first turn's latency baseline (tests); defaults to `new Date()`. */
@@ -101,6 +107,9 @@ export class RunRecorder {
       tool_catalog_hash: hashToolCatalog(options.tools),
       ...(yantraVersion === null ? {} : { yantra_version: yantraVersion }),
       ...(options.budgets === undefined ? {} : { budgets: options.budgets }),
+      ...(options.capture === undefined
+        ? {}
+        : { capture: captureCapabilityRecord(options.capture) }),
     });
     const recorder = new RunRecorder(
       options,

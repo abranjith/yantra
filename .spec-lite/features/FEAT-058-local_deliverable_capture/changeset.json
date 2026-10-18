@@ -2,10 +2,136 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/agent-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/commands/agent-options.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/capture-capability.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-health.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-recorder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/vision.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/factory.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/test-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/capture-capability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/message-catalog.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-health.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-recorder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/vision-registration.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/src/browser/agent-controller.ts",
@@ -15,7 +141,7 @@
     },
     {
       "path": "packages/core/src/browser/epoch-guard.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -26,14 +152,20 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/tests/browser/deliverable-capture.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/browser/epoch-guard.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },

@@ -19,6 +19,7 @@ export type YantraToolName =
   | 'browser_fill_form'
   | 'browser_extract'
   | 'browser_screenshot'
+  | 'browser_capture'
   | 'task_contract';
 
 /** The portion of `workflow_run` permitted by a command profile. */
@@ -82,7 +83,8 @@ const BROWSE_TOOLS = ['browser_navigate', 'browser_observe', 'browser_extract'] 
 // Browser fill tools mutate the page, so they belong here beside
 // `browser_click` and deliberately NOT in BROWSE_TOOLS — that set
 // is `research`'s *read-only* browse mode (on unless the user turns it off).
-const INTERACT_TOOLS: ReadonlySet<string> = new Set([
+// Deliverable capture (FEAT-058 S2) is registered only beside one of these.
+export const INTERACT_TOOLS: ReadonlySet<string> = new Set([
   'browser_click',
   'browser_fill_element',
   'browser_fill_form',

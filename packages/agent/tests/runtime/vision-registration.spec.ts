@@ -47,6 +47,61 @@ describe('@no-llm vision registration gate', () => {
     expect(catalogNames.some((name) => name.startsWith('SCREENSHOT_'))).toBe(false);
   });
 
+  it.each([
+    ['grant absent or false', { grantEnabled: false }, ['grant_missing']],
+    ['text-only model', { modelImageInput: false }, ['model_no_image_input']],
+    ['profile without browser tools', { hasBrowserTools: false }, ['no_browser_tools']],
+    ['one-run suppression', { suppressedByFlag: true }, ['suppressed_by_flag']],
+    ['zero-LLM context', { zeroLlm: true }, ['zero_llm']],
+  ] as const)('records the reason for %s', (_label, override, reasons) => {
+    const vision = resolveVisionAvailability({ ...ALL_TRUE, ...override });
+    expect(vision.available).toBe(false);
+    expect(vision.reasons).toEqual(reasons);
+  });
+
+  it('records no reasons when available, and every reason in order when all fail', () => {
+    expect(resolveVisionAvailability(ALL_TRUE).reasons).toEqual([]);
+    expect(
+      resolveVisionAvailability({
+        grantEnabled: false,
+        hasBrowserTools: false,
+        modelImageInput: false,
+        suppressedByFlag: true,
+        zeroLlm: true,
+      }).reasons,
+    ).toEqual([
+      'grant_missing',
+      'model_no_image_input',
+      'no_browser_tools',
+      'suppressed_by_flag',
+      'zero_llm',
+    ]);
+  });
+
+  it('keeps the availability truth table unchanged: only all five true enables it', () => {
+    const keys = [
+      'grantEnabled',
+      'hasBrowserTools',
+      'modelImageInput',
+      'suppressedByFlag',
+      'zeroLlm',
+    ] as const;
+    for (let mask = 0; mask < 32; mask += 1) {
+      const input = Object.fromEntries(
+        keys.map((key, index) => [key, (mask & (1 << index)) !== 0]),
+      ) as unknown as VisionAvailabilityInput;
+      const expected =
+        input.grantEnabled &&
+        input.hasBrowserTools &&
+        input.modelImageInput &&
+        !input.suppressedByFlag &&
+        !input.zeroLlm;
+      const vision = resolveVisionAvailability(input);
+      expect(vision.available).toBe(expected);
+      expect(vision.reasons.length === 0).toBe(expected);
+    }
+  });
+
   it('keeps Pi tools and the hash catalog on the identical name set', () => {
     for (const available of [false, true]) {
       const vision = resolveVisionAvailability({

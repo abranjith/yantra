@@ -25,7 +25,15 @@ export {
   type ModelVisionCapability,
   type VisionAvailability,
   type VisionAvailabilityInput,
+  type VisionReason,
 } from './vision.js';
+export {
+  captureCapabilityRecord,
+  resolveCaptureCapability,
+  type CaptureCapability,
+  type CaptureCapabilityInput,
+  type DeliverableReason,
+} from './capture-capability.js';
 export {
   locationHandoffFor,
   requiresUserLocation,

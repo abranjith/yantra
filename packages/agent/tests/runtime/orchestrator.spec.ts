@@ -316,6 +316,71 @@ describe('@no-llm runAgenticTask lifecycle', () => {
     expect(await catalogFor(true)).not.toContain('browser_screenshot');
   });
 
+  it('records both capture capabilities in the manifest and run health before the first tool call (FEAT-058)', async () => {
+    const runFor = async (screenshotsSuppressed: boolean) => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-capture-capability-'));
+      tempDirs.push(root);
+      const profile = resolveCommandTaskProfile('do');
+      const base = buildEnvironment(vi.fn(() => Promise.resolve()));
+      const environment: AgenticRunEnvironment = {
+        ...base,
+        domain: { ...base.domain, browser: {} as NonNullable<typeof base.domain.browser> },
+      };
+      let manifestAtOpen: Record<string, unknown> | undefined;
+      let runDir = '';
+      const outcome = await runAgenticTask(
+        {
+          goal: 'Complete the fixture task',
+          profile,
+          model: { provider: 'fixture', id: 'text-model' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: true, screenshots: false }, userLocation: null },
+          screenshotsSuppressed,
+        },
+        {
+          runStore: new LocalRunStore(root),
+          createEnvironment: () => Promise.resolve(environment),
+          resolveModelImageInput: () => false,
+          createProvider: (services) => {
+            runDir = services.runDir;
+            return new FakeAgentProvider({
+              runResult: completed,
+              onRun: async () => {
+                manifestAtOpen = JSON.parse(
+                  await readFile(join(runDir, 'manifest.json'), 'utf8'),
+                ) as Record<string, unknown>;
+              },
+            });
+          },
+        },
+      );
+      const health = JSON.parse(
+        await readFile(join(outcome.runDir, 'run-health.json'), 'utf8'),
+      ) as { capture?: unknown };
+      return { manifestAtOpen, health };
+    };
+
+    const suppressed = await runFor(true);
+    expect((suppressed.manifestAtOpen?.agent as { capture?: unknown }).capture).toEqual({
+      vision_assist: {
+        available: false,
+        reasons: ['grant_missing', 'model_no_image_input', 'suppressed_by_flag'],
+      },
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+    });
+    expect(suppressed.health.capture).toMatchObject({
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+      deliverable_calls: 0,
+    });
+
+    const fresh = await runFor(false);
+    expect((fresh.manifestAtOpen?.agent as { capture?: unknown }).capture).toEqual({
+      vision_assist: { available: false, reasons: ['grant_missing', 'model_no_image_input'] },
+      deliverable: { available: true, reasons: [] },
+    });
+  });
+
   it('rejects malformed markers before creating any run state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'yantra-marker-ingress-'));
     tempDirs.push(root);

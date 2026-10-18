@@ -27,6 +27,7 @@ import {
 import { RUN_HEALTH_SCHEMA_VERSION, type BriefNotice, type RunHealth } from '@yantra/protocol';
 
 import type { BudgetLimit, BudgetSnapshot } from './budget.js';
+import { captureCapabilityRecord, type CaptureCapability } from './capture-capability.js';
 
 /** Terminal status of one tool call, with timeouts told apart from errors. */
 export type ToolOutcomeStatus = 'ok' | 'error' | 'timeout' | 'aborted' | 'denied';
@@ -93,6 +94,10 @@ export class RunHealthLedger {
   private linksOffered = 0;
   private linksWithheld = 0;
   private discoveredFollows = 0;
+  private captureCapability: CaptureCapability | null = null;
+  private deliverableCalls = 0;
+  private deliverableFiles = 0;
+  private deliverableBytes = 0;
   /** Every budget limit that refused a call, in first-hit order. */
   private readonly exhaustedOrder: string[] = [];
 
@@ -125,6 +130,39 @@ export class RunHealthLedger {
    */
   public recordDiscoveredFollow(): void {
     this.discoveredFollows += 1;
+  }
+
+  /**
+   * Record the run's two capture decisions (FEAT-058), resolved before the
+   * first tool call. Once recorded, `summary()` carries the `capture` block.
+   */
+  public recordCaptureCapability(capability: CaptureCapability): void {
+    this.captureCapability = capability;
+  }
+
+  /**
+   * Count one successful `browser_capture` call and what it wrote.
+   *
+   * @param written The PNG files and total bytes the call wrote.
+   */
+  public recordDeliverableCapture(written: {
+    readonly files: number;
+    readonly bytes: number;
+  }): void {
+    this.deliverableCalls += 1;
+    this.deliverableFiles += Math.max(0, Math.floor(written.files));
+    this.deliverableBytes += Math.max(0, Math.floor(written.bytes));
+  }
+
+  /** The capture block, or undefined when no capability was recorded. */
+  private captureSummary(): RunHealth['capture'] {
+    if (this.captureCapability === null) return undefined;
+    return {
+      ...captureCapabilityRecord(this.captureCapability),
+      deliverable_calls: this.deliverableCalls,
+      deliverable_files: this.deliverableFiles,
+      deliverable_bytes: this.deliverableBytes,
+    };
   }
 
   /** The extraction counters, or undefined when no shape-aware read happened. */
@@ -486,6 +524,7 @@ export class RunHealthLedger {
     for (const record of this.exhaustions.values()) stages.budget += record.skippedReads;
     const http = this.fetchList.filter((fetch) => fetch.mode === 'http').length;
     const extraction = this.extractionSummary();
+    const capture = this.captureSummary();
     return {
       schema_version: RUN_HEALTH_SCHEMA_VERSION,
       run_id: input.runId,
@@ -530,6 +569,7 @@ export class RunHealthLedger {
       tool_failures: { total: toolFailures.length, by_code: countByCode(toolFailures) },
       notices: Math.max(0, Math.floor(input.noticeCount)),
       ...(extraction === undefined ? {} : { extraction }),
+      ...(capture === undefined ? {} : { capture }),
     };
   }
 

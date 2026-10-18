@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { buildYantraWrappedTools, yantraToolCatalog } from '../../src/adapters/pi/tools/index.js';
 import { actionLedgerFor } from '../../src/runtime/action-ledger.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS } from '../../src/runtime/budget.js';
+import { resolveCaptureCapability } from '../../src/runtime/capture-capability.js';
 import { FulfillmentRecord } from '../../src/runtime/fulfillment.js';
 import { AGENT_INTERACTION_MESSAGES, renderAgentMessage } from '../../src/runtime/messages.js';
 import { RunHealthLedger } from '../../src/runtime/run-health.js';
@@ -180,16 +181,25 @@ function buildServices(): RunServices {
   const budgets = new BudgetTracker(DEFAULT_BUDGET_LIMITS);
   const sanitizer = new DefaultSanitizer();
   const provenance = new UrlProvenance();
+  const vision = resolveVisionAvailability({
+    grantEnabled: false,
+    hasBrowserTools: true,
+    modelImageInput: false,
+    suppressedByFlag: false,
+    zeroLlm: true,
+  });
   return {
     template: null,
     runId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     runDir: '.',
-    vision: resolveVisionAvailability({
-      grantEnabled: false,
-      hasBrowserTools: true,
-      modelImageInput: false,
+    vision,
+    // A `do` run with a browser: deliverable capture is registered, so every
+    // hint naming browser_capture resolves against the catalog.
+    capture: resolveCaptureCapability({
+      vision,
+      hasBrowser: true,
+      hasInteractionTools: true,
       suppressedByFlag: false,
-      zeroLlm: true,
     }),
     budgets,
     sanitizer,

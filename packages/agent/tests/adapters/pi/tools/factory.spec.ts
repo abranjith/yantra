@@ -48,6 +48,7 @@ describe('@no-llm createYantraTools factory', () => {
           suppressedByFlag: false,
           zeroLlm: false,
           available: true,
+          reasons: [],
           capability: { imageInput: true, resolvedAt: 'pre-catalog' },
         },
       }),

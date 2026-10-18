@@ -57,10 +57,18 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       suppressedByFlag: false,
       zeroLlm: false,
       available: overrides.visionAvailable === true,
+      reasons: overrides.visionAvailable === true ? [] : ['grant_missing'],
       capability: {
         imageInput: overrides.visionAvailable === true,
         resolvedAt: 'pre-catalog',
       },
+    },
+    capture: {
+      visionAssist: {
+        available: overrides.visionAvailable === true,
+        reasons: overrides.visionAvailable === true ? [] : ['grant_missing'],
+      },
+      deliverable: { available: false, reasons: ['no_browser'] },
     },
     budgets,
     sanitizer,
@@ -765,10 +773,12 @@ describe('@no-llm middleware model-supplied value preservation', () => {
     await navigate.execute({ q: `https://example.com/track?id=${TRACKING}` }, undefined);
 
     const observe = wrapTool(
-      spec(async (): Promise<DomainResult> => ({
-        ok: true,
-        model: { digest: `Package ${TRACKING} was delivered.` },
-      })),
+      spec(
+        async (): Promise<DomainResult> => ({
+          ok: true,
+          model: { digest: `Package ${TRACKING} was delivered.` },
+        }),
+      ),
       services,
     );
     const result = await observe.execute({ q: 'observe' }, undefined);

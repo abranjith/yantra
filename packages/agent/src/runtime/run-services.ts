@@ -41,6 +41,7 @@ import type {
 
 import type { ActionLedger } from './action-ledger.js';
 import type { BudgetTracker } from './budget.js';
+import type { CaptureCapability } from './capture-capability.js';
 import type { ContractCapabilityResolver } from './contract-capabilities.js';
 import type { FulfillmentRecord } from './fulfillment.js';
 import type { WorkflowToolMode } from './profiles.js';
@@ -430,6 +431,14 @@ export interface RunServices {
   readonly template: TemplateManifest | null;
   /** Immutable screenshot registration decision resolved before catalog construction. */
   readonly vision: VisionAvailability;
+  /**
+   * Both capture capabilities (FEAT-058), resolved before catalog
+   * construction: Vision Assist and the local deliverable capture
+   * (`browser_capture`). Required, not optional, for the same reason as
+   * `urlProvenance`: a construction site that forgot it would silently drop
+   * the deliverable capture tool and every capability gap it discloses.
+   */
+  readonly capture: CaptureCapability;
   /** Run budget accountant (wall-clock, calls, bytes, hosts). */
   readonly budgets: BudgetTracker;
   /** The single LLM-bound sanitizer chokepoint. */

@@ -1,3 +1,5 @@
+import type { VisionAssistReason } from '@yantra/protocol';
+
 /** Provider-neutral model capability resolved before the run tool catalog exists. */
 export interface ModelVisionCapability {
   readonly imageInput: boolean;
@@ -13,9 +15,21 @@ export interface VisionAvailabilityInput {
   readonly zeroLlm: boolean;
 }
 
+/**
+ * A condition that keeps Vision Assist off (FEAT-058 S3), as the manifest and
+ * `run-health.json` record it.
+ */
+export type VisionReason = VisionAssistReason;
+
 /** The complete registration decision retained for audit and deterministic catalogs. */
 export interface VisionAvailability extends VisionAvailabilityInput {
   readonly available: boolean;
+  /**
+   * Every false condition, in a fixed order (`grant_missing`,
+   * `model_no_image_input`, `no_browser_tools`, `suppressed_by_flag`,
+   * `zero_llm`); empty exactly when {@link available}.
+   */
+  readonly reasons: readonly VisionReason[];
   readonly capability: ModelVisionCapability;
 }
 
@@ -35,7 +49,11 @@ export interface CaptureMetadata {
 
 /** Why Vision Assist is unavailable, as a stable reason code. */
 export type VisionUnavailableReason =
-  'zero_llm' | 'suppressed_by_flag' | 'no_browser_tools' | 'grant_missing' | 'model_text_only';
+  | 'zero_llm'
+  | 'suppressed_by_flag'
+  | 'no_browser_tools'
+  | 'grant_missing'
+  | 'model_text_only';
 
 /**
  * The first gate that keeps Vision Assist off, in a fixed precedence (the
@@ -58,7 +76,14 @@ export function resolveVisionAvailability(input: VisionAvailabilityInput): Visio
     imageInput: input.modelImageInput === true,
     resolvedAt: 'pre-catalog',
   };
+  const reasons: VisionReason[] = [];
+  if (input.grantEnabled !== true) reasons.push('grant_missing');
+  if (!capability.imageInput) reasons.push('model_no_image_input');
+  if (input.hasBrowserTools !== true) reasons.push('no_browser_tools');
+  if (input.suppressedByFlag === true) reasons.push('suppressed_by_flag');
+  if (input.zeroLlm === true) reasons.push('zero_llm');
   return {
+    reasons,
     grantEnabled: input.grantEnabled === true,
     hasBrowserTools: input.hasBrowserTools === true,
     modelImageInput: capability.imageInput,

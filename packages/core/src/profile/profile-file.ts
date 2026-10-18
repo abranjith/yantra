@@ -10,7 +10,9 @@
  * The `context` block is the user's control surface over which *sensitive*
  * facts and capture capabilities the engine may expose to a model. Location
  * defaults to allowed for compatibility; screenshots default to denied because
- * they expose raw, unmasked pixels. Date, timezone, and locale are
+ * they send raw, unmasked pixels to the model provider (Vision Assist). The
+ * grant governs model transmission only: a deliverable capture saved to the
+ * run directory and never sent (FEAT-058) needs no grant. Date, timezone, and locale are
  * host-environment facts, not personal data, and are deliberately not grants.
  */
 
@@ -65,7 +67,10 @@ export const profileSchema = z
     context: z
       .object({
         location: z.boolean().default(true),
-        screenshots: z.boolean().default(false),
+        screenshots: z
+          .boolean()
+          .default(false)
+          .describe('allow Vision Assist to send raw, unmasked screenshots to the model provider'),
       })
       .default({}),
     personalization: z

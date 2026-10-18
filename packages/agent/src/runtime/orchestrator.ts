@@ -104,6 +104,7 @@ import {
   sanitizePublishContent,
 } from './brief-composer.js';
 import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
+import { resolveCaptureCapability } from './capture-capability.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
 import type { AgentTaskConnector } from './connector.js';
 import { INLINE_EVIDENCE_REF } from './evidence-refs.js';
@@ -121,6 +122,7 @@ import {
 } from './outcome.js';
 import {
   COMMAND_TASK_PROFILES,
+  INTERACT_TOOLS,
   browserCapabilityOf,
   promptAddendumFor,
   type CommandTaskProfile,
@@ -670,6 +672,15 @@ export async function runAgenticTask(
       suppressedByFlag: request.screenshotsSuppressed === true,
       zeroLlm: false,
     });
+    // FEAT-058 D2: deliverable capture is resolved beside Vision Assist, before
+    // the catalog exists, and recorded before the first tool call.
+    const capture = resolveCaptureCapability({
+      vision,
+      hasBrowser: domain.browser !== null,
+      hasInteractionTools: profile.toolNames.some((name) => INTERACT_TOOLS.has(name)),
+      suppressedByFlag: request.screenshotsSuppressed === true,
+    });
+    runHealth.recordCaptureCapability(capture);
     // The run's declared contract (FEAT-052). `research` and `do` are expected
     // to declare one; `ask` has no contract tool and never carries the notice.
     const contract = new TaskContractStore({
@@ -686,6 +697,7 @@ export async function runAgenticTask(
       runDir: created.runDir,
       template: request.template?.manifest ?? null,
       vision,
+      capture,
       budgets: runBudget,
       sanitizer,
       userInput,
@@ -777,6 +789,7 @@ export async function runAgenticTask(
       systemPrompt: AGENT_SYSTEM_PROMPT,
       tools: yantraToolCatalog(services, profile),
       budgets: manifestBudgets(budgetsConfig),
+      capture,
     });
     events = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
     events.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });

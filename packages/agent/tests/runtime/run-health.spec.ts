@@ -761,3 +761,65 @@ describe('@no-llm RunHealthLedger — extraction (FEAT-051)', () => {
     }
   });
 });
+
+describe('@no-llm RunHealthLedger — capture capability (FEAT-058)', () => {
+  const summarize = (ledger: RunHealthLedger) =>
+    ledger.summary({
+      runId: 'run-capture',
+      snapshot: { navigations: 1, hosts: 1 },
+      limits: { maxNavigations: 30, maxHosts: 20 },
+      noticeCount: 0,
+    });
+
+  it('omits the capture block when no capability was recorded', () => {
+    expect('capture' in summarize(new RunHealthLedger())).toBe(false);
+  });
+
+  it('carries both decisions with zeroed counters once recorded', () => {
+    const ledger = new RunHealthLedger();
+    ledger.recordCaptureCapability({
+      visionAssist: { available: false, reasons: ['grant_missing'] },
+      deliverable: { available: true, reasons: [] },
+    });
+
+    const summary = summarize(ledger);
+
+    expect(summary.capture).toEqual({
+      vision_assist: { available: false, reasons: ['grant_missing'] },
+      deliverable: { available: true, reasons: [] },
+      deliverable_calls: 0,
+      deliverable_files: 0,
+      deliverable_bytes: 0,
+    });
+    expect(RunHealth.safeParse(summary).success).toBe(true);
+  });
+
+  it('counts deliverable calls, files, and bytes', () => {
+    const ledger = new RunHealthLedger();
+    ledger.recordCaptureCapability({
+      visionAssist: { available: true, reasons: [] },
+      deliverable: { available: true, reasons: [] },
+    });
+    ledger.recordDeliverableCapture({ files: 3, bytes: 120_000 });
+    ledger.recordDeliverableCapture({ files: 1, bytes: 5_000 });
+
+    expect(summarize(ledger).capture).toMatchObject({
+      deliverable_calls: 2,
+      deliverable_files: 4,
+      deliverable_bytes: 125_000,
+    });
+  });
+
+  it('carries only counts and codes: no URL and no path', () => {
+    const ledger = new RunHealthLedger();
+    ledger.recordCaptureCapability({
+      visionAssist: { available: false, reasons: ['suppressed_by_flag'] },
+      deliverable: { available: false, reasons: ['suppressed_by_flag'] },
+    });
+    ledger.recordDeliverableCapture({ files: 1, bytes: 10 });
+
+    const text = JSON.stringify(summarize(ledger).capture);
+
+    expect(text).not.toMatch(/https?:|screenshots\/|\.png|[\\/]/);
+  });
+});
