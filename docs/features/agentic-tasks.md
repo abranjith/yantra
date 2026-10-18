@@ -10,7 +10,7 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
-The prompt is versioned as `agent-v11` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and adds publication guidance for cited findings, tables, conditions, and unmet requirements; `agent-v11` changes only the `do` completion criteria, which now teach the contract's action terms (see [Task contract](#task-contract)). Beyond the scope rules above, it tells the agent:
+The prompt is versioned as `agent-v12` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)); `agent-v12` adds the ten-field batch limit, page-order batching, and continuation through the fill result's `progress`. Beyond the scope rules above, it tells the agent:
 
 - **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
 - **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
@@ -71,13 +71,15 @@ Every field is omitted when there is nothing to say, so an action that changed n
 
 Observation walks the composed tree, so a control a page encapsulates inside a component's own **open** shadow root is scanned, named, given an `eNN` ref, and clicked or filled like any other interactable. This is a property of observation itself, so it holds for every browser tool, and nothing about the ref contract, the observation payload, or the tool arguments differs for such a control. A **closed** shadow root stays unreachable by design: the platform withholds that subtree from the page, so the control is simply absent from the observation and there is nothing to address. No piercing library and no DOM tagging is used to get around that.
 
-Form filling uses one deterministic engine for ordinary controls and stateful widgets. `browser_fill_form` fills up to ten non-secret fields in order and never submits the form.
+Form filling uses one deterministic engine for ordinary controls and stateful widgets. `browser_fill_form` accepts one through ten non-secret fields per call, fills them in the supplied order, and never submits the form. Send fields in page order, then continue a longer form in further bounded batches. An over-cap call is rejected before any field is filled with `INVALID_INPUT` and cause `batch-limit`; its message names the limit, the count sent, and how to split the work. For example, a thirteen-field call is told to send the first ten, then the remaining three in a following call.
+
+Ordinary text inputs receive a short bounded reaction check and normal committed-value verification. The longer suggestion watch runs when the control declares suggestion behavior or that check observes a popup. Declared suggestion widgets keep their existing interaction path, and the fill engine never presses Enter.
 
 **A field that fails no longer ends the batch.** A four-field call that stopped on the first failure returned nothing applied — a call that existed to make four fields' worth of progress made none, and the three untouched fields were indistinguishable from three that had been tried and refused. Every remaining field is now attempted, and the result carries three sets:
 
 | Set       | Meaning                                                                                                                                                                                      |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `applied` | Fields that landed, each with `requested`, `committed`, and `resolution` as a single fill reports them, or `withheld` and `resolution` for a protected control.                              |
+| `applied` | Fields that landed. An ordinary exact success carries only `field`, `ref`, and `resolution`; widget decisions and recovery retain full details, and protected controls retain `withheld`.    |
 | `failed`  | Fields that were attempted and did not take, each with `observed` (`withheld` and `match` for a protected control), `attempted`, and genuine `offered` choices when the widget exposes them. |
 | `skipped` | Fields not attempted, with `blocked_by` naming the failed field that blocks them.                                                                                                            |
 | `covers`  | Optional on an entry in any set; lists every caller field that one fused fill accounts for when it stands for more than its named `field`.                                                   |
@@ -87,6 +89,12 @@ Every field sent appears exactly once across those sets, read as `entry.covers ?
 A field is skipped only when it belongs to the same widget as one that failed — a shared range picker, or one overlay — because a second attempt there would fail for a reason the caller cannot tell apart from a real problem with that field. Resolve the blocking field first. Dependence is read from the widget grouping the page itself reports, never from the order the fields were listed in.
 
 The call succeeds when **any** field applied, so a partial result is progress to build on rather than a reason to re-send the fields that worked; it fails only when nothing applied at all. A partial batch is also visible in the run's audit trail: `report.md` renders it as `partial (N applied, N failed, N skipped)` rather than as a flat `ok`. `browser_fill_element` handles a single field and is the only fill path for a host-bound stored website secret. Successful fills verify the committed state; ambiguity, stale controls, incomplete date ranges, or values that do not commit return typed failures instead of guessed success.
+
+**An exact success stays compact, with its full record in the audit.** Both fill tools omit repeated requested and committed text and routine recovery verdicts from an ordinary exact success. If the committed text differs from the requested text, it is retained. Offered choices, an edited control different from the target, a note or substitution, a failed recovery verdict, multiple typing strategies, or a non-exact resolution keep the full result. A protected control's `withheld` verdict and a fused entry's `covers` are always preserved. Full successful entries, including their recovery ledgers, remain in `details.applied` in `tool-calls.jsonl`.
+
+**Fill results tell the agent what remains on this document.** Successful single-field and batch fills can carry `progress: { filled, eligible, remaining, next }`, derived from the final observation and the run's verified action ledger without another browser read. `filled` counts eligible units this run committed on the current document, `eligible` counts all non-exempt census units, and `remaining` counts those without a verified commit. A radio group or checkbox set counts once. `next` lists up to ten remaining units in page order as `{ ref, label }`, with each group represented once. These are current-document registry refs that either fill tool can reuse directly, even when the ordinary observation window did not show them.
+
+A failed field stays unfilled and remains in `next` in its page position; successfully applied fields are absent. Read the failure before choosing the next request, and resolve a same-widget blocker before sending its skipped fields. Progress is omitted when no current census or action ledger exists, or no eligible units exist. If the census was bounded, `complete: false` accompanies the counts: they describe only the scanned portion and cannot prove whole-form completion. Labels are sanitized and capped at 60 characters; the entire progress block is bounded to 1 KiB. An all-failed batch retains progress in its audit details even though it returns a tool failure.
 
 Field names are resolved conservatively against the accessible name, the derived label, or a section-qualified label such as `Billing City`. The same vocabulary is used for initial resolution and field reacquisition. A first-time request whose matches remain tied after safe narrowing returns `FORM_FIELD_AMBIGUOUS` instead of choosing by document order. Its model-visible message gives the actual candidates' refs, roles, labels, origins, and available section context so the caller can use a ref or a distinguishing section-qualified label. A failed name lookup returns `FORM_FIELD_NOT_FOUND` with up to eight fillable candidates and a remaining count, including refs and marked developer hints for unnamed fields. Document order is available only while re-acquiring a control that was already identified, and only when the candidates preserve that prior identity and share the same normalized name, role, and group. Repeated labels without distinguishing evidence remain ambiguous.
 
@@ -116,7 +124,7 @@ Field names are resolved conservatively against the accessible name, the derived
 
 `verdict` is `exact` when the control holds byte for byte what was sent, or `reformatted` when it holds the same letters and digits with only case, spacing, or punctuation changed, as a card-number mask that inserts spaces produces. `exact` is a raw comparison, not the folded one disclosed text uses, so `passw0rd` for a sent `Passw0rd!` is `reformatted`, never `exact`. Those are the only verdicts a success carries: a control that merely holds something is not proof that it holds the caller's value. `resolution` equals the verdict, `reason` is the same reason the observation entry reports for that control, and `ref` names the control the verdict was taken on — the editee when the page routed the edit elsewhere. When the verdict was taken on the named control itself, the entry also carries the field's `label` when it has one. A stored-secret fill is committed blind with no readback, and its result carries neither `committed` nor `withheld`.
 
-The agent-facing guidance for `do` states this contract directly: a successful result whose `committed` value differs from what was sent is backed by an offered selection or a formatting-equivalent rewrite and must be accepted rather than re-filled; an `editee` means the value landed in a control the page chose, so the named field staying empty is expected; `attempted` is an ordered list of recovery verdicts, each read by its `verdict` — `succeeded` and `failed` name steps the tool already performed and must not be repeated, while a `skipped` entry names a step the tool did **not** take and says why in `unmet`, which is information rather than a prohibition; when `offered` is present, one of its labels can be re-issued verbatim through the interaction family that emitted it; a batch's `applied` fields are set and must not be re-sent; and a `skipped` field waits for the field named in its `blocked_by`. That guidance lives in the command's completion criteria and the tool descriptions, never in the governed system prompt, so `prompt_version` is unchanged and only `tool_catalog_hash` moves.
+The agent-facing guidance for `do` states this contract directly: a successful result whose `committed` value differs from what was sent is backed by an offered selection or a formatting-equivalent rewrite and must be accepted rather than re-filled; an `editee` means the value landed in a control the page chose, so the named field staying empty is expected; `attempted` is an ordered list of recovery verdicts, each read by its `verdict` — `succeeded` and `failed` name steps the tool already performed and must not be repeated, while a `skipped` entry names a step the tool did **not** take and says why in `unmet`, which is information rather than a prohibition; when `offered` is present, one of its labels can be re-issued verbatim through the interaction family that emitted it; a batch's `applied` fields are set and must not be re-sent; and a `skipped` field waits for the field named in its `blocked_by`. The completion criteria also teach bounded batches in page order and continuation from `progress.next`. This guidance lives in the command's completion criteria and tool descriptions; its current prompt version is `agent-v12`, and the tool catalog is recorded separately by `tool_catalog_hash`.
 
 `browser_click` owns one bounded declarative plan. When the page replaces the node behind a ref mid-click, the tool re-observes and finds the element again — constrained to the same accessible name **and** role it described before the click, and refusing anything ambiguous, because recovering an identity is not the same as choosing a different control. The shared recovery runner executes that plan on one deadline and action allowance, so `resolved_by: "re-resolved"` and `attempted` account for the recovery that actually occurred. A click that simply worked reports neither. A disabled element is a definite answer and is never retried. No new pass/fail gate was added: a click that legitimately changes nothing visible still succeeds.
 
@@ -172,7 +180,7 @@ Each `attempted` entry is one verdict in an ordered sequence, carrying its `ordi
 
 These properties are enforced mechanically rather than reviewed. Each next step declares the detail keys its wording refers to, and a test asserts they are populated wherever that failure is constructed — an instruction to "check details.displayedMonths" on a failure carrying no months is a build failure, not a wording problem. Every `offered`-bearing hint receives pairwise-distinct labels and may quote only labels in that payload. Each next step that asks for a _retry_ declares the engine capability that makes it work, and the gate resolves a concrete receiver for every interaction family allowed to emit it; there is no generic fallback sentence for a situation nobody wrote advice for.
 
-Single-field recovery also keeps one absolute 25-second widget deadline and one action allowance across the initial drive, field re-resolution, and the second drive. Re-resolving a replaced field does not restart the clock. One `browser_fill_element` call is one run: the field plan and every fill it drives share a single 32-action ceiling, a single deadline, a single stale-ref reacquisition cap of four, and a single ordered verdict sequence, so a retry after an expensive first attempt gets no fresh allowance of its own. `browser_fill_form` drives each field as its own run, and each failed field carries its own ledger. Either way the result combines the outer `fill` / `re-resolve-field-and-retry` verdicts with the typing and driver work underneath them, so success and failure expose one complete ledger for the bounded operation.
+Single-field recovery also keeps one absolute 25-second widget deadline and one action allowance across the initial drive, field re-resolution, and the second drive. Re-resolving a replaced field does not restart the clock. One `browser_fill_element` call is one run: the field plan and every fill it drives share a single 32-action ceiling, a single deadline, a single stale-ref reacquisition cap of four, and a single ordered verdict sequence, so a retry after an expensive first attempt gets no fresh allowance of its own. `browser_fill_form` drives each field as its own run, and each failed field carries its own ledger. The complete recovery record combines the outer `fill` / `re-resolve-field-and-retry` verdicts with the typing and driver work underneath them. Failures and successful recoveries expose that record to the agent; ordinary exact successes use the compact projection described above, with their full entries retained in the audit.
 
 **A browser that will not start is a distinct, final answer rather than a generic tool fault.** Chrome opens lazily, on the first tool call that needs a page, so a "no usable browser" condition surfaces inside a tool: `browser_navigate` on a run's first navigation, and `web_fetch` when a script-rendered or bot-refused page escalates the HTTP fetch to the browser fallback. Both boundaries report the local cause under a stable code with a message written for that cause:
 
@@ -509,6 +517,56 @@ yantra do "check the public status page" --json
 ```
 
 `discover` is an alias for `do`.
+
+### Continuing a longer form
+
+For a twelve-field form, the agent first observes the page and identifies its fields and requested values. It sends the first ten in page order through `browser_fill_form`. For example, with current refs `e1` through `e12`, the first call can be:
+
+```json
+{
+  "fields": [
+    { "field": "e1", "value": "Example Organization" },
+    { "field": "e2", "value": "Operations" },
+    { "field": "e3", "value": "Support" },
+    { "field": "e4", "value": "Coordinator" },
+    { "field": "e5", "value": "Main office" },
+    { "field": "e6", "value": "North wing" },
+    { "field": "e7", "value": "Second floor" },
+    { "field": "e8", "value": "Morning" },
+    { "field": "e9", "value": "Standard" },
+    { "field": "e10", "value": "Internal" }
+  ]
+}
+```
+
+If all ten ordinary text fields commit, each `applied` entry can be as small as `{"field":"e1","ref":"e1","resolution":"exact"}`. The same result's progress identifies the rest:
+
+```json
+{
+  "filled": 10,
+  "eligible": 12,
+  "remaining": 2,
+  "next": [
+    { "ref": "e11", "label": "Notes" },
+    { "ref": "e12", "label": "Reference" }
+  ]
+}
+```
+
+The agent can use those refs immediately in the next `browser_fill_form` call, with the values the goal requires, without another `browser_observe`:
+
+```json
+{
+  "fields": [
+    { "field": "e11", "value": "Please prepare the draft" },
+    { "field": "e12", "value": "Planning meeting" }
+  ]
+}
+```
+
+After both commit, progress reads `filled: 12`, `eligible: 12`, `remaining: 0`, and `next: []`. This records verified fills on that document; publication still judges the rest of the declared task, including any no-submit requirement.
+
+If `e4` instead failed in the first call while the other nine committed, progress would read `filled: 9` and `remaining: 3`, with `e4` first in `next`, followed by `e11` and `e12`. The agent reads `failed` to determine the supported correction, then sends only the unresolved fields. It does not replay the nine applied fields. A `skipped` entry belonging to the failed field's widget waits for its `blocked_by` field to be resolved. For longer forms the same process repeats in batches of at most ten; after a new document or a stale-ref failure, obtain current refs through a fresh observation.
 
 ### Options
 

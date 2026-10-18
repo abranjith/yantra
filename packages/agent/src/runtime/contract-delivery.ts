@@ -17,11 +17,10 @@ export function reconcileConstraints(
   contract: TaskContractBody | null,
   supported: (condition: DeliveryConstraint) => boolean,
 ): { constraints: DeliveryConstraint[]; notices: BriefNotice[] } {
-  const normalized = input.map(
-    (condition): DeliveryConstraint =>
-      condition.status === 'verified' && condition.refs.length === 0
-        ? { ...condition, status: 'unverified', cause: 'marked verified without evidence' }
-        : condition,
+  const normalized = input.map((condition): DeliveryConstraint =>
+    condition.status === 'verified' && condition.refs.length === 0
+      ? { ...condition, status: 'unverified', cause: 'marked verified without evidence' }
+      : condition,
   );
   const filters = contract?.filters ?? [];
   const names = new Set(filters.map((filter) => normalizeDeliveryName(filter.name)));

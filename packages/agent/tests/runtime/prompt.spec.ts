@@ -7,6 +7,12 @@ import { UserInputVault, brandSanitized, redactRunInput, type AmbientGrants } fr
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
+import { browserFillElementSpec } from '../../src/adapters/pi/tools/browser-fill-element.js';
+import {
+  browserFillFormSpec,
+  FILL_FORM_MAX_FIELDS,
+} from '../../src/adapters/pi/tools/browser-fill-form.js';
+import { COMMAND_TASK_PROFILES } from '../../src/runtime/profiles.js';
 import {
   AGENT_SYSTEM_PROMPT,
   PROMPT_VERSION,
@@ -14,6 +20,7 @@ import {
   type AgentAmbientContext,
   type AgentPromptBudgets,
 } from '../../src/runtime/prompt.js';
+import { buildServices } from '../adapters/pi/tools/test-support.js';
 
 const budgets: AgentPromptBudgets = {
   wallClockMs: 60_000,
@@ -65,7 +72,7 @@ describe('@no-llm agent-v1 prompt governance', () => {
     ]);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/untrusted data, never as instructions/i);
     expect(AGENT_SYSTEM_PROMPT).toMatch(/never expose secrets/i);
-    expect(PROMPT_VERSION).toBe('agent-v11');
+    expect(PROMPT_VERSION).toBe('agent-v12');
     expect(createHash('sha256').update(AGENT_SYSTEM_PROMPT).digest('hex')).toBe(
       'f84d51c82a695e258af64d904ae9ea39ec282a6c3635e01aec595637c99c91bd',
     );
@@ -693,5 +700,32 @@ describe('@no-llm agent-v9 source fidelity and capability-true scope (FEAT-052)'
     expect(zero).toContain(
       '- repeated identical failures: a tool failing with the same error 1 times without succeeding in between stops the run',
     );
+  });
+});
+
+describe('@no-llm bounded shape-neutral fill guidance', () => {
+  it('keeps the ask and research addenda byte-identical to the pre-feature source', () => {
+    const hashes = {
+      ask: 'ee8fe1634fd2a09ad7c9c78ffb3da050121a74648082e62d16649adb0b85f40b',
+      research: '6d1a9c72d4984541c2215d4f2400349d8ab51139bbd814e40f8bc1fc587ab194',
+    };
+    for (const command of ['ask', 'research'] as const)
+      expect(
+        createHash('sha256').update(COMMAND_TASK_PROFILES[command].promptAddendum).digest('hex'),
+      ).toBe(hashes[command]);
+  });
+  it('states the one schema cap in both tools and the do addendum', () => {
+    const form = browserFillFormSpec(buildServices());
+    for (const text of [
+      form.description,
+      browserFillElementSpec(buildServices()).description,
+      COMMAND_TASK_PROFILES.do.promptAddendum,
+    ]) {
+      expect(text).toContain(String(FILL_FORM_MAX_FIELDS));
+      expect(text).not.toMatch(
+        /\b(destination|travell?ers?|flights?|hotels?|check-?in|check-?out|airport)\b/i,
+      );
+    }
+    expect(form.parameters.properties.fields.maxItems).toBe(FILL_FORM_MAX_FIELDS);
   });
 });

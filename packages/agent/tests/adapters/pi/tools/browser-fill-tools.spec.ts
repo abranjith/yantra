@@ -108,8 +108,7 @@ describe('@no-llm browser_fill_form engine delegation', () => {
     expect(model.applied).toEqual([
       expect.objectContaining({
         field: 'Search',
-        driver: 'plain-text',
-        committed: 'stadium hotels',
+        resolution: 'exact',
       }),
       expect.objectContaining({
         field: 'Where to?',
@@ -118,7 +117,7 @@ describe('@no-llm browser_fill_form engine delegation', () => {
       }),
       expect.objectContaining({
         field: 'Dates',
-        driver: 'calendar-grid',
+        resolution: 'exact',
         // The trigger writes its selection into `aria-label` and keeps "Dates"
         // as its text; other pickers do the opposite (KAYAK labels itself
         // "Select start date from calendar input" forever and shows "Sun 9/6").
@@ -374,8 +373,6 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     expect(model).toMatchObject({
       withheld: { reason: 'password', verdict: 'exact', ref: expect.stringMatching(/^e\d+$/u) },
       resolution: 'exact',
-      driver: 'plain-text',
-      dismissed: false,
     });
     for (const key of ['committed', 'requested', 'note']) expect(model).not.toHaveProperty(key);
     expect(result.modelText).not.toContain(SYNTHETIC);
@@ -404,7 +401,7 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
       resolution: 'exact',
     });
     expect(model.applied[0]).not.toHaveProperty('committed');
-    expect(model.applied[1]).toMatchObject({ field: 'City', committed: 'Lyon' });
+    expect(model.applied[1]).toMatchObject({ field: 'City', resolution: 'exact' });
     expect(result.modelText).not.toContain(SYNTHETIC);
   }, 30_000);
 
@@ -478,9 +475,8 @@ describe('@no-llm browser_fill_element contract', () => {
 
     expect(result.status).toBe('ok');
     expect(model).toMatchObject({
-      committed: 'quiet room',
-      driver: 'plain-text',
-      dismissed: false,
+      field: 'Search',
+      resolution: 'exact',
       observation: { title: 'Form' },
     });
     expect(controller.observationCount).toBe(2);
@@ -756,7 +752,7 @@ describe('@no-llm browser_fill_element contract', () => {
       readonly applied: readonly Record<string, unknown>[];
     };
 
-    expect(model.applied[0]).toMatchObject({ resolution: 'exact', committed: 'boots' });
+    expect(model.applied[0]).toMatchObject({ resolution: 'exact' });
     expect(model.applied[0]).not.toHaveProperty('note');
   });
 
@@ -997,7 +993,7 @@ describe('@no-llm browser_fill_element contract', () => {
       expect.objectContaining({
         field: 'Check-in',
         covers: ['Check-in', 'Check-out'],
-        requested: '2026-09-06..2026-09-12',
+        resolution: 'exact',
       }),
     ]);
     expectCompleteAccounting(sets, ['Check-in', 'Check-out']);
@@ -1924,6 +1920,7 @@ class FormController {
       'Element',
       'HTMLElement',
       'HTMLInputElement',
+      'HTMLDataListElement',
       'HTMLTextAreaElement',
       'HTMLSelectElement',
       'HTMLTableElement',
@@ -2072,4 +2069,170 @@ describe('@no-llm fill tools record verified commits in the action ledger (FEAT-
       expect.objectContaining({ event: 'action_recorded', kind: 'fill_committed', covers: 1 }),
     ]);
   }, 30_000);
+});
+
+describe('@no-llm explicit fill batch limit', () => {
+  it('rejects eleven before observing and accepts ten with compact complete accounting', async () => {
+    const controller = new FormController(
+      Array.from({ length: 10 }, (_, i) => `<input aria-label="Field ${i}">`).join(''),
+    );
+    const fields = Array.from({ length: 11 }, (_, i) => ({ field: `Field ${i}`, value: `v${i}` }));
+    const rejected = await run(controller, { fields });
+    expect(rejected.error_code).toBe('INVALID_INPUT');
+    expect(rejected.modelText).toContain('at most 10');
+    expect(rejected.modelText).toContain('sent 11');
+    expect(rejected.modelText).toContain('remaining 1');
+    expect(controller.observationCount).toBe(0);
+    const result = await run(controller, { fields: fields.slice(0, 10) });
+    expect(result.status).toBe('ok');
+    const model = JSON.parse(result.modelText) as FillSets & { applied: Record<string, unknown>[] };
+    expectCompleteAccounting(
+      model,
+      fields.slice(0, 10).map((f) => f.field),
+    );
+    expect(model.applied).toHaveLength(10);
+    const baseline = JSON.parse(
+      readFileSync(
+        new URL(
+          '../../../../../core/tests/fixtures/fill-performance/baseline.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ) as { ten_field_applied_bytes: number };
+    expect(Buffer.byteLength(JSON.stringify(model.applied))).toBeLessThanOrEqual(
+      baseline.ten_field_applied_bytes * 0.4,
+    );
+    expect((result.details as { applied: unknown[] }).applied).toEqual(
+      fields
+        .slice(0, 10)
+        .map((field, i) => ({
+          ...field,
+          ref: `e${i + 1}`,
+          requested: field.value,
+          committed: field.value,
+          driver: 'plain-text',
+          resolution: 'exact',
+          actions: 1,
+          dismissed: false,
+          attempted: expect.any(Array),
+        }))
+        .map(({ value: _value, ...entry }) => entry),
+    );
+
+    expect(
+      model.applied.every((entry: Record<string, unknown>) => Object.keys(entry).length === 3),
+    ).toBe(true);
+    expect((result.details as { applied: unknown[] }).applied).toHaveLength(10);
+    expect(model).not.toHaveProperty('progress');
+  }, 20_000);
+});
+
+describe('@no-llm fill progress from the existing observation', () => {
+  it('reuses the before-picture for a ref whose undeclared control delegates the edit', async () => {
+    const controller = new FormController(
+      '<input id="trigger" aria-label="Trigger"><input id="editor" aria-label="Editor">',
+    );
+    const before = await controller.observe();
+    const controls = before.interactables.map((entry) => ({
+      ref: entry.ref,
+      label: entry.name,
+      groupKey: null,
+      exemption: null,
+    }));
+    Object.assign(controller, {
+      latestFillCensus: () => ({ epoch: 7, host: 'example.test', complete: true, controls }),
+      latestFillObservation: () => before,
+    });
+    const trigger = controller.document.querySelector<HTMLInputElement>('#trigger')!;
+    const editor = controller.document.querySelector<HTMLInputElement>('#editor')!;
+    trigger.addEventListener('input', () => {
+      editor.value = trigger.value;
+      trigger.value = '';
+      editor.focus();
+    });
+    const fill = vi.spyOn(controller, 'fill');
+    const result = await run(controller, {
+      fields: [{ field: before.interactables[0]!.ref, value: 'Blue' }],
+    });
+    expect(result.status).toBe('ok');
+    expect(JSON.parse(result.modelText)).toMatchObject({
+      applied: [{ committed: 'Blue', editee: { name: 'Editor' } }],
+    });
+    expect(fill).toHaveBeenCalledTimes(2);
+    expect(fill.mock.calls.map((call) => call[0])).toEqual(
+      before.interactables.map((entry) => entry.ref),
+    );
+  });
+  it('continues fifteen fields, omits committed refs, and adds no observation for progress', async () => {
+    const controller = new FormController(
+      Array.from({ length: 15 }, (_, i) => `<input aria-label="Field ${i}">`).join(''),
+    );
+    const observation = await controller.observe();
+    const census = {
+      epoch: 7,
+      host: 'example.test',
+      complete: true,
+      controls: observation.interactables.map((e) => ({
+        ref: e.ref,
+        label: e.name,
+        groupKey: null,
+        exemption: null,
+      })),
+    };
+    Object.assign(controller, { latestFillCensus: () => census });
+    const actions = new ActionLedger({
+      nowIso: () => new Date().toISOString(),
+      locate: () => ({ epoch: 7, host: 'example.test' }),
+      sanitizer: new DefaultSanitizer(),
+    });
+    const observe = vi.spyOn(controller, 'observe');
+    observe.mockClear();
+    const first = await run(
+      controller,
+      {
+        fields: observation.interactables
+          .slice(0, 10)
+          .map((e) => ({ field: e.ref, value: 'Blue' })),
+      },
+      new AgentTrace(),
+      actions,
+    );
+    const model = JSON.parse(first.modelText) as {
+      progress: {
+        filled: number;
+        eligible: number;
+        remaining: number;
+        next: { ref: string; label: string }[];
+      };
+    };
+    expect(model.progress).toMatchObject({ filled: 10, eligible: 15, remaining: 5 });
+    expect(model.progress.next.map((e) => e.ref)).toEqual(
+      observation.interactables.slice(10).map((e) => e.ref),
+    );
+    expect(observe).toHaveBeenCalledOnce();
+    const second = await run(
+      controller,
+      { fields: model.progress.next.map((e) => ({ field: e.ref, value: 'Blue' })) },
+      new AgentTrace(),
+      actions,
+    );
+    expect(JSON.parse(second.modelText)).toMatchObject({
+      progress: { filled: 15, remaining: 0, next: [] },
+      note: 'Nothing was submitted. Activate the submit/search control with browser_click.',
+    });
+    expect(observe).toHaveBeenCalledTimes(2);
+    const failed = await run(
+      controller,
+      { fields: [{ field: 'Missing', value: 'Blue' }] },
+      new AgentTrace(),
+      actions,
+    );
+    expect(failed.status).toBe('error');
+    expect((failed.details as { applied: unknown[]; progress: unknown }).applied).toEqual([]);
+    expect((failed.details as { progress: unknown }).progress).toMatchObject({
+      filled: 15,
+      remaining: 0,
+    });
+  }, 20_000);
 });

@@ -211,7 +211,7 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
 
 ### TASK-001: The plain-field fill cost is measured on a controlled 40-control fixture and pinned by operation counts
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add the `forty-controls` layout-matrix page (§3). Synthetic markup only: no site names and no recreated page. Every control has an explicit `<label for>`, so resolution cost is not what is measured. The submit handler increments `window.__submits`.
   - `packages/core/tests/fill/fill-performance.spec.ts` (real Chrome; `page.goto('about:blank')` then `setContent`, which is a DOM-shape fixture):
     - Drive `fillField` through `AgentBrowserController`'s widget port for each of the 40 controls, with a deterministic synthetic value per kind.
@@ -220,16 +220,16 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - Write `baseline.json` with `{ measured_at, chrome_version, fields: 40, total_ms, p50_ms_by_kind, reaction_reads_per_plain_field, full_watch_entries }`. It is UTF-8 with no control bytes, and the timings are informational.
   - Pin today's counts as a characterization assertion. A plain text field enters `watch-and-select` once and takes at least `floor(REACTION_WAIT_MS / REACTION_POLL_MS)` reaction reads. TASK-002 flips this assertion.
   - Agent side: in `browser-fill-tools.spec.ts`, record the model-visible byte length of `applied` for a ten-field plain batch as a pinned baseline number. TASK-004 asserts against it.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Matrix census: every control on `forty-controls` has a unique `data-fixture-key` and an explicit label. The page holds exactly 40 fillable controls (the radio group counts as 3 controls and 1 census unit). No suggestion signal appears anywhere on the page (a byte scan for `aria-autocomplete`, `aria-haspopup`, `role="combobox"`, and `list=`).
   - The characterization assertions above pass on today's code.
   - `baseline.json` is valid JSON with no control bytes (explicit byte scan).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/widget-gauntlet-harness.md` (the `forty-controls` page and the performance characterization).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/widget-gauntlet-harness.md` (the `forty-controls` page and the performance characterization).
 - **Verify**: `pnpm --filter @yantra/test-helpers build`; `cd packages/core && npx vitest run tests/fill/fill-performance.spec.ts`; confirm `baseline.json` shows about 4 s per plain text field, matching G6.
 
 ### TASK-002: A plain input pays one short reaction window, not the four-second suggestion wait, while declared and observed popups keep the full watch
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `combobox-driver.ts`: add `REACTION_PROBE_MS` and `observeReaction` (§2). Reuse `readReaction` and `REACTION_POLL_MS`. Return on the first observed popup. Read committed once at the end of an empty window.
   - `plans.ts`: add the `reaction-check` rung and the new `watch-and-select` entry (§2 table). This is a plan edit, not an inline branch or a wrapper (memory: recovery is declarative data).
   - `engine.ts`:
@@ -241,7 +241,7 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - Add the three gauntlet fixtures and their rows (§3).
   - Flip TASK-001's characterization assertion to the new counts.
   - Update `recovery-characterization.spec.ts` pins that now include `reaction-check`. Each changed pin gets a one-line reason in the same commit.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `text-plan.spec.ts` (pure, fake port and clock):
     - entry table: plain → `reaction-check` entered, `watch-and-select` skipped with `no-suggestion-signal`; declared → `reaction-check` skipped with `suggestions-declared`, `watch-and-select` entered with `suggestions-declared`; plain and popup observed → both entered, with `popup-observed` as the evidence; typing failed → both skipped with `control-not-empty`;
     - `runReaction` is called exactly once on the plain path and zero times on the declared path (counted through the injected seam).
@@ -255,13 +255,13 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - Gauntlet (real Chrome): `undeclared-typeahead` (300 ms) commits the unique suggestion; `undeclared-haspopup` (1.5 s) commits its suggestion through the full watch; `native-datalist` commits typed text; `late-suggestions`, `masked-input`, `dropped-keystroke-input`, `shared-calendar-range`, and `split-date-fields` stay green and unchanged.
   - Replay: one `fill_element` step on a plain input through the executor takes the same counted path (no full watch).
   - `fill-performance.spec.ts`: plain text fields now take ≤ 4 reaction reads each and zero full-watch entries; ten plain fields take ≤ 15 s; 40 controls take ≤ 60 s.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/recovery-as-declarative-data.md` (the text plan's three rungs and their entry conditions) and `docs/features/widget-gauntlet-harness.md` (the three new rows).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/recovery-as-declarative-data.md` (the text plan's three rungs and their entry conditions) and `docs/features/widget-gauntlet-harness.md` (the three new rows).
 - **Verify**: `cd packages/core && npx vitest run tests/fill/text-plan.spec.ts tests/fill/fill-engine.spec.ts tests/fill/fill-performance.spec.ts tests/interaction/recovery-characterization.spec.ts tests/boundary-rules.spec.ts`; `npx turbo run build --filter=@yantra/core`; `cd e2e && npx vitest run widget-gauntlet.spec.ts`.
 - **Depends on**: TASK-001
 
 ### TASK-003: The ten-field cap is stated where the model reads, an over-cap call says how to continue, and the guidance is shape-neutral
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `browser-fill-form.ts`:
     - Export `FILL_FORM_MAX_FIELDS = 10` and use it for `maxItems`.
     - Description: replace "a search form is one call, not one call per field" with neutral wording. Example: "Send up to 10 fields per call, in page order. For a longer form, send the next batch after reading this result: its progress lists the fields that remain."
@@ -275,7 +275,7 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
     - "a location field asked for an airport code commits a city name" → "a field asked for a short code commits the full name the widget offers".
   - Leave the widget-lifecycle, result-reading, and batch-accounting rules otherwise unchanged.
   - `prompt.ts`: bump `PROMPT_VERSION` (deviation 7) and add a history line: "changes only the `do` addendum's batch guidance: states the per-call cap, shape-neutral wording, and continuation through progress".
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `prompt.spec.ts`:
     - `PROMPT_VERSION` equals the new version;
     - the `do` addendum, the `browser_fill_form` description, and the `browser_fill_element` description each contain `String(FILL_FORM_MAX_FIELDS)`, and the schema's `maxItems` equals it;
@@ -284,12 +284,12 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - `browser-fill-tools.spec.ts`: an 11-field call returns `INVALID_INPUT` whose message contains "at most 10", "sent 11", and "remaining 1". The domain was never entered: the controller's `observe` was called 0 times. A 10-field call validates.
   - `message-catalog.spec.ts`: `batch-limit` resolves its capability to a registered tool and renders with exactly the declared detail keys (the existing hint-capability contract).
   - A tool without `inputAdvice` gets the generic `schema-validation` message unchanged (a byte-identical regression check on `browser_click`).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (fill batches, the per-call cap, and continuing a long form).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (fill batches, the per-call cap, and continuing a long form).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/prompt.spec.ts tests/runtime/message-catalog.spec.ts tests/adapters/pi/tools/browser-fill-tools.spec.ts`; `npm run typecheck` in `packages/agent`.
 
 ### TASK-004: A field that landed exactly is reported compactly, and the full recovery ledger goes to the audit
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `browser-common.ts`: `compactAppliedFill(entry: AppliedBrowserFill): Record<string, unknown>`, implementing the §2 rule. It is pure, and it keeps `covers` and FEAT-056's `withheld` when present.
   - `browser-fill-form.ts`:
     - `model.applied` becomes `applied.map(compactAppliedFill)`.
@@ -298,7 +298,7 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - `browser-fill-element.ts`: build the model's top-level keys from `compactAppliedFill`, keeping `driver` and `dismissed` only in full form. Put the full entry in `details.applied` (a one-element array, so audit readers see one shape for both tools).
   - The engine's `FillOutcome` and FEAT-054's `fill_committed` recording are unchanged. Both read the in-memory full entry.
   - Tool descriptions and the `do` addendum: one sentence. "An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail."
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `compactAppliedFill` table:
     - exact, no ledger → `{ field, ref, resolution }`;
     - exact with `committed` text differing from `requested` (a date rendered as `Dec 2, 2026` for `2026-12-02`) → plus `committed`;
@@ -317,19 +317,19 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
     - `expectCompleteAccounting` still passes on compact entries.
   - Audit: through the run recorder, the `tool-calls.jsonl` end entry's `output_sanitized.details.applied[*].attempted` is present for an escalated field, and the user-input mask still applies to `details.applied` (`maskUserInputDeep`).
   - `report-builder` renders the same partial line for a partial batch as before (existing `partialCounts` test).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (compact applied entries) and `docs/features/diagnostics-and-audit.md` (full fill ledgers in `tool-calls.jsonl` under `details.applied`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (compact applied entries) and `docs/features/diagnostics-and-audit.md` (full fill ledgers in `tool-calls.jsonl` under `details.applied`).
 - **Verify**: `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-fill-tools.spec.ts tests/runtime/run-recorder.spec.ts`; `npx turbo run build --filter=@yantra/core` first if core changed; `cd packages/core && npx vitest run tests/audit`.
 - **Depends on**: TASK-002 (the no-`attempted` plain success), TASK-001 (byte baseline)
 
 ### TASK-005: Every fill result reports verified progress, remaining counts, and the next fields to send, with no extra page read
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Core `AgentBrowserController.latestFillCensus()` (§2): build the census from the records kept by the most recent `observe()`, using FEAT-055 TASK-001's entry builder (one function, called from both `fillCensus` and `latestFillCensus`). Return null when the stored observation's epoch differs from `topLevelDocumentEpoch()`.
   - Agent `fulfillment.ts`: `fillCoverage(census, ledger)` (§2). If FEAT-054 TASK-006 inlined the join inside `evaluateFill`, extract it here and have `evaluateFill` call it, with no behavior change.
   - `browser-common.ts`: `modelProgress(coverage): ModelProgress | undefined`. It applies the omission rules and the ten-entry, 60-character, and 1 KiB bounds, and sanitizes labels with the observation-name sanitizer.
   - `browser-fill-form.ts` and `browser-fill-element.ts`: after the existing final `controller.observe()`, compute `progress` from `latestFillCensus()` and `services.actionLedger`. This runs after this call's `fill_committed` entries are recorded, so `filled` includes them. Put it in `model.progress`, and in `details.progress` on every path, including all-failed.
   - Update the `browser_fill_form` success note. When `remaining > 0`: "Nothing was submitted. N eligible fields remain; progress.next lists the next ones." When `remaining === 0`: keep today's note. With failures, keep "The applied fields are set — do not re-send them."
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `fillCoverage` (pure):
     - a radio group counts once and is filled by any member's commit;
     - an exempt control is excluded;
@@ -344,26 +344,26 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
     - a batch with one failure → the failed field appears in `next`, and the applied ones do not;
     - one tool call takes as many `observe()` calls as before this task;
     - no ledger (the STUB path) → no `progress` key.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the `progress` block and continuing through `next`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the `progress` block and continuing through `next`).
 - **Verify**: `cd packages/core && npx vitest run tests/browser/agent-controller-inventory.spec.ts`; `npx turbo run build --filter=@yantra/core`; `cd packages/agent && npx vitest run tests/runtime/fulfillment.spec.ts tests/adapters/pi/tools/browser-fill-tools.spec.ts`.
 - **Depends on**: TASK-004; FEAT-055 TASK-001; FEAT-054 TASK-004 and TASK-006 (STUB until then: no `progress`)
 
 ### TASK-006: Forty controls fill in four batches within the time target, with no resends and no regressions
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `e2e/agent-browser.spec.ts` (real Chrome, scripted tool calls with no LLM, `@no-llm`), on `forty-controls`:
     - Make four `browser_fill_form` calls of 10 fields each, using refs from the first observation and then from each result's `progress.next`. Do not call `browser_observe` between batches.
     - Field 6 of batch 2 gets a value its control refuses: a `number` input with `max="10"` and `step="1"`, given `"12.5"`.
     - Re-send only that field with a valid value in a fifth call.
     - Count, per control, how many times the widget port's `fill`, `type`, or `click` was called on its ref.
   - Sum `duration_ms` from the tool-call end entries. Record total and per-batch tool time into `baseline.json`'s `after` block.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Correctness: final DOM values equal the intended values for all 40 controls, and `window.__submits === 0`.
   - No resends: every control except the refused one received exactly one fill. The refused one received exactly two (the failed attempt and the re-send). No applied field from batch 2 was re-driven by batch 3 or the fifth call.
   - Progress: after batch 4, `remaining === 1` and `next` names the refused field. After the fifth call, `remaining === 0`.
   - Time: each plain ten-field batch ≤ 15 s of tool time, and the 40-control total ≤ 60 s.
   - Regression sweep: `e2e/widget-gauntlet.spec.ts` green (late suggestions, masked input, shared-calendar range, split dates), and the core layout-matrix safety assertion is unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (an example of filling a long form in batches).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (an example of filling a long form in batches).
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run agent-browser.spec.ts widget-gauntlet.spec.ts`; then the repo gates `npx turbo run lint typecheck` and the `e2e` suite (memory: the repo-wide gate, not a subset).
 - **Depends on**: TASK-002, TASK-003, TASK-005
 
@@ -392,17 +392,35 @@ No relational store, and `.spec-lite/data_model.md` does not exist. This feature
   - undeclared popups later than `REACTION_PROBE_MS` (deviation 5);
   - native `<datalist>` option selection (deviation 2).
 
+### Implementation clarifications (2026-10-17)
+
+- The calibrated probe is **325 ms**, with reads at 0/150/300 ms. The initial 450 ms window missed the sixty-second controlled-fixture target; the 300 ms undeclared popup still commits in both the protocol and real-Chrome cases. The baseline records 27 full-watch reaction reads per ordinary field and 9,272 model-applied bytes for ten original plain fills.
+- The source still re-observed even an already registered eNN ref, contrary to the assumption in this spec. Ref resolution now reuses the current-document registry, with the controller's epoch and identity healing retained. Name resolution still observes; progress adds no page read. The constant lives in dependency-free `fill-limits.ts` and is re-exported from `browser-fill-form.ts` to avoid a profiles/tool runtime cycle.
+- The fixture has **40 physical controls and 38 eligible units**: its three radios form one unit. Continuation fills four bounded batches, followed by one correction call. Tests count semantic sends separately from engine-owned mutations: the refused number control can use its existing typing recovery internally, while no committed field is resent or re-driven. Ordinary ten-field batches have the fifteen-second gate; the batch containing the intentional refusal also pays for recovery.
+- The number control rejects invalid native validity states through its input listener; HTML max/step alone mark invalidity but do not prevent a value from being stored. Short, valid synthetic values isolate interaction cost; historical baseline timings are informational and used longer synthetic email/URL/text values. Operation-count and compact-byte comparisons are pinned independently of that timing difference.
+- `agent-v12` is added to the manifest's accepted prompt versions and generated protocol artifacts; older versions remain valid.
+- Ref reuse retains the complete cached before-picture for the editee recovery rung. A regression test fills an undeclared delegating control by ref and proves the edit still lands in the discovered editor without retrying the trigger through other typing strategies.
+- A controlled status/error region is not a suggestion popup. The shared open-state resolver ignores explicit status, alert, log, progressbar, and timer roles in its existing read, then continues real-popup detection. New fake-timer engine and real-Chrome regressions pass without extra page reads.
+- Regression expectations were adjusted for the new forty-control fixture key, capped shape-neutral guidance, and `agent-v12` scorecard. Historical layout baseline rows and the never-resolve-the-wrong-control safety assertion remain unchanged.
+- Validation environment: a clean install of the existing lockfile resolves transitive `pi-ai@0.80.10`, whose OAuth entry point lacks `getOAuthApiKey` required by the pinned `pi-coding-agent@0.80.6`. Tests use the main checkout's working installation of the same pinned SDK (`pi-ai@0.80.6` transitively). No dependency or lockfile change is part of FEAT-057.
+
+### Final verification (2026-10-17)
+
+- Ran all workspace test suites (protocol, helpers, core, agent, CLI, and all 19 end-to-end files). The full run reported four stale fixture/expectation failures: layout baseline keys, batching guidance, scorecard prompt version, and fresh-manifest prompt version. Corrected each and verified its affected test on rerun (16, 30, 1, and 9 passing tests respectively). No other failures were reported.
+- After the final status-region fix, 129 focused core tests and all 12 real-Chrome widget-gauntlet tests passed; the full end-to-end run also passed the updated widget gauntlet and the forty-control continuation case. The checked-in measured tool baseline is 53,873 ms total and 14,391 ms for the first ten plain fields.
+- Final build, all 12 workspace lint/typecheck tasks, root ESLint, end-to-end formatting/lint smoke, and explicit UTF-8/control-byte scans passed. Tests used the compatible installed SDK tree described above.
+
 ## 7. Changeset
 
 > Captured by hooks (`capture-baseline` / `capture-changeset`), not hand-maintained. See `.spec-lite/features/FEAT-057-plain_field_fill_performance/changeset.json`, which is the authoritative deterministic review scope.
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Measure and pin the plain-field fill cost on the `forty-controls` fixture
-- [ ] TASK-002: `reaction-check` rung; full watch only for declared or observed popups
-- [ ] TASK-003: Stated ten-field cap, `batch-limit` advice, shape-neutral guidance, prompt version bump
-- [ ] TASK-004: Compact applied entries; full ledgers in `details.applied`
-- [ ] TASK-005: `progress` with remaining counts and `next`, with no extra read
-- [ ] TASK-006: Forty controls in four batches within target, with no resends and no regressions
+- [x] TASK-001: Measure and pin the plain-field fill cost on the `forty-controls` fixture
+- [x] TASK-002: `reaction-check` rung; full watch only for declared or observed popups
+- [x] TASK-003: Stated ten-field cap, `batch-limit` advice, shape-neutral guidance, prompt version bump
+- [x] TASK-004: Compact applied entries; full ledgers in `details.applied`
+- [x] TASK-005: `progress` with remaining counts and `next`, with no extra read
+- [x] TASK-006: Forty controls in four batches within target, with no resends and no regressions
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

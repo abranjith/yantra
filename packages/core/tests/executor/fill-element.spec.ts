@@ -115,6 +115,25 @@ describe('@no-llm fill_element replay handler', () => {
     }
   }, 45_000);
 
+  it('replays a plain fill on the bounded reaction path without Enter', async () => {
+    let tick = 0;
+    const port = new WidgetTestPort('<input id="q" aria-label="Query">', () => (tick += 50));
+    const reads = vi.spyOn(port, 'evaluateOn');
+    const press = vi.spyOn(port, 'press');
+    const result = await driveFillElement(
+      fillStep({ kind: 'literal', value: 'Blue' }),
+      context(),
+      port,
+      target(port, '#q', 'Query'),
+    );
+    expect(result).toMatchObject({
+      kind: 'completed',
+      details: { committed: 'Blue', driver: 'plain-text' },
+    });
+    expect(reads.mock.calls.length).toBeLessThanOrEqual(10);
+    expect(press).not.toHaveBeenCalledWith('Enter');
+  });
+
   it('is registered in the executor dispatch table', () => {
     expect(STEP_DISPATCH.has('fill_element')).toBe(true);
   });

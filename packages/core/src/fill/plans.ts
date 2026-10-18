@@ -160,6 +160,10 @@ export function buildDriverPlan(
 export interface BuildTextPlanInput<TValue, TFailure> {
   readonly port: WidgetPort;
   readonly budget: WidgetBudget;
+  readonly declaredSuggestions: boolean;
+  readonly runReaction: (
+    context: RungContext<WidgetPort>,
+  ) => Promise<RungOutcome<TValue, TFailure>>;
   readonly runEnter: (context: RungContext<WidgetPort>) => Promise<RungOutcome<TValue, TFailure>>;
   readonly runSelection: (
     context: RungContext<WidgetPort>,
@@ -167,7 +171,7 @@ export interface BuildTextPlanInput<TValue, TFailure> {
   readonly classify: (failure: TFailure) => 'transient' | 'terminal';
 }
 
-/** Build the plain-text entry and optional offered-selection stages. */
+/** Enter text, probe undeclared controls, and select only with a suggestion signal. */
 export function buildTextPlan<TValue, TFailure>(
   input: BuildTextPlanInput<TValue, TFailure>,
 ): EscalationPlan<TValue, TFailure, WidgetPort> {
@@ -184,12 +188,30 @@ export function buildTextPlan<TValue, TFailure>(
         run: input.runEnter,
       },
       {
+        id: 'reaction-check',
+        axis: 'what',
+        entry: (evidence) => {
+          if (evidence.values['text-entered'] !== true)
+            return { enter: false, unmet: 'control-not-empty' };
+          return input.declaredSuggestions
+            ? { enter: false, unmet: 'suggestions-declared' }
+            : { enter: true, evidence: ['text-entered'] };
+        },
+        costCap: { maxActions: 0 },
+        produces: ['popup-observed', 'committed'],
+        run: input.runReaction,
+      },
+      {
         id: 'watch-and-select',
         axis: 'what',
-        entry: (evidence) =>
-          evidence.values['text-entered'] === true
-            ? { enter: true, evidence: ['text-entered'] }
-            : { enter: false, unmet: 'control-not-empty' },
+        entry: (evidence) => {
+          if (evidence.values['text-entered'] !== true)
+            return { enter: false, unmet: 'control-not-empty' };
+          if (input.declaredSuggestions) return { enter: true, evidence: ['suggestions-declared'] };
+          return evidence.values['popup-observed'] === true
+            ? { enter: true, evidence: ['popup-observed'] }
+            : { enter: false, unmet: 'no-suggestion-signal' };
+        },
         costCap: { maxActions: Math.min(input.budget.maxActions, 2) },
         produces: ['offered', 'chosen', 'committed', 'container'],
         run: input.runSelection,

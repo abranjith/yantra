@@ -1,5 +1,7 @@
 import type { TemplateManifest } from '@yantra/protocol';
 
+import { FILL_FORM_MAX_FIELDS } from '../adapters/pi/tools/fill-limits.js';
+
 /** Commands that can start an agentic Yantra session. */
 export type AgenticCommand = 'ask' | 'research' | 'do';
 
@@ -126,29 +128,28 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     promptAddendum:
       `Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
       `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ` +
-      'When a form needs more than one field set, fill it with a single ' +
-      'browser_fill_form listing every field — one call for the whole search form (destination, ' +
-      'dates, travellers), not one call per field. browser_fill_element is for a form with one ' +
-      'field to set, or for a stored secret. Filling fields one at a time is what makes a search ' +
-      'form fall apart: each call re-reads a page the previous call just re-rendered, so the ' +
-      'later fields resolve against controls that have moved or been replaced. ' +
+      `When a form needs more than one field set, use browser_fill_form: up to ${FILL_FORM_MAX_FIELDS} fields per call, ` +
+      'in page order, never one call per field. A longer form takes several calls; after each one, read its ' +
+      'progress (how many eligible fields remain, and the next ones by ref) and send those, rather than observing again. ' +
+      'browser_fill_element is for a form with one field to set, or for a stored secret. ' +
+      'Filling fields one at a time makes a re-rendering form fall apart: each call re-reads a page the previous call just changed. ' +
       'Both tools handle text, stored secrets, dates, ranges, suggestions, dropdowns, ' +
       'radio groups, and toggles, and each owns the whole widget lifecycle — opening a calendar ' +
       'or dropdown, choosing, and closing it again. Set a date range in one call: send both ends ' +
       'together in one browser_fill_form, or one field with the value "YYYY-MM-DD..YYYY-MM-DD". ' +
-      'A check-in/check-out picker commits the pair as a unit, so filling one end by itself is ' +
-      'discarded. Use browser_click only to ' +
+      'A range picker that commits both ends together discards one end filled by itself. Use browser_click only to ' +
       'activate something or submit a completed form, never to operate a field widget by hand: ' +
       'opening a picker yourself and clicking day cells is slower and loses the verification the ' +
       'fill tools perform. ' +
       // How to read what these tools return. Every clause below replaces a
       // guess the model would otherwise have to make about whether its own
       // action worked — which is the failure this guidance exists to prevent.
+      'An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. ' +
       'READ THE RESULT BEFORE ACTING AGAIN. A successful fill reports "requested" (what you ' +
       'sent), "committed" (what the control now holds), and "resolution" (how the two relate). ' +
       'A "committed" that differs from what you sent is normal and is the widget resolving your ' +
-      'value to something it actually offers — a location field asked for an airport code ' +
-      'commits a city name — so accept it and move on. Never re-fill a field to force your ' +
+      'value to something it actually offers — a field asked for a short code ' +
+      'commits the full name the widget offers — so accept it and move on. Never re-fill a field to force your ' +
       'original wording back into it. An "editee" in a result means the page routed the edit to ' +
       'a different control and the value did land there; the field you named staying empty is ' +
       'not a failure and is not something to fix. A failure carries "observed" (what the control ' +

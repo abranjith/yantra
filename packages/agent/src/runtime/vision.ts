@@ -35,11 +35,7 @@ export interface CaptureMetadata {
 
 /** Why Vision Assist is unavailable, as a stable reason code. */
 export type VisionUnavailableReason =
-  | 'zero_llm'
-  | 'suppressed_by_flag'
-  | 'no_browser_tools'
-  | 'grant_missing'
-  | 'model_text_only';
+  'zero_llm' | 'suppressed_by_flag' | 'no_browser_tools' | 'grant_missing' | 'model_text_only';
 
 /**
  * The first gate that keeps Vision Assist off, in a fixed precedence (the

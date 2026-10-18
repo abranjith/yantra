@@ -197,8 +197,8 @@ describe('@no-llm protocol widget gauntlet', () => {
     const registered = PROTOCOL_GAUNTLET.map((entry) => entry.file).sort();
     expect(census(files, registered)).toEqual({ unregistered: [], missing: [] });
     // The protocol half of the gallery, stated as a number so growing it is a
-    // deliberate edit. With the agent tier's four, this is the 20-fixture gate.
-    expect(files).toHaveLength(16);
+    // deliberate edit. With the agent tier's four, this is the 23-fixture gate.
+    expect(files).toHaveLength(19);
   });
 
   it('rejects orphan files and entries independently', () => {

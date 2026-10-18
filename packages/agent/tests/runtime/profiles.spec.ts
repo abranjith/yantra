@@ -252,9 +252,9 @@ describe('@no-llm command task profiles', () => {
     // Wave 1 adds to this guidance; it replaces none of it.
     const task = COMMAND_TASK_PROFILES.do.promptAddendum;
 
-    expect(task).toMatch(/a single browser_fill_form listing every field/i);
+    expect(task).toMatch(/browser_fill_form: up to 10 fields per call/i);
     expect(task).toMatch(/Set a date range in one call/i);
-    expect(task).toMatch(/check-in\/check-out picker commits the pair as a unit/i);
+    expect(task).toMatch(/range picker that commits both ends together/i);
     expect(task).toMatch(/switched_to_new_tab/);
     expect(task).toMatch(/popup_intercepted/);
     expect(task).toMatch(/never to operate a field widget by hand/i);

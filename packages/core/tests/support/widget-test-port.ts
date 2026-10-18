@@ -235,6 +235,7 @@ export class WidgetTestPort implements WidgetPort {
       'Element',
       'HTMLElement',
       'HTMLInputElement',
+      'HTMLDataListElement',
       'HTMLTextAreaElement',
       'HTMLSelectElement',
       'HTMLTableElement',

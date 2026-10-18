@@ -361,7 +361,7 @@ Unchanged and load-bearing:
       the one test class memory says must not be flaky for environmental reasons. Add a boundary
       assertion in `packages/core/tests/boundary-rules.spec.ts` alongside its existing
       single-implementation rules: **no file under `packages/\*/tests/**`resolves a fixture path
-through`process.cwd()`\*\*, so the next fixture reader cannot reintroduce it.
+      through`process.cwd()`\*\*, so the next fixture reader cannot reintroduce it.
 - [ ] **Unit Tests**: This task is a test fix. Cases: the spec passes when run as
       `cd packages/core && npx vitest run tests/interaction/recovery-characterization.spec.ts`
       **and** as `npx vitest run --root packages/core tests/interaction/recovery-characterization.spec.ts`

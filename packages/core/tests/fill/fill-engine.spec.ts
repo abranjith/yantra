@@ -97,6 +97,37 @@ describe('@no-llm unified fill intent parsing', () => {
 });
 
 describe('@no-llm unified fill engine routing', () => {
+  it.each(['status', 'alert'])(
+    'does not watch an aria-controls %s region as suggestions',
+    async (role) => {
+      vi.useFakeTimers();
+      try {
+        const port = new WidgetTestPort(
+          `<input id="field" aria-controls="notice"><div id="notice" role="${role}"><span>Ready</span></div>`,
+        );
+        const limits = budget(port);
+        const run = createRunState({ ...limits, maxReacquisitions: 1 }, port.now());
+        const pending = fillField(
+          port,
+          { field: 'Field', target: target(port, '#field', 'textbox', 'Field') },
+          { kind: 'text', text: 'Blue' },
+          { ...limits, run },
+        );
+        await vi.runAllTimersAsync();
+        expect(await pending).toMatchObject({ ok: true, committed: 'Blue', resolution: 'exact' });
+        expect(run.verdicts).toContainEqual(
+          expect.objectContaining({
+            rungId: 'watch-and-select',
+            kind: 'skipped',
+            unmet: 'no-suggestion-signal',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('routes an offered calendar label back to the date family without typing or pressing', async () => {
     const port = new WidgetTestPort(
       '<button id="date" aria-controls="calendar" aria-haspopup="grid" aria-expanded="true"></button>' +
@@ -1695,12 +1726,8 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     for (const key of ['committed', 'requested', 'note']) {
       expect(outcome).not.toHaveProperty(key);
     }
-    // The historical shape, unchanged: watch-and-select still runs and finds
-    // no suggestions. Only its readback became honest.
-    const ran = verdicts(outcome.ok ? outcome.attempted : undefined)
-      .filter((record) => record.verdict === 'succeeded')
-      .map((record) => record.strategy);
-    expect(ran).toEqual(expect.arrayContaining(['enter-text', 'watch-and-select']));
+    // FEAT-057 replaces the empty full watch with a bounded read-only probe.
+    expect(outcome).not.toHaveProperty('attempted');
     expect(JSON.stringify(outcome)).not.toContain('Synth3tic');
   });
 
@@ -1762,7 +1789,7 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     expect(JSON.stringify(outcome)).not.toContain('oldvalue');
   });
 
-  it('keeps a disclosed plain text fill at exactly the page reads it took before', async () => {
+  it('bounds a disclosed plain text fill after replacing the full watch', async () => {
     // Measured against the engine as it stood before protected-value
     // verification (84 then, under this same clock): the withheld read
     // replaces a read and adds none. The clock steps 50 ms per reading so the
@@ -1781,7 +1808,8 @@ describe('@no-llm protected fields filled with caller-supplied data', () => {
     );
 
     expect(outcome).toMatchObject({ ok: true, committed: 'Lyon', resolution: 'exact' });
-    expect(evaluateOn).toHaveBeenCalledTimes(84);
+    // FEAT-057 skips the full watch; the same stepped clock now takes 9 reads.
+    expect(evaluateOn).toHaveBeenCalledTimes(9);
   }, 20_000);
 
   it('commits a stored secret blind, with no page read at all', async () => {

@@ -1,0 +1,508 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/src/render/brief-terminal.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "docs/features/recovery-as-declarative-data.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/widget-gauntlet-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/agent-browser.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/fixtures/serve.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/gauntlet/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/golden/scorecard.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/do-submit-forbidden.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/listing-table.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-bad-reference.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/publish-flagged-value.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/task-fidelity/search/scripted-provider.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/widget-gauntlet.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/environment.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-common.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-form.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/fill-limits.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/provider/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/action-ledger.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/brief-composer.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-capabilities.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/contract-delivery.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/src/runtime/fulfillment.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/agent/src/runtime/messages.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/middleware.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/profiles.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/prompt.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/src/runtime/vision.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-projections.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/fulfillment-publish.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/extraction-integration.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/agent/tests/runtime/profiles.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/agent/tests/runtime/prompt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-recorder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/actionability-errors.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/installation-types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/managed-install-types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/obstruction.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/browser/selection-validation.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/extraction/search/config.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/fill/engine.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/fill/plans.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/index-db/db.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/choice.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/messages.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/interaction/resolution.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/locator/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/sanitizer/user-input-markers.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/scheduler/cron.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/synthesis/evidence/types.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/widgets/combobox/combobox-driver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/widgets/open-state.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/overlay/event-listeners.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/popup-handler.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller-inventory.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix-baseline.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/discovery/layout-matrix.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/executor/fill-element.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fill/fill-engine.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fill/fill-performance.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fill/text-plan.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fixtures/fill-performance/baseline.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/native-datalist.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/undeclared-haspopup.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/fixtures/widgets/undeclared-typeahead.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/recovery-characterization.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/interaction/widget-regressions.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/sanitizer/user-input-keywords.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/support/gauntlet.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/support/widget-test-port.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/agent-manifest.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/refs.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/protocol/tests/agent-manifest.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/arbitraries/brief.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/forty-controls.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/test-helpers/src/layout-matrix/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-007-ask_pipeline/spec.md",
+    ".spec-lite/features/FEAT-012-cli_polish_distribution/spec.md",
+    ".spec-lite/features/FEAT-033-obstruction_protocol/spec.md",
+    ".spec-lite/features/FEAT-040-accounting_activation/spec.md",
+    ".spec-lite/features/FEAT-043-browser_resolution_lifecycle/spec.md",
+    ".spec-lite/features/FEAT-047-browser_runtime_observability/spec.md",
+    ".spec-lite/features/FEAT-057-plain_field_fill_performance/changeset.json",
+    ".spec-lite/features/FEAT-057-plain_field_fill_performance/spec.md",
+    ".spec-lite/features/feature_plan_executor.md",
+    ".spec-lite/plan.md",
+    ".spec-lite/plan_agentic.md",
+    ".spec-lite/plan_do_workflow_reliability.md"
+  ],
+  "baseline": {
+    "sha": "40db2fa73f7fba6a6f0b921cb52347d525ef5014",
+    "capturedAt": "2026-10-18T00:29:59.827Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-057-plain-field-fill-performance@40db2fa73f7fba6a6f0b921cb52347d525ef5014"
+  },
+  "featureId": "FEAT-057"
+}

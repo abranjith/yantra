@@ -13,6 +13,7 @@ import {
   FulfillmentRecord,
   UNAVAILABLE_FILL,
   censusFillEvaluator,
+  fillCoverage,
   evaluateFulfillment,
   fulfillmentSummary,
   toBriefRequirements,
@@ -616,5 +617,39 @@ describe('@no-llm censusFillEvaluator (FEAT-054 TASK-006)', () => {
         ]),
       ),
     ).toMatchObject({ status: 'met', reason: 'fields 2 of 2 filled' });
+  });
+});
+
+describe('@no-llm shared fill coverage', () => {
+  it('joins groups once, excludes exemptions and old epochs, and preserves order', () => {
+    const census: FillCensus = {
+      epoch: 2,
+      host: 'forms.example.test',
+      complete: false,
+      controls: [
+        { ref: 'e1', label: 'First', groupKey: null, exemption: null },
+        { ref: 'e2', label: 'Choice', groupKey: 'radio:g', exemption: null },
+        { ref: 'e3', label: 'Choice member', groupKey: 'radio:g', exemption: null },
+        { ref: 'e4', label: 'Exempt', groupKey: null, exemption: 'disabled' },
+        { ref: 'e5', label: 'Last', groupKey: null, exemption: null },
+      ],
+    };
+    expect(
+      fillCoverage(
+        census,
+        ledger([
+          { ...fill, ref: 'e1', epoch: 1 },
+          { ...fill, ref: 'e3', epoch: 2 },
+        ]),
+      ),
+    ).toEqual({
+      eligible: 3,
+      filled: 1,
+      complete: false,
+      remaining: [
+        { ref: 'e1', label: 'First', groupKey: null },
+        { ref: 'e5', label: 'Last', groupKey: null },
+      ],
+    });
   });
 });

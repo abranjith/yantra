@@ -21,9 +21,10 @@ import {
 import { PROTOCOL_GAUNTLET, readUtf8 } from '../support/gauntlet.js';
 
 describe('@no-llm recovery characterization gate', () => {
-  it('pins the complete protocol half of the 20-fixture gate', () => {
-    expect(PROTOCOL_GAUNTLET).toHaveLength(16);
-    expect(new Set(PROTOCOL_GAUNTLET.map((entry) => entry.pattern))).toHaveLength(16);
+  it('pins the complete protocol half of the 23-fixture gate', () => {
+    // FEAT-057 adds undeclared, haspopup, and native datalist paths.
+    expect(PROTOCOL_GAUNTLET).toHaveLength(19);
+    expect(new Set(PROTOCOL_GAUNTLET.map((entry) => entry.pattern))).toHaveLength(19);
     expect(PROTOCOL_GAUNTLET.filter((entry) => entry.requiresVision)).toEqual([]);
   });
 

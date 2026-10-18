@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * @no-llm agent real-browser widget gauntlet.
  *
@@ -51,7 +52,7 @@ import {
 } from './gauntlet/registry.js';
 
 describe('@no-llm agent real-browser widget gauntlet', () => {
-  const protocolFixtureCount = 16;
+  const protocolFixtureCount = 19;
   let fixture: FixtureServer;
   let runDir: string;
   let baseController: AgentBrowserController;
@@ -75,6 +76,63 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
     await fixture?.close();
     if (runDir) await rm(runDir, { recursive: true, force: true });
   });
+
+  it.each([
+    ['undeclared-typeahead.html', 'Blue', 'Blue offered'],
+    ['undeclared-haspopup.html', 'Blue', 'Blue offered'],
+    ['native-datalist.html', 'Blue', 'Blue'],
+  ])(
+    'fills %s through the built engine in real Chrome',
+    async (file, value, committed) => {
+      await call('browser_navigate', { url: `${fixture.baseUrl}/protocol-widgets/${file}` });
+      const timedServices = buildServices(runDir, baseController);
+      const timedTools = buildYantraWrappedTools({ ...timedServices, now: () => Date.now() });
+      const result = await timedTools
+        .find((tool) => tool.name === 'browser_fill_element')!
+        .execute({ field: 'Choice', value }, undefined);
+      expect(result.status).toBe('ok');
+      expect((result.details as { applied: { committed: string }[] }).applied[0]?.committed).toBe(
+        committed,
+      );
+      expect(
+        await baseController.evaluate(() => document.querySelector<HTMLInputElement>('#q')!.value),
+      ).toBe(committed);
+    },
+    30_000,
+  );
+
+  it('does not mistake a linked status region for a popup in real Chrome', async () => {
+    await call('browser_navigate', {
+      url: `${fixture.baseUrl}/protocol-widgets/native-datalist.html`,
+    });
+    await baseController.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>('#q')!;
+      input.removeAttribute('list');
+      input.setAttribute('aria-controls', 'notice');
+      const notice = document.createElement('div');
+      notice.id = 'notice';
+      notice.setAttribute('role', 'status');
+      notice.innerHTML = '<span>Ready</span>';
+      document.body.append(notice);
+    });
+    const services = buildServices(runDir, baseController);
+    const tool = buildYantraWrappedTools({ ...services, now: () => Date.now() }).find(
+      (entry) => entry.name === 'browser_fill_element',
+    )!;
+    const result = await tool.execute({ field: 'Choice', value: 'Blue' }, undefined);
+    expect(result.status).toBe('ok');
+    const applied = (
+      result.details as { applied: { committed: string; attempted: Record<string, unknown>[] }[] }
+    ).applied[0]!;
+    expect(applied.committed).toBe('Blue');
+    expect(applied.attempted).toContainEqual(
+      expect.objectContaining({
+        strategy: 'watch-and-select',
+        verdict: 'skipped',
+        unmet: 'no-suggestion-signal',
+      }),
+    );
+  }, 30_000);
 
   const fills = AGENT_GAUNTLET.filter(
     (entry): entry is AgentFillFixture => entry.exercise === 'fill',
@@ -107,7 +165,11 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
       };
       expect(result.status).toBe('ok');
       expect(result.error_code).toBeUndefined();
-      expect(payload.committed).toBe(descriptor.expectedCommitted);
+      expect(
+        payload.committed ??
+          (result.details as { applied?: { committed?: string }[] } | null)?.applied?.[0]
+            ?.committed,
+      ).toBe(descriptor.expectedCommitted);
       expect(topLevelToolCalls).toBe(descriptor.expectedToolCalls);
       expect(counted.counts.mutations).toBe(descriptor.expectedMutations);
       expect(counted.counts.reads).toBe(descriptor.expectedReads);
@@ -237,7 +299,9 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
       value: { kind: 'literal', value: 'Overnight' },
     });
     expect(result.status).toBe('ok');
-    expect((JSON.parse(result.modelText) as { committed?: string }).committed).toBe('Overnight');
+    expect((result.details as { applied: { committed: string }[] }).applied[0]?.committed).toBe(
+      'Overnight',
+    );
 
     // The page itself confirms the commit landed inside the shadow tree.
     const status = await counted.controller.evaluate(
@@ -282,7 +346,7 @@ describe('@no-llm agent real-browser widget gauntlet', () => {
     // The gate FEAT-034 waits on, stated as a number so growing the gallery is
     // a deliberate edit rather than a side effect.
     expect(AGENT_GAUNTLET).toHaveLength(4);
-    expect(protocolFixtureCount + AGENT_GAUNTLET.length).toBe(20);
+    expect(protocolFixtureCount + AGENT_GAUNTLET.length).toBe(23);
     expect(AGENT_GAUNTLET.filter((entry) => entry.requiresVision)).toEqual([]);
     expect(tools.map((tool) => tool.name)).not.toContain('browser_screenshot');
   });

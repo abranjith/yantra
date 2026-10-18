@@ -68,5 +68,10 @@
     "resolved": 2,
     "ambiguous": 0,
     "unresolvable": 0
+  },
+  "forty-controls": {
+    "resolved": 40,
+    "ambiguous": 0,
+    "unresolvable": 0
   }
 }

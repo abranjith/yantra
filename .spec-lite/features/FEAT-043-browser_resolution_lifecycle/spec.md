@@ -61,10 +61,7 @@ interface ResolvedBrowserInstallation extends ExecutableIdentity {
   readonly requestedSelection: BrowserSelection;
   readonly selectionOrigin: 'invocation' | 'config' | 'default';
   readonly selectionReason:
-    | 'managed-preferred'
-    | 'managed-explicit'
-    | 'system-discovery'
-    | 'custom-path';
+    'managed-preferred' | 'managed-explicit' | 'system-discovery' | 'custom-path';
   readonly channel: 'stable' | 'beta' | 'dev' | 'canary' | 'chromium' | 'unknown';
   readonly managedIdentity: ManagedReadyRecord | null;
 }

@@ -17,8 +17,7 @@ import { visionUnavailableReason, type VisionAvailability } from './vision.js';
 
 /** Why a declared artifact cannot be produced in this run. */
 export type CaptureGapReason =
-  | 'scope_unsupported'
-  | NonNullable<ReturnType<typeof visionUnavailableReason>>;
+  'scope_unsupported' | NonNullable<ReturnType<typeof visionUnavailableReason>>;
 
 /** Resolves whether the run can capture a screenshot of a given scope. */
 export interface ContractCapabilityResolver {

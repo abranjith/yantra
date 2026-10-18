@@ -216,9 +216,7 @@ Plan = {
       type: 'extract',
       locator: { kind: 'workflow', step: 'Transactions table' },
       scope: 'read-only-data',
-      schema: {
-        /* zod-derived */
-      },
+      schema: {/* zod-derived */},
       capture_as: 'transactions',
     },
     // ...

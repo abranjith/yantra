@@ -4,6 +4,8 @@ import type { Server } from 'node:net';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { fortyControls } from '@yantra/test-helpers/layout-matrix';
+
 const siteRoot = join(dirname(fileURLToPath(import.meta.url)), 'site');
 
 export interface FixtureServer {
@@ -38,6 +40,23 @@ export async function listen(server: Server): Promise<number> {
 async function serveRequest(path: string, response: ServerResponse): Promise<void> {
   try {
     const pathname = new URL(path, 'http://fixture').pathname;
+    if (pathname === '/performance/forty-controls.html') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(fortyControls.html());
+      return;
+    }
+    if (/^\/protocol-widgets\/[a-z-]+\.html$/.test(pathname)) {
+      const body = await readFile(
+        join(
+          siteRoot,
+          '../../../packages/core/tests/fixtures/widgets',
+          pathname.split('/').at(-1)!,
+        ),
+      );
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(body);
+      return;
+    }
     const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
     const safe = normalize(relative);
     if (safe.startsWith('..')) throw new Error('invalid fixture path');

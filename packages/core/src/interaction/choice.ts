@@ -11,10 +11,7 @@ import { normalizeText } from './types.js';
 
 /** A structural rung that narrowed an otherwise tied choice set. */
 export type ChoiceTieBreakRung =
-  | 'within-container'
-  | 'enabled-and-visible'
-  | 'page-selected'
-  | 'document-order';
+  'within-container' | 'enabled-and-visible' | 'page-selected' | 'document-order';
 
 /** The structural facts shared by candidates that may be tie-broken. */
 export interface StructuralChoice {

@@ -83,10 +83,7 @@ export interface CaptureEntry extends LedgerStamp {
 
 /** One verified action outcome. */
 export type ActionLedgerEntry =
-  | FillCommittedEntry
-  | ClickExecutedEntry
-  | SubmitRefusedEntry
-  | CaptureEntry;
+  FillCommittedEntry | ClickExecutedEntry | SubmitRefusedEntry | CaptureEntry;
 
 /** A committed action: what a later capture must follow. */
 export type CommittedActionEntry = FillCommittedEntry | ClickExecutedEntry;

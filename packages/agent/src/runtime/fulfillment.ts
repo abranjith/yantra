@@ -143,31 +143,65 @@ export function censusFillEvaluator(census: FillCensus | null): FillEvaluator {
     if (lastFill !== undefined && lastFill.epoch !== census.epoch) {
       return { status: 'unmet', reason: 'fields not counted (form_document_left)', ...exemptions };
     }
-    const units = new Map<string, Set<string>>();
-    for (const control of census.controls) {
-      if (control.exemption !== null) continue;
-      const key = control.groupKey === null ? `ref:${control.ref}` : `group:${control.groupKey}`;
-      const refs = units.get(key) ?? new Set<string>();
-      refs.add(control.ref);
-      units.set(key, refs);
-    }
-    if (units.size === 0) {
+    const coverage = fillCoverage(census, ledger);
+    if (coverage.eligible === 0)
       return { status: 'unmet', reason: 'no eligible fields were found', ...exemptions };
-    }
-    const onCensus = commits.filter((entry) => entry.epoch === census.epoch);
-    let filled = 0;
-    for (const [key, refs] of units) {
-      const group = key.startsWith('group:') ? key.slice('group:'.length) : null;
-      const committed = onCensus.some(
-        (entry) => refs.has(entry.ref) || (group !== null && entry.groupKey === group),
-      );
-      if (committed) filled += 1;
-    }
+    const { filled, eligible } = coverage;
     return {
-      status: filled === units.size ? 'met' : 'unmet',
-      reason: `fields ${filled} of ${units.size} filled`,
+      status: filled === eligible ? 'met' : 'unmet',
+      reason: `fields ${filled} of ${eligible} filled`,
       ...exemptions,
     };
+  };
+}
+
+/** Eligible census units and verified commits on their current document. */
+export interface FillCoverage {
+  readonly eligible: number;
+  readonly filled: number;
+  readonly remaining: readonly {
+    readonly ref: string;
+    readonly label: string;
+    readonly groupKey: string | null;
+  }[];
+  readonly complete: boolean;
+}
+
+/** Shared pure coverage computation for fulfillment and fill-tool progress. */
+export function fillCoverage(
+  census: FillCensus,
+  ledger: readonly ActionLedgerEntry[],
+): FillCoverage {
+  const units = new Map<
+    string,
+    { ref: string; label: string; groupKey: string | null; refs: Set<string> }
+  >();
+  for (const control of census.controls) {
+    if (control.exemption !== null) continue;
+    const key = control.groupKey === null ? `ref:${control.ref}` : `group:${control.groupKey}`;
+    const unit = units.get(key) ?? { ...control, refs: new Set<string>() };
+    unit.refs.add(control.ref);
+    units.set(key, unit);
+  }
+  const commits = ledger.filter(
+    (entry): entry is FillCommittedEntry =>
+      entry.kind === 'fill_committed' && entry.epoch === census.epoch,
+  );
+  const remaining = [...units.values()]
+    .filter(
+      (unit) =>
+        !commits.some(
+          (entry) =>
+            unit.refs.has(entry.ref) ||
+            (unit.groupKey !== null && entry.groupKey === unit.groupKey),
+        ),
+    )
+    .map(({ ref, label, groupKey }) => ({ ref, label, groupKey }));
+  return {
+    eligible: units.size,
+    filled: units.size - remaining.length,
+    remaining,
+    complete: census.complete,
   };
 }
 

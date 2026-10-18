@@ -13,6 +13,7 @@ import {
   type AgentBrowserController,
   type AgentBrowserObservation,
   type FillIntent,
+  type ChoiceSubstitution,
   type FillOutcome,
   type FillResolution,
   type WidgetPort,
@@ -28,6 +29,8 @@ import { toCandidateChain, type TraceFillValue } from '../../../runtime/trace.js
 
 import {
   actionMetadataSink,
+  compactAppliedFill,
+  fillProgress,
   browserController,
   browserFailure,
   browserWidgetPort,
@@ -47,6 +50,7 @@ import {
   type ActionMetadataSink,
   type ResolvedFillField,
 } from './browser-common.js';
+import { FILL_FORM_MAX_FIELDS } from './fill-limits.js';
 import { buildFieldFillPlan, type FieldFillOperations } from './interaction-plans.js';
 
 export const FillValueSchema = Type.Union(
@@ -98,6 +102,7 @@ export interface AppliedBrowserFill {
   readonly field: string;
   readonly ref: string;
   readonly driver: string;
+  readonly substitution?: ChoiceSubstitution;
   readonly dismissed: boolean;
   readonly actions: number;
   readonly committed?: string;
@@ -144,8 +149,7 @@ export function browserFillElementSpec(
   return {
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
-    description:
-      "Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form in one call instead: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. Success reports requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.",
+    description: `Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form, up to ${FILL_FORM_MAX_FIELDS} fields per call: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other successes report requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.`,
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -181,24 +185,19 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
   // Taken from the observation the tool already owns: the delta costs no page
   // read of its own, and one fill call yields exactly one delta.
   const delta = deltaAfterAction(controller);
+  const progress = fillProgress(controller, services);
   return {
     ok: true,
     model: {
-      ...(applied.withheld === undefined ? {} : { withheld: applied.withheld }),
-      ...(applied.committed === undefined ? {} : { committed: applied.committed }),
-      ...(applied.requested === undefined ? {} : { requested: applied.requested }),
-      ...(applied.resolution === undefined ? {} : { resolution: applied.resolution }),
-      ...(applied.offered === undefined ? {} : { offered: applied.offered }),
-      ...(applied.note === undefined ? {} : { note: applied.note }),
-      ...(applied.attempted === undefined ? {} : { attempted: applied.attempted }),
-      ...(applied.editee === undefined ? {} : { editee: applied.editee }),
-      driver: applied.driver,
-      dismissed: applied.dismissed,
+      ...(isSecretRef(params.value) ? secretModel(applied) : compactAppliedFill(applied)),
+      ...(progress ? { progress } : {}),
       ...modelActionMetadata(followed),
       observation: modelObservation(observation),
       ...(delta ? { delta: modelDelta(delta) } : {}),
     },
     details: {
+      applied: [applied],
+      ...(progress ? { progress } : {}),
       actions: applied.actions,
       ...(isSecretRef(params.value) ? { secret_key: params.value.key } : {}),
       ...deltaDetails(observation, delta ?? undefined),
@@ -266,7 +265,7 @@ export async function applyBrowserFill(
     let outcome: FillOutcome;
     try {
       outcome = await driveWithRetry(port, controller, field, target, intent, {
-        observation: located.observation,
+        ...(located.observation ? { observation: located.observation } : {}),
       });
     } catch (error) {
       return browserFailure(error, services);
@@ -300,6 +299,7 @@ export async function applyBrowserFill(
       // as `[]`, `0` and `0` on every record of every failing call.
       ...(outcome.attempted === undefined ? {} : { attempted: outcome.attempted }),
       ...(outcome.editee === undefined ? {} : { editee: outcome.editee }),
+      ...(outcome.substitution === undefined ? {} : { substitution: outcome.substitution }),
     };
   }
 
@@ -549,5 +549,21 @@ export async function driveWithRetry(
         }
       : {}),
     details: { ...failure.details, ...(expired ? { reason: 'budget' } : {}), attempted },
+  };
+}
+
+/** Preserve the stored-secret model shape; no value is read back. */
+function secretModel(applied: AppliedBrowserFill): Record<string, unknown> {
+  return {
+    ...(applied.withheld === undefined ? {} : { withheld: applied.withheld }),
+    ...(applied.committed === undefined ? {} : { committed: applied.committed }),
+    ...(applied.requested === undefined ? {} : { requested: applied.requested }),
+    ...(applied.resolution === undefined ? {} : { resolution: applied.resolution }),
+    ...(applied.offered === undefined ? {} : { offered: applied.offered }),
+    ...(applied.note === undefined ? {} : { note: applied.note }),
+    ...(applied.attempted === undefined ? {} : { attempted: applied.attempted }),
+    ...(applied.editee === undefined ? {} : { editee: applied.editee }),
+    driver: applied.driver,
+    dismissed: applied.dismissed,
   };
 }

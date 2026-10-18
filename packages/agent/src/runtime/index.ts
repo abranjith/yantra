@@ -96,11 +96,13 @@ export {
 export {
   FulfillmentRecord,
   evaluateFulfillment,
+  fillCoverage,
   fulfillmentSummary,
   toBriefRequirements,
   unmetPhrase,
   type FulfillmentEvaluation,
   type FulfillmentInput,
+  type FillCoverage,
   type RequirementStatus,
 } from './fulfillment.js';
 export {

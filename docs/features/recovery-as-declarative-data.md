@@ -51,6 +51,38 @@ remainder is skipped as `insufficient-remaining-budget` — a decision nested ru
 like any other. Cleanup runs for every entered rung, including failures and exceptions, but never
 for a skipped one.
 
+### Text entry and suggestion discovery
+
+The text plan has three ordered rungs. Its entry conditions keep ordinary inputs from paying
+the full suggestion wait:
+
+| Rung               | Axis   | Entry condition                                                                  | Skipped reason                                                                |
+| ------------------ | ------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `enter-text`       | `how`  | Always eligible; uses the existing typing ladder.                                | Subject to the shared budget.                                                 |
+| `reaction-check`   | `what` | `text-entered` is true and suggestions are not declared.                         | `control-not-empty` without `text-entered`; otherwise `suggestions-declared`. |
+| `watch-and-select` | `what` | `text-entered` is true and suggestions are declared or `popup-observed` is true. | `control-not-empty` without `text-entered`; otherwise `no-suggestion-signal`. |
+
+`reaction-check` spends no actions. It watches an undeclared control for up to 325 ms, within the
+shared deadline, at the existing 150 ms polling cadence. This calibrated window replaces the initial
+450 ms value, which missed the forty-control time target. An open popup counts even before it has
+candidates, so a loading popup hands off to the full watch. With no popup, the probe reads commitment
+through the same protected-value verifier used by the full watch's no-suggestions path; protected
+contents stay in the page.
+
+Closed-state declarations include a combobox role, `aria-autocomplete` set to `list`, `both`, or
+`inline`, and a non-false `aria-haspopup`. Detected comboboxes can enter their driver plan before
+the text plan is needed. A native `<datalist>` alone does not declare a DOM popup: its browser-drawn
+suggestions cannot be observed by the DOM watcher, so it uses the short check and verifies the typed
+text. A custom DOM popup on that input can still trigger the full watch.
+
+An `aria-controls` or `aria-owns` link alone does not declare suggestions. Linked `status`, `alert`,
+`log`, `progressbar`, and `timer` regions are excluded from popup resolution, so status or error text
+does not start the full watch or get dismissed as a popup.
+
+Declared or observed suggestions retain the existing four-second settling window and candidate
+selection rules. The engine never presses Enter. An ordinary successful text fill keeps its verdicts
+in the run ledger but omits `attempted` when there was no recovery or substitution.
+
 The plans preserve the structural recovery behavior:
 
 - typing can overtype, locate the control the page really edits, clear and type slowly, or use the
@@ -170,6 +202,8 @@ confirmation.
 
 ## Limitations
 
+- An undeclared popup that first appears after the 325 ms reaction window can be missed. A declared
+  suggestion control retains the full watch; native datalist option selection is not supported.
 - The shared fill ceiling remains 25 seconds, 32 actions, and four stale-ref reacquisitions for the
   whole call. The click plan keeps its own smaller allowance: a 15-second top-level deadline, three
   actions, and two reacquisitions. Fast failure comes from skipping ineligible rungs, not from

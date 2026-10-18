@@ -1,0 +1,31 @@
+{
+  "measured_at": "2026-10-18T00:35:13.331Z",
+  "chrome_version": "Chrome/155.0.8059.85",
+  "fields": 40,
+  "total_ms": 169672,
+  "p50_ms_by_kind": {
+    "plain": 5120,
+    "select": 625,
+    "toggle": 1318
+  },
+  "evaluate_on": 1005,
+  "full_watch_entries": 30,
+  "after": {
+    "measured_at": "2026-10-18T00:43:20.611Z",
+    "chrome_version": "Chrome/155.0.8059.85",
+    "fields": 40,
+    "total_ms": 50939,
+    "p50_ms_by_kind": {
+      "plain": 1261,
+      "select": 622,
+      "toggle": 1300
+    },
+    "evaluate_on": 313,
+    "full_watch_entries": 0,
+    "tool_batches_ms": [14391, 15926, 11609, 10485, 1462],
+    "total_tool_ms": 53873
+  },
+  "reaction_reads_per_plain_field": 27,
+  "ten_field_applied_bytes": 9272,
+  "timing_note": "Historical timing used longer synthetic email, URL and text values; timing comparisons are informational. Final gates use short valid values to isolate interaction cost. Reaction-read and applied-byte baselines were measured independently on original source."
+}
