@@ -1,0 +1,138 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/task-fidelity-harness.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity-harness-actions.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/eval.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/form-lab.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/form-state.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/fixtures/sites.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/runner.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenario.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/bench-form-css-order-grid.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/bench-form-over-cap.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/bench-form-repeated-sections.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/bench-form-table-label-cell.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/scenarios/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/score/action-scorer.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/score/render-md.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorecard-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/score/scorer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/task-fidelity/score/synthetic-runs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/changeset.json",
+    ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/spec.md",
+    ".spec-lite/plan_do_workflow_reliability.md"
+  ],
+  "baseline": {
+    "sha": "425b0ca1c7f66c1939c22f0cc3e0c6f40af65251",
+    "capturedAt": "2026-10-18T21:49:29.649Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-060-action-evidence-generality-benchmark@425b0ca1c7f66c1939c22f0cc3e0c6f40af65251"
+  },
+  "featureId": "FEAT-060"
+}

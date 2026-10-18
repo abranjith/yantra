@@ -30,6 +30,12 @@ import {
   FACETED_LISTING_ROUTES,
   renderFacetedListing,
 } from './faceted-listing.js';
+import {
+  FORM_LAB_PATTERN,
+  FORM_LAB_PROVENANCE,
+  FORM_LAB_ROUTES,
+  renderFormLab,
+} from './form-lab.js';
 import type { RenderedPage } from './html.js';
 import {
   MULTI_TABLE_PATTERN,
@@ -79,6 +85,7 @@ export interface TaskSite {
 }
 
 export const SITE_NAMES = [
+  'form-lab',
   'faceted-listing',
   'structured-listing',
   'client-rendered-listing',
@@ -92,6 +99,7 @@ export const SITE_NAMES = [
 export type SiteName = (typeof SITE_NAMES)[number];
 
 export const TASK_SITES: readonly TaskSite[] = Object.freeze([
+  site('form-lab', FORM_LAB_PATTERN, FORM_LAB_PROVENANCE, FORM_LAB_ROUTES, renderFormLab),
   site(
     'faceted-listing',
     FACETED_LISTING_PATTERN,

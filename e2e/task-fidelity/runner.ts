@@ -16,6 +16,7 @@
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { Writable } from 'node:stream';
 
 import {
   resolveCommandTaskProfile,
@@ -28,6 +29,7 @@ import {
   type AgenticTaskOutcome,
   type EnvironmentLeaves,
 } from '@yantra/agent';
+import { CLIConnectorIO, TerminalRenderer, exitCodeForDoOutcome } from '@yantra/cli';
 import {
   BlocklistImpl,
   DEFAULT_SEARCH_CONFIG,
@@ -49,6 +51,7 @@ import {
   type ReceivedResult,
   type ScriptReport,
 } from './agent/scripted-provider.js';
+import { latestFormStates, type FormState } from './fixtures/form-state.js';
 import {
   EgressLog,
   HarnessSetupError,
@@ -91,6 +94,13 @@ export interface RunArtifacts {
 
 /** Everything a measure may read about one completed scenario run. */
 export interface ScenarioRun {
+  readonly formState: Readonly<Record<string, FormState>>;
+  readonly formInitialState?: Readonly<Record<string, FormState>>;
+  readonly surfaces: {
+    readonly firstLine: string;
+    readonly json: unknown;
+    readonly exitCode: number;
+  } | null;
   readonly scenario: Scenario;
   readonly mode: RunMode;
   readonly outcome: AgenticTaskOutcome;
@@ -271,6 +281,11 @@ export async function runScenario(
       progress: connector.progress(),
       confirmationRequests: connector.confirmationRequests(),
       requests: server.requests(),
+      formState: latestFormStates(server.stateLog()),
+      formInitialState: Object.fromEntries(
+        [...server.stateLog()].reverse().map((state) => [state.page, state]),
+      ),
+      surfaces: scenario.command === 'do' ? renderSurfaces(outcome) : null,
       searchCalls: search.calls(),
       searchPeakConcurrency: search.peakConcurrency(),
       browserLaunches: launches.count,
@@ -284,6 +299,30 @@ export async function runScenario(
     await server.close();
     await home?.restore();
   }
+}
+
+/** Exercise the production connector twice, capturing human and JSON output independently. */
+export function renderSurfaces(outcome: AgenticTaskOutcome): NonNullable<ScenarioRun['surfaces']> {
+  const render = (json: boolean): string => {
+    const chunks: string[] = [];
+    const stream = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        chunks.push(chunk.toString('utf8'));
+        done();
+      },
+    });
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      interactive: false,
+      renderOpts: { json, debug: false, noColor: true, stream, errStream: stream },
+    });
+    connector.renderAgentOutcome(outcome);
+    return chunks.join('');
+  };
+  return {
+    firstLine: render(false).trimStart().split('\n')[0] ?? '',
+    json: JSON.parse(render(true)) as unknown,
+    exitCode: exitCodeForDoOutcome(outcome),
+  };
 }
 
 /** A `YANTRA_HOME` for one scenario; restoring it resets the path cache and removes it. */

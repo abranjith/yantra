@@ -13,6 +13,7 @@ import { createServer as createNetServer, type Socket } from 'node:net';
 
 import { closeServer, listen } from '../../fixtures/serve.js';
 
+import { FormStateSchema, type FormState } from './form-state.js';
 import { originOf, siteForHost, type SiteName } from './sites.js';
 import { fixtureTlsIdentity } from './tls.js';
 
@@ -40,6 +41,7 @@ export interface RequestLogEntry {
 
 /** A running fixture server. */
 export interface TaskSiteServer {
+  stateLog(): readonly FormState[];
   /** The ephemeral loopback port every `*.yantra.test` host maps to. */
   readonly port: number;
   /** The origin a site is reached at, e.g. `http://faceted-listing.yantra.test`. */
@@ -62,9 +64,14 @@ const ROBOTS_BODY = 'User-agent: *\nAllow: /\n';
 export async function serveTaskSites(): Promise<TaskSiteServer> {
   let log: RequestLogEntry[] = [];
   let seq = 0;
+  let states: FormState[] = [];
   const handler =
     (scheme: RequestLogEntry['scheme']) =>
     (request: IncomingMessage, response: ServerResponse): void => {
+      if (new URL(request.url ?? '/', 'http://fixture.invalid').pathname === '/__fixture/state') {
+        void receiveState(request, response, states);
+        return;
+      }
       const status = respond(request, response);
       seq += 1;
       log.push(entryOf(request, status, seq, scheme));
@@ -92,9 +99,11 @@ export async function serveTaskSites(): Promise<TaskSiteServer> {
     port,
     origin: originOf,
     requests: () => [...log],
+    stateLog: () => [...states],
     reset: () => {
       log = [];
       seq = 0;
+      states = [];
     },
     close: async () => {
       // Chrome holds keep-alive connections open; close them so `close()`
@@ -105,6 +114,46 @@ export async function serveTaskSites(): Promise<TaskSiteServer> {
       await closeServer(front);
     },
   };
+}
+
+async function receiveState(
+  request: IncomingMessage,
+  response: ServerResponse,
+  states: FormState[],
+): Promise<void> {
+  if (
+    request.method !== 'POST' ||
+    request.headers['content-type']?.split(';')[0] !== 'application/json'
+  ) {
+    response.writeHead(415).end();
+    request.resume();
+    return;
+  }
+  let size = 0;
+  const chunks: Buffer[] = [];
+  try {
+    for await (const chunk of request) {
+      const bytes = Buffer.from(chunk as Uint8Array);
+      size += bytes.length;
+      if (size > 65536) {
+        response.writeHead(413).end();
+        request.resume();
+        return;
+      }
+      chunks.push(bytes);
+    }
+    const result = FormStateSchema.safeParse(
+      JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown,
+    );
+    if (!result.success) {
+      response.writeHead(400).end();
+      return;
+    }
+    states.push(result.data);
+    response.writeHead(204).end();
+  } catch {
+    if (!response.headersSent) response.writeHead(400).end();
+  }
 }
 
 /** The first byte of a TLS ClientHello record. */

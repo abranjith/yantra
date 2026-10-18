@@ -10,6 +10,10 @@ import type { Scenario, Tier } from '../scenario.js';
 
 import { articleQuestion } from './article-question.js';
 import { article } from './article.js';
+import { benchFormCssOrderGrid } from './bench-form-css-order-grid.js';
+import { benchFormOverCap } from './bench-form-over-cap.js';
+import { benchFormRepeatedSections } from './bench-form-repeated-sections.js';
+import { benchFormTableLabelCell } from './bench-form-table-label-cell.js';
 import { budgetExhaustion } from './budget-exhaustion.js';
 import { captureElementBelowFold } from './capture-element-below-fold.js';
 import { captureFullPageTall } from './capture-full-page-tall.js';
@@ -67,6 +71,10 @@ export const HELPER_MODULES: readonly string[] = Object.freeze([
 ]);
 
 export const SCENARIOS: readonly Scenario[] = Object.freeze([
+  benchFormOverCap,
+  benchFormRepeatedSections,
+  benchFormCssOrderGrid,
+  benchFormTableLabelCell,
   doProgressStallRecovers,
   doProgressStallIgnored,
   doProgressFreezePublishes,

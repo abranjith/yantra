@@ -59,6 +59,7 @@ export const MODEL_FLAGS = ['--provider', '--model', '--thinking', '--auth-secre
 
 /** Parsed `pnpm eval:tasks` options. */
 export interface EvalOptions extends AgentModelOptions {
+  readonly suite?: 'do-benchmark';
   /** Scenario ids; empty selects every agentic scenario. */
   readonly scenarios: readonly string[];
   readonly runs: number;
@@ -92,6 +93,7 @@ export function parseEvalArgs(argv: readonly string[]): EvalOptions {
         thinking: { type: 'string' },
         'auth-secret': { type: 'string' },
         scenario: { type: 'string', multiple: true },
+        suite: { type: 'string' },
         runs: { type: 'string' },
         out: { type: 'string' },
         json: { type: 'boolean' },
@@ -101,11 +103,16 @@ export function parseEvalArgs(argv: readonly string[]): EvalOptions {
     throw new EvalUsageError(error instanceof Error ? error.message : String(error));
   }
   const { values } = parsed;
+  if (values.suite !== undefined && values.suite !== 'do-benchmark')
+    throw new EvalUsageError(`Unknown suite "${values.suite}".`);
+  if (values.suite !== undefined && values.scenario !== undefined)
+    throw new EvalUsageError('--suite cannot be combined with --scenario.');
   const runs = values.runs === undefined ? 3 : Number(values.runs);
   if (!Number.isInteger(runs) || runs < 1) {
     throw new EvalUsageError('--runs must be a positive integer.');
   }
   return {
+    ...(values.suite === undefined ? {} : { suite: values.suite }),
     ...(values.provider === undefined ? {} : { provider: values.provider }),
     ...(values.model === undefined ? {} : { model: values.model }),
     ...(values.thinking === undefined ? {} : { thinking: values.thinking }),
@@ -149,7 +156,9 @@ export async function evaluate(
 ): Promise<EvalResult> {
   const stderr = deps.stderr ?? ((line: string) => process.stderr.write(`${line}\n`));
   const now = deps.now ?? (() => new Date());
-  const scenarios = selectScenarios(options.scenarios);
+  const scenarios = selectScenarios(options.scenarios).filter(
+    (scenario) => options.suite === undefined || scenario.suite === options.suite,
+  );
   const selection = await resolveSelection(options, deps);
 
   const outDir = resolve(options.out ?? join(harnessRoot, '.out', timestamp(now())));
@@ -277,7 +286,31 @@ function runScore(run: ScenarioRun, scenario: Scenario): RunScore {
 
 function aggregate(runs: readonly RunScore[]): ScenarioScore['aggregate'] {
   const of = (pick: (run: RunScore) => number | null): number | null => median(runs.map(pick));
+  const actions = runs.flatMap((run) => (run.action === undefined ? [] : [run.action]));
+  const p95 = (values: readonly (number | null)[]): number | null => {
+    const sorted = values.filter((value): value is number => value !== null).sort((a, b) => a - b);
+    return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? null;
+  };
   return {
+    ...(actions.length === 0
+      ? {}
+      : {
+          task_success_rate:
+            actions.filter((action) => action.task_success).length / actions.length,
+          reported_success_rate:
+            actions.filter((action) => action.reported_success).length / actions.length,
+          false_fulfilled: actions.filter(
+            (action) => action.reported_success && !action.task_success,
+          ).length,
+          field_correctness: of((run) => run.action?.field_correctness.value ?? null),
+          wall_ms_p95: p95(runs.map((run) => run.cost.wall_ms)),
+          tool_ms: of((run) => run.timing?.tool_ms ?? null),
+          tool_ms_p95: p95(runs.map((run) => run.timing?.tool_ms ?? null)),
+          reasoning_tokens: of((run) => run.timing?.reasoning_tokens ?? null),
+          reasoning_tokens_p95: p95(runs.map((run) => run.timing?.reasoning_tokens ?? null)),
+          retries: of((run) => run.timing?.retries ?? null),
+          captures: of((run) => run.timing?.captures ?? null),
+        }),
     field_coverage: of((run) => run.field_coverage.value),
     constraint_fidelity: of((run) => run.constraint_fidelity.value),
     source_fidelity: of((run) => run.source_fidelity.value),

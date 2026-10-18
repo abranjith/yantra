@@ -31,7 +31,26 @@ export const CostSchema = z.object({
   fixture_requests: z.number().int().nonnegative(),
 });
 
+export const ActionScoreSchema = z.object({
+  field_correctness: ScoreSchema,
+  exempt_untouched: ScoreSchema,
+  submissions: z.number().int().nonnegative(),
+  capture: ScoreSchema,
+  item_agreement: ScoreSchema,
+  outcome_agreement: z.boolean().nullable(),
+  reported_success: z.boolean(),
+  task_success: z.boolean(),
+});
+export const TimingScoreSchema = z.object({
+  tool_ms: z.number().int().nonnegative(),
+  reasoning_tokens: z.number().int().nonnegative().nullable(),
+  retries: z.number().int().nonnegative(),
+  captures: z.number().int().nonnegative(),
+});
+
 export const RunScoreSchema = z.object({
+  action: ActionScoreSchema.optional(),
+  timing: TimingScoreSchema.optional(),
   run_id: z.string().min(1),
   outcome_kind: z.string().min(1),
   field_coverage: ScoreSchema,
@@ -47,6 +66,17 @@ export const RunScoreSchema = z.object({
 const Median = z.number().min(0).max(1).nullable();
 
 export const AggregateSchema = z.object({
+  task_success_rate: z.number().min(0).max(1).optional(),
+  reported_success_rate: z.number().min(0).max(1).optional(),
+  false_fulfilled: z.number().int().nonnegative().optional(),
+  field_correctness: Median.optional(),
+  wall_ms_p95: z.number().nonnegative().nullable().optional(),
+  tool_ms: z.number().nonnegative().nullable().optional(),
+  tool_ms_p95: z.number().nonnegative().nullable().optional(),
+  reasoning_tokens: z.number().nonnegative().nullable().optional(),
+  reasoning_tokens_p95: z.number().nonnegative().nullable().optional(),
+  retries: z.number().nonnegative().nullable().optional(),
+  captures: z.number().nonnegative().nullable().optional(),
   field_coverage: Median,
   constraint_fidelity: Median,
   source_fidelity: Median,

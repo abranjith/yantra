@@ -5,8 +5,8 @@
 The widget gauntlet checks whether each tool behaves. The task-fidelity harness
 asks a different question: did the whole run deliver what the user asked for?
 It drives complete agentic runs against generic fixture sites. It then measures
-the outcome from the run's own artifacts and from an independent server-side
-request log.
+the outcome from the run's own artifacts, an independent server-side request
+log, and browser-reported fixture form state held by the server.
 
 The harness has two tiers, and both use the same fixture sites:
 
@@ -123,9 +123,11 @@ The server keeps its own request log. Each entry records:
 - a `robots` flag; and
 - the response status and arrival time.
 
-The log covers every request, including robots requests and 404s. The harness
-counts network fetches from this log, independently of anything the run reports
-about itself.
+The log covers ordinary requests, including robots requests and 404s. Fixture
+state posts to `/__fixture/state` are collected separately in `stateLog()` and
+never enter the request log. The harness counts network fetches from the request
+log, independently of anything the run reports about itself, without counting
+its form-state measurement traffic.
 
 Both transports map fixture hosts to the server, and both fail closed:
 
@@ -141,7 +143,7 @@ asserts the log is empty. The browser decorator counts successful launches in a
 measures from outside the code under test, so measuring adds no page read,
 fetch, or launch to the run.
 
-### Serves an eight-pattern fixture gallery
+### Serves a nine-pattern fixture gallery
 
 All listing pages render from one 14-item fictional inventory in
 `fixtures/inventory.ts`. The ground truth is `truthRows()`, which derives from
@@ -164,6 +166,7 @@ the same array, so a page cannot show a value the truth does not hold.
 | `multi-table`             | A specification page whose first table is an unrelated summary; the answer is in the second table                                         | G2                             |
 | `test-form`               | A long single-page application form, larger than the observation cap, to be filled and not submitted                                      | run `20261014T023539Z`; G4     |
 | `tall-page`               | A page far taller than the viewport, with a short form at the top and a labeled panel below the fold                                      | run `20261014T023539Z`; G7, G8 |
+| `form-lab`                | Layout-matrix forms with independent field-state and submission measurement                                                               | G2, G8                         |
 
 The first `faceted-listing` card is the G2 regression card. Its price is plain
 text, while its title and seller are links.
@@ -209,11 +212,46 @@ the page has no margin, so the capture geometry follows from the source alone:
 - A 320 x 180 px button named "Feature panel" sits at y = 6,000, below the
   fold.
 
-Submission is measured from the server side. A real submission navigates to
+For `test-form`, submission is measured from the server side. A real submission navigates to
 `/apply/submitted`, and every `submit` event, `requestSubmit()` call, and
 `submit()` call first sends a beacon to `/apply/submit-event`. A scenario
 counts requests to either path in the request log, so "no submission handler
 fired" is a count of zero and needs no read from a browser already torn down.
+
+`form-lab.yantra.test` serves seven synthetic layout-matrix pages, reusing the
+FEAT-055 fixtures: `/table-label-cell`, `/css-order-grid`, `/repeated-sections`,
+`/over-cap`, `/fieldset-groups`, `/no-evidence`, and `/dynamic-replacement`.
+They cover table-cell labels, visual order differing from DOM order, repeated
+sections, 70 inputs beyond the observation cap, grouped radios and checkboxes,
+controls without identity evidence, and a replaceable input. Each page has one
+form, a Submit button, an Add another `type="button"` control, and disabled,
+read-only, and file inputs. Hand-authored `BENCHMARK_RULES` describe suitable
+values for every keyed control; the three exempt inputs use `untouched`.
+
+The inline script in `fixtures/form-state.ts` reads controls marked with
+`data-fixture-key` and sends their state to the fixture server on initial load
+and after `input`, `change`, or `submit`, coalescing events per animation frame.
+Text and select controls report `value`; radios and checkboxes report `checked`.
+A password control reports only a SHA-256 hex `digest`, computed in the page
+with `crypto.subtle.digest`; its plaintext is never posted. This protects
+password values in the state witness, while ordinary text values remain visible
+in the fixture-only log.
+
+Each state carries a page ID, sequence number, and separate `submits`,
+`requestSubmitCalls`, and `formSubmitCalls` counters. The script prevents the
+submit event's default navigation. Its wrappers still call the native
+`requestSubmit()` and `submit()` methods; the form targets a hidden iframe so
+native `submit()` leaves the measured top-level page in place. A
+`requestSubmit()` call may increment both its call counter and the submit-event
+counter.
+
+The server accepts JSON state posts up to 64 KiB, validates them with
+`FormStateSchema`, and returns 204 for accepted states. `runScenario()` exposes
+`formState` after run finalization: one state per page, selected by highest
+sequence number so asynchronous password hashing cannot make an older update
+win. The witness lives outside the run artifacts and remains available after
+the browser closes. It is fixture instrumentation, separate from the engine's
+own verification and publication claims.
 
 Renderers are pure: the same path and query always produce byte-identical
 output. Each page starts with a header comment that names its pattern and
@@ -654,10 +692,11 @@ npx turbo run build
 cd e2e && npx vitest run task-fidelity
 ```
 
-That command runs four spec files: the tier (`task-fidelity.spec.ts`), the
+That command runs five spec files: the tier (`task-fidelity.spec.ts`), the
 harness self-tests (`task-fidelity-harness.spec.ts`), the `test-form`
-self-tests (`task-fidelity-do-form.spec.ts`), and the `tall-page` self-tests
-(`task-fidelity-capture.spec.ts`). The harness self-tests cover the
+self-tests (`task-fidelity-do-form.spec.ts`), the `tall-page` self-tests
+(`task-fidelity-capture.spec.ts`), and the form-state witness self-tests
+(`task-fidelity-harness-actions.spec.ts`). The harness self-tests cover the
 fixtures, host mapping, scripted search, the runner, matchers and ratchet, the
 census, the scorer, the eval runner, and baselines. The `test-form` self-tests
 check that `/apply` has more than 50 fillable controls, that both forms carry
@@ -669,7 +708,12 @@ heights, that the panel sits below the fold and the form carries a password
 field, that every route renders deterministically, that every `capture-*`
 scenario is registered in the deterministic tier with owner `FEAT-058`, and
 that the capture sources hold no raw control bytes and import neither Vitest
-nor `@yantra/test-helpers`. All four files are `@no-llm` and also run in
+nor `@yantra/test-helpers`. The form-state self-tests use real Chrome to check
+typed values, radio state, password digests without plaintext in the state log,
+the three submission counters, an unchanged top-level URL, and exclusion of
+state posts from the request log. They also check that every `form-lab` control
+has exactly one authored rule and each exempt control has `untouched`.
+All five files are `@no-llm` and also run in
 `pnpm test` and
 `pnpm test:no-llm`. A focused subset uses `-t`, for
 example `npx vitest run task-fidelity-harness -t "scorer"`.
@@ -846,7 +890,8 @@ The deterministic tier needs no credentials, model provider, or network access:
 - A discoverable compatible system Chrome is required for the real-Chrome
   self-tests, for the `listing-client-rendered` and `challenge-small`
   scenarios, which render in a browser, and for the `do-*` and `capture-*`
-  scenarios, which fill, click, and capture in one.
+  scenarios, which fill, click, and capture in one, and for the `form-lab`
+  form-state self-tests.
 
 The agentic tier needs model credentials that the CLI would accept (managed
 auth, a provider environment variable, or `--auth-secret <ref>`). It reads
@@ -878,7 +923,7 @@ uses them. They are documented in
 - **Scoring is exact by design.** A correct value phrased differently, or a row
   that does not name its seller, is not credited. The false site-cause check in
   `honesty` is a reported heuristic, not a score.
-- **The fixtures are fictional and generic.** They model eight structural
+- **The fixtures are fictional and generic.** They model nine structural
   patterns, not real sites. A behavior outside those patterns is not measured.
 - **The `do` form scenarios are slow.** Each real-Chrome fill waits out the
   suggestion window, so `do-form-complete` is allowed 600 seconds and the

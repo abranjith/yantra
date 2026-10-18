@@ -254,7 +254,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-001: Fixture forms report their final state and submit counts to the harness, out of process, without exposing protected values
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `fixtures/form-state.ts`:
     - `FORM_STATE_SCRIPT`: an inline page script that collects every `[data-fixture-key]` control. It reads `value` for text and select controls, and `checked` for checkboxes and radios.
     - For `type=password`, it posts `digest`, the SHA-256 hex from `crypto.subtle.digest`, and never the value.
@@ -272,7 +272,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - a header comment names provenance; no site names.
   - `runner.ts`: `formState` is the last `stateLog` entry per page, read after finalization.
   - `fixtures/census.ts`: `form-lab` registered; no site tokens.
-- [ ] **Unit Tests** (`e2e/task-fidelity-harness.spec.ts`, real Chrome against the fixture server):
+- [x] **Unit Tests** (`e2e/task-fidelity-harness.spec.ts`, real Chrome against the fixture server):
   - typing into two fields and checking a radio produces a final `FormState` with those values;
   - a password control posts a 64-hex `digest` equal to `sha256(value)` computed in Node, and no field anywhere in `stateLog` equals the plaintext (byte scan of the serialized log);
   - clicking the submit button → `submits: 1` and the URL unchanged;
@@ -281,7 +281,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `requests` contains no `/__fixture/state` entry;
   - census: every eligible control on every `form-lab` page has exactly one rule, and every exempt control has `untouched`;
   - a byte scan of the new sources finds no raw control bytes (memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the `form-lab` site, out-of-process form state, and hashed protected values).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the `form-lab` site, out-of-process form state, and hashed protected values).
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity-harness`.
 - **Depends on**: FEAT-055 TASK-003 (page module only)
 
@@ -617,7 +617,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
+- [x] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
 - [ ] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
 - [ ] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
 - [ ] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values (STUB identity until FEAT-055 TASK-005)
