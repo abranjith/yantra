@@ -474,7 +474,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-007: One set of gate expectations runs over every `do` form scenario, and a census proves every plan-required scenario exists and is live
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `expectations.ts`:
     - `gateExpectations(scenario)`: for a scenario whose contract is `actions` with an `actionTruth`, it adds owner-`FEAT-060` expectations:
       1. `gate.fills`: with `intended`, every intended key's final state equals it (password keys by digest); without it, `field_correctness === 1`. Exempt controls are untouched.
@@ -497,18 +497,18 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - Add `'FEAT-060'` to `OWNERS` and `PENDING_OWNERS`.
   - Retrofit: the FEAT-054 `do-*`, FEAT-058 `capture-*`, and FEAT-059 `do-progress-*` form scenarios gain `actionTruth` (pointing at their fixture page, with `intended` from their scripts) so the gate expectations attach. Their own expectations are untouched.
   - Fixtures used by those scenarios (`test-form`, `tall-page`, `forty-controls`) gain `FORM_STATE_SCRIPT` and `data-fixture-key` attributes (no behavior change for the page).
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The census self-test (every category non-empty, IDs unique across categories).
   - A synthetic run that submits once → `gate.submissions` fails with a detail naming the count.
   - A synthetic run whose terminal says `Fulfilled:` while the manifest says `partial` → `gate.agreement` fails.
   - The leftover-baseline rule from FEAT-049 still fires.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the acceptance gate, its six checks, and the census).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the acceptance gate, its six checks, and the census).
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity task-fidelity-harness`.
 - **Depends on**: TASK-002, FEAT-054 TASK-012, FEAT-058 TASK-008, FEAT-059 TASK-010
 
 ### TASK-008: The deterministic tier pins the identity, recovery, mixed-form, citation, and promotion-replay scenarios no earlier slice covers
 
-- [ ] **Implementation** (`command: 'do'`, deterministic tier, owner `'FEAT-060'`, `form-lab` pages, every scenario with `gateExpectations`):
+- [x] **Implementation** (`command: 'do'`, deterministic tier, owner `'FEAT-060'`, `form-lab` pages, every scenario with `gateExpectations`):
   1. `do-gate-css-order`:
      - the contract is `{actions, fill: all_eligible, artifacts: [viewport], effects: {submit: forbidden}}`;
      - the script fills every control by the matrix's label query (not by ref), captures, and publishes;
@@ -537,11 +537,11 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
      - then replay the saved workflow through `RunOrchestrator` (zero-LLM) against the same page, in a fresh browser;
      - expect every `fill_element` step to land on its keyed control (`FormState` equals the agent run's final state), with the structural steps carrying `field_label_origin`.
   - Every scenario's script uses only engineered moves. Each one's goal text names the fixture URL and no site name.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Each scenario's expectations, run by the deterministic spec.
   - A byte scan over the new scenario sources (memory).
   - The tier's runtime stays bounded: the new scenarios add at most 60 seconds to `task-fidelity.spec.ts`, measured once and recorded in the harness README. A browser case doing two navigate-act cycles gets its own timeout (memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the gate scenarios and what each pins).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the gate scenarios and what each pins).
 - **Verify**:
   - `npx turbo run build`; `cd e2e && npx vitest run task-fidelity`.
   - Remove `'FEAT-060'` from `PENDING_OWNERS` once every census ID is live and green, and delete its baselines.
@@ -623,8 +623,11 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - Historical measurement compatibility: before-FEAT-054 published runs are judged by fixture state and capture files; absent requirements and outcome agreement remain unavailable. Current runs require nonempty requirements and all outcome surfaces to agree.
 - The shared lexical anchoring checker is unchanged. Action-enabled composition additionally requires content-word support for action citations and page-cited action claims, because field-label overlap alone accepted a wrong committed name.
 - Acceptance scenarios exposed two bookkeeping defects: fused ranges now retain their resolved covered refs for coverage accounting, and action-only promotion omits synthesis when no output can supply it. Neither changes browser interaction behavior.
+- The failure agreement gate exposed error-code-first CLI output. The connector now leads failed and aborted output with the existing outcome formatter, and handoffs with `Handoff`, preserving their diagnostic details.
 - Existing `native-date-entry` baselines remain in force for `do-form-complete`; its two native date controls are explicitly expected empty in its declared partial state.
-- The user updated managed authentication after initial `401 api_key_expired` responses. A subsequent historical preflight reached browser tools, verified both fields and all exemptions, and failed with its requested capture absent (115,443 ms). The preflight is excluded from the planned cohorts; failed-auth attempts are not committed as form baselines. Live cohorts await completion of local validation.
+- The user updated managed authentication after initial `401 api_key_expired` responses. A subsequent historical preflight reached browser tools, verified both fields and all exemptions, and failed with its requested capture absent (115,443 ms). The preflight is excluded from the planned cohorts; failed-auth attempts are not committed as form baselines. Local validation is complete; formal cohorts are next.
+
+- Local verification: protocol 355, core 3,696, agent 1,433, CLI 605, and test-helpers 10 tests passed; the full end-to-end suite passed 839 tests with one skipped using one worker. An autocomplete failure in the two-worker run passed in isolation and in the full serial rerun. Repository lint and typechecks passed.
 
 ## 8. State Tracking
 
@@ -634,8 +637,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values
 - [x] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
 - [x] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
-- [/] TASK-007: Gate expectations over every `do` form scenario; gate census
-- [/] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
+- [x] TASK-007: Gate expectations over every `do` form scenario; gate census
+- [x] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
 - [/] TASK-009: `pnpm eval:benchmark`; live benchmark recorded in the plan revision log
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

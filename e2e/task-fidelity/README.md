@@ -29,12 +29,18 @@ cd e2e && npx vitest run task-fidelity    # deterministic tier and harness self-
 Real Chrome is needed for rendered listing/challenge cases, form mutations,
 captures, the independent form-state witness, and promotion replay.
 
-FEAT-060 timing record (2026-10-18): the initial nine-scenario run took
-177.82 seconds and included an over-cap timeout. After correcting that case,
-the standalone `do-gate-over-cap` run took 141,328 ms; its timeout is 240,000 ms.
-These measurements do not satisfy the specification's 60-second total allowance
-for the nine added scenarios. A passing aggregate timing measurement has not
-been recorded.
+FEAT-060 timing record (2026-10-18): the user approved exceeding the original
+60-second total allowance while retaining the full 70-control case. All nine
+new scenario runs finished during the current e2e execution. Their manifest
+span was 232,325 ms and their summed engine time was 228,666 ms.
+`do-gate-over-cap` took 138,682 ms in that execution; an earlier standalone run
+took 141,328 ms. Its timeout is 240,000 ms. These are scenario-run measurements,
+not a claim that the overall e2e assertions passed. The supporting local
+artifact is `.out/new-gate-timing.json` (gitignored).
+
+The six `task-fidelity` spec files include
+`task-fidelity-harness-benchmark.spec.ts`; its name also includes it in the
+focused `npx vitest run task-fidelity-harness` verification.
 
 ```sh
 pnpm eval:tasks                                   # every agentic scenario × 3 runs
@@ -229,8 +235,11 @@ including unmet targets; usage/validation errors exit 1, other failures exit 2.
 `eval:tasks` exits 0 after writing scores, 1 for usage, 3 for typed startup
 failures, and 2 for other failures.
 
-Current live attempts failed before tools ran because the `opencode-go` API key
-had expired. No successful live form benchmark or committed form baseline is
+The updated credential worked in a historical preflight: 13 turns, 2/2 fields
+correct, and 3/3 exemptions untouched. It failed after 115,443 ms with the
+required capture missing. That preflight and the earlier 401 authentication
+attempts are excluded from benchmark cohorts. Formal before/after runs await
+final local checks. No completed form benchmark or committed form baseline is
 recorded yet.
 
 ## Baselines

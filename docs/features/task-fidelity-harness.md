@@ -652,9 +652,13 @@ Nine additional deterministic scenarios pin the remaining behaviors:
 | `do-gate-cite-source-for-fill` | A pre-fill page citation cannot establish a later committed value and produces one uncited-claim notice.                                               |
 | `do-gate-promote-replay`       | Promotion reports the omitted screenshot and saved structural fill steps replay with zero LLM against a fresh browser.                                 |
 
-The added scenarios have not met the specification's 60-second total runtime
-budget. The corrected over-cap scenario alone took 141.328 seconds and has a
-240-second timeout; see the [harness README](../../e2e/task-fidelity/README.md)
+The user approved a timing deviation to retain the full 70-control case. All
+nine new scenario runs finished during the current e2e execution: their
+manifest span was 232.325 seconds and summed engine time was 228.666 seconds.
+The over-cap case took 138.682 seconds in that execution, versus 141.328 seconds
+in an earlier standalone run, and has a 240-second timeout. This exceeds the
+original 60-second total allowance; it does not establish that the overall e2e
+assertions passed. See the [harness README](../../e2e/task-fidelity/README.md)
 for the timing record.
 
 ### Scores the outcome of agentic runs
@@ -814,7 +818,7 @@ harness self-tests (`task-fidelity-harness.spec.ts`), the `test-form`
 self-tests (`task-fidelity-do-form.spec.ts`), the `tall-page` self-tests
 (`task-fidelity-capture.spec.ts`), and the form-state witness self-tests
 (`task-fidelity-harness-actions.spec.ts`), plus the report self-tests
-(`task-fidelity-benchmark.spec.ts`). The harness self-tests cover the
+(`task-fidelity-harness-benchmark.spec.ts`). The harness self-tests cover the
 fixtures, host mapping, scripted search, the runner, matchers and ratchet, the
 census, the scorer, the eval runner, and baselines. The `test-form` self-tests
 check that `/apply` has more than 50 fillable controls, that both forms carry
@@ -1006,10 +1010,12 @@ for success rate and wall p50/p95. Its target table evaluates after cells:
 Targets are observational: the report command exits 0 whenever files are
 written, even when targets fail; usage/validation errors exit 1 and other
 failures exit 2. `eval:tasks` retains its separate exit codes above. A generated
-report establishes only what its supplied runs measured. No successful live
-form benchmark or committed form baseline is recorded yet: current provider
-attempts failed before tool execution because the `opencode-go` API key had
-expired.
+report establishes only what its supplied runs measured. The updated credential
+worked in a historical preflight: it ran 13 turns, filled 2/2 fields correctly,
+and preserved 3/3 exemptions, but failed after 115.443 seconds with the required
+capture missing. That preflight and earlier authentication failures are
+excluded from benchmark cohorts. Formal before/after runs await final local
+checks; no completed form benchmark or committed form baseline is recorded yet.
 
 ## Inputs and Outputs
 

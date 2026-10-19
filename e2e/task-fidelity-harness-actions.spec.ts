@@ -23,7 +23,7 @@ import { BENCHMARK_RULES, FORM_LAB_PAGES } from './task-fidelity/fixtures/form-l
 import { latestFormStates, protectedDigest } from './task-fidelity/fixtures/form-state.js';
 import { hostMappedBrowserProvider } from './task-fidelity/fixtures/host-mapping.js';
 import { serveTaskSites, type TaskSiteServer } from './task-fidelity/fixtures/server.js';
-import type { ScenarioRun } from './task-fidelity/runner.js';
+import { renderSurfaces, type ScenarioRun } from './task-fidelity/runner.js';
 import type { ActionTruth } from './task-fidelity/scenario.js';
 import { SCENARIOS, scenarioNamed } from './task-fidelity/scenarios/index.js';
 import { actionTiming, scoreActions } from './task-fidelity/score/action-scorer.js';
@@ -276,6 +276,19 @@ describe('@no-llm independent action scorer', () => {
       scoreActions({ ...run, surfaces: { ...run.surfaces!, exitCode: 2 } }, truth)
         .outcome_agreement,
     ).toBe(false);
+  });
+  it('checks failed human and JSON surfaces through the production connector', () => {
+    const base = syntheticRun({ manifest: { taskOutcome: 'failed' } });
+    const outcome: ScenarioRun['outcome'] = {
+      kind: 'failed',
+      runId: 'failed',
+      runDir: '/none',
+      error: { code: 'AGENT_STALLED', message: 'No progress.' },
+      terminationReason: 'stalled',
+    };
+    const surfaces = renderSurfaces(outcome);
+    expect(surfaces.firstLine).toBe('Failed: AGENT_STALLED: No progress.');
+    expect(scoreActions({ ...base, outcome, surfaces }, truth).outcome_agreement).toBe(true);
   });
   it('scores historical delivery from fixture truth while keeping unavailable agreement null', () => {
     const run = perfect();

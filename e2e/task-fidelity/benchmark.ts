@@ -46,13 +46,16 @@ export interface BenchmarkReport {
 }
 export class BenchmarkUsageError extends Error {}
 
-/** Nearest-rank percentiles; absent telemetry stays absent rather than becoming zero. */
+/** Median p50 and nearest-rank p95; absent telemetry stays absent. */
 export function percentile(
   values: readonly (number | null | undefined)[],
   fraction: number,
 ): number | null {
   const sorted = values.filter((value): value is number => value != null).sort((a, b) => a - b);
-  return sorted.length === 0 ? null : sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)]!;
+  if (sorted.length === 0) return null;
+  if (fraction === 0.5 && sorted.length % 2 === 0)
+    return (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2;
+  return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)]!;
 }
 function setting(card: Baseline): string {
   return `${card.model.provider}/${card.model.id}/${card.model.thinking ?? 'default'}`;

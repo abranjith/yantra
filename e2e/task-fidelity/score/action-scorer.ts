@@ -276,7 +276,7 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
         surfaces !== undefined &&
         manifestOutcome === outcome &&
         record(surfaces.json).task_outcome === outcome &&
-        surfaces.firstLine.split(/[:\s]/u)[0]?.toLowerCase() === outcome &&
+        surfaces.firstLine.split(/[:.\s]/u)[0]?.toLowerCase() === outcome &&
         surfaces.exitCode === record(record(AgentRuntime.TASK_OUTCOME_TABLE)[outcome]).exitCode;
   // Historical pipelines predate per-item requirements and the outcome enum.
   // Their published result is the reported-success surface; browser truth still judges delivery.
