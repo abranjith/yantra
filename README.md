@@ -71,7 +71,7 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
 - Manage configuration, models, credentials, browser selection, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
 
-Ordinary agentic Briefs can include cited findings, sections, and comparison tables with row citations. When a task contract is declared, **Conditions** shows each filter as verified, unverified, or not met, and results citing only hosts outside the required sources appear under **Alternatives**. **Sources** lists cited pages; **Also consulted** lists pages read without a citation. Yantra flags values its evidence check cannot anchor; see [Reading an attributed Brief](docs/usage.md#read-an-attributed-brief).
+Ordinary agentic Briefs can include cited findings, sections, and comparison tables with row citations. In `do`, these can also cite browser actions; an **Actions** section shows the cited fills, clicks, refused submits, and captures. When a task contract is declared, **Conditions** shows each filter as verified, unverified, or not met, and results citing only hosts outside the required sources appear under **Alternatives**. **Sources** lists cited pages; **Also consulted** lists pages read without a citation. Yantra flags values its evidence check cannot anchor; see [Reading an attributed Brief](docs/usage.md#read-an-attributed-brief).
 
 During `do`, Yantra reports task-contract progress and uses bounded recovery when work stalls. Adjust its per-turn thinking limit (default `2m`) with `--turn-timeout`; see [Progress and recovery](docs/usage.md#follow-progress-and-recover-from-stalls).
 
@@ -107,7 +107,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Recovery as Declarative Data](docs/features/recovery-as-declarative-data.md) — bounded fill and click recovery plans, shared accounting, and verdict diagnostics.
 - [Puppeteer 25.10 API Migration](docs/features/puppeteer-api-migration.md) — preserved browser behavior, explicit resource ownership, and migration-test coverage.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.
-- [Task-Fidelity Harness](docs/features/task-fidelity-harness.md) — whole-run outcome scoring against generic fixture sites, a CI-gating scripted tier, and the never-gating `pnpm eval:tasks` agentic scorecard.
+- [Task-Fidelity Harness](docs/features/task-fidelity-harness.md) — whole-run outcome scoring against generic fixture sites, a CI-gating scripted tier, the never-gating `pnpm eval:tasks` agentic scorecard, and offline `pnpm eval:benchmark` comparisons.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, and audit boundaries.
 
 ### Generated reference

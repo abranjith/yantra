@@ -15,7 +15,7 @@
     },
     {
       "path": "apps/cli/tests/render/brief-actions.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -57,7 +57,7 @@
     },
     {
       "path": "e2e/task-fidelity-benchmark.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -81,7 +81,7 @@
     },
     {
       "path": "e2e/task-fidelity/benchmark.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -201,67 +201,67 @@
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-builder.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-cite-actions.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-cite-source-for-fill.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-common.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-css-order.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-mixed-form.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-no-evidence.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-over-cap.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-promote-replay.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-recovery-groups.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/task-fidelity/scenarios/do-gate-repeated-sections.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -363,7 +363,7 @@
     },
     {
       "path": "packages/agent/src/runtime/action-evidence.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -447,7 +447,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/action-evidence.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -471,7 +471,7 @@
     },
     {
       "path": "packages/core/src/brief/actions.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -507,7 +507,7 @@
     },
     {
       "path": "packages/core/tests/brief/actions.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -531,7 +531,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/action-evidence.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -567,9 +567,15 @@
     },
     {
       "path": "packages/protocol/tests/action-evidence.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     }
   ],
   "excluded": [

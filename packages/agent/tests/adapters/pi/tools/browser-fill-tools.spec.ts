@@ -40,6 +40,7 @@ import {
 } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
 import { browserFillFormSpec } from '../../../../src/adapters/pi/tools/browser-fill-form.js';
 import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
+import { createYantraTools } from '../../../../src/adapters/pi/tools/index.js';
 import { ActionLedger } from '../../../../src/runtime/action-ledger.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { BrowserToolDeps } from '../../../../src/runtime/run-services.js';
@@ -48,6 +49,33 @@ import { AgentTrace } from '../../../../src/runtime/trace.js';
 import { allowingEthics, buildServices } from './test-support.js';
 
 describe('@no-llm browser_fill_form engine delegation', () => {
+  it('threads the Pi call ID into the verified ledger and lifts action IDs into its result', async () => {
+    const controller = new FormController('<input id="first" aria-label="First">');
+    const services = buildServices({
+      domain: {
+        browser: {
+          controller: controller as unknown as AgentBrowserController,
+          ethics: allowingEthics(),
+          secretResolver: null,
+          sensitiveScreenLatch: new SensitiveScreenLatch(),
+          secretHosts: () => Promise.resolve([]),
+          captureThresholdBytes: 16384,
+        },
+      },
+    });
+    const tool = createYantraTools(services).find(
+      (candidate) => candidate.name === 'browser_fill_form',
+    )!;
+    const result = await tool.execute(
+      'pi-fill-call',
+      { fields: [{ field: 'First', value: 'Avery' }] },
+      undefined,
+      undefined,
+      undefined as never,
+    );
+    expect(services.actionLedger.entries()[0]).toMatchObject({ callId: 'pi-fill-call' });
+    expect(result).toMatchObject({ actions: ['A1'] });
+  });
   it.each(['table-label-cell', 'css-order-grid'])(
     'fills structural labels on %s in real Chrome',
     async (id) => {
@@ -2035,7 +2063,12 @@ describe('@no-llm fill tools record verified commits in the action ledger (FEAT-
     const { services } = await runElement(controller, { field: 'Email', value: 'a@example.test' });
 
     expect(services.actionLedger.entries()).toEqual([
-      expect.objectContaining({ kind: 'fill_committed', tool: 'browser_fill_element', covers: 1 }),
+      expect.objectContaining({
+        kind: 'fill_committed',
+        tool: 'browser_fill_element',
+        covers: 1,
+        callId: null,
+      }),
     ]);
   }, 30_000);
 

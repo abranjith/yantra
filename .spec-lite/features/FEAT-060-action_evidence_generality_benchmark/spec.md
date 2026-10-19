@@ -403,7 +403,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-005: `result_publish` resolves `[A<n>]` citations, anchors them against what the action committed, and keeps page sources and action evidence apart
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `evidence-refs.ts`: `INLINE_ACTION_REF = /\[(A[1-9]\d*)\]/gu`, and `parseActionRef`. `INLINE_EVIDENCE_REF` is unchanged.
   - `brief-composer.ts`, when `ctx.actions !== null`:
     - Explicit `sources` arrays and inline markers accept `A` refs. An unknown ID → issue `reference-action-unknown` (values: `ref`, `pointer`, `known` as a bounded range such as `A1–A7`). In assembled mode the marker is stripped.
@@ -429,7 +429,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `profiles.ts`:
     - the `do` addendum gains one sentence: "When you report what you did, cite the action ID from the tool result ([A3]); cite pages ([S1]) only for what a page said."
     - Bump `PROMPT_VERSION` to the next unused `agent-vN` and add it to the manifest enum.
-- [ ] **Unit Tests** (`brief-composer.spec.ts`, pure):
+- [x] **Unit Tests** (`brief-composer.spec.ts`, pure):
   - "Filled First name with Avery [A1]", where A1 observed `Avery` with label `First name` → no flag. The same text citing `[S1]` (a pre-fill page without "Avery") → flagged. This pins the separation.
   - "Filled First name with Blake [A1]" → flagged (`missing` names `blake`).
   - "Set password to Hunter2 [A5]" on a withheld action → flagged. "Filled Password [A5]" → not flagged.
@@ -441,13 +441,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `brief_composed` includes `cited_actions`.
   - The message-catalog hint-capability test resolves both new causes.
   - `result-publish.spec.ts`: a `do` publish with an `A` citation writes a schema-valid `brief.json` whose `actions[0].call_id` equals the ledger's.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (citing actions; why a page cannot prove a fill; how inferred labels appear).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (citing actions; why a page cannot prove a fill; how inferred labels appear).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/brief-composer.spec.ts tests/adapters/pi/tools/result-publish.spec.ts tests/runtime/message-catalog.spec.ts`.
 - **Depends on**: TASK-004, FEAT-054 TASK-005
 
 ### TASK-006: The Markdown, HTML, and terminal Briefs list cited actions, mark inferred labels, and link captures
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `to-markdown.ts`: `## Actions`, rendered only when `actions` is present. One line per action, ASCII punctuation, for example:
     - `- A3: filled "First name" (label inferred from page layout, medium confidence) in "Billing address"; verified exact`;
     - `- A6: did not click "Place order" (submit refused: it would submit the form)`;
@@ -463,12 +463,12 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `apps/cli/src/render/terminal.ts` `renderBrief`: the same list, with absolute capture paths.
   - `report-builder.ts`: tool-call lines show `actions: A3, A4` when the entry carries them.
   - Older Briefs and reports render byte-identically.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Goldens: a Brief without `actions` is byte-identical in md, html, and terminal. A Brief with one action of each kind and each origin renders the exact lines.
   - HTML: a capture artifact path `javascript:alert(1)`, built directly and bypassing the schema, renders with no anchor.
   - Output byte scan: no raw control byte, no `\xC3\xA2` sequence.
   - `report.md` golden for an entry with `actions`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the Actions section of a `do` Brief).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the Actions section of a `do` Brief).
 - **Verify**: `npx turbo run build --filter=@yantra/core`; `cd packages/core && npx vitest run tests/brief tests/audit`; `cd apps/cli && npx vitest run tests/render`.
 - **Depends on**: TASK-005
 
@@ -632,8 +632,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [ ] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
 - [x] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
 - [ ] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values (STUB identity until FEAT-055 TASK-005)
-- [ ] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
-- [ ] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
+- [x] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
+- [x] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
 - [ ] TASK-007: Gate expectations over every `do` form scenario; gate census
 - [ ] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
 - [ ] TASK-009: `pnpm eval:benchmark`; live benchmark recorded in the plan revision log
