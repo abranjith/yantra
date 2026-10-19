@@ -6,6 +6,7 @@ import { FileUsageWriter, ToolCallWriter, type ToolAuditEntryInput } from '@yant
 import { readManifest, writeManifest, type RunManifest } from '@yantra/core/workflow/replay';
 import {
   AgentManifestSection,
+  ActionId,
   ArtifactRef,
   ToolAuditEntry,
   artifactRefsOf,
@@ -204,6 +205,11 @@ export class RunRecorder {
         this.startedCalls.delete(event.callId);
         const metadata = readToolResultMetadata(event.output);
         const artifacts = readArtifacts(event.output);
+        const rawActions =
+          typeof event.output === 'object' && event.output !== null
+            ? (event.output as { actions?: unknown }).actions
+            : undefined;
+        const actions = ActionId.array().max(16).safeParse(rawActions);
         const output = projectOutputForAudit(event.output, artifacts);
         const endAt = Date.parse(event.at);
         const duration =
@@ -220,6 +226,11 @@ export class RunRecorder {
             error_code: metadata.errorCode,
             confirmation_id: metadata.confirmationId,
             ...(artifacts.length > 0 ? { artifacts } : {}),
+            ...((metadata.status ?? (event.isError ? 'error' : 'ok')) === 'ok' &&
+            actions.success &&
+            actions.data.length > 0
+              ? { actions: actions.data }
+              : {}),
           }),
         );
         if (artifacts.length > 0) {
@@ -326,7 +337,7 @@ function validArtifacts(values: readonly unknown[]): ArtifactRef[] {
 }
 
 /** The legacy `captures` element shape, as `tool-calls.jsonl` defines it. */
-const LegacyCapture = ToolAuditEntry.shape.captures.unwrap().element;
+const LegacyCapture = ToolAuditEntry.innerType().shape.captures.unwrap().element;
 
 /**
  * Replaces provider image blocks with metadata before stable audit

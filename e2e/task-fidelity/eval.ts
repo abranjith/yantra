@@ -59,6 +59,7 @@ export const MODEL_FLAGS = ['--provider', '--model', '--thinking', '--auth-secre
 
 /** Parsed `pnpm eval:tasks` options. */
 export interface EvalOptions extends AgentModelOptions {
+  readonly phase?: 'before' | 'after';
   readonly suite?: 'do-benchmark';
   /** Scenario ids; empty selects every agentic scenario. */
   readonly scenarios: readonly string[];
@@ -94,6 +95,7 @@ export function parseEvalArgs(argv: readonly string[]): EvalOptions {
         'auth-secret': { type: 'string' },
         scenario: { type: 'string', multiple: true },
         suite: { type: 'string' },
+        phase: { type: 'string' },
         runs: { type: 'string' },
         out: { type: 'string' },
         json: { type: 'boolean' },
@@ -103,6 +105,8 @@ export function parseEvalArgs(argv: readonly string[]): EvalOptions {
     throw new EvalUsageError(error instanceof Error ? error.message : String(error));
   }
   const { values } = parsed;
+  if (values.phase !== undefined && values.phase !== 'before' && values.phase !== 'after')
+    throw new EvalUsageError('--phase must be before or after');
   if (values.suite !== undefined && values.suite !== 'do-benchmark')
     throw new EvalUsageError(`Unknown suite "${values.suite}".`);
   if (values.suite !== undefined && values.scenario !== undefined)
@@ -112,6 +116,7 @@ export function parseEvalArgs(argv: readonly string[]): EvalOptions {
     throw new EvalUsageError('--runs must be a positive integer.');
   }
   return {
+    ...(values.phase === undefined ? {} : { phase: values.phase }),
     ...(values.suite === undefined ? {} : { suite: values.suite }),
     ...(values.provider === undefined ? {} : { provider: values.provider }),
     ...(values.model === undefined ? {} : { model: values.model }),
@@ -195,6 +200,7 @@ export async function evaluate(
   }
 
   const card = ScoreCardSchema.parse({
+    ...(options.phase === undefined ? {} : { benchmark_phase: options.phase }),
     schema_version: 1,
     generated_at: now().toISOString(),
     git_sha: gitSha(),

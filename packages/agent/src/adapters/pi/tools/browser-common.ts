@@ -678,6 +678,7 @@ export function compactAppliedFill(entry: AppliedBrowserFill): Record<string, un
     return { ...entry };
   return {
     field: entry.field,
+    ...(entry.action === undefined ? {} : { action: entry.action }),
     ref: entry.ref,
     resolution: 'exact',
     ...(entry.withheld ? { withheld: entry.withheld } : {}),

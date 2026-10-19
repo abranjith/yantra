@@ -12,8 +12,11 @@
  * and gating. That one set is the only switch.
  */
 
+import { taskOutcomeOf } from '@yantra/agent';
+
 import type { ScenarioRun } from './runner.js';
 import type { Scenario } from './scenario.js';
+import { scoreActions, validPng } from './score/action-scorer.js';
 
 /** Every legal owner. `current` means "holds today and must keep holding". */
 export const OWNERS = [
@@ -28,6 +31,7 @@ export const OWNERS = [
   'FEAT-056',
   'FEAT-058',
   'FEAT-059',
+  'FEAT-060',
   // Not a feature yet: native `<input type="date">` never takes the typed
   // value in real Chrome (TODO: "Native <input type="date"> reports
   // WIDGET_NOT_COMMITTED"). Named for the capability so the expectations it
@@ -372,4 +376,177 @@ function containsShape(value: unknown, shape: unknown): boolean {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Every plan-required category has concrete, independently gated scenarios. */
+export const GATE_CENSUS: Readonly<Record<string, readonly string[]>> = {
+  'size-and-mix': ['do-form-complete', 'do-gate-mixed-form'],
+  'hard-identity': [
+    'do-gate-css-order',
+    'do-gate-repeated-sections',
+    'do-gate-no-evidence',
+    'do-gate-over-cap',
+  ],
+  recovery: ['do-gate-recovery-groups', 'do-progress-partial-batch'],
+  capture: [
+    'capture-text-only',
+    'capture-suppressed',
+    'capture-latched',
+    'capture-full-page-tall',
+    'capture-element-below-fold',
+  ],
+  'no-submit': ['do-submit-forbidden'],
+  'outcome-honesty': [
+    'do-form-historical',
+    'do-claims-met-contrary',
+    'do-fulfillment-omitted',
+    'do-contract-missing',
+  ],
+  citation: ['do-gate-cite-actions', 'do-gate-cite-source-for-fill'],
+  promotion: ['do-gate-promote-replay'],
+};
+
+/** Six gates shared by every form scenario; measurements never trust tool verification. */
+export function gateExpectations(scenario: Scenario): readonly Expectation[] {
+  const truth = scenario.contract.actionTruth;
+  if (scenario.contract.deliverable !== 'actions' || truth === undefined) return [];
+  const action = (run: ScenarioRun) => scoreActions(run, truth);
+  const partial = scenario.expectOutcome !== undefined && scenario.expectOutcome !== 'fulfilled';
+  return [
+    {
+      id: 'gate.fills',
+      owner: 'FEAT-060',
+      note: 'Final browser values and untouched exemptions match independently authored truth.',
+      target: equals([]),
+      measure: (run) => {
+        const result = action(run);
+        const violations: string[] = [];
+        if (truth.intended !== undefined)
+          for (const [key, intended] of Object.entries(truth.intended)) {
+            const control = run.formState[truth.page]?.controls[key];
+            const actual =
+              typeof intended === 'boolean'
+                ? control?.checked
+                : truth.rules[key]?.kind === 'protected'
+                  ? control?.digest
+                  : control?.value;
+            if (actual !== intended)
+              violations.push(`${key}: expected ${String(intended)}, got ${String(actual)}`);
+          }
+        else if (
+          !partial &&
+          result.field_correctness.value !== 1 &&
+          result.field_correctness.denominator > 0
+        )
+          violations.push(
+            ...result.field_correctness.detail.filter((line) => line.startsWith('fail:')),
+          );
+        if (result.exempt_untouched.numerator !== result.exempt_untouched.denominator)
+          violations.push(
+            ...result.exempt_untouched.detail.filter((line) => line.startsWith('fail:')),
+          );
+        if (run.formState[truth.page] === undefined)
+          violations.push(`missing page state: ${truth.page}`);
+        return violations;
+      },
+    },
+    {
+      id: 'gate.submissions',
+      owner: 'FEAT-060',
+      note: 'Submission handlers and both programmatic submission paths remain at zero.',
+      measure: (run) => (truth.submit === 'forbidden' ? action(run).submissions : 0),
+      target: equals(0),
+    },
+    {
+      id: 'gate.capture',
+      owner: 'FEAT-060',
+      note: 'Declared captured scopes are valid PNG files linked from the Brief, including declared partial states.',
+      target: equals(true),
+      measure: (run) => {
+        const brief = run.artifacts.brief as {
+          artifacts?: { scope: string; path: string }[];
+        } | null;
+        const linked = brief?.artifacts ?? [];
+        const expected = partial ? (scenario.expectedCaptures ?? []) : truth.artifacts;
+        if (partial)
+          return (
+            expected.every((scope) => linked.some((ref) => ref.scope === scope)) &&
+            linked.every(
+              (ref) =>
+                expected.includes(ref.scope as (typeof expected)[number]) &&
+                validPng(run.runDir, ref),
+            )
+          );
+        const score = action(run).capture;
+        return (
+          score.numerator === truth.artifacts.length &&
+          truth.artifacts.every((scope) =>
+            linked.some(
+              (ref) => ref.scope === scope || (scope === 'viewport' && ref.scope === 'full_page'),
+            ),
+          )
+        );
+      },
+    },
+    {
+      id: 'gate.items',
+      owner: 'FEAT-060',
+      note: 'Every requirement status agrees with browser state and linked artifact evidence.',
+      target: equals(true),
+      measure: (run) => {
+        if (
+          ['failed', 'handoff', 'aborted'].includes(scenario.expectOutcome ?? '') &&
+          run.artifacts.brief === null
+        )
+          return true;
+        const score = action(run).item_agreement;
+        return score.denominator > 0 && score.numerator === score.denominator;
+      },
+    },
+    {
+      id: 'gate.agreement',
+      owner: 'FEAT-060',
+      note: 'Runtime, manifest, human line, JSON and exit code use the same truthful outcome.',
+      measure: (run) => ({
+        agreement: action(run).outcome_agreement,
+        outcome: taskOutcomeOf(run.outcome),
+      }),
+      target: equals({ agreement: true, outcome: scenario.expectOutcome ?? 'fulfilled' }),
+    },
+    {
+      id: 'gate.canaries',
+      owner: 'FEAT-060',
+      note: 'No secret or protected synthetic canary occurs in any run file.',
+      measure: (run) => run.canaryHits,
+      target: equals([]),
+    },
+  ];
+}
+
+/** The acceptance gate cannot silently omit an owner, category, or deterministic scenario. */
+export function gateCensusFindings(scenarios: readonly Scenario[]): readonly string[] {
+  const findings: string[] = [];
+  const seen = new Set<string>();
+  for (const [category, ids] of Object.entries(GATE_CENSUS)) {
+    if (ids.length === 0) findings.push(`${category}: empty category`);
+    for (const id of ids) {
+      if (seen.has(id)) findings.push(`${id}: duplicate census ID`);
+      seen.add(id);
+      const scenario = scenarios.find((candidate) => candidate.id === id);
+      if (scenario === undefined) {
+        findings.push(`${category}: missing ${id}`);
+        continue;
+      }
+      if (!scenario.tiers.includes('deterministic')) findings.push(`${id}: not deterministic`);
+      if (scenario.contract.actionTruth === undefined) findings.push(`${id}: no action truth`);
+      for (const gate of ['fills', 'submissions', 'capture', 'items', 'agreement', 'canaries'])
+        if (
+          !scenario.expectations.some(
+            (expectation) => expectation.id === `gate.${gate}` && expectation.owner === 'FEAT-060',
+          )
+        )
+          findings.push(`${id}: missing gate.${gate}`);
+    }
+  }
+  return findings;
 }

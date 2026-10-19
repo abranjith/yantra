@@ -39,6 +39,7 @@ import type {
   TemplatedReport,
 } from '@yantra/protocol';
 
+import { ActionObservations } from './action-evidence.js';
 import type { ActionLedger } from './action-ledger.js';
 import type { BudgetTracker } from './budget.js';
 import type { CaptureCapability } from './capture-capability.js';
@@ -534,6 +535,7 @@ export interface RunServices {
    * construction site that forgot it would silently judge every action unmet.
    */
   readonly actionLedger: ActionLedger;
+  readonly actionObservations: ActionObservations;
   /**
    * The evaluation of the run's publication against its contract (FEAT-054),
    * set by `result_publish` or the runtime-assembled fallback. Required for
@@ -558,7 +560,8 @@ export type { SearchProviderName, SearchResult };
 
 /** Attach one ledger with lazy, memory-only views of the completed service bundle. */
 export function withRunProgress(
-  services: Omit<RunServices, 'progress'>,
+  services: Omit<RunServices, 'progress' | 'actionObservations'> &
+    Partial<Pick<RunServices, 'actionObservations'>>,
   mode: 'enforce' | 'observe' = 'observe',
   now: () => number = services.now,
 ): RunServices {
@@ -578,5 +581,11 @@ export function withRunProgress(
     now,
     mode,
   );
-  return { ...services, progress };
+  return {
+    ...services,
+    progress,
+    actionObservations:
+      services.actionObservations ??
+      new ActionObservations(services.sanitizer, (text) => services.userInput?.mask(text) ?? text),
+  };
 }

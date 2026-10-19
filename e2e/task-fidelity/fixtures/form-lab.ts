@@ -1,4 +1,6 @@
 /** Synthetic layout forms; provenance: FEAT-055 layout matrix, plan gaps G2 and G8. */
+import { readFileSync } from 'node:fs';
+
 import { layoutMatrix } from '@yantra/test-helpers/layout-matrix';
 
 import type { ValueRule } from '../scenario.js';
@@ -16,8 +18,31 @@ export const FORM_LAB_PAGES = [
   'fieldset-groups',
   'no-evidence',
   'dynamic-replacement',
+  'mixed-form',
+  'cite-actions',
+  'recovery-groups',
 ] as const;
 export const FORM_LAB_ROUTES = ['/', ...FORM_LAB_PAGES.map((id) => `/${id}`)];
+
+const rangeMarkup = readFileSync(
+  new URL(
+    '../../../packages/core/tests/fixtures/widgets/shared-calendar-range.html',
+    import.meta.url,
+  ),
+  'utf8',
+);
+const extraBodies: Readonly<Record<string, string>> = {
+  'mixed-form':
+    '<h1>Evidence form</h1><label>First name <input data-fixture-key="first"></label><div>Family name<input data-fixture-key="family"></div><label>Email <input type="email" data-fixture-key="email"></label><label>Region <select data-fixture-key="region"><option value="">Choose</option><option>North</option></select></label><label>Comments <textarea data-fixture-key="comments"></textarea></label><label>Password <input type="password" data-fixture-key="password"></label>',
+  'cite-actions':
+    '<h1>Evidence form</h1><label>First name <input data-fixture-key="first"></label><label>Email <input type="email" data-fixture-key="email"></label>',
+  'recovery-groups':
+    `<h1>Recovery form</h1><label>Name <input data-fixture-key="name"></label><label>Units <input type="number" max="10" data-fixture-key="units" oninput="if(!this.validity.valid)this.value='' "></label><div>Email<input data-fixture-key="email"></div><button type="button" onclick="const old=document.querySelector('[data-fixture-key=email]');const fresh=old.cloneNode();fresh.value='';old.replaceWith(fresh);fresh.dispatchEvent(new Event('change',{bubbles:true}));">Replace email</button>` +
+    rangeMarkup
+      .replace('id="from"', 'id="from" data-fixture-key="from" aria-controls="calendar"')
+      .replace('id="to"', 'id="to" data-fixture-key="to" aria-controls="calendar"')
+      .replaceAll('<button', '<button type="button"'),
+};
 
 const exempt: Record<string, ValueRule> = {
   disabled: { kind: 'untouched' },
@@ -49,6 +74,24 @@ export const BENCHMARK_RULES: Readonly<Record<string, Readonly<Record<string, Va
   },
   'no-evidence': { a: { kind: 'nonempty' }, b: { kind: 'nonempty' }, ...exempt },
   'dynamic-replacement': { email: { kind: 'email' }, ...exempt },
+  'mixed-form': {
+    first: { kind: 'letters' },
+    family: { kind: 'letters' },
+    email: { kind: 'email' },
+    region: { kind: 'choice' },
+    comments: { kind: 'nonempty' },
+    password: { kind: 'protected' },
+    ...exempt,
+  },
+  'cite-actions': { first: { kind: 'letters' }, email: { kind: 'email' }, ...exempt },
+  'recovery-groups': {
+    name: { kind: 'letters' },
+    units: { kind: 'number', min: 1, max: 10 },
+    email: { kind: 'email' },
+    from: { kind: 'nonempty' },
+    to: { kind: 'nonempty' },
+    ...exempt,
+  },
 };
 
 export function renderFormLab(path: string): RenderedPage | null {
@@ -63,8 +106,14 @@ export function renderFormLab(path: string): RenderedPage | null {
   if (!FORM_LAB_ROUTES.includes(path)) return null;
   const page = layoutMatrix.find((candidate) => candidate.id === id)!;
   // Flatten the matrix's existing form, preserving all field structure.
-  const body = page
-    .html()
+  const body = (
+    extraBodies[id] ??
+    page
+      ?.html()
+      .replace(/^[\s\S]*?<body>/u, '')
+      .replace(/<\/body>[\s\S]*$/u, '') ??
+    ''
+  )
     .replace(/^[\s\S]*?<body>/u, '')
     .replace(/<\/body>[\s\S]*$/u, '')
     .replace(/<\/?form[^>]*>/gu, '');

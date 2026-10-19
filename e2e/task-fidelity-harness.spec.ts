@@ -1920,6 +1920,10 @@ describe('@no-llm task-fidelity eval', () => {
 
   it('offers every agentic scenario the spec names', () => {
     expect(scenariosFor('agentic').map((scenario) => scenario.id)).toEqual([
+      'bench-form-over-cap',
+      'bench-form-repeated-sections',
+      'bench-form-css-order-grid',
+      'bench-form-table-label-cell',
       'listing-table',
       'listing-structured',
       'listing-client-rendered',

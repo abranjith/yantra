@@ -102,6 +102,7 @@ export const ScenarioScoreSchema = z.object({
 
 export const ScoreCardSchema = z.object({
   schema_version: z.literal(1),
+  benchmark_phase: z.enum(['before', 'after']).optional(),
   generated_at: z.string().datetime(),
   git_sha: z.string().nullable(),
   prompt_version: z.string().min(1),

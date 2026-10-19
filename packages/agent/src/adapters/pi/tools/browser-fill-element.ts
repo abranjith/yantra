@@ -22,6 +22,7 @@ import {
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { idOf } from '../../../runtime/action-ledger.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainFailure, DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
 import type { RunServices } from '../../../runtime/run-services.js';
@@ -99,6 +100,7 @@ export type BrowserFillValue = Static<typeof FillValueSchema>;
 type Params = Static<typeof BrowserFillElementParams>;
 
 export interface AppliedBrowserFill {
+  readonly action?: string;
   readonly field: string;
   readonly ref: string;
   readonly driver: string;
@@ -149,7 +151,7 @@ export function browserFillElementSpec(
   return {
     name: 'browser_fill_element',
     label: 'Browser Fill Element',
-    description: `Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form, up to ${FILL_FORM_MAX_FIELDS} fields per call: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other successes report requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.`,
+    description: `Fill ONE control through the deterministic semantic fill engine — a form with a single field to set, or a stored secret. When two or more fields of the same form need values, use browser_fill_form, up to ${FILL_FORM_MAX_FIELDS} fields per call: filling them one at a time re-resolves each field against a page the previous fill re-rendered. Handles text, suggestions, choices, toggles, dates, and ranges. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other successes report requested, committed, and resolution: a committed value that differs from what you sent is the widget resolving your value, not a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. It also reports editee when the page routed the edit to a different control — the value landed there, and the field you named staying empty is expected. Success also carries delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window rather than claiming this fill caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. Failure reports observed and attempted verdicts (recovery already performed — never repeat it); when genuine choices are available it also reports offered labels that can be re-issued verbatim. Do not use browser_click to operate a field widget or submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels. Each applied field carries action (A<n>); cite it as [A<n>] in result_publish when reporting what you did.`,
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
@@ -160,18 +162,26 @@ export function browserFillElementSpec(
       description: 'Fill a protected website field using a host-bound secret.',
       consequence: 'reversible',
     }),
-    run: (params: Params, ctx): Promise<DomainResult> => runFillElement(params, ctx.services),
+    run: (params: Params, ctx): Promise<DomainResult> =>
+      runFillElement(params, ctx.services, ctx.callId),
   };
 }
 
-async function runFillElement(params: Params, services: RunServices): Promise<DomainResult> {
+async function runFillElement(
+  params: Params,
+  services: RunServices,
+  callId: string | null,
+): Promise<DomainResult> {
   const controller = browserController(services);
   if (isDomainFailure(controller)) return controller;
   // One collector per top-level call. Everything the page raised while this
   // fill drove it is attributed to this fill, rather than surfacing on whatever
   // tool runs next.
   const sink = actionMetadataSink();
-  const applied = await applyBrowserFill(params.field, params.value, services, undefined, sink);
+  const applied = await applyBrowserFill(params.field, params.value, services, undefined, sink, {
+    ...SINGLE_FIELD,
+    callId,
+  });
   // Drained even on failure: a popup a failed fill opened must not leak forward
   // either, and the URLs the page produced are still evidence the run reached
   // organically.
@@ -196,6 +206,7 @@ async function runFillElement(params: Params, services: RunServices): Promise<Do
       ...(delta ? { delta: modelDelta(delta) } : {}),
     },
     details: {
+      action_ids: applied.action === undefined ? [] : [applied.action],
       applied: [applied],
       ...(progress ? { progress } : {}),
       actions: applied.actions,
@@ -219,8 +230,10 @@ export interface FailedBrowserFill extends DomainFailure {
 
 /** Which tool a verified fill is recorded under, and how many caller fields it stands for. */
 export interface FillAttribution {
+  readonly callId?: string | null;
   readonly tool: 'browser_fill_form' | 'browser_fill_element';
   readonly covers: number;
+  readonly coveredRefs?: readonly string[];
 }
 
 const SINGLE_FIELD: FillAttribution = { tool: 'browser_fill_element', covers: 1 };
@@ -280,8 +293,11 @@ export async function applyBrowserFill(
       { kind: 'literal', value: services.userInput?.mask(literal) ?? literal },
       services,
     );
-    recordFillCommitted(services, field, target, attribution);
+    const action = recordFillCommitted(services, field, target, attribution, outcome);
+    if (outcome.withheld === undefined && outcome.committed !== undefined)
+      services.actionObservations.record(action, outcome.committed);
     return {
+      action,
       field,
       ref: target.ref,
       driver: outcome.driver,
@@ -354,8 +370,9 @@ export async function applyBrowserFill(
     );
     if (!outcome.ok) return mapFillFailure(outcome);
     await appendSemanticTrace(controller, target, { kind: 'secret_ref', key: value.key }, services);
-    recordFillCommitted(services, field, target, attribution);
+    const action = recordFillCommitted(services, field, target, attribution, outcome);
     return {
+      action,
       field,
       ref: target.ref,
       driver: outcome.driver,
@@ -404,15 +421,27 @@ function recordFillCommitted(
   field: string,
   target: WidgetTarget,
   attribution: FillAttribution,
-): void {
-  services.actionLedger.record({
+  outcome: Extract<FillOutcome, { readonly ok: true }>,
+): string {
+  const fieldIdentity = services.domain.browser?.controller.describeRef(target.ref)?.field;
+  const entry = services.actionLedger.record({
+    callId: attribution.callId ?? null,
     kind: 'fill_committed',
     tool: attribution.tool,
     ref: target.ref,
     field: target.name.trim().length > 0 ? target.name : field,
     groupKey: target.group,
     covers: attribution.covers,
+    ...(attribution.coveredRefs === undefined ? {} : { coveredRefs: attribution.coveredRefs }),
+    identity: {
+      label: target.label ?? (target.name.trim() || null),
+      origin: target.labelOrigin ?? (target.name.trim() ? 'explicit' : 'none'),
+      confidence: fieldIdentity?.confidence ?? null,
+      section: fieldIdentity?.section ?? null,
+    },
+    verification: { resolution: outcome.resolution ?? null, withheld: outcome.withheld ?? null },
   });
+  return idOf(entry);
 }
 
 export function isSecretRef(
@@ -555,6 +584,7 @@ export async function driveWithRetry(
 /** Preserve the stored-secret model shape; no value is read back. */
 function secretModel(applied: AppliedBrowserFill): Record<string, unknown> {
   return {
+    ...(applied.action === undefined ? {} : { action: applied.action }),
     ...(applied.withheld === undefined ? {} : { withheld: applied.withheld }),
     ...(applied.committed === undefined ? {} : { committed: applied.committed }),
     ...(applied.requested === undefined ? {} : { requested: applied.requested }),

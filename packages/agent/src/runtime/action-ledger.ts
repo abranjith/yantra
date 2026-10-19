@@ -14,8 +14,16 @@
  * run's sanitizer and the user-input mask before they are kept.
  */
 
-import type { Logger, PayloadSanitizer, SubmitSignal } from '@yantra/core';
-import type { ArtifactScope } from '@yantra/protocol';
+import type {
+  Logger,
+  PayloadSanitizer,
+  SubmitSignal,
+  LabelOrigin,
+  LabelConfidence,
+  FillResolution,
+  WithheldCommit,
+} from '@yantra/core';
+import type { ArtifactScope, ArtifactRef, ActionId } from '@yantra/protocol';
 
 import type { CaptureArtifactSet } from './capture-artifacts.js';
 import type { SubmitRefusalSignal } from './submit-policy.js';
@@ -28,6 +36,7 @@ const MAX_NAME_CHARS = 80;
 
 /** Fields every entry carries, stamped by the ledger. */
 interface LedgerStamp {
+  readonly callId: string | null;
   /** Monotonic 1-based sequence number within the run. */
   readonly seq: number;
   /** ISO-8601 record time. */
@@ -40,6 +49,16 @@ interface LedgerStamp {
 
 /** A fill the engine committed and verified. */
 export interface FillCommittedEntry extends LedgerStamp {
+  readonly identity: {
+    readonly label: string | null;
+    readonly origin: LabelOrigin;
+    readonly confidence: LabelConfidence | null;
+    readonly section: string | null;
+  } | null;
+  readonly verification: {
+    readonly resolution: FillResolution | null;
+    readonly withheld: WithheldCommit | null;
+  };
   readonly kind: 'fill_committed';
   readonly tool: 'browser_fill_form' | 'browser_fill_element';
   readonly ref: string;
@@ -49,6 +68,8 @@ export interface FillCommittedEntry extends LedgerStamp {
   readonly groupKey: string | null;
   /** How many caller fields this one entry stands for (2 for a fused date range). */
   readonly covers: number;
+  /** Resolved controls committed together, such as both legs of a date range. */
+  readonly coveredRefs?: readonly string[];
 }
 
 /** A click that executed. */
@@ -72,6 +93,7 @@ export interface SubmitRefusedEntry extends LedgerStamp {
 
 /** A capture written to the run directory. */
 export interface CaptureEntry extends LedgerStamp {
+  readonly artifacts: readonly ArtifactRef[];
   readonly kind: 'capture';
   readonly scope: ArtifactScope;
   /** Run-relative path of the PNG (part 1 of a tiled set). */
@@ -104,11 +126,18 @@ export type ActionLedgerEntry =
 export type CommittedActionEntry = FillCommittedEntry | ClickExecutedEntry;
 
 /** What a producer supplies; the ledger adds the stamp. */
-export type ActionLedgerInput =
-  | Omit<FillCommittedEntry, keyof LedgerStamp>
+export type ActionLedgerInput = { readonly callId?: string | null } & (
+  | (Omit<FillCommittedEntry, keyof LedgerStamp | 'identity' | 'verification'> &
+      Partial<Pick<FillCommittedEntry, 'identity' | 'verification'>>)
   | Omit<ClickExecutedEntry, keyof LedgerStamp>
   | Omit<SubmitRefusedEntry, keyof LedgerStamp>
-  | Omit<CaptureEntry, keyof LedgerStamp>;
+  | (Omit<CaptureEntry, keyof LedgerStamp | 'artifacts'> & Partial<Pick<CaptureEntry, 'artifacts'>>)
+);
+
+/** IDs are the existing ledger sequence, never a second counter. */
+export function idOf(entry: Pick<ActionLedgerEntry, 'seq'>): ActionId {
+  return `A${entry.seq}`;
+}
 
 /** Where the browser is when an entry is recorded. */
 export interface LedgerLocation {
@@ -161,12 +190,22 @@ export class ActionLedger {
   public record(input: ActionLedgerInput): ActionLedgerEntry {
     const location = this.safeLocate();
     const stamp: LedgerStamp = {
+      callId: input.callId ?? null,
       seq: this.recorded.length + 1,
       at: this.options.nowIso(),
       epoch: location.epoch,
       host: location.host,
     };
-    const entry = this.cleaned({ ...input, ...stamp });
+    const defaults =
+      input.kind === 'fill_committed'
+        ? {
+            identity: input.identity ?? null,
+            verification: input.verification ?? { resolution: null, withheld: null },
+          }
+        : input.kind === 'capture'
+          ? { artifacts: input.artifacts ?? [] }
+          : {};
+    const entry = this.cleaned({ ...input, ...defaults, ...stamp } as ActionLedgerEntry);
     this.recorded.push(entry);
     this.options.logger?.info({ ...projection(entry) }, 'action recorded');
     return entry;
@@ -205,7 +244,20 @@ export class ActionLedger {
   private cleaned(entry: ActionLedgerEntry): ActionLedgerEntry {
     switch (entry.kind) {
       case 'fill_committed':
-        return { ...entry, field: this.clean(entry.field, MAX_FIELD_CHARS) };
+        return {
+          ...entry,
+          field: this.clean(entry.field, MAX_FIELD_CHARS),
+          identity:
+            entry.identity === null
+              ? null
+              : {
+                  ...entry.identity,
+                  label:
+                    entry.identity.label === null ? null : this.clean(entry.identity.label, 120),
+                  section:
+                    entry.identity.section === null ? null : this.clean(entry.identity.section, 60),
+                },
+        };
       case 'click_executed':
       case 'submit_refused':
         return { ...entry, name: this.clean(entry.name, MAX_NAME_CHARS) };

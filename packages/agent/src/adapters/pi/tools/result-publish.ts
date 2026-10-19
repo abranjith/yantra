@@ -44,6 +44,7 @@ import {
   type BriefFacets,
   type BriefConstraint,
   type BriefArtifact,
+  type BriefAction,
   type BriefRequirement,
   type Section,
   type BriefNotice,
@@ -57,6 +58,7 @@ import {
 } from '@yantra/protocol';
 import { Type, type Static, type TObject } from 'typebox';
 
+import { actionEvidenceView } from '../../../runtime/action-evidence.js';
 import {
   composeAgentBrief,
   composedPublishSummary,
@@ -111,7 +113,8 @@ const BriefContentParams = Type.Object(
     key_findings: Type.Optional(
       Type.Array(Type.Unknown(), {
         maxItems: 20,
-        description: 'A plain string (uncited commentary) or {text, sources: ["S3", "S3#r5"]}.',
+        description:
+          'A plain string (uncited commentary) or {text, sources: ["S3", "S3#r5"]}. In do, sources and inline markers can cite A<n> for what you did and S<n> for what a page said.',
       }),
     ),
     sections: Type.Optional(
@@ -295,6 +298,10 @@ async function runPublish(params: unknown, services: RunServices): Promise<Domai
       evidence,
       documents: services.documents,
       contract: services.contract.current(),
+      actions:
+        services.contract.command === 'do' && services.domain.browser !== null
+          ? actionEvidenceView(services.actionLedger, services.actionObservations)
+          : null,
       mode: 'tool',
     },
   );
@@ -756,6 +763,7 @@ function buildBriefFromAgentContent(
       ? { requirements: record.requirements as BriefRequirement[] }
       : {}),
     ...(Array.isArray(record.artifacts) ? { artifacts: record.artifacts as BriefArtifact[] } : {}),
+    ...(Array.isArray(record.actions) ? { actions: record.actions as BriefAction[] } : {}),
     sources: asArray(record.sources).map((entry, index) => toSource(entry, index, nowIso)),
     metadata: {
       synthesis: 'llm',
@@ -788,6 +796,7 @@ function toKeyFinding(entry: unknown): KeyFinding {
   // agent-visible pointer instead of being silently dropped here.
   const citations = [...asArray(record.citations)] as number[];
   return {
+    ...(Array.isArray(record.actions) ? { actions: [...asArray(record.actions)] as string[] } : {}),
     text: typeof record.text === 'string' ? record.text : '',
     citations,
     // An explicit editorial flag is honored (editorial: false with no

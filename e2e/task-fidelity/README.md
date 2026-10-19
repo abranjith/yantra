@@ -23,17 +23,25 @@ and each scenario's search answers queries that name the subject or the site's h
 
 ```sh
 npx turbo run build                       # e2e reads @yantra/* from dist/
-cd e2e && npx vitest run task-fidelity    # both spec files: tier + harness self-tests
+cd e2e && npx vitest run task-fidelity    # deterministic tier and harness self-tests
 ```
 
-Real Chrome is needed for `client-rendered-listing` and the small challenge variant.
-The tier runs in about 20 seconds.
+Real Chrome is needed for rendered listing/challenge cases, form mutations,
+captures, the independent form-state witness, and promotion replay.
+
+FEAT-060 timing record (2026-10-18): the initial nine-scenario run took
+177.82 seconds and included an over-cap timeout. After correcting that case,
+the standalone `do-gate-over-cap` run took 141,328 ms; its timeout is 240,000 ms.
+These measurements do not satisfy the specification's 60-second total allowance
+for the nine added scenarios. A passing aggregate timing measurement has not
+been recorded.
 
 ```sh
 pnpm eval:tasks                                   # every agentic scenario × 3 runs
 pnpm eval:tasks --scenario article-question --runs 1
 pnpm eval:tasks --provider anthropic --model <id> --thinking <level> --auth-secret <ref>
 pnpm eval:tasks --out <dir> --json                # scorecard JSON on stdout
+pnpm eval:tasks --suite do-benchmark --runs 20 --phase after --out <dir>
 ```
 
 Model selection uses the CLI's own resolver (flag > `YANTRA_AGENT_*` > `profile.yaml` >
@@ -48,7 +56,7 @@ Output lands in `e2e/task-fidelity/.out/<UTC timestamp>/` (gitignored): `scoreca
 | Path                          | What it is                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------ |
 | `fixtures/inventory.ts`       | The truth dataset. Every listing page and every score derives from it.               |
-| `fixtures/sites.ts`           | The six patterns, each at `<name>.yantra.test`.                                      |
+| `fixtures/sites.ts`           | The nine patterns, each at `<name>.yantra.test`.                                     |
 | `fixtures/server.ts`          | One loopback server routed by `Host`, with its own request log.                      |
 | `fixtures/host-mapping.ts`    | `mappedRequestFn` (HTTP) and `hostMappedBrowserProvider` (Chrome). Fail closed.      |
 | `fixtures/census.ts`          | Gallery census: unique patterns, provenance only in header comments, no site tokens. |
@@ -60,17 +68,23 @@ Output lands in `e2e/task-fidelity/.out/<UTC timestamp>/` (gitignored): `scoreca
 | `score/`                      | The scorer, the scorecard schema, and the Markdown renderer.                         |
 | `golden/`                     | Byte-for-byte goldens (article text, scripted scorecard). Prettier-ignored.          |
 | `baselines/`                  | Committed agentic baselines (aggregate-only).                                        |
+| `fixtures/form-state.ts`      | Browser-reported field states, password digests, and submission counters.            |
+| `fixtures/form-lab.ts`        | Ten synthetic form layouts and independently authored correctness rules.             |
+| `benchmark.ts`                | Merge saved form measurements by layout, model setting, and before/after phase.      |
 
 ## Fixture patterns
 
-| Site                      | Pattern                                                              | Gap    |
-| ------------------------- | -------------------------------------------------------------------- | ------ |
-| `faceted-listing`         | Repeated cards, facet links, pagination, detail pages holding colors | G2, G3 |
-| `structured-listing`      | The same inventory only as schema.org JSON-LD behind a thin shell    | G2     |
-| `client-rendered-listing` | Cards injected by script after load into an empty shell              | G2, G5 |
-| `challenge-interstitial`  | HTTP 200 human-verification form; `small` and `large-main` variants  | G10    |
-| `article`                 | ~1,600 words of prose with a byline and `datePublished` JSON-LD      | G2     |
-| `multi-table`             | The answer sits in the second table                                  | G2     |
+| Site                      | Pattern                                                                            | Gap    |
+| ------------------------- | ---------------------------------------------------------------------------------- | ------ |
+| `faceted-listing`         | Repeated cards, facet links, pagination, detail pages holding colors               | G2, G3 |
+| `structured-listing`      | The same inventory only as schema.org JSON-LD behind a thin shell                  | G2     |
+| `client-rendered-listing` | Cards injected by script after load into an empty shell                            | G2, G5 |
+| `challenge-interstitial`  | HTTP 200 human-verification form; `small` and `large-main` variants                | G10    |
+| `article`                 | ~1,600 words of prose with a byline and `datePublished` JSON-LD                    | G2     |
+| `multi-table`             | The answer sits in the second table                                                | G2     |
+| `test-form`               | Long and short application forms with independent submission/state measurement     | G4     |
+| `tall-page`               | Fixed-height pages, a protected field, and a panel below the fold                  | G7, G8 |
+| `form-lab`                | Ten form layouts covering identity, protected data, recovery, and action citations | G2, G8 |
 
 Site and brand names may appear only in a page's leading header comment; the census
 reuses `SITE_TOKEN_SOURCE` from `eslint.config.js`.
@@ -78,7 +92,8 @@ reuses `SITE_TOKEN_SOURCE` from `eslint.config.js`.
 ## Expectations and owners
 
 Every deterministic expectation names its owner: `current` (holds today, must keep
-holding) or the feature that builds the capability (`FEAT-048`, `FEAT-050`–`FEAT-053`).
+holding) or the feature that builds the capability. FEAT-060 gates are live;
+`native-date-entry` remains the pending capability.
 For an owner in `PENDING_OWNERS`, the test asserts the **baseline** — an exact
 characterization of today's behavior — and also evaluates the **target**. If the target
 already holds, the test fails with:
@@ -96,6 +111,30 @@ Each expectation is its own test: `<scenario> › <owner> › <id>`.
 
 A capability that already holds today is owned by `current`, never by a pending owner:
 a pending target may not already pass.
+
+## Form acceptance gates
+
+`gateExpectations()` adds six checks to form scenarios with authored action
+truth: intended final fills and untouched exemptions, zero forbidden submission
+signals, linked PNG captures, evidence-matching requirement items, agreement
+across runtime/manifest/human/JSON/exit-code surfaces, and a scan for secret or
+protected canaries in every run file. Expected partial outcomes use explicit
+intended state and expected capture scopes. An expected failed, handoff, or
+aborted run without a Brief treats the item-status check as not applicable;
+the other checks remain active.
+
+`GATE_CENSUS` requires eight nonempty categories with distinct deterministic
+scenario IDs, authored truth, and all six FEAT-060 gate expectations: size and
+mix, hard identity, recovery, capture, no submission, outcome honesty, citation,
+and promotion. Nine new scenarios cover CSS order, repeated sections, missing
+label evidence, 70 controls, a mixed protected form, group recovery, action
+citations, invalid page-source support for a fill, and promotion followed by
+zero-LLM replay. Their IDs start with `do-gate-`.
+
+The fixture server stores initial/final form witnesses separately from its
+request log. Keyed password controls post SHA-256 digests, never plaintext;
+ordinary field values and checked states remain observable. Authored rules,
+rather than the engine's own verification verdicts, determine field correctness.
 
 ## Scores (agentic tier)
 
@@ -117,6 +156,82 @@ Delivered rows are read from the published Brief in structural order: `facets.co
 rows, then section table rows or bullets, then findings, then overview sentences. A row
 matches a truth item by a unique price-and-seller pair, or a unique title-and-seller pair.
 Rows in a section with `kind: 'alternatives'` (FEAT-053) are excluded from the answer.
+
+Action runs add independent `action` and `timing` measurements. True success
+requires correct fields, unchanged exemptions, no forbidden submission, valid
+required captures, matching nonempty requirement statuses, outcome-surface
+agreement, and a fulfilled outcome. Reported success means fulfilled alone.
+`false_fulfilled` counts the gap. PNG checks cover signature, IHDR dimensions,
+byte length, SHA-256, complete scope, and declared parts. Historical action and
+timing fields are optional; absent reasoning telemetry stays `null`. Pipelines
+without manifest or runtime `taskOutcome` use `published` as reported success
+and compute true success from fixture correctness, exemptions, submissions,
+and captures. Historical outcome agreement remains `null` and absent items
+have a zero denominator. Current runs retain strict nonempty matching items
+and agreement across all outcome surfaces.
+
+## Form benchmark procedure
+
+The `do-benchmark` suite contains four agentic-only layouts: table-cell labels,
+CSS order, repeated sections, and over-cap. Each fills all eligible controls,
+saves a full-page screenshot, and forbids submission. `--suite` cannot be mixed
+with `--scenario`. One invocation selects one provider/model/thinking setting.
+
+1. Build the measurement checkout. For `before`, use the pipeline commit before
+   FEAT-054's first change with the benchmark harness available; retain the
+   measured `git_sha` in its output. Use the implemented checkout for `after`.
+2. Run the suite for two settings in each phase, keeping each setting's flags
+   consistent across phases. Choose distinct output directories:
+
+   ```sh
+   pnpm eval:tasks --suite do-benchmark --runs 20 --phase before --provider <provider-a> --model <model-a> --out e2e/task-fidelity/.out/before-a
+   pnpm eval:tasks --suite do-benchmark --runs 20 --phase before --provider <provider-b> --model <model-b> --out e2e/task-fidelity/.out/before-b
+   pnpm eval:tasks --suite do-benchmark --runs 20 --phase after --provider <provider-a> --model <model-a> --out e2e/task-fidelity/.out/after-a
+   pnpm eval:tasks --suite do-benchmark --runs 20 --phase after --provider <provider-b> --model <model-b> --out e2e/task-fidelity/.out/after-b
+   ```
+
+   Add `--thinking` and `--auth-secret` as required by each setting. Run each
+   command from its measurement checkout and retain or copy its outputs before
+   merging. Each command plans 4 × 20 = 80 live runs, each phase with two
+   settings plans 160, and before plus after totals 320. The first stderr line
+   states the invocation's run count. These runs spend real model tokens.
+
+3. Merge all four saved scorecards (paths may point into different checkouts):
+
+   ```sh
+   pnpm eval:benchmark e2e/task-fidelity/.out/before-a/scorecard.json e2e/task-fidelity/.out/before-b/scorecard.json e2e/task-fidelity/.out/after-a/scorecard.json e2e/task-fidelity/.out/after-b/scorecard.json --out e2e/task-fidelity/.out/benchmark
+   ```
+
+   The merger also accepts `baseline.json`. It makes no provider calls. Read
+   `benchmark.md` and retain `benchmark.json`; `--json` prints the JSON too.
+
+4. Copy reviewed phase/setting `baseline.json` files to names such as
+   `baselines/<yyyy-mm>-do-benchmark-after-<model>.json`. Record measured commits,
+   per-layout/per-setting success, latency, false fulfilled counts, and target
+   verdicts in the governing plan's revision log. Do not substitute a failed
+   authentication attempt for a completed baseline.
+
+The report writes one table per provider/model/thinking setting and one target
+table. Cells contain true successes/total runs, reported success, false
+fulfilled, p50/p95 wall/tool/reasoning measurements, median correctness,
+retries, and captures. Missing telemetry is `not recorded`. Matching before
+and after cells add after-minus-before success-rate and wall p50/p95 deltas.
+An absent `benchmark_phase` is interpreted as `after`. Input prompt versions
+must agree within each setting and phase; phases may differ. Duplicate runs
+within a cell and malformed inputs are refused.
+
+Targets evaluate after cells: each needs at least 20 runs and at least 95% true
+success (19/20 at exactly 20 runs); at least three layouts must qualify; two
+settings must qualify on the same three layouts; every cell must have wall
+p50 ≤ 120,000 ms and p95 ≤ 300,000 ms. Fewer runs or missing timing are unmet.
+Targets are observational: `eval:benchmark` exits 0 after writing reports,
+including unmet targets; usage/validation errors exit 1, other failures exit 2.
+`eval:tasks` exits 0 after writing scores, 1 for usage, 3 for typed startup
+failures, and 2 for other failures.
+
+Current live attempts failed before tools ran because the `opencode-go` API key
+had expired. No successful live form benchmark or committed form baseline is
+recorded yet.
 
 ## Baselines
 

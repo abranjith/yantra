@@ -1,6 +1,9 @@
-import { DocumentStore, type PageAnalysis } from '@yantra/core';
+import { DefaultSanitizer, DocumentStore, type PageAnalysis } from '@yantra/core';
+import { TaskContractBody } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ActionObservations, actionEvidenceView } from '../../src/runtime/action-evidence.js';
+import { ActionLedger } from '../../src/runtime/action-ledger.js';
 import { composeAgentBrief, type ComposeContext } from '../../src/runtime/brief-composer.js';
 import type { EvidenceEntry } from '../../src/runtime/run-services.js';
 
@@ -245,5 +248,149 @@ describe('@no-llm Brief composer', () => {
     );
     if (!result.isOk) throw new Error('expected composition');
     expect(result.value.content.sources).toEqual(['https://outside.test/']);
+  });
+});
+
+describe('@no-llm action attribution in Brief composition', () => {
+  function context(count = 2): ComposeContext {
+    const sanitizer = new DefaultSanitizer();
+    const ledger = new ActionLedger({
+      sanitizer,
+      nowIso: () => '2026-10-18T12:00:00.000Z',
+      locate: () => ({ epoch: 1, host: 'source1.test' }),
+    });
+    const observations = new ActionObservations(sanitizer);
+    for (let index = 1; index <= count; index++) {
+      ledger.record({
+        kind: 'fill_committed',
+        tool: 'browser_fill_form',
+        field: index === 2 ? 'Password' : 'First name',
+        ref: `e${index}`,
+        groupKey: null,
+        covers: 1,
+        callId: `call-${index}`,
+        identity: {
+          label: index === 2 ? 'Password' : 'First name',
+          origin: 'structural',
+          confidence: 'medium',
+          section: 'Billing',
+        },
+        verification:
+          index === 2
+            ? { resolution: null, withheld: { reason: 'password', verdict: 'exact' } }
+            : { resolution: 'exact', withheld: null },
+      });
+      if (index !== 2) observations.record(`A${index}`, 'Avery');
+    }
+    return { ...composerContext(), actions: actionEvidenceView(ledger, observations) };
+  }
+  const composed = (ctx: ComposeContext, findings: unknown[]) => {
+    const result = composeAgentBrief({ ...base, key_findings: findings }, ctx);
+    if (!result.isOk) throw new Error(JSON.stringify(result.error));
+    return result.value;
+  };
+  it('anchors a committed value only to the action that observed it', () => {
+    expect(composed(context(), ['Filled First name with Avery [A1]']).verdict.flagged).toBe(0);
+    expect(composed(context(), ['Filled First name with Avery [S1]']).verdict.flagged).toBe(1);
+    const wrong = composed(context(), ['Filled First name with Blake [A1]']);
+    expect(wrong.verdict.flagged).toBe(1);
+    expect(wrong.notices[0]?.reason).toContain('blake');
+    expect(composed(context(), ['Set Password to Hunter2 [A2]']).verdict.flagged).toBe(1);
+    expect(composed(context(), ['Filled Password [A2]']).verdict.flagged).toBe(0);
+  });
+  it('retains action IDs without numbering them as page sources', () => {
+    const result = composed(context(), [
+      'Filled Password [A2]',
+      'Filled First name with Avery [A1]',
+    ]);
+    expect(result.content.actions).toMatchObject([
+      { id: 'A2', call_id: 'call-2', label_origin: 'structural', confidence: 'medium' },
+      { id: 'A1' },
+    ]);
+    expect(result.content.key_findings).toMatchObject([
+      { text: 'Filled Password [A2]', citations: [], actions: ['A2'], editorial: false },
+      { actions: ['A1'] },
+    ]);
+    expect(result.summary).toMatchObject({
+      cited_actions: 2,
+      cited_sources: 0,
+      consulted_sources: 4,
+    });
+  });
+  it('rejects unknown actions and strips their markers only in assembled mode', () => {
+    const ctx = context();
+    const result = composeAgentBrief({ ...base, overview: 'Done [A9]' }, ctx);
+    expect(result).toMatchObject({
+      isOk: false,
+      error: [{ cause: 'reference-action-unknown', values: { known: 'A1-A2' } }],
+    });
+    const assembled = composeAgentBrief(
+      { ...base, overview: 'Done [A9]' },
+      { ...ctx, mode: 'assembled' },
+    );
+    expect(assembled).toMatchObject({ isOk: true, value: { content: { overview: 'Done ' } } });
+  });
+  it('requires a page citation for table rows and keeps required_sources page-only', () => {
+    const contract = TaskContractBody.parse({
+      deliverable: 'table',
+      subject: 'fields',
+      required_fields: ['Field'],
+      filters: [],
+      required_sources: [],
+      ranking: null,
+      limit: null,
+      notes: null,
+    });
+    const table = { columns: ['Field'], rows: [['First name']], row_sources: [['A1']] };
+    expect(composeAgentBrief({ ...base, table }, { ...context(), contract })).toMatchObject({
+      isOk: false,
+      error: [{ cause: 'row-action-only' }],
+    });
+    expect(
+      composeAgentBrief(
+        { ...base, table: { ...table, row_sources: [['A1', 'S1']] } },
+        { ...context(), contract },
+      ).isOk,
+    ).toBe(true);
+    expect(
+      composeAgentBrief(
+        { ...base, table },
+        { ...context(), contract: { ...contract, deliverable: 'actions' } },
+      ).isOk,
+    ).toBe(true);
+    const required = composed(
+      {
+        ...context(),
+        contract: { ...contract, deliverable: 'actions', required_sources: ['source1.test'] },
+      },
+      ['Filled First name with Avery [A1]'],
+    );
+    expect(required.evidence.deliverableGaps.join(' ')).toContain(
+      'nothing in the answer is cited from',
+    );
+  });
+  it('caps public evidence and emits exactly one overflow notice', () => {
+    const findings = Array.from({ length: 7 }, (_, index) => ({
+      text: 'Filled First name',
+      sources: Array.from(
+        { length: Math.min(6, 41 - index * 6) },
+        (_, offset) => `A${index * 6 + offset + 1}`,
+      ),
+    }));
+    const result = composed(context(41), findings);
+    expect(result.content.actions).toHaveLength(40);
+    expect(result.notices.filter((notice) => notice.source === 'actions')).toEqual([
+      {
+        kind: 'other',
+        source: 'actions',
+        reason: '1 further cited actions are listed in tool-calls.jsonl',
+      },
+    ]);
+  });
+  it('ignores literal action markers when no action view is active', () => {
+    const input = { ...base, overview: 'Literal [A1]', key_findings: ['Literal [A1]'] };
+    const before = composeAgentBrief(input, composerContext());
+    const after = composeAgentBrief(input, { ...composerContext(), actions: null });
+    expect(after).toEqual(before);
   });
 });

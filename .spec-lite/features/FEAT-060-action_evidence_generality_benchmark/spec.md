@@ -339,7 +339,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-003: The protocol carries action IDs, Brief action evidence, and per-call action IDs, and every older artifact still parses
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - New `schemas/action-evidence.ts`: `ActionId` and `BriefAction` per §2, `.strict()`, `noAnsi` on text, `.describe()` on every field (the generated docs derive from it). The kind-specific fields use a `superRefine` (`verification` with `fill` only, `signal` with `submit_refused` only, `artifacts` with `capture` only).
   - `brief.ts`:
     - optional `actions` (≤ 40, unique `id`);
@@ -347,7 +347,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - a refinement that every cited ID exists in `Brief.actions`.
   - `tool-audit.ts`: optional `actions: ActionId[]` (≤ 16), which may appear only on `end` entries with `status: 'ok'`.
   - Export from the index and regenerate JSON Schema.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Existing Brief, `tool-calls.jsonl`, and FEAT-058-era fixtures without the fields parse unchanged (property test over the fixtures).
   - Rejections:
     - `A0` and `a3`;
@@ -358,7 +358,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - 41 actions.
   - A capture action whose `artifacts` reuse FEAT-058's `ArtifactRef` grammar rejects `../x.png`.
   - The generated-schema drift test passes.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (action IDs, Brief action evidence, `tool-calls.jsonl` `actions`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (action IDs, Brief action evidence, `tool-calls.jsonl` `actions`).
 - **Verify**: `cd packages/protocol && npx vitest run`; `npx turbo run build --filter=@yantra/protocol`.
 - **Depends on**: FEAT-058 TASK-001 (`ArtifactRef`)
 
@@ -615,11 +615,22 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 > Captured by hooks (`capture-baseline` / `capture-changeset`), not hand-maintained. See `.spec-lite/features/FEAT-060-action_evidence_generality_benchmark/changeset.json`, which is the authoritative deterministic review scope.
 
+## Implementation Notes (2026-10-18)
+
+- User-selected benchmark settings: `opencode-go / deepseek-v4-pro / high` and `opencode-go / deepseek-v4-pro / medium`.
+- User clarification: missing Brief requirements are not applicable for expected failures without a Brief. Independent state, submissions, outcome surfaces, and canaries still run.
+- User-approved deviation: retain all 70 fields and give the over-cap scenario a 240-second allowance. Its corrected standalone run took 141,328 ms; the nine-scenario 60-second total bound is not met. No interaction waits were weakened.
+- Historical measurement compatibility: before-FEAT-054 published runs are judged by fixture state and capture files; absent requirements and outcome agreement remain unavailable. Current runs require nonempty requirements and all outcome surfaces to agree.
+- The shared lexical anchoring checker is unchanged. Action-enabled composition additionally requires content-word support for action citations and page-cited action claims, because field-label overlap alone accepted a wrong committed name.
+- Acceptance scenarios exposed two bookkeeping defects: fused ranges now retain their resolved covered refs for coverage accounting, and action-only promotion omits synthesis when no output can supply it. Neither changes browser interaction behavior.
+- Existing `native-date-entry` baselines remain in force for `do-form-complete`; its two native date controls are explicitly expected empty in its declared partial state.
+- Live benchmark is pending: managed authentication at `C:/Users/abran/.yantra/data/pi/auth.json` received provider `401 api_key_expired`, including a one-run retry after the user disputed expiration. A working credential source is being resolved; failed-auth attempts are not committed as form baselines.
+
 ## 8. State Tracking
 
 - [x] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
 - [ ] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
-- [ ] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
+- [x] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
 - [ ] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values (STUB identity until FEAT-055 TASK-005)
 - [ ] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
 - [ ] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked

@@ -25,6 +25,7 @@ export const FormStateSchema = z
     submits: z.number().int().nonnegative(),
     requestSubmitCalls: z.number().int().nonnegative(),
     formSubmitCalls: z.number().int().nonnegative(),
+    clicks: z.number().int().nonnegative().optional(),
   })
   .strict();
 
@@ -45,96 +46,74 @@ export function latestFormStates(log: readonly FormState[]): Readonly<Record<str
   return result;
 }
 
-/** Self-contained page code; serialized as source so no Node closure can leak in. */
-function installFormState(): void {
-  let seq = 0;
-  let scheduled = false;
-  let submits = 0;
-  let requestSubmitCalls = 0;
-  let formSubmitCalls = 0;
-  let pending: Promise<void> = Promise.resolve();
-  const collect = async (): Promise<void> => {
+/** Add stable fixture keys to existing form markup without changing its controls. */
+export function withFormState(html: string, page: string): string {
+  const keyed = html.replace(/<(input|select|textarea)\b[^>]*>/gu, (tag) => {
+    if (tag.includes('data-fixture-key=')) return tag;
+    const id = /\bid="([^"]+)"/u.exec(tag)?.[1];
+    const name = /\bname="([^"]+)"/u.exec(tag)?.[1];
+    const value = /\bvalue="([^"]+)"/u.exec(tag)?.[1];
+    const key =
+      id ??
+      (name === undefined ? undefined : /\btype="radio"/u.test(tag) ? `${name}-${value}` : name);
+    return key === undefined ? tag : tag.replace(/>$/u, ` data-fixture-key="${key}">`);
+  });
+  return keyed
+    .replace(/<body\b/u, `<body data-fixture-page="${page}"`)
+    .replace('</body>', `${FORM_STATE_SCRIPT}</body>`);
+}
+
+/** Plain browser source: transform-time helpers must never enter the fixture page. */
+export const FORM_STATE_SCRIPT = String.raw`<script>(() => {
+  let seq = Number(sessionStorage.getItem('__fixture_seq') ?? '0');
+  let scheduled = false, submits = 0, requestSubmitCalls = 0, formSubmitCalls = 0, clicks = 0;
+  let pending = Promise.resolve();
+  const collect = async () => {
     const state = {
       page: document.body.dataset.fixturePage ?? location.pathname.slice(1),
-      seq: ++seq,
-      controls: {} as Record<string, { value?: string; digest?: string; checked?: boolean }>,
-      submits,
-      requestSubmitCalls,
-      formSubmitCalls,
+      seq: ++seq, controls: {}, submits, requestSubmitCalls, formSubmitCalls, clicks,
     };
-    const protectedValues: { key: string; value: string }[] = [];
-    for (const control of document.querySelectorAll<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >('[data-fixture-key]')) {
-      const key = control.dataset.fixtureKey!;
+    sessionStorage.setItem('__fixture_seq', String(seq));
+    const protectedValues = [];
+    for (const control of document.querySelectorAll('[data-fixture-key]')) {
+      const key = control.dataset.fixtureKey;
       if (control instanceof HTMLInputElement && control.type === 'password') {
         protectedValues.push({ key, value: control.value });
-      } else if (
-        control instanceof HTMLInputElement &&
-        ['checkbox', 'radio'].includes(control.type)
-      ) {
+      } else if (control instanceof HTMLInputElement && ['checkbox', 'radio'].includes(control.type)) {
         state.controls[key] = { checked: control.checked };
       } else state.controls[key] = { value: control.value };
     }
-    // Capture counters and values synchronously before the first await.
     for (const { key, value } of protectedValues) {
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
       state.controls[key] = {
-        digest: Array.from(new Uint8Array(bytes), (byte) =>
-          byte.toString(16).padStart(2, '0'),
-        ).join(''),
+        digest: Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join(''),
       };
     }
     await fetch('/__fixture/state', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(state),
-      keepalive: true,
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(state), keepalive: true,
     });
   };
-  const schedule = (): void => {
+  const schedule = () => {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      pending = collect();
-    });
+    requestAnimationFrame(() => { scheduled = false; pending = collect(); });
   };
   const prototype = HTMLFormElement.prototype;
-  // Keep the native receiver: these wrappers intentionally call the method on each form.
-  // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalRequest = prototype.requestSubmit;
-  // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalSubmit = prototype.submit;
-  prototype.requestSubmit = function (submitter?: HTMLElement): void {
-    requestSubmitCalls++;
-    schedule();
-    originalRequest.call(this, submitter);
+  prototype.requestSubmit = function (submitter) {
+    requestSubmitCalls++; schedule(); originalRequest.call(this, submitter);
   };
-  prototype.submit = function (): void {
-    formSubmitCalls++;
-    schedule();
-    originalSubmit.call(this);
+  prototype.submit = function () {
+    formSubmitCalls++; schedule(); originalSubmit.call(this);
   };
   document.addEventListener('input', schedule, true);
   document.addEventListener('change', schedule, true);
-  document.addEventListener(
-    'submit',
-    (event) => {
-      submits++;
-      event.preventDefault();
-      schedule();
-    },
-    true,
-  );
-  // Tests can await the actual network witness, rather than sleeping a guessed duration.
-  Object.assign(window, {
-    flushFixtureState: async () => {
-      await pending;
-      await collect();
-    },
-  });
+  document.addEventListener('click', () => { clicks++; schedule(); }, true);
+  document.addEventListener('submit', event => {
+    submits++; event.preventDefault(); schedule();
+  }, true);
+  Object.assign(window, { flushFixtureState: async () => { await pending; await collect(); } });
   pending = collect();
-}
-
-export const FORM_STATE_SCRIPT = `<script>(${installFormState.toString()})();</script>`;
+})();</script>`;

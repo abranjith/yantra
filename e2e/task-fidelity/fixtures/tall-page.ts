@@ -14,6 +14,7 @@
  * names no site.
  */
 
+import { withFormState } from './form-state.js';
 import {
   escapeHtml,
   headerComment,
@@ -55,9 +56,10 @@ export const TALL_PAGE_ROUTES: readonly string[] = Object.freeze([
 
 /** Render one route, or null for an unknown path. */
 export function renderTallPage(path: string, _query: URLSearchParams): RenderedPage | null {
-  if (path === TALL_PAGE_PATH) return htmlPage(tallPage('Quarterly report', TALL_PAGE_HEIGHT));
+  if (path === TALL_PAGE_PATH)
+    return htmlPage(withFormState(tallPage('Quarterly report', TALL_PAGE_HEIGHT), 'report'));
   if (path === TALL_PAGE_LONG_PATH) {
-    return htmlPage(tallPage('Annual report', TALL_PAGE_LONG_HEIGHT));
+    return htmlPage(withFormState(tallPage('Annual report', TALL_PAGE_LONG_HEIGHT), 'report/long'));
   }
   if (path === '/') {
     return homePage({

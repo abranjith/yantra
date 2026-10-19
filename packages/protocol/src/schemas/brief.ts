@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { ULID_PATTERN } from '../utils/ulid.js';
 
+import { ActionId, BriefAction } from './action-evidence.js';
 import { ScreenshotArtifactPath } from './artifact-ref.js';
 import { ArtifactScope, CONTRACT_REQUIREMENT_ID_PATTERN, FillExemption } from './task-contract.js';
 
@@ -39,6 +40,7 @@ const noAnsi = (value: string): boolean => !ANSI_ESCAPE_PATTERN.test(value);
 const CitationList = z
   .array(z.number().int().min(1).describe('A source number (sources[].n).'))
   .describe('Source numbers (sources[].n) backing this content.');
+const ActionList = z.array(ActionId).max(8).describe('Recorded action IDs backing this content.');
 
 const FacetScalar = z
   .union([z.string(), z.number(), z.boolean(), z.null()])
@@ -61,6 +63,7 @@ export type ChildFinding = z.infer<typeof ChildFinding>;
 
 export const KeyFinding = z
   .object({
+    actions: ActionList.optional(),
     text: z
       .string()
       .min(1)
@@ -109,6 +112,7 @@ export function editorialMarkIsInformative(findings: readonly KeyFinding[]): boo
 
 export const Section = z
   .object({
+    actions: ActionList.optional(),
     kind: z
       .enum(['alternatives'])
       .optional()
@@ -129,6 +133,10 @@ export const BriefFacets = z
     comparison: z
       .object({
         columns: z.array(z.string()).min(1).describe('Column headers.'),
+        row_actions: z
+          .array(ActionList)
+          .optional()
+          .describe('Recorded action IDs backing each row, in row order.'),
         rows: z
           .array(z.array(FacetScalar).describe('One comparison row.'))
           .describe('Comparison rows; every row length must equal columns.length.'),
@@ -146,6 +154,15 @@ export const BriefFacets = z
     }
 
     const width = facets.comparison.columns.length;
+    if (
+      facets.comparison.row_actions !== undefined &&
+      facets.comparison.row_actions.length !== facets.comparison.rows.length
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['comparison', 'row_actions'],
+        message: 'row_actions length must equal rows.length',
+      });
     if (
       facets.comparison.row_citations !== undefined &&
       facets.comparison.row_citations.length !== facets.comparison.rows.length
@@ -431,6 +448,11 @@ export type BriefNotice = z.infer<typeof BriefNotice>;
 
 export const Brief = z
   .object({
+    actions: z
+      .array(BriefAction)
+      .max(40)
+      .optional()
+      .describe('Cited action evidence, in first-citation order; absent on older Briefs.'),
     brief_id: z.string().regex(ULID_PATTERN).describe('Unique Brief document id (ULID).'),
     task_id: z.string().regex(ULID_PATTERN).describe('Originating task id (ULID).'),
     schema_version: z
@@ -474,6 +496,35 @@ export const Brief = z
       .describe('Honest per-source failures and validator flags; may be empty.'),
   })
   .superRefine((brief, ctx) => {
+    const actionIds = new Set<string>();
+    brief.actions?.forEach((action, index) => {
+      if (actionIds.has(action.id))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actions', index, 'id'],
+          message: 'Action IDs must be unique',
+        });
+      actionIds.add(action.id);
+    });
+    const checkActions = (ids: readonly string[] | undefined, path: (string | number)[]): void => {
+      ids?.forEach((id, index) => {
+        if (!actionIds.has(id))
+          ctx.addIssue({
+            code: 'custom',
+            path: [...path, index],
+            message: `${id} does not resolve to declared action evidence`,
+          });
+      });
+    };
+    brief.key_findings.forEach((finding, index) =>
+      checkActions(finding.actions, ['key_findings', index, 'actions']),
+    );
+    brief.sections.forEach((section, index) =>
+      checkActions(section.actions, ['sections', index, 'actions']),
+    );
+    brief.facets?.comparison?.row_actions?.forEach((ids, index) =>
+      checkActions(ids, ['facets', 'comparison', 'row_actions', index]),
+    );
     // sources[].n must be strictly ascending and contiguous from 1.
     brief.sources.forEach((source, index) => {
       if (source.n !== index + 1) {
@@ -542,7 +593,11 @@ export const Brief = z
       finding.children.forEach((child, childIndex) => {
         checkCitations(child.citations, ['key_findings', index, 'children', childIndex]);
       });
-      if (!finding.editorial && finding.citations.length === 0) {
+      if (
+        !finding.editorial &&
+        finding.citations.length === 0 &&
+        (finding.actions?.length ?? 0) === 0
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['key_findings', index, 'citations'],

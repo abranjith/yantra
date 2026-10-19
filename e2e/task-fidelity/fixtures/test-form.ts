@@ -19,6 +19,7 @@
  * It recreates no real page and names no site.
  */
 
+import { FORM_STATE_SCRIPT, withFormState } from './form-state.js';
 import {
   escapeHtml,
   headerComment,
@@ -158,12 +159,15 @@ export function renderTestForm(path: string, _query: URLSearchParams): RenderedP
       htmlDocument({
         header: header(),
         title: 'Destination selection',
-        body: autocompleteFixture(),
+        body:
+          autocompleteFixture() +
+          '<script>document.querySelector("input").dataset.fixtureKey="destination";document.body.dataset.fixturePage="progress/autocomplete";</script>' +
+          FORM_STATE_SCRIPT,
       }),
     );
-  if (path === TEST_FORM_PATH) return htmlPage(formPage());
+  if (path === TEST_FORM_PATH) return htmlPage(withFormState(formPage(), 'apply'));
   if (path === TEST_FORM_SUBMITTED_PATH) return htmlPage(submittedPage());
-  if (path === TEST_FORM_SHORT_PATH) return htmlPage(shortFormPage());
+  if (path === TEST_FORM_SHORT_PATH) return htmlPage(withFormState(shortFormPage(), 'quick-apply'));
   if (path === TEST_FORM_SUBMIT_EVENT_PATH) {
     return { status: 204, contentType: 'text/plain; charset=utf-8', body: '' };
   }

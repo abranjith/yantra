@@ -152,6 +152,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
       'activate something or submit a completed form, never to operate a field widget by hand: ' +
       'opening a picker yourself and clicking day cells is slower and loses the verification the ' +
       'fill tools perform. ' +
+      'When you report what you did, cite the action ID from the tool result ([A3]); cite pages ([S1]) only for what a page said. ' +
       // How to read what these tools return. Every clause below replaces a
       // guess the model would otherwise have to make about whether its own
       // action worked — which is the failure this guidance exists to prevent.

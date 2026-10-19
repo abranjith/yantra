@@ -24,6 +24,7 @@ import {
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { idOf } from '../../../runtime/action-ledger.js';
 import type { BudgetDecision } from '../../../runtime/budget.js';
 import {
   artifactRefsOfSet,
@@ -68,17 +69,21 @@ export function browserCaptureSpec(
       'Save a clean screenshot of the page to the run directory as a deliverable the user ' +
       'asked for. The image is kept on this computer and is NOT shown to you; you receive its ' +
       'path and size. Capture after your last page action. Do not use it to inspect a page: ' +
-      'read the page with browser_observe or browser_extract.',
+      'read the page with browser_observe or browser_extract. The result carries action (A<n>); cite it as [A<n>] in result_publish when reporting the capture.',
     parameters: BrowserCaptureParams,
     sanitizationProfile: 'public',
     // A capture is local, cheap, bounded, and delivers a declared item, so it
     // stays callable during the exploration wind-down (S8). The hard deadline,
     // the per-tool timeout, and the capture budget still bind.
-    run: (params): Promise<DomainResult> => runCapture(params, services),
+    run: (params, ctx): Promise<DomainResult> => runCapture(params, services, ctx.callId),
   };
 }
 
-async function runCapture(params: Params, services: RunServices): Promise<DomainResult> {
+async function runCapture(
+  params: Params,
+  services: RunServices,
+  callId: string | null,
+): Promise<DomainResult> {
   if (params.scope === 'element' && params.ref === undefined) {
     return invalid('capture-ref-required');
   }
@@ -144,20 +149,25 @@ async function runCapture(params: Params, services: RunServices): Promise<Domain
   services.runHealth.recordDeliverableCapture({ files: parts.length, bytes });
   // One ledger entry per call, cited by part 1: fulfillment judges screenshot
   // items from it (FEAT-058 S6/S7), and the Brief lists its files.
-  services.actionLedger.record({
-    kind: 'capture',
-    scope: set.scope,
-    path: parts[0]!.path,
-    sha256: parts[0]!.sha256,
-    bytes,
-    producer: 'browser_capture',
-    parts: parts.length,
-    complete: set.complete,
-    captureSet: set,
-  });
+  const action = idOf(
+    services.actionLedger.record({
+      callId,
+      artifacts: artifactRefsOfSet(set),
+      kind: 'capture',
+      scope: set.scope,
+      path: parts[0]!.path,
+      sha256: parts[0]!.sha256,
+      bytes,
+      producer: 'browser_capture',
+      parts: parts.length,
+      complete: set.complete,
+      captureSet: set,
+    }),
+  );
   return {
     ok: true,
     model: {
+      action,
       scope: set.scope,
       ...(set.ref === undefined ? {} : { ref: set.ref }),
       complete: set.complete,
@@ -174,7 +184,7 @@ async function runCapture(params: Params, services: RunServices): Promise<Domain
       remaining_captures: services.budgets.remainingDeliverableCaptures(),
       saved_locally: true,
     },
-    details: { artifacts: artifactRefsOfSet(set), capture_set: set },
+    details: { artifacts: artifactRefsOfSet(set), capture_set: set, action_ids: [action] },
   };
 }
 

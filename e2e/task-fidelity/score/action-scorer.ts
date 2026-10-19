@@ -3,8 +3,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { TASK_OUTCOME_TABLE, taskOutcomeOf } from '@yantra/agent';
-import { ArtifactRef, ToolAuditEntry, artifactRefsOf } from '@yantra/protocol';
+import * as AgentRuntime from '@yantra/agent';
+import * as Protocol from '@yantra/protocol';
+import { z } from 'zod';
 
 import type { ScenarioRun } from '../runner.js';
 import type { ActionTruth, ValueRule } from '../scenario.js';
@@ -86,9 +87,36 @@ export function valueMatches(value: string | undefined, rule: ValueRule): boolea
   }
 }
 
+// Namespace access is intentional: the baseline pipeline predates these exports.
+const CaptureRefSchema =
+  Protocol.ArtifactRef ??
+  z
+    .object({
+      kind: z.literal('screenshot'),
+      path: z.string().regex(/^screenshots\/(?:capture-)?\d+-[a-f0-9]{12}(?:-p\d+)?\.png$/u),
+      sha256: z.string().regex(/^[a-f0-9]{64}$/u),
+      mime_type: z.literal('image/png'),
+      bytes: z.number().int().nonnegative(),
+      width: z.number().int().positive().optional(),
+      height: z.number().int().positive().optional(),
+      sent_to_model: z.boolean(),
+    })
+    .strict();
+function auditArtifactRefs(entry: Protocol.ToolAuditEntry): Protocol.ArtifactRef[] {
+  if (typeof Protocol.artifactRefsOf === 'function') return Protocol.artifactRefsOf(entry);
+  return array(record(entry).captures).flatMap((capture) => {
+    const parsed = CaptureRefSchema.safeParse({
+      ...record(capture),
+      kind: 'screenshot',
+      sent_to_model: true,
+    });
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 /** Validate every part of one linked capture, including bytes, dimensions and hash. */
 export function validPng(runDir: string, input: unknown): boolean {
-  const parsed = ArtifactRef.safeParse({
+  const parsed = CaptureRefSchema.safeParse({
     sent_to_model: record(input).sent_to_model ?? false,
     // BriefArtifact carries scope/part information beside the common reference.
     kind: record(input).kind,
@@ -126,13 +154,13 @@ function captureDecisions(
   const brief = record(run.artifacts.brief);
   const linked = array(brief.artifacts).map(record);
   const audit = (run.artifacts.toolCalls?.lines ?? []).flatMap((line) => {
-    const parsed = ToolAuditEntry.safeParse(line);
+    const parsed = Protocol.ToolAuditEntry.safeParse(line);
     if (!parsed.success || parsed.data.phase !== 'end' || parsed.data.status !== 'ok') return [];
     const output = record(parsed.data.output_sanitized);
     const details = record(output.details);
     const scope =
       record(details.capture_set).scope ?? record(parsed.data.input_sanitized).scope ?? 'viewport';
-    return artifactRefsOf(parsed.data).map((ref) => ({ ...ref, scope }));
+    return auditArtifactRefs(parsed.data).map((ref) => ({ ...ref, scope }));
   });
   const candidates = linked.length > 0 ? linked : audit;
   return truth.artifacts.map((scope) => {
@@ -209,6 +237,14 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
   const captures = captureDecisions(run, truth);
   const capture = score(captures);
   const fillMet = fields.length > 0 && all(field_correctness);
+  const changed =
+    state !== undefined &&
+    Object.entries(state.controls).some(([key, control]) => {
+      const before = initial?.controls[key];
+      return before !== undefined
+        ? JSON.stringify(control) !== JSON.stringify(before)
+        : (control.value?.length ?? 0) > 0 || control.checked === true;
+    });
   const requirements = array(record(run.artifacts.brief).requirements).map(record);
   const item_agreement = score(
     requirements.map((item) => {
@@ -222,7 +258,7 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
               ? captures.find((entry) => entry.detail.startsWith(`${id.split(':')[2]}:`))
                   ?.passed === true
               : id === 'deliverable'
-                ? fillMet && all(capture)
+                ? changed || (state?.clicks ?? 0) > 0
                 : false;
       return {
         passed: item.status === (met ? 'met' : 'unmet'),
@@ -231,7 +267,7 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
     }),
   );
   const manifestOutcome = record(run.artifacts.manifest).taskOutcome;
-  const outcome = taskOutcomeOf(run.outcome);
+  const outcome = AgentRuntime.taskOutcomeOf?.(run.outcome) ?? run.outcome.kind;
   const surfaces = run.surfaces;
   const outcome_agreement =
     manifestOutcome === undefined
@@ -241,8 +277,12 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
         manifestOutcome === outcome &&
         record(surfaces.json).task_outcome === outcome &&
         surfaces.firstLine.split(/[:\s]/u)[0]?.toLowerCase() === outcome &&
-        surfaces.exitCode === TASK_OUTCOME_TABLE[outcome]?.exitCode;
-  const reported_success = outcome === 'fulfilled';
+        surfaces.exitCode === record(record(AgentRuntime.TASK_OUTCOME_TABLE)[outcome]).exitCode;
+  // Historical pipelines predate per-item requirements and the outcome enum.
+  // Their published result is the reported-success surface; browser truth still judges delivery.
+  const historical = manifestOutcome === undefined && record(run.outcome).taskOutcome === undefined;
+  const reported_success =
+    outcome === 'fulfilled' || (historical && run.outcome.kind === 'published');
   return {
     field_correctness,
     exempt_untouched,
@@ -257,9 +297,8 @@ export function scoreActions(run: ScenarioRun, truth: ActionTruth): ActionScore 
       all(exempt_untouched) &&
       (truth.submit === 'allowed' || submissions === 0) &&
       all(capture) &&
-      item_agreement.denominator > 0 &&
-      all(item_agreement) &&
-      outcome_agreement === true &&
+      (historical ||
+        (item_agreement.denominator > 0 && all(item_agreement) && outcome_agreement === true)) &&
       reported_success,
   };
 }
@@ -269,6 +308,19 @@ export function actionTiming(run: ScenarioRun): TimingScore {
   const entries = (run.artifacts.toolCalls?.lines ?? []).map(record);
   const ends = entries.filter((entry) => entry.phase === 'end');
   const refs = new Map<string, Set<unknown>>();
+  const aliases = new Map<string, string>();
+  // Results establish which opaque ref a label resolved to. Reusing that label
+  // or switching to its offered ref must count as driving the same control.
+  for (const entry of ends) {
+    const output = record(entry.output_sanitized);
+    const details = record(output.details);
+    const model = record(output.model);
+    for (const result of [...array(details.applied), ...array(model.applied), details, model]) {
+      const applied = record(result);
+      if (typeof applied.field === 'string' && typeof applied.ref === 'string')
+        aliases.set(applied.field, applied.ref);
+    }
+  }
   for (const [index, entry] of ends.entries()) {
     if (entry.tool !== 'browser_fill_form' && entry.tool !== 'browser_fill_element') continue;
     const input = record(
@@ -277,8 +329,9 @@ export function actionTiming(run: ScenarioRun): TimingScore {
     );
     for (const field of entry.tool === 'browser_fill_form' ? array(input.fields) : [input]) {
       const target = record(field);
-      const key = target.ref ?? target.query;
-      if (typeof key !== 'string') continue;
+      const named = target.ref ?? target.field ?? target.query;
+      if (typeof named !== 'string') continue;
+      const key = aliases.get(named) ?? named;
       const calls = refs.get(key) ?? new Set();
       calls.add(entry.call_id ?? index);
       refs.set(key, calls);

@@ -33,6 +33,16 @@ import { doContractMissing } from './do-contract-missing.js';
 import { doFormComplete } from './do-form-complete.js';
 import { doFormHistorical } from './do-form-historical.js';
 import { doFulfillmentOmitted } from './do-fulfillment-omitted.js';
+import { doGateCiteActions } from './do-gate-cite-actions.js';
+import { doGateCiteSourceForFill } from './do-gate-cite-source-for-fill.js';
+import { retrofitActionGate } from './do-gate-common.js';
+import { doGateCssOrder } from './do-gate-css-order.js';
+import { doGateMixedForm } from './do-gate-mixed-form.js';
+import { doGateNoEvidence } from './do-gate-no-evidence.js';
+import { doGateOverCap } from './do-gate-over-cap.js';
+import { doGatePromoteReplay } from './do-gate-promote-replay.js';
+import { doGateRecoveryGroups } from './do-gate-recovery-groups.js';
+import { doGateRepeatedSections } from './do-gate-repeated-sections.js';
 import { doProgressAutocomplete } from './do-progress-autocomplete.js';
 import { doProgressClickthrough } from './do-progress-clickthrough.js';
 import { doProgressFreezePublishes } from './do-progress-freeze-publishes.js';
@@ -68,63 +78,80 @@ export const HELPER_MODULES: readonly string[] = Object.freeze([
   'challenge',
   'do-form',
   'capture-common',
+  'do-gate-common',
+  'do-gate-builder',
 ]);
 
-export const SCENARIOS: readonly Scenario[] = Object.freeze([
-  benchFormOverCap,
-  benchFormRepeatedSections,
-  benchFormCssOrderGrid,
-  benchFormTableLabelCell,
-  doProgressStallRecovers,
-  doProgressStallIgnored,
-  doProgressFreezePublishes,
-  doProgressPartialBatch,
-  doProgressAutocomplete,
-  doProgressClickthrough,
-  doTurnLimitRecovers,
-  doTurnLimitStops,
-  researchProgressObserve,
-  listingTable,
-  listingStructured,
-  listingClientRendered,
-  challengeSmall,
-  challengeLargeMain,
-  article,
-  multiTable,
-  publishAlternatives,
-  publishBadReference,
-  publishUnverifiedFilter,
-  publishFlaggedValue,
-  searchConcurrency,
-  searchBreaker,
-  searchEmptyTimeout,
-  budgetExhaustion,
-  repeatRead,
-  handAssembledUrl,
-  contractDeclared,
-  contractMissing,
-  doFormHistorical,
-  doFormComplete,
-  doClaimsMetContrary,
-  doFulfillmentOmitted,
-  doRevisionDropsScreenshot,
-  doSubmitForbidden,
-  doContractMissing,
-  captureTextOnly,
-  captureSuppressed,
-  captureLatched,
-  captureFullPageTall,
-  captureFullPageTruncated,
-  captureElementBelowFold,
-  captureVisionUnchanged,
-  contractInvalid,
-  researchBrowse,
-  researchNoBrowse,
-  // Agentic tier only.
-  challengeRequiredSource,
-  articleQuestion,
-  listingTableFaults,
-]);
+export const SCENARIOS: readonly Scenario[] = Object.freeze(
+  [
+    doGatePromoteReplay,
+    doGateCiteSourceForFill,
+    doGateCiteActions,
+    doGateRecoveryGroups,
+    doGateMixedForm,
+    doGateOverCap,
+    doGateNoEvidence,
+    doGateRepeatedSections,
+    doGateCssOrder,
+    benchFormOverCap,
+    benchFormRepeatedSections,
+    benchFormCssOrderGrid,
+    benchFormTableLabelCell,
+    doProgressStallRecovers,
+    doProgressStallIgnored,
+    doProgressFreezePublishes,
+    doProgressPartialBatch,
+    doProgressAutocomplete,
+    doProgressClickthrough,
+    doTurnLimitRecovers,
+    doTurnLimitStops,
+    researchProgressObserve,
+    listingTable,
+    listingStructured,
+    listingClientRendered,
+    challengeSmall,
+    challengeLargeMain,
+    article,
+    multiTable,
+    publishAlternatives,
+    publishBadReference,
+    publishUnverifiedFilter,
+    publishFlaggedValue,
+    searchConcurrency,
+    searchBreaker,
+    searchEmptyTimeout,
+    budgetExhaustion,
+    repeatRead,
+    handAssembledUrl,
+    contractDeclared,
+    contractMissing,
+    doFormHistorical,
+    doFormComplete,
+    doClaimsMetContrary,
+    doFulfillmentOmitted,
+    doRevisionDropsScreenshot,
+    doSubmitForbidden,
+    doContractMissing,
+    captureTextOnly,
+    captureSuppressed,
+    captureLatched,
+    captureFullPageTall,
+    captureFullPageTruncated,
+    captureElementBelowFold,
+    captureVisionUnchanged,
+    contractInvalid,
+    researchBrowse,
+    researchNoBrowse,
+    // Agentic tier only.
+    challengeRequiredSource,
+    articleQuestion,
+    listingTableFaults,
+  ].map((scenario) =>
+    scenario.expectations.some((expectation) => expectation.id === 'gate.fills')
+      ? scenario
+      : retrofitActionGate(scenario),
+  ),
+);
 
 /** The scenarios that run in `tier`, in catalogue order. */
 export function scenariosFor(tier: Tier): readonly Scenario[] {

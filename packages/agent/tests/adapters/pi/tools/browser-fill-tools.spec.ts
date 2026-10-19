@@ -69,8 +69,16 @@ describe('@no-llm browser_fill_form engine delegation', () => {
         const result = await wrapTool(browserFillFormSpec(services), services).execute(
           { fields: [{ field: control.expect.query, value: 'Synthetic' }] },
           undefined,
+          { callId: 'structural-fill-call' },
         );
         expect(result.status).toBe('ok');
+        expect(services.actionLedger.entries()[0]).toMatchObject({
+          callId: 'structural-fill-call',
+          identity: { origin: 'structural', confidence: 'medium' },
+          verification: { resolution: 'exact' },
+        });
+        expect(services.actionObservations.get('A1')).toBe('Synthetic');
+        expect(result.details).toMatchObject({ action_ids: ['A1'] });
         expect(
           await browser.page.$eval(
             `[data-fixture-key="${control.key}"]`,
@@ -2109,6 +2117,7 @@ describe('@no-llm explicit fill batch limit', () => {
         .map((field, i) => ({
           ...field,
           ref: `e${i + 1}`,
+          action: `A${i + 1}`,
           requested: field.value,
           committed: field.value,
           driver: 'plain-text',
@@ -2121,7 +2130,7 @@ describe('@no-llm explicit fill batch limit', () => {
     );
 
     expect(
-      model.applied.every((entry: Record<string, unknown>) => Object.keys(entry).length === 3),
+      model.applied.every((entry: Record<string, unknown>) => Object.keys(entry).length === 4),
     ).toBe(true);
     expect((result.details as { applied: unknown[] }).applied).toHaveLength(10);
     expect(model).not.toHaveProperty('progress');

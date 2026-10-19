@@ -218,15 +218,19 @@ For `test-form`, submission is measured from the server side. A real submission 
 counts requests to either path in the request log, so "no submission handler
 fired" is a count of zero and needs no read from a browser already torn down.
 
-`form-lab.yantra.test` serves seven synthetic layout-matrix pages, reusing the
+`form-lab.yantra.test` serves ten synthetic form pages, reusing the
 FEAT-055 fixtures: `/table-label-cell`, `/css-order-grid`, `/repeated-sections`,
-`/over-cap`, `/fieldset-groups`, `/no-evidence`, and `/dynamic-replacement`.
+`/over-cap`, `/fieldset-groups`, `/no-evidence`, and `/dynamic-replacement`, plus
+`/mixed-form`, `/cite-actions`, and `/recovery-groups`.
 They cover table-cell labels, visual order differing from DOM order, repeated
 sections, 70 inputs beyond the observation cap, grouped radios and checkboxes,
 controls without identity evidence, and a replaceable input. Each page has one
 form, a Submit button, an Add another `type="button"` control, and disabled,
 read-only, and file inputs. Hand-authored `BENCHMARK_RULES` describe suitable
 values for every keyed control; the three exempt inputs use `untouched`.
+The added pages combine protected and ordinary controls, separate page facts
+from later committed values, and exercise a refused number, replaced input,
+and shared-calendar date range. The root page links to all ten forms.
 
 The inline script in `fixtures/form-state.ts` reads controls marked with
 `data-fixture-key` and sends their state to the fixture server on initial load
@@ -249,7 +253,8 @@ The server accepts JSON state posts up to 64 KiB, validates them with
 `FormStateSchema`, and returns 204 for accepted states. `runScenario()` exposes
 `formState` after run finalization: one state per page, selected by highest
 sequence number so asynchronous password hashing cannot make an older update
-win. The witness lives outside the run artifacts and remains available after
+win. It also exposes `formInitialState`, the lowest-sequence state per page,
+for comparisons against the final values. The witness lives outside the run artifacts and remains available after
 the browser closes. It is fixture instrumentation, separate from the engine's
 own verification and publication claims.
 
@@ -379,6 +384,11 @@ After the run fully finalizes, `runScenario` returns a `ScenarioRun`. That
 object is everything an expectation or score may read:
 
 - `outcome` and `runDir`.
+- `formState` and `formInitialState`: the final and initial fixture-server
+  witnesses, keyed by page ID.
+- `surfaces`: for `do` scenarios, the human first line and JSON output rendered
+  independently through the production `CLIConnectorIO`, plus the exit code
+  from `exitCodeForDoOutcome`. Other commands return `null`.
 - `artifacts`: `manifest.json`, `brief.json`, `document.json`, `usage.json`,
   `run-health.json`, `contract.json`, `report.md`, plus `tool-calls.jsonl`, `events.jsonl`, and
   `runtime.jsonl`. Artifacts are read tolerantly:
@@ -602,6 +612,51 @@ following:
   `.yantra.test` host.
 - Every deterministic scenario has a script.
 
+### Applies six acceptance gates to form scenarios
+
+`gateExpectations()` attaches six FEAT-060 checks to action scenarios with
+authored `actionTruth`. Existing form, capture, and progress scenarios retain
+their original owner expectations and gain the same checks:
+
+| Gate               | What it checks                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate.fills`       | Final keyed values match the script's intended state, or authored correctness rules for a complete run; exempt controls remain untouched.       |
+| `gate.submissions` | Submit events and both programmatic submit paths total zero when submission is forbidden.                                                       |
+| `gate.capture`     | Expected scopes are linked from the Brief and their files pass PNG checks; declared partial outcomes use their explicitly expected capture set. |
+| `gate.items`       | Published requirement statuses agree with fixture evidence.                                                                                     |
+| `gate.agreement`   | Runtime, manifest, human output, JSON output, and exit code agree with the scenario's expected outcome.                                         |
+| `gate.canaries`    | No protected synthetic or secret canary appears in any run file.                                                                                |
+
+For an explicitly expected `failed`, `handoff`, or `aborted` outcome with no
+Brief, the requirement-item check is not applicable and passes without requiring
+a Brief. This exception does not apply to a successful or partial publication;
+the other five gates still run. Expected partial scenarios check their authored
+partial state rather than requiring every field to be complete.
+
+`GATE_CENSUS` covers eight categories: size and mix, hard identity, recovery,
+capture, no submission, outcome honesty, citation, and promotion. The census
+rejects empty categories, repeated IDs, missing scenarios, scenarios outside the
+deterministic tier, absent action truth, and any missing FEAT-060 gate.
+
+Nine additional deterministic scenarios pin the remaining behaviors:
+
+| Scenario                       | What it pins                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `do-gate-css-order`            | Label queries fill the intended controls despite CSS visual order.                                                                                     |
+| `do-gate-repeated-sections`    | A bare City query reports both candidates; section-qualified queries preserve different billing and shipping values.                                   |
+| `do-gate-no-evidence`          | Missing labels produce offered refs; fills use those refs and retain absent label origin in action evidence.                                           |
+| `do-gate-over-cap`             | Inventory continuation exposes the remaining fields; batches of ten fill all 70 controls before a full-page capture.                                   |
+| `do-gate-mixed-form`           | Explicit and structural labels, select, textarea, and protected input work together; the password digest matches and plaintext stays out of run files. |
+| `do-gate-recovery-groups`      | Retry only the refused number and replaced email; commit the calendar pair as one applied entry covering two controls.                                 |
+| `do-gate-cite-actions`         | New field values cite action evidence, the capture cites its action, and a page fact retains its source citation.                                      |
+| `do-gate-cite-source-for-fill` | A pre-fill page citation cannot establish a later committed value and produces one uncited-claim notice.                                               |
+| `do-gate-promote-replay`       | Promotion reports the omitted screenshot and saved structural fill steps replay with zero LLM against a fresh browser.                                 |
+
+The added scenarios have not met the specification's 60-second total runtime
+budget. The corrected over-cap scenario alone took 141.328 seconds and has a
+240-second timeout; see the [harness README](../../e2e/task-fidelity/README.md)
+for the timing record.
+
 ### Scores the outcome of agentic runs
 
 `score/scorer.ts` is a set of pure functions of a `ScenarioRun`, the scenario's
@@ -613,8 +668,10 @@ The scorer reads only these inputs:
 
 - public run artifacts;
 - the fixture request log;
-- the search call log; and
-- the launch count.
+- the search call log;
+- the launch count; and
+- for action scenarios, the fixture form-state witnesses and rendered outcome
+  surfaces.
 
 A run that lacks `run-health.json` or `usage.json` scores without a throw. An
 absent artifact means "not measured", never success.
@@ -628,8 +685,9 @@ String, numeric and boolean scalar values are included. Valid referenced
 captures from the owning run supplement that URL's corpus. Scoring uses these
 completed-run artifacts for both scripted and model-driven runs.
 
-Each score is `{ value, numerator, denominator, detail[] }`, with `value`
-rounded to three decimals. `value` is `null` exactly when the denominator is 0,
+Each score is `{ value, numerator, denominator, detail[] }`. The research scores
+round `value` to three decimals; action scores retain the ratio. `value` is
+`null` exactly when the denominator is 0,
 and the schema enforces that. For example, "nothing was cited" is never a
 citation validity of 1.0.
 
@@ -677,6 +735,65 @@ truth answer.
 Per-scenario aggregates are the median of each run's non-null values, or `null`
 when every run is `null`.
 
+### Scores form actions independently of reported success
+
+An `actions` contract supplies an `actionTruth` answer key: the fixture page,
+authored rules per control, required screenshot scopes, and whether submission
+is forbidden. The answer key stays outside the model's inputs.
+`score/action-scorer.ts` compares the server witness against those rules rather
+than trusting the engine's verification verdicts.
+
+`field_correctness` measures eligible controls against rules such as `letters`,
+`email`, bounded `digits` or `number`, ISO `date`, `nonempty`, `choice`, and a
+nonempty password `digest` for `protected`. A missing control fails. A
+`checked-any` group counts once and requires every member to exist and at least
+one to be checked. `exempt_untouched` compares exempt controls with the initial
+witness; when no initial state exists, an explicit `actionTruth.intended` value
+can supply the comparison. Absence of both cannot establish an exemption.
+
+The action score also records these checks:
+
+- `submissions` sums submit events, `requestSubmit()` calls, and `submit()`
+  calls. These are separate signals, so the sum is not a count of unique
+  transactions.
+- `capture` checks each requested scope using Brief artifact references, or
+  successful audited capture references when the Brief has none. It validates
+  the reference and reads the run-local file, checking PNG signature, IHDR
+  dimensions, byte length, and SHA-256. A full-page capture marked incomplete
+  fails, and multipart captures must supply all declared parts.
+- `item_agreement` compares each published requirement status with fixture
+  evidence for filling, submission, screenshots, or the overall deliverable.
+  Missing requirements produce a zero denominator, not agreement.
+- `outcome_agreement` compares runtime outcome, manifest `taskOutcome`, rendered
+  JSON `task_outcome`, the human first word, and the production exit-code table.
+  It is `null` on historical runs without manifest `taskOutcome`.
+
+For current runs, `reported_success` means only that the runtime outcome is `fulfilled`.
+`task_success` additionally requires a fixture state, all eligible rules to pass,
+all exempt controls to remain unchanged, zero submission signals when forbidden,
+every required capture to pass, nonempty matching requirement statuses, and
+agreement across all outcome surfaces. The aggregate reports both success
+rates and `false_fulfilled`, the number reported fulfilled that fail these
+independent checks.
+
+Action runs also carry `timing`: summed audited tool duration (`tool_ms`),
+reported reasoning tokens, the number of field targets driven in multiple fill
+calls (`retries`), and successful capture calls with artifact references
+(`captures`). Reasoning tokens are `null` when usage did not record them. The
+Actions table shows true and reported success, false fulfilled, field
+correctness, median and p95 wall/tool time, median reasoning tokens, retries,
+and captures. JSON additionally carries p95 reasoning tokens. Action and timing
+fields are optional in the unchanged `schema_version: 1`, so historical
+baselines continue to validate without these measurements.
+
+Historical pipelines without either manifest or runtime `taskOutcome` use
+`published` as their reported-success signal. Their true-success projection
+still requires correct fixture fields, unchanged exemptions, no forbidden
+submission, and valid required captures. Unavailable outcome agreement stays
+`null` and missing requirements retain a zero denominator; those unavailable
+surfaces do not automatically fail historical task success. Current runs keep
+the strict requirement-item and outcome-surface checks above.
+
 ## How to Use It
 
 The e2e workspace resolves `@yantra/*` packages from their built `dist/`, and
@@ -692,11 +809,12 @@ npx turbo run build
 cd e2e && npx vitest run task-fidelity
 ```
 
-That command runs five spec files: the tier (`task-fidelity.spec.ts`), the
+That command runs six spec files: the tier (`task-fidelity.spec.ts`), the
 harness self-tests (`task-fidelity-harness.spec.ts`), the `test-form`
 self-tests (`task-fidelity-do-form.spec.ts`), the `tall-page` self-tests
 (`task-fidelity-capture.spec.ts`), and the form-state witness self-tests
-(`task-fidelity-harness-actions.spec.ts`). The harness self-tests cover the
+(`task-fidelity-harness-actions.spec.ts`), plus the report self-tests
+(`task-fidelity-benchmark.spec.ts`). The harness self-tests cover the
 fixtures, host mapping, scripted search, the runner, matchers and ratchet, the
 census, the scorer, the eval runner, and baselines. The `test-form` self-tests
 check that `/apply` has more than 50 fillable controls, that both forms carry
@@ -713,10 +831,17 @@ typed values, radio state, password digests without plaintext in the state log,
 the three submission counters, an unchanged top-level URL, and exclusion of
 state posts from the request log. They also check that every `form-lab` control
 has exactly one authored rule and each exempt control has `untouched`.
-All five files are `@no-llm` and also run in
+All six files are `@no-llm` and also run in
 `pnpm test` and
 `pnpm test:no-llm`. A focused subset uses `-t`, for
 example `npx vitest run task-fidelity-harness -t "scorer"`.
+
+The action self-tests also use synthetic completed runs to check true versus
+reported success, historical and missing evidence, grouped controls, corrupt
+or incomplete captures, tool duration, and fill retries without a model call.
+The benchmark self-tests cover shared-layout targets, insufficient samples,
+latency, phase/prompt compatibility, deltas, report writing, and importability
+without Vitest.
 
 ### Land an owning feature
 
@@ -753,30 +878,41 @@ pnpm eval:tasks                                       # every agentic scenario �
 pnpm eval:tasks --scenario article-question --runs 1  # one cheap run
 pnpm eval:tasks --provider <provider> --model <id> --thinking <level> --auth-secret <ref>
 pnpm eval:tasks --out <dir> --json                    # also print the scorecard JSON
+pnpm eval:tasks --suite do-benchmark --runs 20        # four form layouts, one model setting
+pnpm eval:tasks --suite do-benchmark --runs 20 --phase after --out <dir>
 ```
 
 | Flag                                                   | Meaning                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--provider`, `--model`, `--thinking`, `--auth-secret` | The shared agentic model flags, spelled as the CLI registers them (a self-test enforces this). Selection resolves through the CLI's own resolver, in this order: flag, then environment, then profile, then pinned default. Budgets resolve the same way, and a scenario's own budgets override them. |
 | `--scenario <id>`                                      | Repeatable. Defaults to every agentic scenario.                                                                                                                                                                                                                                                       |
+| `--suite <name>`                                       | Selects a named suite. The supported name is `do-benchmark`; cannot be combined with `--scenario`. Without either selector, every agentic scenario runs.                                                                                                                                              |
+| `--phase <before\|after>`                              | Records `benchmark_phase` for before/after comparisons. The aggregator treats an absent phase as `after`.                                                                                                                                                                                             |
 | `--runs <n>`                                           | A positive integer. Defaults to 3.                                                                                                                                                                                                                                                                    |
 | `--out <dir>`                                          | Defaults to `e2e/task-fidelity/.out/<UTC timestamp>/`, which is git- and Prettier-ignored. A relative path resolves against the current working directory.                                                                                                                                            |
 | `--json`                                               | Prints the scorecard JSON to stdout after the files are written.                                                                                                                                                                                                                                      |
 
-The tier has seven agentic scenarios. Each goal is fixture-native and names its
-required source.
+The tier has eleven agentic scenarios: seven research cases and four form
+benchmarks. Each goal is fixture-native and names its required source.
 
-| Scenario                    | What it asks for                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listing-table`             | Seller, lowest price, and colors for new 2026 Summit AWD listings near the user, from `faceted-listing.yantra.test`. The answer key is the cheapest five matching rows × four fields. |
-| `listing-structured`        | The same data from the JSON-LD-only listing                                                                                                                                           |
-| `listing-client-rendered`   | The same data from the script-rendered listing                                                                                                                                        |
-| `multi-table`               | One answer cell from the second table                                                                                                                                                 |
-| `challenge-required-source` | The required source serves a challenge. A faithful answer discloses the block and offers other sources only as labelled alternatives.                                                 |
-| `article-question`          | Two facts from the article                                                                                                                                                            |
-| `listing-table+faults`      | `listing-table` with `challenge-on-concurrency` on a `duckduckgo`-named provider and `maxNavigations: 30`                                                                             |
+| Scenario                       | What it asks for                                                                                                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listing-table`                | Seller, lowest price, and colors for new 2026 Summit AWD listings near the user, from `faceted-listing.yantra.test`. The answer key is the cheapest five matching rows × four fields. |
+| `listing-structured`           | The same data from the JSON-LD-only listing                                                                                                                                           |
+| `listing-client-rendered`      | The same data from the script-rendered listing                                                                                                                                        |
+| `multi-table`                  | One answer cell from the second table                                                                                                                                                 |
+| `challenge-required-source`    | The required source serves a challenge. A faithful answer discloses the block and offers other sources only as labelled alternatives.                                                 |
+| `article-question`             | Two facts from the article                                                                                                                                                            |
+| `listing-table+faults`         | `listing-table` with `challenge-on-concurrency` on a `duckduckgo`-named provider and `maxNavigations: 30`                                                                             |
+| `bench-form-table-label-cell`  | Fill the table-label layout, save a full-page screenshot, and do not submit.                                                                                                          |
+| `bench-form-css-order-grid`    | The same task with visual order differing from DOM order.                                                                                                                             |
+| `bench-form-repeated-sections` | The same task with repeated field sections.                                                                                                                                           |
+| `bench-form-over-cap`          | The same task with 70 inputs beyond the observation cap.                                                                                                                              |
 
-Runs execute one at a time, and each run gets its own fixture server.
+The four `bench-form-*` scenarios form `do-benchmark`, run with command `do`,
+and are agentic-only. Runs execute one at a time, and each run gets its own
+fixture server. Select one model setting per invocation using the existing
+model flags; repeat the invocation to measure another setting.
 
 ### Exit codes and output
 
@@ -798,9 +934,10 @@ stderr carries the following lines:
 ### Cost expectations
 
 Every agentic run is a real model session that spends real tokens under the
-CLI-resolved budgets. The default invocation is 7 scenarios × 3 runs = 21
+CLI-resolved budgets. The default invocation is 11 scenarios × 3 runs = 33
 sequential runs. There is no cost-cap flag. To limit spend, narrow the run with
-`--scenario` and `--runs`, and check the plan line before letting it proceed.
+`--scenario` or `--suite` and `--runs`, and check the plan line before letting it
+proceed. `--suite do-benchmark --runs 20` plans 80 runs for one model setting.
 `cost_usd` in the scorecard is the sum of the provider's per-call estimates in
 `usage.json`, and it is `null` when no call reports one.
 
@@ -833,6 +970,47 @@ check every committed `*.json` baseline:
 - every scenario ID it holds must still exist in the agentic catalogue, so a
   renamed scenario cannot silently orphan a baseline.
 
+### Compare model settings and before/after measurements
+
+`pnpm eval:benchmark <scorecard.json>... [--out <dir>] [--json]` merges saved
+scorecards or committed `baseline.json` files without calling a model or
+starting a browser. It writes `benchmark.json` and `benchmark.md`, defaulting
+to `e2e/task-fidelity/.out/benchmark/`. Each cell combines one `bench-form-*`
+layout, provider/model/thinking setting, and phase. Inputs record their measured
+commit and prompt version. Conflicting prompt versions within one setting and
+phase, duplicate run IDs within a cell, invalid inputs, or no benchmark runs
+are usage errors. Before and after phases may have different prompt versions.
+
+Run the four-layout suite with 20 runs per layout for each of two settings,
+using explicit `--phase before` and `--phase after` and distinct output
+directories. The before measurement must name the pipeline commit before
+FEAT-054's changes; record it from that checkout with the harness available.
+Keep the same model settings across phases. This is 80 runs per setting per
+phase, 160 per phase across two settings, and 320 for the complete comparison.
+The [harness README](../../e2e/task-fidelity/README.md#form-benchmark-procedure)
+provides the commands and baseline procedure.
+
+The Markdown has a table per setting with true successes and total runs,
+reported successes, false fulfilled counts, wall/tool/reasoning p50 and p95,
+median field correctness, retries, and captures. Missing telemetry reads
+`not recorded`. Matching before/after cells include after-minus-before deltas
+for success rate and wall p50/p95. Its target table evaluates after cells:
+
+- Every cell needs at least 20 runs and at least 95% true success; fewer runs
+  are marked insufficient. At exactly 20 runs this requires at least 19.
+- At least three layouts must qualify, and at least two model settings must
+  qualify on the same three layouts.
+- Every after cell needs wall p50 at most 120,000 ms and p95 at most 300,000 ms;
+  absent timing is unmet.
+
+Targets are observational: the report command exits 0 whenever files are
+written, even when targets fail; usage/validation errors exit 1 and other
+failures exit 2. `eval:tasks` retains its separate exit codes above. A generated
+report establishes only what its supplied runs measured. No successful live
+form benchmark or committed form baseline is recorded yet: current provider
+attempts failed before tool execution because the `opencode-go` API key had
+expired.
+
 ## Inputs and Outputs
 
 Scenarios are TypeScript values (`e2e/task-fidelity/scenario.ts`). Each one has
@@ -841,6 +1019,7 @@ these fields:
 - `id`, `sites`, `command`, and a fixture-native `goal`;
 - the scoring `contract`;
 - `userLocation`;
+- optional `suite: 'do-benchmark'` for the form benchmark selection;
 - the scripted `serps`;
 - optional `faults`, `searchProviderName`, and `budgets`;
 - optional `browse`: whether a `research` run gets the read-only browser, as
@@ -911,6 +1090,9 @@ uses them. They are documented in
 - **One baseline, one model.** The committed baseline covers a single model
   and prompt version at 3 runs per scenario. Other models are not measured
   until someone with their credentials records a baseline.
+- **Form benchmark availability is not a recorded result.** The benchmark
+  scenarios and independent scores do not establish a live success rate;
+  that requires model-driven runs and their saved scorecards.
 - **The harness drives agentic runs only.** The deterministic `ask` and
   `research --no-llm` pipelines are not measured.
 - **Agentic scores never gate CI.** They are medians over a small number of

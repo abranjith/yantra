@@ -72,6 +72,10 @@ export interface ScenarioTruthRow {
 
 /** One task-fidelity scenario. */
 export interface Scenario {
+  readonly expectOutcome?: 'fulfilled' | 'partial' | 'handoff' | 'failed' | 'aborted';
+  readonly expectedCaptures?: readonly ('viewport' | 'full_page' | 'element')[];
+  readonly saveAs?: string;
+  readonly canaries?: readonly string[];
   readonly suite?: 'do-benchmark';
   /** Unique across the catalogue. */
   readonly id: string;

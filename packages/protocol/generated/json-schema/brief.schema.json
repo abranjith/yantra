@@ -4,6 +4,253 @@
     "Brief": {
       "type": "object",
       "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^A[1-9]\\d*$",
+                "description": "Run-wide action identifier, equal to A followed by the ledger sequence."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fill",
+                  "click",
+                  "submit_refused",
+                  "capture"
+                ],
+                "description": "Verified action kind."
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Sanitized field or control label; null when no label is known."
+              },
+              "label_origin": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "structural",
+                  "placeholder",
+                  "title",
+                  "none"
+                ],
+                "description": "Evidence from which the fill label was resolved."
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "description": "Confidence of an inferred label."
+              },
+              "section": {
+                "type": "string",
+                "maxLength": 60,
+                "description": "Sanitized form section containing the field."
+              },
+              "ref": {
+                "type": "string",
+                "pattern": "^e[0-9]+$",
+                "description": "Page-scoped target reference."
+              },
+              "epoch": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Committed document epoch when the action happened."
+              },
+              "call_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Provider tool-call identifier, or null for a direct execution."
+              },
+              "host": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Page hostname at action time, or null when unknown."
+              },
+              "verification": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "resolution": {
+                        "type": "string",
+                        "enum": [
+                          "exact",
+                          "single_offered_match",
+                          "selected_from_offered",
+                          "typed_literal",
+                          "reformatted"
+                        ],
+                        "description": "How the fill was verified."
+                      }
+                    },
+                    "required": [
+                      "resolution"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "withheld": {
+                        "type": "object",
+                        "properties": {
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "password",
+                              "autocomplete",
+                              "secret_marker",
+                              "stored_secret"
+                            ],
+                            "description": "Why the readback was withheld, including an opaque stored-secret fill."
+                          },
+                          "verdict": {
+                            "type": "string",
+                            "enum": [
+                              "exact",
+                              "reformatted",
+                              "unchecked"
+                            ],
+                            "description": "Safe comparison verdict; never the protected value."
+                          }
+                        },
+                        "required": [
+                          "reason",
+                          "verdict"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Protected readback verification."
+                      }
+                    },
+                    "required": [
+                      "withheld"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Fill verification without any committed value."
+              },
+              "signal": {
+                "type": "string",
+                "enum": [
+                  "structural",
+                  "name",
+                  "nested-workflow"
+                ],
+                "description": "Signal that caused a submit refusal."
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "screenshot"
+                      ],
+                      "description": "What kind of file the artifact is."
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Run-relative path of the artifact file, using forward slashes."
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "description": "Lowercase hex SHA-256 of the file bytes."
+                    },
+                    "mime_type": {
+                      "type": "string",
+                      "const": "image/png",
+                      "description": "Media type of the file."
+                    },
+                    "bytes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "File size in bytes."
+                    },
+                    "width": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "description": "Image width in pixels."
+                    },
+                    "height": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "description": "Image height in pixels."
+                    },
+                    "sent_to_model": {
+                      "type": "boolean",
+                      "description": "True only when the image was shown to the model provider (Vision Assist); false for a capture kept on this computer."
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "sha256",
+                    "mime_type",
+                    "bytes",
+                    "sent_to_model"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One file a tool call wrote to the run directory: metadata only, never image bytes or a data URI."
+                },
+                "minItems": 1,
+                "maxItems": 6,
+                "description": "Every saved file of a capture action."
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "epoch",
+              "call_id",
+              "host"
+            ],
+            "additionalProperties": false,
+            "description": "One cited, verified browser action: identities and verdicts only, never field values."
+          },
+          "maxItems": 40,
+          "description": "Cited action evidence, in first-citation order; absent on older Briefs."
+        },
         "brief_id": {
           "type": "string",
           "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
@@ -33,6 +280,14 @@
           "items": {
             "type": "object",
             "properties": {
+              "actions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/Brief/properties/actions/items/properties/id"
+                },
+                "maxItems": 8,
+                "description": "Recorded action IDs backing this content."
+              },
               "text": {
                 "type": "string",
                 "minLength": 1,
@@ -117,6 +372,10 @@
           "items": {
             "type": "object",
             "properties": {
+              "actions": {
+                "$ref": "#/definitions/Brief/properties/key_findings/items/properties/actions",
+                "description": "Recorded action IDs backing this content."
+              },
               "kind": {
                 "type": "string",
                 "enum": [
@@ -168,6 +427,13 @@
                           },
                           "minItems": 1,
                           "description": "Column headers."
+                        },
+                        "row_actions": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/Brief/properties/key_findings/items/properties/actions"
+                          },
+                          "description": "Recorded action IDs backing each row, in row order."
                         },
                         "rows": {
                           "type": "array",
@@ -465,9 +731,7 @@
                 "description": "What a screenshot covers: the visible viewport, the full page, or one element."
               },
               "path": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Run-relative path of the artifact file, using forward slashes."
+                "$ref": "#/definitions/Brief/properties/actions/items/properties/artifacts/items/properties/path"
               },
               "sha256": {
                 "type": "string",

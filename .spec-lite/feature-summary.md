@@ -42,6 +42,10 @@ Everything Yantra owns lives under one root, `~/.yantra` (override `YANTRA_HOME`
 
 ## Agent Runtime
 
+**FEAT-060 ? Action Evidence and Form Generality** _(in progress: 2026-10-18 by implement)_
+Source spec: [spec.md](features/FEAT-060-action_evidence_generality_benchmark/spec.md)
+Verified browser actions expose `A<n>` IDs linked to tool calls. `do` Briefs can cite them separately from page sources, persist value-free identities and verification, and render inferred labels and capture links. Masked non-withheld observations exist only in a private in-memory store. The harness records independent browser state (passwords hashed in page), scores true versus reported success, applies six shared gates, and provides nine additional deterministic scenarios plus four live form layouts. `eval:benchmark` merges settings and before/after phases into observational reports. Local validation is in progress; live before/after results remain pending credential resolution. The user approved retaining full coverage despite exceeding the new-scenario 60-second timing allowance.
+
 **FEAT-059 — Contract-Item Progress** _(updated: 2026-10-18 by implement)_
 Source spec: [spec.md](features/FEAT-059-contract_item_progress/spec.md)
 Runs measure progress from new evidence, canonical pages, verified actions, saved artifacts, and live contract items without reading the browser again. In `do`, unchanged calls trigger one supported recovery steer, then exploration closes while publication and a bounded requested capture remain available, and continued stalling stops with an honest partial or failure. A configurable thinking limit (`--turn-timeout`, `agent.turn_timeout`, default two minutes, minimum ten seconds) aborts only a provider turn before output and re-prompts the same session through the shared ladder; `ask` and `research` observe progress without enforcing these limits. Terminal and JSON events show contract progress and recovery, while run health and usage record counts, reasoning tokens, provider timing, and thinking provenance without thought text.

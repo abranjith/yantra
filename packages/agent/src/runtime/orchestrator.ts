@@ -98,6 +98,7 @@ import type {
   AgentSession,
 } from '../provider/types.js';
 
+import { actionEvidenceView } from './action-evidence.js';
 import { actionLedgerFor, type ActionLedgerEntry } from './action-ledger.js';
 import {
   composeAgentBrief,
@@ -1527,6 +1528,10 @@ async function maybeAssembleUnpublishedResult(
       documents: services.documents,
       contract: services.contract.current(),
       mode: 'assembled',
+      actions:
+        services.contract.command === 'do' && services.domain.browser !== null
+          ? actionEvidenceView(services.actionLedger, services.actionObservations)
+          : null,
     },
   );
   if (!composed.isOk) return undefined;

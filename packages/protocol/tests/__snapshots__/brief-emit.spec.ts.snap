@@ -9,6 +9,253 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
       "additionalProperties": false,
       "description": "The universal synthesized output document: answer-first overview, key findings, sections, facets, numbered sources, notices, and metadata. Every citation resolves to a declared source (no uncited claims).",
       "properties": {
+        "actions": {
+          "description": "Cited action evidence, in first-citation order; absent on older Briefs.",
+          "items": {
+            "additionalProperties": false,
+            "description": "One cited, verified browser action: identities and verdicts only, never field values.",
+            "properties": {
+              "artifacts": {
+                "description": "Every saved file of a capture action.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One file a tool call wrote to the run directory: metadata only, never image bytes or a data URI.",
+                  "properties": {
+                    "bytes": {
+                      "description": "File size in bytes.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "height": {
+                      "description": "Image height in pixels.",
+                      "exclusiveMinimum": 0,
+                      "type": "integer",
+                    },
+                    "kind": {
+                      "description": "What kind of file the artifact is.",
+                      "enum": [
+                        "screenshot",
+                      ],
+                      "type": "string",
+                    },
+                    "mime_type": {
+                      "const": "image/png",
+                      "description": "Media type of the file.",
+                      "type": "string",
+                    },
+                    "path": {
+                      "description": "Run-relative path of the artifact file, using forward slashes.",
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "sent_to_model": {
+                      "description": "True only when the image was shown to the model provider (Vision Assist); false for a capture kept on this computer.",
+                      "type": "boolean",
+                    },
+                    "sha256": {
+                      "description": "Lowercase hex SHA-256 of the file bytes.",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "type": "string",
+                    },
+                    "width": {
+                      "description": "Image width in pixels.",
+                      "exclusiveMinimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "kind",
+                    "path",
+                    "sha256",
+                    "mime_type",
+                    "bytes",
+                    "sent_to_model",
+                  ],
+                  "type": "object",
+                },
+                "maxItems": 6,
+                "minItems": 1,
+                "type": "array",
+              },
+              "call_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "Provider tool-call identifier, or null for a direct execution.",
+              },
+              "confidence": {
+                "description": "Confidence of an inferred label.",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low",
+                ],
+                "type": "string",
+              },
+              "epoch": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "Committed document epoch when the action happened.",
+              },
+              "host": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "Page hostname at action time, or null when unknown.",
+              },
+              "id": {
+                "description": "Run-wide action identifier, equal to A followed by the ledger sequence.",
+                "pattern": "^A[1-9]\\d*$",
+                "type": "string",
+              },
+              "kind": {
+                "description": "Verified action kind.",
+                "enum": [
+                  "fill",
+                  "click",
+                  "submit_refused",
+                  "capture",
+                ],
+                "type": "string",
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "maxLength": 120,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "Sanitized field or control label; null when no label is known.",
+              },
+              "label_origin": {
+                "description": "Evidence from which the fill label was resolved.",
+                "enum": [
+                  "explicit",
+                  "structural",
+                  "placeholder",
+                  "title",
+                  "none",
+                ],
+                "type": "string",
+              },
+              "ref": {
+                "description": "Page-scoped target reference.",
+                "pattern": "^e[0-9]+$",
+                "type": "string",
+              },
+              "section": {
+                "description": "Sanitized form section containing the field.",
+                "maxLength": 60,
+                "type": "string",
+              },
+              "signal": {
+                "description": "Signal that caused a submit refusal.",
+                "enum": [
+                  "structural",
+                  "name",
+                  "nested-workflow",
+                ],
+                "type": "string",
+              },
+              "verification": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "resolution": {
+                        "description": "How the fill was verified.",
+                        "enum": [
+                          "exact",
+                          "single_offered_match",
+                          "selected_from_offered",
+                          "typed_literal",
+                          "reformatted",
+                        ],
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "resolution",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "withheld": {
+                        "additionalProperties": false,
+                        "description": "Protected readback verification.",
+                        "properties": {
+                          "reason": {
+                            "description": "Why the readback was withheld, including an opaque stored-secret fill.",
+                            "enum": [
+                              "password",
+                              "autocomplete",
+                              "secret_marker",
+                              "stored_secret",
+                            ],
+                            "type": "string",
+                          },
+                          "verdict": {
+                            "description": "Safe comparison verdict; never the protected value.",
+                            "enum": [
+                              "exact",
+                              "reformatted",
+                              "unchecked",
+                            ],
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "reason",
+                          "verdict",
+                        ],
+                        "type": "object",
+                      },
+                    },
+                    "required": [
+                      "withheld",
+                    ],
+                    "type": "object",
+                  },
+                ],
+                "description": "Fill verification without any committed value.",
+              },
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "epoch",
+              "call_id",
+              "host",
+            ],
+            "type": "object",
+          },
+          "maxItems": 40,
+          "type": "array",
+        },
         "artifacts": {
           "description": "Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs.",
           "items": {
@@ -60,9 +307,7 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
                 "type": "integer",
               },
               "path": {
-                "description": "Run-relative path of the artifact file, using forward slashes.",
-                "minLength": 1,
-                "type": "string",
+                "$ref": "#/definitions/Brief/properties/actions/items/properties/artifacts/items/properties/path",
               },
               "scope": {
                 "description": "What a screenshot covers: the visible viewport, the full page, or one element.",
@@ -169,6 +414,13 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
                           "minItems": 1,
                           "type": "array",
                         },
+                        "row_actions": {
+                          "description": "Recorded action IDs backing each row, in row order.",
+                          "items": {
+                            "$ref": "#/definitions/Brief/properties/key_findings/items/properties/actions",
+                          },
+                          "type": "array",
+                        },
                         "row_citations": {
                           "description": "Sources backing each row, in row order; length must equal rows.length.",
                           "items": {
@@ -222,6 +474,14 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
             "additionalProperties": false,
             "description": "A scannable, citation-backed finding bullet.",
             "properties": {
+              "actions": {
+                "description": "Recorded action IDs backing this content.",
+                "items": {
+                  "$ref": "#/definitions/Brief/properties/actions/items/properties/id",
+                },
+                "maxItems": 8,
+                "type": "array",
+              },
               "children": {
                 "default": [],
                 "description": "Nested child findings that elaborate this parent; one level deep only.",
@@ -625,6 +885,10 @@ exports[`@no-llm brief json schema emission > emits brief.schema.json as valid d
             "additionalProperties": false,
             "description": "A deep-detail prose section of the Brief.",
             "properties": {
+              "actions": {
+                "$ref": "#/definitions/Brief/properties/key_findings/items/properties/actions",
+                "description": "Recorded action IDs backing this content.",
+              },
               "body_md": {
                 "description": "Markdown body prose; must not contain raw ANSI escapes.",
                 "type": "string",
