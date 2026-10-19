@@ -81,7 +81,7 @@
     },
     {
       "path": "e2e/task-fidelity-harness-benchmark.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
