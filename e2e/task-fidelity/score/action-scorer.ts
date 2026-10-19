@@ -358,9 +358,9 @@ export function actionTiming(run: ScenarioRun): TimingScore {
     retries: [...refs.values()].filter((calls) => calls.size > 1).length,
     captures: ends.filter(
       (entry) =>
-        entry.tool === 'browser_capture' &&
+        ['browser_capture', 'browser_screenshot'].includes(String(entry.tool)) &&
         entry.status === 'ok' &&
-        array(entry.artifacts).length > 0,
+        (array(entry.artifacts).length > 0 || array(entry.captures).length > 0),
     ).length,
   };
 }

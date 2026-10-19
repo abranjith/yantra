@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildBenchmark, main, renderBenchmark } from './task-fidelity/benchmark.js';
+import { buildBenchmark, main, renderBenchmark, percentile } from './task-fidelity/benchmark.js';
 import { BaselineSchema, type Baseline } from './task-fidelity/score/scorecard-schema.js';
 
 const baselinePath = fileURLToPath(
@@ -45,6 +45,11 @@ async function card(model = 'one', runs = 20, successes = 19): Promise<Baseline>
   };
 }
 describe('@no-llm benchmark report', () => {
+  it('uses the median for p50 and nearest-rank p95 without inventing missing timing', () => {
+    expect(percentile([10, 20, null], 0.5)).toBe(15);
+    expect(percentile([10, 20, null], 0.95)).toBe(20);
+    expect(percentile([null], 0.5)).toBeNull();
+  });
   it('meets every target with two settings on three layouts at 19/20', async () => {
     const report = buildBenchmark([
       { file: 'one', card: await card() },

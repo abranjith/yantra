@@ -73,7 +73,9 @@ describe('@no-llm ActionObservations', () => {
       covers: 1,
       verification: { resolution: null, withheld: { reason: 'password', verdict: 'exact' } },
     });
-    expect(actionEvidenceText(entry, 'protected-canary')).toBe('Filled Password verified exact');
+    expect(actionEvidenceText(entry, 'protected-canary')).toBe(
+      'Filled Password field verified exact',
+    );
     expect(briefActionOf(entry)).toMatchObject({
       call_id: null,
       verification: { withheld: { reason: 'password', verdict: 'exact' } },

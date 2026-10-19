@@ -464,6 +464,18 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/prompt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-recorder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/src/audit/report-builder.ts",
       "status": "M",
       "role": "implement",

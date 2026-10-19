@@ -412,5 +412,15 @@ describe('@no-llm independent action scorer', () => {
       captures: 0,
     });
     expect(actionTiming(syntheticRun({})).reasoning_tokens).toBeNull();
+    expect(
+      actionTiming(
+        syntheticRun({
+          toolCalls: [
+            { phase: 'end', tool: 'browser_screenshot', status: 'ok', captures: [{}] },
+            { phase: 'end', tool: 'browser_capture', status: 'ok', artifacts: [{}] },
+          ],
+        }),
+      ).captures,
+    ).toBe(2);
   });
 });

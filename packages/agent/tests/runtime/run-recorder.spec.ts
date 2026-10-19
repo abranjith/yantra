@@ -128,7 +128,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       expect(AgentManifestSection.parse(manifest.agent)).toMatchObject({
         auth_source: authSource,
         session_file: `agent/session-${authSource}.jsonl`,
-        prompt_version: 'agent-v14',
+        prompt_version: 'agent-v15',
       });
       expect(text).not.toContain(SECRET_CANARY);
     },
@@ -247,6 +247,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
         status: 'denied',
         error_code: 'CONFIRMATION_DENIED',
         confirmation_id: 'confirmation-1',
+        actions: ['A9'],
       },
       isError: true,
       at: '2026-07-14T12:00:00.010Z',
@@ -257,6 +258,7 @@ describe('@no-llm run recorder and catalog hashing', () => {
       tool: 'web_search',
       output: {
         results: [],
+        actions: ['A1', 'A2'],
         details: {
           applied: [
             { field: 'Choice', attempted: [{ strategy: 'clear-then-type', verdict: 'succeeded' }] },
@@ -293,7 +295,9 @@ describe('@no-llm run recorder and catalog hashing', () => {
       error_code: 'CONFIRMATION_DENIED',
       confirmation_id: 'confirmation-1',
     });
+    expect(entries[2]).not.toHaveProperty('actions');
     expect(entries[3]).toMatchObject({
+      actions: ['A1', 'A2'],
       status: 'ok',
       duration_ms: 20,
       output_sanitized: {

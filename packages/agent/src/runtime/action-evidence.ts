@@ -36,7 +36,7 @@ export function actionEvidenceView(
 export function actionEvidenceText(entry: ActionLedgerEntry, observation: string | null): string {
   switch (entry.kind) {
     case 'fill_committed':
-      return `Filled ${entry.identity?.label ?? entry.field} ${entry.identity?.section ?? ''} ${entry.verification.withheld === null ? (observation ?? '') : ''} verified ${entry.verification.withheld?.verdict ?? entry.verification.resolution ?? ''}`
+      return `Filled ${entry.identity?.label ?? entry.field} field ${entry.identity?.section ?? ''} ${entry.verification.withheld === null ? (observation ?? '') : ''} verified ${entry.verification.withheld?.verdict ?? entry.verification.resolution ?? ''}`
         .replace(/\s+/gu, ' ')
         .trim();
     case 'click_executed':

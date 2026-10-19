@@ -287,7 +287,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-002: One action scorer separates true task success from reported success, and the `do-benchmark` suite runs on any pipeline version
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `scenario.ts`: add the `actions` deliverable, `ActionTruth`, and `suite`.
   - `score/action-scorer.ts` (pure; reads `ScenarioRun` only):
     - `fieldCorrectness`: each eligible key's final state checked against its `ValueRule`. A rule `checked-any` counts its group once. A missing key fails, with detail naming the key.
@@ -316,7 +316,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - goal: `Fill every field of the form at https://form-lab.yantra.test/<page> with suitable test data, then take a full-page screenshot. Do not submit the form.`;
     - `actionTruth` with the page's rules, `artifacts: ['full_page']`, `submit: 'forbidden'`.
   - `eval.ts`: `--suite <name>` selects scenarios by suite and is refused together with `--scenario`. The first stderr line states the plan as today.
-- [ ] **Unit Tests** (synthetic `ScenarioRun`s through `score/synthetic-runs.ts`; no model):
+- [x] **Unit Tests** (synthetic `ScenarioRun`s through `score/synthetic-runs.ts`; no model):
   - a perfect run → `task_success: true`, `field_correctness 1`;
   - an email typed into a `letters` field → `field_correctness < 1` and detail names both keys;
   - one submit → `task_success: false`, `submissions: 1`;
@@ -328,7 +328,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - the committed `2026-10-baseline.json` still validates;
   - `parseEvalArgs(['--suite','do-benchmark','--scenario','x'])` → `EvalUsageError`;
   - harness modules import no Vitest (memory): a `tsx` import smoke of `eval.ts` succeeds.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (action scores, true versus reported success, `--suite`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (action scores, true versus reported success, `--suite`).
 - **Verify**:
   - `npx turbo run build`; `cd e2e && npx vitest run task-fidelity-harness`.
   - Manually, **record the baseline (S12)**:
@@ -364,7 +364,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-004: Every verified action records its tool call, field identity, and verdict, and the model sees its action ID; no value is persisted
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `adapters/pi/tools/index.ts` `toPiTool`: pass `toolCallId` as `tool.execute(params, signal, { callId })`. `toAgentToolResult` lifts `details.action_ids` to a top-level `actions` (the same pattern as `captures`/`artifacts`).
   - `middleware.ts`: `WrappedTool.execute` accepts `meta`, and `DomainContext.callId` is `meta?.callId ?? null`. Direct callers (the harness's scripted agent, tests) may omit it.
   - `action-ledger.ts` (FEAT-054):
@@ -384,7 +384,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - Each tool sets `details.action_ids`.
   - `run-recorder.ts`: the end entry writes `actions` when non-empty.
   - Tool descriptions (fill, click, capture): one sentence each. Example: "Each applied field carries action (A<n>), the ID of what you did; cite it in result_publish as [A<n>] when you report it."
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `toPiTool` passes the call ID, and a fill recorded through it has `callId` equal to the Pi call ID. A direct `execute` without `meta` records `callId: null`.
   - A 3-field batch with 1 failure:
     - 2 `action` keys, with consecutive IDs that equal ledger `seq`;
@@ -397,7 +397,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - A refused submit → `action` on the refusal, `signal` recorded, and the end entry status `error` with no `actions` key (refusals are failures to the audit). The ledger still holds it.
   - A capture with 3 parts → one action whose `artifacts` SHAs equal the audit refs.
   - Privacy canary (byte scan): a stored-secret canary and a protected synthetic value are absent from `tool-calls.jsonl`, `runtime.jsonl`, `JSON.stringify(ledger.entries())`, and `JSON.stringify(services.actionObservations)` (which must serialize to `{}`).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (`actions` on tool-call entries; how an action ID links to its call) and `docs/features/safety-and-privacy.md` (action evidence stores no values).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (`actions` on tool-call entries; how an action ID links to its call) and `docs/features/safety-and-privacy.md` (action evidence stores no values).
 - **Verify**: `npx turbo run build --filter=@yantra/protocol --filter=@yantra/core`; `cd packages/agent && npx vitest run tests/runtime/action-ledger.spec.ts tests/runtime/action-evidence.spec.ts tests/runtime/middleware.spec.ts tests/runtime/run-recorder.spec.ts tests/adapters/pi/tools`; then `npm run typecheck` in `packages/agent`, and `tests/runtime` itself (memory: the runtime suites are outside the test typecheck).
 - **Depends on**: TASK-003, FEAT-054 TASK-004, FEAT-058 TASK-004
 
@@ -550,7 +550,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-009: `pnpm eval:benchmark` merges model settings into a per-layout, per-model report, checks the targets, and the results are recorded in the plan
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `benchmark.ts` (Vitest-free; `tsx`): `pnpm eval:benchmark <scorecard.json>... [--out <dir>] [--json]`. Also accept committed `baseline.json` files, through `BaselineSchema`.
     - Validate every input. Refuse inputs whose `prompt_version` sets differ within one model setting (exit 1, naming both files).
     - Cells: one per (`bench-form-*` scenario × `provider/model/thinking`), with `runs`, `successes` (true task success), `reported`, `false_fulfilled`, `p50_ms`/`p95_ms` wall time, tool time p50/p95, reasoning tokens p50/p95 (or `null` with a "not recorded" note), median field correctness, retries, and captures.
@@ -569,7 +569,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - then `pnpm eval:benchmark` over those scorecards and the TASK-002 `before` baselines;
     - commit `baselines/<yyyy-mm>-do-benchmark-after-<model>.json`;
     - add a §16 revision-log row to `plan_do_workflow_reliability.md` with the per-layout and per-model success, p50/p95, false-fulfilled count, and target verdicts.
-- [ ] **Unit Tests** (`task-fidelity-harness.spec.ts`, synthetic scorecards):
+- [x] **Unit Tests** (`task-fidelity-harness.spec.ts`, synthetic scorecards):
   - two model settings × 3 layouts × 20 runs with 19 successes each → every target met;
   - one cell at 18/20 → `per-cell-success` names it;
   - a cell with 5 runs → "insufficient runs";
@@ -578,7 +578,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - a `before` plus `after` pair → the delta column is present;
   - reasoning tokens all null → "not recorded";
   - a `tsx` import smoke (no Vitest).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the live benchmark, its targets, and how to read `benchmark.md`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the live benchmark, its targets, and how to read `benchmark.md`).
 - **Verify**: `cd e2e && npx vitest run task-fidelity-harness`. The plan's §16 has the benchmark row, and `git diff .spec-lite/plan_do_workflow_reliability.md` shows only that row.
 - **Depends on**: TASK-002, TASK-008
 
@@ -624,18 +624,18 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - The shared lexical anchoring checker is unchanged. Action-enabled composition additionally requires content-word support for action citations and page-cited action claims, because field-label overlap alone accepted a wrong committed name.
 - Acceptance scenarios exposed two bookkeeping defects: fused ranges now retain their resolved covered refs for coverage accounting, and action-only promotion omits synthesis when no output can supply it. Neither changes browser interaction behavior.
 - Existing `native-date-entry` baselines remain in force for `do-form-complete`; its two native date controls are explicitly expected empty in its declared partial state.
-- Live benchmark is pending: managed authentication at `C:/Users/abran/.yantra/data/pi/auth.json` received provider `401 api_key_expired`, including a one-run retry after the user disputed expiration. A working credential source is being resolved; failed-auth attempts are not committed as form baselines.
+- The user updated managed authentication after initial `401 api_key_expired` responses. A subsequent historical preflight reached browser tools, verified both fields and all exemptions, and failed with its requested capture absent (115,443 ms). The preflight is excluded from the planned cohorts; failed-auth attempts are not committed as form baselines. Live cohorts await completion of local validation.
 
 ## 8. State Tracking
 
 - [x] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
-- [ ] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
+- [/] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
 - [x] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
-- [ ] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values (STUB identity until FEAT-055 TASK-005)
+- [x] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values
 - [x] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
 - [x] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
-- [ ] TASK-007: Gate expectations over every `do` form scenario; gate census
-- [ ] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
-- [ ] TASK-009: `pnpm eval:benchmark`; live benchmark recorded in the plan revision log
+- [/] TASK-007: Gate expectations over every `do` form scenario; gate census
+- [/] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
+- [/] TASK-009: `pnpm eval:benchmark`; live benchmark recorded in the plan revision log
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
