@@ -93,25 +93,25 @@
     },
     {
       "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-high.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-medium.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-high.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-medium.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
