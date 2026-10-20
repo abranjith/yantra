@@ -82,6 +82,7 @@ describe('@no-llm FEAT-059 semantic progress', () => {
     });
     f.setCensus({
       epoch: 1,
+      host: 'fixture.example',
       complete: true,
       controls: Array.from({ length: 10 }, (_, i) => ({
         ref: `e${i + 1}`,
@@ -127,7 +128,7 @@ describe('@no-llm FEAT-059 semantic progress', () => {
     expect(f.checkpoint().signals).toContain('item_advanced');
     expect(f.progress.summary().fill).toEqual({ done: 1, total: 2 });
     expect(f.progress.liveItems()[0]?.state).toBe('advancing');
-    f.setCensus({ epoch: 1, complete: true, controls: [] });
+    f.setCensus({ epoch: 1, host: 'fixture.example', complete: true, controls: [] });
     record('Answer 2');
     f.checkpoint();
     expect(f.progress.summary().fill).toEqual({ done: 2, total: 2 });
@@ -144,7 +145,7 @@ describe('@no-llm FEAT-059 semantic progress', () => {
       kind: 'submit_refused',
       ref: 'e1',
       name: 'submit',
-      signal: 'protected-name',
+      signal: 'name',
     });
     expect(f.checkpoint().signals).toEqual([]);
     f.ledger.record({

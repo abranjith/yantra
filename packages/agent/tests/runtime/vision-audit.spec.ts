@@ -29,6 +29,7 @@ function makeSession(runDir: string): EmittingSession {
     emit: (event) => {
       for (const listener of listeners) listener(event);
     },
+    steer: () => Promise.resolve('idle'),
     abort: () => Promise.resolve(),
     close: () => Promise.resolve(),
   };

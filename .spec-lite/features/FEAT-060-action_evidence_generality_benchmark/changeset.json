@@ -68,12 +68,6 @@
       "task": "TASK-003"
     },
     {
-      "path": "e2e/task-fidelity-benchmark.spec.ts",
-      "status": "A",
-      "role": "implement",
-      "task": "TASK-003"
-    },
-    {
       "path": "e2e/task-fidelity-harness-actions.spec.ts",
       "status": "A",
       "role": "implement",
@@ -96,6 +90,30 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-high.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-medium.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-high.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-medium.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "e2e/task-fidelity/benchmark.ts",
@@ -470,6 +488,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/acquisition-integration.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/agent/tests/runtime/action-evidence.spec.ts",
       "status": "A",
       "role": "implement",
@@ -482,10 +506,70 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/confirmation-bridge.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/environment-leaves.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/extraction-integration.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/fault-mix.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "packages/agent/tests/runtime/fulfillment.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/location-gate.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/middleware.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/outcome.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/progress-ledger.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/promote-synthesis.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/agent/tests/runtime/prompt.spec.ts",
@@ -498,6 +582,48 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-log-lifecycle.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/runtime-observability.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/task-contract.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/template-prompt.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/url-provenance.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tests/runtime/vision-audit.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/tsconfig.tests.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/core/src/audit/report-builder.ts",
@@ -546,6 +672,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/browser/managed-install-live.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/discovery/promote-agent-trace.spec.ts",
@@ -616,7 +748,10 @@
   ],
   "excluded": [
     ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/benchmark.json",
+    ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/benchmark.md",
     ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/changeset.json",
+    ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/completion-audit.md",
     ".spec-lite/features/FEAT-060-action_evidence_generality_benchmark/spec.md",
     ".spec-lite/plan_do_workflow_reliability.md"
   ],

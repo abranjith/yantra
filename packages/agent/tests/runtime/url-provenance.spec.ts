@@ -122,7 +122,7 @@ describe('@no-llm UrlProvenance matching', () => {
   it('is inert on unparseable input rather than throwing', () => {
     const provenance = new UrlProvenance();
 
-    expect(() => provenance.record('not a url')).not.toThrow();
+    expect(() => provenance.record('not a url', { kind: 'tool', tool: 'test' })).not.toThrow();
     expect(provenance.size).toBe(0);
     expect(provenance.has('not a url')).toBe(false);
     expect(provenance.has('')).toBe(false);

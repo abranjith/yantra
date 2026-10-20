@@ -158,7 +158,13 @@ describe('@no-llm maybePromoteTrace synthesis intent', () => {
       request: request({ saveAs: 'package-eta' }),
       environment: environment(store),
       trace: populatedTrace(),
-      outcome: { kind: 'failed', runId: 'r', runDir: '/r', error: { code: 'X', message: 'no' } },
+      outcome: {
+        kind: 'failed',
+        runId: 'r',
+        runDir: '/r',
+        error: { code: 'X', message: 'no' },
+        terminationReason: 'provider_failed',
+      },
       persistenceGoal: 'When will my package arrive?',
     });
 

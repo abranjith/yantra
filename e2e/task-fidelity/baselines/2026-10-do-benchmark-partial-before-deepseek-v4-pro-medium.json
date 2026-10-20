@@ -1,0 +1,3472 @@
+{
+  "schema_version": 1,
+  "benchmark_phase": "before",
+  "generated_at": "2026-10-20T03:54:04.058Z",
+  "git_sha": "d737ba44ad80509ec67e587eea69951221c6b5d6",
+  "prompt_version": "agent-v10",
+  "model": {
+    "provider": "opencode-go",
+    "id": "deepseek-v4-pro",
+    "thinking": "medium"
+  },
+  "runs_per_scenario": 20,
+  "scenarios": [
+    {
+      "id": "bench-form-table-label-cell",
+      "runs": [
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 25254,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T130520Z-do-be53a44a",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 26377,
+            "output_tokens": 9010,
+            "cost_usd": 0.07852585200000001,
+            "wall_ms": 140052,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 28674,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T130740Z-do-331bde80",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 12,
+            "input_tokens": 9371,
+            "output_tokens": 17700,
+            "cost_usd": 0.079842916,
+            "wall_ms": 230644,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 36531,
+            "reasoning_tokens": null,
+            "retries": 4,
+            "captures": 0
+          },
+          "run_id": "20261019T131131Z-do-146dfcd2",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 17,
+            "input_tokens": 13254,
+            "output_tokens": 23427,
+            "cost_usd": 0.10785819200000002,
+            "wall_ms": 316898,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 41738,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T131647Z-do-116fe306",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 12,
+            "input_tokens": 10495,
+            "output_tokens": 11676,
+            "cost_usd": 0.060920532,
+            "wall_ms": 185734,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 43447,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T131953Z-do-9b5a1858",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 12,
+            "input_tokens": 10149,
+            "output_tokens": 10738,
+            "cost_usd": 0.056931756000000014,
+            "wall_ms": 178234,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 24049,
+            "reasoning_tokens": null,
+            "retries": 0,
+            "captures": 0
+          },
+          "run_id": "20261019T132251Z-do-94020b08",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 8,
+            "input_tokens": 9393,
+            "output_tokens": 6904,
+            "cost_usd": 0.041485196,
+            "wall_ms": 106405,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 29213,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T132438Z-do-c2fa4510",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 9915,
+            "output_tokens": 7512,
+            "cost_usd": 0.0449993,
+            "wall_ms": 123177,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 30321,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T132641Z-do-8fa3b02b",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 12,
+            "input_tokens": 10438,
+            "output_tokens": 11417,
+            "cost_usd": 0.059836512,
+            "wall_ms": 169852,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 28680,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T132931Z-do-80a9af6f",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 9256,
+            "output_tokens": 14857,
+            "cost_usd": 0.069517176,
+            "wall_ms": 210040,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 27169,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T133301Z-do-91d03de6",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 10035,
+            "output_tokens": 9628,
+            "cost_usd": 0.052692420000000004,
+            "wall_ms": 142828,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 26194,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T133524Z-do-bb96b5a4",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 9,
+            "input_tokens": 9951,
+            "output_tokens": 6749,
+            "cost_usd": 0.04211902000000001,
+            "wall_ms": 112647,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 29222,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T133717Z-do-dbfd7589",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 10367,
+            "output_tokens": 10722,
+            "cost_usd": 0.057103204,
+            "wall_ms": 158224,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 42681,
+            "reasoning_tokens": null,
+            "retries": 2,
+            "captures": 0
+          },
+          "run_id": "20261019T133955Z-do-1eb3e282",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 15,
+            "input_tokens": 10600,
+            "output_tokens": 24105,
+            "cost_usd": 0.10526744800000001,
+            "wall_ms": 332324,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 39848,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T134527Z-do-e9f64624",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 15,
+            "input_tokens": 11735,
+            "output_tokens": 14426,
+            "cost_usd": 0.07319936400000002,
+            "wall_ms": 220642,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 39697,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T134908Z-do-7ece561f",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 10081,
+            "output_tokens": 11035,
+            "cost_usd": 0.057809875999999996,
+            "wall_ms": 177782,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 35721,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T135206Z-do-c93addc1",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 10080,
+            "output_tokens": 10674,
+            "cost_usd": 0.05629015999999999,
+            "wall_ms": 161251,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 42462,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T135447Z-do-88924991",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 13,
+            "input_tokens": 10230,
+            "output_tokens": 6733,
+            "cost_usd": 0.04316499200000001,
+            "wall_ms": 129965,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 35526,
+            "reasoning_tokens": null,
+            "retries": 2,
+            "captures": 0
+          },
+          "run_id": "20261019T135657Z-do-05edb762",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 11145,
+            "output_tokens": 26279,
+            "cost_usd": 0.11440674,
+            "wall_ms": 358874,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 30675,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T140256Z-do-7db40760",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 10667,
+            "output_tokens": 11437,
+            "cost_usd": 0.060887356000000004,
+            "wall_ms": 180950,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: first",
+                "pass: last"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 27770,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T140557Z-do-e8963aaa",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 10556,
+            "output_tokens": 8799,
+            "cost_usd": 0.050478328,
+            "wall_ms": 137262,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "task_success_rate": 0,
+        "reported_success_rate": 1,
+        "false_fulfilled": 20,
+        "field_correctness": 1,
+        "wall_ms_p95": 332324,
+        "tool_ms": 30498,
+        "tool_ms_p95": 42681,
+        "reasoning_tokens": null,
+        "reasoning_tokens_p95": null,
+        "retries": 1,
+        "captures": 0,
+        "field_coverage": null,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 11.5,
+        "wall_ms": 173817,
+        "cost_usd": 0.059,
+        "navigations": 1,
+        "browser_launches": 1,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    },
+    {
+      "id": "bench-form-css-order-grid",
+      "runs": [
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 18897,
+            "reasoning_tokens": null,
+            "retries": 0,
+            "captures": 0
+          },
+          "run_id": "20261019T140814Z-do-1050b20b",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 8,
+            "input_tokens": 9596,
+            "output_tokens": 10140,
+            "cost_usd": 0.05322033600000001,
+            "wall_ms": 145446,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 28302,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261019T234001Z-do-643ab416",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 14751,
+            "output_tokens": 17381,
+            "cost_usd": 0.087681964,
+            "wall_ms": 275003,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 50967,
+            "reasoning_tokens": null,
+            "retries": 5,
+            "captures": 0
+          },
+          "run_id": "20261019T234436Z-do-b967c998",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 10276,
+            "output_tokens": 20651,
+            "cost_usd": 0.093335224,
+            "wall_ms": 211572,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 47182,
+            "reasoning_tokens": null,
+            "retries": 5,
+            "captures": 0
+          },
+          "run_id": "20261019T234808Z-do-0ebafa6c",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 18,
+            "input_tokens": 11841,
+            "output_tokens": 36426,
+            "cost_usd": 0.15309714800000002,
+            "wall_ms": 323653,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 38281,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261019T235332Z-do-abe619cd",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 10,
+            "input_tokens": 9822,
+            "output_tokens": 17205,
+            "cost_usd": 0.078765856,
+            "wall_ms": 165221,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 35055,
+            "reasoning_tokens": null,
+            "retries": 2,
+            "captures": 0
+          },
+          "run_id": "20261019T235617Z-do-cc4dcdf0",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 29717,
+            "output_tokens": 26762,
+            "cost_usd": 0.14715006000000003,
+            "wall_ms": 312441,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 29336,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261020T000129Z-do-b584ac6c",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 13,
+            "input_tokens": 10640,
+            "output_tokens": 24597,
+            "cost_usd": 0.10736658400000001,
+            "wall_ms": 242713,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 23559,
+            "reasoning_tokens": null,
+            "retries": 0,
+            "captures": 0
+          },
+          "run_id": "20261020T000532Z-do-03afe451",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 9,
+            "input_tokens": 9536,
+            "output_tokens": 8148,
+            "cost_usd": 0.046196768000000006,
+            "wall_ms": 142984,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 39643,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261020T000755Z-do-a1130b22",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 10317,
+            "output_tokens": 14474,
+            "cost_usd": 0.070240204,
+            "wall_ms": 200905,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 28958,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261020T001116Z-do-e06cb792",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 12,
+            "input_tokens": 26037,
+            "output_tokens": 14060,
+            "cost_usd": 0.09608361200000001,
+            "wall_ms": 238911,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 39944,
+            "reasoning_tokens": null,
+            "retries": 2,
+            "captures": 0
+          },
+          "run_id": "20261020T001515Z-do-e1cc04f9",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 18,
+            "input_tokens": 36108,
+            "output_tokens": 24089,
+            "cost_usd": 0.15088932,
+            "wall_ms": 395899,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 25079,
+            "reasoning_tokens": null,
+            "retries": 1,
+            "captures": 0
+          },
+          "run_id": "20261020T002151Z-do-df35427d",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 11,
+            "input_tokens": 16671,
+            "output_tokens": 10751,
+            "cost_usd": 0.068076572,
+            "wall_ms": 183807,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 54120,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261020T002455Z-do-5ff9fb88",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 30019,
+            "output_tokens": 22657,
+            "cost_usd": 0.133833724,
+            "wall_ms": 393783,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 51756,
+            "reasoning_tokens": null,
+            "retries": 3,
+            "captures": 0
+          },
+          "run_id": "20261020T003129Z-do-8b3c4865",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 13,
+            "input_tokens": 9784,
+            "output_tokens": 11629,
+            "cost_usd": 0.05952911200000001,
+            "wall_ms": 149742,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 19282,
+            "reasoning_tokens": null,
+            "retries": 0,
+            "captures": 0
+          },
+          "run_id": "20261020T003358Z-do-4241f1f2",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 8,
+            "input_tokens": 9930,
+            "output_tokens": 10587,
+            "cost_usd": 0.055269823999999995,
+            "wall_ms": 104367,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 2,
+              "denominator": 2,
+              "detail": [
+                "pass: family",
+                "pass: given"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 0,
+              "numerator": 0,
+              "denominator": 1,
+              "detail": [
+                "fail: full_page: missing, incomplete or invalid PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": null,
+              "numerator": 0,
+              "denominator": 0,
+              "detail": []
+            },
+            "outcome_agreement": null,
+            "reported_success": true,
+            "task_success": false
+          },
+          "timing": {
+            "tool_ms": 24103,
+            "reasoning_tokens": null,
+            "retries": 0,
+            "captures": 0
+          },
+          "run_id": "20261020T003543Z-do-c25f90eb",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 9,
+            "input_tokens": 10064,
+            "output_tokens": 13533,
+            "cost_usd": 0.066120696,
+            "wall_ms": 131301,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "task_success_rate": 0,
+        "reported_success_rate": 1,
+        "false_fulfilled": 16,
+        "field_correctness": 1,
+        "wall_ms_p95": 395899,
+        "tool_ms": 32195.5,
+        "tool_ms_p95": 54120,
+        "reasoning_tokens": null,
+        "reasoning_tokens_p95": null,
+        "retries": 1.5,
+        "captures": 0,
+        "field_coverage": null,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 11,
+        "wall_ms": 206238.5,
+        "cost_usd": 0.083,
+        "navigations": 1,
+        "browser_launches": 1,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    }
+  ],
+  "totals": {
+    "runs": 36,
+    "wall_ms": 7391533,
+    "cost_usd": 2.7802,
+    "navigations": 36,
+    "browser_launches": 36
+  }
+}

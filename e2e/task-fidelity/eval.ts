@@ -12,12 +12,13 @@
  * `--model`, `--thinking`, `--auth-secret`), and selection resolves through
  * the CLI's own resolver: flag > environment > profile > pinned default.
  *
- * Exit codes follow the CLI: 0 written, 1 usage, 2 execution, 3 environment
- * (missing model credentials, checked before any fixture server starts).
+ * Exit codes follow the CLI: 0 complete, 1 usage, 2 execution, 3 environment
+ * (missing credentials before startup, or provider unavailability). Completed
+ * runs are checkpointed before the next request, including on interruption.
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -73,6 +74,11 @@ export interface EvalOptions extends AgentModelOptions {
 /** A command-line mistake: exit 1. */
 export class EvalUsageError extends Error {
   public override readonly name = 'EvalUsageError';
+}
+
+/** Provider access failed; preserve measured runs and stop without scoring the outage. */
+export class EvalProviderUnavailableError extends Error {
+  public override readonly name = 'EvalProviderUnavailableError';
 }
 
 /**
@@ -149,11 +155,12 @@ export interface EvalResult {
 }
 
 /**
- * Run the agentic tier and write its scorecard.
+ * Run the agentic tier, checkpointing its scorecard after each completed run.
  *
  * @throws {EvalUsageError} for an unknown scenario or a no-LLM environment.
  * @throws {AgentAuthUnavailableError} when no model credential is available —
  *   before any fixture server starts.
+ * @throws {EvalProviderUnavailableError} after saving completed runs when the provider is unavailable.
  */
 export async function evaluate(
   options: EvalOptions,
@@ -176,7 +183,38 @@ export async function evaluate(
 
   const run = deps.runScenario ?? runScenario;
   const scored: ScenarioScore[] = [];
+  const measuredSha = gitSha();
   let totalWallMs = 0;
+  const checkpoint = async (progress: readonly ScenarioScore[]): Promise<EvalResult> => {
+    const card = ScoreCardSchema.parse({
+      ...(options.phase === undefined ? {} : { benchmark_phase: options.phase }),
+      schema_version: 1,
+      generated_at: now().toISOString(),
+      git_sha: measuredSha,
+      prompt_version: PROMPT_VERSION,
+      model: {
+        provider: selection.model.provider,
+        id: selection.model.id,
+        thinking: selection.model.thinking ?? null,
+      },
+      runs_per_scenario: options.runs,
+      scenarios: [...progress],
+      totals: totals(progress, totalWallMs),
+    } satisfies ScoreCard);
+    const markdown = renderScorecardMarkdown(card);
+    const baseline = BaselineSchema.parse(baselineOf(card));
+    for (const [file, content] of [
+      ['scorecard.json', `${JSON.stringify(card, null, 2)}\n`],
+      ['scorecard.md', markdown],
+      ['baseline.json', `${JSON.stringify(baseline, null, 2)}\n`],
+    ] as const) {
+      const path = join(outDir, file);
+      await writeFile(`${path}.tmp`, content, 'utf8');
+      await rename(`${path}.tmp`, path);
+    }
+    return { card, outDir, markdown };
+  };
+  await checkpoint([]);
   for (const scenario of scenarios) {
     const runs: RunScore[] = [];
     for (let index = 1; index <= options.runs; index += 1) {
@@ -188,9 +226,18 @@ export async function evaluate(
         budgets: selection.budgets,
         ...(deps.agentOverride === undefined ? {} : { agentOverride: deps.agentOverride }),
       });
+      if (
+        result.outcome.kind === 'failed' &&
+        result.outcome.error.code === 'AGENT_PROVIDER_UNAVAILABLE'
+      ) {
+        throw new EvalProviderUnavailableError(
+          `${result.outcome.error.message} Completed runs are saved in ${outDir}.`,
+        );
+      }
       totalWallMs += result.wallMs;
       const score = runScore(result, scenario);
       runs.push(score);
+      await checkpoint([...scored, { id: scenario.id, runs, aggregate: aggregate(runs) }]);
       stderr(
         `${scenario.id} ${index}/${options.runs} · ${result.outcome.kind} · ` +
           `${score.cost.turns ?? '?'} turns · ${Math.round(result.wallMs / 1000)} s`,
@@ -199,29 +246,9 @@ export async function evaluate(
     scored.push({ id: scenario.id, runs, aggregate: aggregate(runs) });
   }
 
-  const card = ScoreCardSchema.parse({
-    ...(options.phase === undefined ? {} : { benchmark_phase: options.phase }),
-    schema_version: 1,
-    generated_at: now().toISOString(),
-    git_sha: gitSha(),
-    prompt_version: PROMPT_VERSION,
-    model: {
-      provider: selection.model.provider,
-      id: selection.model.id,
-      thinking: selection.model.thinking ?? null,
-    },
-    runs_per_scenario: options.runs,
-    scenarios: scored,
-    totals: totals(scored, totalWallMs),
-  } satisfies ScoreCard);
-  const markdown = renderScorecardMarkdown(card);
-  await writeFile(join(outDir, 'scorecard.json'), `${JSON.stringify(card, null, 2)}\n`, 'utf8');
-  await writeFile(join(outDir, 'scorecard.md'), markdown, 'utf8');
-  // The committable projection: copy it to `baselines/` to record a baseline.
-  const baseline = BaselineSchema.parse(baselineOf(card));
-  await writeFile(join(outDir, 'baseline.json'), `${JSON.stringify(baseline, null, 2)}\n`, 'utf8');
+  const result = await checkpoint(scored);
   stderr(`scorecard written to ${outDir}`);
-  return { card, outDir, markdown };
+  return result;
 }
 
 function selectScenarios(ids: readonly string[]): readonly Scenario[] {
@@ -290,7 +317,8 @@ function runScore(run: ScenarioRun, scenario: Scenario): RunScore {
   });
 }
 
-function aggregate(runs: readonly RunScore[]): ScenarioScore['aggregate'] {
+/** Summarize measured runs, including a checkpoint's incomplete sample. */
+export function aggregate(runs: readonly RunScore[]): ScenarioScore['aggregate'] {
   const of = (pick: (run: RunScore) => number | null): number | null => median(runs.map(pick));
   const actions = runs.flatMap((run) => (run.action === undefined ? [] : [run.action]));
   const p95 = (values: readonly (number | null)[]): number | null => {
@@ -332,7 +360,8 @@ function aggregate(runs: readonly RunScore[]): ScenarioScore['aggregate'] {
   };
 }
 
-function totals(scenarios: readonly ScenarioScore[], wallMs: number): ScoreCard['totals'] {
+/** Total only the measured runs retained in a scorecard. */
+export function totals(scenarios: readonly ScenarioScore[], wallMs: number): ScoreCard['totals'] {
   const runs = scenarios.flatMap((scenario) => scenario.runs);
   const costs = runs.map((run) => run.cost.cost_usd);
   return {
@@ -386,14 +415,16 @@ export async function main(argv: readonly string[]): Promise<number> {
 
 /**
  * The stderr line and exit code for a failed evaluation, following the CLI:
- * 1 for usage, 3 for a typed startup (environment) failure such as missing
- * model credentials, 2 for anything else.
+ * 1 for usage, 3 for startup or provider-availability environment failures,
+ * 2 for anything else.
  */
 export function evalFailure(error: unknown): {
   readonly line: string;
   readonly exitCode: 1 | 2 | 3;
 } {
   if (error instanceof EvalUsageError) return { line: `eval:tasks: ${error.message}`, exitCode: 1 };
+  if (error instanceof EvalProviderUnavailableError)
+    return { line: `AGENT_PROVIDER_UNAVAILABLE: ${error.message}`, exitCode: 3 };
   if (error instanceof AgentStartupError)
     return { line: `${error.code}: ${error.message}`, exitCode: 3 };
   return {

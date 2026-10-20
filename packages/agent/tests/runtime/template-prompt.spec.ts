@@ -12,6 +12,7 @@ describe('@no-llm template completion nudge', () => {
     const nudge = buildCompletionNudge(
       [
         {
+          sourceId: 'S1',
           url: 'https://example.com/',
           finalUrl: null,
           title: 'Evidence',

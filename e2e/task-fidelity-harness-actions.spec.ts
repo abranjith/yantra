@@ -383,6 +383,58 @@ describe('@no-llm independent action scorer', () => {
         },
       });
       expect(scoreActions(captured(), captureTruth).capture.value).toBe(1);
+      const unlinked: ScenarioRun = {
+        ...captured(),
+        artifacts: {
+          ...captured().artifacts,
+          brief: { requirements: [{ id: 'artifact:screenshot:full_page', status: 'met' }] },
+          toolCalls: {
+            lines: [
+              {
+                phase: 'end',
+                ts: '2026-10-19T00:00:00.000Z',
+                seq: 1,
+                run_id: 'run',
+                session_id: 'session',
+                call_id: 'capture-call',
+                tool: 'browser_capture',
+                status: 'ok',
+                duration_ms: 1,
+                artifacts: [
+                  {
+                    kind: 'screenshot',
+                    path,
+                    sha256,
+                    mime_type: 'image/png',
+                    bytes: png.length,
+                    width: 1,
+                    height: 1,
+                    sent_to_model: false,
+                  },
+                ],
+                input_sanitized: { scope: 'full_page' },
+                output_sanitized: null,
+                error_code: null,
+                confirmation_id: null,
+              },
+            ],
+            unparseable: [],
+          },
+        },
+      };
+      expect(scoreActions(unlinked, captureTruth)).toMatchObject({
+        capture: { value: 0 },
+        task_success: false,
+      });
+      const historical = {
+        ...unlinked,
+        outcome: {
+          ...unlinked.outcome,
+          taskOutcome: undefined,
+        } as unknown as ScenarioRun['outcome'],
+        artifacts: { ...unlinked.artifacts, manifest: {} },
+      };
+      expect(scoreActions(historical, captureTruth).capture.value).toBe(1);
       for (const overrides of [
         { sha256: '0'.repeat(64) },
         { width: 2 },

@@ -653,13 +653,14 @@ Nine additional deterministic scenarios pin the remaining behaviors:
 | `do-gate-promote-replay`       | Promotion reports the omitted screenshot and saved structural fill steps replay with zero LLM against a fresh browser.                                 |
 
 The user approved a timing deviation to retain the full 70-control case. All
-nine new scenario runs finished during the current e2e execution: their
+nine new scenario runs finished during the measured e2e execution: their
 manifest span was 232.325 seconds and summed engine time was 228.666 seconds.
 The over-cap case took 138.682 seconds in that execution, versus 141.328 seconds
 in an earlier standalone run, and has a 240-second timeout. This exceeds the
-original 60-second total allowance; it does not establish that the overall e2e
-assertions passed. See the [harness README](../../e2e/task-fidelity/README.md)
-for the timing record.
+original 60-second total allowance. The complete serial e2e validation later
+passed with 841 tests passed and one skipped across 22 files; package suites,
+lint, and typechecks also passed. See the
+[harness README](../../e2e/task-fidelity/README.md) for the timing record.
 
 ### Scores the outcome of agentic runs
 
@@ -760,11 +761,12 @@ The action score also records these checks:
 - `submissions` sums submit events, `requestSubmit()` calls, and `submit()`
   calls. These are separate signals, so the sum is not a count of unique
   transactions.
-- `capture` checks each requested scope using Brief artifact references, or
-  successful audited capture references when the Brief has none. It validates
-  the reference and reads the run-local file, checking PNG signature, IHDR
-  dimensions, byte length, and SHA-256. A full-page capture marked incomplete
-  fails, and multipart captures must supply all declared parts.
+- `capture` checks each requested scope using Brief artifact references.
+  Historical pipelines without Brief artifact support or task outcomes may
+  fall back to successful audited capture references when the Brief has none.
+  It validates the reference and reads the run-local file, checking PNG
+  signature, IHDR dimensions, byte length, and SHA-256. A full-page capture
+  marked incomplete fails, and multipart captures must supply all declared parts.
 - `item_agreement` compares each published requirement status with fixture
   evidence for filling, submission, screenshots, or the overall deliverable.
   Missing requirements produce a zero denominator, not agreement.
@@ -796,7 +798,11 @@ still requires correct fixture fields, unchanged exemptions, no forbidden
 submission, and valid required captures. Unavailable outcome agreement stays
 `null` and missing requirements retain a zero denominator; those unavailable
 surfaces do not automatically fail historical task success. Current runs keep
-the strict requirement-item and outcome-surface checks above.
+the strict requirement-item and outcome-surface checks above. Their required
+captures must be linked from the Brief; a successful audited capture alone
+earns no capture credit. Only historical pipelines without Brief artifact
+support or task outcomes may fall back to audited capture references, which
+still undergo the same PNG validation.
 
 ## How to Use It
 
@@ -920,12 +926,12 @@ model flags; repeat the invocation to measure another setting.
 
 ### Exit codes and output
 
-| Exit | When                                                                                                                                                                                  |
-| ---: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    0 | The scorecard was written, whatever the scores. Scores are observational and never gate.                                                                                              |
-|    1 | Usage: an unknown flag, a positional argument, a non-positive `--runs`, an unknown agentic scenario, or an environment that selects the no-LLM path (for example `LLM_PROVIDER=none`) |
-|    3 | A typed startup error, such as missing model credentials (`AGENT_AUTH_UNAVAILABLE: …`). This is raised before the output directory, any fixture server, or any run is created.        |
-|    2 | Anything else                                                                                                                                                                         |
+| Exit | When                                                                                                                                                                                                                                         |
+| ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    0 | Evaluation completed and the scorecard was written, whatever the scores. Scores are observational and never gate.                                                                                                                            |
+|    1 | Usage: an unknown flag, a positional argument, a non-positive `--runs`, an unknown agentic scenario, or an environment that selects the no-LLM path (for example `LLM_PROVIDER=none`)                                                        |
+|    3 | A typed startup error, such as missing credentials (`AGENT_AUTH_UNAVAILABLE`), or a run returning `AGENT_PROVIDER_UNAVAILABLE`. Missing credentials fail before output/server creation; provider interruption preserves earlier checkpoints. |
+|    2 | Anything else                                                                                                                                                                                                                                |
 
 stderr carries the following lines:
 
@@ -934,6 +940,16 @@ stderr carries the following lines:
 - one line per run, such as `listing-table 2/3 · published · 7 turns · 41 s`;
   and
 - `scorecard written to <dir>` at the end.
+
+The evaluator captures the measured git SHA once at invocation start. It writes
+an initial empty checkpoint and replaces each of `scorecard.json`,
+`scorecard.md`, and `baseline.json` atomically after every scored run, including
+aggregates for an unfinished scenario. `runs_per_scenario` remains the requested
+count; use each scenario's actual `runs` length to assess a partial sample.
+If a run returns `AGENT_PROVIDER_UNAVAILABLE`, evaluation stops with exit 3,
+excludes that provider failure from form scoring, and retains prior completed
+scores and raw run artifacts. A host interruption likewise leaves the last
+written checkpoint available; it does not score an unfinished run.
 
 ### Cost expectations
 
@@ -976,6 +992,11 @@ check every committed `*.json` baseline:
 
 ### Compare model settings and before/after measurements
 
+On 2026-10-19 the user waived OpenCode Go live testing as a FEAT-060 completion
+condition and required all other unit and applicable tests to pass. The live
+benchmark capability remains available; its targets and partial results are
+unchanged by that waiver.
+
 `pnpm eval:benchmark <scorecard.json>... [--out <dir>] [--json]` merges saved
 scorecards or committed `baseline.json` files without calling a model or
 starting a browser. It writes `benchmark.json` and `benchmark.md`, defaulting
@@ -985,11 +1006,17 @@ commit and prompt version. Conflicting prompt versions within one setting and
 phase, duplicate run IDs within a cell, invalid inputs, or no benchmark runs
 are usage errors. Before and after phases may have different prompt versions.
 
-Run the four-layout suite with 20 runs per layout for each of two settings,
+For an optional full comparison, run the four-layout suite with 20 runs per layout for each of two settings,
 using explicit `--phase before` and `--phase after` and distinct output
 directories. The before measurement must name the pipeline commit before
 FEAT-054's changes; record it from that checkout with the harness available.
-Keep the same model settings across phases. This is 80 runs per setting per
+Keep the same model settings across phases and hold each measured checkout's
+HEAD fixed until its runs finish. Give each concurrently running cohort its own
+`YANTRA_HOME`, `YANTRA_DATA_DIR`, and `YANTRA_CACHE_DIR`, initialized from the
+same configuration, profile, auth, and model registry. This avoids shared Pi
+registry writes while preserving the same inputs. Keep the measurement host
+awake and do not overlap the cohorts with test execution. Each cohort runs its
+own scenarios sequentially. This is 80 runs per setting per
 phase, 160 per phase across two settings, and 320 for the complete comparison.
 The [harness README](../../e2e/task-fidelity/README.md#form-benchmark-procedure)
 provides the commands and baseline procedure.
@@ -1010,12 +1037,50 @@ for success rate and wall p50/p95. Its target table evaluates after cells:
 Targets are observational: the report command exits 0 whenever files are
 written, even when targets fail; usage/validation errors exit 1 and other
 failures exit 2. `eval:tasks` retains its separate exit codes above. A generated
-report establishes only what its supplied runs measured. The updated credential
-worked in a historical preflight: it ran 13 turns, filled 2/2 fields correctly,
-and preserved 3/3 exemptions, but failed after 115.443 seconds with the required
-capture missing. That preflight and earlier authentication failures are
-excluded from benchmark cohorts. Formal before/after runs await final local
-checks; no completed form benchmark or committed form baseline is recorded yet.
+report establishes only what its supplied runs measured.
+
+The original comparison planned four 80-run cohorts for
+`opencode-go/deepseek-v4-pro` with `high` and `medium` thinking. Before measures
+`d737ba44ad80509ec67e587eea69951221c6b5d6` with `agent-v10`; after measures
+`204bb9b` with `agent-v15`. The retained partial comparison contains 109 of the
+originally planned 320 valid scores: before/high and before/medium have 36 each
+(20 table-label and 16 CSS-order); after/high has 25 (20 over-cap and five
+repeated-section); after/medium has 12 over-cap scores. After/high over-cap has
+19/20 true and reported successes with zero false fulfilled. This completed
+cell does not establish the broader benchmark targets.
+
+Live collection and automatic quota retries are stopped under the user's
+waiver; the remaining 211 planned measurements were not run. The partial report
+records unmet targets and insufficient cells. No layout has matching before
+and after cells, so it contains no measured before/after deltas. The waiver is
+a feature-completion decision, not evidence of benchmark success.
+
+Four partial baselines are retained under `e2e/task-fidelity/baselines/`, named
+`2026-10-do-benchmark-partial-before-deepseek-v4-pro-high.json`,
+`2026-10-do-benchmark-partial-before-deepseek-v4-pro-medium.json`,
+`2026-10-do-benchmark-partial-after-deepseek-v4-pro-high.json`, and
+`2026-10-do-benchmark-partial-after-deepseek-v4-pro-medium.json`. The merged
+`benchmark.json` and `benchmark.md` are recorded in
+`.spec-lite/features/FEAT-060-action_evidence_generality_benchmark/`. They
+retain the 109-run partial evidence without claiming a full-cohort comparison.
+The completion audit removed audit-only capture credit from one already-failed
+current run; true and reported success counts did not change.
+
+Recovery excluded 187 provider-unavailable results from three completed
+scorecards and recomputed aggregates over a fixed snapshot of 53 retained
+scores. That earlier recovery and its partial report are historical snapshots,
+not the current live total. Raw runs without an independent score remain
+excluded.
+
+Earlier authentication/preflight failures, host-pause runs, and shared-state
+startup failures remain excluded. The
+[harness README](../../e2e/task-fidelity/README.md#current-measurement-status)
+lists the retained counts and artifact paths. After the completion audit's
+capture-scoring fix, all 129 harness tests, all 12 lint/typecheck jobs, and the
+full e2e suite passed (841 passed and one existing test skipped across 22 files).
+Final workspace and optional real-browser validation is being recorded in the
+feature spec and completion audit. The benchmark scenarios, scorer, and report
+are tested independently of provider availability.
 
 ## Inputs and Outputs
 
@@ -1093,12 +1158,10 @@ uses them. They are documented in
 
 ## Limitations
 
-- **One baseline, one model.** The committed baseline covers a single model
-  and prompt version at 3 runs per scenario. Other models are not measured
-  until someone with their credentials records a baseline.
-- **Form benchmark availability is not a recorded result.** The benchmark
-  scenarios and independent scores do not establish a live success rate;
-  that requires model-driven runs and their saved scorecards.
+- **Limited live evidence.** The original research baseline covers one model
+  at 3 runs per scenario. The form comparison retains 109 partial runs with
+  high and medium thinking for one model; it does not meet the full comparison
+  targets. Further OpenCode Go live collection was waived as a completion gate.
 - **The harness drives agentic runs only.** The deterministic `ask` and
   `research --no-llm` pipelines are not measured.
 - **Agentic scores never gate CI.** They are medians over a small number of

@@ -162,7 +162,13 @@ function captureDecisions(
       record(details.capture_set).scope ?? record(parsed.data.input_sanitized).scope ?? 'viewport';
     return auditArtifactRefs(parsed.data).map((ref) => ({ ...ref, scope }));
   });
-  const candidates = linked.length > 0 ? linked : audit;
+  // Only older pipelines lack Brief artifact links. A current run must link
+  // its capture in the Brief, even when the audit proves the PNG was written.
+  const historical =
+    Protocol.ArtifactRef === undefined ||
+    (record(run.artifacts.manifest).taskOutcome === undefined &&
+      record(run.outcome).taskOutcome === undefined);
+  const candidates = linked.length > 0 ? linked : historical ? audit : [];
   return truth.artifacts.map((scope) => {
     const refs = candidates.filter(
       (ref) => ref.scope === scope || (scope === 'viewport' && ref.scope === 'full_page'),
