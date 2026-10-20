@@ -1649,6 +1649,37 @@ flowchart TD
   Table --> Artifacts[Exit code, manifest, task event, report.md, first line]
 ```
 
+#### Action citations and value-free evidence
+
+Action evidence uses the ledger's existing sequence as its identity: `idOf(entry)` returns
+`A<seq>`, with no second counter. The middleware threads the provider's tool-call ID into both
+the domain operation and its pre-domain policy hook. Producers stamp that ID on ledger entries
+and expose action IDs in tool results; the adapter's `auditProjectionOf` forwards them to the
+recorder. The recorder validates and attaches `actions` only to successful tool-call end entries.
+This joins an action to its originating call without introducing another artifact type.
+
+`ActionObservations` in `runtime/action-evidence.ts` is a separate run-local store for anchoring
+fill claims. It keeps only non-withheld committed text, user-input-masked, public-sanitized, and
+cut to 120 characters. Its private fields have no serialization or iteration API. Protected fills
+have no observation. The ledger, runtime log, and persisted `BriefAction` projection carry
+identity and verification metadata, never committed values; observation text is used only while
+checking a claim.
+
+Both `result_publish` and the assembled fallback pass an `ActionEvidenceView` to
+`composeAgentBrief` only for `do` with a browser. That enables inline `[A<n>]` resolution and
+anchoring against the recorded action, including its available observation. Unknown IDs produce
+`reference-action-unknown`; unsupported action claims are flagged by the anchoring checks.
+Outside that context the inline action grammar is disabled. Document evidence retains its separate
+`S<n>` grammar: action IDs remain unchanged, never become Brief sources, and never satisfy
+`required_sources`. A `table` row still needs document evidence (`row-action-only` rejects an
+action-only row), while an `actions` deliverable may cite actions alone. Fulfillment continues to
+read the ledger directly, independently of citations.
+
+The composer projects cited actions into optional `Brief.actions` in first-citation order,
+bounded to 40, with up to eight action references per finding, section, or table row. Fill
+projections retain label origin and inferred confidence; capture projections retain their artifact
+references. The report-template publication path does not use action citation composition.
+
 #### Contract-item progress and bounded recovery
 
 Every agentic run owns one `ProgressLedger` (`runtime/progress-ledger.ts`), attached to
@@ -2422,6 +2453,33 @@ and it accepts the shared agentic flag spellings (`--provider`, `--model`, `--th
 `--auth-secret`). Missing model credentials fail with `AGENT_AUTH_UNAVAILABLE` and environment exit
 3 before any fixture server starts; usage errors exit 1 and execution failures exit 2.
 
+Form scenarios add a measurement path outside the runtime's action ledger. Fixture pages post
+event-driven state, keyed by `data-fixture-key`, to `POST /__fixture/state`; the server keeps it
+in a separate `stateLog`, excluded from acquisition request counts. Password controls hash their
+values in the page and send only SHA-256 digests. After teardown, the runner selects the highest
+sequence per page and retains initial state for untouched-control comparisons. It also captures
+human and JSON output through the production CLI connector and resolves the production exit code.
+
+`score/action-scorer.ts` compares that witness with authored per-control value rules, untouched
+exemptions, submission counters, and saved capture files rather than accepting engine verification
+verdicts. Current-run true success requires correct fields, untouched exemptions, the declared
+submission policy, valid captures, requirement-status agreement, agreement across outcome surfaces,
+and reported fulfillment. Reported success is recorded separately; historical published runs have
+compatibility handling for missing outcome and requirement fields. The shared deterministic form
+gates additionally scan for canary leaks, and `GATE_CENSUS` maps required scenario categories to
+concrete scenarios, including action citations and promotion followed by LLM-free replay.
+
+The agentic `do-benchmark` suite is selected with `pnpm eval:tasks --suite do-benchmark`, using
+one model setting per invocation. The separate, Vitest-free `benchmark.ts` command
+(`pnpm eval:benchmark <scorecard.json>...`) reads validated scorecards or aggregate baselines
+without starting a browser or provider. It groups `bench-form-*` runs by layout, provider/model/
+thinking setting, and before/after phase, rejects duplicate run IDs and inconsistent prompt
+versions within a setting and phase, and writes `benchmark.json` and `benchmark.md`. Reports
+separate true successes, reported successes, and `false_fulfilled`, retain absent telemetry as
+null, and include timing percentiles, field correctness, retries, captures, and available
+before/after deltas. Success and latency targets are observational report checks; writing a report
+does not establish that those targets were met.
+
 ```mermaid
 flowchart LR
   Scenario[Scenario catalogue] --> Runner[runScenario]
@@ -2431,10 +2489,14 @@ flowchart LR
   Scripted[ScriptedAgentProvider] -->|deterministic tier| Orchestrator
   Model[Real model via Pi] -->|agentic tier| Orchestrator
   Orchestrator --> Artifacts[Run artifacts and harness counts]
+  Fixtures --> State[Independent form-state log]
+  State --> Scorer
   Artifacts --> Ledger[Expectation ledger and owner ratchet]
   Artifacts --> Scorer[Outcome scorer]
   Ledger --> Vitest["@no-llm Vitest cases"]
   Scorer --> Scorecard[scorecard.json, scorecard.md, baseline.json]
+  Scorecard --> Benchmark[Offline benchmark aggregation]
+  Benchmark --> BenchmarkFiles[benchmark.json and benchmark.md]
 ```
 
 ## Data Flow
@@ -2901,7 +2963,11 @@ treats it as optional.
 The task outcome adds no artifact type and one nullable column. The `ActionLedger`,
 `FulfillmentEvaluation`, and effective action terms are run-local memory; the ledger's durable
 trace is count-only `action_recorded`, `submit_refused`, and `fulfillment_evaluated` lines in
-`runtime.jsonl`. What persists rides existing artifacts as optional fields. A `do` Brief carries
+`runtime.jsonl`. `ActionObservations` also remains memory-only. Cited ledger entries have a
+value-free durable projection in optional `Brief.actions`, with action references on findings,
+sections, and table rows; successful `tool-calls.jsonl` end entries can carry the corresponding
+`actions` IDs. These additive fields require no new file or SQLite migration. Other outcome
+information rides existing artifacts as optional fields. A `do` Brief carries
 `requirements` (at most 16, unique ids, each `met`, `unmet`, or `not_applicable` with a bounded
 reason, the declaring revision, and bounded exemptions). `manifest.json` carries camelCase
 `taskOutcome` and `terminationReason`, and its `agent` section carries `yantra_version` and the

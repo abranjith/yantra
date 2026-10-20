@@ -193,6 +193,7 @@ export function fillCoverage(
         !commits.some(
           (entry) =>
             unit.refs.has(entry.ref) ||
+            entry.coveredRefs?.some((ref) => unit.refs.has(ref)) === true ||
             (unit.groupKey !== null && entry.groupKey === unit.groupKey),
         ),
     )

@@ -23,7 +23,7 @@ import type { ScenarioContract } from '../scenario.js';
 import { briefOf, crossCuttingExpectations, noticesOf } from './common.js';
 
 /** The form page the goal names. */
-export const FORM_URL = `${originOf('test-form')}${TEST_FORM_PATH}`;
+export const FORM_URL = `${originOf('test-form').replace('http:', 'https:')}${TEST_FORM_PATH}`;
 
 /** The form's host, as a contract names it. */
 export const FORM_HOST = 'test-form.yantra.test';

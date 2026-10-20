@@ -15,6 +15,7 @@ import { basename, dirname, join } from 'node:path';
 
 import {
   briefToHtml,
+  actionParts,
   briefToMarkdown,
   captureLabels,
   captureTitle,
@@ -289,6 +290,23 @@ export class TerminalRenderer implements OutputRenderer {
       ...(opts.width !== undefined ? { width: opts.width } : {}),
     });
     opts.stream.write(`${rendered}\n`);
+    if (brief.actions !== undefined && brief.actions.length > 0)
+      opts.stream.write(
+        `\nActions\n${brief.actions
+          .map(
+            (action) =>
+              `- ${actionParts(action, brief)
+                .map((part) =>
+                  part.kind === 'text'
+                    ? part.text
+                    : artifacts !== null && isCaptureArtifactPath(part.path)
+                      ? `${part.label}: ${join(dirname(artifacts.htmlPath), part.path)}`
+                      : `${part.label}: ${part.path}`,
+                )
+                .join('')}`,
+          )
+          .join('\n')}\n`,
+      );
     opts.stream.write(
       briefCaptureLines(brief, artifacts === null ? null : dirname(artifacts.htmlPath)),
     );

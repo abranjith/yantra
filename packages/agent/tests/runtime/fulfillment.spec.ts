@@ -727,6 +727,29 @@ describe('@no-llm censusFillEvaluator (FEAT-054 TASK-006)', () => {
 });
 
 describe('@no-llm shared fill coverage', () => {
+  it('counts both resolved range controls only on their current document', () => {
+    const current: FillCensus = {
+      epoch: 2,
+      host: 'forms.example.test',
+      complete: true,
+      controls: ['from', 'to'].map((ref) => ({ ref, label: ref, groupKey: null, exemption: null })),
+    };
+    expect(
+      fillCoverage(
+        current,
+        ledger([{ ...fill, epoch: 2, ref: 'from', covers: 2, coveredRefs: ['from', 'to'] }]),
+      ),
+    ).toMatchObject({ filled: 2, remaining: [] });
+    expect(
+      fillCoverage(
+        current,
+        ledger([{ ...fill, epoch: 1, ref: 'from', covers: 2, coveredRefs: ['from', 'to'] }]),
+      ),
+    ).toMatchObject({ filled: 0 });
+    expect(
+      fillCoverage(current, ledger([{ ...fill, epoch: 2, ref: 'from', covers: 2 }])),
+    ).toMatchObject({ filled: 1 });
+  });
   it('joins groups once, excludes exemptions and old epochs, and preserves order', () => {
     const census: FillCensus = {
       epoch: 2,

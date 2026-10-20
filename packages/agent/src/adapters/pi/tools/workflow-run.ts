@@ -64,11 +64,16 @@ export function workflowRunSpec(services: RunServices): ToolWrapperSpec<typeof W
     parameters: WorkflowRunParams,
     sanitizationProfile: 'public',
     mutating: true,
-    run: (params: Params, ctx): Promise<DomainResult> => runWorkflowTool(params, ctx.services),
+    run: (params: Params, ctx): Promise<DomainResult> =>
+      runWorkflowTool(params, ctx.services, ctx.callId),
   };
 }
 
-async function runWorkflowTool(params: Params, services: RunServices): Promise<DomainResult> {
+async function runWorkflowTool(
+  params: Params,
+  services: RunServices,
+  callId: string | null,
+): Promise<DomainResult> {
   if (services.workflowToolMode === 'list' && params.mode === 'run') {
     return {
       ok: false,
@@ -119,7 +124,7 @@ async function runWorkflowTool(params: Params, services: RunServices): Promise<D
   // FEAT-054 S8: a nested workflow would otherwise bypass the agent-side
   // no-submit refusal, so a clicking plan is refused before it runs.
   if (submitForbidden(services) && (await workflowMayClick(name, deps.loadSteps?.bind(deps)))) {
-    return submitRefusal(services, 'nested-workflow', name, null);
+    return submitRefusal(services, 'nested-workflow', name, null, callId);
   }
 
   const outcome = await deps.run(

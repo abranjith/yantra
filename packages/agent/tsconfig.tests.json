@@ -9,7 +9,8 @@
     "src/**/*.ts",
     "tests/provider/**/*.ts",
     "tests/boundaries/**/*.ts",
-    "tests/adapters/**/*.ts"
+    "tests/adapters/**/*.ts",
+    "tests/runtime/**/*.ts"
   ],
   "exclude": ["src/_lint-fixtures/**/*"]
 }

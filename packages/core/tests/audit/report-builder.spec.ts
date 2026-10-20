@@ -424,9 +424,11 @@ describe('@no-llm report builder — agentic runs', () => {
           },
         ],
       }),
+      toolCallLine({ seq: 0, call_id: 'c2', tool: 'browser_capture', phase: 'start' }),
       toolCallLine({
         seq: 2,
         call_id: 'c2',
+        actions: ['A3', 'A4'],
         tool: 'browser_capture',
         phase: 'end',
         status: 'ok',
@@ -446,6 +448,7 @@ describe('@no-llm report builder — agentic runs', () => {
     ]);
 
     const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+    expect(markdown).toContain(' - actions: A3, A4');
 
     expect(markdown).toContain(
       `- [1] screenshots/1-eeeeeeeeeeee.png - 800x600, 500 bytes, image/png, sha256=${sha}, sent to model: yes\n`,

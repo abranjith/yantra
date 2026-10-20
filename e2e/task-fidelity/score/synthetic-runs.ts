@@ -138,6 +138,8 @@ export function syntheticRun(input: {
   };
   return {
     scenario: listingTable,
+    formState: {},
+    surfaces: null,
     mode: 'agentic',
     outcome: {
       kind: input.outcome ?? 'published',

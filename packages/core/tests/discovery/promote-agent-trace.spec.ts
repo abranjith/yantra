@@ -92,6 +92,28 @@ describe('@no-llm promoteAgentTrace', () => {
     expect(store.saved[0]).not.toHaveProperty('notes');
     expect(WorkflowFileSchema.safeParse(store.saved[0]).success).toBe(true);
   });
+  it('promotes an action-only trace without synthesis even when the run has a goal', async () => {
+    const store = makeFakeStore();
+    const result = await promoteAgentTrace(
+      [
+        navigate,
+        {
+          kind: 'fill',
+          host: 'shop.example',
+          locator: [{ kind: 'css', value: '#name' }],
+          value: { kind: 'literal', value: 'Avery' },
+          submit: false,
+          requires_confirmation: false,
+        },
+      ],
+      { workflowName: 'fill-only', store, synthesisGoal: 'Fill the form and capture it' },
+    );
+    expect(result.isOk).toBe(true);
+    expect(store.saved[0]?.synthesis).toBeNull();
+    expect(store.saved[0]?.outputs).toEqual([]);
+    expect(store.saved[0]?.steps.map((step) => step.verb)).toEqual(['navigate', 'fill']);
+  });
+
   it('promotes a fill+click+extract trace into a valid, lint-clean workflow', async () => {
     const store = makeFakeStore();
     const steps: PromotableTraceStep[] = [

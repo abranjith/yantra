@@ -51,7 +51,7 @@ function bridge(options: {
     interactive: options.interactive ?? true,
     requestConfirmation: vi.fn((_request, signal) => {
       if (options.response !== 'pending') return Promise.resolve(options.response ?? 'granted');
-      return new Promise((_, reject) => {
+      return new Promise<'granted' | 'denied'>((_, reject) => {
         signal.addEventListener('abort', () => reject(new Error('connector canceled')), {
           once: true,
         });

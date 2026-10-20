@@ -28,6 +28,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ScriptStep } from './task-fidelity/agent/scripted-provider.js';
 import {
   EvalUsageError,
+  EvalProviderUnavailableError,
   MODEL_FLAGS,
   evalFailure,
   evaluate,
@@ -1881,6 +1882,78 @@ describe('@no-llm task-fidelity eval', () => {
     expect(runScenarioSpy).not.toHaveBeenCalled();
   });
 
+  it('retains a valid completed-run checkpoint when the next run is interrupted', async () => {
+    const out = join(outRoot, 'interrupted');
+    let calls = 0;
+    await expect(
+      evaluate(
+        { scenarios: ['listing-table'], runs: 3, out, json: false },
+        {
+          agentOverride: 'scripted',
+          stderr: () => undefined,
+          now: fixedNow,
+          runScenario: async () => {
+            calls += 1;
+            if (calls === 2) {
+              const saved = BaselineSchema.parse(
+                JSON.parse(await readFile(join(out, 'baseline.json'), 'utf8')),
+              );
+              expect(saved.totals.runs).toBe(1);
+              throw new Error('interrupted before another result');
+            }
+            return syntheticRun({ wallMs: 75 });
+          },
+        },
+      ),
+    ).rejects.toThrow('interrupted before another result');
+    const saved = ScoreCardSchema.parse(
+      JSON.parse(await readFile(join(out, 'scorecard.json'), 'utf8')),
+    );
+    expect(saved.totals).toMatchObject({ runs: 1, wall_ms: 75 });
+    expect(saved.scenarios[0]?.runs).toHaveLength(1);
+    expect(await readdir(out)).not.toContain('scorecard.json.tmp');
+  });
+
+  it('stops on provider unavailability without scoring it as a form result', async () => {
+    const out = join(outRoot, 'provider-quota');
+    let calls = 0;
+    await expect(
+      evaluate(
+        { scenarios: ['listing-table'], runs: 20, out, json: false },
+        {
+          agentOverride: 'scripted',
+          stderr: () => undefined,
+          runScenario: () => {
+            calls += 1;
+            if (calls === 1) return Promise.resolve(syntheticRun({ wallMs: 50 }));
+            return Promise.resolve({
+              ...syntheticRun({}),
+              outcome: {
+                kind: 'failed',
+                runId: 'provider-unavailable',
+                runDir: '',
+                terminationReason: 'provider_failed',
+                error: {
+                  code: 'AGENT_PROVIDER_UNAVAILABLE',
+                  message: '429: Go usage limit exceeded',
+                },
+              },
+            });
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(EvalProviderUnavailableError);
+    expect(calls).toBe(2);
+    const saved = BaselineSchema.parse(
+      JSON.parse(await readFile(join(out, 'baseline.json'), 'utf8')),
+    );
+    expect(saved.totals).toMatchObject({ runs: 1, wall_ms: 50 });
+    expect(evalFailure(new EvalProviderUnavailableError('quota'))).toEqual({
+      exitCode: 3,
+      line: 'AGENT_PROVIDER_UNAVAILABLE: quota',
+    });
+  });
+
   it('maps failures to the CLI’s exit codes: credentials 3, usage 1, anything else 2', () => {
     expect(
       evalFailure(
@@ -1920,6 +1993,10 @@ describe('@no-llm task-fidelity eval', () => {
 
   it('offers every agentic scenario the spec names', () => {
     expect(scenariosFor('agentic').map((scenario) => scenario.id)).toEqual([
+      'bench-form-over-cap',
+      'bench-form-repeated-sections',
+      'bench-form-css-order-grid',
+      'bench-form-table-label-cell',
       'listing-table',
       'listing-structured',
       'listing-client-rendered',

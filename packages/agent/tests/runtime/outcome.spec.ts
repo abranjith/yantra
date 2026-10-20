@@ -24,7 +24,7 @@ const error = { code: 'AGENT_TOOL_FAILED', message: 'boom' };
 
 function published(
   taskOutcome: 'fulfilled' | 'partial',
-  requirements: RequirementsSummary | null,
+  requirements: Omit<RequirementsSummary, 'satisfied'> | null,
   terminationReason: TerminationReason = 'model_finished',
 ): Extract<AgenticTaskOutcome, { kind: 'published' }> {
   return {
@@ -32,7 +32,16 @@ function published(
     kind: 'published',
     brief,
     taskOutcome,
-    requirements,
+    requirements:
+      requirements === null
+        ? null
+        : {
+            ...requirements,
+            satisfied: Array.from({ length: requirements.met }, (_, i) => ({
+              id: `met-${i}`,
+              label: `Met item ${i}`,
+            })),
+          },
     artifacts: [],
     captureSets: [],
     terminationReason,

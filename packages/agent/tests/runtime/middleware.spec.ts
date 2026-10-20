@@ -3,13 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { DefaultSanitizer, ModelSuppliedValues, UserInputVault } from '@yantra/core';
-import type {
-  ConfirmationGateway,
-  ConfirmationOutcome,
-  ConfirmationRequest,
-  Logger,
-} from '@yantra/core';
+import { DefaultSanitizer, DocumentStore, ModelSuppliedValues, UserInputVault } from '@yantra/core';
+import type { ConfirmationGateway, ConfirmationOutcome, Logger } from '@yantra/core';
+import type { ConfirmationRequest } from '@yantra/protocol';
 import { assertRuntimeEventIsSafe } from '@yantra/test-helpers';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
@@ -71,6 +67,7 @@ function makeServices(overrides: ServicesOverrides = {}): RunServices {
       },
       deliverable: { available: false, reasons: ['no_browser'] },
     },
+    documents: new DocumentStore(),
     budgets,
     sanitizer,
     ...(overrides.userInput ? { userInput: overrides.userInput } : {}),
@@ -265,7 +262,7 @@ describe('@no-llm middleware screenshot content exception', () => {
 /** A minimal spec with a stubbable domain op. */
 function spec(
   run: ToolWrapperSpec['run'],
-  extra: Partial<ToolWrapperSpec> = {},
+  extra: Partial<ToolWrapperSpec<ReturnType<typeof paramsSchema>>> = {},
 ): ToolWrapperSpec<ReturnType<typeof paramsSchema>> {
   return {
     name: 'demo_tool',

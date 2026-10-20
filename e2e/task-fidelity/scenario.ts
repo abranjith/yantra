@@ -14,6 +14,29 @@ import type { ScriptedSerpEntry, SearchFault } from './search/scripted-provider.
 /** A tier a scenario runs in. */
 export type Tier = 'deterministic' | 'agentic';
 
+/** Independent, authored correctness rules for fixture controls. */
+export type ValueRule =
+  | {
+      readonly kind:
+        | 'nonempty'
+        | 'letters'
+        | 'email'
+        | 'date'
+        | 'choice'
+        | 'protected'
+        | 'untouched';
+    }
+  | { readonly kind: 'digits' | 'number'; readonly min: number; readonly max: number }
+  | { readonly kind: 'checked-any'; readonly group: string };
+
+export interface ActionTruth {
+  readonly page: string;
+  readonly rules: Readonly<Record<string, ValueRule>>;
+  readonly intended?: Readonly<Record<string, string | boolean>>;
+  readonly artifacts: readonly ('viewport' | 'full_page' | 'element')[];
+  readonly submit: 'forbidden' | 'allowed';
+}
+
 /** One filter the user's request imposes, as a truth field name and value. */
 export interface ContractFilter {
   readonly name: string;
@@ -29,6 +52,7 @@ export interface ContractFilter {
  * key would measure nothing.
  */
 export interface ScenarioContract {
+  readonly actionTruth?: ActionTruth;
   readonly deliverable: 'table' | 'answer' | 'report' | 'actions';
   /** Truth fields every delivered row (or the answer) must carry. */
   readonly requiredFields: readonly string[];
@@ -48,6 +72,11 @@ export interface ScenarioTruthRow {
 
 /** One task-fidelity scenario. */
 export interface Scenario {
+  readonly expectOutcome?: 'fulfilled' | 'partial' | 'handoff' | 'failed' | 'aborted';
+  readonly expectedCaptures?: readonly ('viewport' | 'full_page' | 'element')[];
+  readonly saveAs?: string;
+  readonly canaries?: readonly string[];
+  readonly suite?: 'do-benchmark';
   /** Unique across the catalogue. */
   readonly id: string;
   readonly sites: readonly SiteName[];

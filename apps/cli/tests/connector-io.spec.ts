@@ -598,7 +598,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
     expect([...bytes].every((byte) => byte === 0x0a || (byte >= 0x20 && byte < 0x7f))).toBe(true);
   });
 
-  it('keeps handoff and failure text on stderr unchanged', () => {
+  it('leads handoff text with its outcome and keeps the next action on stderr', () => {
     expect(
       render({
         kind: 'handoff',
@@ -610,7 +610,7 @@ describe('@no-llm cli/connector-io task outcome lines (FEAT-054)', () => {
       }),
     ).toEqual({
       stdout: '',
-      stderr: '\nHuman handoff required: CAPTCHA\nSafest next action: Complete it manually.\n',
+      stderr: '\nHandoff: CAPTCHA\nSafest next action: Complete it manually.\n',
     });
   });
 

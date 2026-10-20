@@ -277,13 +277,13 @@ export class CLIConnectorIO implements ConnectorIO {
         return;
       case 'handoff':
         opts.errStream.write(
-          `\nHuman handoff required: ${outcome.blocker}\nSafest next action: ${outcome.safestNextAction}\n`,
+          `\nHandoff: ${outcome.blocker}\nSafest next action: ${outcome.safestNextAction}\n`,
         );
         return;
       case 'failed':
       case 'budget_exhausted':
       case 'aborted':
-        opts.errStream.write(`\n${outcome.error.code}: ${outcome.error.message}\n`);
+        opts.errStream.write(`\n${agentFailureLine(outcome)}\n`);
         return;
     }
   }

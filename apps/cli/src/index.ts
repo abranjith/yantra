@@ -49,6 +49,9 @@ export {
   type AgentOptions,
 } from './agent-options.js';
 export { loadEffectivePreferences } from './preferences.js';
+export { CLIConnectorIO } from './connector-io.js';
+export { TerminalRenderer } from './render/terminal.js';
+export { exitCodeForDoOutcome } from './commands/do.js';
 
 export interface CliRunOptions {
   readonly askRuntime?: Partial<AskRuntime>;

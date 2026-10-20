@@ -229,6 +229,7 @@ export async function promoteAgentTrace(
     });
   }
 
+  const outputs = declareOutputs(workflowSteps);
   const workflow: WorkflowFile = {
     version: 1,
     name: opts.workflowName,
@@ -239,8 +240,9 @@ export async function promoteAgentTrace(
     secrets: [...secrets].sort(),
     cookies: 'none',
     steps: workflowSteps,
-    outputs: declareOutputs(workflowSteps),
-    synthesis: synthesisFor(opts.synthesisGoal, opts.synthesisUsedLlm === true),
+    outputs,
+    synthesis:
+      outputs.length > 0 ? synthesisFor(opts.synthesisGoal, opts.synthesisUsedLlm === true) : null,
     outputs_unredacted: false,
     _unrecorded_frames: [],
     _locators: locators,

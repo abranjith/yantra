@@ -1,6 +1,7 @@
 /** Run-owned attribution: resolve evidence IDs before numbering protocol sources. */
 import {
   checkAnchoring,
+  tokenize,
   pageEvidenceText,
   recordEvidenceText,
   type AnchorClaim,
@@ -17,7 +18,9 @@ import {
   type TaskContractBody,
 } from '@yantra/protocol';
 
+import { actionEvidenceText, briefActionOf, type ActionEvidenceView } from './action-evidence.js';
 import type { ActionLedgerEntry } from './action-ledger.js';
+import { idOf } from './action-ledger.js';
 import {
   alternativesBody,
   boundedNotice,
@@ -26,11 +29,18 @@ import {
   reconcileConstraints,
   type DeliveryConstraint,
 } from './contract-delivery.js';
-import { INLINE_EVIDENCE_REF, parseEvidenceRef } from './evidence-refs.js';
+import {
+  INLINE_EVIDENCE_REF,
+  INLINE_ACTION_REF,
+  parseActionRef,
+  parseEvidenceRef,
+} from './evidence-refs.js';
 import type { EvidenceEntry, RunServices } from './run-services.js';
 import { hostSatisfiesRequiredSource } from './task-contract.js';
 
 export type ComposeCause =
+  | 'reference-action-unknown'
+  | 'row-action-only'
   | 'reference-unknown'
   | 'reference-anchor-unknown'
   | 'reference-numeric'
@@ -51,6 +61,7 @@ export interface ResolvedRef {
   readonly entryIndex: number;
 }
 export interface ComposeSummary {
+  readonly cited_actions: number;
   readonly cited_sources: number;
   readonly consulted_sources: number;
   readonly table_rows: number;
@@ -114,6 +125,7 @@ export interface AgentPublishContent {
   }[];
 }
 export interface ComposeContext {
+  readonly actions?: ActionEvidenceView | null;
   readonly evidence: readonly EvidenceEntry[];
   readonly documents: DocumentStore;
   readonly contract: TaskContractBody | null;
@@ -218,8 +230,30 @@ export function composeAgentBrief(
     ),
   );
   const resolved = new Map<string, ResolvedRef>();
+  const actions = ctx.actions ?? null;
+  const byAction = new Map(actions?.entries().map((entry) => [idOf(entry), entry]) ?? []);
+  const resolvedActions = new Map<string, ActionLedgerEntry>();
   const known = knownSources([...byId.keys()]);
   const resolve = (ref: string, pointer: string): boolean => {
+    if (actions !== null && parseActionRef(ref) !== null) {
+      const entry = byAction.get(ref);
+      if (entry === undefined) {
+        const ids = [...byAction.keys()];
+        issues.push({
+          cause: 'reference-action-unknown',
+          pointer,
+          values: {
+            ref,
+            pointer,
+            known:
+              ids.length === 0 ? '(none)' : ids.length === 1 ? ids[0]! : `${ids[0]}-${ids.at(-1)}`,
+          },
+        });
+        return false;
+      }
+      resolvedActions.set(ref, entry);
+      return true;
+    }
     const parsed = parseEvidenceRef(ref);
     const entryIndex = parsed === null ? undefined : byId.get(parsed.sourceId);
     if (parsed === null || entryIndex === undefined) {
@@ -251,6 +285,14 @@ export function composeAgentBrief(
       }
       return ctx.mode === 'assembled' ? '' : marker;
     });
+    if (actions !== null)
+      cleaned = cleaned.replace(INLINE_ACTION_REF, (marker, ref: string) => {
+        if (resolve(ref, pointer)) {
+          refs.push(ref);
+          return marker;
+        }
+        return ctx.mode === 'assembled' ? '' : marker;
+      });
     return { text: cleaned, refs: union(refs), pointer };
   };
   const overview = textRefs(publishText(raw.overview, 20000, true), [], 'overview');
@@ -310,6 +352,13 @@ export function composeAgentBrief(
         },
       });
     const refs = refsFrom(rowSources[index]);
+    if (
+      ctx.contract?.deliverable === 'table' &&
+      refs.length > 0 &&
+      refs.every((ref) => parseActionRef(ref) !== null) &&
+      actions !== null
+    )
+      issues.push({ cause: 'row-action-only', pointer, values: { row: String(index) } });
     if (refs.length === 0)
       issues.push({
         cause: 'row-uncited',
@@ -351,6 +400,12 @@ export function composeAgentBrief(
   const evidenceText = new Map<string, string | null>();
   const loadEvidence = (ref: string): string | null => {
     if (evidenceText.has(ref)) return evidenceText.get(ref) ?? null;
+    const action = resolvedActions.get(ref);
+    if (action !== undefined) {
+      const text = actionEvidenceText(action, actions?.observed(ref) ?? null);
+      evidenceText.set(ref, text);
+      return text;
+    }
     const parsed = resolved.get(ref);
     if (parsed === undefined) return null;
     let text: string | null;
@@ -416,7 +471,9 @@ export function composeAgentBrief(
       { refs: alternativeRefs },
       ...delivery.rows,
       ...constraints,
-    ].flatMap((item) => item.refs.map((ref) => resolved.get(ref)!.sourceId)),
+    ].flatMap((item) =>
+      item.refs.flatMap((ref) => (resolved.has(ref) ? [resolved.get(ref)!.sourceId] : [])),
+    ),
   );
   const order = [
     ...citedIds.map((id) => byId.get(id)!),
@@ -424,7 +481,19 @@ export function composeAgentBrief(
   ];
   const numbers = new Map(order.map((entryIndex, i) => [entryIndex, i + 1]));
   const citations = (refs: readonly string[]): number[] =>
-    union(refs.map((ref) => resolved.get(ref)!.sourceId)).map((id) => numbers.get(byId.get(id)!)!);
+    union(refs.flatMap((ref) => (resolved.has(ref) ? [resolved.get(ref)!.sourceId] : []))).map(
+      (id) => numbers.get(byId.get(id)!)!,
+    );
+  const actionOrder = [...resolvedActions.keys()];
+  const keptActions = new Set(actionOrder.slice(0, 40));
+  const actionRefs = (refs: readonly string[]): { actions?: string[] } => {
+    const ids = refs.filter((ref) => keptActions.has(ref)).slice(0, 8);
+    return ids.length === 0 ? {} : { actions: ids };
+  };
+  const stripRefs = (text: string): string => {
+    const pageFree = text.replace(INLINE_EVIDENCE_REF, '');
+    return actions === null ? pageFree : pageFree.replace(INLINE_ACTION_REF, '');
+  };
   const rewrite = (text: string): string =>
     text.replace(
       INLINE_EVIDENCE_REF,
@@ -486,7 +555,7 @@ export function composeAgentBrief(
       claims.push({
         id: finding.pointer,
         kind: 'finding',
-        text: finding.text.replace(INLINE_EVIDENCE_REF, ''),
+        text: stripRefs(finding.text),
         refs: finding.refs,
         mode: 'numbers-and-words',
       }),
@@ -497,7 +566,7 @@ export function composeAgentBrief(
       claims.push({
         id: section.pointer,
         kind: 'section',
-        text: section.body_md.replace(INLINE_EVIDENCE_REF, ''),
+        text: stripRefs(section.body_md),
         refs: section.refs,
         mode: 'numbers',
       }),
@@ -512,9 +581,38 @@ export function composeAgentBrief(
         mode: 'numbers-and-words',
       });
   });
-  const report = checkAnchoring(claims, loadEvidence);
+  const anchored = checkAnchoring(claims, loadEvidence);
+  // A field label can dominate the shared 50% overlap check and hide a wrong
+  // committed word. Action claims must support their content words as well;
+  // The action-enabled do path also checks page-cited action claims: a page
+  // with matching field labels cannot establish a later committed value.
+  const actionFlags = claims.flatMap((claim) => {
+    if (
+      actions === null ||
+      (!claim.refs.some((ref) => resolvedActions.has(ref)) &&
+        !/\b(?:filled|clicked|captured|set)\b/iu.test(claim.text))
+    )
+      return [];
+    const words = new Set(tokenize(claim.refs.map((ref) => loadEvidence(ref) ?? '').join(' ')));
+    const missing = [...new Set(tokenize(claim.text))].filter((word) => !words.has(word));
+    return missing.length === 0
+      ? []
+      : [{ id: claim.id, kind: claim.kind, text: claim.text, missing }];
+  });
+  const flagged = new Map(anchored.flagged.map((flag) => [flag.id, flag]));
+  for (const flag of actionFlags) {
+    const prior = flagged.get(flag.id);
+    flagged.set(flag.id, { ...flag, missing: union([...(prior?.missing ?? []), ...flag.missing]) });
+  }
+  const report = { checked: anchored.checked, flagged: [...flagged.values()] };
   const alternativesCount = delivery.alternativesRows.length + delivery.alternativesFindings.length;
   const notices: BriefNotice[] = [...delivery.notices, ...constraintsResult.notices];
+  if (actionOrder.length > 40)
+    notices.push({
+      kind: 'other',
+      source: 'actions',
+      reason: `${actionOrder.length - 40} further cited actions are listed in tool-calls.jsonl`,
+    });
   if (alternativesCount > 0)
     notices.push({
       kind: 'contract_gap',
@@ -540,18 +638,24 @@ export function composeAgentBrief(
     });
   return ok({
     content: {
+      ...(actions !== null && actionOrder.length > 0
+        ? { actions: actionOrder.slice(0, 40).map((id) => briefActionOf(resolvedActions.get(id)!)) }
+        : {}),
       title: publishText(raw.title, 200),
       overview: rewrite(overview.text),
       key_findings: delivery.findings.map((finding) => ({
         text: rewrite(finding.text),
         citations: citations(finding.refs),
-        editorial: finding.refs.length === 0,
+        ...actionRefs(finding.refs),
+        editorial:
+          citations(finding.refs).length === 0 && actionRefs(finding.refs).actions === undefined,
       })),
       sections: [
         ...sections.map((section) => ({
           heading: section.heading,
           body_md: sectionBody(section),
           citations: citations(section.refs),
+          ...actionRefs(section.refs),
         })),
         ...(alternativesCount === 0
           ? []
@@ -581,6 +685,10 @@ export function composeAgentBrief(
                 columns,
                 rows: delivery.rows.map((row) => row.cells),
                 row_citations: delivery.rows.map((row) => citations(row.refs)),
+                ...(actions !== null &&
+                delivery.rows.some((row) => actionRefs(row.refs).actions !== undefined)
+                  ? { row_actions: delivery.rows.map((row) => actionRefs(row.refs).actions ?? []) }
+                  : {}),
               },
             },
       sources,
@@ -606,6 +714,7 @@ export function composeAgentBrief(
     },
     verdict: { claims_checked: report.checked, flagged: report.flagged.length, stripped: 0 },
     summary: {
+      cited_actions: actionOrder.length,
       cited_sources: citedIds.length,
       consulted_sources: evidence.length - citedIds.length,
       table_rows: delivery.rows.length,

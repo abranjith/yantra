@@ -7,10 +7,16 @@ import {
   type AmbientContextView,
 } from '../../src/runtime/location-gate.js';
 
-const GRANTED_UNSET: AmbientContextView = { grants: { location: true }, userLocation: null };
-const DENIED: AmbientContextView = { grants: { location: false }, userLocation: null };
+const GRANTED_UNSET: AmbientContextView = {
+  grants: { location: true, screenshots: false },
+  userLocation: null,
+};
+const DENIED: AmbientContextView = {
+  grants: { location: false, screenshots: false },
+  userLocation: null,
+};
 const AVAILABLE: AmbientContextView = {
-  grants: { location: true },
+  grants: { location: true, screenshots: false },
   userLocation: brandSanitized('Naperville, IL, US'),
 };
 
@@ -122,7 +128,7 @@ describe('@no-llm locationHandoffFor', () => {
 
   it('treats a blank location value as unavailable', () => {
     const blank: AmbientContextView = {
-      grants: { location: true },
+      grants: { location: true, screenshots: false },
       userLocation: brandSanitized(''),
     };
     expect(locationHandoffFor('hotels near me', blank)).not.toBeNull();

@@ -1,10 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DRIVER_COMPATIBILITY } from '../../src/browser/driver-compatibility.js';
+import { ManagedInstallHelperClient } from '../../src/browser/managed-install-helper-client.js';
+import { LocalManagedInstallService } from '../../src/browser/managed-install.js';
 import { managedBrowsersRoot, resetPathCache } from '../../src/browser/paths.js';
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import { LocalBrowserProvider } from '../../src/browser/provider.js';
@@ -33,7 +36,20 @@ describe.runIf(runLiveInstall)('@no-llm live managed Stable installation', () =>
   it('downloads Stable into the candidate tree, publishes it, and launches it', async () => {
     const profileStore = new LocalProfileStore();
     const services = createLocalBrowserRuntimeServices({ profileStore });
-    const outcome = await services.installService?.install({
+    // Vitest loads the parent from src; the standalone Node child must use the
+    // compiled entry that the installed package ships, as in the packaging test.
+    const installService = new LocalManagedInstallService({
+      state: services.managedState,
+      coordinator: services.coordinator,
+      helper: new ManagedInstallHelperClient({
+        helperPath: () =>
+          resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            '../../dist/browser/managed-install-helper.js',
+          ),
+      }),
+    });
+    const outcome = await installService.install({
       trigger: 'explicit-command',
       consent: {
         granted: true,

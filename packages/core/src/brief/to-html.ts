@@ -54,6 +54,7 @@ import {
   type Section,
 } from '@yantra/protocol';
 
+import { actionParts } from './actions.js';
 import { captureLabels, captureTitle, isCaptureArtifactPath } from './captures.js';
 import {
   escapeForMarkdown,
@@ -95,6 +96,25 @@ export function briefToHtml(brief: Brief): string {
   if (brief.artifacts !== undefined && brief.artifacts.length > 0) {
     body.push(capturesHtml(brief.artifacts));
   }
+
+  if (brief.actions !== undefined && brief.actions.length > 0)
+    body.push(
+      '<h2>Actions</h2>',
+      `<ul>${brief.actions
+        .map(
+          (action) =>
+            `<li>${actionParts(action, brief)
+              .map((part) =>
+                part.kind === 'text'
+                  ? escapeHtml(part.text)
+                  : isCaptureArtifactPath(part.path)
+                    ? `<a href="${escapeHtml(part.path)}">${escapeHtml(part.label)}</a>`
+                    : escapeHtml(part.path),
+              )
+              .join('')}</li>`,
+        )
+        .join('')}</ul>`,
+    );
 
   const overview = brief.overview.trim();
   if (overview.length > 0) {

@@ -155,8 +155,8 @@ function toPiTool(tool: WrappedTool): ToolDefinition {
     label: tool.label,
     description: tool.description,
     parameters: tool.parameters,
-    execute: async (_toolCallId, params, signal) => {
-      const result = await tool.execute(params, signal);
+    execute: async (toolCallId, params, signal) => {
+      const result = await tool.execute(params, signal, { callId: toolCallId });
       return toAgentToolResult(result);
     },
   });
@@ -170,7 +170,11 @@ function toPiTool(tool: WrappedTool): ToolDefinition {
 export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unknown> {
   const details =
     result.details !== null && typeof result.details === 'object' && !Array.isArray(result.details)
-      ? (result.details as { readonly captures?: unknown; readonly artifacts?: unknown })
+      ? (result.details as {
+          readonly captures?: unknown;
+          readonly artifacts?: unknown;
+          readonly action_ids?: unknown;
+        })
       : undefined;
   const captures = details?.captures;
   const artifacts = details?.artifacts;
@@ -187,6 +191,11 @@ export function toAgentToolResult(result: YantraToolResult): AgentToolResult<unk
     ...(result.terminate === true ? { terminate: true } : {}),
     ...(Array.isArray(captures) && captures.length > 0 ? { captures } : {}),
     ...(Array.isArray(artifacts) && artifacts.length > 0 ? { artifacts } : {}),
+    ...(result.status === 'ok' &&
+    Array.isArray(details?.action_ids) &&
+    details.action_ids.length > 0
+      ? { actions: details.action_ids }
+      : {}),
   };
   // The extra audit fields are intentional (read by the FEAT-023 recorder); Pi
   // ignores unknown fields on the result object.

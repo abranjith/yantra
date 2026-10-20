@@ -12,6 +12,7 @@ import type { Result } from '../utils/result.js';
 import { err, ok } from '../utils/result.js';
 import { generateUlid } from '../utils/ulid.js';
 
+import type { BriefAction } from './action-evidence.js';
 import type {
   BriefArtifact,
   BriefConstraint,
@@ -31,6 +32,7 @@ import { BRIEF_SCHEMA_VERSION, Brief } from './brief.js';
  * of a minimal deterministic Brief.
  */
 export interface CreateBriefInput {
+  readonly actions?: readonly BriefAction[];
   /** Declared conditions; omitted when not supplied. */
   readonly constraints?: readonly BriefConstraint[];
   /** Per-item requirement statuses of a `do` task (FEAT-054); omitted elsewhere. */
@@ -111,6 +113,7 @@ export const createBrief = (input: CreateBriefInput): Brief => ({
   ...(input.constraints === undefined ? {} : { constraints: [...input.constraints] }),
   ...(input.requirements === undefined ? {} : { requirements: [...input.requirements] }),
   ...(input.artifacts === undefined ? {} : { artifacts: [...input.artifacts] }),
+  ...(input.actions === undefined ? {} : { actions: [...input.actions] }),
 });
 
 /**

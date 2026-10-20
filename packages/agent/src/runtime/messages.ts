@@ -113,6 +113,22 @@ export const AGENT_INTERACTION_MESSAGES = [
   ),
   tool(
     'BRIEF_INVALID',
+    'reference-action-unknown',
+    (d) =>
+      `${text(d.ref)} at ${text(d.pointer)} is not an action this run recorded. Cite an action ID shown in a fill, click, or capture result: ${text(d.known)}.`,
+    ['ref', 'pointer', 'known'],
+    'result_publish',
+  ),
+  tool(
+    'BRIEF_INVALID',
+    'row-action-only',
+    (d) =>
+      `Table row ${text(d.row)} cites only actions. A table row must also cite the page its values came from (a source_id such as S1).`,
+    ['row'],
+    'result_publish',
+  ),
+  tool(
+    'BRIEF_INVALID',
     'reference-anchor-unknown',
     (d) =>
       `${text(d.source)} was read, but it has no record ${text(d.ref)}. Cite ${text(d.source)} itself, or a record id shown in its results.`,

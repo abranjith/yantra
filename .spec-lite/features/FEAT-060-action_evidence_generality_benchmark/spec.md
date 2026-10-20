@@ -9,6 +9,8 @@
 
 FEAT-054 to FEAT-059 make a `do` run fill forms, capture screenshots, refuse submits, and report its outcome honestly. FEAT-060 closes the plan by doing three things.
 
+**User scope override (2026-10-19):** OpenCode Go live testing is waived as a feature completion gate. All automated unit, integration, browser, replay, privacy, schema, lint, and type checks remain required where applicable to this host. The live benchmark capability remains implemented, but completing the original 320-run experiment is optional. Preserve the 109 existing measurements as explicitly partial baselines and a report, record this waiver in the plan, and do not claim that the live generality or latency targets were achieved. Automatic live collection is stopped. This override supersedes the live-execution requirements in TASK-002 and TASK-009 below.
+
 1. **A Brief can cite what the run did, not only what it read.** Today every Brief citation is a page the run read (`S<n>`, or a record anchor `S<n>#r<k>`, [`evidence-refs.ts`](../../../packages/agent/src/runtime/evidence-refs.ts)). A `do` Brief that says "Filled First name with Avery [S1]" is checked against the pre-fill page text ([`brief-composer.ts:495`](../../../packages/agent/src/runtime/brief-composer.ts#L495)). That page never contained "Avery", so the claim is flagged as unanchored, even though the value was verified in the field. The fix is not to loosen anchoring. Each verified action gets a run-wide ID (`A<n>`), and the run keeps evidence for it: the tool call, the document epoch, the resolved field identity, and the verification verdict. Captures use FEAT-058's generic artifact reference. The model cites `[A3]`. Anchoring checks the claim against that action's observation, and page sources stay page sources.
 2. **The task-fidelity harness becomes the plan's acceptance gate.** The deterministic tier gets the browser-mutation scenarios that no earlier slice pins: hard identity cases, group-level recovery, a mixed form with protected values, citing actions, and promotion-then-replay. One set of gate expectations then runs over every `do` form scenario, including the FEAT-054, FEAT-058, and FEAT-059 ones. It checks five things: the final browser values, the submission count, the capture file, per-item status against independent evidence, and agreement between outcome, terminal line, `--json`, and exit code. All of it is measured outside the code under test.
 3. **A live, multi-model benchmark tests generality.** Agentic-tier scenarios run on layout-matrix forms, with one scorer that separates _true_ task success from _reported_ success. A report tool merges the scorecards from two or more model settings into per-layout, per-model results. The benchmark is run once on today's pipeline as a baseline and again after the plan lands, and both results are recorded in the plan's revision log.
@@ -254,7 +256,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-001: Fixture forms report their final state and submit counts to the harness, out of process, without exposing protected values
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `fixtures/form-state.ts`:
     - `FORM_STATE_SCRIPT`: an inline page script that collects every `[data-fixture-key]` control. It reads `value` for text and select controls, and `checked` for checkboxes and radios.
     - For `type=password`, it posts `digest`, the SHA-256 hex from `crypto.subtle.digest`, and never the value.
@@ -272,7 +274,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - a header comment names provenance; no site names.
   - `runner.ts`: `formState` is the last `stateLog` entry per page, read after finalization.
   - `fixtures/census.ts`: `form-lab` registered; no site tokens.
-- [ ] **Unit Tests** (`e2e/task-fidelity-harness.spec.ts`, real Chrome against the fixture server):
+- [x] **Unit Tests** (`e2e/task-fidelity-harness.spec.ts`, real Chrome against the fixture server):
   - typing into two fields and checking a radio produces a final `FormState` with those values;
   - a password control posts a 64-hex `digest` equal to `sha256(value)` computed in Node, and no field anywhere in `stateLog` equals the plaintext (byte scan of the serialized log);
   - clicking the submit button → `submits: 1` and the URL unchanged;
@@ -281,13 +283,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `requests` contains no `/__fixture/state` entry;
   - census: every eligible control on every `form-lab` page has exactly one rule, and every exempt control has `untouched`;
   - a byte scan of the new sources finds no raw control bytes (memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the `form-lab` site, out-of-process form state, and hashed protected values).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the `form-lab` site, out-of-process form state, and hashed protected values).
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity-harness`.
 - **Depends on**: FEAT-055 TASK-003 (page module only)
 
 ### TASK-002: One action scorer separates true task success from reported success, and the `do-benchmark` suite runs on any pipeline version
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `scenario.ts`: add the `actions` deliverable, `ActionTruth`, and `suite`.
   - `score/action-scorer.ts` (pure; reads `ScenarioRun` only):
     - `fieldCorrectness`: each eligible key's final state checked against its `ValueRule`. A rule `checked-any` counts its group once. A missing key fails, with detail naming the key.
@@ -316,7 +318,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - goal: `Fill every field of the form at https://form-lab.yantra.test/<page> with suitable test data, then take a full-page screenshot. Do not submit the form.`;
     - `actionTruth` with the page's rules, `artifacts: ['full_page']`, `submit: 'forbidden'`.
   - `eval.ts`: `--suite <name>` selects scenarios by suite and is refused together with `--scenario`. The first stderr line states the plan as today.
-- [ ] **Unit Tests** (synthetic `ScenarioRun`s through `score/synthetic-runs.ts`; no model):
+- [x] **Unit Tests** (synthetic `ScenarioRun`s through `score/synthetic-runs.ts`; no model):
   - a perfect run → `task_success: true`, `field_correctness 1`;
   - an email typed into a `letters` field → `field_correctness < 1` and detail names both keys;
   - one submit → `task_success: false`, `submissions: 1`;
@@ -328,10 +330,10 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - the committed `2026-10-baseline.json` still validates;
   - `parseEvalArgs(['--suite','do-benchmark','--scenario','x'])` → `EvalUsageError`;
   - harness modules import no Vitest (memory): a `tsx` import smoke of `eval.ts` succeeds.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (action scores, true versus reported success, `--suite`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (action scores, true versus reported success, `--suite`).
 - **Verify**:
   - `npx turbo run build`; `cd e2e && npx vitest run task-fidelity-harness`.
-  - Manually, **record the baseline (S12)**:
+  - Optional live execution, **waived as a completion gate by the user on 2026-10-19**; the original procedure for a complete baseline (S12) remains:
     - `pnpm eval:tasks --suite do-benchmark --runs 20` for each of two model settings;
     - `pnpm eval:benchmark <both scorecards>` (TASK-009 may not exist yet; if so, commit the two `baseline.json` files as `baselines/<yyyy-mm>-do-benchmark-before-<model>.json`, each recording the measured commit in a header field);
     - record the headline medians in plan §16.
@@ -339,7 +341,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-003: The protocol carries action IDs, Brief action evidence, and per-call action IDs, and every older artifact still parses
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - New `schemas/action-evidence.ts`: `ActionId` and `BriefAction` per §2, `.strict()`, `noAnsi` on text, `.describe()` on every field (the generated docs derive from it). The kind-specific fields use a `superRefine` (`verification` with `fill` only, `signal` with `submit_refused` only, `artifacts` with `capture` only).
   - `brief.ts`:
     - optional `actions` (≤ 40, unique `id`);
@@ -347,7 +349,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - a refinement that every cited ID exists in `Brief.actions`.
   - `tool-audit.ts`: optional `actions: ActionId[]` (≤ 16), which may appear only on `end` entries with `status: 'ok'`.
   - Export from the index and regenerate JSON Schema.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Existing Brief, `tool-calls.jsonl`, and FEAT-058-era fixtures without the fields parse unchanged (property test over the fixtures).
   - Rejections:
     - `A0` and `a3`;
@@ -358,13 +360,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - 41 actions.
   - A capture action whose `artifacts` reuse FEAT-058's `ArtifactRef` grammar rejects `../x.png`.
   - The generated-schema drift test passes.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (action IDs, Brief action evidence, `tool-calls.jsonl` `actions`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/protocol-spec.md` (action IDs, Brief action evidence, `tool-calls.jsonl` `actions`).
 - **Verify**: `cd packages/protocol && npx vitest run`; `npx turbo run build --filter=@yantra/protocol`.
 - **Depends on**: FEAT-058 TASK-001 (`ArtifactRef`)
 
 ### TASK-004: Every verified action records its tool call, field identity, and verdict, and the model sees its action ID; no value is persisted
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `adapters/pi/tools/index.ts` `toPiTool`: pass `toolCallId` as `tool.execute(params, signal, { callId })`. `toAgentToolResult` lifts `details.action_ids` to a top-level `actions` (the same pattern as `captures`/`artifacts`).
   - `middleware.ts`: `WrappedTool.execute` accepts `meta`, and `DomainContext.callId` is `meta?.callId ?? null`. Direct callers (the harness's scripted agent, tests) may omit it.
   - `action-ledger.ts` (FEAT-054):
@@ -384,7 +386,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - Each tool sets `details.action_ids`.
   - `run-recorder.ts`: the end entry writes `actions` when non-empty.
   - Tool descriptions (fill, click, capture): one sentence each. Example: "Each applied field carries action (A<n>), the ID of what you did; cite it in result_publish as [A<n>] when you report it."
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `toPiTool` passes the call ID, and a fill recorded through it has `callId` equal to the Pi call ID. A direct `execute` without `meta` records `callId: null`.
   - A 3-field batch with 1 failure:
     - 2 `action` keys, with consecutive IDs that equal ledger `seq`;
@@ -397,13 +399,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - A refused submit → `action` on the refusal, `signal` recorded, and the end entry status `error` with no `actions` key (refusals are failures to the audit). The ledger still holds it.
   - A capture with 3 parts → one action whose `artifacts` SHAs equal the audit refs.
   - Privacy canary (byte scan): a stored-secret canary and a protected synthetic value are absent from `tool-calls.jsonl`, `runtime.jsonl`, `JSON.stringify(ledger.entries())`, and `JSON.stringify(services.actionObservations)` (which must serialize to `{}`).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (`actions` on tool-call entries; how an action ID links to its call) and `docs/features/safety-and-privacy.md` (action evidence stores no values).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/diagnostics-and-audit.md` (`actions` on tool-call entries; how an action ID links to its call) and `docs/features/safety-and-privacy.md` (action evidence stores no values).
 - **Verify**: `npx turbo run build --filter=@yantra/protocol --filter=@yantra/core`; `cd packages/agent && npx vitest run tests/runtime/action-ledger.spec.ts tests/runtime/action-evidence.spec.ts tests/runtime/middleware.spec.ts tests/runtime/run-recorder.spec.ts tests/adapters/pi/tools`; then `npm run typecheck` in `packages/agent`, and `tests/runtime` itself (memory: the runtime suites are outside the test typecheck).
 - **Depends on**: TASK-003, FEAT-054 TASK-004, FEAT-058 TASK-004
 
 ### TASK-005: `result_publish` resolves `[A<n>]` citations, anchors them against what the action committed, and keeps page sources and action evidence apart
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `evidence-refs.ts`: `INLINE_ACTION_REF = /\[(A[1-9]\d*)\]/gu`, and `parseActionRef`. `INLINE_EVIDENCE_REF` is unchanged.
   - `brief-composer.ts`, when `ctx.actions !== null`:
     - Explicit `sources` arrays and inline markers accept `A` refs. An unknown ID → issue `reference-action-unknown` (values: `ref`, `pointer`, `known` as a bounded range such as `A1–A7`). In assembled mode the marker is stripped.
@@ -429,7 +431,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `profiles.ts`:
     - the `do` addendum gains one sentence: "When you report what you did, cite the action ID from the tool result ([A3]); cite pages ([S1]) only for what a page said."
     - Bump `PROMPT_VERSION` to the next unused `agent-vN` and add it to the manifest enum.
-- [ ] **Unit Tests** (`brief-composer.spec.ts`, pure):
+- [x] **Unit Tests** (`brief-composer.spec.ts`, pure):
   - "Filled First name with Avery [A1]", where A1 observed `Avery` with label `First name` → no flag. The same text citing `[S1]` (a pre-fill page without "Avery") → flagged. This pins the separation.
   - "Filled First name with Blake [A1]" → flagged (`missing` names `blake`).
   - "Set password to Hunter2 [A5]" on a withheld action → flagged. "Filled Password [A5]" → not flagged.
@@ -441,13 +443,13 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `brief_composed` includes `cited_actions`.
   - The message-catalog hint-capability test resolves both new causes.
   - `result-publish.spec.ts`: a `do` publish with an `A` citation writes a schema-valid `brief.json` whose `actions[0].call_id` equals the ledger's.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (citing actions; why a page cannot prove a fill; how inferred labels appear).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (citing actions; why a page cannot prove a fill; how inferred labels appear).
 - **Verify**: `cd packages/agent && npx vitest run tests/runtime/brief-composer.spec.ts tests/adapters/pi/tools/result-publish.spec.ts tests/runtime/message-catalog.spec.ts`.
 - **Depends on**: TASK-004, FEAT-054 TASK-005
 
 ### TASK-006: The Markdown, HTML, and terminal Briefs list cited actions, mark inferred labels, and link captures
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `to-markdown.ts`: `## Actions`, rendered only when `actions` is present. One line per action, ASCII punctuation, for example:
     - `- A3: filled "First name" (label inferred from page layout, medium confidence) in "Billing address"; verified exact`;
     - `- A6: did not click "Place order" (submit refused: it would submit the form)`;
@@ -463,18 +465,18 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - `apps/cli/src/render/terminal.ts` `renderBrief`: the same list, with absolute capture paths.
   - `report-builder.ts`: tool-call lines show `actions: A3, A4` when the entry carries them.
   - Older Briefs and reports render byte-identically.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Goldens: a Brief without `actions` is byte-identical in md, html, and terminal. A Brief with one action of each kind and each origin renders the exact lines.
   - HTML: a capture artifact path `javascript:alert(1)`, built directly and bypassing the schema, renders with no anchor.
   - Output byte scan: no raw control byte, no `\xC3\xA2` sequence.
   - `report.md` golden for an entry with `actions`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the Actions section of a `do` Brief).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md` (the Actions section of a `do` Brief).
 - **Verify**: `npx turbo run build --filter=@yantra/core`; `cd packages/core && npx vitest run tests/brief tests/audit`; `cd apps/cli && npx vitest run tests/render`.
 - **Depends on**: TASK-005
 
 ### TASK-007: One set of gate expectations runs over every `do` form scenario, and a census proves every plan-required scenario exists and is live
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `expectations.ts`:
     - `gateExpectations(scenario)`: for a scenario whose contract is `actions` with an `actionTruth`, it adds owner-`FEAT-060` expectations:
       1. `gate.fills`: with `intended`, every intended key's final state equals it (password keys by digest); without it, `field_correctness === 1`. Exempt controls are untouched.
@@ -497,18 +499,18 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - Add `'FEAT-060'` to `OWNERS` and `PENDING_OWNERS`.
   - Retrofit: the FEAT-054 `do-*`, FEAT-058 `capture-*`, and FEAT-059 `do-progress-*` form scenarios gain `actionTruth` (pointing at their fixture page, with `intended` from their scripts) so the gate expectations attach. Their own expectations are untouched.
   - Fixtures used by those scenarios (`test-form`, `tall-page`, `forty-controls`) gain `FORM_STATE_SCRIPT` and `data-fixture-key` attributes (no behavior change for the page).
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The census self-test (every category non-empty, IDs unique across categories).
   - A synthetic run that submits once → `gate.submissions` fails with a detail naming the count.
   - A synthetic run whose terminal says `Fulfilled:` while the manifest says `partial` → `gate.agreement` fails.
   - The leftover-baseline rule from FEAT-049 still fires.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the acceptance gate, its six checks, and the census).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the acceptance gate, its six checks, and the census).
 - **Verify**: `npx turbo run build`; `cd e2e && npx vitest run task-fidelity task-fidelity-harness`.
 - **Depends on**: TASK-002, FEAT-054 TASK-012, FEAT-058 TASK-008, FEAT-059 TASK-010
 
 ### TASK-008: The deterministic tier pins the identity, recovery, mixed-form, citation, and promotion-replay scenarios no earlier slice covers
 
-- [ ] **Implementation** (`command: 'do'`, deterministic tier, owner `'FEAT-060'`, `form-lab` pages, every scenario with `gateExpectations`):
+- [x] **Implementation** (`command: 'do'`, deterministic tier, owner `'FEAT-060'`, `form-lab` pages, every scenario with `gateExpectations`):
   1. `do-gate-css-order`:
      - the contract is `{actions, fill: all_eligible, artifacts: [viewport], effects: {submit: forbidden}}`;
      - the script fills every control by the matrix's label query (not by ref), captures, and publishes;
@@ -537,11 +539,11 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
      - then replay the saved workflow through `RunOrchestrator` (zero-LLM) against the same page, in a fresh browser;
      - expect every `fill_element` step to land on its keyed control (`FormState` equals the agent run's final state), with the structural steps carrying `field_label_origin`.
   - Every scenario's script uses only engineered moves. Each one's goal text names the fixture URL and no site name.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Each scenario's expectations, run by the deterministic spec.
   - A byte scan over the new scenario sources (memory).
   - The tier's runtime stays bounded: the new scenarios add at most 60 seconds to `task-fidelity.spec.ts`, measured once and recorded in the harness README. A browser case doing two navigate-act cycles gets its own timeout (memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the gate scenarios and what each pins).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the gate scenarios and what each pins).
 - **Verify**:
   - `npx turbo run build`; `cd e2e && npx vitest run task-fidelity`.
   - Remove `'FEAT-060'` from `PENDING_OWNERS` once every census ID is live and green, and delete its baselines.
@@ -550,7 +552,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ### TASK-009: `pnpm eval:benchmark` merges model settings into a per-layout, per-model report, checks the targets, and the results are recorded in the plan
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `benchmark.ts` (Vitest-free; `tsx`): `pnpm eval:benchmark <scorecard.json>... [--out <dir>] [--json]`. Also accept committed `baseline.json` files, through `BaselineSchema`.
     - Validate every input. Refuse inputs whose `prompt_version` sets differ within one model setting (exit 1, naming both files).
     - Cells: one per (`bench-form-*` scenario × `provider/model/thinking`), with `runs`, `successes` (true task success), `reported`, `false_fulfilled`, `p50_ms`/`p95_ms` wall time, tool time p50/p95, reasoning tokens p50/p95 (or `null` with a "not recorded" note), median field correctness, retries, and captures.
@@ -564,12 +566,12 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
     - When a `before` and an `after` input share a model setting (baseline header field), add a delta column.
   - Root `package.json`: `"eval:benchmark": "tsx e2e/task-fidelity/benchmark.ts"`.
   - Harness `README.md`: the benchmark procedure. It costs about 20 × 4 × 2 = 160 live runs; the first stderr line states the count before any run.
-  - **Run it** (manual, with the user's credentials; not CI):
+  - **Optional live execution** (waived as a completion gate by the user on 2026-10-19; original procedure retained for future manual use):
     - `pnpm eval:tasks --suite do-benchmark --runs 20` per model setting;
     - then `pnpm eval:benchmark` over those scorecards and the TASK-002 `before` baselines;
     - commit `baselines/<yyyy-mm>-do-benchmark-after-<model>.json`;
     - add a §16 revision-log row to `plan_do_workflow_reliability.md` with the per-layout and per-model success, p50/p95, false-fulfilled count, and target verdicts.
-- [ ] **Unit Tests** (`task-fidelity-harness.spec.ts`, synthetic scorecards):
+- [x] **Unit Tests** (`task-fidelity-harness.spec.ts`, synthetic scorecards):
   - two model settings × 3 layouts × 20 runs with 19 successes each → every target met;
   - one cell at 18/20 → `per-cell-success` names it;
   - a cell with 5 runs → "insufficient runs";
@@ -578,7 +580,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - a `before` plus `after` pair → the delta column is present;
   - reasoning tokens all null → "not recorded";
   - a `tsx` import smoke (no Vitest).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the live benchmark, its targets, and how to read `benchmark.md`).
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/task-fidelity-harness.md` (the live benchmark, its targets, and how to read `benchmark.md`).
 - **Verify**: `cd e2e && npx vitest run task-fidelity-harness`. The plan's §16 has the benchmark row, and `git diff .spec-lite/plan_do_workflow_reliability.md` shows only that row.
 - **Depends on**: TASK-002, TASK-008
 
@@ -615,16 +617,35 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 > Captured by hooks (`capture-baseline` / `capture-changeset`), not hand-maintained. See `.spec-lite/features/FEAT-060-action_evidence_generality_benchmark/changeset.json`, which is the authoritative deterministic review scope.
 
+## Implementation Notes (2026-10-18)
+
+- User-selected benchmark settings: `opencode-go / deepseek-v4-pro / high` and `opencode-go / deepseek-v4-pro / medium`.
+- User clarification: missing Brief requirements are not applicable for expected failures without a Brief. Independent state, submissions, outcome surfaces, and canaries still run.
+- User-approved deviation: retain all 70 fields and give the over-cap scenario a 240-second allowance. Its corrected standalone run took 141,328 ms; the nine-scenario 60-second total bound is not met. No interaction waits were weakened.
+- Historical measurement compatibility: before-FEAT-054 published runs are judged by fixture state and capture files; absent requirements and outcome agreement remain unavailable. Current runs require nonempty requirements and all outcome surfaces to agree.
+- The shared lexical anchoring checker is unchanged. Action-enabled composition additionally requires content-word support for action citations and page-cited action claims, because field-label overlap alone accepted a wrong committed name.
+- Acceptance scenarios exposed two bookkeeping defects: fused ranges now retain their resolved covered refs for coverage accounting, and action-only promotion omits synthesis when no output can supply it. Neither changes browser interaction behavior.
+- The failure agreement gate exposed error-code-first CLI output. The connector now leads failed and aborted output with the existing outcome formatter, and handoffs with `Handoff`, preserving their diagnostic details.
+- Existing `native-date-entry` baselines remain in force for `do-form-complete`; its two native date controls are explicitly expected empty in its declared partial state.
+- The user updated managed authentication after initial `401 api_key_expired` responses. A subsequent historical preflight reached browser tools, verified both fields and all exemptions, and failed with its requested capture absent (115,443 ms). The preflight is excluded from the planned cohorts; failed-auth attempts are not committed as form baselines. Local validation is complete. Four formal 80-run cohorts started on 2026-10-19, using one sequential run per cohort and four concurrent cohorts, with no test suites running concurrently. Before source: d737ba44ad80509ec67e587eea69951221c6b5d6 plus the measurement harness; after source: 204bb9b0e263570d91355d6a903fc5bc4d075e54. Preflights and failed-auth attempts remain excluded. The first batch was interrupted by a simultaneous roughly three-hour host pause and excluded after all four active runs exhausted their wall budgets. A second shared-state attempt exposed an EPERM rename race on Pi models.json before a model turn and was also excluded. Final cohorts use separate `*-isolated` output folders, identical copied configuration/credentials in private per-cohort Yantra data homes, and a temporary Windows system execution request released after measurement. The actual high/medium levels and before/after prompt versions were verified from all four manifests. The provider then returned 429 GoUsageLimitError. Provider-unavailable runs are excluded: 53 independent scores were recovered from three completed scorecards (before high/medium table 20 plus CSS 1 each; after high over-cap 11). The interrupted after-medium cohort had no final scorecard, so its raw runs remain unscored and require repetition. Collection now atomically checkpoints each completed run and stops on AGENT_PROVIDER_UNAVAILABLE with exit 3 before scoring the outage. The user chose waiting for quota recovery with the same settings. Quota recovered at about 2026-10-19 23:39Z and collection resumed only the missing per-layout counts. The collector change has 129 harness tests passing and repository lint/typechecks passing. A local coordinator preserves checkpoints, checks quota every 15 minutes after GoUsageLimitError, and merges a final report only after all sixteen cells contain exactly 20 distinct runs. No production interaction code changed. This historical collection attempt was superseded by the user waiver below.
+
+- A subsequent Go quota limit at about 2026-10-20 00:39Z stopped all four workers with exit 3. All 109 completed measurements were retained (before high/medium: 36 each; after high: 25; after medium: 12), leaving 211. The completed after/high over-cap cell has 19 true successes, 19 reported successes, and zero false-fulfilled results in 20 runs. Other cells and overall targets remain incomplete. Quota retries were paused for full end-to-end verification, then restored at the same settings.
+- Local verification: protocol 355, core 3,696, agent 1,433, CLI 605, and test-helpers 10 tests passed; the final full end-to-end suite passed 841 tests with one skipped across 22 files in 981.22 seconds using `--maxWorkers=1 --minWorkers=1 --hookTimeout=60000`. The first post-checkpoint full run had a fixture-census setup timeout while importing `eslint.config.js` under the default 15-second hook allowance (834 passed, eight skipped); all 129 harness tests passed in isolation, then the full suite passed with the longer setup allowance. Assertions and individual test deadlines are unchanged. An earlier autocomplete failure in the two-worker run passed in isolation and in the full serial rerun. Repository lint and typechecks passed. No benchmark measurements overlapped either full verification run.
+
+- User override on 2026-10-19: skip further OpenCode Go live testing as a feature gate, run all other applicable automated tests, and finish the feature. The collector and retry loop are stopped and disabled. The retained 109 measurements are published in four partial baselines plus [benchmark.md](benchmark.md) and [benchmark.json](benchmark.json); the remaining 211 runs are waived, not counted as successful. Generality and latency targets remain unmet or unproven. The plan revision log records this disposition.
+
 ## 8. State Tracking
 
-- [ ] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
-- [ ] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; baseline on today's pipeline
-- [ ] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
-- [ ] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values (STUB identity until FEAT-055 TASK-005)
-- [ ] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
-- [ ] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
-- [ ] TASK-007: Gate expectations over every `do` form scenario; gate census
-- [ ] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
-- [ ] TASK-009: `pnpm eval:benchmark`; live benchmark recorded in the plan revision log
+Completion audit (2026-10-20): [completion-audit.md](completion-audit.md). The audit corrected the current-run capture scorer's audit-only fallback, added regression coverage, and corrected one already-failed retained run's capture score without changing success counts. All six workspaces have been verified: 6,956 distinct tests passed, with three POSIX-only checks skipped on Windows and one live-agent check skipped under the user waiver. The final end-to-end suite passed 841 tests across all 22 files in 1,000.26 seconds. All twelve lint/typecheck jobs, protocol schema/export verification, and static security checks passed. The runtime test directory is now included in the regular agent type check; all 787 runtime tests passed again after correcting stale fixture types. All 109 retained live measurements are published as explicitly partial baselines and a report; the plan records the waiver and unproven live targets. The remaining task hooks and final implementation hook passed, and [pull request #12](https://github.com/abranjith/yantra/pull/12) is open against `development`. All nine tasks are complete under the approved scope.
+
+- [x] TASK-001: Out-of-process form state, `form-lab` site, hashed protected values, value-rule census
+- [x] TASK-002: Action scorer (true vs reported success), `do-benchmark` suite, `--suite`; partial historical baselines retained under the user waiver
+- [x] TASK-003: Protocol `ActionId`, `Brief.actions`, `tool-calls.jsonl` `actions`
+- [x] TASK-004: Ledger links call, identity, verdict; action IDs in results; no persisted values
+- [x] TASK-005: `[A<n>]` citations anchored to action evidence; page and action evidence kept apart
+- [x] TASK-006: Actions section in md/html/terminal Briefs; inferred labels marked; captures linked
+- [x] TASK-007: Gate expectations over every `do` form scenario; gate census
+- [x] TASK-008: Identity, recovery, mixed-form, citation, and promotion-replay gate scenarios
+- [x] TASK-009: `pnpm eval:benchmark`; partial live benchmark and completion waiver recorded in the plan revision log
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

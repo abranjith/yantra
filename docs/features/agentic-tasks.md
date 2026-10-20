@@ -10,7 +10,7 @@ Each goal that passes deterministic input, credential, and location preflight cr
 
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
-The prompt is versioned as `agent-v14` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)), the ten-field batch limit, page-order batching, continuation through the fill result's `progress`, and how to deliver a requested screenshot (see [Requesting a screenshot](#requesting-a-screenshot)). The prompt also states the run's thinking limit. Beyond the scope rules above, it tells the agent:
+The prompt is versioned as `agent-v15` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)), the ten-field batch limit, page-order batching, continuation through the fill result's `progress`, how to deliver a requested screenshot (see [Requesting a screenshot](#requesting-a-screenshot)), and how to cite the actions it reports. The prompt also states the run's thinking limit. Beyond the scope rules above, it tells the agent:
 
 - **Source fidelity.** When the goal names a source, the fields it wants, or conditions the results must meet, those are part of what it asks: deliver from that source, and for each condition either confirm it in the evidence or report it as unconfirmed, never state it as met because the goal asked for it.
 - **No unreported causes.** Never explain missing data with a cause no tool result reported; say the evidence did not contain it.
@@ -411,6 +411,30 @@ Every contract filter appears in **Conditions**, beneath the title, retaining th
 **Anchoring flags unsupported values without deleting them.** A deterministic check compares each cited non-empty string or numeric table cell, cited finding, and verified condition against its referenced evidence. Record IDs use that record's evidence; page IDs use retained page content, or the ledger title and excerpt when page content is unavailable. It checks normalized numbers and word overlap; cited sections receive a numbers-only check. Numeric normalization supports English-style comma grouping and decimal points while preserving magnitude and sign: `45000` matches `$45,000.00`, but not `$450.00`. Ambiguous separator patterns remain exact tokens. The check prepares each evidence reference's word and number sets once per pass and reuses sets for equivalent reference groups. Missing values generate an `uncited_claim_flagged` notice and remain in the published answer. `metadata.citation_verdict` records `claims_checked`, `flagged`, and `stripped: 0`. This is a heuristic check of evidence presence, not proof of truth, entailment, units, or freshness.
 
 Model-authored publication text passes the public sanitizer before composition. Marked user values remain masked during checking and resolve to their original values in the published artifact. A successful publication's tool response summarizes cited and consulted sources, main-table and alternative row counts, condition statuses, contract gaps, and flagged values. Its `brief_composed` entry in `runtime.jsonl` records counts only; cell text, page text, and URLs are excluded. The sanitized tool audit retains the publication parameters and their evidence references.
+
+### Citing browser actions
+
+In a `do` run with a browser, each recorded fill, executed click, refused submit, or capture has a run-wide ID such as `A1`. A fill result gives each applied field its own `action`; click and capture results carry `action`, and a submit refusal carries it in `details`. Copy those IDs into `result_publish` as inline markers such as `[A1]` or in a finding or section's `sources` list. Table rows use `row_sources`. IDs are never renumbered.
+
+For example, after a verified First name fill returned `action: "A1"`, a finding can be:
+
+```json
+{ "text": "Filled First name with Avery [A1]", "sources": ["A1"] }
+```
+
+The action observation can support the committed value `Avery`; a page read before the fill cannot establish that it was entered. Page and record citations (`S<n>` and `S<n>#r<k>`) keep their existing checks. A claim citing an action also needs its content words supported by the cited evidence, so a matching field label cannot hide a wrong committed value. Unsupported claims remain visible with an `uncited_claim_flagged` notice. An unknown action ID returns retryable `BRIEF_INVALID` with cause `reference-action-unknown`.
+
+Action citations never become document sources or satisfy `required_sources`. For a `table` deliverable, each row still needs a page citation; an action-only row returns `row-action-only`. An `actions` deliverable permits action-only rows. Citations do not decide whether the task was fulfilled; the engine judges the recorded actions and contract items as described below. `ask` and `research` do not interpret literal `[A1]` text as an action citation.
+
+The Brief's optional `actions` array lists cited actions in first-citation order, up to 40, and findings, sections, and table rows carry their action IDs separately from numbered page citations. Further cited actions produce a notice pointing to `tool-calls.jsonl`. Each action records its identity, document epoch, host, tool-call ID when available, and a value-free verification verdict or capture artifact references. The separate committed-text observation used for anchoring is masked, sanitized, capped at 120 characters, and kept only in memory; it is never persisted as action evidence. Protected fields have no committed-text observation, so their actions cannot support claims quoting their values. A stored-secret action retains its existing `unchecked` verdict with reason `stored_secret`.
+
+Markdown, HTML, and terminal Briefs show an **Actions** section only when there are cited actions. Inferred fill labels remain visibly qualified, for example:
+
+```text
+A1: filled "First name" (label inferred from page layout, medium confidence) in "Billing"; verified exact
+```
+
+Placeholder and title labels say `label inferred from placeholder text` or `label inferred from title text`, with confidence when available. A control with no label shows its field ref and `(no label found)`. Protected readbacks show their safe verdict and `(value withheld)`. Capture actions link every saved part in Markdown and HTML; the terminal shows absolute paths. When available, the tool-call ID appears at the end as `(call <id>)`.
 
 ### Judging a `do` result
 

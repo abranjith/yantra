@@ -70,6 +70,24 @@ export function renderScorecardMarkdown(card: ScoreCard): string {
         `${amount(aggregate.browser_launches)} | ${amount(aggregate.interaction_required)} |`,
     );
   }
+  const actionScenarios = card.scenarios.filter(
+    (scenario) => scenario.aggregate.task_success_rate !== undefined,
+  );
+  if (actionScenarios.length > 0) {
+    lines.push(
+      '',
+      '## Actions',
+      '',
+      '| Scenario | True success | Reported | False fulfilled | Fields | Wall p50/p95 (ms) | Tool p50/p95 (ms) | Reasoning tokens | Retries | Captures |',
+      '| --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: |',
+    );
+    for (const scenario of actionScenarios) {
+      const a = scenario.aggregate;
+      lines.push(
+        `| ${scenario.id} | ${cell(a.task_success_rate ?? null)} | ${cell(a.reported_success_rate ?? null)} | ${a.false_fulfilled ?? 0} | ${cell(a.field_correctness ?? null)} | ${amount(a.wall_ms)}/${amount(a.wall_ms_p95 ?? null)} | ${amount(a.tool_ms ?? null)}/${amount(a.tool_ms_p95 ?? null)} | ${a.reasoning_tokens === null ? 'not recorded' : amount(a.reasoning_tokens ?? null)} | ${amount(a.retries ?? null)} | ${amount(a.captures ?? null)} |`,
+      );
+    }
+  }
   lines.push(
     '',
     `Totals: ${card.totals.runs} runs, ${(card.totals.wall_ms / 1000).toFixed(1)} s, ` +

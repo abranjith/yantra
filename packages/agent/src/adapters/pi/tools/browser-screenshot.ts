@@ -6,6 +6,7 @@ import { SetOfMarksError, StaleElementRefError } from '@yantra/core';
 import type { ArtifactRef } from '@yantra/protocol';
 import { Type, type Static } from 'typebox';
 
+import { idOf } from '../../../runtime/action-ledger.js';
 import type { BudgetDecision } from '../../../runtime/budget.js';
 import { renderAgentMessage } from '../../../runtime/messages.js';
 import type { DomainFailure, DomainResult, ToolWrapperSpec } from '../../../runtime/middleware.js';
@@ -32,11 +33,15 @@ export function browserScreenshotSpec(
       'Capture fallback visual evidence when text observation is insufficient or contradicts observed behavior. Use only after reading text evidence; do not use it as the default way to inspect a page.',
     parameters: BrowserScreenshotParams,
     sanitizationProfile: 'public',
-    run: (params): Promise<DomainResult> => runScreenshot(params, services),
+    run: (params, ctx): Promise<DomainResult> => runScreenshot(params, services, ctx.callId),
   };
 }
 
-async function runScreenshot(params: Params, services: RunServices): Promise<DomainResult> {
+async function runScreenshot(
+  params: Params,
+  services: RunServices,
+  callId: string | null,
+): Promise<DomainResult> {
   const deps = services.domain.browser;
   if (deps === null) return unavailable('No active browser is available for screenshot capture.');
   const controller = deps.controller;
@@ -107,14 +112,6 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
       marks: captured.marks,
       seq,
     };
-    services.actionLedger.record({
-      kind: 'capture',
-      scope: artifact.scope,
-      path: artifact.path,
-      sha256: artifact.sha256,
-      bytes: artifact.bytes,
-      producer: 'browser_screenshot',
-    });
     // The generic artifact reference (FEAT-058 S9): this image is shown to the
     // model, so it is recorded as sent.
     const auditArtifact: ArtifactRef = {
@@ -127,10 +124,22 @@ async function runScreenshot(params: Params, services: RunServices): Promise<Dom
       height: artifact.height,
       sent_to_model: true,
     };
+    const action = idOf(
+      services.actionLedger.record({
+        callId,
+        artifacts: [auditArtifact],
+        kind: 'capture',
+        scope: artifact.scope,
+        path: artifact.path,
+        sha256: artifact.sha256,
+        bytes: artifact.bytes,
+        producer: 'browser_screenshot',
+      }),
+    );
     return {
       ok: true,
-      model: { ...artifact, remaining_captures: services.budgets.remainingCaptures() },
-      details: { artifacts: [auditArtifact] },
+      model: { action, ...artifact, remaining_captures: services.budgets.remainingCaptures() },
+      details: { artifacts: [auditArtifact], action_ids: [action] },
       content: [
         {
           kind: 'image',

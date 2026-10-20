@@ -26,6 +26,7 @@ import {
   type Section,
 } from '@yantra/protocol';
 
+import { actionParts } from './actions.js';
 import { captureLabels, captureTitle, isCaptureArtifactPath } from './captures.js';
 
 /**
@@ -64,6 +65,26 @@ export function briefToMarkdown(brief: Brief): string {
   if (brief.artifacts !== undefined && brief.artifacts.length > 0) {
     blocks.push(['## Captures', '', ...brief.artifacts.map(captureLine)].join('\n'));
   }
+
+  if (brief.actions !== undefined && brief.actions.length > 0)
+    blocks.push(
+      [
+        '## Actions',
+        '',
+        ...brief.actions.map(
+          (action) =>
+            `- ${actionParts(action, brief)
+              .map((part) =>
+                part.kind === 'text'
+                  ? part.text
+                  : isCaptureArtifactPath(part.path)
+                    ? `[${part.label}](${part.path})`
+                    : inline(part.path),
+              )
+              .join('')}`,
+        ),
+      ].join('\n'),
+    );
 
   const overview = brief.overview.trim();
   if (overview.length > 0) {

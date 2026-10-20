@@ -5,6 +5,16 @@
 Current schema version: **0.2**. Accepted versions: 0.1, 0.2.
 The 0.2 bump is additive: it introduces the Brief document type; Plan and workflow contracts are unchanged and 0.1 documents remain valid.
 
+## ActionId
+
+Run-wide action identifier, equal to A followed by the ledger sequence.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## AgentManifestSection
 
 Stable agent metadata embedded in manifest.json for one run-local session.
@@ -231,6 +241,7 @@ The universal synthesized output document: answer-first overview, key findings, 
 
 | Field          | Description                                                                                                                      |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| actions        | Cited action evidence, in first-citation order; absent on older Briefs.                                                          |
 | brief_id       | Unique Brief document id (ULID).                                                                                                 |
 | task_id        | Originating task id (ULID).                                                                                                      |
 | schema_version | Protocol schema version this document was written under.                                                                         |
@@ -250,6 +261,7 @@ Example:
 
 ```json
 {
+  "actions": "<actions>",
   "brief_id": "<brief_id>",
   "task_id": "<task_id>",
   "schema_version": "<schema_version>",
@@ -264,6 +276,46 @@ Example:
   "artifacts": "<artifacts>",
   "metadata": "<metadata>",
   "notices": "<notices>"
+}
+```
+
+## BriefAction
+
+One cited, verified browser action: identities and verdicts only, never field values.
+
+| Field        | Description                                                             |
+| ------------ | ----------------------------------------------------------------------- |
+| id           | Run-wide action identifier, equal to A followed by the ledger sequence. |
+| kind         | Verified action kind.                                                   |
+| label        | Sanitized field or control label; null when no label is known.          |
+| label_origin | Evidence from which the fill label was resolved.                        |
+| confidence   | Confidence of an inferred label.                                        |
+| section      | Sanitized form section containing the field.                            |
+| ref          | Page-scoped target reference.                                           |
+| epoch        | Committed document epoch when the action happened.                      |
+| call_id      | Provider tool-call identifier, or null for a direct execution.          |
+| host         | Page hostname at action time, or null when unknown.                     |
+| verification | Fill verification without any committed value.                          |
+| signal       | Signal that caused a submit refusal.                                    |
+| artifacts    | Every saved file of a capture action.                                   |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "kind": "<kind>",
+  "label": "<label>",
+  "label_origin": "<label_origin>",
+  "confidence": "<confidence>",
+  "section": "<section>",
+  "ref": "<ref>",
+  "epoch": "<epoch>",
+  "call_id": "<call_id>",
+  "host": "<host>",
+  "verification": "<verification>",
+  "signal": "<signal>",
+  "artifacts": "<artifacts>"
 }
 ```
 
@@ -1271,6 +1323,7 @@ A scannable, citation-backed finding bullet.
 
 | Field     | Description                                                                                                                                                                                                                                           |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| actions   | Recorded action IDs backing this content.                                                                                                                                                                                                             |
 | text      | Markdown text of the finding. Inline [n] markers are optional: the LLM path may emit them, while the deterministic path carries citations only in the structured citations[] array. The structured array is the single source of truth for rendering. |
 | citations | Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true.                                                                                                                                                 |
 | editorial | True marks uncited synthesis commentary — the only legal uncited form.                                                                                                                                                                                |
@@ -1281,6 +1334,7 @@ Example:
 
 ```json
 {
+  "actions": "<actions>",
   "text": "<text>",
   "citations": "<citations>",
   "editorial": "<editorial>",
@@ -1753,6 +1807,7 @@ A deep-detail prose section of the Brief.
 
 | Field     | Description                                                     |
 | --------- | --------------------------------------------------------------- |
+| actions   | Recorded action IDs backing this content.                       |
 | kind      | Labels off-contract alternatives; absent for ordinary sections. |
 | heading   | Section heading.                                                |
 | body_md   | Markdown body prose; must not contain raw ANSI escapes.         |
@@ -1762,6 +1817,7 @@ Example:
 
 ```json
 {
+  "actions": "<actions>",
   "kind": "<kind>",
   "heading": "<heading>",
   "body_md": "<body_md>",
@@ -2093,6 +2149,7 @@ Stable append-only tool lifecycle entry stored in tool-calls.jsonl.
 
 | Field            | Description                                                                                                                  |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| actions          | Run-wide action IDs recorded by this successful tool call.                                                                   |
 | ts               | ISO-8601 UTC timestamp for this lifecycle phase.                                                                             |
 | seq              | Monotonic sequence number within the run.                                                                                    |
 | run_id           | Owning Yantra run identifier.                                                                                                |
@@ -2113,6 +2170,7 @@ Example:
 
 ```json
 {
+  "actions": "<actions>",
   "ts": "<ts>",
   "seq": "<seq>",
   "run_id": "<run_id>",

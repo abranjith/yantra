@@ -563,6 +563,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
         sanitizer: new DefaultSanitizer(),
         createEnvironment: () => Promise.resolve(environment),
         createProvider: (services) => {
+          if (!services.trace) throw new Error('Expected recording trace');
           services.trace.append({
             kind: 'navigate',
             host: 'example.com',
@@ -1055,7 +1056,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('returns a handoff and spends nothing when the goal needs an absent location', async () => {
       const result = await gated('cheap hotels near me August 5 2026 2 nights', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: null,
       });
 
@@ -1068,7 +1069,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('writes the run directory and emits the failure event', async () => {
       const result = await gated('hotels near me', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: null,
       });
 
@@ -1082,7 +1083,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('maps to exit code 4 (user handoff)', async () => {
       const result = await gated('hotels near me', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: null,
       });
 
@@ -1091,11 +1092,11 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('selects the remedy from the grant', async () => {
       const unset = await gated('hotels near me', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: null,
       });
       const denied = await gated('hotels near me', {
-        grants: { location: false },
+        grants: { location: false, screenshots: false },
         userLocation: null,
       });
 
@@ -1111,7 +1112,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('does not fire when the location is available', async () => {
       const result = await gated('hotels near me', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: brandSanitized('Naperville, IL, US'),
       });
 
@@ -1121,7 +1122,7 @@ describe('@no-llm runAgenticTask lifecycle', () => {
 
     it('does not fire for a goal that needs no location', async () => {
       const result = await gated('compare the top three 4K monitors', {
-        grants: { location: true },
+        grants: { location: true, screenshots: false },
         userLocation: null,
       });
 
@@ -1652,7 +1653,8 @@ describe('@no-llm runAgenticTask run-health finalization (FEAT-048)', () => {
       }
     };
     const record = (level: string) => (obj: Record<string, unknown> | string) => {
-      const line = typeof obj === 'string' ? { level, msg: obj } : { level, ...obj };
+      const line: Record<string, unknown> =
+        typeof obj === 'string' ? { level, msg: obj } : { level, ...obj };
       lines.push(line);
       if (line.event === 'run_health') order.push('run_health logged');
     };

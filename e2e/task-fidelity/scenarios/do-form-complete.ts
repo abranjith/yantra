@@ -32,7 +32,7 @@ import {
 } from './do-form.js';
 
 /** Synthetic test data for every eligible control, by label. */
-const VALUES: readonly (readonly [string, string])[] = [
+export const VALUES: readonly (readonly [string, string])[] = [
   ['First name', 'Ada'],
   ['Last name', 'Lovelace'],
   ['Email address', 'ada@example.test'],

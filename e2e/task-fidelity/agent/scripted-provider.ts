@@ -248,7 +248,7 @@ export class ScriptedAgentProvider implements AgentProvider {
         at: new Date().toISOString(),
       });
       const startedAt = Date.now();
-      const result = await tool.execute(params, undefined);
+      const result = await tool.execute(params, undefined, { callId });
       const endedAt = Date.now();
       const audit = auditProjectionOf(result);
       emit({

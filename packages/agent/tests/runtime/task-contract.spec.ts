@@ -35,9 +35,13 @@ async function runDir(): Promise<string> {
   return dir;
 }
 
-function params(overrides: Partial<TaskContractParams> = {}): TaskContractParams {
-  return {
-    deliverable: 'table',
+type ContractOverrides = Omit<Partial<TaskContractParams>, 'ranking'> & {
+  ranking?: TaskContractParams['ranking'] | undefined;
+};
+
+function params(overrides: ContractOverrides = {}): TaskContractParams {
+  const { ranking, ...rest } = {
+    deliverable: 'table' as const,
     subject: 'new 2026 SUV listings',
     required_fields: ['dealer', 'price', 'exterior color', 'interior color'],
     filters: [
@@ -45,10 +49,11 @@ function params(overrides: Partial<TaskContractParams> = {}): TaskContractParams
       { name: 'drivetrain', value: 'AWD' },
     ],
     required_sources: ['example-listings.test'],
-    ranking: { field: 'price', direction: 'asc' },
+    ranking: { field: 'price', direction: 'asc' as const },
     limit: 10,
     ...overrides,
   };
+  return { ...rest, ...(ranking === undefined ? {} : { ranking }) };
 }
 
 function normalized(overrides: Partial<TaskContractParams> = {}): TaskContractBody {
@@ -100,7 +105,7 @@ describe('@no-llm normalizeContract', () => {
         ],
       },
       { required_sources: ['a.test', 'https://www.A.test/x'] },
-    ] satisfies Partial<TaskContractParams>[]) {
+    ] satisfies ContractOverrides[]) {
       const result = normalizeContract(params(overrides), cleaning);
       expect(result.isOk ? null : result.error.cause).toBe('contract-duplicate');
     }

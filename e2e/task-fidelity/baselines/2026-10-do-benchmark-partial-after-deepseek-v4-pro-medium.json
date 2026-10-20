@@ -1,0 +1,2059 @@
+{
+  "schema_version": 1,
+  "benchmark_phase": "after",
+  "generated_at": "2026-10-20T03:54:04.067Z",
+  "git_sha": "204bb9b0e263570d91355d6a903fc5bc4d075e54",
+  "prompt_version": "agent-v15",
+  "model": {
+    "provider": "opencode-go",
+    "id": "deepseek-v4-pro",
+    "thinking": "medium"
+  },
+  "runs_per_scenario": 20,
+  "scenarios": [
+    {
+      "id": "bench-form-over-cap",
+      "runs": [
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 144391,
+            "reasoning_tokens": 3140,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261019T233910Z-do-f0114829",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 42889,
+            "output_tokens": 5849,
+            "cost_usd": 0.098298052,
+            "wall_ms": 225071,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 163627,
+            "reasoning_tokens": 9705,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261019T234256Z-do-383796e7",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 25901,
+            "output_tokens": 12987,
+            "cost_usd": 0.094316004,
+            "wall_ms": 263569,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 163013,
+            "reasoning_tokens": 9796,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261019T234719Z-do-ed67f82e",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 28270,
+            "output_tokens": 13683,
+            "cost_usd": 0.10187537599999999,
+            "wall_ms": 279430,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 135513,
+            "reasoning_tokens": 6752,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261019T235159Z-do-21a39bee",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 13,
+            "input_tokens": 25394,
+            "output_tokens": 10738,
+            "cost_usd": 0.084881608,
+            "wall_ms": 220734,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 136772,
+            "reasoning_tokens": 23715,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261019T235539Z-do-1f032b60",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 16,
+            "input_tokens": 25292,
+            "output_tokens": 28637,
+            "cost_usd": 0.14919200800000001,
+            "wall_ms": 349359,
+            "navigations": 2,
+            "browser_launches": 1,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 159274,
+            "reasoning_tokens": 17471,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T000129Z-do-4a643d5a",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 17,
+            "input_tokens": 26688,
+            "output_tokens": 21516,
+            "cost_usd": 0.12685110400000002,
+            "wall_ms": 366414,
+            "navigations": 2,
+            "browser_launches": 1,
+            "fixture_requests": 2
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 141249,
+            "reasoning_tokens": 11095,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T000735Z-do-2ba4b75f",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 25554,
+            "output_tokens": 14723,
+            "cost_usd": 0.100082016,
+            "wall_ms": 288240,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 139858,
+            "reasoning_tokens": 8077,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T001224Z-do-a9ff5d09",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 15,
+            "input_tokens": 48814,
+            "output_tokens": 11340,
+            "cost_usd": 0.128462344,
+            "wall_ms": 319368,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 158536,
+            "reasoning_tokens": 3493,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T001743Z-do-be3e4344",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 14,
+            "input_tokens": 49932,
+            "output_tokens": 6710,
+            "cost_usd": 0.113521312,
+            "wall_ms": 227402,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 167231,
+            "reasoning_tokens": 10584,
+            "retries": 1,
+            "captures": 1
+          },
+          "run_id": "20261020T002131Z-do-36e9836f",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 17,
+            "input_tokens": 40066,
+            "output_tokens": 14091,
+            "cost_usd": 0.12389264,
+            "wall_ms": 375798,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 139843,
+            "reasoning_tokens": 9496,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T002746Z-do-ef18795c",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 15,
+            "input_tokens": 27207,
+            "output_tokens": 13202,
+            "cost_usd": 0.098056772,
+            "wall_ms": 251190,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        },
+        {
+          "action": {
+            "field_correctness": {
+              "value": 1,
+              "numerator": 70,
+              "denominator": 70,
+              "detail": [
+                "pass: f0",
+                "pass: f1",
+                "pass: f2",
+                "pass: f3",
+                "pass: f4",
+                "pass: f5",
+                "pass: f6",
+                "pass: f7",
+                "pass: f8",
+                "pass: f9",
+                "pass: f10",
+                "pass: f11",
+                "pass: f12",
+                "pass: f13",
+                "pass: f14",
+                "pass: f15",
+                "pass: f16",
+                "pass: f17",
+                "pass: f18",
+                "pass: f19",
+                "pass: f20",
+                "pass: f21",
+                "pass: f22",
+                "pass: f23",
+                "pass: f24",
+                "pass: f25",
+                "pass: f26",
+                "pass: f27",
+                "pass: f28",
+                "pass: f29",
+                "pass: f30",
+                "pass: f31",
+                "pass: f32",
+                "pass: f33",
+                "pass: f34",
+                "pass: f35",
+                "pass: f36",
+                "pass: f37",
+                "pass: f38",
+                "pass: f39",
+                "pass: f40",
+                "pass: f41",
+                "pass: f42",
+                "pass: f43",
+                "pass: f44",
+                "pass: f45",
+                "pass: f46",
+                "pass: f47",
+                "pass: f48",
+                "pass: f49",
+                "pass: f50",
+                "pass: f51",
+                "pass: f52",
+                "pass: f53",
+                "pass: f54",
+                "pass: f55",
+                "pass: f56",
+                "pass: f57",
+                "pass: f58",
+                "pass: f59",
+                "pass: f60",
+                "pass: f61",
+                "pass: f62",
+                "pass: f63",
+                "pass: f64",
+                "pass: f65",
+                "pass: f66",
+                "pass: f67",
+                "pass: f68",
+                "pass: f69"
+              ]
+            },
+            "exempt_untouched": {
+              "value": 1,
+              "numerator": 3,
+              "denominator": 3,
+              "detail": [
+                "pass: disabled",
+                "pass: readonly",
+                "pass: file"
+              ]
+            },
+            "submissions": 0,
+            "capture": {
+              "value": 1,
+              "numerator": 1,
+              "denominator": 1,
+              "detail": [
+                "pass: full_page: valid linked PNG"
+              ]
+            },
+            "item_agreement": {
+              "value": 1,
+              "numerator": 4,
+              "denominator": 4,
+              "detail": [
+                "pass: deliverable: fixture met, reported met",
+                "pass: fill: fixture met, reported met",
+                "pass: artifact:screenshot:full_page: fixture met, reported met",
+                "pass: effects.submit: fixture met, reported met"
+              ]
+            },
+            "outcome_agreement": true,
+            "reported_success": true,
+            "task_success": true
+          },
+          "timing": {
+            "tool_ms": 163346,
+            "reasoning_tokens": 10867,
+            "retries": 0,
+            "captures": 1
+          },
+          "run_id": "20261020T003158Z-do-3601c3cb",
+          "outcome_kind": "published",
+          "field_coverage": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "constraint_fidelity": {
+            "value": 1,
+            "numerator": 1,
+            "denominator": 1,
+            "detail": []
+          },
+          "source_fidelity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "the contract names no required source"
+            ]
+          },
+          "citation_validity": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": [
+              "nothing was cited"
+            ]
+          },
+          "honesty": {
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "detail": []
+          },
+          "cost": {
+            "turns": 18,
+            "input_tokens": 28228,
+            "output_tokens": 15707,
+            "cost_usd": 0.10972184800000002,
+            "wall_ms": 296999,
+            "navigations": 1,
+            "browser_launches": 1,
+            "fixture_requests": 1
+          },
+          "interaction_required": 0
+        }
+      ],
+      "aggregate": {
+        "task_success_rate": 1,
+        "reported_success_rate": 1,
+        "false_fulfilled": 0,
+        "field_correctness": 1,
+        "wall_ms_p95": 375798,
+        "tool_ms": 151463.5,
+        "tool_ms_p95": 167231,
+        "reasoning_tokens": 9750.5,
+        "reasoning_tokens_p95": 23715,
+        "retries": 0,
+        "captures": 1,
+        "field_coverage": null,
+        "constraint_fidelity": 1,
+        "source_fidelity": null,
+        "citation_validity": null,
+        "honesty": null,
+        "turns": 15,
+        "wall_ms": 283835,
+        "cost_usd": 0.106,
+        "navigations": 1,
+        "browser_launches": 1,
+        "interaction_required": 0,
+        "stability": {
+          "mean_jaccard_top5": null,
+          "same_top5_in_at_least": 0
+        }
+      }
+    }
+  ],
+  "totals": {
+    "runs": 12,
+    "wall_ms": 3463574,
+    "cost_usd": 1.3292,
+    "navigations": 14,
+    "browser_launches": 12
+  }
+}

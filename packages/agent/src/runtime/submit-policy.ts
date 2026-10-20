@@ -10,6 +10,7 @@
 
 import type { SubmitSignal } from '@yantra/core';
 
+import { idOf } from './action-ledger.js';
 import { renderAgentMessage } from './messages.js';
 import type { DomainFailure } from './middleware.js';
 import type { RunServices, WorkflowStepShape } from './run-services.js';
@@ -39,8 +40,11 @@ export function submitRefusal(
   signal: SubmitRefusalSignal,
   name: string,
   ref: string | null,
+  callId: string | null = null,
 ): DomainFailure {
-  services.actionLedger.record({ kind: 'submit_refused', ref, name, signal });
+  const action = idOf(
+    services.actionLedger.record({ kind: 'submit_refused', ref, name, signal, callId }),
+  );
   const host = services.domain.browser?.controller.host() ?? '';
   services.runtimeLogger?.info(
     { schema_version: 1, event: 'submit_refused', signal, host },
@@ -51,6 +55,7 @@ export function submitRefusal(
     errorCode: 'SUBMIT_FORBIDDEN',
     message: renderAgentMessage('tool', 'SUBMIT_FORBIDDEN', signal, { name }),
     retryable: false,
+    details: { action, action_ids: [action] },
     diagnostic: { cause: signal },
   };
 }

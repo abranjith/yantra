@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-20T03:54:04.071Z",
+  "git_sha": "204bb9b0e263570d91355d6a903fc5bc4d075e54",
+  "inputs": [
+    {
+      "file": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-high.json",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "prompt_version": "agent-v10",
+      "phase": "before",
+      "git_sha": "d737ba44ad80509ec67e587eea69951221c6b5d6"
+    },
+    {
+      "file": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-before-deepseek-v4-pro-medium.json",
+      "model": "opencode-go/deepseek-v4-pro/medium",
+      "prompt_version": "agent-v10",
+      "phase": "before",
+      "git_sha": "d737ba44ad80509ec67e587eea69951221c6b5d6"
+    },
+    {
+      "file": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-high.json",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "prompt_version": "agent-v15",
+      "phase": "after",
+      "git_sha": "204bb9b0e263570d91355d6a903fc5bc4d075e54"
+    },
+    {
+      "file": "e2e/task-fidelity/baselines/2026-10-do-benchmark-partial-after-deepseek-v4-pro-medium.json",
+      "model": "opencode-go/deepseek-v4-pro/medium",
+      "prompt_version": "agent-v15",
+      "phase": "after",
+      "git_sha": "204bb9b0e263570d91355d6a903fc5bc4d075e54"
+    }
+  ],
+  "cells": [
+    {
+      "scenario": "bench-form-css-order-grid",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "phase": "before",
+      "runs": 16,
+      "successes": 0,
+      "reported": 15,
+      "false_fulfilled": 15,
+      "p50_ms": 193561.5,
+      "p95_ms": 586301,
+      "tool_ms_p50": 33441,
+      "tool_ms_p95": 50285,
+      "reasoning_tokens_p50": null,
+      "reasoning_tokens_p95": null,
+      "field_correctness": 1,
+      "retries": 1,
+      "captures": 0,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-over-cap",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "phase": "after",
+      "runs": 20,
+      "successes": 19,
+      "reported": 19,
+      "false_fulfilled": 0,
+      "p50_ms": 312362,
+      "p95_ms": 414209,
+      "tool_ms_p50": 155876,
+      "tool_ms_p95": 170464,
+      "reasoning_tokens_p50": 11093.5,
+      "reasoning_tokens_p95": 17119,
+      "field_correctness": 1,
+      "retries": 0,
+      "captures": 1,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-repeated-sections",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "phase": "after",
+      "runs": 5,
+      "successes": 5,
+      "reported": 5,
+      "false_fulfilled": 0,
+      "p50_ms": 106284,
+      "p95_ms": 297281,
+      "tool_ms_p50": 16607,
+      "tool_ms_p95": 18727,
+      "reasoning_tokens_p50": 9249,
+      "reasoning_tokens_p95": 18460,
+      "field_correctness": 1,
+      "retries": 0,
+      "captures": 1,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-table-label-cell",
+      "model": "opencode-go/deepseek-v4-pro/high",
+      "phase": "before",
+      "runs": 20,
+      "successes": 0,
+      "reported": 20,
+      "false_fulfilled": 20,
+      "p50_ms": 180092,
+      "p95_ms": 272646,
+      "tool_ms_p50": 39744.5,
+      "tool_ms_p95": 58084,
+      "reasoning_tokens_p50": null,
+      "reasoning_tokens_p95": null,
+      "field_correctness": 1,
+      "retries": 2,
+      "captures": 0,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-css-order-grid",
+      "model": "opencode-go/deepseek-v4-pro/medium",
+      "phase": "before",
+      "runs": 16,
+      "successes": 0,
+      "reported": 16,
+      "false_fulfilled": 16,
+      "p50_ms": 206238.5,
+      "p95_ms": 395899,
+      "tool_ms_p50": 32195.5,
+      "tool_ms_p95": 54120,
+      "reasoning_tokens_p50": null,
+      "reasoning_tokens_p95": null,
+      "field_correctness": 1,
+      "retries": 1.5,
+      "captures": 0,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-over-cap",
+      "model": "opencode-go/deepseek-v4-pro/medium",
+      "phase": "after",
+      "runs": 12,
+      "successes": 12,
+      "reported": 12,
+      "false_fulfilled": 0,
+      "p50_ms": 283835,
+      "p95_ms": 375798,
+      "tool_ms_p50": 151463.5,
+      "tool_ms_p95": 167231,
+      "reasoning_tokens_p50": 9750.5,
+      "reasoning_tokens_p95": 23715,
+      "field_correctness": 1,
+      "retries": 0,
+      "captures": 1,
+      "delta": null
+    },
+    {
+      "scenario": "bench-form-table-label-cell",
+      "model": "opencode-go/deepseek-v4-pro/medium",
+      "phase": "before",
+      "runs": 20,
+      "successes": 0,
+      "reported": 20,
+      "false_fulfilled": 20,
+      "p50_ms": 173817,
+      "p95_ms": 332324,
+      "tool_ms_p50": 30498,
+      "tool_ms_p95": 42681,
+      "reasoning_tokens_p50": null,
+      "reasoning_tokens_p95": null,
+      "field_correctness": 1,
+      "retries": 1,
+      "captures": 0,
+      "delta": null
+    }
+  ],
+  "targets": [
+    {
+      "id": "per-cell-success",
+      "met": false,
+      "detail": "opencode-go/deepseek-v4-pro/high bench-form-repeated-sections: 5/5 (insufficient runs); opencode-go/deepseek-v4-pro/medium bench-form-over-cap: 12/12 (insufficient runs)"
+    },
+    {
+      "id": "layouts",
+      "met": false,
+      "detail": "1 layouts meet 95%"
+    },
+    {
+      "id": "models",
+      "met": false,
+      "detail": "Requires two settings meeting 95% on the same three layouts"
+    },
+    {
+      "id": "p50",
+      "met": false,
+      "detail": "Every after cell: p50 <= 120000 ms; missing timing is unmet"
+    },
+    {
+      "id": "p95",
+      "met": false,
+      "detail": "Every after cell: p95 <= 300000 ms; missing timing is unmet"
+    }
+  ],
+  "live_measurement": {
+    "status": "waived_by_user",
+    "date": "2026-10-19",
+    "planned_runs": 320,
+    "measured_runs": 109,
+    "unrun": 211,
+    "reason": "User requested skipping OpenCode Go live testing as a feature completion gate. Existing measurements are partial evidence only; live generality and latency targets are not established."
+  }
+}

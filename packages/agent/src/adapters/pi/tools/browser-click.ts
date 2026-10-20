@@ -10,6 +10,7 @@ import {
 } from '@yantra/core';
 import { Type, type Static } from 'typebox';
 
+import { idOf } from '../../../runtime/action-ledger.js';
 import {
   asDetailsRecord,
   type DomainResult,
@@ -110,7 +111,7 @@ export function browserClickSpec(
     name: 'browser_click',
     label: 'Browser Click',
     description:
-      'Click one actionable element by its latest opaque observation ref. A fresh post-action observation is returned, so browser_observe is only needed for a read without acting. It also returns delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window and is not a claim that the click caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. If the page replaces the element mid-click the tool re-finds it by the same name and role and reports resolved_by plus attempted verdicts, so a failure here means that recovery already ran. Do NOT supply CSS/XPath, reuse stale refs, or click protected submit/purchase actions without user confirmation.',
+      'Click one actionable element by its latest opaque observation ref. A fresh post-action observation is returned, so browser_observe is only needed for a read without acting. It also returns delta: what changed between the page you last saw and this one — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the action window and is not a claim that the click caused every change, lists only dialogs it saw open or close rather than asserting none are open, and says complete: false with a reason wherever a bound stopped it being definite. If the page replaces the element mid-click the tool re-finds it by the same name and role and reports resolved_by plus attempted verdicts, so a failure here means that recovery already ran. Do NOT supply CSS/XPath, reuse stale refs, or click protected submit/purchase actions without user confirmation. The result carries action (A<n>); cite it as [A<n>] in result_publish when reporting the click.',
     parameters: BrowserClickParams,
     sanitizationProfile: 'public',
     mutating: true,
@@ -122,7 +123,9 @@ export function browserClickSpec(
       if (controller === undefined) return null;
       const name = controller.describeRef(params.ref)?.name ?? '';
       const signal = classifySubmitTarget(await controller.submitFacts(params.ref), name);
-      return signal === null ? null : submitRefusal(ctx.services, signal, name, params.ref);
+      return signal === null
+        ? null
+        : submitRefusal(ctx.services, signal, name, params.ref, ctx.callId);
     },
     requiresConfirmation: (params: Params) =>
       PROTECTED_ACTION_RE.test(
@@ -192,12 +195,15 @@ export function browserClickSpec(
       // produced it, so it is attested. Attesting BEFORE following the tab is
       // what lets the follow re-check it like any other navigation target.
       recordActionProvenance(ctx.services, clicked, 'browser_click');
-      ctx.services.actionLedger.record({
-        kind: 'click_executed',
-        ref: activeRef,
-        name,
-        submitClass,
-      });
+      const action = idOf(
+        ctx.services.actionLedger.record({
+          callId: ctx.callId,
+          kind: 'click_executed',
+          ref: activeRef,
+          name,
+          submitClass,
+        }),
+      );
       const result = await followSiteOpenedTab(ctx.services, controller, clicked);
       ctx.services.trace?.append({
         kind: 'click',
@@ -224,6 +230,7 @@ export function browserClickSpec(
         ok: true,
         model: {
           ...model,
+          action,
           ...(built.resolvedBy() === 're-resolved' ? { resolved_by: built.resolvedBy() } : {}),
           ...(recoveredInPlan || (recovered?.length ?? 0) > 0 ? { attempted } : {}),
           // Additive in this wave: the delta ships **beside** the observation,
@@ -232,7 +239,7 @@ export function browserClickSpec(
           ...(observation ? { observation: modelObservation(observation) } : {}),
           ...(delta ? { delta: modelDelta(delta) } : {}),
         },
-        details: deltaDetails(observation, delta),
+        details: { ...deltaDetails(observation, delta), action_ids: [action] },
       };
     },
   };

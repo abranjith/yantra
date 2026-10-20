@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ActionId } from './action-evidence.js';
 import { ArtifactRef } from './artifact-ref.js';
 
 const UtcTimestamp = z
@@ -10,6 +11,11 @@ const UtcTimestamp = z
 /** One stable Yantra projection of a provider tool lifecycle event. */
 export const ToolAuditEntry = z
   .object({
+    actions: z
+      .array(ActionId)
+      .max(16)
+      .optional()
+      .describe('Run-wide action IDs recorded by this successful tool call.'),
     ts: UtcTimestamp.describe('ISO-8601 UTC timestamp for this lifecycle phase.'),
     seq: z.number().int().nonnegative().describe('Monotonic sequence number within the run.'),
     run_id: z.string().min(1).describe('Owning Yantra run identifier.'),
@@ -70,6 +76,14 @@ export const ToolAuditEntry = z
       ),
   })
   .strict()
+  .superRefine((entry, ctx) => {
+    if (entry.actions !== undefined && (entry.phase !== 'end' || entry.status !== 'ok'))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['actions'],
+        message: 'actions are valid only on successful end entries',
+      });
+  })
   .describe('Stable append-only tool lifecycle entry stored in tool-calls.jsonl.');
 
 export type ToolAuditEntry = z.infer<typeof ToolAuditEntry>;

@@ -9,6 +9,7 @@ import type { BrowserCapability } from './profiles.js';
  */
 
 /**
+ * agent-v15 (FEAT-060) adds action citation guidance to do only.
  * agent-v14 (FEAT-059) adds the do recovery instruction and thinking budget.
  * The system prompt and the default thinking level remain unchanged.
  * agent-v13 (FEAT-058) adds one `do` addendum sentence: a requested screenshot
@@ -30,7 +31,7 @@ import type { BrowserCapability } from './profiles.js';
  * than a fallback. `agent-v8` added the governed `Scope` section itself.
  * The system prompt text itself intentionally remains output-shape agnostic.
  */
-export const PROMPT_VERSION = 'agent-v14' as const;
+export const PROMPT_VERSION = 'agent-v15' as const;
 
 /**
  * The complete production system prompt for agentic Yantra runs.

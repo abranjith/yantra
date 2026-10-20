@@ -172,7 +172,8 @@ function renderAgenticReport(input: {
           (call.partial === null
             ? ''
             : ` (${call.partial.applied} applied, ${call.partial.failed} failed, ${call.partial.skipped} skipped)`) +
-          (call.durationMs === null ? '' : ` - ${call.durationMs}ms`),
+          (call.durationMs === null ? '' : ` - ${call.durationMs}ms`) +
+          (call.actions.length === 0 ? '' : ` - actions: ${call.actions.join(', ')}`),
       );
     }
   }
@@ -385,6 +386,7 @@ function summarizeToolCalls(entries: ToolAuditEntryType[]): {
   readonly errorCode: string | null;
   readonly durationMs: number | null;
   readonly partial: PartialCounts | null;
+  readonly actions: readonly string[];
 }[] {
   const ends = new Map<string, ToolAuditEntryType>();
   for (const entry of entries) {
@@ -406,6 +408,7 @@ function summarizeToolCalls(entries: ToolAuditEntryType[]): {
         errorCode: end?.error_code ?? null,
         durationMs: end?.duration_ms ?? null,
         partial,
+        actions: end?.actions ?? [],
       };
     });
 }

@@ -16,6 +16,7 @@
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { Writable } from 'node:stream';
 
 import {
   resolveCommandTaskProfile,
@@ -28,11 +29,17 @@ import {
   type AgenticTaskOutcome,
   type EnvironmentLeaves,
 } from '@yantra/agent';
+import { CLIConnectorIO, TerminalRenderer, exitCodeForDoOutcome } from '@yantra/cli';
 import {
   BlocklistImpl,
   DEFAULT_SEARCH_CONFIG,
   brandSanitized,
   createSelectedBrowserProvider,
+  DefaultSanitizer,
+  FileWorkflowStore,
+  LocalBrowserProvider,
+  LocalProfileStore,
+  workflowsRoot,
   defaultEthicsConfig,
   resetPathCache,
   sanitize,
@@ -41,7 +48,7 @@ import {
   type RankSignalSink,
   type Sanitized,
 } from '@yantra/core';
-import { LocalRunStore } from '@yantra/core/workflow/replay';
+import { LocalRunStore, RunOrchestrator } from '@yantra/core/workflow/replay';
 import type { ConfirmationRequest } from '@yantra/protocol';
 
 import {
@@ -49,6 +56,7 @@ import {
   type ReceivedResult,
   type ScriptReport,
 } from './agent/scripted-provider.js';
+import { latestFormStates, type FormState } from './fixtures/form-state.js';
 import {
   EgressLog,
   HarnessSetupError,
@@ -91,6 +99,18 @@ export interface RunArtifacts {
 
 /** Everything a measure may read about one completed scenario run. */
 export interface ScenarioRun {
+  readonly replay?: {
+    readonly outcome: string;
+    readonly formState: Readonly<Record<string, FormState>>;
+    readonly workflow: unknown;
+  };
+  readonly formState: Readonly<Record<string, FormState>>;
+  readonly formInitialState?: Readonly<Record<string, FormState>>;
+  readonly surfaces: {
+    readonly firstLine: string;
+    readonly json: unknown;
+    readonly exitCode: number;
+  } | null;
   readonly scenario: Scenario;
   readonly mode: RunMode;
   readonly outcome: AgenticTaskOutcome;
@@ -221,6 +241,7 @@ export async function runScenario(
     const outcome = await runAgenticTask(
       {
         goal: scenario.goal,
+        ...(scenario.saveAs === undefined ? {} : { saveAs: scenario.saveAs }),
         profile,
         model: scripted ? SCRIPTED_MODEL : (options.model ?? SCRIPTED_MODEL),
         auth: options.auth ?? { mode: 'managed' },
@@ -257,6 +278,53 @@ export async function runScenario(
 
     const artifacts = await readArtifacts(outcome.runDir);
     const report: ScriptReport | null = agent?.report() ?? null;
+    const requests = server.requests();
+    const formState = latestFormStates(server.stateLog());
+    const formInitialState = Object.fromEntries(
+      [...server.stateLog()].sort((a, b) => b.seq - a.seq).map((state) => [state.page, state]),
+    );
+    let replay: ScenarioRun['replay'];
+    if (
+      scenario.saveAs !== undefined &&
+      outcome.kind === 'published' &&
+      outcome.promotion?.saved === true
+    ) {
+      const workflowStore = new FileWorkflowStore(workflowsRoot());
+      const loaded = await workflowStore.load(scenario.saveAs);
+      if (loaded.isOk) {
+        server.reset();
+        const replayProvider = hostMappedBrowserProvider(
+          new LocalBrowserProvider({ profileStore: new LocalProfileStore() }),
+          server.port,
+        );
+        const replayRun = await new RunOrchestrator({
+          workflowStore,
+          runStore: new LocalRunStore(join(options.runRoot, 'replay')),
+          browserProvider: replayProvider,
+          keychain: canaryKeychain(),
+          sanitizer: new DefaultSanitizer(),
+          ethicsGate: { check: () => Promise.resolve() },
+          logger: {
+            info: () => undefined,
+            warn: () => undefined,
+            error: () => undefined,
+            debug: () => undefined,
+          },
+          llmClient: null,
+        }).run({
+          workflowName: scenario.saveAs,
+          params: {},
+          budgets: {},
+          json: false,
+          debug: false,
+        });
+        replay = {
+          outcome: replayRun.kind,
+          formState: latestFormStates(server.stateLog()),
+          workflow: loaded.value,
+        };
+      }
+    }
     return {
       scenario,
       mode: options.mode,
@@ -270,13 +338,20 @@ export async function runScenario(
       prompt: report?.prompt ?? null,
       progress: connector.progress(),
       confirmationRequests: connector.confirmationRequests(),
-      requests: server.requests(),
+      requests,
+      formState,
+      formInitialState,
+      ...(replay === undefined ? {} : { replay }),
+      surfaces: scenario.command === 'do' ? renderSurfaces(outcome) : null,
       searchCalls: search.calls(),
       searchPeakConcurrency: search.peakConcurrency(),
       browserLaunches: launches.count,
       rankSignals,
       egress: egress.hosts(),
-      canaryHits: await canaryHits(outcome.runDir, Object.values(RUN_CANARIES)),
+      canaryHits: await canaryHits(outcome.runDir, [
+        ...Object.values(RUN_CANARIES),
+        ...(scenario.canaries ?? []),
+      ]),
       runtimeLogFindings: runtimeLogVerdict(artifacts.runtime, options.runtimeLogScanner),
       wallMs,
     };
@@ -284,6 +359,30 @@ export async function runScenario(
     await server.close();
     await home?.restore();
   }
+}
+
+/** Exercise the production connector twice, capturing human and JSON output independently. */
+export function renderSurfaces(outcome: AgenticTaskOutcome): NonNullable<ScenarioRun['surfaces']> {
+  const render = (json: boolean): string => {
+    const chunks: string[] = [];
+    const stream = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        chunks.push(chunk.toString('utf8'));
+        done();
+      },
+    });
+    const connector = new CLIConnectorIO(new TerminalRenderer(), {
+      interactive: false,
+      renderOpts: { json, debug: false, noColor: true, stream, errStream: stream },
+    });
+    connector.renderAgentOutcome(outcome);
+    return chunks.join('');
+  };
+  return {
+    firstLine: render(false).trimStart().split('\n')[0] ?? '',
+    json: JSON.parse(render(true)) as unknown,
+    exitCode: exitCodeForDoOutcome(outcome),
+  };
 }
 
 /** A `YANTRA_HOME` for one scenario; restoring it resets the path cache and removes it. */

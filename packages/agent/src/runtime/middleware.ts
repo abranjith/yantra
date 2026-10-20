@@ -140,6 +140,7 @@ export type DomainResult = DomainSuccess | DomainFailure;
 
 /** Context handed to a domain operation. */
 export interface DomainContext {
+  readonly callId: string | null;
   /** The per-run services bundle. */
   readonly services: RunServices;
   /** Merged abort signal (run abort ∪ per-tool timeout). Threaded into I/O. */
@@ -164,6 +165,7 @@ export interface ConfirmationSpec {
 
 /** Context for a spec's optional pre-domain policy hook. */
 export interface PolicyContext {
+  readonly callId: string | null;
   readonly services: RunServices;
 }
 
@@ -244,7 +246,11 @@ export interface WrappedTool {
   readonly description: string;
   readonly parameters: TSchema;
   /** Execute the fully-guarded pipeline for one raw tool call. */
-  execute(rawParams: unknown, signal: AbortSignal | undefined): Promise<YantraToolResult>;
+  execute(
+    rawParams: unknown,
+    signal: AbortSignal | undefined,
+    meta?: { readonly callId: string },
+  ): Promise<YantraToolResult>;
 }
 
 /** Default per-run confirmation wait ceiling (minutes, not hours — plan §5). */
@@ -267,7 +273,8 @@ export function wrapTool<TParams extends TSchema>(
     label: spec.label,
     description: spec.description,
     parameters: spec.parameters,
-    execute: (rawParams, signal) => runPipeline(spec, services, rawParams, signal),
+    execute: (rawParams, signal, meta) =>
+      runPipeline(spec, services, rawParams, signal, meta?.callId ?? null),
   };
 }
 
@@ -288,8 +295,9 @@ async function runPipeline<TParams extends TSchema>(
   services: RunServices,
   rawParams: unknown,
   callSignal: AbortSignal | undefined,
+  callId: string | null,
 ): Promise<YantraToolResult> {
-  const outcome = await runStages(spec, services, rawParams, callSignal);
+  const outcome = await runStages(spec, services, rawParams, callSignal, callId);
   recordOutcome(spec.name, services, outcome);
   return outcome.result;
 }
@@ -306,6 +314,7 @@ async function runStages<TParams extends TSchema>(
   services: RunServices,
   rawParams: unknown,
   callSignal: AbortSignal | undefined,
+  callId: string | null,
 ): Promise<PipelineOutcome> {
   try {
     // 1. Input validation — a closed schema rejects unknown/invalid input
@@ -450,7 +459,7 @@ async function runStages<TParams extends TSchema>(
       };
     }
     if (spec.policy) {
-      const refusal = await spec.policy(params, { services });
+      const refusal = await spec.policy(params, { services, callId });
       if (refusal) {
         return domainFailureOutcome(fromFailure(spec, services, refusal), refusal);
       }
@@ -487,7 +496,7 @@ async function runStages<TParams extends TSchema>(
     // fields and many typing rungs — shares one allowance across all of them.
     services.domain.browser?.controller.beginToolCall();
     const guarded = await runGuarded(
-      (signal) => spec.run(params, { services, signal, confirmationId }),
+      (signal) => spec.run(params, { services, signal, confirmationId, callId }),
       services,
       callSignal,
     );

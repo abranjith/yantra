@@ -66,7 +66,7 @@ export function browserFillFormSpec(
   return {
     name: 'browser_fill_form',
     label: 'Browser Fill Form',
-    description: `Preferred way to fill a form: set non-secret controls in bounded ordered batches, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Send up to ${FILL_FORM_MAX_FIELDS} fields per call, in page order. For a longer form, send the next batch after reading this result: its progress lists the fields that remain. Use browser_fill_element for a credential or a lone field. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other fields report requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed and attempted recovery verdicts, plus offered labels when genuine choices are available), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Every field sent appears in exactly one of those three sets. An entry may account for more than the field it names: a date range the page commits as one unit is one entry whose covers lists every field it stands for, in applied, failed, and skipped alike. Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels.`,
+    description: `Preferred way to fill a form: set non-secret controls in bounded ordered batches, through the same semantic engine as browser_fill_element, including dates, ranges, choices, toggles, and suggestions. Send up to ${FILL_FORM_MAX_FIELDS} fields per call, in page order. For a longer form, send the next batch after reading this result: its progress lists the fields that remain. Use browser_fill_element for a credential or a lone field. An applied field that landed exactly as sent lists only field, ref, and resolution; every other field carries full detail. Other fields report requested, committed, and resolution, so a committed value that differs from what you sent reads as the widget resolving it rather than as a failure. A control that withholds its contents (a password or other protected field) reports withheld with a verdict checked inside the page instead of committed; exact or reformatted means the value landed. A field that fails does not end the batch: the result carries applied (what landed), failed (each with observed and attempted recovery verdicts, plus offered labels when genuine choices are available), and skipped (fields belonging to the same widget as a failed one, which must wait until that field is resolved). Every field sent appears in exactly one of those three sets. An entry may account for more than the field it names: a date range the page commits as one unit is one entry whose covers lists every field it stands for, in applied, failed, and skipped alike. Partial success is progress to build on, not a reason to re-send the fields that worked. The result also carries one delta for the whole call: what changed between the page you last saw and the page the batch left behind — URL, dialogs opened or closed, how many elements appeared or vanished, where focus went — which describes the call window rather than claiming these fills caused every change, and says complete: false with a reason wherever a bound stopped it being definite. Do not use this tool to submit the form. A field's field.label and section are usable as its name; origin identifies its source, and hint values are developer attributes, not labels. Each applied field carries action (A<n>); cite it as [A<n>] in result_publish when reporting what you did.`,
     parameters: BrowserFillFormParams,
     inputAdvice: (raw) => {
       if (
@@ -84,7 +84,8 @@ export function browserFillFormSpec(
     },
     sanitizationProfile: 'authenticated',
     mutating: true,
-    run: (params: Params, ctx): Promise<DomainResult> => runFillForm(params, ctx.services),
+    run: (params: Params, ctx): Promise<DomainResult> =>
+      runFillForm(params, ctx.services, ctx.callId),
   };
 }
 
@@ -137,7 +138,11 @@ interface SkippedField {
  * container afterwards commonly answers null, and a rule written that way would
  * quietly never fire.
  */
-async function runFillForm(params: Params, services: RunServices): Promise<DomainResult> {
+async function runFillForm(
+  params: Params,
+  services: RunServices,
+  callId: string | null,
+): Promise<DomainResult> {
   for (const spec of params.fields) {
     const parsed = parseFillValue(spec.value, 'textbox');
     if (!('kind' in parsed)) {
@@ -181,9 +186,18 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
       }
     }
 
+    const coveredRefs: string[] = [];
+    if (spec.covers.length > 1) {
+      for (const covered of spec.covers) {
+        const resolved = await resolveFillField(covered, controller);
+        if (!isDomainFailure(resolved)) coveredRefs.push(resolved.target.ref);
+      }
+    }
     const outcome = await applyBrowserFill(spec.field, spec.value, services, preresolved, sink, {
       tool: 'browser_fill_form',
+      callId,
       covers: spec.covers.length,
+      ...(coveredRefs.length > 1 ? { coveredRefs } : {}),
     });
     if (isDomainFailure(outcome)) {
       const details = asDetails(outcome.details);
@@ -274,6 +288,7 @@ async function runFillForm(params: Params, services: RunServices): Promise<Domai
             : 'Nothing was submitted. Activate the submit/search control with browser_click.',
     },
     details: {
+      action_ids: applied.flatMap((entry) => (entry.action === undefined ? [] : [entry.action])),
       fields: applied.length,
       applied,
       ...(progress ? { progress } : {}),

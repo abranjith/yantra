@@ -18,6 +18,8 @@
 import type { ScenarioRun } from '../runner.js';
 import type { Scenario, ScenarioContract, ScenarioTruthRow } from '../scenario.js';
 
+import { actionTiming, scoreActions, type ActionScore, type TimingScore } from './action-scorer.js';
+
 /** One scored dimension. */
 export interface Score {
   /** numerator / denominator, or null when the denominator is 0. */
@@ -43,6 +45,8 @@ export interface CostScore {
 
 /** Every score for one run. */
 export interface RunScores {
+  readonly action?: ActionScore;
+  readonly timing?: TimingScore;
   readonly field_coverage: Score;
   readonly constraint_fidelity: Score;
   readonly source_fidelity: Score;
@@ -705,6 +709,9 @@ export function scoreRun(
   const delivered = deliveredRows(matched);
   const coverage = fieldCoverage(matched, scenario.contract, truth);
   return {
+    ...(scenario.contract.deliverable === 'actions' && scenario.contract.actionTruth !== undefined
+      ? { action: scoreActions(run, scenario.contract.actionTruth), timing: actionTiming(run) }
+      : {}),
     field_coverage: { ...coverage, detail: [...coverage.detail, ...detail] },
     constraint_fidelity: constraintFidelity(run, delivered, scenario.contract),
     source_fidelity: sourceFidelity(run, matched, scenario.contract),

@@ -342,7 +342,7 @@ describe('@no-llm agentic runtime log lifecycle', () => {
         model: { provider: 'fixture', id: 'fixture-model' },
         auth: { mode: 'managed' },
         connector: new SilentConnector(),
-        ambient: { grants: { location: true }, userLocation: null },
+        ambient: { grants: { location: true, screenshots: false }, userLocation: null },
       },
       {
         runStore: new LocalRunStore(root),

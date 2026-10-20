@@ -30,8 +30,8 @@ import { briefOf } from './common.js';
 export const TALL_HOST = 'tall-page.yantra.test';
 
 /** The standard (about 9,000 px) and long (30,000 px) pages. */
-export const TALL_URL = `${originOf('tall-page')}${TALL_PAGE_PATH}`;
-export const TALL_LONG_URL = `${originOf('tall-page')}${TALL_PAGE_LONG_PATH}`;
+export const TALL_URL = `${originOf('tall-page').replace('http:', 'https:')}${TALL_PAGE_PATH}`;
+export const TALL_LONG_URL = `${originOf('tall-page').replace('http:', 'https:')}${TALL_PAGE_LONG_PATH}`;
 
 /** The harness's ground-truth contract for a fill-and-capture goal. */
 export const CAPTURE_SCENARIO_CONTRACT: ScenarioContract = {

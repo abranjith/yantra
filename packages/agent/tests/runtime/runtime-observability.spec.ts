@@ -172,6 +172,7 @@ class ToolDrivingProvider implements AgentProvider {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      steer: () => Promise.resolve('idle'),
       abort: () => Promise.resolve(),
       close: () => Promise.resolve(),
       run: async (): Promise<AgentRunResult> => {
