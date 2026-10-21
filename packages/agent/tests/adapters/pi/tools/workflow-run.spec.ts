@@ -213,9 +213,71 @@ describe('@no-llm workflow_run under effects.submit: forbidden (FEAT-054 S8)', (
 
     expect(result.error_code).toBe('SUBMIT_FORBIDDEN');
     expect((JSON.parse(result.modelText) as { message: string }).message).toMatch(
-      /workflow "bank-statement" clicks/u,
+      /workflow "bank-statement" clicks or submits a field/u,
     );
     expect(run).not.toHaveBeenCalled();
+  });
+
+  // REV-001: replay presses Enter after a `fill` with `submit: true`, which
+  // submits the field's form exactly as a click on its submit button would.
+  it('refuses a workflow whose fill step submits', async () => {
+    const run = vi.fn();
+    const services = await forbiddingServices({
+      run,
+      loadSteps: () => Promise.resolve([{ verb: 'navigate' }, { verb: 'fill', submit: true }]),
+    });
+
+    const result = await wrapTool(workflowRunSpec(services), services).execute(RUN, undefined);
+
+    expect(result.error_code).toBe('SUBMIT_FORBIDDEN');
+    expect(run).not.toHaveBeenCalled();
+    expect(services.actionLedger.entries()).toEqual([
+      expect.objectContaining({ kind: 'submit_refused', signal: 'nested-workflow' }),
+    ]);
+  });
+
+  it('refuses a workflow that calls a workflow whose fill step submits', async () => {
+    const run = vi.fn();
+    const plans: Record<
+      string,
+      readonly { verb: string; workflow_name?: string; submit?: boolean }[]
+    > = {
+      'bank-statement': [{ verb: 'call_workflow', workflow_name: 'search' }],
+      search: [{ verb: 'navigate' }, { verb: 'fill', submit: true }],
+    };
+    const services = await forbiddingServices({
+      run,
+      loadSteps: (name) => Promise.resolve(plans[name] ?? null),
+    });
+
+    const result = await wrapTool(workflowRunSpec(services), services).execute(RUN, undefined);
+
+    expect(result.error_code).toBe('SUBMIT_FORBIDDEN');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('runs a workflow whose fill steps do not submit', async () => {
+    const run = vi.fn().mockResolvedValue({
+      ok: true,
+      runId: 'nested-run-1',
+      stepCount: 3,
+      outputs: {},
+    });
+    const services = await forbiddingServices({
+      run,
+      loadSteps: () =>
+        Promise.resolve([
+          { verb: 'navigate' },
+          { verb: 'fill', submit: false },
+          { verb: 'fill' },
+          { verb: 'fill_element' },
+        ]),
+    });
+
+    const result = await wrapTool(workflowRunSpec(services), services).execute(RUN, undefined);
+
+    expect(result.status).toBe('ok');
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it('refuses a workflow that calls a clicking workflow', async () => {

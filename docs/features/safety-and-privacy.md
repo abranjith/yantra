@@ -138,7 +138,7 @@ The structural facts come from one read-only evaluation of the element, which ch
 
 A submit-class click is refused with the non-retryable `SUBMIT_FORBIDDEN`, whose cause is `structural` or `name`. The refusal runs before the confirmation gate, so no confirmation request is built, no prompt appears, and no submission handler on the page fires. The message says the control was not clicked and why, and tells the agent to leave the form unsubmitted and continue with the remaining items or finish with `result_publish`.
 
-A saved workflow could click on the agent's behalf, so under `forbidden`, `workflow_run` refuses before running any workflow whose plan, or a workflow it calls, contains a `click` step, with `SUBMIT_FORBIDDEN` and cause `nested-workflow`. The check is structural and runs nothing. It also refuses when it cannot rule a click out: a plan that cannot be loaded, a call with no callee, or more than 16 workflows to inspect. An extract-only workflow still runs.
+A saved workflow could submit on the agent's behalf, so under `forbidden`, `workflow_run` refuses before running any workflow whose plan, or a workflow it calls, contains a `click` step or a `fill` step with `submit: true` (replay presses Enter, which submits the field's form), with `SUBMIT_FORBIDDEN` and cause `nested-workflow`. The check is structural and runs nothing. It also refuses when it cannot rule a submission out: a plan that cannot be loaded, a call with no callee, or more than 16 workflows to inspect. An extract-only workflow still runs.
 
 Each refusal is recorded in the run's action ledger and as one `submit_refused` line in `runtime.jsonl` with the signal and bare hostname, never the control's name. At publication the contract's `effects.submit` requirement is met when no submit-class click executed, and refused attempts are counted in its reason. With `effects.submit: "allowed"`, the default, click and confirmation behavior is unchanged.
 
@@ -340,23 +340,23 @@ See [Saved Workflows](saved-workflows.md) for workflow syntax and replay behavio
 
 ### Common safety outcomes
 
-| Outcome                                                                     | Meaning                                                                                      |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Exit `1`                                                                    | Invalid marker, host, preference, workflow, or other validation failure                      |
-| Exit `2`                                                                    | Execution, policy, or budget failure                                                         |
-| Exit `3`                                                                    | Environment failure such as unavailable model authorization or required runtime service      |
-| Exit `4`                                                                    | Human handoff, including denied/timed-out workflow confirmation or missing required location |
-| `SECRET_HOST_MISMATCH`                                                      | Stored website secret was requested on an unrelated live host                                |
-| `FILL_VALUE_INVALID`                                                        | A credential-shaped literal or invalid semantic fill was refused before mutation             |
-| `CONFIRMATION_DENIED` / `CONFIRMATION_TIMEOUT` / `CONFIRMATION_UNAVAILABLE` | The protected action was not executed                                                        |
-| `SUBMIT_FORBIDDEN`                                                          | The contract forbids submitting, so a submit-class click or clicking workflow was not run    |
-| `URL_NOT_FROM_EVIDENCE`                                                     | A fetch or browser navigation used a URL, path, or parameter name nothing attested           |
-| `URL_CREDENTIAL_SHAPE` / `URL_HOST_NOT_ALLOWED`                             | Outbound URL was refused by policy                                                           |
-| `ETHICS_BLOCKED`                                                            | Robots, blocklist, or rate-limit policy refused the fetch or action                          |
-| `SITE_CHALLENGE`                                                            | The page was a human-verification challenge in the standard browser; it was not read         |
-| `SCREENSHOT_SENSITIVE_SCREEN`                                               | A stored secret was filled on this document, so no screenshot of it was taken or saved       |
-| `CAPTURE_UNAVAILABLE`                                                       | A local capture could not be taken cleanly or within bounds; nothing was saved               |
-| `SEARCH_BLOCKED` with cause `circuit-open`                                  | The search provider challenged or rate-limited an earlier query, so this search was not sent |
+| Outcome                                                                     | Meaning                                                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Exit `1`                                                                    | Invalid marker, host, preference, workflow, or other validation failure                                   |
+| Exit `2`                                                                    | Execution, policy, or budget failure                                                                      |
+| Exit `3`                                                                    | Environment failure such as unavailable model authorization or required runtime service                   |
+| Exit `4`                                                                    | Human handoff, including denied/timed-out workflow confirmation or missing required location              |
+| `SECRET_HOST_MISMATCH`                                                      | Stored website secret was requested on an unrelated live host                                             |
+| `FILL_VALUE_INVALID`                                                        | A credential-shaped literal or invalid semantic fill was refused before mutation                          |
+| `CONFIRMATION_DENIED` / `CONFIRMATION_TIMEOUT` / `CONFIRMATION_UNAVAILABLE` | The protected action was not executed                                                                     |
+| `SUBMIT_FORBIDDEN`                                                          | The contract forbids submitting, so a submit-class click or a workflow that clicks or submits was not run |
+| `URL_NOT_FROM_EVIDENCE`                                                     | A fetch or browser navigation used a URL, path, or parameter name nothing attested                        |
+| `URL_CREDENTIAL_SHAPE` / `URL_HOST_NOT_ALLOWED`                             | Outbound URL was refused by policy                                                                        |
+| `ETHICS_BLOCKED`                                                            | Robots, blocklist, or rate-limit policy refused the fetch or action                                       |
+| `SITE_CHALLENGE`                                                            | The page was a human-verification challenge in the standard browser; it was not read                      |
+| `SCREENSHOT_SENSITIVE_SCREEN`                                               | A stored secret was filled on this document, so no screenshot of it was taken or saved                    |
+| `CAPTURE_UNAVAILABLE`                                                       | A local capture could not be taken cleanly or within bounds; nothing was saved                            |
+| `SEARCH_BLOCKED` with cause `circuit-open`                                  | The search provider challenged or rate-limited an earlier query, so this search was not sent              |
 
 Expected failures are returned to the model as bounded, structured, retry-classified results. Unexpected exceptions are genericized in model-visible output.
 

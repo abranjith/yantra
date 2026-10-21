@@ -828,8 +828,9 @@ export const AGENT_INTERACTION_MESSAGES = [
     'SUBMIT_FORBIDDEN',
     'nested-workflow',
     (details) =>
-      `Not run: the saved workflow "${text(details.name).slice(0, 64)}" clicks, and the task ` +
-      'contract says effects.submit is forbidden, so it could submit a form. Do the remaining ' +
+      `Not run: the saved workflow "${text(details.name).slice(0, 64)}" clicks or submits a ` +
+      'field, and the task contract says effects.submit is forbidden, so it could submit a ' +
+      'form. Do the remaining ' +
       'items with the browser tools or finish with result_publish.',
     ['name'],
     'result_publish',

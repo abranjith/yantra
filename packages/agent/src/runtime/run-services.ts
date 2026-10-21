@@ -252,9 +252,9 @@ export interface WorkflowToolDeps {
   /**
    * The validated steps of a saved workflow (verb plus, for `call_workflow`,
    * the callee), or null when it cannot be loaded. Read only under
-   * `effects.submit: forbidden` (FEAT-054 S8) to refuse a clicking workflow
-   * before it runs; absent means the plan cannot be checked, so such a run is
-   * refused.
+   * `effects.submit: forbidden` (FEAT-054 S8) to refuse a workflow that could
+   * submit before it runs; absent means the plan cannot be checked, so such a
+   * run is refused.
    */
   loadSteps?(name: string): Promise<readonly WorkflowStepShape[] | null>;
 }
@@ -263,6 +263,8 @@ export interface WorkflowToolDeps {
 export interface WorkflowStepShape {
   readonly verb: string;
   readonly workflow_name?: string;
+  /** A `fill` step's `submit` flag: replay presses Enter, submitting the form. */
+  readonly submit?: boolean;
 }
 
 /** Browser tool dependencies for the run's single ephemeral controller. */
