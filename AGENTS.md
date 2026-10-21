@@ -30,6 +30,7 @@ Typical flow: brainstorm → plan → feature → implement → review → docum
 - [spec-document-usage](.agents/skills/spec-document-usage/SKILL.md)
 - [spec-feature](.agents/skills/spec-feature/SKILL.md)
 - [spec-fix](.agents/skills/spec-fix/SKILL.md)
+- [spec-hook-help](.agents/skills/spec-hook-help/SKILL.md)
 - [spec-implement](.agents/skills/spec-implement/SKILL.md)
 - [spec-memorize](.agents/skills/spec-memorize/SKILL.md)
 - [spec-plan-critic](.agents/skills/spec-plan-critic/SKILL.md)
