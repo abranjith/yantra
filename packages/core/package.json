@@ -44,7 +44,7 @@
     "cheerio": "^1.1.2",
     "croner": "^10.0.1",
     "jsdom": "^26.0.0",
-    "jsonata": "^2.0.5",
+    "jsonata": "^2.2.2",
     "keytar": "^7.9.0",
     "marked": "^15.0.12",
     "picocolors": "^1.1.1",

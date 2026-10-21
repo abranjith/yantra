@@ -1,8 +1,34 @@
 // @no-llm
+import { readFileSync } from 'node:fs';
+
 import fc from 'fast-check';
 import { describe, it, expect } from 'vitest';
 
 import { JSONataEvaluator, JSONataEvaluationError } from '../../../src/workflow/yaml/jsonata.js';
+
+/** The first release outside GHSA-2943-5xfg-gq5f, GHSA-66mm-25pp-rfff and GHSA-663r-x48j-fg8p. */
+const PATCHED_JSONATA = [2, 2, 1] as const;
+
+describe('jsonata dependency', () => {
+  // The lockfile is not committed, so a fresh install could resolve a
+  // vulnerable release; evaluated workflow expressions make that code execution.
+  it('resolves a release patched against expression code execution', () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../../node_modules/jsonata/package.json', import.meta.url), 'utf8'),
+    ) as { version: string };
+    const [major = 0, minor = 0, patch = 0] = manifest.version.split('.').map(Number);
+    const installed = [major, minor, patch];
+
+    const firstDifference = installed.findIndex((part, index) => part !== PATCHED_JSONATA[index]);
+    const patched =
+      firstDifference === -1 || installed[firstDifference]! > PATCHED_JSONATA[firstDifference]!;
+
+    // The version is in the subject so a failure names the vulnerable release.
+    expect(`${manifest.version}: ${patched ? 'patched' : 'vulnerable'}`).toBe(
+      `${manifest.version}: patched`,
+    );
+  });
+});
 
 describe('JSONataEvaluator', () => {
   const evaluator = new JSONataEvaluator();
