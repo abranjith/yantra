@@ -1580,7 +1580,11 @@ carry it.
 
 `result_publish` runs this only for `do`. Before composition it refuses with retryable
 `CONTRACT_REQUIRED`, which names `task_contract` as the move, when `contract.requiredToPublish` is
-set and nothing was declared, on both the Brief and the template path. On the Brief path, after
+set and nothing was declared, on both the Brief and the template path. The middleware applies the
+same refusal earlier (cause `before-action`) to every tool whose spec sets `contractGated` —
+`browser_click`, both fill tools, and `workflow_run` in run mode — so the contract's effects
+terms bind the first page change; it runs after the action-phase latch and before the tool's
+policy hook and the confirmation gate. On the Brief path, after
 composition, `evaluatePublication` reads `RunServices.fillCensus` only when the effective terms
 carry a fill, evaluates, writes `requirements` onto the Brief, and appends the disagreement notice;
 the template path evaluates without delivery evidence. After the
