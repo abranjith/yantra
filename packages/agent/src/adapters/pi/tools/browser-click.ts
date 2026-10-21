@@ -115,6 +115,7 @@ export function browserClickSpec(
     parameters: BrowserClickParams,
     sanitizationProfile: 'public',
     mutating: true,
+    contractGated: true,
     // FEAT-054: under `effects.submit: forbidden` a submit-class target is
     // refused here, before the confirmation gate, so no prompt is ever built.
     policy: async (params: Params, ctx) => {

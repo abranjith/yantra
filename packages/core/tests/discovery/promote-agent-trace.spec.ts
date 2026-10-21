@@ -556,3 +556,79 @@ describe('@no-llm promoteAgentTrace synthesis block', () => {
     expect(workflow.synthesis).toBeNull();
   });
 });
+
+describe('@no-llm REV-012 typed text shaped like a reference is never promoted', () => {
+  const fillWith = (value: PromotableTraceStep['value']): PromotableTraceStep => ({
+    kind: 'fill',
+    host: 'shop.example',
+    locator: [{ kind: 'css', value: '#comment' }],
+    value,
+    requires_confirmation: false,
+  });
+  const fillElementWith = (text: string): PromotableTraceStep => ({
+    kind: 'fill_element',
+    host: 'shop.example',
+    field: {
+      role: 'textbox',
+      name: 'Comment',
+      group: null,
+      label: 'Comment',
+      label_origin: 'explicit',
+    },
+    locator: [{ kind: 'css', value: '#comment' }],
+    value: { kind: 'literal', value: text },
+    requires_confirmation: false,
+  });
+
+  it.each([
+    ['a whole secret reference', '{{ secret:bank.password }}'],
+    ['an embedded param reference', 'Hello {{ param:name }}, welcome'],
+    ['a capture reference without spaces', '{{capture:s2.rows}}'],
+    ['an upper-case near miss', '{{ SECRET:bank.password }}'],
+  ])('refuses %s in a fill and saves nothing', async (_label, text) => {
+    const store = makeFakeStore();
+
+    const result = await promoteAgentTrace([navigate, fillWith({ kind: 'literal', value: text })], {
+      workflowName: 'comment',
+      store,
+    });
+
+    expect(result.isOk).toBe(false);
+    if (result.isOk) return;
+    expect(result.error.kind).toBe('reference_shaped_literal');
+    expect(result.error.message).toMatch(/into a field/u);
+    expect(result.error.message).not.toContain(text);
+    expect(store.saved).toHaveLength(0);
+  });
+
+  it('refuses the same text in a semantic fill and counts the fields', async () => {
+    const store = makeFakeStore();
+
+    const result = await promoteAgentTrace(
+      [navigate, fillElementWith('{{ secret:a.b }}'), fillElementWith('{{ param:x }}')],
+      { workflowName: 'comment', store },
+    );
+
+    expect(result.isOk).toBe(false);
+    if (result.isOk) return;
+    expect(result.error.message).toMatch(/into 2 fields/u);
+  });
+
+  it('still promotes a stored secret as a reference, and ordinary text as text', async () => {
+    const store = makeFakeStore();
+
+    const result = await promoteAgentTrace(
+      [
+        navigate,
+        fillWith({ kind: 'secret_ref', key: 'shop.password' }),
+        fillElementWith('Order {12} ships Monday'),
+      ],
+      { workflowName: 'comment', store },
+    );
+
+    expect(result.isOk ? null : result.error).toBeNull();
+    if (!result.isOk) return;
+    const values = result.value.steps.flatMap((step) => ('value' in step ? [step.value] : []));
+    expect(values).toEqual(['{{ secret:shop.password }}', 'Order {12} ships Monday']);
+  });
+});

@@ -14,7 +14,14 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Brief, Plan, SecretRef, SecurityScope, TaskOutcome } from '@yantra/protocol';
+import {
+  TASK_OUTCOME_TABLE,
+  type Brief,
+  type Plan,
+  type SecretRef,
+  type SecurityScope,
+  type TaskOutcome,
+} from '@yantra/protocol';
 
 import { runsRoot } from '../../browser/paths.js';
 import type { BrowserProvider } from '../../browser/types.js';
@@ -94,26 +101,23 @@ export interface RunOrchestratorOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * Maps an orchestrator outcome to a POSIX exit code.
+ * Maps an orchestrator outcome to its exit code through the protocol's one
+ * outcome table, so `yantra run` and the agentic commands agree word for word
+ * (REV-011):
  *
- * - 0: success
- * - 2: workflow logic failure (scope violation, ethics refused, step failure)
- * - 4: non-blocking abort (human handoff requested, user-aborted)
+ * - 0: success (`fulfilled`)
+ * - 2: workflow logic failure — scope violation, ethics refused, step failure (`failed`)
+ * - 4: human handoff requested (`handoff`)
+ * - 130: user abort (`aborted`)
  */
 export function exitCodeFor(outcome: OrchestratorRunOutcome): number {
-  if (outcome.kind === 'success') return 0;
-  if (outcome.kind === 'aborted') {
-    const reason = outcome.reason;
-    if (reason === 'user-handoff' || reason === 'user-abort') return 4;
-    return 2; // scope-violation, ethics-refused
-  }
-  return 2; // failure
+  return TASK_OUTCOME_TABLE[taskOutcomeForReplay(outcome)].exitCode;
 }
 
 /**
  * The task-outcome word for a replay outcome (FEAT-054 D3), so `yantra run`
- * speaks the same vocabulary as the agentic commands. Behavior and exit codes
- * are unchanged: a user abort still exits 4 through {@link exitCodeFor}.
+ * speaks the same vocabulary as the agentic commands. {@link exitCodeFor} reads
+ * each word's exit code from the shared table.
  *
  * - `success` → `fulfilled`
  * - `aborted` with `user-handoff` → `handoff`; with `user-abort` → `aborted`

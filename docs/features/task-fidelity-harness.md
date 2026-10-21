@@ -1014,7 +1014,11 @@ Keep the same model settings across phases and hold each measured checkout's
 HEAD fixed until its runs finish. Give each concurrently running cohort its own
 `YANTRA_HOME`, `YANTRA_DATA_DIR`, and `YANTRA_CACHE_DIR`, initialized from the
 same configuration, profile, auth, and model registry. This avoids shared Pi
-registry writes while preserving the same inputs. Keep the measurement host
+registry writes while preserving the same inputs. Copying `auth` puts a
+plaintext provider credential (`data/pi/auth.json`) into each cohort home, so
+create the homes in a directory you own and delete every one of them as soon as
+collection stops, whether it finished, failed, or was cancelled; never leave
+them in a shared temp directory. Keep the measurement host
 awake and do not overlap the cohorts with test execution. Each cohort runs its
 own scenarios sequentially. This is 80 runs per setting per
 phase, 160 per phase across two settings, and 320 for the complete comparison.

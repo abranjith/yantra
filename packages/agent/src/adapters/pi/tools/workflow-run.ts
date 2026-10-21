@@ -64,6 +64,8 @@ export function workflowRunSpec(services: RunServices): ToolWrapperSpec<typeof W
     parameters: WorkflowRunParams,
     sanitizationProfile: 'public',
     mutating: true,
+    // Running a workflow can change the page; listing the catalog cannot.
+    contractGated: (params: Params) => params.mode === 'run',
     run: (params: Params, ctx): Promise<DomainResult> =>
       runWorkflowTool(params, ctx.services, ctx.callId),
   };

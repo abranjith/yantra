@@ -45,7 +45,12 @@ export const ScreenshotArtifactPath = z
   )
   .describe('Run-relative path of the artifact file, using forward slashes.');
 
-/** The artifact kinds a reference may name; FEAT-060 extends the set. */
+/**
+ * The artifact kinds a reference may name. Only `screenshot` ships (FEAT-058,
+ * reused by FEAT-060's action evidence); `web_fetch` text captures are not
+ * projected yet, and widening the kind, path grammar, and media type for them
+ * is deferred in TODO ("generic artifact reference: text captures").
+ */
 export const ArtifactKind = z.enum(['screenshot']).describe('What kind of file the artifact is.');
 
 export type ArtifactKind = z.infer<typeof ArtifactKind>;

@@ -155,6 +155,7 @@ export function browserFillElementSpec(
     parameters: BrowserFillElementParams,
     sanitizationProfile: 'authenticated',
     mutating: true,
+    contractGated: true,
     requiresConfirmation: (params: Params) => isSecretRef(params.value),
     buildConfirmation: () => ({
       action_kind: 'fill',

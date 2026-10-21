@@ -171,7 +171,7 @@ Repeat `--params key=value` for several values. A parameter file must be a YAML 
 
 `--json` prints the raw run outcome, including outputs and Brief document data when available, plus `task_outcome`. Without it, the first line names the run and its outcome word, such as `✓ Run <run-id>: fulfilled`; a successful ordinary run then prints declared outputs and truncates very long terminal values with a pointer to `outputs.json`. A workflow with a `synthesis:` block renders the Brief instead.
 
-Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. The words change no behavior: exit codes are as listed under [Exit behavior](#exit-behavior), so a replay user abort still exits `4`. A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
+Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. Each word has one exit code across every command, read from the protocol's shared outcome table: a replay user abort exits `130`, as `do`, `ask`, and `research` do, and a handoff exits `4` (see [Exit behavior](#exit-behavior)). A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
 
 ### Control replay synthesis
 
@@ -274,12 +274,13 @@ Persisted output redaction does **not** rewrite the in-memory outcome used for t
 
 ### Exit behavior
 
-| Exit | Current direct-workflow meaning                                                                                                                                                    |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Replay completed successfully.                                                                                                                                                     |
-| `1`  | CLI, workflow-load, parameter, preflight, runtime-setup, or resume-eligibility error thrown before a terminal executor outcome. Lint also uses `1` for errors and strict warnings. |
-| `2`  | Executor returned a workflow failure, scope violation, or ethics refusal.                                                                                                          |
-| `4`  | Confirmation/human handoff or user abort. Resume's non-interactive consent gate also uses `4`.                                                                                     |
+| Exit  | Current direct-workflow meaning                                                                                                                                                    |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`   | Replay completed successfully.                                                                                                                                                     |
+| `1`   | CLI, workflow-load, parameter, preflight, runtime-setup, or resume-eligibility error thrown before a terminal executor outcome. Lint also uses `1` for errors and strict warnings. |
+| `2`   | Executor returned a workflow failure, scope violation, or ethics refusal.                                                                                                          |
+| `4`   | Confirmation/human handoff. Resume's non-interactive consent gate also uses `4`.                                                                                                   |
+| `130` | User abort (`aborted`), the same code the agentic commands use.                                                                                                                    |
 
 ## Configuration and Permissions
 

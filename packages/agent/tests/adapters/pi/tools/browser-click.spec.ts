@@ -86,7 +86,10 @@ function recordingGateway(): ConfirmationGateway & { readonly requests: Confirma
   };
 }
 
-async function setup(submit: 'forbidden' | 'allowed' | 'undeclared'): Promise<{
+async function setup(
+  submit: 'forbidden' | 'allowed' | 'undeclared',
+  options: { readonly requiredToPublish?: boolean } = {},
+): Promise<{
   readonly services: RunServices;
   readonly controller: ReturnType<typeof formController>;
   readonly gateway: ReturnType<typeof recordingGateway>;
@@ -99,6 +102,9 @@ async function setup(submit: 'forbidden' | 'allowed' | 'undeclared'): Promise<{
     runDir: dir,
     command: 'do',
     required: true,
+    ...(options.requiredToPublish === undefined
+      ? {}
+      : { requiredToPublish: options.requiredToPublish }),
   });
   if (submit !== 'undeclared') {
     const params: TaskContractParams = {
@@ -276,5 +282,53 @@ describe('@no-llm browser_click records verified outcomes in the action ledger (
 
     expect(result.status).toBe('error');
     expect(services.actionLedger.entries()).toEqual([]);
+  });
+});
+
+describe('@no-llm browser_click before a contract in do (REV-003)', () => {
+  it('refuses a structural submit button before any contract, with no prompt and no click', async () => {
+    const { services, controller, gateway } = await setup('undeclared', {
+      requiredToPublish: true,
+    });
+
+    const result = await click(services, 'e1');
+
+    expect(result.error_code).toBe('CONTRACT_REQUIRED');
+    expect(result.retryable).toBe(true);
+    expect((JSON.parse(result.modelText) as { message: string }).message).toMatch(
+      /Call task_contract first/u,
+    );
+    expect(controller.click).not.toHaveBeenCalled();
+    expect(controller.submitFacts).not.toHaveBeenCalled();
+    expect(gateway.requests).toEqual([]);
+    expect(services.actionLedger.entries()).toEqual([]);
+  });
+
+  it('refuses an ordinary button too: the gate is about ordering, not the target', async () => {
+    const { services, controller } = await setup('undeclared', { requiredToPublish: true });
+
+    const result = await click(services, 'e2');
+
+    expect(result.error_code).toBe('CONTRACT_REQUIRED');
+    expect(controller.click).not.toHaveBeenCalled();
+  });
+
+  it('applies the declared effects once a contract exists: a forbidden submit is then refused by the policy', async () => {
+    const { services, controller } = await setup('forbidden', { requiredToPublish: true });
+
+    expect((await click(services, 'e1')).error_code).toBe('SUBMIT_FORBIDDEN');
+    const ordinary = await click(services, 'e2');
+
+    expect(ordinary.status).toBe('ok');
+    expect(controller.click).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a run whose result is not judged against a contract unchanged', async () => {
+    const { services, controller } = await setup('undeclared', { requiredToPublish: false });
+
+    const result = await click(services, 'e2');
+
+    expect(result.status).toBe('ok');
+    expect(controller.click).toHaveBeenCalledOnce();
   });
 });

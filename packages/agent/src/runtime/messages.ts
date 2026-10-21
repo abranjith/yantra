@@ -893,6 +893,17 @@ export const AGENT_INTERACTION_MESSAGES = [
   ),
   middleware('BUDGET_EXHAUSTED', 'budget-decision', passThrough, ['message'], 'result_publish'),
   middleware(
+    'CONTRACT_REQUIRED',
+    'before-action',
+    () =>
+      'This tool changes the page, and the task has no declared contract yet. Call ' +
+      'task_contract first with the deliverable and every requirement the goal states, ' +
+      'including fill, artifacts, and effects (for example, effects.submit forbidden when the ' +
+      'goal says not to submit), then repeat this call. Reading the page needs no contract.',
+    [],
+    'task_contract',
+  ),
+  middleware(
     'ACTION_PHASE_CLOSED',
     'published',
     () => 'The result has already been published; mutating tools are no longer available.',
