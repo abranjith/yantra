@@ -193,6 +193,17 @@ export interface ToolWrapperSpec<TParams extends TSchema = TSchema> {
   /** True when this call must be rejected after the action phase closes. */
   readonly mutating?: boolean;
   /**
+   * True for a tool that changes page state (a click, a fill, a nested
+   * workflow). In a command whose result is judged against its contract
+   * (`do`), such a call is refused with `CONTRACT_REQUIRED` until a contract
+   * is declared, so an engine-enforced term such as `effects.submit:
+   * forbidden` is in force before the first action (REV-003). Navigation and
+   * reads stay open: the model may look at a page before declaring. A
+   * function gates only the calls it returns true for (`workflow_run`'s
+   * `mode: "run"`, not its catalog listing).
+   */
+  readonly contractGated?: boolean | ((params: Static<TParams>) => boolean);
+  /**
    * True for the run's terminal publication tool. Its call is exempt from the
    * run-wide cumulative budgets (see `BudgetTracker`): the exit from a run must
    * never be starved by the exploration that preceded it.
@@ -442,6 +453,25 @@ async function runStages<TParams extends TSchema>(
           false,
         ),
         cause: 'action-phase-closed',
+      };
+    }
+    // Contract-first latch (REV-003): a page-changing call in a contract-judged
+    // run waits for the contract, so its effects terms bind the first action.
+    if (
+      (spec.contractGated === true ||
+        (typeof spec.contractGated === 'function' && spec.contractGated(params))) &&
+      services.contract.requiredToPublish &&
+      services.contract.current() === null
+    ) {
+      return {
+        result: failure(
+          spec,
+          services,
+          'CONTRACT_REQUIRED',
+          renderAgentMessage('middleware', 'CONTRACT_REQUIRED', 'before-action'),
+          true,
+        ),
+        cause: 'before-action',
       };
     }
     // Evidence-phase latch: once the completion nudge closed evidence

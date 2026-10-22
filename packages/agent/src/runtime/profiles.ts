@@ -48,6 +48,10 @@ const REQUIRED_SOURCE =
   'and present any other source only as a clearly labeled alternative, never merged into the ' +
   'answer.';
 const DECLARE_CONTRACT = 'Call task_contract in the same turn as your first search or fetch.';
+// REV-003: in `do` the engine refuses a click, fill, or workflow run until a
+// contract exists, so the model is told to declare before its first page change.
+const DECLARE_CONTRACT_BEFORE_ACTION =
+  'Call task_contract before your first click, fill, or workflow run; reading a page needs no contract.';
 // FEAT-054: the requirements the engine checks live in the contract, not in
 // notes. Shared by the `do` addendum only; research cannot declare actions.
 const DECLARE_ACTIONS =
@@ -138,7 +142,7 @@ export const COMMAND_TASK_PROFILES: Readonly<Record<AgenticCommand, CommandTaskP
     workflowToolMode: 'run',
     promptAddendum:
       `If Yantra sends a progress check, follow its Next step or publish what you have; it is sent at most once. Complete the requested task safely and verify the outcome. ${PUBLISH_GUIDANCE} ` +
-      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_ACTIONS} ${CAPTURE_DELIVERABLE} ` +
+      `${REQUIRED_SOURCE} ${DECLARE_CONTRACT} ${DECLARE_CONTRACT_BEFORE_ACTION} ${DECLARE_ACTIONS} ${CAPTURE_DELIVERABLE} ` +
       `When a form needs more than one field set, use browser_fill_form: up to ${FILL_FORM_MAX_FIELDS} fields per call, ` +
       'in page order, never one call per field. A longer form takes several calls; after each one, read its ' +
       'progress (how many eligible fields remain, and the next ones by ref) and send those, rather than observing again. ' +

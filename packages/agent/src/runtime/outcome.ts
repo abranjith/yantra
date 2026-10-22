@@ -1,4 +1,10 @@
-import type { ArtifactRef, FailureClass, TaskOutcome, TerminationReason } from '@yantra/protocol';
+import {
+  TASK_OUTCOME_TABLE,
+  type ArtifactRef,
+  type FailureClass,
+  type TaskOutcome,
+  type TerminationReason,
+} from '@yantra/protocol';
 
 import type { AgentError } from '../provider/types.js';
 
@@ -99,27 +105,11 @@ export type AgenticTaskOutcome =
       readonly terminationReason: TerminationReason;
     };
 
-/** What one task outcome means for every consumer. */
-export interface TaskOutcomeMapping {
-  /** The documented CLI exit code. */
-  readonly exitCode: number;
-  /** The manifest `status`. */
-  readonly manifestStatus: 'completed' | 'failed' | 'aborted';
-  /** The terminal `events.jsonl` event. */
-  readonly event: 'task_completed' | 'task_failed';
-}
-
 /**
- * The one mapping from task outcome to exit code, manifest status, and event
- * (FEAT-054 D3). Every consumer reads it; none keeps its own copy.
+ * The one outcome table (FEAT-054 D3), owned by the protocol so `yantra run`
+ * reads it too. Re-exported here for the agentic consumers.
  */
-export const TASK_OUTCOME_TABLE: Readonly<Record<TaskOutcome, TaskOutcomeMapping>> = {
-  fulfilled: { exitCode: 0, manifestStatus: 'completed', event: 'task_completed' },
-  partial: { exitCode: 2, manifestStatus: 'failed', event: 'task_failed' },
-  handoff: { exitCode: 4, manifestStatus: 'failed', event: 'task_failed' },
-  failed: { exitCode: 2, manifestStatus: 'failed', event: 'task_failed' },
-  aborted: { exitCode: 130, manifestStatus: 'aborted', event: 'task_failed' },
-};
+export { TASK_OUTCOME_TABLE, type TaskOutcomeMapping } from '@yantra/protocol';
 
 /** Termination reasons that mean a run budget ended the work. */
 const BUDGET_TERMINATIONS: ReadonlySet<TerminationReason> = new Set<TerminationReason>([

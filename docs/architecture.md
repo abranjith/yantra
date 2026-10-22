@@ -1580,7 +1580,11 @@ carry it.
 
 `result_publish` runs this only for `do`. Before composition it refuses with retryable
 `CONTRACT_REQUIRED`, which names `task_contract` as the move, when `contract.requiredToPublish` is
-set and nothing was declared, on both the Brief and the template path. On the Brief path, after
+set and nothing was declared, on both the Brief and the template path. The middleware applies the
+same refusal earlier (cause `before-action`) to every tool whose spec sets `contractGated` —
+`browser_click`, both fill tools, and `workflow_run` in run mode — so the contract's effects
+terms bind the first page change; it runs after the action-phase latch and before the tool's
+policy hook and the confirmation gate. On the Brief path, after
 composition, `evaluatePublication` reads `RunServices.fillCensus` only when the effective terms
 carry a fill, evaluates, writes `requirements` onto the Brief, and appends the disagreement notice;
 the template path evaluates without delivery evidence. After the
@@ -1600,7 +1604,9 @@ judged item was met; otherwise it is `partial`. A published `ask` or `research` 
 `repeated-tool-failure`, `stalled`, `turn-timeout`), `handoff`, `provider_failed`, or, for a model that finished, `wall-clock-soft`
 when `BudgetTracker.softWindDownReached` and `model_finished` otherwise.
 
-`TASK_OUTCOME_TABLE` in `runtime/outcome.ts` is the one mapping every consumer reads:
+`TASK_OUTCOME_TABLE` in `@yantra/protocol` (`schemas/task-outcome.ts`, re-exported by `runtime/outcome.ts`)
+is the one mapping every consumer reads, including replay's `exitCodeFor`, so `yantra run` and
+`yantra resume` exit with the same code per word as the agentic commands:
 
 | Task outcome | Exit code | Manifest status | Terminal event   |
 | ------------ | --------- | --------------- | ---------------- |
@@ -1693,8 +1699,11 @@ launched controller's current URL and document epoch, the `ActionLedger`, the ca
 and the effective contract terms. It performs no observation, extraction, fetch, or browser
 operation. A counted `tool_finished` checkpoint advances when it sees a new document, a canonical
 top-level URL not previously seen in the run, a newly verified action or capture, or a live item
-moving toward met. `submit_refused` does not advance action progress. Successful unchanged reads,
-empty listings, and refused exploration therefore cannot hide a stall. Tool specs mark
+moving toward met. `submit_refused` does not advance action progress, and neither does a verified action that reaches
+nothing new: coverage is keyed by field or widget group per document epoch, by control per epoch,
+and by capture content, so a re-fill, a repeat click, or an identical capture is a no-progress
+call. Successful unchanged reads, empty listings, refused exploration, and repeated actions
+therefore cannot hide a stall. Tool specs mark
 `task_contract` and `result_publish` as `progressRole: 'bookkeeping'`: their calls neither advance
 nor reset the no-progress window.
 

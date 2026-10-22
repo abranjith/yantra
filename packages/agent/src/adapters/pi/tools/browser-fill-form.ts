@@ -84,6 +84,7 @@ export function browserFillFormSpec(
     },
     sanitizationProfile: 'authenticated',
     mutating: true,
+    contractGated: true,
     run: (params: Params, ctx): Promise<DomainResult> =>
       runFillForm(params, ctx.services, ctx.callId),
   };

@@ -147,7 +147,12 @@ export {
   artifactRequirementId,
   type TaskContractBodyInput,
 } from './schemas/task-contract.js';
-export { TaskOutcome, TerminationReason } from './schemas/task-outcome.js';
+export {
+  TASK_OUTCOME_TABLE,
+  TaskOutcome,
+  TerminationReason,
+  type TaskOutcomeMapping,
+} from './schemas/task-outcome.js';
 export {
   LocatorCandidate,
   ParamDeclaration,

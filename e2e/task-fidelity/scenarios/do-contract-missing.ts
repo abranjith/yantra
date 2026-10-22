@@ -1,8 +1,9 @@
 /**
- * `do-contract-missing`: a `do` run publishes before declaring a contract
- * (FEAT-054 D4). `result_publish` refuses with `CONTRACT_REQUIRED` and names
- * `task_contract`; one declaration recovers, and the Brief carries the
- * per-item requirements.
+ * `do-contract-missing`: a `do` run acts and publishes before declaring a
+ * contract. The fill is refused with `CONTRACT_REQUIRED` before it touches the
+ * page (REV-003: the contract's effects bind the first action), and so is
+ * `result_publish` (FEAT-054 D4); both name `task_contract`. One declaration
+ * recovers both, and the Brief carries the per-item requirements.
  */
 
 import { equals, satisfies, type Expectation } from '../expectations.js';
@@ -23,6 +24,19 @@ import {
 
 const expectations: readonly Expectation[] = [
   ...formExpectations(),
+  {
+    id: 'fill-refused-without-contract',
+    owner: 'FEAT-054',
+    measure: (run) => {
+      const first = resultLabelled(run, 'fill before contract');
+      return {
+        code: first?.errorCode ?? null,
+        namesTool: first?.modelText.includes('task_contract'),
+      };
+    },
+    target: equals({ code: 'CONTRACT_REQUIRED', namesTool: true }),
+    note: 'A page change waits for the contract, so effects.submit binds the first action.',
+  },
   {
     id: 'publish-refused-without-contract',
     owner: 'FEAT-054',
@@ -65,9 +79,10 @@ export const doContractMissing: Scenario = {
   serps: [],
   script: [
     NAVIGATE_STEP,
-    fillAnswersStep(1, 2),
+    fillAnswersStep(1, 2, 'fill before contract'),
     publishFormStep(undefined, 'publish before contract'),
     contractStep(CAPTURE_CONTRACT),
+    fillAnswersStep(1, 2),
     publishFormStep(),
   ],
   expectations,

@@ -27,7 +27,7 @@ import type { RunServices } from '../../../runtime/run-services.js';
 import {
   submitForbidden,
   submitRefusal,
-  workflowMayClick,
+  workflowMaySubmit,
 } from '../../../runtime/submit-policy.js';
 
 const WorkflowRunParams = Type.Object(
@@ -64,6 +64,8 @@ export function workflowRunSpec(services: RunServices): ToolWrapperSpec<typeof W
     parameters: WorkflowRunParams,
     sanitizationProfile: 'public',
     mutating: true,
+    // Running a workflow can change the page; listing the catalog cannot.
+    contractGated: (params: Params) => params.mode === 'run',
     run: (params: Params, ctx): Promise<DomainResult> =>
       runWorkflowTool(params, ctx.services, ctx.callId),
   };
@@ -122,8 +124,9 @@ async function runWorkflowTool(
   if (!validation.ok) return validation.failure;
 
   // FEAT-054 S8: a nested workflow would otherwise bypass the agent-side
-  // no-submit refusal, so a clicking plan is refused before it runs.
-  if (submitForbidden(services) && (await workflowMayClick(name, deps.loadSteps?.bind(deps)))) {
+  // no-submit refusal, so a plan that clicks or submits a fill (Enter) is
+  // refused before it runs.
+  if (submitForbidden(services) && (await workflowMaySubmit(name, deps.loadSteps?.bind(deps)))) {
     return submitRefusal(services, 'nested-workflow', name, null, callId);
   }
 

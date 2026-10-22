@@ -8,6 +8,7 @@ import {
   renderProgressLine,
   type ProgressSources,
 } from '../../src/runtime/progress-ledger.js';
+import { STALL_POLICY, isStalled } from '../../src/runtime/recovery.js';
 import { withRunProgress } from '../../src/runtime/run-services.js';
 import { NO_ACTION_TERMS, type EffectiveActionTerms } from '../../src/runtime/task-contract.js';
 import { buildServices } from '../adapters/pi/tools/test-support.js';
@@ -274,5 +275,134 @@ describe('@no-llm FEAT-059 semantic progress', () => {
     f.progress.reserveExemptCapture('element');
     expect(f.progress.captureExemptionAvailable('element')).toBe(false);
     expect(f.progress.exemptCapturesUsed()).toBe(2);
+  });
+});
+
+describe('@no-llm REV-004 repeated actions do not reset the stall window', () => {
+  const fill = (ref: string, extra: { groupKey?: string; coveredRefs?: string[] } = {}) => ({
+    kind: 'fill_committed' as const,
+    tool: 'browser_fill_form' as const,
+    ref,
+    field: `Field ${ref}`,
+    groupKey: extra.groupKey ?? null,
+    covers: 1,
+    ...(extra.coveredRefs === undefined ? {} : { coveredRefs: extra.coveredRefs }),
+  });
+  const click = (ref: string) => ({
+    kind: 'click_executed' as const,
+    ref,
+    name: `Control ${ref}`,
+    submitClass: null,
+  });
+  const capture = (sha: string) => ({
+    kind: 'capture' as const,
+    scope: 'viewport' as const,
+    path: `screenshots/capture-1-${sha.slice(0, 12)}.png`,
+    sha256: sha,
+    bytes: 10,
+    producer: 'browser_capture',
+  });
+
+  it('a field re-filled again and again reaches the stall threshold', () => {
+    const f = fixture();
+    f.ledger.record(fill('e1'));
+    expect(f.checkpoint().signals).toEqual(['action_verified']);
+
+    let last = f.checkpoint();
+    for (let call = 0; call < STALL_POLICY.noProgressCalls; call += 1) {
+      f.ledger.record(fill('e1'));
+      last = f.checkpoint();
+      expect(last.signals).toEqual([]);
+    }
+
+    expect(last.noProgressCalls).toBeGreaterThanOrEqual(STALL_POLICY.noProgressCalls);
+    expect(isStalled(last, false)).toBe(true);
+  });
+
+  it('a control clicked repeatedly on one document reaches the stall threshold', () => {
+    const f = fixture();
+    f.ledger.record(click('e4'));
+    expect(f.checkpoint().signals).toEqual(['action_verified']);
+
+    let last = f.checkpoint();
+    for (let call = 0; call < STALL_POLICY.noProgressCalls; call += 1) {
+      f.ledger.record(click('e4'));
+      last = f.checkpoint();
+    }
+
+    expect(isStalled(last, false)).toBe(true);
+  });
+
+  it('an identical capture is not new evidence, a different one is', () => {
+    const f = fixture();
+    f.ledger.record(capture('a'.repeat(64)));
+    expect(f.checkpoint().signals).toEqual(['action_verified', 'artifact_saved']);
+
+    f.ledger.record(capture('a'.repeat(64)));
+    expect(f.checkpoint().signals).toEqual([]);
+
+    f.ledger.record(capture('b'.repeat(64)));
+    expect(f.checkpoint().signals).toEqual(['action_verified', 'artifact_saved']);
+  });
+
+  it('a new field, a pair leg, or one new field in a batch of repeats still counts', () => {
+    const f = fixture();
+    f.ledger.record(fill('e1'));
+    f.checkpoint();
+
+    f.ledger.record(fill('e2'));
+    expect(f.checkpoint().signals).toContain('action_verified');
+
+    f.ledger.record(fill('e3', { coveredRefs: ['e3', 'e4'] }));
+    expect(f.checkpoint().signals).toContain('action_verified');
+    f.ledger.record(fill('e4'));
+    expect(f.checkpoint().signals).toEqual([]);
+
+    f.ledger.record(fill('e1'));
+    f.ledger.record(fill('e2'));
+    f.ledger.record(fill('e5'));
+    const mixed = f.checkpoint();
+    expect(mixed.signals).toContain('action_verified');
+    expect(mixed.noProgressCalls).toBe(0);
+  });
+
+  it('a group counts once: another option of the same radio group is not new coverage', () => {
+    const f = fixture();
+    f.ledger.record(fill('e7', { groupKey: 'radio:plan' }));
+    expect(f.checkpoint().signals).toContain('action_verified');
+
+    f.ledger.record(fill('e8', { groupKey: 'radio:plan' }));
+    expect(f.checkpoint().signals).toEqual([]);
+  });
+
+  it('the same ref on a new document is new coverage', () => {
+    let epoch = 1;
+    const ledger = new ActionLedger({
+      nowIso: () => new Date(0).toISOString(),
+      locate: () => ({ epoch, host: 'fixture.example' }),
+      sanitizer: new DefaultSanitizer(),
+    });
+    const progress = new ProgressLedger(
+      {
+        documentCount: () => 0,
+        page: () => null,
+        ledger,
+        census: () => null,
+        terms: () => NO_ACTION_TERMS,
+        contract: () => null,
+      },
+      () => 0,
+      'enforce',
+    );
+    const checkpoint = () => progress.checkpoint({ tool: 'synthetic', role: 'counted' });
+    ledger.record(click('e2'));
+    expect(checkpoint().signals).toEqual(['action_verified']);
+    ledger.record(click('e2'));
+    expect(checkpoint().signals).toEqual([]);
+
+    epoch = 2;
+    ledger.record(click('e2'));
+
+    expect(checkpoint().signals).toEqual(['action_verified']);
   });
 });

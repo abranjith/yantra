@@ -204,6 +204,14 @@ export async function promoteAgentTrace(
     });
   }
 
+  const shaped = steps.filter(
+    (step) =>
+      (step.kind === 'fill' || step.kind === 'fill_element') &&
+      step.value?.kind === 'literal' &&
+      REFERENCE_SHAPED.test(step.value.value),
+  ).length;
+  if (shaped > 0) return err(referenceShapedLiteral(shaped));
+
   const locators: Record<string, LocatorCandidate[]> = {};
   const secrets = new Set<string>();
   const workflowSteps: WorkflowStep[] = [];
@@ -450,6 +458,7 @@ export interface PromoteOptions {
 /** Failure returned (never thrown) by {@link promoteDiscoverySession}. */
 export type PromoteError =
   | { readonly kind: 'no_completed_steps'; readonly message: string }
+  | { readonly kind: 'reference_shaped_literal'; readonly message: string }
   | { readonly kind: 'lint_failed'; readonly message: string; readonly errors: readonly string[] }
   | { readonly kind: 'name_collision'; readonly message: string }
   | { readonly kind: 'save_failed'; readonly message: string };
@@ -475,6 +484,17 @@ export async function promoteDiscoverySession(
       message: 'No completed cycles to promote — every cycle was rejected, failed, or blocked.',
     });
   }
+
+  const shaped = completedCycles
+    .flatMap((cycle) => cycle.proposal.steps)
+    .filter(
+      (step) =>
+        (step.type === 'fill' || step.type === 'fill_element') &&
+        step.value.kind === 'literal' &&
+        typeof step.value.value === 'string' &&
+        REFERENCE_SHAPED.test(step.value.value),
+    ).length;
+  if (shaped > 0) return err(referenceShapedLiteral(shaped));
 
   const locators: Record<string, LocatorCandidate[]> = {};
   const steps: WorkflowStep[] = [];
@@ -676,6 +696,27 @@ function registerLocator(
 }
 
 /** Extracts the scalar value from a discovery-proposed literal ValueRef. */
+/**
+ * A fill value replay would read as a reference rather than as text: any
+ * `{{ secret:… }}`, `{{ param:… }}`, or `{{ capture:… }}` form, whole or
+ * embedded (`workflow-to-plan.ts` parses both). A value the agent typed is
+ * page- or model-influenced, and saved verbatim it would make replay resolve a
+ * stored secret or a param into that field (REV-012). Spacing and case follow
+ * the replay grammar loosely on purpose: refusing a near-miss costs nothing.
+ */
+const REFERENCE_SHAPED = /\{\{\s*(?:secret|param|capture)\s*:/iu;
+
+/** The refusal for a run whose typed text would replay as a reference. */
+function referenceShapedLiteral(stepCount: number): PromoteError {
+  return {
+    kind: 'reference_shaped_literal',
+    message:
+      `The run typed text shaped like a workflow reference ({{ secret:… }}, {{ param:… }}, or ` +
+      `{{ capture:… }}) into ${stepCount === 1 ? 'a field' : `${stepCount} fields`}. A saved ` +
+      'workflow would replay it as a reference instead of as that text, so the run was not saved.',
+  };
+}
+
 function literalToScalar(ref: ValueRef): string | number | boolean | null {
   return ref.kind === 'literal' ? ref.value : null;
 }

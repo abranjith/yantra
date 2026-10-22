@@ -1,7 +1,7 @@
 import { canonicalUrl, type FillCensus } from '@yantra/core';
 import { artifactRequirementId, type RunHealth, type TaskContractBody } from '@yantra/protocol';
 
-import type { ActionLedger } from './action-ledger.js';
+import type { ActionLedger, ActionLedgerEntry } from './action-ledger.js';
 import type { NowMs } from './budget.js';
 import {
   actionsStatus,
@@ -57,6 +57,8 @@ export class ProgressLedger {
   private noProgressCalls = 0;
   private longestMs = 0;
   private readonly captureExemptions = new Set<string>();
+  /** What verified actions have reached so far; see {@link claimCoverage}. */
+  private readonly coverage = new Set<string>();
   private progressError = false;
   private readonly signals: Record<ProgressSignal, number> = {
     new_document: 0,
@@ -122,8 +124,12 @@ export class ProgressLedger {
     const entries = this.sources.ledger
       .entries()
       .filter((e) => e.kind !== 'submit_refused' && e.seq > this.verifiedSeq);
-    if (entries.length > 0) signals.push('action_verified');
-    if (entries.some((e) => e.kind === 'capture')) signals.push('artifact_saved');
+    // Only an action that reaches something not reached before is progress: a
+    // re-fill of a committed field, a repeat click, or an identical capture is
+    // a successful no-op and must not reset the stall window (REV-004).
+    const fresh = entries.filter((e) => this.claimCoverage(e));
+    if (fresh.length > 0) signals.push('action_verified');
+    if (fresh.some((e) => e.kind === 'capture')) signals.push('artifact_saved');
     const items = this.liveItems();
     const changedItems = this.changedItems(items);
     if (
@@ -152,6 +158,32 @@ export class ProgressLedger {
       noProgressCalls: this.noProgressCalls,
       msSinceProgress: Math.max(0, now - this.lastProgressAt),
     };
+  }
+
+  /**
+   * Records what one verified action reached and reports whether any of it
+   * is new: a field or widget group per document, a control per document, or
+   * a capture's content. Keys hold refs, epochs, scopes, and hashes only.
+   */
+  private claimCoverage(entry: ActionLedgerEntry): boolean {
+    const keys: string[] = [];
+    switch (entry.kind) {
+      case 'submit_refused':
+        return false;
+      case 'fill_committed':
+        keys.push(`fill|${entry.epoch}|${entry.groupKey ?? `ref:${entry.ref}`}`);
+        for (const ref of entry.coveredRefs ?? []) keys.push(`fill|${entry.epoch}|ref:${ref}`);
+        break;
+      case 'click_executed':
+        keys.push(`click|${entry.epoch}|${entry.ref}`);
+        break;
+      case 'capture':
+        keys.push(`capture|${entry.scope}|${entry.sha256}`);
+        break;
+    }
+    const fresh = keys.filter((key) => !this.coverage.has(key));
+    for (const key of fresh) this.coverage.add(key);
+    return fresh.length > 0;
   }
 
   /** Rebase after a rung so every later stall requires a fresh no-progress window. */

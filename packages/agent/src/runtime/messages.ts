@@ -828,8 +828,9 @@ export const AGENT_INTERACTION_MESSAGES = [
     'SUBMIT_FORBIDDEN',
     'nested-workflow',
     (details) =>
-      `Not run: the saved workflow "${text(details.name).slice(0, 64)}" clicks, and the task ` +
-      'contract says effects.submit is forbidden, so it could submit a form. Do the remaining ' +
+      `Not run: the saved workflow "${text(details.name).slice(0, 64)}" clicks or submits a ` +
+      'field, and the task contract says effects.submit is forbidden, so it could submit a ' +
+      'form. Do the remaining ' +
       'items with the browser tools or finish with result_publish.',
     ['name'],
     'result_publish',
@@ -891,6 +892,17 @@ export const AGENT_INTERACTION_MESSAGES = [
     'result_publish',
   ),
   middleware('BUDGET_EXHAUSTED', 'budget-decision', passThrough, ['message'], 'result_publish'),
+  middleware(
+    'CONTRACT_REQUIRED',
+    'before-action',
+    () =>
+      'This tool changes the page, and the task has no declared contract yet. Call ' +
+      'task_contract first with the deliverable and every requirement the goal states, ' +
+      'including fill, artifacts, and effects (for example, effects.submit forbidden when the ' +
+      'goal says not to submit), then repeat this call. Reading the page needs no contract.',
+    [],
+    'task_contract',
+  ),
   middleware(
     'ACTION_PHASE_CLOSED',
     'published',

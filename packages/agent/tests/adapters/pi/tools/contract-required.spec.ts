@@ -5,12 +5,17 @@ import { join } from 'node:path';
 import { parseTemplate } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { browserFillElementSpec } from '../../../../src/adapters/pi/tools/browser-fill-element.js';
+import { browserFillFormSpec } from '../../../../src/adapters/pi/tools/browser-fill-form.js';
+import { browserNavigateSpec } from '../../../../src/adapters/pi/tools/browser-navigate.js';
+import { browserObserveSpec } from '../../../../src/adapters/pi/tools/browser-observe.js';
 import {
   createBriefPublisher,
   createTemplatedReportPublisher,
   resultPublishSpec,
 } from '../../../../src/adapters/pi/tools/result-publish.js';
 import { taskContractSpec } from '../../../../src/adapters/pi/tools/task-contract.js';
+import { workflowRunSpec } from '../../../../src/adapters/pi/tools/workflow-run.js';
 import type { BudgetLimits } from '../../../../src/runtime/budget.js';
 import { wrapTool } from '../../../../src/runtime/middleware.js';
 import type { AgenticCommand } from '../../../../src/runtime/profiles.js';
@@ -137,5 +142,86 @@ describe('@no-llm result_publish requires a contract in do (FEAT-054 D4)', () =>
 
     expect(result.error_code).toBe('CONTRACT_REQUIRED');
     expect(await exists(join(runDir, 'document.json'))).toBe(false);
+  });
+});
+
+describe('@no-llm page-changing tools wait for the contract in do (REV-003)', () => {
+  let runDir: string;
+  beforeEach(async () => {
+    runDir = await mkdtemp(join(tmpdir(), 'yantra-contract-first-'));
+  });
+  afterEach(async () => {
+    await rm(runDir, { recursive: true, force: true });
+  });
+
+  function setup(command: AgenticCommand) {
+    const contract = new TaskContractStore({
+      runId: 'r',
+      runDir,
+      command,
+      required: command !== 'ask',
+      requiredToPublish: command === 'do',
+    });
+    const services = buildServices({ runDir, contract });
+    return { services, declare: wrapTool(taskContractSpec(services), services) };
+  }
+
+  const FILL_FORM = { fields: [{ field: 'First name', value: 'Ada' }] };
+  const FILL_ELEMENT = { field: 'First name', value: 'Ada' };
+  const RUN_WORKFLOW = { mode: 'run', workflow: 'sign-up' } as const;
+
+  it.each([
+    ['browser_fill_form', browserFillFormSpec, FILL_FORM],
+    ['browser_fill_element', browserFillElementSpec, FILL_ELEMENT],
+    ['workflow_run (mode run)', workflowRunSpec, RUN_WORKFLOW],
+  ] as const)(
+    'refuses %s before a contract and names task_contract',
+    async (_label, spec, input) => {
+      const { services } = setup('do');
+
+      const result = await wrapTool(spec(services) as never, services).execute(input, undefined);
+
+      expect(result.error_code).toBe('CONTRACT_REQUIRED');
+      expect(result.retryable).toBe(true);
+      expect(result.modelText).toMatch(/Call task_contract first/u);
+    },
+  );
+
+  it.each([
+    ['browser_navigate', browserNavigateSpec, { url: 'https://forms.example.test/' }],
+    ['browser_observe', browserObserveSpec, {}],
+    ['workflow_run (mode list)', workflowRunSpec, { mode: 'list' }],
+  ] as const)(
+    'leaves %s open before a contract: reading needs none',
+    async (_label, spec, input) => {
+      const { services } = setup('do');
+
+      const result = await wrapTool(spec(services) as never, services).execute(input, undefined);
+
+      expect(result.error_code).not.toBe('CONTRACT_REQUIRED');
+    },
+  );
+
+  it('lets the same fill through once a contract is declared', async () => {
+    const { services, declare } = setup('do');
+    const fill = wrapTool(browserFillFormSpec(services), services);
+    expect((await fill.execute(FILL_FORM, undefined)).error_code).toBe('CONTRACT_REQUIRED');
+
+    expect((await declare.execute(CONTRACT, undefined)).status).toBe('ok');
+    const result = await fill.execute(FILL_FORM, undefined);
+
+    // No browser in this fixture: the call now reaches the tool body.
+    expect(result.error_code).not.toBe('CONTRACT_REQUIRED');
+  });
+
+  it.each(['research', 'ask'] as const)('does not gate %s', async (command) => {
+    const { services } = setup(command);
+
+    const result = await wrapTool(browserFillFormSpec(services), services).execute(
+      FILL_FORM,
+      undefined,
+    );
+
+    expect(result.error_code).not.toBe('CONTRACT_REQUIRED');
   });
 });

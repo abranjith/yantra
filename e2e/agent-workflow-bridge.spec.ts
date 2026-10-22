@@ -440,6 +440,7 @@ function promotionScenario(): Scenario {
   return async (session) => {
     await session.call('browser_navigate', { url: `${fixtureSite.baseUrl}/form.html` });
     let observed = parseModel(await session.call('browser_observe', {}));
+    await declareFixtureContract(session);
     await session.call('browser_fill_element', {
       field: refByName(observed, 'Username'),
       value: { kind: 'literal', value: 'alice' },
@@ -463,6 +464,8 @@ function invocationScenario(): Scenario {
     const listed = await session.call('workflow_run', { mode: 'list' });
     expect(listed.status).toBe('ok');
     expect(listed.modelText).toContain('catalog-flow');
+    // Listing needs no contract; running a workflow changes the page (REV-003).
+    await declareFixtureContract(session);
     const ran = await session.call('workflow_run', { mode: 'run', workflow: 'catalog-flow' });
     expect(ran.status).toBe('ok');
     expect(ran.modelText).toContain('completed');
@@ -496,14 +499,26 @@ function catalogTrace(): PromotableTraceStep[] {
   ];
 }
 
-async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
-  // A `do` result is judged against its contract, so it declares one first
-  // (FEAT-054 D4); without it result_publish returns CONTRACT_REQUIRED.
+/** Sessions that have declared the fixture contract. */
+const declaredSessions = new WeakSet<ScenarioSession>();
+
+/**
+ * Declares the fixture contract once per session. A `do` run must declare
+ * before its first click, fill, or workflow run (REV-003) and before
+ * publishing (FEAT-054 D4); without it either call returns CONTRACT_REQUIRED.
+ */
+async function declareFixtureContract(session: ScenarioSession): Promise<void> {
+  if (declaredSessions.has(session)) return;
   const declared = await session.call('task_contract', {
     deliverable: 'report',
     subject: 'the fixture task',
   });
   expect(declared.status).toBe('ok');
+  declaredSessions.add(session);
+}
+
+async function publish(session: ScenarioSession, refs: readonly string[]): Promise<void> {
+  await declareFixtureContract(session);
   const citations = refs.map((ref) => `[${ref}]`).join('');
   const brief = {
     title: 'Bridge result',

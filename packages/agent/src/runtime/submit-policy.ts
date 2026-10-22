@@ -62,11 +62,12 @@ export function submitRefusal(
 
 /**
  * True when the saved workflow `name`, or any workflow it calls, contains a
- * `click` step — or when that cannot be ruled out (a plan that cannot be
- * loaded, a call without a callee, or more workflows than the check reads).
- * Structural and read-only: nothing runs.
+ * step that can submit a form — a `click`, or a `fill` with `submit: true`
+ * (replay presses Enter) — or when that cannot be ruled out (a plan that
+ * cannot be loaded, a call without a callee, or more workflows than the check
+ * reads). Structural and read-only: nothing runs.
  */
-export async function workflowMayClick(
+export async function workflowMaySubmit(
   name: string,
   loadSteps: ((name: string) => Promise<readonly WorkflowStepShape[] | null>) | undefined,
 ): Promise<boolean> {
@@ -82,6 +83,7 @@ export async function workflowMayClick(
     if (steps === null) return true;
     for (const step of steps) {
       if (step.verb === 'click') return true;
+      if (step.verb === 'fill' && step.submit === true) return true;
       if (step.verb === 'call_workflow') {
         if (step.workflow_name === undefined || step.workflow_name.length === 0) return true;
         queue.push(step.workflow_name);

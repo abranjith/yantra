@@ -41,3 +41,27 @@ export const TerminationReason = z
   );
 
 export type TerminationReason = z.infer<typeof TerminationReason>;
+
+/** What one task outcome means for every consumer (FEAT-054 D3). */
+export interface TaskOutcomeMapping {
+  /** The documented CLI exit code. */
+  readonly exitCode: number;
+  /** The run manifest `status`. */
+  readonly manifestStatus: 'completed' | 'failed' | 'aborted';
+  /** The terminal `events.jsonl` event. */
+  readonly event: 'task_completed' | 'task_failed';
+}
+
+/**
+ * The one mapping from task outcome to exit code, manifest status, and event.
+ * It lives in the protocol so that the agentic commands (`do`, `ask`,
+ * `research`) and deterministic replay (`run`) read the same table: one word
+ * means one exit code everywhere (REV-011).
+ */
+export const TASK_OUTCOME_TABLE: Readonly<Record<TaskOutcome, TaskOutcomeMapping>> = {
+  fulfilled: { exitCode: 0, manifestStatus: 'completed', event: 'task_completed' },
+  partial: { exitCode: 2, manifestStatus: 'failed', event: 'task_failed' },
+  handoff: { exitCode: 4, manifestStatus: 'failed', event: 'task_failed' },
+  failed: { exitCode: 2, manifestStatus: 'failed', event: 'task_failed' },
+  aborted: { exitCode: 130, manifestStatus: 'aborted', event: 'task_failed' },
+};

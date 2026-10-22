@@ -10,3 +10,28 @@ allowBuilds:
   keytar: true
   lefthook: true
   protobufjs: false
+# Security overrides (review_plan_do_workflow_reliability REV-006/REV-007,
+# 2026-10-20). Each pins a patched release in the same major line; remove an
+# entry once the named parent resolves a patched version on its own.
+overrides:
+  # REV-006: undici below 7.29.1 / 8.10.2 carries TLS-bypass, cache-disclosure,
+  # and DoS advisories. The Pi SDK pins 8.5.0 and cheerio's ^7.19.0 can stay on
+  # an old 7.x in an existing lockfile. Remove the 8.x entry when
+  # @earendil-works/pi-coding-agent is upgraded to a release depending on
+  # undici >= 8.10.2 (0.99.x does), and the 7.x entry when no installed parent
+  # can resolve below 7.29.1.
+  'undici@>=7.0.0 <7.29.1': ^7.29.1
+  'undici@>=8.0.0 <8.10.2': ^8.10.2
+  # REV-007 (dev/build only): ReDoS/DoS fixes via eslint, typescript-eslint,
+  # @vitest/coverage-v8, jsdom, and postcss. Remove each when
+  # its parents resolve the patched line; vite, esbuild, tinypool, and vitest
+  # need major upgrades and are tracked in TODO with the vitest 4 migration.
+  'brace-expansion@<1.1.21': ^1.1.21
+  'brace-expansion@>=2.0.0 <2.1.7': ^2.1.7
+  'brace-expansion@>=4.0.0 <5.0.12': ^5.0.12
+  'js-yaml@<3.15.2': ^3.15.2
+  'js-yaml@>=4.0.0 <4.3.2': ^4.3.2
+  'ws@>=8.0.0 <8.21.0': ^8.21.0
+  'nanoid@<3.3.18': ^3.3.18
+  'postcss@<8.5.23': ^8.5.23
+  'source-map-js@>=1.0.0 <1.2.2': ^1.2.2

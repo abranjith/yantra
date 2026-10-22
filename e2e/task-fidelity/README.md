@@ -229,7 +229,9 @@ with `--scenario`. One invocation selects one provider/model/thinking setting.
    `YANTRA_HOME`, `YANTRA_DATA_DIR`, and `YANTRA_CACHE_DIR` roots initialized
    from identical configuration, profile, auth, and model-registry copies.
    Shared Pi state can otherwise race while renaming `models.json.tmp`.
-   Cohorts may run concurrently; each invocation runs its own scenarios
+   The auth copy is a plaintext provider credential (`data/pi/auth.json`):
+   create the roots in a directory you own, and delete them all as soon as
+   collection stops, however it stops. Cohorts may run concurrently; each invocation runs its own scenarios
    sequentially. Keep the host awake during measurement and run local tests
    before launching the cohorts.
 
