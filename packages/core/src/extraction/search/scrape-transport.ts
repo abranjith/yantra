@@ -1,5 +1,5 @@
 import { PageTimeoutError, type PageSource } from '../../browser/page-source.js';
-import type { Logger } from '../../browser/types.js';
+import type { Logger, Page } from '../../browser/types.js';
 import type { SearchProviderName } from '../types.js';
 
 import { ScrapeSearchError } from './errors.js';
@@ -27,6 +27,18 @@ export interface FetchSerpOptions {
   readonly provider: SearchProviderName;
   /** Ceiling on the SERP render; defaults to {@link DEFAULT_SERP_TIMEOUT_MS}. */
   readonly timeoutMs?: number;
+}
+
+/**
+ * A search run through a page's own search form, the way a person runs it:
+ * open the page, enter the query in its search field, submit.
+ */
+export interface SerpFormSubmission {
+  /** The page carrying the search form. Loaded without the query. */
+  readonly pageUrl: string;
+  /** `name` of the visible text field that takes the query. */
+  readonly field: string;
+  readonly query: string;
 }
 
 /**
@@ -66,18 +78,52 @@ export class ScrapeTransport {
    *   is aborted, or the browser navigation fails.
    */
   public async fetchSerp(url: string, opts: FetchSerpOptions): Promise<string> {
-    const ethicsDecision = await this.ethicsGate.checkUrl(url);
-    if (!ethicsDecision.ok) {
-      throw new ScrapeSearchError(
-        `Search URL refused by ethics gate [${ethicsDecision.reason}: ${ethicsDecision.detail}] ` +
-          `(host: ${safeHost(url)}).`,
-        {
+    return this.render(url, opts, async (page) => {
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      return page.evaluate(() => document.documentElement.outerHTML);
+    });
+  }
+
+  /**
+   * Runs a search through the search page's own form and returns the results
+   * page's full HTML. For an endpoint whose interface submits the query (a
+   * POST form) rather than linking to it: a direct GET carrying the query is a
+   * request no person's browser makes there, and such endpoints answer it with
+   * an anti-bot challenge. The form's target passes the ethics gate too, since
+   * submitting navigates there. Same abort, deadline, and failure mapping as
+   * {@link fetchSerp}.
+   *
+   * @throws {ScrapeSearchError} `search-form-missing` when the page has no
+   *   visible text field named `field` inside a form, plus every
+   *   {@link fetchSerp} failure.
+   */
+  public async submitSerpForm(form: SerpFormSubmission, opts: FetchSerpOptions): Promise<string> {
+    return this.render(form.pageUrl, opts, async (page) => {
+      await page.goto(form.pageUrl, { waitUntil: 'domcontentloaded' });
+      const action = await page.evaluate(searchFormAction, form.field);
+      if (action === null) {
+        throw new ScrapeSearchError(`Search page has no form field named "${form.field}".`, {
           provider: opts.provider,
-          host: safeHost(url),
-          code: `ethics-refused:${ethicsDecision.reason}:${ethicsDecision.detail}`,
-        },
-      );
-    }
+          host: safeHost(form.pageUrl),
+          code: 'search-form-missing',
+        });
+      }
+      await this.assertAllowed(action, opts.provider);
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+        page.evaluate(submitSearchForm, { field: form.field, query: form.query }),
+      ]);
+      return page.evaluate(() => document.documentElement.outerHTML);
+    });
+  }
+
+  /** Gate, abort check, then `work` on a page under the render deadline. */
+  private async render(
+    url: string,
+    opts: FetchSerpOptions,
+    work: (page: Page) => Promise<string>,
+  ): Promise<string> {
+    await this.assertAllowed(url, opts.provider);
 
     if (opts.signal.aborted) {
       throw new ScrapeSearchError('Search aborted before browser launch.', {
@@ -88,13 +134,10 @@ export class ScrapeTransport {
     }
 
     try {
-      return await this.pages.withPage(
-        async (page) => {
-          await page.goto(url, { waitUntil: 'domcontentloaded' });
-          return page.evaluate(() => document.documentElement.outerHTML);
-        },
-        { timeoutMs: opts.timeoutMs ?? DEFAULT_SERP_TIMEOUT_MS, signal: opts.signal },
-      );
+      return await this.pages.withPage(work, {
+        timeoutMs: opts.timeoutMs ?? DEFAULT_SERP_TIMEOUT_MS,
+        signal: opts.signal,
+      });
     } catch (error) {
       if (error instanceof ScrapeSearchError) {
         throw error;
@@ -124,6 +167,21 @@ export class ScrapeTransport {
       });
     }
   }
+
+  private async assertAllowed(url: string, provider: SearchProviderName): Promise<void> {
+    const ethicsDecision = await this.ethicsGate.checkUrl(url);
+    if (!ethicsDecision.ok) {
+      throw new ScrapeSearchError(
+        `Search URL refused by ethics gate [${ethicsDecision.reason}: ${ethicsDecision.detail}] ` +
+          `(host: ${safeHost(url)}).`,
+        {
+          provider,
+          host: safeHost(url),
+          code: `ethics-refused:${ethicsDecision.reason}:${ethicsDecision.detail}`,
+        },
+      );
+    }
+  }
 }
 
 export function safeHost(url: string): string {
@@ -132,4 +190,50 @@ export function safeHost(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * In-page, read-only: the absolute URL the form owning the visible text field
+ * `field` submits to, or null when no form has one. Shipped to the page by
+ * source, so it must stay self-contained.
+ *
+ * @internal Exported for the real-Chrome transport tests.
+ */
+export function searchFormAction(field: string): string | null {
+  const input = Array.from(document.getElementsByName(field)).find(
+    (el): el is HTMLInputElement =>
+      el instanceof HTMLInputElement && (el.type === 'text' || el.type === 'search'),
+  );
+  const form = input?.form ?? null;
+  if (form === null) return null;
+  // The attribute, not `form.action`: a control named "action" shadows that property.
+  return new URL(form.getAttribute('action') ?? '', document.baseURI).href;
+}
+
+/**
+ * In-page: enters `query` in the visible text field `field` and submits its
+ * form through the form's default button, as pressing Enter does, so the
+ * request carries the same fields a person's would. Shipped to the page by
+ * source, so it must stay self-contained.
+ *
+ * @internal Exported for the real-Chrome transport tests.
+ */
+export function submitSearchForm(entry: { readonly field: string; readonly query: string }): void {
+  const input = Array.from(document.getElementsByName(entry.field)).find(
+    (el): el is HTMLInputElement =>
+      el instanceof HTMLInputElement && (el.type === 'text' || el.type === 'search'),
+  );
+  const form = input?.form ?? null;
+  if (input === undefined || form === null) {
+    throw new Error(`No search form owns a text field named "${entry.field}".`);
+  }
+  input.value = entry.query;
+  const defaultButton =
+    Array.from(form.elements).find(
+      (el): el is HTMLButtonElement | HTMLInputElement =>
+        (el instanceof HTMLButtonElement && el.type === 'submit') ||
+        (el instanceof HTMLInputElement && (el.type === 'submit' || el.type === 'image')),
+    ) ?? null;
+  // Deferred so this evaluation returns before the navigation replaces its context.
+  setTimeout(() => form.requestSubmit(defaultButton), 0);
 }
