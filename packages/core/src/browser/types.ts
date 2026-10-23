@@ -68,6 +68,11 @@ export interface Logger {
 export interface Page {
   goto(url: string, opts?: { waitUntil?: string }): Promise<unknown>;
   /**
+   * Resolve when the main frame finishes its next navigation, such as one a
+   * form submission starts. Call it before triggering that navigation.
+   */
+  waitForNavigation(opts?: { waitUntil?: string }): Promise<unknown>;
+  /**
    * Run `fn` in the page. At most one serializable argument, because the
    * function is shipped by source and can close over nothing.
    */

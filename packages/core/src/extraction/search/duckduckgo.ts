@@ -13,11 +13,19 @@ export interface DuckDuckGoSearchProviderOptions {
 }
 
 /**
- * DuckDuckGo search provider. Scrapes DuckDuckGo's HTML endpoint through the
+ * DuckDuckGo search provider. Searches DuckDuckGo's HTML endpoint through the
  * shared {@link ScrapeTransport}, parsing organic result rows with cheerio. No
- * API key required. When DuckDuckGo serves its anti-bot anomaly/challenge page
- * we surface a typed `anomaly-challenge` error advising a keyed provider — we
- * never attempt to evade the block (memory §General: honor blocks).
+ * API key required.
+ *
+ * The query goes through the endpoint's own search form, as a person's browser
+ * sends it. That form submits by POST; a GET carrying `q` is a request no
+ * person's browser makes there. Since 2026-10-22 DuckDuckGo answers every such
+ * GET with an image challenge (HTTP 202), headless or not, warm cookies or
+ * not, while the form submission from the same browser returns results.
+ *
+ * When DuckDuckGo still serves its anti-bot anomaly/challenge page we surface a
+ * typed `anomaly-challenge` error advising a keyed provider — we never attempt
+ * to evade the block (memory §General: honor blocks).
  */
 export class DuckDuckGoSearchProvider implements SearchProvider {
   public readonly name = 'duckduckgo' as const;
@@ -34,11 +42,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     query: string,
     opts: { limit: number; signal: AbortSignal },
   ): Promise<readonly SearchResult[]> {
-    const searchUrl = this.buildSearchUrl(query);
-    const html = await this.transport.fetchSerp(searchUrl, {
-      signal: opts.signal,
-      provider: this.name,
-    });
+    const html = await this.transport.submitSerpForm(
+      { pageUrl: this.endpoint, field: 'q', query },
+      { signal: opts.signal, provider: this.name },
+    );
 
     const { rows, blocked } = parseDuckDuckGoHtml(html);
     const mapped = rows
@@ -52,12 +59,12 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
           'DuckDuckGo served an anti-bot challenge instead of search results. ' +
             'The automated browser was flagged; retry shortly, or configure a keyed ' +
             'search provider (`--search-provider tavily` or `--search-provider brave`) to avoid scraping.',
-          { provider: this.name, host: safeHost(searchUrl), code: 'anomaly-challenge' },
+          { provider: this.name, host: safeHost(this.endpoint), code: 'anomaly-challenge' },
         );
       }
       throw new ScrapeSearchError('DuckDuckGo search did not return result rows.', {
         provider: this.name,
-        host: safeHost(searchUrl),
+        host: safeHost(this.endpoint),
         code: 'empty-results',
       });
     }
@@ -77,12 +84,6 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       rank,
       publishedAt: null,
     };
-  }
-
-  private buildSearchUrl(query: string): string {
-    const url = new URL(this.endpoint);
-    url.searchParams.set('q', query);
-    return url.toString();
   }
 }
 

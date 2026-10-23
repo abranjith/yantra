@@ -23,6 +23,68 @@ function providerFor(html: string, gate = passGate): DuckDuckGoSearchProvider {
 }
 
 describe('@no-llm extraction/search/duckduckgo', () => {
+  it('searches through the HTML endpoint form, never a GET carrying the query', async () => {
+    // Regression: from 2026-10-22 DuckDuckGo answered every `GET /html/?q=`
+    // with an image challenge (HTTP 202) — headless or headful, cold or warm —
+    // so the first search of runs 20261022T011949Z, 20261022T130239Z, and
+    // 20261023T010715Z failed SEARCH_BLOCKED and opened the run's breaker. The
+    // endpoint's own form posts the query, and that returned results from the
+    // same browser.
+    const browser = fakeBrowserProvider(fixture('duckduckgo-serp.html'));
+    const provider = new DuckDuckGoSearchProvider({
+      transport: new ScrapeTransport({
+        pages: browser.pages,
+        ethicsGate: passGate,
+        logger: silentLogger,
+      }),
+    });
+
+    const rows = await provider.search('ai news', {
+      limit: 3,
+      signal: new AbortController().signal,
+    });
+
+    expect(rows).toHaveLength(3);
+    expect(browser.visited()).toEqual(['https://html.duckduckgo.com/html/']);
+    expect(browser.submissions()).toEqual([{ field: 'q', query: 'ai news' }]);
+  });
+
+  it('submits to a configured endpoint without adding the query to its URL', async () => {
+    const browser = fakeBrowserProvider(fixture('duckduckgo-serp.html'));
+    const provider = new DuckDuckGoSearchProvider({
+      transport: new ScrapeTransport({
+        pages: browser.pages,
+        ethicsGate: passGate,
+        logger: silentLogger,
+      }),
+      endpoint: 'https://ddg.mirror.example/html/',
+    });
+
+    await provider.search('ai news', { limit: 3, signal: new AbortController().signal });
+
+    expect(browser.visited()).toEqual(['https://ddg.mirror.example/html/']);
+  });
+
+  it('surfaces a missing search form as a typed error, not as empty results', async () => {
+    const browser = fakeBrowserProvider(fixture('duckduckgo-serp.html'), { formAction: null });
+    const provider = new DuckDuckGoSearchProvider({
+      transport: new ScrapeTransport({
+        pages: browser.pages,
+        ethicsGate: passGate,
+        logger: silentLogger,
+      }),
+    });
+
+    const error = await provider
+      .search('ai news', { limit: 3, signal: new AbortController().signal })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ScrapeSearchError);
+    const err = error as ScrapeSearchError;
+    expect(err.context.code).toBe('search-form-missing');
+    expect(err.context.provider).toBe('duckduckgo');
+  });
+
   it('parses organic result rows from the SERP fixture', async () => {
     const provider = providerFor(fixture('duckduckgo-serp.html'));
 

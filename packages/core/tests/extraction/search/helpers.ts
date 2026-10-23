@@ -46,15 +46,38 @@ const CHROME_130: ChromeInstall = {
   source: 'system',
 };
 
+/** What the transport did to its pages, across every page the fake handed out. */
+interface PageRecord {
+  readonly visited: string[];
+  readonly submissions: { readonly field: string; readonly query: string }[];
+}
+
 class FakePage implements Page {
-  public constructor(private readonly html: string) {}
-  public async goto(): Promise<unknown> {
+  public constructor(
+    private readonly html: string,
+    private readonly formAction: string | null | undefined,
+    private readonly record: PageRecord,
+  ) {}
+  public async goto(url: string): Promise<unknown> {
+    this.record.visited.push(url);
     return { ok: true };
   }
-  public async evaluate<T>(): Promise<T> {
-    // The scrape transport reads the SERP via
-    // `page.evaluate(() => document.documentElement.outerHTML)`; the fake just
-    // returns the fixture HTML regardless of the passed function.
+  public async waitForNavigation(): Promise<unknown> {
+    return null;
+  }
+  public async evaluate<T, A>(_fn: (arg: A) => T, arg?: A): Promise<T> {
+    // Told apart by argument, since the fake cannot run in-page source:
+    // none reads the page (`outerHTML`, answered with the fixture), a field
+    // name asks for the search form's target, and a `{ field, query }`
+    // submits that form.
+    if (typeof arg === 'string') {
+      const action = this.formAction === undefined ? this.record.visited.at(-1) : this.formAction;
+      return action as unknown as T;
+    }
+    if (arg !== undefined) {
+      this.record.submissions.push(arg as unknown as PageRecord['submissions'][number]);
+      return undefined as T;
+    }
     return this.html as unknown as T;
   }
   public async close(): Promise<void> {
@@ -72,12 +95,16 @@ class FakeSession implements BrowserSession {
   public readonly id = 'fake-session';
   public readonly chrome = CHROME_130;
   public readonly profilePath = '/tmp/fake-profile';
-  public constructor(private readonly html: string) {}
+  public constructor(
+    private readonly html: string,
+    private readonly formAction: string | null | undefined,
+    private readonly record: PageRecord,
+  ) {}
   public async newPage(): Promise<Page> {
-    return new FakePage(this.html);
+    return new FakePage(this.html, this.formAction, this.record);
   }
   public async newIsolatedPage(): Promise<Page> {
-    return new FakePage(this.html);
+    return new FakePage(this.html, this.formAction, this.record);
   }
   public async close(): Promise<void> {
     return;
@@ -97,6 +124,18 @@ export interface FakeBrowserProviderHandle {
   lastExtraArgs(): readonly string[];
   /** The headless mode requested by the transport. */
   lastHeadless(): boolean | undefined;
+  /** Every URL a page was sent to with `goto`, in order. */
+  visited(): readonly string[];
+  /** Every search-form submission, in order. */
+  submissions(): readonly { readonly field: string; readonly query: string }[];
+}
+
+export interface FakeBrowserProviderOptions {
+  /**
+   * Where the page's search form submits; `null` means the page has no such
+   * form. Defaults to the page's own URL, as a form posting back to itself.
+   */
+  readonly formAction?: string | null;
 }
 
 /**
@@ -104,17 +143,21 @@ export interface FakeBrowserProviderHandle {
  * its SERP content. Records launch count and the transport-owned launch options;
  * core launcher compatibility is covered by browser launcher tests.
  */
-export function fakeBrowserProvider(html: string): FakeBrowserProviderHandle {
+export function fakeBrowserProvider(
+  html: string,
+  options: FakeBrowserProviderOptions = {},
+): FakeBrowserProviderHandle {
   let launchCount = 0;
   let lastArgs: readonly string[] = [];
   let lastHeadless: boolean | undefined;
+  const record: PageRecord = { visited: [], submissions: [] };
 
   const provider: BrowserProvider = {
     launch: async (launchOpts) => {
       launchCount += 1;
       lastArgs = launchOpts.extraArgs ?? [];
       lastHeadless = launchOpts.headless;
-      return new FakeSession(html);
+      return new FakeSession(html, options.formAction, record);
     },
     detectChrome: async () => CHROME_130,
   };
@@ -125,5 +168,7 @@ export function fakeBrowserProvider(html: string): FakeBrowserProviderHandle {
     launches: () => launchCount,
     lastExtraArgs: () => lastArgs,
     lastHeadless: () => lastHeadless,
+    visited: () => record.visited,
+    submissions: () => record.submissions,
   };
 }

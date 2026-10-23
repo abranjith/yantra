@@ -99,6 +99,7 @@ function fakeProvider(
 function fakePage(onClose: () => void): Page {
   return {
     goto: () => Promise.resolve(null),
+    waitForNavigation: () => Promise.resolve(null),
     evaluate: <T>() => Promise.resolve(undefined as T),
     close: () => {
       onClose();

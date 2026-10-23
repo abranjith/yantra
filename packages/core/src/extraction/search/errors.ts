@@ -40,7 +40,8 @@ export class RateLimitError extends SearchProviderError {
  * Raised by scraped providers (google/duckduckgo) when a SERP fetch fails —
  * ethics refusal, anti-bot anomaly/CAPTCHA interstitial, empty results, or a
  * transport error. The `context.code` discriminates the specific cause
- * (`ethics-refused:*`, `anomaly-challenge`, `empty-results`, `aborted`).
+ * (`ethics-refused:*`, `anomaly-challenge`, `empty-results`, `aborted`,
+ * `search-form-missing`).
  */
 export class ScrapeSearchError extends SearchProviderError {
   public constructor(

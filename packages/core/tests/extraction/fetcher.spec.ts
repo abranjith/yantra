@@ -31,6 +31,9 @@ class FakePage implements Page {
     // report one (test fakes, same-document navigation) resolves with null.
     return this.status === null ? null : { status: () => this.status };
   }
+  public async waitForNavigation(): Promise<unknown> {
+    return null;
+  }
   public async evaluate<T>(): Promise<T> {
     return '<html><main><article><p>rendered</p></article></main></html>' as T;
   }
@@ -298,6 +301,7 @@ describe('@no-llm extraction/fetcher browser fallback honors its deadline (FEAT-
     let closes = 0;
     const page: Page = {
       goto: () => new Promise<unknown>(() => undefined),
+      waitForNavigation: () => Promise.resolve(null),
       evaluate: <T>() => Promise.resolve('' as T),
       close: () => {
         closes += 1;

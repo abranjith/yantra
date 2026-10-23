@@ -41,6 +41,11 @@ function wrapPage(puppeteerPage: PuppeteerPage, onClose: () => void): Page {
     goto(url, opts) {
       return puppeteerPage.goto(url, opts as Parameters<PuppeteerPage['goto']>[1]);
     },
+    waitForNavigation(opts) {
+      return puppeteerPage.waitForNavigation(
+        opts as Parameters<PuppeteerPage['waitForNavigation']>[0],
+      );
+    },
     evaluate<T, A>(fn: (arg: A) => T, arg?: A) {
       // Forwarded only when given: Puppeteer refuses arguments alongside a
       // string expression, which some callers of this facade pass.

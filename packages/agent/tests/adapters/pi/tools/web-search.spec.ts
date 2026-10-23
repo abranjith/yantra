@@ -1027,7 +1027,15 @@ describe('@no-llm web_search — the run search breaker (FEAT-050)', () => {
         pageUses += 1;
         return fn({
           goto: () => Promise.resolve(null),
-          evaluate: <T>() => Promise.resolve(CHALLENGE_SERP as unknown as T),
+          waitForNavigation: () => Promise.resolve(null),
+          // A field name asks for the search form's target; every other read
+          // is the page DuckDuckGo answered the submission with.
+          evaluate: <T, A>(_fn: (arg: A) => T, arg?: A) =>
+            Promise.resolve(
+              (typeof arg === 'string'
+                ? 'https://html.duckduckgo.com/html/'
+                : CHALLENGE_SERP) as unknown as T,
+            ),
           close: () => Promise.resolve(),
           url: () => 'https://html.duckduckgo.com/html/',
           on: () => undefined,
