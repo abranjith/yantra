@@ -10,7 +10,11 @@ import type { ReactNode } from 'react';
 import { Icon } from '../icons/Icon.js';
 import { ICON_NAMES } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
+import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
+import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
+import { Tab, TabList, TabPanel, Tabs } from '../primitives/Tabs.js';
+import { Tooltip, TooltipTrigger } from '../primitives/Tooltip.js';
 import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
 import { CONTRAST_PAIRINGS, type ContrastPairing } from '../tokens/pairings.js';
 import { THEMES } from '../tokens/palette.js';
@@ -22,8 +26,8 @@ export interface GalleryEntry {
   /** Kebab-case and unique; used in the URL and in baseline file names. */
   readonly id: string;
   readonly title: string;
-  /** The export name in `src/primitives/index.ts`, or `null` for sheets. */
-  readonly primitive: string | null;
+  /** The primitive family this entry demonstrates, or `null` for sheets. */
+  readonly primitive: PrimitiveFamily | null;
   readonly render: () => ReactNode;
   /** Whether the harness walks focus through this entry. */
   readonly interactive: boolean;
@@ -227,6 +231,69 @@ function LinkSheet(): ReactNode {
   );
 }
 
+function TabsSheet(): ReactNode {
+  return (
+    <Tabs defaultSelectedKey="timeline">
+      <TabList aria-label="Run views">
+        <Tab id="timeline">Timeline</Tab>
+        <Tab id="evidence">Evidence</Tab>
+        <Tab id="audit">Audit</Tab>
+        <Tab id="usage" isDisabled>
+          Usage
+        </Tab>
+      </TabList>
+      <TabPanel id="timeline">
+        <p className="text-ink">Twelve tool calls, two steers, no escalations.</p>
+      </TabPanel>
+      <TabPanel id="evidence">
+        <p className="text-ink">Four cited sources.</p>
+      </TabPanel>
+      <TabPanel id="audit">
+        <p className="text-ink">Nothing left the page that the policy withheld.</p>
+      </TabPanel>
+      <TabPanel id="usage">
+        <p className="text-ink">Usage is not available for this run.</p>
+      </TabPanel>
+    </Tabs>
+  );
+}
+
+function TooltipSheet(): ReactNode {
+  return (
+    <div className="flex min-h-24 items-start gap-4 pt-12">
+      <TooltipTrigger isOpen>
+        <Button variant="quiet" icon="action.copy" aria-label="Copy command" />
+        <Tooltip placement="top">Copy the CLI command</Tooltip>
+      </TooltipTrigger>
+      <TooltipTrigger>
+        <Button variant="secondary" icon="action.stop">
+          Stop
+        </Button>
+        <Tooltip>Stops the run after the current step</Tooltip>
+      </TooltipTrigger>
+    </div>
+  );
+}
+
+function DisclosureSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-2">
+      <Disclosure defaultExpanded>
+        <DisclosureTrigger headingLevel={3}>Constraints</DisclosureTrigger>
+        <DisclosurePanel>
+          <p>Return window at least 30 days; restocking fee stated.</p>
+        </DisclosurePanel>
+      </Disclosure>
+      <Disclosure>
+        <DisclosureTrigger headingLevel={3}>Also consulted</DisclosureTrigger>
+        <DisclosurePanel>
+          <p>Two pages that did not state a policy.</p>
+        </DisclosurePanel>
+      </Disclosure>
+    </div>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -313,6 +380,27 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Link',
     primitive: 'Link',
     render: () => <LinkSheet />,
+    interactive: true,
+  },
+  {
+    id: 'tabs',
+    title: 'Tabs',
+    primitive: 'Tabs',
+    render: () => <TabsSheet />,
+    interactive: true,
+  },
+  {
+    id: 'tooltip',
+    title: 'Tooltip',
+    primitive: 'Tooltip',
+    render: () => <TooltipSheet />,
+    interactive: true,
+  },
+  {
+    id: 'disclosure',
+    title: 'Disclosure',
+    primitive: 'Disclosure',
+    render: () => <DisclosureSheet />,
     interactive: true,
   },
 ];

@@ -207,7 +207,7 @@
     },
     {
       "path": "packages/ui/src/csp.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -309,27 +309,51 @@
     },
     {
       "path": "packages/ui/src/lib/cn.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/ui/src/primitives/Button.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
-      "path": "packages/ui/src/primitives/index.ts",
+      "path": "packages/ui/src/primitives/Disclosure.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/families.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/index.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/ui/src/primitives/Link.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Tabs.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/Tooltip.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/ui/src/styles/assets/glass-noise.png",
@@ -411,13 +435,13 @@
     },
     {
       "path": "packages/ui/tests/csp.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/ui/tests/gallery/completeness.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -435,27 +459,39 @@
     },
     {
       "path": "packages/ui/tests/lib/cn.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/ui/tests/primitives/button.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/ui/tests/primitives/link.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/tabs-tooltip-disclosure.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/ui/tests/setup.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tests/support/css-escape.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/ui/tests/support/match-media.ts",

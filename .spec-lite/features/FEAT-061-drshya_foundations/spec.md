@@ -120,6 +120,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **React Aria under the strict CSP.** React Aria's `usePress` injects `<style id="react-aria-pressable-style">`, which `default-src 'self'` blocks; the harness caught it on the first primitive. Drshya ships that `touch-action` rule in `drshya.css` (`@layer base`). `prepareStrictCsp(document)` from `@yantra/ui` places a `<meta>` with that id, so React Aria skips the injection. **FEAT-065 must call `prepareStrictCsp` before its first render.** `usePreventScroll` has a second injection, but only on iOS Safari's scroll path. A unit test pins the id against the installed React Aria source.
 - **Focus ring.** The focus ring is `outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`. Tailwind v4's `outline-none` also sets `--tw-outline-style: none`, which would leave the ring invisible. Buttons transition only `color`, `background-color` and `border-color`, so the ring appears at once. The harness focus walk measures two animation frames after each Tab.
 - **Pairing added.** `on-accent` on `accent-ink` is in the gate, because `accent-ink` is the primary button's hover and pressed fill.
+- **Primitive families.** A primitive can span several exports (`Tabs`, `TabList`, `Tab`, `TabPanel`), so `src/primitives/families.ts` maps each family to its exports. `GalleryEntry.primitive` names the family. The completeness test checks both directions: every barrel export belongs to exactly one family, and every family has exactly one gallery entry. This is what makes TASK-014's "all 16 primitives" countable.
+- **Pinned React Aria API status (1.22.1).** Toast is still exported as `UNSTABLE_ToastRegion`, `UNSTABLE_ToastQueue` and `UNSTABLE_Toast`. `TableLoadMoreItem` and `SubmenuTrigger` exist. jsdom needs a `CSS.escape` polyfill (`tests/support/css-escape.ts`) for React Aria collections.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -842,7 +844,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
 - [x] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
 - [x] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
-- [ ] TASK-009: Tabs, Tooltip, Disclosure
+- [x] TASK-009: Tabs, Tooltip, Disclosure
 - [ ] TASK-010: Toast (app-owned queue, polite, no focus theft)
 - [ ] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
 - [ ] TASK-012 (M4): TextField, NumberField, Checkbox, Switch

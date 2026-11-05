@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DRSHYA_PACKAGE } from '../src/index.js';
 
+import { cssEscape } from './support/css-escape.js';
 import { setMatchMedia } from './support/match-media.js';
 
 describe('@no-llm Drshya toolchain', () => {
@@ -30,6 +31,14 @@ describe('@no-llm Drshya toolchain', () => {
 
   it('exports the package entry point', () => {
     expect(DRSHYA_PACKAGE).toBe('@yantra/ui');
+  });
+
+  it('provides CSS.escape for React Aria collections', () => {
+    expect(cssEscape('react-aria-1')).toBe('react-aria-1');
+    expect(cssEscape('a b')).toBe('a\\ b');
+    expect(cssEscape('1x')).toBe('\\31 x');
+    expect(cssEscape('-')).toBe('\\-');
+    expect(CSS.escape('a:b')).toBe('a\\:b');
   });
 
   it('stubs matchMedia with a controllable implementation', () => {
