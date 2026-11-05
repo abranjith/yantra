@@ -12,6 +12,31 @@
 @import '@fontsource-variable/martian-mono/wdth.css';
 @import './theme.generated.css';
 
+/* React Aria state variants: hover:, pressed:, focus-visible:, disabled:, selected: … follow data-* attributes. */
+@plugin 'tailwindcss-react-aria-components';
+
+/*
+ * React Aria's pressable rule, shipped here instead of injected as an inline
+ * <style> that the app's CSP blocks (see src/csp.ts). In the base layer, so
+ * utilities can still override touch-action.
+ */
+@layer base {
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+}
+
+/* A pending indicator spins; reduced motion (below) stops it after one frame. */
+@utility pending-indicator {
+  animation: drshya-pending 1s linear infinite;
+}
+
+@keyframes drshya-pending {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 /* Three voices (brainstorm rule 3): the user in plain sans, the agent in italic, the engine in mono. */
 @utility type-label {
   font-family: var(--font-sans);

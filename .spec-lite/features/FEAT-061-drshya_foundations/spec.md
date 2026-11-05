@@ -117,6 +117,9 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Glass verification without disabling noise.** The noise tile is exactly half black and half white with a 64 px period, so any 64×64 window averages to `base + noise·(0.5 − base)`. The harness checks that mean against the S3 model to ±3/255 over black and white in both themes. `prefers-reduced-transparency` is emulated through CDP `Emulation.setEmulatedMedia`, because puppeteer's `emulateMediaFeatures` rejects that feature.
 - **Gallery fixtures stylesheet.** The black, white and stripe backdrops live in `src/gallery/gallery.css`, exported as `@yantra/ui/gallery.css`. FEAT-065 imports it next to `drshya.css` wherever it mounts the gallery.
 - **Glyphs are path data.** Each `src/icons/glyphs/*.ts` file exports only its geometry (`GlyphNode`). `registry.tsx`, the only file allowed to import `lucide-react`, wraps each one with Lucide's own `createLucideIcon`, so glyphs get Lucide's exact SVG contract by construction. Lucide's half-filled circle is named `Contrast` in 1.68.0, and it backs `outcome.partial`.
+- **React Aria under the strict CSP.** React Aria's `usePress` injects `<style id="react-aria-pressable-style">`, which `default-src 'self'` blocks; the harness caught it on the first primitive. Drshya ships that `touch-action` rule in `drshya.css` (`@layer base`). `prepareStrictCsp(document)` from `@yantra/ui` places a `<meta>` with that id, so React Aria skips the injection. **FEAT-065 must call `prepareStrictCsp` before its first render.** `usePreventScroll` has a second injection, but only on iOS Safari's scroll path. A unit test pins the id against the installed React Aria source.
+- **Focus ring.** The focus ring is `outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`. Tailwind v4's `outline-none` also sets `--tw-outline-style: none`, which would leave the ring invisible. Buttons transition only `color`, `background-color` and `border-color`, so the ring appears at once. The harness focus walk measures two animation frames after each Tab.
+- **Pairing added.** `on-accent` on `accent-ink` is in the gate, because `accent-ink` is the primary button's hover and pressed fill.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -838,7 +841,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
 - [x] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
 - [x] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
-- [ ] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
+- [x] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
 - [ ] TASK-009: Tabs, Tooltip, Disclosure
 - [ ] TASK-010: Toast (app-owned queue, polite, no focus theft)
 - [ ] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete

@@ -70,7 +70,8 @@ function each(
 /** The initial pairing set (spec §2 `ContrastPairing`). */
 export const CONTRAST_PAIRINGS: readonly ContrastPairing[] = [
   ...each(TEXT_INKS, SOLID_SURFACES, 'text'),
-  ...each(['on-accent'], ['accent'], 'text'),
+  // accent-ink is the primary button's hover and pressed fill.
+  ...each(['on-accent'], ['accent', 'accent-ink'], 'text'),
   // Tooltips are the inverse solid surface.
   ...each(['surface'], ['ink'], 'text'),
   ...each([...SIGNAL_GRAPHICS, 'field-edge'], SOLID_SURFACES, 'non-text'),

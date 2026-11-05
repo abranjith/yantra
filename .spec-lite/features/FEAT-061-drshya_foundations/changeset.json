@@ -177,7 +177,7 @@
     },
     {
       "path": "packages/ui/src/_lint-fixtures/lucide-direct.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -189,7 +189,7 @@
     },
     {
       "path": "packages/ui/src/_lint-fixtures/registry-like.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -204,6 +204,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/csp.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/ui/src/gallery/assets/backdrop-stripes.png",
@@ -243,55 +249,55 @@
     },
     {
       "path": "packages/ui/src/icons/glyphs/bindu.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/capture.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/contract.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/glyph.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/handoff.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/protected.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/glyphs/provenance.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/Icon.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/icons/registry.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -300,6 +306,30 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/lib/cn.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Button.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Link.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/ui/src/styles/assets/glass-noise.png",
@@ -380,6 +410,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/ui/tests/csp.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/gallery/completeness.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/ui/tests/gallery/gallery.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -387,9 +429,27 @@
     },
     {
       "path": "packages/ui/tests/icons/icon.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/tests/lib/cn.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/button.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/link.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/ui/tests/setup.ts",

@@ -9,6 +9,8 @@ import type { ReactNode } from 'react';
 
 import { Icon } from '../icons/Icon.js';
 import { ICON_NAMES } from '../icons/registry.js';
+import { Button } from '../primitives/Button.js';
+import { Link } from '../primitives/Link.js';
 import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
 import { CONTRAST_PAIRINGS, type ContrastPairing } from '../tokens/pairings.js';
 import { THEMES } from '../tokens/palette.js';
@@ -179,6 +181,52 @@ function IconSheet(): ReactNode {
   );
 }
 
+const BUTTON_VARIANTS = ['primary', 'secondary', 'quiet'] as const;
+const BUTTON_SIZES = ['sm', 'md'] as const;
+
+function ButtonSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-4">
+      {BUTTON_VARIANTS.map((variant) => (
+        <div key={variant} className="flex flex-wrap items-center gap-3">
+          <span className="type-engine w-24 text-ink-2">{variant}</span>
+          {BUTTON_SIZES.map((size) => (
+            <Button key={size} variant={variant} size={size}>
+              Run {size}
+            </Button>
+          ))}
+          <Button variant={variant} icon="action.retry">
+            Retry
+          </Button>
+          <Button variant={variant} icon="action.copy" aria-label="Copy command" />
+          <Button variant={variant} isPending>
+            Saving
+          </Button>
+          <Button variant={variant} isDisabled>
+            Disabled
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LinkSheet(): ReactNode {
+  return (
+    <ul className="flex flex-col gap-2 text-ink">
+      <li>
+        Internal: <Link href="/runs/42">Run 42</Link>
+      </li>
+      <li>
+        External: <Link href="https://example.com/returns">Return policy</Link>
+      </li>
+      <li>
+        Unsafe (rendered as text): <Link href="javascript:alert(1)">Not a link</Link>
+      </li>
+    </ul>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -252,5 +300,19 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     primitive: null,
     render: () => <IconSheet />,
     interactive: false,
+  },
+  {
+    id: 'button',
+    title: 'Button',
+    primitive: 'Button',
+    render: () => <ButtonSheet />,
+    interactive: true,
+  },
+  {
+    id: 'link',
+    title: 'Link',
+    primitive: 'Link',
+    render: () => <LinkSheet />,
+    interactive: true,
   },
 ];

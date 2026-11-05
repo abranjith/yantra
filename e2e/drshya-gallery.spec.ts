@@ -36,7 +36,9 @@ import {
   runAxe,
   stateName,
   stateSearch,
+  walkFocus,
   type AxeViolation,
+  type FocusStop,
   type GallerySurfaces,
   type GalleryTheme,
   type PageEvidence,
@@ -100,6 +102,7 @@ describe('@no-llm Drshya gallery', () => {
           let evidence: PageEvidence;
           let violations: AxeViolation[];
           let screenshot: Uint8Array;
+          let focusStops: FocusStop[] = [];
 
           beforeAll(async () => {
             const opened = await openGallery(browser, server.origin, stateSearch(state));
@@ -112,6 +115,9 @@ describe('@no-llm Drshya gallery', () => {
               // Evidence first: injecting axe must not be able to mask a violation.
               evidence = await opened.evidence();
               violations = await runAxe(opened.page);
+              if (entry.interactive) {
+                focusStops = await walkFocus(opened.page);
+              }
             } finally {
               await opened.page.close();
             }
@@ -127,6 +133,20 @@ describe('@no-llm Drshya gallery', () => {
           it('has no axe-core violations', () => {
             expect(violations).toEqual([]);
           });
+
+          it.skipIf(!entry.interactive)(
+            'shows a 2 px Ion focus ring on every keyboard focus stop',
+            () => {
+              expect(focusStops.length).toBeGreaterThan(0);
+              const missing = focusStops.filter(
+                (stop) =>
+                  stop.outlineStyle === 'none' ||
+                  Number.parseFloat(stop.outlineWidth) < 2 ||
+                  stop.outlineColor !== stop.accent,
+              );
+              expect(missing).toEqual([]);
+            },
+          );
 
           const comparePixels =
             pixelsRequired || visualOptions.update || hasBaseline(name, visualOptions);

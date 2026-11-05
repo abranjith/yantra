@@ -141,6 +141,80 @@ export async function runAxe(
   }, selector);
 }
 
+/** What a keyboard focus stop looked like. */
+export interface FocusStop {
+  readonly label: string;
+  readonly outlineStyle: string;
+  readonly outlineWidth: string;
+  readonly outlineColor: string;
+  /** `--color-accent` resolved to a color in the same theme context. */
+  readonly accent: string;
+}
+
+/**
+ * Tabs through every focusable element inside the entry and records its focus
+ * ring. Stops when focus leaves the entry or returns to an element already
+ * visited.
+ */
+export async function walkFocus(page: Page, maxStops = 80): Promise<FocusStop[]> {
+  const stops: FocusStop[] = [];
+  const seen = new Set<string>();
+  for (let step = 0; step < maxStops; step += 1) {
+    await page.keyboard.press('Tab');
+    // Let focus styles settle: measure after two frames, not in the Tab's own.
+    await page.evaluate(
+      () =>
+        new Promise<void>((settle) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              settle();
+            });
+          });
+        }),
+    );
+    const stop = await page.evaluate((entrySelector) => {
+      const active = document.activeElement;
+      const entry = document.querySelector(entrySelector);
+      if (!(active instanceof HTMLElement) || !entry?.contains(active)) {
+        return null;
+      }
+      if (!active.hasAttribute('data-drshya-focus-id')) {
+        active.setAttribute(
+          'data-drshya-focus-id',
+          String(entry.querySelectorAll('[data-drshya-focus-id]').length),
+        );
+      }
+      const probe = document.createElement('span');
+      probe.style.setProperty('color', 'var(--color-accent)');
+      entry.append(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      const style = getComputedStyle(active);
+      return {
+        id: active.getAttribute('data-drshya-focus-id') ?? '',
+        label: (active.getAttribute('aria-label') ?? active.textContent ?? '').trim(),
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        outlineColor: style.outlineColor,
+        accent,
+      };
+    }, ENTRY_SELECTOR);
+    if (stop === null) {
+      if (stops.length > 0) {
+        break;
+      }
+      continue;
+    }
+    if (seen.has(stop.id)) {
+      break;
+    }
+    seen.add(stop.id);
+    const { id: _id, ...recorded } = stop;
+    stops.push(recorded);
+  }
+  return stops;
+}
+
 /** Request URLs whose origin is not the gallery server's (data: URIs included). */
 export function foreignRequests(evidence: PageEvidence, origin: string): string[] {
   return evidence.requests.filter((url) => {
