@@ -7,6 +7,8 @@
 
 import type { ReactNode } from 'react';
 
+import { Icon } from '../icons/Icon.js';
+import { ICON_NAMES } from '../icons/registry.js';
 import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
 import { CONTRAST_PAIRINGS, type ContrastPairing } from '../tokens/pairings.js';
 import { THEMES } from '../tokens/palette.js';
@@ -162,6 +164,21 @@ function TypeShapeMotionSheet(): ReactNode {
   );
 }
 
+/** Every registry name with its label, at 16 and 20 px. */
+function IconSheet(): ReactNode {
+  return (
+    <ul className="grid grid-cols-3 gap-x-6 gap-y-2">
+      {ICON_NAMES.map((name) => (
+        <li key={name} className="flex items-center gap-3 text-ink">
+          <Icon name={name} size={16} />
+          <Icon name={name} size={20} />
+          <span className="type-engine text-ink-2">{name}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -227,6 +244,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Type, shape and motion',
     primitive: null,
     render: () => <TypeShapeMotionSheet />,
+    interactive: false,
+  },
+  {
+    id: 'icons',
+    title: 'Icons',
+    primitive: null,
+    render: () => <IconSheet />,
     interactive: false,
   },
 ];

@@ -21,6 +21,8 @@ export {
   type SurfacesPreference,
   type ThemePreference,
 } from './appearance.js';
+export { Icon, ICON_STROKE_WIDTH, type IconProps, type IconSize } from './icons/Icon.js';
+export { ICON_NAMES, ICON_REGISTRY, type IconName, type IconRecord } from './icons/registry.js';
 export {
   BLACK,
   WHITE,

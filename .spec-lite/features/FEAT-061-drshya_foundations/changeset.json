@@ -123,19 +123,19 @@
     },
     {
       "path": "packages/ui/src/_lint-fixtures/arbitrary-color.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/ui/src/_lint-fixtures/clean.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/ui/src/_lint-fixtures/color-literal.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -165,25 +165,37 @@
     },
     {
       "path": "packages/ui/src/_lint-fixtures/inline-style.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/ui/src/_lint-fixtures/inner-html.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/lucide-direct.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/_lint-fixtures/raw-palette.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
-      "path": "packages/ui/src/_lint-fixtures/site-name.tsx",
+      "path": "packages/ui/src/_lint-fixtures/registry-like.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/site-name.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -228,6 +240,60 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/bindu.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/capture.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/contract.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/glyph.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/handoff.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/protected.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/provenance.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/Icon.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/registry.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/index.ts",
@@ -318,6 +384,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/icons/icon.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/ui/tests/setup.ts",

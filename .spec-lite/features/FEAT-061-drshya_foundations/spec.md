@@ -116,6 +116,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Glass numbers after D4.** The shipped `--glass-alpha` is 0.775 (light) and 0.8 (dark), set by `ink-2`, as the pre-check predicted. D4 lowered `accent-ink`'s chroma, which moves its light glass floor from 0.945 to 0.925. That is still above the 0.85 cap, so it stays off glass, and TASK-004's test asserts 0.925.
 - **Glass verification without disabling noise.** The noise tile is exactly half black and half white with a 64 px period, so any 64×64 window averages to `base + noise·(0.5 − base)`. The harness checks that mean against the S3 model to ±3/255 over black and white in both themes. `prefers-reduced-transparency` is emulated through CDP `Emulation.setEmulatedMedia`, because puppeteer's `emulateMediaFeatures` rejects that feature.
 - **Gallery fixtures stylesheet.** The black, white and stripe backdrops live in `src/gallery/gallery.css`, exported as `@yantra/ui/gallery.css`. FEAT-065 imports it next to `drshya.css` wherever it mounts the gallery.
+- **Glyphs are path data.** Each `src/icons/glyphs/*.ts` file exports only its geometry (`GlyphNode`). `registry.tsx`, the only file allowed to import `lucide-react`, wraps each one with Lucide's own `createLucideIcon`, so glyphs get Lucide's exact SVG contract by construction. Lucide's half-filled circle is named `Contrast` in 1.68.0, and it backs `outcome.partial`.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -836,7 +837,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
 - [x] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
 - [x] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
-- [ ] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
+- [x] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
 - [ ] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
 - [ ] TASK-009: Tabs, Tooltip, Disclosure
 - [ ] TASK-010: Toast (app-owned queue, polite, no focus theft)

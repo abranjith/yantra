@@ -34,42 +34,52 @@ const UI_DEPENDENCY_DIRECTION =
   'only, and never imports core, agent or Node built-ins.';
 
 /**
- * Import restrictions for Drshya (`packages/ui`) browser code.
+ * Import restrictions for Drshya (`packages/ui`) and app (`apps/web`) browser
+ * code, except the icon rule.
  *
- * One exported value because flat config *replaces* a rule's options for
- * matching files: any later block that touches
- * `@typescript-eslint/no-restricted-imports` for these files (the icon
- * registry override) must restate every pattern from here, never a subset
- * written out by hand.
+ * Flat config *replaces* a rule's options for matching files, so the icon
+ * registry override below restates these patterns from this one value rather
+ * than from a hand-written subset.
  */
-export const UI_IMPORT_RESTRICTIONS = {
-  patterns: [
-    {
-      group: ['node:*', 'node:*/**'],
-      message: `Drshya is browser code and must not import Node built-ins (${UI_DEPENDENCY_DIRECTION})`,
-    },
-    {
-      group: [
-        '@yantra/core',
-        '@yantra/core/*',
-        '@yantra/agent',
-        '@yantra/agent/*',
-        '@yantra/cli',
-        '@yantra/cli/*',
-      ],
-      message: `Drshya must not import Yantra engine packages (${UI_DEPENDENCY_DIRECTION})`,
-    },
-    {
-      group: ['@earendil-works/*'],
-      message: `Drshya must not import the agent provider SDK (${UI_DEPENDENCY_DIRECTION})`,
-    },
-    {
-      group: ['@yantra/protocol', '@yantra/protocol/*'],
-      allowTypeImports: true,
-      message: `Drshya may import @yantra/protocol with \`import type\` only (${UI_DEPENDENCY_DIRECTION})`,
-    },
-  ],
+const UI_BOUNDARY_PATTERNS = [
+  {
+    group: ['node:*', 'node:*/**'],
+    message: `Drshya is browser code and must not import Node built-ins (${UI_DEPENDENCY_DIRECTION})`,
+  },
+  {
+    group: [
+      '@yantra/core',
+      '@yantra/core/*',
+      '@yantra/agent',
+      '@yantra/agent/*',
+      '@yantra/cli',
+      '@yantra/cli/*',
+    ],
+    message: `Drshya must not import Yantra engine packages (${UI_DEPENDENCY_DIRECTION})`,
+  },
+  {
+    group: ['@earendil-works/*'],
+    message: `Drshya must not import the agent provider SDK (${UI_DEPENDENCY_DIRECTION})`,
+  },
+  {
+    group: ['@yantra/protocol', '@yantra/protocol/*'],
+    allowTypeImports: true,
+    message: `Drshya may import @yantra/protocol with \`import type\` only (${UI_DEPENDENCY_DIRECTION})`,
+  },
+];
+
+/** Icons come from the semantic registry only (plan_ui.md §9). */
+const LUCIDE_PATTERN = {
+  group: ['lucide-react', 'lucide-react/*'],
+  message:
+    'Import icons from the Drshya registry (`<Icon name=…>`), never `lucide-react` directly (plan_ui.md §9). Only packages/ui/src/icons/registry.tsx may import it.',
 };
+
+/** Every browser-code import restriction, the icon rule included. */
+export const UI_IMPORT_RESTRICTIONS = { patterns: [...UI_BOUNDARY_PATTERNS, LUCIDE_PATTERN] };
+
+/** The same restrictions without the icon rule, for the registry file alone. */
+export const UI_REGISTRY_IMPORT_RESTRICTIONS = { patterns: [...UI_BOUNDARY_PATTERNS] };
 
 /** The site-name tripwire, shared by every block that sets no-restricted-syntax. */
 export const SITE_SPECIFIC_SELECTORS = [
@@ -339,10 +349,18 @@ export default tseslint.config(
   // code takes protocol types only, and nothing from core, agent, the provider
   // SDK or Node.
   {
-    files: ['packages/ui/src/**/*.{ts,tsx}'],
+    files: ['packages/ui/src/**/*.{ts,tsx}', 'apps/web/src/**/*.{ts,tsx}'],
     rules: {
       'import/no-nodejs-modules': 'error',
       '@typescript-eslint/no-restricted-imports': ['error', UI_IMPORT_RESTRICTIONS],
+    },
+  },
+  // The icon registry is the one file that may import lucide-react; every
+  // other browser-code restriction still applies to it.
+  {
+    files: ['packages/ui/src/icons/registry.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', UI_REGISTRY_IMPORT_RESTRICTIONS],
     },
   },
 

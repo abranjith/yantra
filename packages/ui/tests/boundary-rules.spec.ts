@@ -22,7 +22,11 @@ const untypedEslint = new ESLint({
   overrideConfig: tseslint.configs.disableTypeChecked,
 });
 
-async function lintSnippet(path: string, code: string): Promise<string[]> {
+async function lintSnippet(
+  path: string,
+  code: string,
+  ruleId = 'no-restricted-syntax',
+): Promise<string[]> {
   const results = await untypedEslint.lintText(code, { filePath: resolve(repoRoot, path) });
   const messages = results.flatMap((result) => result.messages);
   const fatal = messages.filter((message) => message.fatal === true);
@@ -31,7 +35,7 @@ async function lintSnippet(path: string, code: string): Promise<string[]> {
       `could not parse ${path}: ${fatal.map((message) => message.message).join('; ')}`,
     );
   }
-  return byRule(messages, 'no-restricted-syntax').map((message) => message.message);
+  return byRule(messages, ruleId).map((message) => message.message);
 }
 
 async function lintFixture(name: string): Promise<Linter.LintMessage[]> {
@@ -205,6 +209,65 @@ describe('@no-llm Drshya lint boundary rules', () => {
         ),
       ).toEqual([expect.stringContaining('Raw palette utility')]);
     }, 60_000);
+  });
+
+  describe('icon imports (TASK-007)', () => {
+    const lucideViolations = async (path: string) =>
+      byRule(
+        (await eslint.lintFiles([resolve(repoRoot, path)])).flatMap((result) => result.messages),
+        '@typescript-eslint/no-restricted-imports',
+      ).map((message) => message.message);
+
+    it('rejects a direct lucide-react import in a component', async () => {
+      expect(await lucideViolations(`${fixtureDir}/lucide-direct.tsx`)).toEqual([
+        expect.stringContaining('Import icons from the Drshya registry'),
+      ]);
+    }, 60_000);
+
+    it('scopes the lucide-react exemption to registry.tsx alone', async () => {
+      expect(await lucideViolations(`${fixtureDir}/registry-like.tsx`)).toEqual([
+        expect.stringContaining('Import icons from the Drshya registry'),
+      ]);
+      expect(await lucideViolations('packages/ui/src/icons/registry.tsx')).toEqual([]);
+    }, 60_000);
+
+    it('keeps every other boundary on the registry file', async () => {
+      expect(
+        await lintSnippet(
+          'packages/ui/src/icons/registry.tsx',
+          "import { detectChrome } from '@yantra/core';\nexport const probe = detectChrome;",
+          '@typescript-eslint/no-restricted-imports',
+        ),
+      ).toEqual([expect.stringContaining('must not import Yantra engine packages')]);
+    }, 60_000);
+
+    it('brings the icon, engine and Node restrictions to apps/web', async () => {
+      const messages = await lintSnippet(
+        'apps/web/src/in-memory-probe.tsx',
+        [
+          "import { X } from 'lucide-react';",
+          "import { detectChrome } from '@yantra/core';",
+          'export const probe = [X, detectChrome];',
+        ].join('\n'),
+        '@typescript-eslint/no-restricted-imports',
+      );
+
+      expect(messages).toEqual([
+        expect.stringContaining('Import icons from the Drshya registry'),
+        expect.stringContaining('must not import Yantra engine packages'),
+      ]);
+    }, 60_000);
+
+    it('keeps lucide-react imports out of production source except the registry (source scan)', () => {
+      const importers = productionSources().filter(
+        (path) =>
+          importSpecifiers(readFileSync(resolve(repoRoot, path), 'utf8')).some((specifier) =>
+            specifier.startsWith('lucide-react'),
+          ) && !path.replaceAll('\\', '/').endsWith('src/icons/registry.tsx'),
+      );
+
+      expect(importers).toEqual([]);
+    });
   });
 
   it('keeps production source free of Node, core and agent imports (source scan)', () => {
