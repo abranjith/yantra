@@ -13,70 +13,73 @@ Typical flow: brainstorm → plan → feature → implement → review → docum
 
 **Agent files** (`.claude/agents/`):
 
-- [spec.architect](.claude/agents/spec.architect.md)
-- [spec.brainstormer](.claude/agents/spec.brainstormer.md)
-- [spec.planner](.claude/agents/spec.planner.md)
-- [spec.feature_planner](.claude/agents/spec.feature_planner.md)
-- [spec.yolo](.claude/agents/spec.yolo.md)
-- [spec.data_model_builder](.claude/agents/spec.data_model_builder.md)
-- [spec.devops](.claude/agents/spec.devops.md)
-- [spec.documenter](.claude/agents/spec.documenter.md)
-- [spec.design_documenter](.claude/agents/spec.design_documenter.md)
-- [spec.feature_documenter](.claude/agents/spec.feature_documenter.md)
-- [spec.readme_writer](.claude/agents/spec.readme_writer.md)
-- [spec.usage_documenter](.claude/agents/spec.usage_documenter.md)
-- [spec.feature](.claude/agents/spec.feature.md)
-- [spec.fixer](.claude/agents/spec.fixer.md)
-- [spec.hook_helper](.claude/agents/spec.hook_helper.md)
-- [spec.implementer](.claude/agents/spec.implementer.md)
-- [spec.memorize](.claude/agents/spec.memorize.md)
-- [spec.plan_critic](.claude/agents/spec.plan_critic.md)
-- [spec.reviewer](.claude/agents/spec.reviewer.md)
-- [spec.todo](.claude/agents/spec.todo.md)
-- [spec.tool_helper](.claude/agents/spec.tool_helper.md)
-- [spec.integration_tester](.claude/agents/spec.integration_tester.md)
-- [spec.unit_tester](.claude/agents/spec.unit_tester.md)
+- [spec-architect](.claude/agents/spec-architect.md)
+- [spec-brainstormer](.claude/agents/spec-brainstormer.md)
+- [spec-planner](.claude/agents/spec-planner.md)
+- [spec-feature-planner](.claude/agents/spec-feature-planner.md)
+- [spec-yolo](.claude/agents/spec-yolo.md)
+- [spec-data-model-builder](.claude/agents/spec-data-model-builder.md)
+- [spec-devops](.claude/agents/spec-devops.md)
+- [spec-documenter](.claude/agents/spec-documenter.md)
+- [spec-design-documenter](.claude/agents/spec-design-documenter.md)
+- [spec-feature-documenter](.claude/agents/spec-feature-documenter.md)
+- [spec-readme-writer](.claude/agents/spec-readme-writer.md)
+- [spec-usage-documenter](.claude/agents/spec-usage-documenter.md)
+- [spec-feature](.claude/agents/spec-feature.md)
+- [spec-fixer](.claude/agents/spec-fixer.md)
+- [spec-hook-helper](.claude/agents/spec-hook-helper.md)
+- [spec-implementer](.claude/agents/spec-implementer.md)
+- [spec-memorize](.claude/agents/spec-memorize.md)
+- [spec-plan-critic](.claude/agents/spec-plan-critic.md)
+- [spec-reviewer](.claude/agents/spec-reviewer.md)
+- [spec-todo](.claude/agents/spec-todo.md)
+- [spec-tool-helper](.claude/agents/spec-tool-helper.md)
+- [spec-integration-tester](.claude/agents/spec-integration-tester.md)
+- [spec-unit-tester](.claude/agents/spec-unit-tester.md)
+
+**Skill directories** (`.claude/skills/`) — auto-discovered, or run with `/<name>`:
+
+- [spec-build-data-model](.claude/skills/spec-build-data-model/SKILL.md)
+- [spec-devops](.claude/skills/spec-devops/SKILL.md)
+- [spec-document](.claude/skills/spec-document/SKILL.md)
+- [spec-document-design](.claude/skills/spec-document-design/SKILL.md)
+- [spec-document-feature](.claude/skills/spec-document-feature/SKILL.md)
+- [spec-document-readme](.claude/skills/spec-document-readme/SKILL.md)
+- [spec-document-usage](.claude/skills/spec-document-usage/SKILL.md)
+- [spec-feature](.claude/skills/spec-feature/SKILL.md)
+- [spec-fix](.claude/skills/spec-fix/SKILL.md)
+- [spec-hook-help](.claude/skills/spec-hook-help/SKILL.md)
+- [spec-implement](.claude/skills/spec-implement/SKILL.md)
+- [spec-memorize](.claude/skills/spec-memorize/SKILL.md)
+- [spec-plan-critic](.claude/skills/spec-plan-critic/SKILL.md)
+- [spec-review](.claude/skills/spec-review/SKILL.md)
+- [spec-todo](.claude/skills/spec-todo/SKILL.md)
+- [spec-tool-help](.claude/skills/spec-tool-help/SKILL.md)
+- [spec-write-integration-tests](.claude/skills/spec-write-integration-tests/SKILL.md)
+- [spec-write-unit-tests](.claude/skills/spec-write-unit-tests/SKILL.md)
 
 **Command files** (`.claude/commands/`):
 
-- [spec.architect](.claude/commands/spec.architect.md)
-- [spec.brainstorm](.claude/commands/spec.brainstorm.md)
-- [spec.plan](.claude/commands/spec.plan.md)
-- [spec.plan_feature](.claude/commands/spec.plan_feature.md)
-- [spec.yolo](.claude/commands/spec.yolo.md)
-- [spec.build_data_model](.claude/commands/spec.build_data_model.md)
-- [spec.devops](.claude/commands/spec.devops.md)
-- [spec.document](.claude/commands/spec.document.md)
-- [spec.document_design](.claude/commands/spec.document_design.md)
-- [spec.document_feature](.claude/commands/spec.document_feature.md)
-- [spec.document_readme](.claude/commands/spec.document_readme.md)
-- [spec.document_usage](.claude/commands/spec.document_usage.md)
-- [spec.feature](.claude/commands/spec.feature.md)
-- [spec.fix](.claude/commands/spec.fix.md)
-- [spec.hook_help](.claude/commands/spec.hook_help.md)
-- [spec.implement](.claude/commands/spec.implement.md)
-- [spec.memorize](.claude/commands/spec.memorize.md)
-- [spec.plan_critic](.claude/commands/spec.plan_critic.md)
-- [spec.review](.claude/commands/spec.review.md)
-- [spec.todo](.claude/commands/spec.todo.md)
-- [spec.tool_help](.claude/commands/spec.tool_help.md)
-- [spec.write_integration_tests](.claude/commands/spec.write_integration_tests.md)
-- [spec.write_unit_tests](.claude/commands/spec.write_unit_tests.md)
-- [spec.help](.claude/commands/spec.help.md)
-- [spec.orchestrator](.claude/commands/spec.orchestrator.md)
+- [spec-architect](.claude/commands/spec-architect.md)
+- [spec-brainstorm](.claude/commands/spec-brainstorm.md)
+- [spec-plan](.claude/commands/spec-plan.md)
+- [spec-plan-feature](.claude/commands/spec-plan-feature.md)
+- [spec-yolo](.claude/commands/spec-yolo.md)
+- [spec-help](.claude/commands/spec-help.md)
+- [spec-orchestrator](.claude/commands/spec-orchestrator.md)
 
 ## Usage
 
-To use an agent, reference its prompt file in your conversation:
+To use an agent, ask Claude to delegate to it by name:
 
 ```text
-Use the planner from .claude/agents/spec.planner.md to create a technical plan for this project.
+Use the spec-planner agent to create a technical plan for this project.
 ```
 
 Suggested manual checkpoint after planning:
 
 ```text
-Use the plan critic from .claude/agents/spec.plan_critic.md to review .spec-lite/plan.md for feasibility, technical risks, product improvements, and future enhancements before implementation starts.
+/spec-plan-critic .spec-lite/plan.md
 ```
 
 ## Output Directory

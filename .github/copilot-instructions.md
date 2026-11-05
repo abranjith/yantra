@@ -11,31 +11,31 @@ Typical flow: brainstorm → plan → feature → implement → review → docum
 
 **Agent files** (`.github/agents/`) — select from the agents dropdown in Copilot Chat:
 
-- [spec.architect](.github/agents/spec.architect.agent.md)
-- [spec.brainstormer](.github/agents/spec.brainstormer.agent.md)
-- [spec.planner](.github/agents/spec.planner.agent.md)
-- [spec.feature_planner](.github/agents/spec.feature_planner.agent.md)
-- [spec.yolo](.github/agents/spec.yolo.agent.md)
-- [spec.data_model_builder](.github/agents/spec.data_model_builder.agent.md)
-- [spec.devops](.github/agents/spec.devops.agent.md)
-- [spec.documenter](.github/agents/spec.documenter.agent.md)
-- [spec.design_documenter](.github/agents/spec.design_documenter.agent.md)
-- [spec.feature_documenter](.github/agents/spec.feature_documenter.agent.md)
-- [spec.readme_writer](.github/agents/spec.readme_writer.agent.md)
-- [spec.usage_documenter](.github/agents/spec.usage_documenter.agent.md)
-- [spec.feature](.github/agents/spec.feature.agent.md)
-- [spec.fixer](.github/agents/spec.fixer.agent.md)
-- [spec.hook_helper](.github/agents/spec.hook_helper.agent.md)
-- [spec.implementer](.github/agents/spec.implementer.agent.md)
-- [spec.memorize](.github/agents/spec.memorize.agent.md)
-- [spec.plan_critic](.github/agents/spec.plan_critic.agent.md)
-- [spec.reviewer](.github/agents/spec.reviewer.agent.md)
-- [spec.todo](.github/agents/spec.todo.agent.md)
-- [spec.tool_helper](.github/agents/spec.tool_helper.agent.md)
-- [spec.integration_tester](.github/agents/spec.integration_tester.agent.md)
-- [spec.unit_tester](.github/agents/spec.unit_tester.agent.md)
-- [spec.help](.github/agents/spec.help.agent.md)
-- [spec.orchestrator](.github/agents/spec.orchestrator.agent.md)
+- [spec-architect](.github/agents/spec-architect.agent.md)
+- [spec-brainstormer](.github/agents/spec-brainstormer.agent.md)
+- [spec-planner](.github/agents/spec-planner.agent.md)
+- [spec-feature-planner](.github/agents/spec-feature-planner.agent.md)
+- [spec-yolo](.github/agents/spec-yolo.agent.md)
+- [spec-data-model-builder](.github/agents/spec-data-model-builder.agent.md)
+- [spec-devops](.github/agents/spec-devops.agent.md)
+- [spec-documenter](.github/agents/spec-documenter.agent.md)
+- [spec-design-documenter](.github/agents/spec-design-documenter.agent.md)
+- [spec-feature-documenter](.github/agents/spec-feature-documenter.agent.md)
+- [spec-readme-writer](.github/agents/spec-readme-writer.agent.md)
+- [spec-usage-documenter](.github/agents/spec-usage-documenter.agent.md)
+- [spec-feature](.github/agents/spec-feature.agent.md)
+- [spec-fixer](.github/agents/spec-fixer.agent.md)
+- [spec-hook-helper](.github/agents/spec-hook-helper.agent.md)
+- [spec-implementer](.github/agents/spec-implementer.agent.md)
+- [spec-memorize](.github/agents/spec-memorize.agent.md)
+- [spec-plan-critic](.github/agents/spec-plan-critic.agent.md)
+- [spec-reviewer](.github/agents/spec-reviewer.agent.md)
+- [spec-todo](.github/agents/spec-todo.agent.md)
+- [spec-tool-helper](.github/agents/spec-tool-helper.agent.md)
+- [spec-integration-tester](.github/agents/spec-integration-tester.agent.md)
+- [spec-unit-tester](.github/agents/spec-unit-tester.agent.md)
+- [spec-help](.github/agents/spec-help.agent.md)
+- [spec-orchestrator](.github/agents/spec-orchestrator.agent.md)
 
 **Skill directories** (`.github/skills/`) — auto-discovered by Copilot based on task:
 
@@ -60,19 +60,19 @@ Typical flow: brainstorm → plan → feature → implement → review → docum
 
 **Prompt files** (`.github/prompts/`) — reference with `#file` or browse with `/`:
 
-- [spec.architect](.github/prompts/spec.architect.prompt.md)
-- [spec.brainstorm](.github/prompts/spec.brainstorm.prompt.md)
-- [spec.plan](.github/prompts/spec.plan.prompt.md)
-- [spec.plan_feature](.github/prompts/spec.plan_feature.prompt.md)
-- [spec.yolo](.github/prompts/spec.yolo.prompt.md)
-- [spec.help](.github/prompts/spec.help.prompt.md)
-- [spec.orchestrator](.github/prompts/spec.orchestrator.prompt.md)
+- [spec-architect](.github/prompts/spec-architect.prompt.md)
+- [spec-brainstorm](.github/prompts/spec-brainstorm.prompt.md)
+- [spec-plan](.github/prompts/spec-plan.prompt.md)
+- [spec-plan-feature](.github/prompts/spec-plan-feature.prompt.md)
+- [spec-yolo](.github/prompts/spec-yolo.prompt.md)
+- [spec-help](.github/prompts/spec-help.prompt.md)
+- [spec-orchestrator](.github/prompts/spec-orchestrator.prompt.md)
 
 Suggested manual checkpoint after planning:
 
-- `/spec.plan_critic .spec-lite/plan.md`
-- `/spec.plan_critic .spec-lite/plan_<name>.md .spec-lite/brainstorm.md`
-- `/spec.plan_critic .spec-lite/plan_<name>.md .spec-lite/features/feature_<name>.md`
+- `/spec-plan-critic .spec-lite/plan.md`
+- `/spec-plan-critic .spec-lite/plan_<name>.md .spec-lite/brainstorm.md`
+- `/spec-plan-critic .spec-lite/plan_<name>.md .spec-lite/features/feature_<name>.md`
 
 To invoke an agent, select it from the agents dropdown, reference a prompt file with `#file`,
 or describe the task and Copilot will auto-discover the right skill.

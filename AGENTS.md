@@ -11,13 +11,13 @@ for structured software engineering workflows.
 
 Typical flow: brainstorm → plan → feature → implement → review → document. Memory supplies standing instructions across every role.
 
-**Subagents** (`.codex/agents/`) — invoke by name (e.g., `use spec.planner`):
+**Subagents** (`.codex/agents/`) — invoke by name (e.g., `use spec-planner`):
 
-- [spec.architect](.codex/agents/spec.architect.toml)
-- [spec.brainstormer](.codex/agents/spec.brainstormer.toml)
-- [spec.planner](.codex/agents/spec.planner.toml)
-- [spec.feature_planner](.codex/agents/spec.feature_planner.toml)
-- [spec.yolo](.codex/agents/spec.yolo.toml)
+- [spec-architect](.codex/agents/spec-architect.toml)
+- [spec-brainstormer](.codex/agents/spec-brainstormer.toml)
+- [spec-planner](.codex/agents/spec-planner.toml)
+- [spec-feature-planner](.codex/agents/spec-feature-planner.toml)
+- [spec-yolo](.codex/agents/spec-yolo.toml)
 
 **Skills** (`.agents/skills/`) — auto-discovered by Codex based on the task:
 
@@ -42,7 +42,7 @@ Typical flow: brainstorm → plan → feature → implement → review → docum
 
 Suggested manual checkpoint after planning:
 
-- Use `spec.plan_critic` against `.spec-lite/plan.md` to pressure-test feasibility before implementation.
+- Use the `spec-plan-critic` skill against `.spec-lite/plan.md` to pressure-test feasibility before implementation.
 
 Planning outputs are written to `.spec-lite/`; documentation uses the directory configured in `.spec-lite.json`.
 
