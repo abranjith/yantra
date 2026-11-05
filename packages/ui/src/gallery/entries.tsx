@@ -5,7 +5,7 @@
  * harness screenshots it against a visual baseline.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Icon } from '../icons/Icon.js';
 import { ICON_NAMES } from '../icons/registry.js';
@@ -14,6 +14,7 @@ import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Di
 import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
 import { Tab, TabList, TabPanel, Tabs } from '../primitives/Tabs.js';
+import { createToastQueue, ToastProvider } from '../primitives/Toast.js';
 import { Tooltip, TooltipTrigger } from '../primitives/Tooltip.js';
 import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
 import { CONTRAST_PAIRINGS, type ContrastPairing } from '../tokens/pairings.js';
@@ -31,6 +32,12 @@ export interface GalleryEntry {
   readonly render: () => ReactNode;
   /** Whether the harness walks focus through this entry. */
   readonly interactive: boolean;
+  /**
+   * Whether the entry renders React Aria overlays (toasts, popovers, dialogs),
+   * which portal into `document.body`. The harness then screenshots the full
+   * page and scopes axe and the focus walk to the whole document.
+   */
+  readonly overlays?: true;
 }
 
 function ratioLabel(pairing: ContrastPairing): string {
@@ -294,6 +301,42 @@ function DisclosureSheet(): ReactNode {
   );
 }
 
+/** One toast per tone plus one with an action, without timers (deterministic). */
+function ToastSheet(): ReactNode {
+  const [queue] = useState(() => {
+    const created = createToastQueue({ maxVisibleToasts: 6, autoDismiss: false });
+    created.add({ tone: 'info', title: 'Run saved as a workflow' });
+    created.add({
+      tone: 'fulfilled',
+      title: 'Run fulfilled',
+      description: 'Three of three requirements met, each cited.',
+    });
+    created.add({
+      tone: 'partial',
+      title: 'Partially fulfilled',
+      description: 'One source unverified.',
+    });
+    created.add({
+      tone: 'failed',
+      title: 'Run failed',
+      description: 'The site blocked automation.',
+    });
+    created.add({
+      tone: 'needs-you',
+      title: 'Confirmation needed',
+      description: 'Submitting the form spends money.',
+      action: { label: 'Review', onAction: () => undefined },
+    });
+    return created;
+  });
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-ink-2">Toasts announce politely and never take focus.</p>
+      <ToastProvider queue={queue} />
+    </div>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -402,5 +445,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     primitive: 'Disclosure',
     render: () => <DisclosureSheet />,
     interactive: true,
+  },
+  {
+    id: 'toast',
+    title: 'Toast',
+    primitive: 'Toast',
+    render: () => <ToastSheet />,
+    interactive: true,
+    overlays: true,
   },
 ];

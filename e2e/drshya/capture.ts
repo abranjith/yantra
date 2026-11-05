@@ -156,7 +156,11 @@ export interface FocusStop {
  * ring. Stops when focus leaves the entry or returns to an element already
  * visited.
  */
-export async function walkFocus(page: Page, maxStops = 80): Promise<FocusStop[]> {
+export async function walkFocus(
+  page: Page,
+  scopeSelector: string = ENTRY_SELECTOR,
+  maxStops = 80,
+): Promise<FocusStop[]> {
   const stops: FocusStop[] = [];
   const seen = new Set<string>();
   for (let step = 0; step < maxStops; step += 1) {
@@ -172,11 +176,15 @@ export async function walkFocus(page: Page, maxStops = 80): Promise<FocusStop[]>
           });
         }),
     );
-    const stop = await page.evaluate((entrySelector) => {
+    const stop = await page.evaluate((scope) => {
       const active = document.activeElement;
-      const entry = document.querySelector(entrySelector);
+      const entry = document.querySelector(scope);
       if (!(active instanceof HTMLElement) || !entry?.contains(active)) {
         return null;
+      }
+      if (active === document.body || active === document.documentElement) {
+        // Nothing focused yet (or focus fell back to the page): keep tabbing.
+        return 'pending' as const;
       }
       if (!active.hasAttribute('data-drshya-focus-id')) {
         active.setAttribute(
@@ -198,7 +206,10 @@ export async function walkFocus(page: Page, maxStops = 80): Promise<FocusStop[]>
         outlineColor: style.outlineColor,
         accent,
       };
-    }, ENTRY_SELECTOR);
+    }, scopeSelector);
+    if (stop === 'pending') {
+      continue;
+    }
     if (stop === null) {
       if (stops.length > 0) {
         break;

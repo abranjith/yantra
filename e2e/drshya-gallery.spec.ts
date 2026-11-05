@@ -111,12 +111,17 @@ describe('@no-llm Drshya gallery', () => {
               if (element === null) {
                 throw new Error(`${name}: no ${ENTRY_SELECTOR} rendered`);
               }
-              screenshot = await element.screenshot({ type: 'png' });
+              // Overlays portal into document.body, outside the entry section.
+              screenshot =
+                entry.overlays === true
+                  ? await opened.page.screenshot({ type: 'png', fullPage: true })
+                  : await element.screenshot({ type: 'png' });
               // Evidence first: injecting axe must not be able to mask a violation.
               evidence = await opened.evidence();
-              violations = await runAxe(opened.page);
+              const scope = entry.overlays === true ? 'body' : ENTRY_SELECTOR;
+              violations = await runAxe(opened.page, scope);
               if (entry.interactive) {
-                focusStops = await walkFocus(opened.page);
+                focusStops = await walkFocus(opened.page, scope);
               }
             } finally {
               await opened.page.close();

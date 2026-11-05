@@ -10,6 +10,7 @@ export const PRIMITIVE_FAMILIES = {
   Tabs: ['Tabs', 'TabList', 'Tab', 'TabPanel'],
   Tooltip: ['TooltipTrigger', 'Tooltip'],
   Disclosure: ['Disclosure', 'DisclosureTrigger', 'DisclosurePanel'],
+  Toast: ['ToastProvider'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type PrimitiveFamily = keyof typeof PRIMITIVE_FAMILIES;

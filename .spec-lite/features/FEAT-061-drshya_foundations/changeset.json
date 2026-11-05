@@ -321,13 +321,13 @@
     },
     {
       "path": "packages/ui/src/primitives/Disclosure.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "packages/ui/src/primitives/families.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -345,13 +345,19 @@
     },
     {
       "path": "packages/ui/src/primitives/Tabs.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
-      "path": "packages/ui/src/primitives/Tooltip.tsx",
+      "path": "packages/ui/src/primitives/Toast.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/primitives/Tooltip.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -477,9 +483,15 @@
     },
     {
       "path": "packages/ui/tests/primitives/tabs-tooltip-disclosure.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/tests/primitives/toast.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/ui/tests/setup.ts",
@@ -489,7 +501,7 @@
     },
     {
       "path": "packages/ui/tests/support/css-escape.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },

@@ -122,6 +122,11 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **Pairing added.** `on-accent` on `accent-ink` is in the gate, because `accent-ink` is the primary button's hover and pressed fill.
 - **Primitive families.** A primitive can span several exports (`Tabs`, `TabList`, `Tab`, `TabPanel`), so `src/primitives/families.ts` maps each family to its exports. `GalleryEntry.primitive` names the family. The completeness test checks both directions: every barrel export belongs to exactly one family, and every family has exactly one gallery entry. This is what makes TASK-014's "all 16 primitives" countable.
 - **Pinned React Aria API status (1.22.1).** Toast is still exported as `UNSTABLE_ToastRegion`, `UNSTABLE_ToastQueue` and `UNSTABLE_Toast`. `TableLoadMoreItem` and `SubmenuTrigger` exist. jsdom needs a `CSS.escape` polyfill (`tests/support/css-escape.ts`) for React Aria collections.
+- **Toast decisions (TASK-010).**
+  - React Aria marks toast content `role="alert"`, which is assertive. Drshya overrides it with `role="status"` and `aria-live="polite"` to meet plan §9's polite announcements.
+  - The tone word ("Failed", "Needs you") is `ink-2` text, not the signal's `-ink` color. Toasts are glass, and S3 allows only `ink` and `ink-2` as glass text. The tone is carried by the registry icon in the graphic signal color plus the word, never by color alone.
+  - React Aria portals the toast region into `document.body`, so there is no inline placement. `createToastQueue({ autoDismiss: false })` keeps the gallery deterministic. The `UNSTABLE_*` names stay inside `Toast.tsx`.
+- **Overlay entries.** `GalleryEntry.overlays: true` marks entries whose React Aria overlays portal outside the entry section. Toast does now; Popover, Select, ComboBox, Dialog and Menu will in M4. For those entries, the harness screenshots the full page and scopes axe and the focus walk to the whole document.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -845,7 +850,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
 - [x] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
 - [x] TASK-009: Tabs, Tooltip, Disclosure
-- [ ] TASK-010: Toast (app-owned queue, polite, no focus theft)
+- [x] TASK-010: Toast (app-owned queue, polite, no focus theft)
 - [ ] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
 - [ ] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
 - [ ] TASK-013 (M4): Popover, Select, ComboBox
