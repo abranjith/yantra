@@ -1,0 +1,27 @@
+/*
+ * Drshya entry stylesheet. Apps import this once (`@yantra/ui/drshya.css`).
+ *
+ * Token values live in TypeScript (src/tokens) and are generated into
+ * theme.generated.css; only the hand-written utilities and rules live here.
+ */
+
+@import 'tailwindcss';
+@import './theme.generated.css';
+
+/*
+ * `dark:` follows the resolved theme: an explicit data-theme="dark" on any
+ * ancestor, or a dark OS when no ancestor pins data-theme="light".
+ */
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']) *):not(:where([data-theme] *, [data-theme])) {
+      @slot;
+    }
+  }
+}
+
+/* Scan the package's own source for class names. */
+@source '../';

@@ -68,6 +68,19 @@ The brainstorm's OKLCH values were run through the WCAG 2.x contrast formula. Th
 
   The route still exists in development builds only, as §6 requires, and no Storybook is added. **Confirmed by the user 2026-11-04.**
 
+- **DEVIATION D4 (light signals are out of the sRGB gamut; found at implementation).** The pre-check clipped OKLCH to gamut, but §2 makes an out-of-gamut token a generator error. Six light tokens are outside sRGB at their brainstorm chroma (Ion fill's red channel is −0.06). On a wide-gamut display Chrome would render the unclipped color, which the gate never measured. **Decision (user, 2026-11-04):** keep the gamut error, and store each of these tokens at its lightness and hue with the largest in-gamut chroma, floored to 0.001. Lightness and hue are unchanged, so D1 and D2 stand. Every pairing still passes:
+
+  | Token (light)          | Brainstorm chroma | In-gamut chroma | Check          | Clipped | Shipped |
+  | ---------------------- | ----------------- | --------------- | -------------- | ------- | ------- |
+  | `ion-fill` (0.54, 218) | 0.14              | 0.097           | white on fill  | 4.56    | 4.89    |
+  | `accent-ink` (0.50)    | 0.12              | 0.089           | text on fog-10 | 4.80    | 5.06    |
+  | `jade` (0.55, 162)     | 0.13              | 0.120           | 3:1 on fog-10  | 3.91    | 3.97    |
+  | `jade-ink` (0.51)      | 0.13              | 0.111           | text on fog-10 | 4.58    | 4.72    |
+  | `amber` (0.62, 65)     | 0.15              | 0.139           | 3:1 on fog-10  | 3.28    | 3.28    |
+  | `amber-ink` (0.54)     | 0.15              | 0.121           | text on fog-10 | 4.55    | 4.55    |
+
+  The dark theme, Crimson and Rani are already in gamut. When a token is out of gamut, the generator still measures its contrast on the clipped color, so one `TokenContractError` lists the gamut failure and any contrast failure together.
+
 ### Spec decisions
 
 The plan leaves these details open. Each is the smallest rule that makes the plan's behavior enforceable. Override any of them before Implement starts.
@@ -115,26 +128,26 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - **Mapping:** `SEMANTIC_COLORS: Record<SemanticColor, { light: PrimitiveName; dark: PrimitiveName }>`.
   - **Initial mapping.** The brainstorm leaves the dark `ink`, dark `rule` and dark `sunken` roles open; this spec fills them.
 
-    | Semantic                    | Light                                  | Dark                     |
-    | --------------------------- | -------------------------------------- | ------------------------ |
-    | `bg`                        | fog-05                                 | fog-99                   |
-    | `surface`                   | fog-00                                 | fog-95                   |
-    | `sunken`                    | fog-10                                 | fog-99                   |
-    | `ink`                       | fog-95                                 | fog-05                   |
-    | `ink-2`                     | fog-70                                 | fog-40                   |
-    | `ink-3`                     | fog-60                                 | fog-50                   |
-    | `rule`                      | fog-20                                 | fog-90                   |
-    | `rule-strong`               | fog-30                                 | fog-80                   |
-    | `field-edge`                | fog-60                                 | fog-50                   |
-    | `accent`                    | ion-fill `0.54 0.14 218` (D1)          | ion-fill `0.80 0.14 218` |
-    | `on-accent`                 | white `1 0 0`                          | `0.18 0.03 230`          |
-    | `accent-ink`                | `0.50 0.12 218`                        | `0.82 0.12 218`          |
-    | `signal-fulfilled` / `-ink` | `0.55 0.13 162` / `0.51 0.13 162` (D2) | `0.76 0.14 162` / same   |
-    | `signal-partial` / `-ink`   | `0.62 0.15 65` / `0.54 0.15 65` (D2)   | `0.80 0.14 65` / same    |
-    | `signal-failed` / `-ink`    | `0.55 0.20 25` / same                  | `0.70 0.18 25` / same    |
-    | `signal-needs-you` / `-ink` | `0.55 0.22 352` / same                 | `0.72 0.20 352` / same   |
-    | `glass-tint`                | fog-00                                 | fog-95                   |
-    | `glass-edge`, `glass-spec`  | fog-20, fog-00                         | fog-80, fog-40           |
+    | Semantic                    | Light                                       | Dark                     |
+    | --------------------------- | ------------------------------------------- | ------------------------ |
+    | `bg`                        | fog-05                                      | fog-99                   |
+    | `surface`                   | fog-00                                      | fog-95                   |
+    | `sunken`                    | fog-10                                      | fog-99                   |
+    | `ink`                       | fog-95                                      | fog-05                   |
+    | `ink-2`                     | fog-70                                      | fog-40                   |
+    | `ink-3`                     | fog-60                                      | fog-50                   |
+    | `rule`                      | fog-20                                      | fog-90                   |
+    | `rule-strong`               | fog-30                                      | fog-80                   |
+    | `field-edge`                | fog-60                                      | fog-50                   |
+    | `accent`                    | ion-fill `0.54 0.097 218` (D1, D4)          | ion-fill `0.80 0.14 218` |
+    | `on-accent`                 | white `1 0 0`                               | `0.18 0.03 230`          |
+    | `accent-ink`                | `0.50 0.089 218` (D4)                       | `0.82 0.12 218`          |
+    | `signal-fulfilled` / `-ink` | `0.55 0.12 162` / `0.51 0.111 162` (D2, D4) | `0.76 0.14 162` / same   |
+    | `signal-partial` / `-ink`   | `0.62 0.139 65` / `0.54 0.121 65` (D2, D4)  | `0.80 0.14 65` / same    |
+    | `signal-failed` / `-ink`    | `0.55 0.20 25` / same                       | `0.70 0.18 25` / same    |
+    | `signal-needs-you` / `-ink` | `0.55 0.22 352` / same                      | `0.72 0.20 352` / same   |
+    | `glass-tint`                | fog-00                                      | fog-95                   |
+    | `glass-edge`, `glass-spec`  | fog-20, fog-00                              | fog-80, fog-40           |
 
 - **`ContrastPairing`** (`src/tokens/pairings.ts`):
   - `fg` (`SemanticColor`) — the text or graphic color.
@@ -807,7 +820,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 ## 8. State Tracking
 
 - [x] TASK-001: `@yantra/ui` package, dependency gate, workspace wiring, import-boundary lint
-- [ ] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
+- [x] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
 - [ ] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
 - [ ] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
 - [ ] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
