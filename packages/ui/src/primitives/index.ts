@@ -22,6 +22,14 @@ export type { TooltipProps, TooltipTriggerProps } from './Tooltip.js';
 export { Disclosure, DisclosurePanel, DisclosureTrigger } from './Disclosure.js';
 export { ToastProvider } from './Toast.js';
 export { Table } from './Table.js';
+export { TextField } from './TextField.js';
+export type { TextFieldProps } from './TextField.js';
+export { NumberField } from './NumberField.js';
+export type { NumberFieldProps } from './NumberField.js';
+export { Checkbox } from './Checkbox.js';
+export type { CheckboxProps } from './Checkbox.js';
+export { Switch } from './Switch.js';
+export type { SwitchProps } from './Switch.js';
 export type { TableColumn, TableLoadState, TableProps } from './Table.js';
 export type {
   DrshyaToastQueue,

@@ -131,6 +131,8 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - The row-header guard throws `TableContractError` in every build, not only in development. `packages/ui` has no build-mode flag in browser code, and an unnamed row is a developer error either way.
   - React Aria's load-more sentinel shows its content only while `isLoading`, so the error row reuses that slot with no `onLoadMore`, and an error never auto-retries.
   - jsdom tests size elements (`tests/support/layout.ts`) and install a controllable `IntersectionObserver`. Without layout, the virtualizer renders all 10,000 rows and the worker runs out of heap.
+- **Focus indicator for native-input controls.** Checkbox and Switch focus React Aria's visually hidden `<input>`; the Ion ring is drawn on the visible box or track (`group-focus-visible:`), which carries `data-focus-indicator`. The harness focus walk measures that indicator when the focused element is a hidden input inside a `<label>`.
+- **Field anatomy exports.** `FieldLabel`, `FieldDescription`, `FieldErrorText` and `fieldInputStyles` are exported from the package root, not the primitives barrel. They are building blocks, not one of the 16 primitive families.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -856,7 +858,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-009: Tabs, Tooltip, Disclosure
 - [x] TASK-010: Toast (app-owned queue, polite, no focus theft)
 - [x] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
-- [ ] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
+- [x] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
 - [ ] TASK-013 (M4): Popover, Select, ComboBox
 - [ ] TASK-014 (M4): Dialog, Menu
 

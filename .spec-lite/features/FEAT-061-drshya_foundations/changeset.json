@@ -231,7 +231,7 @@
     },
     {
       "path": "packages/ui/src/gallery/fixtures.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -326,6 +326,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/ui/src/primitives/Checkbox.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "packages/ui/src/primitives/Disclosure.tsx",
       "status": "A",
       "role": "implement",
@@ -336,6 +342,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/field.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "packages/ui/src/primitives/index.ts",
@@ -350,8 +362,20 @@
       "task": "TASK-008"
     },
     {
-      "path": "packages/ui/src/primitives/Table.tsx",
+      "path": "packages/ui/src/primitives/NumberField.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/Switch.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/Table.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -360,6 +384,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/TextField.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "packages/ui/src/primitives/Toast.tsx",
@@ -488,6 +518,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/ui/tests/primitives/fields.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "packages/ui/tests/primitives/link.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -495,7 +531,7 @@
     },
     {
       "path": "packages/ui/tests/primitives/table.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -525,13 +561,13 @@
     },
     {
       "path": "packages/ui/tests/support/intersection-observer.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "packages/ui/tests/support/layout.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },

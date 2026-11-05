@@ -12,6 +12,10 @@ export const PRIMITIVE_FAMILIES = {
   Disclosure: ['Disclosure', 'DisclosureTrigger', 'DisclosurePanel'],
   Toast: ['ToastProvider'],
   Table: ['Table'],
+  TextField: ['TextField'],
+  NumberField: ['NumberField'],
+  Checkbox: ['Checkbox'],
+  Switch: ['Switch'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type PrimitiveFamily = keyof typeof PRIMITIVE_FAMILIES;

@@ -29,6 +29,16 @@ export { classifyHref, linkStyles } from './primitives/Link.js';
 export { tabStyles } from './primitives/Tabs.js';
 export { createToastQueue, TOAST_TIMEOUT_MS, TOAST_TONES } from './primitives/Toast.js';
 export { assertOneRowHeader, TableContractError } from './primitives/Table.js';
+export {
+  FieldDescription,
+  FieldErrorText,
+  FieldLabel,
+  fieldInputStyles,
+  type FieldChromeProps,
+  type FieldLabelProps,
+} from './primitives/field.js';
+export { checkboxBoxStyles } from './primitives/Checkbox.js';
+export { switchThumbStyles, switchTrackStyles } from './primitives/Switch.js';
 export { TOOLTIP_CLOSE_DELAY_MS, TOOLTIP_DELAY_MS } from './primitives/Tooltip.js';
 export { PRIMITIVE_FAMILIES, type PrimitiveFamily } from './primitives/families.js';
 export { Icon, ICON_STROKE_WIDTH, type IconProps, type IconSize } from './icons/Icon.js';

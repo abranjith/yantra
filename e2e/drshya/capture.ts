@@ -192,15 +192,27 @@ export async function walkFocus(
           String(entry.querySelectorAll('[data-drshya-focus-id]').length),
         );
       }
+      // Checkbox and Switch focus a visually hidden native input; the ring is
+      // drawn on the visible control, which carries data-focus-indicator.
+      const indicator =
+        active instanceof HTMLInputElement
+          ? (active.closest('label')?.querySelector('[data-focus-indicator]') ?? null)
+          : null;
+      const ringed = indicator instanceof HTMLElement ? indicator : active;
       const probe = document.createElement('span');
       probe.style.setProperty('color', 'var(--color-accent)');
       entry.append(probe);
       const accent = getComputedStyle(probe).color;
       probe.remove();
-      const style = getComputedStyle(active);
+      const style = getComputedStyle(ringed);
       return {
         id: active.getAttribute('data-drshya-focus-id') ?? '',
-        label: (active.getAttribute('aria-label') ?? active.textContent ?? '').trim(),
+        label: (
+          active.getAttribute('aria-label') ??
+          active.closest('label')?.textContent ??
+          active.textContent ??
+          ''
+        ).trim(),
         outlineStyle: style.outlineStyle,
         outlineWidth: style.outlineWidth,
         outlineColor: style.outlineColor,

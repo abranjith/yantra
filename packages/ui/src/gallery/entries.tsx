@@ -10,11 +10,15 @@ import { useState, type ReactNode } from 'react';
 import { Icon } from '../icons/Icon.js';
 import { ICON_NAMES, type IconName } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
+import { Checkbox } from '../primitives/Checkbox.js';
 import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
 import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
+import { NumberField } from '../primitives/NumberField.js';
+import { Switch } from '../primitives/Switch.js';
 import { Table, type TableColumn } from '../primitives/Table.js';
 import { Tab, TabList, TabPanel, Tabs } from '../primitives/Tabs.js';
+import { TextField } from '../primitives/TextField.js';
 import { createToastQueue, ToastProvider } from '../primitives/Toast.js';
 import { Tooltip, TooltipTrigger } from '../primitives/Tooltip.js';
 import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
@@ -421,6 +425,87 @@ function LargeTableSheet(): ReactNode {
   );
 }
 
+function TextFieldSheet(): ReactNode {
+  return (
+    <div className="grid max-w-3xl grid-cols-2 gap-6">
+      <TextField
+        label="Goal"
+        description="What the run should accomplish."
+        defaultValue="Compare return policies"
+      />
+      <TextField
+        label="Start URL"
+        voice="engine"
+        isRequired
+        defaultValue="https://example.com/returns"
+      />
+      <TextField
+        label="Profile name"
+        isInvalid
+        defaultValue="work profile!"
+        errorMessage="Use letters, digits and dashes only."
+      />
+      <TextField label="Run ID" isDisabled voice="engine" defaultValue="run-00042" />
+      <TextField
+        label="Notes"
+        multiline
+        description="Kept with the run, never sent to the model."
+        defaultValue="Prefer stores with free returns."
+      />
+    </div>
+  );
+}
+
+function NumberFieldSheet(): ReactNode {
+  return (
+    <div className="grid max-w-3xl grid-cols-2 gap-6">
+      <NumberField label="Max hops" defaultValue={12} minValue={1} maxValue={50} />
+      <NumberField
+        label="Budget (USD)"
+        isRequired
+        defaultValue={2.5}
+        step={0.5}
+        minValue={0}
+        formatOptions={{ style: 'currency', currency: 'USD' }}
+      />
+      <NumberField
+        label="Sources"
+        isInvalid
+        defaultValue={0}
+        errorMessage="At least one source is needed."
+      />
+      <NumberField label="Captures" isDisabled defaultValue={3} />
+    </div>
+  );
+}
+
+function CheckboxSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-3">
+      <Checkbox>Save as a workflow</Checkbox>
+      <Checkbox defaultSelected>Cite every claim</Checkbox>
+      <Checkbox isIndeterminate>Some sources selected</Checkbox>
+      <Checkbox isDisabled>Allow uploads (not available)</Checkbox>
+      <Checkbox isRequired isInvalid>
+        I reviewed the consent terms (required)
+      </Checkbox>
+    </div>
+  );
+}
+
+function SwitchSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-3">
+      <Switch>Headless browser</Switch>
+      <Switch defaultSelected>Solid surfaces</Switch>
+      <Switch isDisabled>Scheduled runs (daemon offline)</Switch>
+      <Switch isDisabled defaultSelected>
+        Audit log (always on)
+      </Switch>
+    </div>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -543,6 +628,34 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Table',
     primitive: 'Table',
     render: () => <TableSheet />,
+    interactive: true,
+  },
+  {
+    id: 'text-field',
+    title: 'TextField',
+    primitive: 'TextField',
+    render: () => <TextFieldSheet />,
+    interactive: true,
+  },
+  {
+    id: 'number-field',
+    title: 'NumberField',
+    primitive: 'NumberField',
+    render: () => <NumberFieldSheet />,
+    interactive: true,
+  },
+  {
+    id: 'checkbox',
+    title: 'Checkbox',
+    primitive: 'Checkbox',
+    render: () => <CheckboxSheet />,
+    interactive: true,
+  },
+  {
+    id: 'switch',
+    title: 'Switch',
+    primitive: 'Switch',
+    render: () => <SwitchSheet />,
     interactive: true,
   },
   {
