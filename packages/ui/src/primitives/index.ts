@@ -21,6 +21,8 @@ export { Tooltip, TooltipTrigger } from './Tooltip.js';
 export type { TooltipProps, TooltipTriggerProps } from './Tooltip.js';
 export { Disclosure, DisclosurePanel, DisclosureTrigger } from './Disclosure.js';
 export { ToastProvider } from './Toast.js';
+export { Table } from './Table.js';
+export type { TableColumn, TableLoadState, TableProps } from './Table.js';
 export type {
   DrshyaToastQueue,
   ToastAction,

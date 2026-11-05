@@ -390,6 +390,48 @@ describe('@no-llm Drshya gallery', () => {
     });
   });
 
+  describe('large table', () => {
+    it(
+      'keeps the DOM bounded at 10,000 rows and asks for more exactly once at the bottom',
+      async () => {
+        const opened = await openGallery(
+          browser,
+          server.origin,
+          stateSearch({ entry: 'table-large', theme: 'light', surfaces: 'glass' }),
+        );
+        try {
+          const page = opened.page;
+          const rowCount = () =>
+            page.$$eval('[data-gallery-entry] [role="row"]', (rows) => rows.length);
+          const loadMoreCount = () => page.evaluate(() => window.__drshyaLoadMoreCount ?? 0);
+
+          expect(await rowCount()).toBeLessThanOrEqual(60);
+          expect(await loadMoreCount()).toBe(0);
+
+          await page.$eval('[data-gallery-entry] [role="grid"]', (grid) => {
+            grid.scrollTop = grid.scrollHeight;
+          });
+          await page.waitForFunction(() => (window.__drshyaLoadMoreCount ?? 0) > 0, {
+            timeout: 10_000,
+          });
+          // Let any duplicate observer callbacks land before counting.
+          await new Promise((settle) => setTimeout(settle, 500));
+
+          expect(await loadMoreCount()).toBe(1);
+          expect(await rowCount()).toBeLessThanOrEqual(60);
+          const lastRun = await page.$eval(
+            '[data-gallery-entry] [role="grid"]',
+            (grid) => grid.textContent ?? '',
+          );
+          expect(lastRun).toContain('run-10000');
+        } finally {
+          await opened.page.close();
+        }
+      },
+      STATE_TIMEOUT,
+    );
+  });
+
   describe('system theme', () => {
     const entry = GALLERY_ENTRIES[0]?.id ?? 'tokens-colors';
 

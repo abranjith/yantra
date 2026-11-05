@@ -8,6 +8,10 @@ import {
   parseGallerySearch,
   type GalleryEntry,
 } from '../../src/gallery/index.js';
+import { useFixedLayout } from '../support/layout.js';
+
+// table-large renders 10,000 rows: give the virtualizer a viewport.
+useFixedLayout();
 
 function wrapper(container: HTMLElement): HTMLElement {
   const element = container.firstElementChild;

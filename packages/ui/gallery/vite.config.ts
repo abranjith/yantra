@@ -20,5 +20,7 @@ export default defineConfig({
     emptyOutDir: true,
     // Fonts and textures must be files: `default-src 'self'` blocks data: URIs.
     assetsInlineLimit: 0,
+    // One local dev page bundling every primitive; size is not a concern here.
+    chunkSizeWarningLimit: 2000,
   },
 });

@@ -8,11 +8,12 @@
 import { useState, type ReactNode } from 'react';
 
 import { Icon } from '../icons/Icon.js';
-import { ICON_NAMES } from '../icons/registry.js';
+import { ICON_NAMES, type IconName } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
 import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
 import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
+import { Table, type TableColumn } from '../primitives/Table.js';
 import { Tab, TabList, TabPanel, Tabs } from '../primitives/Tabs.js';
 import { createToastQueue, ToastProvider } from '../primitives/Toast.js';
 import { Tooltip, TooltipTrigger } from '../primitives/Tooltip.js';
@@ -22,6 +23,14 @@ import { THEMES } from '../tokens/palette.js';
 import { SEMANTIC_COLOR_NAMES } from '../tokens/semantic.js';
 
 import { BG_CLASS, TEXT_CLASS } from './classes.js';
+import { fixtureRuns, type FixtureOutcome, type FixtureRun } from './fixtures.js';
+
+declare global {
+  interface Window {
+    /** How many times the large-table entry asked for more rows (harness probe). */
+    __drshyaLoadMoreCount?: number;
+  }
+}
 
 export interface GalleryEntry {
   /** Kebab-case and unique; used in the URL and in baseline file names. */
@@ -337,6 +346,81 @@ function ToastSheet(): ReactNode {
   );
 }
 
+const OUTCOME_CELL = {
+  fulfilled: {
+    icon: 'outcome.fulfilled',
+    className: 'text-signal-fulfilled-ink',
+    label: 'Fulfilled',
+  },
+  partial: { icon: 'outcome.partial', className: 'text-signal-partial-ink', label: 'Partial' },
+  failed: { icon: 'outcome.failed', className: 'text-signal-failed-ink', label: 'Failed' },
+  aborted: { icon: 'outcome.aborted', className: 'text-ink-2', label: 'Aborted' },
+} as const satisfies Record<
+  FixtureOutcome,
+  { readonly icon: IconName; readonly className: string; readonly label: string }
+>;
+
+const RUN_COLUMNS: readonly TableColumn<FixtureRun>[] = [
+  { id: 'id', header: 'Run', cell: (run) => run.id, voice: 'engine', width: 140 },
+  { id: 'goal', header: 'Goal', cell: (run) => run.goal, isRowHeader: true, width: '3fr' },
+  { id: 'mode', header: 'Mode', cell: (run) => run.mode, width: 110 },
+  {
+    id: 'outcome',
+    header: 'Outcome',
+    width: 140,
+    cell: (run) => {
+      const outcome = OUTCOME_CELL[run.outcome];
+      return (
+        <span className={`inline-flex items-center gap-2 ${outcome.className}`}>
+          <Icon name={outcome.icon} size={16} />
+          {outcome.label}
+        </span>
+      );
+    },
+  },
+  {
+    id: 'duration',
+    header: 'Duration',
+    cell: (run) => run.duration,
+    voice: 'engine',
+    align: 'end',
+    width: 110,
+  },
+];
+
+const SMALL_RUNS = fixtureRuns(25);
+
+function TableSheet(): ReactNode {
+  return (
+    <Table
+      aria-label="Recent runs"
+      columns={RUN_COLUMNS}
+      rows={SMALL_RUNS}
+      getRowKey={(run) => run.id}
+      emptyState="No runs yet"
+      height="32rem"
+    />
+  );
+}
+
+function LargeTableSheet(): ReactNode {
+  const [rows] = useState(() => fixtureRuns(10_000));
+  return (
+    <Table
+      aria-label="All runs"
+      columns={RUN_COLUMNS}
+      rows={rows}
+      getRowKey={(run) => run.id}
+      emptyState="No runs yet"
+      loadState="idle"
+      onLoadMore={() => {
+        window.__drshyaLoadMoreCount = (window.__drshyaLoadMoreCount ?? 0) + 1;
+      }}
+      height="32rem"
+    />
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -453,5 +537,19 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     render: () => <ToastSheet />,
     interactive: true,
     overlays: true,
+  },
+  {
+    id: 'table',
+    title: 'Table',
+    primitive: 'Table',
+    render: () => <TableSheet />,
+    interactive: true,
+  },
+  {
+    id: 'table-large',
+    title: 'Table, 10,000 rows',
+    primitive: null,
+    render: () => <LargeTableSheet />,
+    interactive: false,
   },
 ];

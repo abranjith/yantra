@@ -230,6 +230,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/ui/src/gallery/fixtures.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/ui/src/gallery/gallery.css",
       "status": "A",
       "role": "implement",
@@ -344,6 +350,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/ui/src/primitives/Table.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/ui/src/primitives/Tabs.tsx",
       "status": "A",
       "role": "implement",
@@ -351,7 +363,7 @@
     },
     {
       "path": "packages/ui/src/primitives/Toast.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -482,6 +494,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/ui/tests/primitives/table.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/ui/tests/primitives/tabs-tooltip-disclosure.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -489,7 +507,7 @@
     },
     {
       "path": "packages/ui/tests/primitives/toast.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -504,6 +522,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/tests/support/intersection-observer.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/tests/support/layout.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/ui/tests/support/match-media.ts",
