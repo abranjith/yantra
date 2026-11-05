@@ -13,6 +13,17 @@
   background-color: #fff;
 }
 
+/* A gallery-only loop; reduced motion (drshya.css) stops it. */
+.gallery-motion-loop {
+  animation: gallery-pulse var(--duration-slow) var(--ease-standard) infinite alternate;
+}
+
+@keyframes gallery-pulse {
+  to {
+    opacity: 0.4;
+  }
+}
+
 .gallery-backdrop-stripes {
   background-image: url('./assets/backdrop-stripes.png');
   background-repeat: repeat;

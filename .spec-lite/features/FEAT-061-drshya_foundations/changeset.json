@@ -153,7 +153,7 @@
     },
     {
       "path": "packages/ui/src/gallery/assets/backdrop-stripes.png",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -171,7 +171,7 @@
     },
     {
       "path": "packages/ui/src/gallery/gallery.css",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -195,7 +195,7 @@
     },
     {
       "path": "packages/ui/src/styles/assets/glass-noise.png",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -231,7 +231,7 @@
     },
     {
       "path": "packages/ui/src/tokens/glass.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -246,6 +246,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/scale.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/src/tokens/semantic.ts",
@@ -309,9 +315,15 @@
     },
     {
       "path": "packages/ui/tests/tokens/glass.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/tests/tokens/scale.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/tests/tokens/theme-css.spec.ts",

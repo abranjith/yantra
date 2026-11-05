@@ -26,6 +26,7 @@ import {
 } from './glass.js';
 import { CONTRAST_PAIRINGS, MINIMUM_CONTRAST, type ContrastPairing } from './pairings.js';
 import { PRIMITIVES, THEMES, type PrimitiveToken, type Theme } from './palette.js';
+import { CLEARED_NAMESPACES, FONT_FAMILIES, MOTION, RADIUS_SCALE, TYPE_SCALE } from './scale.js';
 import { SEMANTIC_COLORS, SEMANTIC_COLOR_NAMES, type SemanticColor } from './semantic.js';
 
 /** Everything the generator reads. Tests pass deliberately broken sets. */
@@ -286,13 +287,30 @@ export function emitThemeCss(set: TokenSet = DRSHYA_TOKENS): string {
     declaration('--glass-blur', `${String(set.glass.blurPx)}px`, '  '),
     declaration('--glass-saturate', String(set.glass.saturate), '  '),
     declaration('--glass-noise-alpha', String(set.glass.noiseAlpha), '  '),
+    // Motion durations are plain properties so reduced motion can zero them.
+    ...Object.entries(MOTION.durations).map(([name, value]) =>
+      declaration(`--duration-${name}`, value, '  '),
+    ),
   ]);
 
   const theme = block('@theme', [
-    declaration('--color-*', 'initial', '  '),
+    // Spec S1: clear every default namespace Drshya replaces, so a default
+    // utility (bg-red-500, rounded-2xl, text-xl, shadow-lg) compiles to nothing.
+    ...CLEARED_NAMESPACES.map((namespace) => declaration(`--${namespace}-*`, 'initial', '  ')),
     ...semanticDeclarations(set, 'light', '  '),
+    ...Object.entries(FONT_FAMILIES).map(([name, value]) =>
+      declaration(`--font-${name}`, value, '  '),
+    ),
+    ...Object.entries(TYPE_SCALE).flatMap(([name, step]) => [
+      declaration(`--text-${name}`, step.size, '  '),
+      declaration(`--text-${name}--line-height`, step.lineHeight, '  '),
+    ]),
+    ...Object.entries(RADIUS_SCALE).map(([name, value]) =>
+      declaration(`--radius-${name}`, value, '  '),
+    ),
     // The only shadow: under glass, to separate it from the moving viewport.
     declaration('--shadow-glass', GLASS_SHADOW, '  '),
+    declaration('--ease-standard', MOTION.easeStandard, '  '),
   ]);
 
   const systemDark = block('@media (prefers-color-scheme: dark)', [

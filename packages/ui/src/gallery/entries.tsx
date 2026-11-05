@@ -90,6 +90,78 @@ function PairingSheet(): ReactNode {
   );
 }
 
+/** Static class names per type step, so Tailwind generates each one. */
+const TYPE_SAMPLES = [
+  { name: 'micro', className: 'text-micro' },
+  { name: 'caption', className: 'text-caption' },
+  { name: 'body', className: 'text-body' },
+  { name: 'lead', className: 'text-lead' },
+  { name: 'title', className: 'text-title' },
+  { name: 'headline', className: 'text-headline' },
+] as const;
+
+const RADIUS_SAMPLES = [
+  { name: 'chip', className: 'rounded-chip' },
+  { name: 'control', className: 'rounded-control' },
+  { name: 'frame', className: 'rounded-frame' },
+  { name: 'full', className: 'rounded-full' },
+] as const;
+
+function TypeShapeMotionSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <span className="type-label text-ink-2">Mission</span>
+        <span className="type-display text-ink">00:42</span>
+        <p className="type-body text-ink">
+          Compare the return policies of three outdoor-gear stores and cite each one.
+        </p>
+        <p className="type-agent" data-voice="agent">
+          understood: three stores, the return window and restocking fee, each with a citation.
+        </p>
+        <p className="type-engine text-ink" data-voice="engine">
+          browser_fill_form #07 A6
+        </p>
+      </div>
+      <ul className="flex flex-col gap-1">
+        {TYPE_SAMPLES.map((sample) => (
+          <li key={sample.name} className={`text-ink ${sample.className}`}>
+            {sample.name}: Evidence before eloquence
+          </li>
+        ))}
+      </ul>
+      <ul className="flex items-end gap-4">
+        {RADIUS_SAMPLES.map((sample) => (
+          <li key={sample.name} className="flex flex-col items-center gap-1">
+            <span
+              aria-hidden="true"
+              className={`block size-12 border border-rule-strong bg-sunken ${sample.className}`}
+            />
+            <span className="type-engine text-ink-2">{sample.name}</span>
+          </li>
+        ))}
+        <li className="flex flex-col items-center gap-1">
+          {/* A banned default: the class compiles to nothing (spec S1). */}
+          <span
+            aria-hidden="true"
+            data-banned-radius
+            className="block size-12 rounded-2xl border border-rule-strong bg-sunken"
+          />
+          <span className="type-engine text-ink-2">2xl (none)</span>
+        </li>
+      </ul>
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          data-motion-loop
+          className="gallery-motion-loop block size-3 rounded-full bg-accent"
+        />
+        <span className="text-ink-2">A loop that reduced motion stops</span>
+      </div>
+    </div>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -148,6 +220,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Glass and Solid surfaces',
     primitive: null,
     render: () => <GlassSheet />,
+    interactive: false,
+  },
+  {
+    id: 'tokens-type-shape-motion',
+    title: 'Type, shape and motion',
+    primitive: null,
+    render: () => <TypeShapeMotionSheet />,
     interactive: false,
   },
 ];

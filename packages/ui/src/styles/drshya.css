@@ -6,7 +6,78 @@
  */
 
 @import 'tailwindcss';
+/* Self-hosted fonts (no third-party requests): Archivo with its width axis, normal and italic, and Martian Mono's width axis. */
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/archivo/wdth-italic.css';
+@import '@fontsource-variable/martian-mono/wdth.css';
 @import './theme.generated.css';
+
+/* Three voices (brainstorm rule 3): the user in plain sans, the agent in italic, the engine in mono. */
+@utility type-label {
+  font-family: var(--font-sans);
+  font-stretch: 125%;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+}
+
+@utility type-display {
+  font-family: var(--font-sans);
+  font-stretch: 112.5%;
+  font-weight: 650;
+  font-size: var(--text-display);
+  line-height: var(--text-display--line-height);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility type-body {
+  font-family: var(--font-sans);
+  font-stretch: 100%;
+  font-weight: 400;
+}
+
+@utility type-agent {
+  font-family: var(--font-sans);
+  font-stretch: 100%;
+  font-style: italic;
+  color: var(--color-ink-2);
+}
+
+@utility type-engine {
+  font-family: var(--font-mono);
+  font-stretch: 87.5%;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Reduced motion stops every loop: durations collapse to zero, any animation
+ * runs once and instantly, and view transitions do not animate.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme] {
+    --duration-quick: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
 
 /*
  * `dark:` follows the resolved theme: an explicit data-theme="dark" on any

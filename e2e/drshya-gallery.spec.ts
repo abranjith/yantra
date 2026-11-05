@@ -296,6 +296,75 @@ describe('@no-llm Drshya gallery', () => {
     );
   });
 
+  describe('type, shape and motion', () => {
+    interface TypeEvidence {
+      readonly loadedFamilies: string[];
+      readonly engineFamily: string;
+      readonly engineStretch: string;
+      readonly loopIterations: string;
+      readonly bannedRadius: string;
+      readonly frameRadius: string;
+    }
+
+    let evidence: TypeEvidence;
+    let pageEvidence: PageEvidence;
+
+    beforeAll(async () => {
+      const opened = await openGallery(
+        browser,
+        server.origin,
+        stateSearch({ entry: 'tokens-type-shape-motion', theme: 'light', surfaces: 'glass' }),
+      );
+      try {
+        evidence = await opened.page.evaluate(() => {
+          const style = (selector: string) => {
+            const element = document.querySelector(selector);
+            if (element === null) {
+              throw new Error(`missing ${selector}`);
+            }
+            return getComputedStyle(element);
+          };
+          return {
+            loadedFamilies: [...document.fonts]
+              .filter((face) => face.status === 'loaded')
+              .map((face) => face.family.replaceAll('"', '')),
+            engineFamily: style('[data-voice="engine"]').fontFamily,
+            engineStretch: style('[data-voice="engine"]').fontStretch,
+            loopIterations: style('[data-motion-loop]').animationIterationCount,
+            bannedRadius: style('[data-banned-radius]').borderTopLeftRadius,
+            frameRadius: style('.rounded-frame').borderTopLeftRadius,
+          };
+        });
+        pageEvidence = await opened.evidence();
+      } finally {
+        await opened.page.close();
+      }
+    }, STATE_TIMEOUT);
+
+    it('loads both self-hosted families from the gallery origin', () => {
+      expect(new Set(evidence.loadedFamilies)).toEqual(
+        new Set(['Archivo Variable', 'Martian Mono Variable']),
+      );
+      const fontRequests = pageEvidence.requests.filter((url) => url.endsWith('.woff2'));
+      expect(fontRequests.length).toBeGreaterThan(0);
+      expect(foreignRequests(pageEvidence, server.origin)).toEqual([]);
+    });
+
+    it('sets the engine voice in Martian Mono at 87.5% width', () => {
+      expect(evidence.engineFamily.startsWith('"Martian Mono Variable"')).toBe(true);
+      expect(evidence.engineStretch).toBe('87.5%');
+    });
+
+    it('runs a loop once under reduced motion', () => {
+      expect(evidence.loopIterations).toBe('1');
+    });
+
+    it('compiles rounded-2xl to nothing while Drshya radii apply', () => {
+      expect(evidence.bannedRadius).toBe('0px');
+      expect(evidence.frameRadius).toBe('14px');
+    });
+  });
+
   describe('system theme', () => {
     const entry = GALLERY_ENTRIES[0]?.id ?? 'tokens-colors';
 

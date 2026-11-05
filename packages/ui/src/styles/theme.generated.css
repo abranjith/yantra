@@ -33,11 +33,22 @@
   --glass-blur: 20px;
   --glass-saturate: 1.5;
   --glass-noise-alpha: 0.03;
+  --duration-quick: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
 }
 
 /* Semantic tier: Tailwind generates utilities from these. Light values. */
 @theme {
   --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --animate-*: initial;
+  --ease-*: initial;
   --color-bg: var(--drshya-fog-05);
   --color-surface: var(--drshya-fog-00);
   --color-sunken: var(--drshya-fog-10);
@@ -61,7 +72,28 @@
   --color-glass-tint: var(--drshya-fog-00);
   --color-glass-edge: var(--drshya-fog-20);
   --color-glass-spec: var(--drshya-fog-00);
+  --font-sans: "Archivo Variable", system-ui, sans-serif;
+  --font-mono: "Martian Mono Variable", ui-monospace, monospace;
+  --text-micro: 0.72rem;
+  --text-micro--line-height: 1.4;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.4;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5;
+  --text-lead: 1.125rem;
+  --text-lead--line-height: 1.5;
+  --text-title: 1.5rem;
+  --text-title--line-height: 1.25;
+  --text-headline: 2.25rem;
+  --text-headline--line-height: 1.15;
+  --text-display: clamp(2.25rem, 1rem + 4vw, 4.1rem);
+  --text-display--line-height: 1.05;
+  --radius-chip: 4px;
+  --radius-control: 8px;
+  --radius-frame: 14px;
+  --radius-full: 9999px;
   --shadow-glass: 0 1px 2px oklch(0 0 0 / 0.12), 0 8px 24px oklch(0 0 0 / 0.16);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Dark theme following the OS, unless data-theme pins light. */
