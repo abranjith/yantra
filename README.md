@@ -13,6 +13,7 @@ This repository is a private, unpublished `0.0.1` pnpm workspace. There is no ve
 - `@yantra/protocol` defines the shared Zod contracts and generates TypeScript types, JSON Schema, and the protocol reference.
 - `@yantra/core` provides the provider-independent browser, workflow, research, policy, persistence, scheduling, and diagnostics engines.
 - `@yantra/agent` composes core services for governed model-driven execution and confines provider-SDK integration to its adapter seam.
+- `@yantra/ui` is Drshya, the design system for the Yantra app: OKLCH tokens on Tailwind v4, a semantic icon registry, and accessible React Aria primitives (browser code; protocol types only).
 - `@yantra/test-helpers` supplies shared fixtures and no-LLM/provider test-tag plumbing.
 - `@yantra/cli` is the executable composition root for commands, configuration, output rendering, and exit-code mapping.
 

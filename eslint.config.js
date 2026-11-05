@@ -29,6 +29,48 @@ const SITE_SPECIFIC_LOGIC_MESSAGE =
   'A site name may appear in a comment as evidence for a general rule, never in a value the ' +
   'code evaluates. See .spec-lite/memory.md -> General.';
 
+const UI_DEPENDENCY_DIRECTION =
+  'see plan_ui.md §8 "Dependency direction": packages/ui depends on @yantra/protocol for types ' +
+  'only, and never imports core, agent or Node built-ins.';
+
+/**
+ * Import restrictions for Drshya (`packages/ui`) browser code.
+ *
+ * One exported value because flat config *replaces* a rule's options for
+ * matching files: any later block that touches
+ * `@typescript-eslint/no-restricted-imports` for these files (the icon
+ * registry override) must restate every pattern from here, never a subset
+ * written out by hand.
+ */
+export const UI_IMPORT_RESTRICTIONS = {
+  patterns: [
+    {
+      group: ['node:*', 'node:*/**'],
+      message: `Drshya is browser code and must not import Node built-ins (${UI_DEPENDENCY_DIRECTION})`,
+    },
+    {
+      group: [
+        '@yantra/core',
+        '@yantra/core/*',
+        '@yantra/agent',
+        '@yantra/agent/*',
+        '@yantra/cli',
+        '@yantra/cli/*',
+      ],
+      message: `Drshya must not import Yantra engine packages (${UI_DEPENDENCY_DIRECTION})`,
+    },
+    {
+      group: ['@earendil-works/*'],
+      message: `Drshya must not import the agent provider SDK (${UI_DEPENDENCY_DIRECTION})`,
+    },
+    {
+      group: ['@yantra/protocol', '@yantra/protocol/*'],
+      allowTypeImports: true,
+      message: `Drshya may import @yantra/protocol with \`import type\` only (${UI_DEPENDENCY_DIRECTION})`,
+    },
+  ],
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -82,7 +124,7 @@ export default tseslint.config(
 
   // Vitest plugin for spec files.
   {
-    files: ['**/*.spec.ts'],
+    files: ['**/*.spec.ts', '**/*.spec.tsx'],
     plugins: { vitest: vitestPlugin },
     rules: {
       ...vitestPlugin.configs.recommended.rules,
@@ -195,7 +237,12 @@ export default tseslint.config(
   // general defect is valuable evidence. What is forbidden is a site name the
   // code can evaluate — a literal, a template chunk, a lookup key.
   {
-    files: ['packages/*/src/**/*.ts', 'apps/*/src/**/*.ts'],
+    files: [
+      'packages/*/src/**/*.ts',
+      'apps/*/src/**/*.ts',
+      'packages/*/src/**/*.tsx',
+      'apps/*/src/**/*.tsx',
+    ],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -211,10 +258,21 @@ export default tseslint.config(
     },
   },
 
+  // Drshya import boundary (plan_ui.md §8 "Dependency direction"): browser
+  // code takes protocol types only, and nothing from core, agent, the provider
+  // SDK or Node.
+  {
+    files: ['packages/ui/src/**/*.{ts,tsx}'],
+    rules: {
+      'import/no-nodejs-modules': 'error',
+      '@typescript-eslint/no-restricted-imports': ['error', UI_IMPORT_RESTRICTIONS],
+    },
+  },
+
   // Lint fixture files: they intentionally violate boundaries.
   // Excluded from build configs and only loaded by the boundary spec.
   {
-    files: ['**/_lint-fixtures/**/*.ts'],
+    files: ['**/_lint-fixtures/**/*.{ts,tsx}'],
     ...tseslint.configs.disableTypeChecked,
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
@@ -299,6 +357,20 @@ export default tseslint.config(
   {
     ...tseslint.configs.disableTypeChecked,
     files: ['packages/core/tests/**/*.ts'],
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+
+  // Drshya tests, the gallery dev page and the token script are outside the
+  // package's source project; `tsconfig.tests.json` typechecks them instead.
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: [
+      'packages/ui/tests/**/*.{ts,tsx}',
+      'packages/ui/gallery/**/*.{ts,tsx}',
+      'packages/ui/scripts/**/*.ts',
+    ],
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
     },
