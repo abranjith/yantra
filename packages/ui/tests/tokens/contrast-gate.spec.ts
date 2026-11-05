@@ -4,6 +4,7 @@ import { contrastRatio, oklch, oklchToSrgb, type Oklch } from '../../src/tokens/
 import {
   DRSHYA_TOKENS,
   emitThemeCss,
+  pairingRatio,
   resolveRgb,
   validateTokens,
   type TokenSet,
@@ -64,10 +65,7 @@ describe('@no-llm Drshya contrast gate', () => {
       pairing.themes
         .map((theme) => ({
           label: `${pairing.fg}/${pairing.bg} (${theme})`,
-          ratio: contrastRatio(
-            resolveRgb(DRSHYA_TOKENS, pairing.fg, theme),
-            resolveRgb(DRSHYA_TOKENS, pairing.bg, theme),
-          ),
+          ratio: pairingRatio(DRSHYA_TOKENS, pairing, theme) ?? 0,
           required: MINIMUM_CONTRAST[pairing.kind],
         }))
         .filter((result) => result.ratio < result.required),

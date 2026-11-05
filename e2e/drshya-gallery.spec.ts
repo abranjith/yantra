@@ -11,9 +11,21 @@
  * Deliberately ungated: a missing Chrome fails with a remediation.
  */
 
-import { PRIMITIVES, type Oklch } from '@yantra/ui';
+import {
+  BLACK,
+  DRSHYA_TOKENS,
+  GLASS_SPEC,
+  PRIMITIVES,
+  WHITE,
+  compositeOver,
+  resolveGlassAlpha,
+  resolveRgb,
+  type Oklch,
+  type Rgb,
+} from '@yantra/ui';
 import { GALLERY_ENTRIES } from '@yantra/ui/gallery';
-import type { Browser } from 'puppeteer-core';
+import { PNG } from 'pngjs';
+import type { Browser, Page } from 'puppeteer-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { launchGalleryBrowser } from './drshya/browser.js';
@@ -142,6 +154,147 @@ describe('@no-llm Drshya gallery', () => {
       }
     }
   }
+
+  describe('glass and solid surfaces', () => {
+    const WINDOW = 64;
+    const INSET = 16;
+    const CHANNEL_TOLERANCE = 3 / 255;
+
+    /** Mean RGB (0..1) of a 64 px window in the empty lower right of a panel. */
+    async function sampleTint(page: Page, backdrop: string): Promise<Rgb> {
+      const panel = await page.$(`[data-glass-backdrop="${backdrop}"] [data-glass-panel]`);
+      const box = await panel?.boundingBox();
+      if (box === null || box === undefined) {
+        throw new Error(`no glass panel over ${backdrop}`);
+      }
+      const png = PNG.sync.read(
+        Buffer.from(
+          await page.screenshot({
+            type: 'png',
+            clip: {
+              x: Math.round(box.x + box.width - INSET - WINDOW),
+              y: Math.round(box.y + box.height - INSET - WINDOW),
+              width: WINDOW,
+              height: WINDOW,
+            },
+          }),
+        ),
+      );
+      const sums = [0, 0, 0];
+      for (let pixel = 0; pixel < WINDOW * WINDOW; pixel += 1) {
+        for (const channel of [0, 1, 2] as const) {
+          sums[channel] = (sums[channel] ?? 0) + (png.data[pixel * 4 + channel] ?? 0);
+        }
+      }
+      const mean = (channel: 0 | 1 | 2) => (sums[channel] ?? 0) / (WINDOW * WINDOW * 255);
+      return [mean(0), mean(1), mean(2)];
+    }
+
+    async function surfaceStyle(
+      surfaces: 'glass' | 'solid',
+      media: readonly { name: string; value: string }[] = [],
+    ): Promise<{ backdropFilter: string; background: string; surface: string }> {
+      const opened = await openGallery(
+        browser,
+        server.origin,
+        stateSearch({ entry: 'surfaces-glass', theme: 'light', surfaces }),
+        { media },
+      );
+      try {
+        return await opened.page.$eval('[data-glass-panel]', (panel) => {
+          const probe = document.createElement('div');
+          probe.style.setProperty('background-color', 'var(--color-surface)');
+          panel.append(probe);
+          const surface = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          const style = getComputedStyle(panel);
+          return {
+            backdropFilter: style.backdropFilter,
+            background: style.backgroundColor,
+            surface,
+          };
+        });
+      } finally {
+        await opened.page.close();
+      }
+    }
+
+    for (const theme of THEMES) {
+      it(
+        `composites the ${theme} tint exactly as the S3 model predicts, over black and white`,
+        async () => {
+          const opened = await openGallery(
+            browser,
+            server.origin,
+            stateSearch({ entry: 'surfaces-glass', theme, surfaces: 'glass' }),
+          );
+          try {
+            const tint = resolveRgb(DRSHYA_TOKENS, 'glass-tint', theme);
+            const alpha = resolveGlassAlpha(DRSHYA_TOKENS, theme);
+            const noise = GLASS_SPEC.noiseAlpha;
+            const offBy: string[] = [];
+            for (const [backdrop, color] of [
+              ['black', BLACK],
+              ['white', WHITE],
+            ] as const) {
+              const base = compositeOver(tint, alpha, color);
+              // The noise tile is half black, half white: over one full period
+              // its mean shifts the base by noise * (0.5 - base).
+              const expected = base.map((value) => value + noise * (0.5 - value));
+              const actual = await sampleTint(opened.page, backdrop);
+              actual.forEach((value, channel) => {
+                const delta = Math.abs(value - (expected[channel] ?? Number.NaN));
+                if (delta > CHANNEL_TOLERANCE) {
+                  offBy.push(
+                    `${backdrop} channel ${String(channel)}: ${(delta * 255).toFixed(2)}/255`,
+                  );
+                }
+              });
+            }
+            expect(offBy).toEqual([]);
+          } finally {
+            await opened.page.close();
+          }
+        },
+        STATE_TIMEOUT,
+      );
+    }
+
+    it(
+      'renders glass translucent with a backdrop filter in Glass mode',
+      async () => {
+        const style = await surfaceStyle('glass');
+
+        expect(style.backdropFilter).not.toBe('none');
+        expect(style.background).not.toBe(style.surface);
+      },
+      STATE_TIMEOUT,
+    );
+
+    it(
+      'swaps glass for the opaque surface under data-surfaces="solid"',
+      async () => {
+        const style = await surfaceStyle('solid');
+
+        expect(style.backdropFilter).toBe('none');
+        expect(style.background).toBe(style.surface);
+      },
+      STATE_TIMEOUT,
+    );
+
+    it(
+      'swaps glass for the opaque surface when the OS asks for reduced transparency',
+      async () => {
+        const style = await surfaceStyle('glass', [
+          { name: 'prefers-reduced-transparency', value: 'reduce' },
+        ]);
+
+        expect(style.backdropFilter).toBe('none');
+        expect(style.background).toBe(style.surface);
+      },
+      STATE_TIMEOUT,
+    );
+  });
 
   describe('system theme', () => {
     const entry = GALLERY_ENTRIES[0]?.id ?? 'tokens-colors';

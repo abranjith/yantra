@@ -7,8 +7,7 @@
 
 import type { ReactNode } from 'react';
 
-import { contrastRatio } from '../tokens/color-math.js';
-import { DRSHYA_TOKENS, resolveRgb } from '../tokens/emit.js';
+import { DRSHYA_TOKENS, pairingRatio } from '../tokens/emit.js';
 import { CONTRAST_PAIRINGS, type ContrastPairing } from '../tokens/pairings.js';
 import { THEMES } from '../tokens/palette.js';
 import { SEMANTIC_COLOR_NAMES } from '../tokens/semantic.js';
@@ -28,12 +27,14 @@ export interface GalleryEntry {
 
 function ratioLabel(pairing: ContrastPairing): string {
   return THEMES.map((theme) => {
-    const ratio = contrastRatio(
-      resolveRgb(DRSHYA_TOKENS, pairing.fg, theme),
-      resolveRgb(DRSHYA_TOKENS, pairing.bg, theme),
-    );
-    return `${theme} ${ratio.toFixed(2)}`;
+    const ratio = pairingRatio(DRSHYA_TOKENS, pairing, theme);
+    return `${theme} ${ratio === null ? 'n/a' : ratio.toFixed(2)}`;
   }).join(' · ');
+}
+
+/** The class that paints a pairing's background; glass pairings sit on real glass. */
+function backgroundClass(pairing: ContrastPairing): string {
+  return pairing.bg === 'glass' ? 'glass' : BG_CLASS[pairing.bg];
 }
 
 function ColorSheet(): ReactNode {
@@ -56,7 +57,9 @@ function PairingSample({ pairing }: { readonly pairing: ContrastPairing }): Reac
   const label = `${pairing.fg} on ${pairing.bg}`;
   if (pairing.kind === 'text') {
     return (
-      <li className={`flex items-baseline justify-between gap-4 px-3 py-2 ${BG_CLASS[pairing.bg]}`}>
+      <li
+        className={`flex items-baseline justify-between gap-4 px-3 py-2 ${backgroundClass(pairing)}`}
+      >
         <span className={TEXT_CLASS[pairing.fg]}>{label}</span>
         <span className={`type-engine ${TEXT_CLASS[pairing.fg]}`}>{ratioLabel(pairing)}</span>
       </li>
@@ -64,7 +67,7 @@ function PairingSample({ pairing }: { readonly pairing: ContrastPairing }): Reac
   }
   // Non-text pairings are shown as the graphic they govern, labelled in ink.
   return (
-    <li className={`flex items-center justify-between gap-4 px-3 py-2 ${BG_CLASS[pairing.bg]}`}>
+    <li className={`flex items-center justify-between gap-4 px-3 py-2 ${backgroundClass(pairing)}`}>
       <span className="flex items-center gap-2 text-ink">
         <span
           aria-hidden="true"
@@ -87,6 +90,43 @@ function PairingSheet(): ReactNode {
   );
 }
 
+const GLASS_BACKDROPS = [
+  { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
+  { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
+  { id: 'stripes', label: 'Over stripes', className: 'gallery-backdrop-stripes' },
+] as const;
+
+/**
+ * A glass panel over the two analytic extremes and a busy pattern. The lower
+ * right of each panel stays empty: the harness samples the tint there, over a
+ * 64 px window that holds exactly one period of the noise tile.
+ */
+function GlassSheet(): ReactNode {
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      {GLASS_BACKDROPS.map((backdrop) => (
+        <div
+          key={backdrop.id}
+          data-glass-backdrop={backdrop.id}
+          className={`p-10 ${backdrop.className}`}
+        >
+          <div data-glass-panel className="glass flex h-56 flex-col gap-2 rounded-frame p-4">
+            <p className="text-ink">{backdrop.label}: ink</p>
+            <p className="text-ink-2">Secondary ink on glass</p>
+            <span className="flex items-center gap-2 text-ink-2">
+              <span
+                aria-hidden="true"
+                className="inline-block size-3 rounded-full bg-accent outline-2 outline-offset-2 outline-accent"
+              />
+              Ion as a graphic only
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The gallery's entries, in display order. */
 export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -101,6 +141,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Contrast pairings',
     primitive: null,
     render: () => <PairingSheet />,
+    interactive: false,
+  },
+  {
+    id: 'surfaces-glass',
+    title: 'Glass and Solid surfaces',
+    primitive: null,
+    render: () => <GlassSheet />,
     interactive: false,
   },
 ];

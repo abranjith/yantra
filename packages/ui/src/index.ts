@@ -34,7 +34,22 @@ export {
   type Rgb,
   type SrgbConversion,
 } from './tokens/color-math.js';
+export {
+  DRSHYA_TOKENS,
+  computeGlassFloor,
+  resolveGlassAlpha,
+  resolveRgb,
+  type GlassFloor,
+  type TokenSet,
+} from './tokens/emit.js';
 export { TokenContractError, type TokenFailure } from './tokens/errors.js';
+export {
+  GLASS_SPEC,
+  GLASS_TEXT_FLOOR_CAP,
+  GLASS_TEXT_TOKENS,
+  minimumScrimAlpha,
+  type GlassSpec,
+} from './tokens/glass.js';
 export {
   PRIMITIVES,
   THEMES,

@@ -28,7 +28,9 @@ describe('@no-llm Drshya theme CSS', () => {
       expect(propertyNames(root)).toContain(`--drshya-${primitive.name}`);
     }
     expect(theme).not.toMatch(/--color-(fog|ion|jade|amber|crimson|rani)\b/u);
-    expect(propertyNames(theme).every((name) => name.startsWith('--color-'))).toBe(true);
+    expect(propertyNames(theme).filter((name) => !name.startsWith('--color-'))).toEqual([
+      '--shadow-glass',
+    ]);
   });
 
   it('clears the default color namespace so no Tailwind palette utility exists', () => {

@@ -5,14 +5,19 @@
  * with a `TokenContractError` (spec §2, TASK-002).
  */
 
+import { GLASS_TEXT_TOKENS } from './glass.js';
 import { THEMES, type Theme } from './palette.js';
 import type { SemanticColor } from './semantic.js';
 
 /** `text` needs 4.5:1; `non-text` (glyphs, fills, rings, boundaries) needs 3:1. */
 export type PairingKind = 'text' | 'non-text';
 
-/** What a foreground sits on. */
-export type PairingBackground = SemanticColor;
+/**
+ * What a foreground sits on: a semantic color, or `'glass'` — the glass
+ * composite at the shipped tint opacity over pure black and pure white, with
+ * the noise shift (spec S3).
+ */
+export type PairingBackground = SemanticColor | 'glass';
 
 export interface ContrastPairing {
   readonly fg: SemanticColor;
@@ -71,4 +76,5 @@ export const CONTRAST_PAIRINGS: readonly ContrastPairing[] = [
   ...each([...SIGNAL_GRAPHICS, 'field-edge'], SOLID_SURFACES, 'non-text'),
   // The focus ring.
   ...each(['accent'], ['bg', 'surface'], 'non-text'),
+  ...each(GLASS_TEXT_TOKENS, ['glass'], 'text'),
 ];

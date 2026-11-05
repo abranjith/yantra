@@ -1,0 +1,19 @@
+/*
+ * Gallery-only fixtures: deterministic backdrops for the glass sheet. Import
+ * after Drshya wherever the gallery is mounted (`@yantra/ui/gallery.css`).
+ * Literal colors are allowed here because these are test backdrops, not
+ * design tokens.
+ */
+
+.gallery-backdrop-black {
+  background-color: #000;
+}
+
+.gallery-backdrop-white {
+  background-color: #fff;
+}
+
+.gallery-backdrop-stripes {
+  background-image: url('./assets/backdrop-stripes.png');
+  background-repeat: repeat;
+}

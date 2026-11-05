@@ -21,43 +21,43 @@
     },
     {
       "path": "e2e/drshya-gallery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/browser.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/capture.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/gallery-server.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/gallery-server.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/visual.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "e2e/drshya/visual.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -87,25 +87,25 @@
     },
     {
       "path": "packages/ui/gallery/gallery.css",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/gallery/index.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/gallery/main.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/gallery/vite.config.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -147,31 +147,43 @@
     },
     {
       "path": "packages/ui/src/appearance.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
-      "path": "packages/ui/src/gallery/classes.ts",
+      "path": "packages/ui/src/gallery/assets/backdrop-stripes.png",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/gallery/classes.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/src/gallery/entries.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
-      "path": "packages/ui/src/gallery/Gallery.tsx",
+      "path": "packages/ui/src/gallery/gallery.css",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/gallery/Gallery.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/src/gallery/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -180,6 +192,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/styles/assets/glass-noise.png",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/src/styles/drshya.css",
@@ -212,6 +230,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/ui/src/tokens/glass.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/ui/src/tokens/pairings.ts",
       "status": "A",
       "role": "implement",
@@ -231,7 +255,7 @@
     },
     {
       "path": "packages/ui/tests/appearance.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -243,7 +267,7 @@
     },
     {
       "path": "packages/ui/tests/gallery/gallery.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -282,6 +306,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/tokens/glass.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/tests/tokens/theme-css.spec.ts",

@@ -1,3 +1,4 @@
-/* The gallery page: Drshya plus this directory's own markup (index.html). */
+/* The gallery page: Drshya, the gallery's fixtures, and this directory's markup. */
 @import '../src/styles/drshya.css';
+@import '../src/gallery/gallery.css';
 @source './';

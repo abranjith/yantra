@@ -113,6 +113,9 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - **axe injection.** `page.addScriptTag({ path })` adds an inline `<script>`, which `default-src 'self'` blocks. The harness evaluates axe's source with `page.evaluate` (`Runtime.evaluate`), which CSP does not govern, after it has collected the CSP evidence.
 - **Theme selectors.** The explicit theme blocks are `[data-theme="dark"]` and `[data-theme="light"]` rather than `:root[...]`, so any subtree can carry the appearance. The gallery wrapper needs this. The OS block stays `:root:not([data-theme="light"])`.
 - **Linux baselines are bootstrapped by CI.** The baselines could not be produced on the implementing Windows machine. The first Linux CI run fails the pixel step and uploads `e2e/drshya/.out/`, and those images are committed as `e2e/drshya/baselines/linux/` (S6 flow).
+- **Glass numbers after D4.** The shipped `--glass-alpha` is 0.775 (light) and 0.8 (dark), set by `ink-2`, as the pre-check predicted. D4 lowered `accent-ink`'s chroma, which moves its light glass floor from 0.945 to 0.925. That is still above the 0.85 cap, so it stays off glass, and TASK-004's test asserts 0.925.
+- **Glass verification without disabling noise.** The noise tile is exactly half black and half white with a 64 px period, so any 64×64 window averages to `base + noise·(0.5 − base)`. The harness checks that mean against the S3 model to ±3/255 over black and white in both themes. `prefers-reduced-transparency` is emulated through CDP `Emulation.setEmulatedMedia`, because puppeteer's `emulateMediaFeatures` rejects that feature.
+- **Gallery fixtures stylesheet.** The black, white and stripe backdrops live in `src/gallery/gallery.css`, exported as `@yantra/ui/gallery.css`. FEAT-065 imports it next to `drshya.css` wherever it mounts the gallery.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -830,7 +833,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-001: `@yantra/ui` package, dependency gate, workspace wiring, import-boundary lint
 - [x] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
 - [x] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
-- [ ] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
+- [x] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
 - [ ] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
 - [ ] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
 - [ ] TASK-007: Semantic icon registry, six glyphs, Lucide import lint

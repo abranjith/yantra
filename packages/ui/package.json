@@ -16,6 +16,7 @@
       "import": "./dist/index.js"
     },
     "./drshya.css": "./src/styles/drshya.css",
+    "./gallery.css": "./src/gallery/gallery.css",
     "./gallery": {
       "types": "./dist/gallery/index.d.ts",
       "import": "./dist/gallery/index.js"
@@ -23,7 +24,9 @@
   },
   "files": [
     "dist",
-    "src/styles"
+    "src/styles",
+    "src/gallery/gallery.css",
+    "src/gallery/assets"
   ],
   "scripts": {
     "build": "tsx scripts/emit-tokens.ts --check && tsc -b tsconfig.build.json && vite build --config gallery/vite.config.ts",

@@ -100,10 +100,12 @@ export async function openGallery(
       });
     });
   });
-  await page.emulateMediaFeatures([
-    { name: 'prefers-reduced-motion', value: 'reduce' },
-    ...(options.media ?? []),
-  ]);
+  // CDP directly: puppeteer's emulateMediaFeatures rejects
+  // prefers-reduced-transparency, which Solid mode must honor.
+  const cdp = await page.createCDPSession();
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, ...(options.media ?? [])],
+  });
   await page.goto(`${origin}/index.html${search}`, { waitUntil: 'load' });
   await page.waitForSelector('[data-gallery-ready]', { timeout: 15_000 });
 
