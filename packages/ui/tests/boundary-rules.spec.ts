@@ -3,12 +3,36 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ESLint, type Linter } from 'eslint';
+import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = 'packages/ui/src/_lint-fixtures';
 
 const eslint = new ESLint({ cwd: repoRoot, ignore: false });
+
+/**
+ * For in-memory snippets at paths no TS project contains (src/tokens probes,
+ * apps/web before FEAT-065 creates it): the same config, minus type-aware
+ * parsing, so the per-path rule blocks still decide what applies.
+ */
+const untypedEslint = new ESLint({
+  cwd: repoRoot,
+  ignore: false,
+  overrideConfig: tseslint.configs.disableTypeChecked,
+});
+
+async function lintSnippet(path: string, code: string): Promise<string[]> {
+  const results = await untypedEslint.lintText(code, { filePath: resolve(repoRoot, path) });
+  const messages = results.flatMap((result) => result.messages);
+  const fatal = messages.filter((message) => message.fatal === true);
+  if (fatal.length > 0) {
+    throw new Error(
+      `could not parse ${path}: ${fatal.map((message) => message.message).join('; ')}`,
+    );
+  }
+  return byRule(messages, 'no-restricted-syntax').map((message) => message.message);
+}
 
 async function lintFixture(name: string): Promise<Linter.LintMessage[]> {
   const results = await eslint.lintFiles([resolve(repoRoot, fixtureDir, name)]);
@@ -94,6 +118,94 @@ describe('@no-llm Drshya lint boundary rules', () => {
 
     expect(restricted.map((message) => message.line)).toEqual([1, 2, 3, 4]);
   }, 60_000);
+
+  describe('Drshya styling (TASK-006)', () => {
+    const styleViolations = async (name: string) =>
+      byRule(await lintFixture(name), 'no-restricted-syntax').map((message) => ({
+        line: message.line,
+        message: message.message,
+      }));
+
+    it('rejects raw palette utilities, with variants, primitives and opacity', async () => {
+      const violations = await styleViolations('raw-palette.tsx');
+
+      expect(violations.map((violation) => violation.line)).toEqual([3, 4, 5, 6]);
+      expect(
+        violations.every((violation) => violation.message.startsWith('Raw palette utility')),
+      ).toBe(true);
+      expect(violations[0]?.message).toContain('plan_ui.md §9');
+    }, 60_000);
+
+    it('rejects arbitrary color values', async () => {
+      const violations = await styleViolations('arbitrary-color.tsx');
+      const arbitrary = violations.filter((violation) =>
+        violation.message.startsWith('Arbitrary color value'),
+      );
+
+      expect(arbitrary.map((violation) => violation.line)).toEqual([2, 3]);
+    }, 60_000);
+
+    it('rejects hex and color-function literals', async () => {
+      const violations = await styleViolations('color-literal.tsx');
+
+      expect(violations.map((violation) => violation.line)).toEqual([2, 3]);
+      expect(violations.every((violation) => violation.message.startsWith('Color literal'))).toBe(
+        true,
+      );
+    }, 60_000);
+
+    it('rejects inline style properties that are not custom properties', async () => {
+      const violations = await styleViolations('inline-style.tsx');
+
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.line).toBe(2);
+      expect(violations[0]?.message).toContain('Inline style');
+    }, 60_000);
+
+    it('rejects dangerouslySetInnerHTML', async () => {
+      const violations = await styleViolations('inner-html.tsx');
+
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.message).toContain('dangerouslySetInnerHTML is forbidden');
+    }, 60_000);
+
+    it('still enforces the site rule in packages/ui (flat config replaces, not merges)', async () => {
+      const violations = await styleViolations('site-name.tsx');
+
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.message).toContain('Website-specific logic is forbidden');
+    }, 60_000);
+
+    it('accepts semantic utilities, custom-property styles and #07-style refs', async () => {
+      expect(await lintFixture('clean.tsx')).toEqual([]);
+    }, 60_000);
+
+    it('exempts the token data directory from the style selectors only', async () => {
+      const tokenFile = 'packages/ui/src/tokens/in-memory-probe.ts';
+
+      expect(
+        await lintSnippet(tokenFile, "export const swatch = 'bg-red-500 oklch(0.5 0.1 200)';"),
+      ).toEqual([]);
+      expect(await lintSnippet(tokenFile, "export const site = 'expedia';")).toEqual([
+        expect.stringContaining('Website-specific logic is forbidden'),
+      ]);
+      expect(
+        await lintSnippet(
+          'packages/ui/src/in-memory-probe.ts',
+          "export const swatch = 'bg-red-500';",
+        ),
+      ).toEqual([expect.stringContaining('Raw palette utility')]);
+    }, 60_000);
+
+    it('applies the same rules to apps/web source', async () => {
+      expect(
+        await lintSnippet(
+          'apps/web/src/in-memory-probe.ts',
+          "export const swatch = 'text-rose-600';",
+        ),
+      ).toEqual([expect.stringContaining('Raw palette utility')]);
+    }, 60_000);
+  });
 
   it('keeps production source free of Node, core and agent imports (source scan)', () => {
     const sources = productionSources();

@@ -122,6 +122,24 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/ui/src/_lint-fixtures/arbitrary-color.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/clean.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/color-literal.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/ui/src/_lint-fixtures/imports-core.ts",
       "status": "A",
       "role": "implement",
@@ -144,6 +162,30 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/inline-style.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/inner-html.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/raw-palette.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/site-name.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/ui/src/appearance.ts",
@@ -249,7 +291,7 @@
     },
     {
       "path": "packages/ui/src/tokens/scale.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -321,7 +363,7 @@
     },
     {
       "path": "packages/ui/tests/tokens/scale.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

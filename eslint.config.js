@@ -71,6 +71,79 @@ export const UI_IMPORT_RESTRICTIONS = {
   ],
 };
 
+/** The site-name tripwire, shared by every block that sets no-restricted-syntax. */
+export const SITE_SPECIFIC_SELECTORS = [
+  {
+    selector: `Literal[value=/${SITE_TOKEN_SOURCE}/i]`,
+    message: SITE_SPECIFIC_LOGIC_MESSAGE,
+  },
+  {
+    selector: `TemplateElement[value.raw=/${SITE_TOKEN_SOURCE}/i]`,
+    message: SITE_SPECIFIC_LOGIC_MESSAGE,
+  },
+];
+
+const DRSHYA_RULE = 'See plan_ui.md §9 and .spec-lite/memory.md -> General (Drshya).';
+
+/**
+ * Utility prefixes that take a color. `border-x`, `border-t` and friends are
+ * spelled out; `(?:^|[\s:])` lets variant prefixes (`hover:`, `dark:`) match.
+ */
+const COLOR_UTILITY_PREFIX =
+  '(?:bg|text|border(?:-[xytrblse])?|ring|ring-offset|outline|fill|stroke|from|via|to|decoration|shadow|inset-shadow|drop-shadow|divide|placeholder|caret|accent)';
+
+/** Tailwind palette names and Drshya primitive ramps; none is a semantic token. */
+const PALETTE_NAME =
+  '(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white|fog|ion|jade|crimson|rani)';
+
+// esquery regex literals cannot contain "/", so the opacity slash is \u002F.
+const RAW_PALETTE_SOURCE = `(?:^|[\\s:])${COLOR_UTILITY_PREFIX}-${PALETTE_NAME}(?=$|[\\s\\u002F-])`;
+const ARBITRARY_COLOR_SOURCE = '-\\[(?:#|(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\\()';
+const HEX_COLOR_SOURCE = '^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$';
+const COLOR_FUNCTION_SOURCE = '(?:oklch|oklab|rgba?|hsla?)\\(';
+
+const RAW_PALETTE_MESSAGE = `Raw palette utility: style with Drshya semantic utilities (bg-surface, text-ink-2, border-rule), never a Tailwind palette or primitive ramp. ${DRSHYA_RULE}`;
+const ARBITRARY_COLOR_MESSAGE = `Arbitrary color value: add or use a semantic token instead of -[#…] or -[oklch(…)]. ${DRSHYA_RULE}`;
+const COLOR_LITERAL_MESSAGE = `Color literal outside the token data: colors live in packages/ui/src/tokens and reach components as semantic utilities. ${DRSHYA_RULE}`;
+const INLINE_STYLE_MESSAGE = `Inline style: only custom properties ('--progress': '40%') may be set inline; everything else is a utility. ${DRSHYA_RULE}`;
+const INNER_HTML_MESSAGE = `dangerouslySetInnerHTML is forbidden: page-derived text is untrusted and React escaping is the only renderer (plan_ui.md §3, §7). ${DRSHYA_RULE}`;
+
+/** Drshya styling selectors for packages/ui and apps/web (FEAT-061 TASK-006). */
+export const DRSHYA_STYLE_SELECTORS = [
+  { selector: `Literal[value=/${RAW_PALETTE_SOURCE}/i]`, message: RAW_PALETTE_MESSAGE },
+  { selector: `TemplateElement[value.raw=/${RAW_PALETTE_SOURCE}/i]`, message: RAW_PALETTE_MESSAGE },
+  { selector: `Literal[value=/${ARBITRARY_COLOR_SOURCE}/i]`, message: ARBITRARY_COLOR_MESSAGE },
+  {
+    selector: `TemplateElement[value.raw=/${ARBITRARY_COLOR_SOURCE}/i]`,
+    message: ARBITRARY_COLOR_MESSAGE,
+  },
+  { selector: `Literal[value=/${HEX_COLOR_SOURCE}/i]`, message: COLOR_LITERAL_MESSAGE },
+  { selector: `Literal[value=/${COLOR_FUNCTION_SOURCE}/i]`, message: COLOR_LITERAL_MESSAGE },
+  {
+    selector: `TemplateElement[value.raw=/${COLOR_FUNCTION_SOURCE}/i]`,
+    message: COLOR_LITERAL_MESSAGE,
+  },
+  {
+    selector:
+      'JSXAttribute[name.name="style"] > JSXExpressionContainer > ObjectExpression > Property[key.type="Identifier"]',
+    message: INLINE_STYLE_MESSAGE,
+  },
+  {
+    selector:
+      'JSXAttribute[name.name="style"] > JSXExpressionContainer > ObjectExpression > Property[key.type="Literal"]:not([key.value=/^--/])',
+    message: INLINE_STYLE_MESSAGE,
+  },
+  {
+    selector:
+      'JSXAttribute[name.name="style"] > JSXExpressionContainer > ObjectExpression > SpreadElement',
+    message: INLINE_STYLE_MESSAGE,
+  },
+  {
+    selector: 'JSXAttribute[name.name="dangerouslySetInnerHTML"]',
+    message: INNER_HTML_MESSAGE,
+  },
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -244,17 +317,21 @@ export default tseslint.config(
       'apps/*/src/**/*.tsx',
     ],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: `Literal[value=/${SITE_TOKEN_SOURCE}/i]`,
-          message: SITE_SPECIFIC_LOGIC_MESSAGE,
-        },
-        {
-          selector: `TemplateElement[value.raw=/${SITE_TOKEN_SOURCE}/i]`,
-          message: SITE_SPECIFIC_LOGIC_MESSAGE,
-        },
-      ],
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS],
+    },
+  },
+
+  // Drshya styling (plan_ui.md §9; memory -> General): components style only
+  // through semantic utilities. The token data directory is exempt from the
+  // style selectors (it defines the colors), but stays under the site rule
+  // through the block above. The site selectors are restated here because a
+  // later block *replaces* no-restricted-syntax options for matching files;
+  // leaving them out would silently disable the site rule in packages/ui.
+  {
+    files: ['packages/ui/src/**/*.{ts,tsx}', 'apps/web/src/**/*.{ts,tsx}'],
+    ignores: ['packages/ui/src/tokens/**'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...DRSHYA_STYLE_SELECTORS],
     },
   },
 

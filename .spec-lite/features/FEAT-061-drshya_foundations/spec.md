@@ -835,7 +835,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
 - [x] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
 - [x] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
-- [ ] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
+- [x] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
 - [ ] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
 - [ ] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
 - [ ] TASK-009: Tabs, Tooltip, Disclosure
