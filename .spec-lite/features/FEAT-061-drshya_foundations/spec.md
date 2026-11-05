@@ -133,6 +133,12 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - jsdom tests size elements (`tests/support/layout.ts`) and install a controllable `IntersectionObserver`. Without layout, the virtualizer renders all 10,000 rows and the worker runs out of heap.
 - **Focus indicator for native-input controls.** Checkbox and Switch focus React Aria's visually hidden `<input>`; the Ion ring is drawn on the visible box or track (`group-focus-visible:`), which carries `data-focus-indicator`. The harness focus walk measures that indicator when the focused element is a hidden input inside a `<label>`.
 - **Field anatomy exports.** `FieldLabel`, `FieldDescription`, `FieldErrorText` and `fieldInputStyles` are exported from the package root, not the primitives barrel. They are building blocks, not one of the 16 primitive families.
+- **Overlay decisions (TASK-013).**
+  - In React Aria 1.22, ComboBox has no `isOpen` or `defaultOpen`. Its gallery entry renders closed, and a harness test types into it to open the list, runs axe on the open listbox, and checks "No matches", in all four states.
+  - The React Aria plugin's focus variant is `focus:` (`data-focused`); `focused:` does not exist. Option rows use `focus:`.
+  - Overlay-scoped axe runs disable only `region`. React Aria's overlay root portals beside `<main>`, and landmark structure belongs to the app shell (FEAT-065).
+  - The focus walk skips programmatic focus targets (`tabIndex` −1), such as an opened dialog container. They are not Tab stops.
+  - Popover is a family of `Popover` (the glass surface Select, ComboBox and Menu share), `PopoverTrigger` and `PopoverDialog`. `Option` and the style recipes are exported from the package root.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -859,7 +865,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-010: Toast (app-owned queue, polite, no focus theft)
 - [x] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
 - [x] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
-- [ ] TASK-013 (M4): Popover, Select, ComboBox
+- [x] TASK-013 (M4): Popover, Select, ComboBox
 - [ ] TASK-014 (M4): Dialog, Menu
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

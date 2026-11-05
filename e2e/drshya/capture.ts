@@ -123,22 +123,30 @@ export async function openGallery(
 export async function runAxe(
   page: Page,
   selector: string = ENTRY_SELECTOR,
+  disabledRules: readonly string[] = [],
 ): Promise<AxeViolation[]> {
   await page.evaluate(AXE_SOURCE);
-  return page.evaluate(async (target) => {
-    const axe = window.axe;
-    const element = document.querySelector(target);
-    if (axe === undefined || element === null) {
-      throw new Error(`axe-core or ${target} is missing`);
-    }
-    const result = await axe.run(element, { resultTypes: ['violations'] });
-    return result.violations.map((violation) => ({
-      id: violation.id,
-      impact: violation.impact ?? null,
-      help: violation.help,
-      targets: violation.nodes.map((node) => node.target.join(' ')),
-    }));
-  }, selector);
+  return page.evaluate(
+    async (target, disabled) => {
+      const axe = window.axe;
+      const element = document.querySelector(target);
+      if (axe === undefined || element === null) {
+        throw new Error(`axe-core or ${target} is missing`);
+      }
+      const result = await axe.run(element, {
+        resultTypes: ['violations'],
+        rules: Object.fromEntries(disabled.map((id) => [id, { enabled: false }])),
+      });
+      return result.violations.map((violation) => ({
+        id: violation.id,
+        impact: violation.impact ?? null,
+        help: violation.help,
+        targets: violation.nodes.map((node) => node.target.join(' ')),
+      }));
+    },
+    selector,
+    [...disabledRules],
+  );
 }
 
 /** What a keyboard focus stop looked like. */
@@ -182,7 +190,9 @@ export async function walkFocus(
       if (!(active instanceof HTMLElement) || !entry?.contains(active)) {
         return null;
       }
-      if (active === document.body || active === document.documentElement) {
+      // Programmatic focus targets (an opened dialog, tabIndex -1) are not Tab
+      // stops; keep tabbing to the next real control.
+      if (active === document.body || active === document.documentElement || active.tabIndex < 0) {
         // Nothing focused yet (or focus fell back to the page): keep tabbing.
         return 'pending' as const;
       }

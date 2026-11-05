@@ -39,6 +39,7 @@ export {
 } from './primitives/field.js';
 export { checkboxBoxStyles } from './primitives/Checkbox.js';
 export { switchThumbStyles, switchTrackStyles } from './primitives/Switch.js';
+export { Option, optionStyles, popoverStyles } from './primitives/Popover.js';
 export { TOOLTIP_CLOSE_DELAY_MS, TOOLTIP_DELAY_MS } from './primitives/Tooltip.js';
 export { PRIMITIVE_FAMILIES, type PrimitiveFamily } from './primitives/families.js';
 export { Icon, ICON_STROKE_WIDTH, type IconProps, type IconSize } from './icons/Icon.js';

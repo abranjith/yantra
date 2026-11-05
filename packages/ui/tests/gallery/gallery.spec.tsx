@@ -44,10 +44,16 @@ describe('@no-llm Drshya gallery', () => {
     it.each(GALLERY_ENTRIES.map((entry) => [entry.id, entry] as const))(
       'renders %s without throwing, inside a labelled section',
       (id, entry) => {
-        render(<Gallery search={gallerySearch(entry.id, { theme: 'dark', surfaces: 'solid' })} />);
+        const { container } = render(
+          <Gallery search={gallerySearch(entry.id, { theme: 'dark', surfaces: 'solid' })} />,
+        );
 
-        const section = screen.getByRole('region', { name: entry.title });
-        expect(section.getAttribute('data-gallery-entry')).toBe(id);
+        // By attribute, not role: an open overlay entry (Select, Popover)
+        // rightly hides the rest of the page from the accessibility tree.
+        const section = container.querySelector(`[data-gallery-entry="${id}"]`);
+        expect(section?.tagName).toBe('SECTION');
+        const headingId = section?.getAttribute('aria-labelledby') ?? '';
+        expect(document.getElementById(headingId)?.textContent).toBe(entry.title);
       },
     );
 

@@ -119,7 +119,14 @@ describe('@no-llm Drshya gallery', () => {
               // Evidence first: injecting axe must not be able to mask a violation.
               evidence = await opened.evidence();
               const scope = entry.overlays === true ? 'body' : ENTRY_SELECTOR;
-              violations = await runAxe(opened.page, scope);
+              // Overlays portal into body beside <main>, so axe's page-structure
+              // rule "region" flags React Aria's overlay root. Landmark
+              // structure is the app shell's (FEAT-065); every other rule runs.
+              violations = await runAxe(
+                opened.page,
+                scope,
+                entry.overlays === true ? ['region'] : [],
+              );
               if (entry.interactive) {
                 focusStops = await walkFocus(opened.page, scope);
               }
@@ -388,6 +395,50 @@ describe('@no-llm Drshya gallery', () => {
       expect(evidence.bannedRadius).toBe('0px');
       expect(evidence.frameRadius).toBe('14px');
     });
+  });
+
+  describe('combo box, opened by typing', () => {
+    // React Aria 1.22's ComboBox has no isOpen/defaultOpen, so its gallery
+    // entry renders closed; this opens it the way a person does.
+    for (const theme of THEMES) {
+      for (const surfaces of SURFACES) {
+        it(
+          `filters, passes axe while open, and shows No matches (${theme}, ${surfaces})`,
+          async () => {
+            const opened = await openGallery(
+              browser,
+              server.origin,
+              stateSearch({ entry: 'combo-box', theme, surfaces }),
+            );
+            try {
+              const page = opened.page;
+              await page.click('[data-gallery-entry] input');
+              await page.keyboard.type('se');
+              await page.waitForSelector('[role="listbox"]', { timeout: 10_000 });
+              const options = await page.$$eval('[role="option"]', (items) =>
+                items.map((item) => item.textContent?.trim() ?? ''),
+              );
+              expect(options).toEqual(['Brave Search', 'SearXNG', 'Fixture search (tests)']);
+
+              expect(await runAxe(page, 'body', ['region'])).toEqual([]);
+
+              await page.keyboard.type('zzz');
+              await page.waitForFunction(
+                () =>
+                  document.querySelector('[role="listbox"]')?.textContent?.includes('No matches'),
+                { timeout: 10_000 },
+              );
+              const evidence = await opened.evidence();
+              expect(evidence.cspViolations).toEqual([]);
+              expect(foreignRequests(evidence, server.origin)).toEqual([]);
+            } finally {
+              await opened.page.close();
+            }
+          },
+          STATE_TIMEOUT,
+        );
+      }
+    }
   });
 
   describe('large table', () => {

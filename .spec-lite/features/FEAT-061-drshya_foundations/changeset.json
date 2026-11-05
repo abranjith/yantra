@@ -327,9 +327,15 @@
     },
     {
       "path": "packages/ui/src/primitives/Checkbox.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/ComboBox.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/ui/src/primitives/Disclosure.tsx",
@@ -345,7 +351,7 @@
     },
     {
       "path": "packages/ui/src/primitives/field.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -363,13 +369,25 @@
     },
     {
       "path": "packages/ui/src/primitives/NumberField.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
-      "path": "packages/ui/src/primitives/Switch.tsx",
+      "path": "packages/ui/src/primitives/Popover.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/src/primitives/Select.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/src/primitives/Switch.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -387,7 +405,7 @@
     },
     {
       "path": "packages/ui/src/primitives/TextField.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -519,7 +537,7 @@
     },
     {
       "path": "packages/ui/tests/primitives/fields.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -528,6 +546,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/overlays.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/ui/tests/primitives/table.spec.tsx",

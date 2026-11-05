@@ -29,6 +29,12 @@ export type { NumberFieldProps } from './NumberField.js';
 export { Checkbox } from './Checkbox.js';
 export type { CheckboxProps } from './Checkbox.js';
 export { Switch } from './Switch.js';
+export { Popover, PopoverDialog, PopoverTrigger } from './Popover.js';
+export type { OptionProps, PopoverDialogProps, PopoverProps } from './Popover.js';
+export { Select } from './Select.js';
+export type { ListOption, SelectProps } from './Select.js';
+export { ComboBox } from './ComboBox.js';
+export type { ComboBoxProps } from './ComboBox.js';
 export type { SwitchProps } from './Switch.js';
 export type { TableColumn, TableLoadState, TableProps } from './Table.js';
 export type {

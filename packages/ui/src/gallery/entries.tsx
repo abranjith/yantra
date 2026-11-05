@@ -11,10 +11,13 @@ import { Icon } from '../icons/Icon.js';
 import { ICON_NAMES, type IconName } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
 import { Checkbox } from '../primitives/Checkbox.js';
+import { ComboBox } from '../primitives/ComboBox.js';
 import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
 import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
 import { NumberField } from '../primitives/NumberField.js';
+import { Popover, PopoverDialog, PopoverTrigger } from '../primitives/Popover.js';
+import { Select, type ListOption } from '../primitives/Select.js';
 import { Switch } from '../primitives/Switch.js';
 import { Table, type TableColumn } from '../primitives/Table.js';
 import { Tab, TabList, TabPanel, Tabs } from '../primitives/Tabs.js';
@@ -506,6 +509,76 @@ function SwitchSheet(): ReactNode {
   );
 }
 
+const PROVIDERS: readonly ListOption[] = [
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'ollama', label: 'Ollama (local)' },
+  { id: 'none', label: 'No model (deterministic only)' },
+  { id: 'other', label: 'Other provider', isDisabled: true },
+];
+
+const SEARCH_PROVIDERS: readonly ListOption[] = [
+  { id: 'brave', label: 'Brave Search' },
+  { id: 'searxng', label: 'SearXNG' },
+  { id: 'duckduckgo', label: 'DuckDuckGo' },
+  { id: 'fixture', label: 'Fixture search (tests)' },
+];
+
+/** Overlays open over the busy stripe backdrop, so glass is judged at its worst. */
+function OverlayStage({ children }: { readonly children: ReactNode }): ReactNode {
+  return <div className="gallery-backdrop-stripes min-h-96 p-6">{children}</div>;
+}
+
+function PopoverSheet(): ReactNode {
+  return (
+    <OverlayStage>
+      <PopoverTrigger defaultOpen>
+        <Button variant="secondary" icon="glyph.provenance">
+          Provenance
+        </Button>
+        <Popover placement="bottom start">
+          <PopoverDialog aria-label="How this URL was found">
+            <p className="font-semibold text-ink">Attested by a search result</p>
+            <p className="text-ink-2">goal → search → page → link</p>
+            <Button size="sm" variant="quiet" icon="action.copy">
+              Copy URL
+            </Button>
+          </PopoverDialog>
+        </Popover>
+      </PopoverTrigger>
+    </OverlayStage>
+  );
+}
+
+function SelectSheet(): ReactNode {
+  return (
+    <OverlayStage>
+      <div className="max-w-xs rounded-control bg-surface p-4">
+        <Select
+          label="Model provider"
+          options={PROVIDERS}
+          defaultSelectedKey="anthropic"
+          defaultOpen
+        />
+      </div>
+    </OverlayStage>
+  );
+}
+
+function ComboBoxSheet(): ReactNode {
+  return (
+    <OverlayStage>
+      <div className="max-w-xs rounded-control bg-surface p-4">
+        <ComboBox
+          label="Search provider"
+          options={SEARCH_PROVIDERS}
+          description="Type to filter."
+          placeholder="Choose a provider"
+        />
+      </div>
+    </OverlayStage>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -657,6 +730,30 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     primitive: 'Switch',
     render: () => <SwitchSheet />,
     interactive: true,
+  },
+  {
+    id: 'popover',
+    title: 'Popover',
+    primitive: 'Popover',
+    render: () => <PopoverSheet />,
+    interactive: true,
+    overlays: true,
+  },
+  {
+    id: 'select',
+    title: 'Select',
+    primitive: 'Select',
+    render: () => <SelectSheet />,
+    interactive: true,
+    overlays: true,
+  },
+  {
+    id: 'combo-box',
+    title: 'ComboBox',
+    primitive: 'ComboBox',
+    render: () => <ComboBoxSheet />,
+    interactive: true,
+    overlays: true,
   },
   {
     id: 'table-large',

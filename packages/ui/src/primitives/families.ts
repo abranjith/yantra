@@ -16,6 +16,9 @@ export const PRIMITIVE_FAMILIES = {
   NumberField: ['NumberField'],
   Checkbox: ['Checkbox'],
   Switch: ['Switch'],
+  Popover: ['Popover', 'PopoverTrigger', 'PopoverDialog'],
+  Select: ['Select'],
+  ComboBox: ['ComboBox'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type PrimitiveFamily = keyof typeof PRIMITIVE_FAMILIES;
