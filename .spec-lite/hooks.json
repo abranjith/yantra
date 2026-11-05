@@ -28,6 +28,144 @@
         "provider": "github",
         "targetBranch": "development"
       }
+    },
+    {
+      "name": "plan-ready",
+      "description": "Post the finished plan to sdd-tracker and ask for the next step.",
+      "events": ["plan.post"],
+      "type": "builtin",
+      "builtin": "checkpoint",
+      "options": {
+        "question": "Plan `${plan.file}` is ready. What next?",
+        "attach": ["${plan.file}"],
+        "choices": {
+          "critique": {
+            "description": "Pressure-test the plan with Plan Critic",
+            "skill": "plan-critic",
+            "args": "critique ${plan.file}"
+          },
+          "features": {
+            "description": "Break the plan down into feature specs",
+            "skill": "feature",
+            "args": "break down plan ${plan.file} into individual feature files"
+          },
+          "stop": { "description": "Stop here; I'll pick it up later", "stop": true }
+        },
+        "github": {
+          "repo": "abranjith/sdd-tracker",
+          "target": "issue",
+          "approvers": ["abranjith"]
+        },
+        "expiresIn": "7d"
+      }
+    },
+    {
+      "name": "critique-ready",
+      "description": "Post the plan critique to sdd-tracker and ask for the next step.",
+      "events": ["plan-critic.post"],
+      "type": "builtin",
+      "builtin": "checkpoint",
+      "options": {
+        "question": "Critique of `${plan.file}` is ready (verdict: ${verdict.code}). What next?",
+        "attach": ["${report.file}"],
+        "choices": {
+          "revise": {
+            "description": "Revise the plan to address the critique",
+            "skill": "plan",
+            "args": "revise ${plan.file} to address the critique in ${report.file}"
+          },
+          "features": {
+            "description": "Accept the plan and break it down into feature specs",
+            "skill": "feature",
+            "args": "break down plan ${plan.file} into individual feature files"
+          },
+          "stop": { "description": "Stop here; I'll pick it up later", "stop": true }
+        },
+        "github": {
+          "repo": "abranjith/sdd-tracker",
+          "target": "issue",
+          "approvers": ["abranjith"]
+        },
+        "expiresIn": "7d"
+      }
+    },
+    {
+      "name": "specs-ready",
+      "description": "After a Plan Mode breakdown, tell sdd-tracker the specs are ready and offer implementation.",
+      "events": ["feature.post"],
+      "type": "builtin",
+      "builtin": "checkpoint",
+      "requires": ["plan"],
+      "options": {
+        "question": "Feature specs for `${plan.file}` are ready (${summary:-done}). What next?",
+        "choices": {
+          "implement": {
+            "description": "Implement every feature in the plan, in row order",
+            "skill": "implement",
+            "args": "implement plan ${plan.file}"
+          },
+          "stop": { "description": "Stop here; I'll review the specs first", "stop": true }
+        },
+        "github": {
+          "repo": "abranjith/sdd-tracker",
+          "target": "issue",
+          "approvers": ["abranjith"]
+        },
+        "expiresIn": "7d"
+      }
+    },
+    {
+      "name": "implementation-ready",
+      "description": "After a feature is implemented, committed and its PR opened, offer a review in sdd-tracker.",
+      "events": ["implement.post"],
+      "type": "builtin",
+      "builtin": "checkpoint",
+      "requires": ["feature"],
+      "order": 400,
+      "options": {
+        "question": "${feature.id} (${feature.name}) is implemented and its PR is open. What next?",
+        "choices": {
+          "review": {
+            "description": "Review the implemented feature",
+            "skill": "review",
+            "args": "review feature ${feature.name}"
+          },
+          "continue": { "description": "Accept as is", "continue": true }
+        },
+        "github": {
+          "repo": "abranjith/sdd-tracker",
+          "target": "issue",
+          "approvers": ["abranjith"]
+        },
+        "expiresIn": "7d",
+        "afterEffects": true
+      }
+    },
+    {
+      "name": "review-ready",
+      "description": "Post the review verdict to sdd-tracker and ask whether to remediate.",
+      "events": ["review.verdict"],
+      "type": "builtin",
+      "builtin": "checkpoint",
+      "options": {
+        "question": "Review is ready (verdict: ${verdict}). What next?",
+        "attach": ["${report.file}"],
+        "choices": {
+          "remediate": {
+            "description": "Fix the findings",
+            "skill": "implement",
+            "args": "Address the findings in ${report.file}"
+          },
+          "continue": { "description": "Accept and finish", "continue": true },
+          "stop": { "description": "Stop here", "stop": true }
+        },
+        "github": {
+          "repo": "abranjith/sdd-tracker",
+          "target": "issue",
+          "approvers": ["abranjith"]
+        },
+        "expiresIn": "7d"
+      }
     }
   ]
 }
