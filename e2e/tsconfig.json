@@ -10,6 +10,7 @@
     { "path": "../packages/protocol" },
     { "path": "../packages/core" },
     { "path": "../packages/agent" },
+    { "path": "../packages/ui" },
     { "path": "../apps/cli" }
   ],
   "include": ["*.ts", "**/*.ts"],

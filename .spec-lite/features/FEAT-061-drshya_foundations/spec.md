@@ -107,6 +107,14 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - `e2e` dev dependencies: `axe-core` 4.14.0, `pixelmatch` 8.0.0, `pngjs` 7.0.0, `@types/pngjs` 6.0.5, `puppeteer-core` 25.10.0.
 - Peer check: `@tailwindcss/vite` accepts vite `^8`; `@vitejs/plugin-react` 6 requires vite `^8`.
 
+**Implementation notes (recorded during Implement).**
+
+- **Gallery output directories.** `tsc` emits `src/gallery/` to `dist/gallery/`, so `@yantra/ui/gallery` resolves to `dist/gallery/index.{js,d.ts}`, and the standalone page builds to `dist/gallery-site/` (not `dist/gallery-module` and `dist/gallery` as §3 and TASK-003 said). The harness serves `dist/gallery-site`.
+- **axe injection.** `page.addScriptTag({ path })` adds an inline `<script>`, which `default-src 'self'` blocks. The harness evaluates axe's source with `page.evaluate` (`Runtime.evaluate`), which CSP does not govern, after it has collected the CSP evidence.
+- **Theme selectors.** The explicit theme blocks are `[data-theme="dark"]` and `[data-theme="light"]` rather than `:root[...]`, so any subtree can carry the appearance. The gallery wrapper needs this. The OS block stays `:root:not([data-theme="light"])`.
+- **Linux baselines are bootstrapped by CI.** The baselines could not be produced on the implementing Windows machine. The first Linux CI run fails the pixel step and uploads `e2e/drshya/.out/`, and those images are committed as `e2e/drshya/baselines/linux/` (S6 flow).
+- **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
+
 ## 2. Data Model (Granular)
 
 > `.spec-lite/data_model.md` does not exist, and FEAT-061 persists nothing. Its "data model" is the typed contracts that the token generator, the gallery and later features share. All of them live in `packages/ui/src` and are plain TypeScript types: this package has no Zod and no protocol schema. Nothing is written to `~/.yantra`.
@@ -821,7 +829,7 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 - [x] TASK-001: `@yantra/ui` package, dependency gate, workspace wiring, import-boundary lint
 - [x] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
-- [ ] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
+- [x] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
 - [ ] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
 - [ ] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
 - [ ] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules

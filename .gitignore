@@ -4,6 +4,8 @@ dist/
 coverage/
 pnpm-lock.yaml
 e2e/task-fidelity/.out/
+# Drshya gallery harness output (actual and diff PNGs); CI uploads it on failure.
+e2e/drshya/.out/
 .env*
 .vscode/*
 !.vscode/settings.json

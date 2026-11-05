@@ -16,7 +16,8 @@
     "@yantra/agent": "workspace:*",
     "@yantra/cli": "workspace:*",
     "@yantra/core": "workspace:*",
-    "@yantra/protocol": "workspace:*"
+    "@yantra/protocol": "workspace:*",
+    "@yantra/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/pngjs": "6.0.5",

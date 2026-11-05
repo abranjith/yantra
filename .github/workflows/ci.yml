@@ -60,6 +60,17 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Drshya visual baselines are required on Linux only (FEAT-061 spec S6).
+      # The harness writes actual and diff PNGs here, so a missing or changed
+      # Linux baseline can be reviewed and committed from any machine.
+      - name: Upload Drshya gallery screenshots
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drshya-gallery-${{ matrix.os }}-${{ matrix.llm-provider }}
+          path: e2e/drshya/.out/
+          if-no-files-found: ignore
+
   security-static-check:
     name: security-static-check
     runs-on: ubuntu-latest

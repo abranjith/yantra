@@ -10,6 +10,18 @@
 export const DRSHYA_PACKAGE = '@yantra/ui' as const;
 
 export {
+  DEFAULT_APPEARANCE,
+  SURFACES_PREFERENCES,
+  THEME_PREFERENCES,
+  appearanceAttributes,
+  applyAppearance,
+  parseAppearance,
+  type Appearance,
+  type AppearanceAttributes,
+  type SurfacesPreference,
+  type ThemePreference,
+} from './appearance.js';
+export {
   BLACK,
   WHITE,
   compositeOver,

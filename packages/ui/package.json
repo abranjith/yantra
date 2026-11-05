@@ -15,14 +15,19 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./drshya.css": "./src/styles/drshya.css"
+    "./drshya.css": "./src/styles/drshya.css",
+    "./gallery": {
+      "types": "./dist/gallery/index.d.ts",
+      "import": "./dist/gallery/index.js"
+    }
   },
   "files": [
     "dist",
     "src/styles"
   ],
   "scripts": {
-    "build": "tsx scripts/emit-tokens.ts --check && tsc -b tsconfig.build.json",
+    "build": "tsx scripts/emit-tokens.ts --check && tsc -b tsconfig.build.json && vite build --config gallery/vite.config.ts",
+    "gallery": "vite --config gallery/vite.config.ts",
     "emit:tokens": "tsx scripts/emit-tokens.ts",
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",

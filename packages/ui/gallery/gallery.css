@@ -1,0 +1,3 @@
+/* The gallery page: Drshya plus this directory's own markup (index.html). */
+@import '../src/styles/drshya.css';
+@source './';
