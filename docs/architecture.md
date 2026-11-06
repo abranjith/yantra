@@ -162,6 +162,21 @@ argv for every leaf over an adversarial alphabet through reference models of eac
 passing and the MSVCRT parse; cmd's caret and metacharacter pass, then MSVCRT) and asserts the
 re-parse equals the original.
 
+The real shells are the authority. `e2e/command-format-shells.spec.ts` runs a corpus of one
+invocation per leaf plus values built to break quoting (quotes, `$`, `$(…)`, backticks, `%`,
+`%PATH%`, `^`, `!`, `&|<>`, a line break, the empty argument, a leading dash after `--`, trailing
+backslashes, tabs, `@`, brackets and Unicode) through bash (Git Bash on Windows), Windows
+PowerShell 5.1 and cmd. Each command runs through launchers shaped like the npm/pnpm cmd-shim
+templates and through `node <absolute path>`, against `e2e/fixtures/argv-echo`, which writes the
+argv it received to a file so no console code page can alter it. Verified on Windows 11 with all
+three shells, every value arrives intact, except where the formatter marks cmd unavailable. A
+missing shell is skipped with the reason in the test name; on Linux and macOS only bash runs.
+One limitation is inherent and asserted: if PowerShell runs the `.cmd` launcher explicitly
+(`yantra.cmd …`), Windows re-reads the line through cmd, which expands a `%NAME%` pair and ends
+the command at a line break. PowerShell's own resolution of `yantra` picks the `.ps1` launcher,
+which carries everything, and because the formatter wraps quoted PowerShell values in literal
+double quotes, `& | < > ^` and a lone `%` survive the `.cmd` route too.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:

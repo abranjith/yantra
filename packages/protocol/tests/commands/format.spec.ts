@@ -29,26 +29,26 @@ describe('@no-llm per-shell quoting goldens', () => {
   it.each([
     ['plain', 'plain', 'plain', 'plain'],
     ['--json', '--json', '--json', '--json'],
-    ['a b', "'a b'", "'a b'", '"a b"'],
+    ['a b', "'a b'", `'"a b"'`, '"a b"'],
     ['', "''", `'""'`, '""'],
-    ["it's", `'it'\\''s'`, `'it''s'`, "it's"],
-    ['say "hi"', `'say "hi"'`, `'say \\"hi\\"'`, null],
-    ['$HOME', "'$HOME'", "'$HOME'", '$HOME'],
-    ['a`b', "'a`b'", "'a`b'", 'a`b'],
-    ['50%', '50%', "'50%'", null],
-    ['a^b', "'a^b'", "'a^b'", '"a^b"'],
-    ['wow!', "'wow!'", "'wow!'", 'wow!'],
-    ['a&b', "'a&b'", "'a&b'", '"a&b"'],
-    ['line\nbreak', "'line\nbreak'", "'line\nbreak'", null],
+    ["it's", `'it'\\''s'`, `'"it''s"'`, "it's"],
+    ['say "hi"', `'say "hi"'`, `'"say \\"hi\\""'`, null],
+    ['$HOME', "'$HOME'", `'"$HOME"'`, '$HOME'],
+    ['a`b', "'a`b'", `'"a\`b"'`, 'a`b'],
+    ['50%', '50%', `'"50%"'`, null],
+    ['a^b', "'a^b'", `'"a^b"'`, '"a^b"'],
+    ['wow!', "'wow!'", `'"wow!"'`, 'wow!'],
+    ['a&b', "'a&b'", `'"a&b"'`, '"a&b"'],
+    ['line\nbreak', "'line\nbreak'", `'"line\nbreak"'`, null],
     ['-x', '-x', '-x', '-x'],
-    ['--', '--', "'--'", '--'],
-    ['@file', '@file', "'@file'", '@file'],
-    ['a,b', 'a,b', "'a,b'", '"a,b"'],
+    ['--', '--', `'"--"'`, '--'],
+    ['@file', '@file', `'"@file"'`, '@file'],
+    ['a,b', 'a,b', `'"a,b"'`, '"a,b"'],
     ['k=v', 'k=v', 'k=v', '"k=v"'],
-    ['café', "'café'", "'café'", 'café'],
-    ['東京', "'東京'", "'東京'", '東京'],
-    ['C:\\dir\\', "'C:\\dir\\'", "'C:\\dir\\'", 'C:\\dir\\'],
-    ['a b\\', "'a b\\'", "'a b\\\\'", '"a b\\\\"'],
+    ['café', "'café'", `'"café"'`, 'café'],
+    ['東京', "'東京'", `'"東京"'`, '東京'],
+    ['C:\\dir\\', "'C:\\dir\\'", `'"C:\\dir\\\\"'`, 'C:\\dir\\'],
+    ['a b\\', "'a b\\'", `'"a b\\\\"'`, '"a b\\\\"'],
   ])('quotes %j', (value, posix, powershell, cmd) => {
     expect(quotePosix(value)).toBe(posix);
     expect(quotePowerShell(value)).toBe(powershell);
@@ -69,7 +69,7 @@ describe('@no-llm formatInvocation', () => {
     });
     expect(formatInvocation(value, 'powershell')).toEqual({
       ok: true,
-      text: "yantra do 'book a table' --json",
+      text: `yantra do '"book a table"' --json`,
     });
     expect(formatInvocation(value, 'cmd')).toEqual({
       ok: true,

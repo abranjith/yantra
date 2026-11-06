@@ -403,7 +403,7 @@ export default tseslint.config(
   // have no program to resolve them against.
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['**/tests/**/fixtures/**/*.{js,mjs,cjs}'],
+    files: ['**/tests/**/fixtures/**/*.{js,mjs,cjs}', 'e2e/fixtures/**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly' },
       // No TS program covers them, so the project service has nothing to resolve.

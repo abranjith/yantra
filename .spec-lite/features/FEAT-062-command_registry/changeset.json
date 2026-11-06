@@ -2216,6 +2216,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "e2e/command-format-shells.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "e2e/fixtures/argv-echo/argv-echo.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "e2e/task-fidelity-harness.spec.ts",
       "status": "M",
       "role": "implement",
@@ -2331,7 +2343,7 @@
     },
     {
       "path": "packages/protocol/src/commands/format.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -2409,13 +2421,13 @@
     },
     {
       "path": "packages/protocol/tests/commands/format.property.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "packages/protocol/tests/commands/format.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -2439,7 +2451,7 @@
     },
     {
       "path": "packages/protocol/tests/commands/shell-tokenizers.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     }

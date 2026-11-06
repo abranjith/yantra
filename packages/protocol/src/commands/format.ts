@@ -73,8 +73,6 @@ function escapeMsvcrt(value: string, wrapped: boolean): string {
   return out;
 }
 
-const WHITESPACE = /\s/;
-
 // ---------------------------------------------------------------- PowerShell 5.1
 
 const POWERSHELL_BARE = /^(?:--?[A-Za-z][A-Za-z0-9-]*|[A-Za-z0-9_][A-Za-z0-9_./:=+-]*)$/;
@@ -83,14 +81,17 @@ const POWERSHELL_BARE = /^(?:--?[A-Za-z][A-Za-z0-9-]*|[A-Za-z0-9_][A-Za-z0-9_./:
  * One PowerShell 5.1 argument for a native command. PowerShell passes a
  * string through unchanged unless it holds unquoted whitespace, in which case
  * it wraps it in `"…"` without escaping anything, and it drops an empty
- * string. So the value is first encoded for the child's MSVCRT parse, then
- * written as a single-quoted PowerShell literal (`'` as `''`); an empty value
- * becomes `'""'`.
+ * string. So a value that needs quoting is encoded for the child's MSVCRT
+ * parse and wrapped in literal double quotes by us, which PowerShell then
+ * passes verbatim; the result is written as a single-quoted PowerShell
+ * literal (`'` as `''`). The double quotes also keep `& | < > ^` quoted if the
+ * command resolves to a `.cmd` launcher, which re-reads the line through cmd.
+ * An empty value becomes `'""'`.
  */
 export function quotePowerShell(token: string): string {
   if (token === '') return `'""'`;
   if (POWERSHELL_BARE.test(token) && token !== '--') return token;
-  const encoded = escapeMsvcrt(token, WHITESPACE.test(token));
+  const encoded = `"${escapeMsvcrt(token, true)}"`;
   return `'${encoded.replace(/'/g, "''")}'`;
 }
 
@@ -177,10 +178,15 @@ export function formatInvocation(
     return { ok: true, text: [...program, ...tokens].map(quotePosix).join(' ') };
   }
   if (shell === 'powershell') {
-    const head = program.map(quotePowerShell);
-    // A quoted command name is a string expression; the call operator runs it.
-    const call = head[0] !== program[0] ? ['&', ...head] : head;
-    return { ok: true, text: [...call, ...tokens.map(quotePowerShell)].join(' ') };
+    // The first program token is the command name, which PowerShell resolves
+    // itself; a quoted name is a string expression, run by the call operator.
+    const [command = 'yantra', ...programArgs] = program;
+    const name = POWERSHELL_BARE.test(command) ? command : `'${command.replace(/'/g, "''")}'`;
+    const call = name === command ? [name] : ['&', name];
+    return {
+      ok: true,
+      text: [...call, ...[...programArgs, ...tokens].map(quotePowerShell)].join(' '),
+    };
   }
   for (const [index, token] of [...program, ...tokens].entries()) {
     const problem = cmdProblem(token);
