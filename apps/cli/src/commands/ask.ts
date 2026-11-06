@@ -42,17 +42,15 @@ import {
   UserInputMarkerError,
 } from '@yantra/core';
 import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@yantra/protocol';
-import { CommanderError, Option, type Command } from 'commander';
+import { CommanderError, type Command } from 'commander';
 
 import {
-  addAgentOptions,
   parseDuration,
   resolveAgentInvocation,
   type AgentInvocation,
   type AgentOptions,
 } from '../agent-options.js';
 import {
-  addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
@@ -64,16 +62,14 @@ import {
   resolveAmbientContext,
   type ResolvedAmbientContext,
 } from '../preferences.js';
+import { attachRegistered } from '../registry/build-command-tree.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
-import {
-  TEMPLATE_LLM_GUARD,
-  TEMPLATE_OPTION_DESCRIPTION,
-  resolveTemplateRef,
-} from '../template-ref.js';
+import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -124,55 +120,16 @@ export interface AskRuntime {
  * Render`, producing a Brief (styled terminal / md / html / json).
  */
 export function registerAskCommand(program: Command, runtime?: Partial<AskRuntime>): void {
-  const resolvedRuntime = runtimeWithDefaults(runtime);
+  attachRegistered(program, 'ask', { ask: makeAskHandler(runtime) });
+}
 
-  const askCommand = program
-    .command('ask')
-    .description('Answer a question from the web as a synthesized Brief.')
-    .argument('<query>', 'question to answer from web sources');
-  // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
-  // `--auth-secret`), identical to `research` and `do`. These bind the LLM
-  // provider; `--search-provider` below is the unrelated web-search backend.
-  addBrowserSelectionOptions(addAgentOptions(askCommand))
-    .addOption(new Option('--json', 'shorthand for --format json').default(false))
-    .addOption(
-      new Option(
-        '--detail <level>',
-        'terminal disclosure level (default: prefs.defaults.detail)',
-      ).choices(['overview', 'standard', 'full']),
-    )
-    .addOption(
-      new Option('--format <format>', 'output format sent to stdout')
-        .choices(['terminal', 'md', 'html', 'json'])
-        .default('terminal'),
-    )
-    .addOption(
-      new Option(
-        '--length <length>',
-        'synthesis length budget (default: prefs.defaults.length)',
-      ).choices(['short', 'medium', 'long']),
-    )
-    .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
-    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addOption(new Option('--no-cache', 'disable cache reads/writes'))
-    .addOption(new Option('--no-color', 'disable ANSI color output'))
-    .addOption(new Option('--max-sources <n>', 'maximum sources to fetch'))
-    .addOption(
-      new Option(
-        '--search-provider <provider>',
-        'search provider (default: auto walks tavily -> brave -> duckduckgo); ' +
-          'tavily/brave require API keys, google/duckduckgo scrape (google is opt-in)',
-      ).choices(['auto', 'google', 'duckduckgo', 'brave', 'tavily']),
-    )
-    .addOption(new Option('--limit <count>', 'number of sources to consider').default('3'))
-    .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('30000'))
-    .addOption(
-      new Option(
-        '--pipeline-timeout <duration>',
-        'deterministic pipeline timeout (for example 100s)',
-      ).default('100s'),
-    )
-    .action(async (queryArg: string, options: AskOptions, command: Command) => {
+/** The `ask` handler over an injectable runtime, bound to the `ask` registry entry. */
+export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
+  const resolvedRuntime = runtimeWithDefaults(runtime);
+  return handler(
+    async (args: HandlerArgs, options: AskOptions, command: Command): Promise<void> => {
+      const [queryArg] = args as readonly [string];
+
       // A conflicting `--browser` pair is a validation failure, resolved before
       // any pipeline or provider session exists.
       const browserSelection = resolveBrowserSelectionOverride(options);
@@ -283,7 +240,8 @@ export function registerAskCommand(program: Command, runtime?: Partial<AskRuntim
         resolvedRuntime.stderr.write(`ask failed: ${message}\n`);
         throw new CommanderError(2, 'yantra.ask.failed', message);
       }
-    });
+    },
+  );
 }
 
 /** Renders the Brief through the unified connector dispatch. */

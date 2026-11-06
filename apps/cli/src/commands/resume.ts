@@ -26,16 +26,17 @@ import {
   loadResumePoint,
   requiresUserConsent,
 } from '@yantra/core/workflow/replay';
-import { Command } from 'commander';
+import { type Command } from 'commander';
 
-import { addAgentOptions, resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
+import { resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import {
-  addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler, type HandlerArgs } from '../registry/handler.js';
 import {
   buildOrchestratorRuntime,
   makeStderrLogger,
@@ -51,116 +52,106 @@ interface ResumeOptions extends AgentOptions, BrowserSelectionOptions {
 }
 
 export function makeResumeCommand(): Command {
-  const cmd = new Command('resume');
+  return createRegisteredCommand('resume', { resume: handler(resumeHandler) });
+}
 
-  addBrowserSelectionOptions(addAgentOptions(cmd))
-    .description('Resume a previously failed or paused workflow run')
-    .argument('<run-id>', 'Run ID to resume (from the run directory name)')
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Emit verbose debug logging to stderr', false)
-    .option('--open', 'open the generated brief.html in the default browser', false)
-    .option(
-      '--force',
-      'Skip the user-consent check for scope-violation / ethics-refused failures',
-      false,
-    )
-    .action(async (runId: string, options: ResumeOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
-      logger.info({ runId }, 'yantra resume: starting');
-      let closeRuntime = (): void => undefined;
+/** `yantra resume <run-id>`: bound to the `resume` registry entry. */
+export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): Promise<void> {
+  const [runId] = args as readonly [string];
 
-      // Resolved before any run state is touched: a conflicting `--browser`
-      // pair is a validation failure, not a resume that half-started.
-      let browserSelection;
-      try {
-        browserSelection = resolveBrowserSelectionOverride(options);
-      } catch (err) {
-        process.stderr.write(`${err instanceof Error ? err.message : String(err)}
+  const logger = makeStderrLogger(options.debug === true);
+  logger.info({ runId }, 'yantra resume: starting');
+  let closeRuntime = (): void => undefined;
+
+  // Resolved before any run state is touched: a conflicting `--browser`
+  // pair is a validation failure, not a resume that half-started.
+  let browserSelection;
+  try {
+    browserSelection = resolveBrowserSelectionOverride(options);
+  } catch (err) {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}
 `);
-        process.exit(1);
-      }
+    process.exit(1);
+  }
 
-      try {
-        // Same consent policy as `run`: prompt only in an interactive TTY,
-        // never under `--json` / unattended (plan §6).
-        const interactive = process.stdin.isTTY === true && options.json !== true;
+  try {
+    // Same consent policy as `run`: prompt only in an interactive TTY,
+    // never under `--json` / unattended (plan §6).
+    const interactive = process.stdin.isTTY === true && options.json !== true;
 
-        // Read the resume point before building the runtime, so the runtime can
-        // inherit the original run's synthesis strategy — a resumed run must not
-        // silently change how its Brief is produced. `loadResumePoint` needs only
-        // a run store, so this costs nothing extra.
-        const point = await loadResumePoint(new LocalRunStore(), runId);
+    // Read the resume point before building the runtime, so the runtime can
+    // inherit the original run's synthesis strategy — a resumed run must not
+    // silently change how its Brief is produced. `loadResumePoint` needs only
+    // a run store, so this costs nothing extra.
+    const point = await loadResumePoint(new LocalRunStore(), runId);
 
-        const inherited = await synthesisForResume(
-          point.manifest,
-          logger,
-          options,
-          process.env,
-          await loadEffectivePreferences(),
-        );
-        const runtime = await buildOrchestratorRuntime({
-          logger,
-          confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
-          browser: {
-            installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
-            ...(browserSelection === undefined ? {} : { selection: browserSelection }),
-          },
-          // Omitted, not set to undefined: an absent key disables the stage,
-          // which is what a run that never synthesized should inherit.
-          ...(inherited === undefined ? {} : { synthesis: inherited }),
-        });
-        const { orchestrator } = runtime;
-        closeRuntime = runtime.close;
-
-        if (options.force !== true && requiresUserConsent(point.manifest.failureClass)) {
-          if (options.json === true) {
-            process.stderr.write(
-              `Resume of run ${runId} requires interactive consent (failure class: ${point.manifest.failureClass}). Re-run without --json or pass --force.\n`,
-            );
-            closeRuntime();
-            process.exit(4);
-          }
-          process.stderr.write(
-            `\nThis run was stopped due to "${point.manifest.failureClass}".\n` +
-              `Resume only if you intended to allow this workflow to access that resource.\n` +
-              `Pass --force to bypass this check.\n`,
-          );
-          closeRuntime();
-          process.exit(4);
-        }
-
-        const outcome = await orchestrator.resume(runId);
-        if (options.open === true && outcome.kind === 'success' && outcome.brief) {
-          openArtifact(outcome.brief.htmlPath);
-        }
-
-        if (options.json === true) {
-          process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
-        } else {
-          const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
-          process.stdout.write(`${icon} Resume ${outcome.runId}: ${outcome.kind}\n`);
-        }
-
-        closeRuntime();
-        process.exit(exitCodeFor(outcome));
-      } catch (err) {
-        closeRuntime();
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`Error: ${message}\n`);
-        if (options.debug === true && err instanceof Error && err.stack !== undefined) {
-          process.stderr.write(`${err.stack}\n`);
-        }
-        process.exit(
-          err instanceof BrowserInstallOfferDeclinedError
-            ? 4
-            : err instanceof BrowserManagedInstallError
-              ? 3
-              : 1,
-        );
-      }
+    const inherited = await synthesisForResume(
+      point.manifest,
+      logger,
+      options,
+      process.env,
+      await loadEffectivePreferences(),
+    );
+    const runtime = await buildOrchestratorRuntime({
+      logger,
+      confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+      browser: {
+        installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+        ...(browserSelection === undefined ? {} : { selection: browserSelection }),
+      },
+      // Omitted, not set to undefined: an absent key disables the stage,
+      // which is what a run that never synthesized should inherit.
+      ...(inherited === undefined ? {} : { synthesis: inherited }),
     });
+    const { orchestrator } = runtime;
+    closeRuntime = runtime.close;
 
-  return cmd;
+    if (options.force !== true && requiresUserConsent(point.manifest.failureClass)) {
+      if (options.json === true) {
+        process.stderr.write(
+          `Resume of run ${runId} requires interactive consent (failure class: ${point.manifest.failureClass}). Re-run without --json or pass --force.\n`,
+        );
+        closeRuntime();
+        process.exit(4);
+      }
+      process.stderr.write(
+        `\nThis run was stopped due to "${point.manifest.failureClass}".\n` +
+          `Resume only if you intended to allow this workflow to access that resource.\n` +
+          `Pass --force to bypass this check.\n`,
+      );
+      closeRuntime();
+      process.exit(4);
+    }
+
+    const outcome = await orchestrator.resume(runId);
+    if (options.open === true && outcome.kind === 'success' && outcome.brief) {
+      openArtifact(outcome.brief.htmlPath);
+    }
+
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+    } else {
+      const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
+      process.stdout.write(`${icon} Resume ${outcome.runId}: ${outcome.kind}\n`);
+    }
+
+    closeRuntime();
+    process.exit(exitCodeFor(outcome));
+  } catch (err) {
+    closeRuntime();
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Error: ${message}\n`);
+    if (options.debug === true && err instanceof Error && err.stack !== undefined) {
+      process.stderr.write(`${err.stack}\n`);
+    }
+    process.exit(
+      err instanceof BrowserInstallOfferDeclinedError
+        ? 4
+        : err instanceof BrowserManagedInstallError
+          ? 3
+          : 1,
+    );
+  }
 }
 
 /**

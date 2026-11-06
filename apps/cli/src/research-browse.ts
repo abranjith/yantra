@@ -9,9 +9,8 @@
  */
 
 import { preferenceValue, type EffectivePreferences } from '@yantra/core';
-import { Option, type Command } from 'commander';
 
-/** Parsed value registered by {@link addNoBrowseOption}. */
+/** Parsed value of `research --no-browse` (registry entry `research`). */
 export interface NoBrowseOption {
   /**
    * Commander stores `--no-browse` as `browse: false`. A lone negatable option
@@ -24,16 +23,6 @@ export interface NoBrowseOption {
 export interface ResearchBrowseResolution {
   readonly enabled: boolean;
   readonly source: 'flag' | 'preference' | 'default';
-}
-
-/**
- * Registers `--no-browse`. `research` only: `ask` never browses and `do`
- * always does, so the flag would be a dead control on either.
- */
-export function addNoBrowseOption(command: Command): Command {
-  return command.addOption(
-    new Option('--no-browse', 'run research without the read-only browser for this run'),
-  );
 }
 
 /**

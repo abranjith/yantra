@@ -22,6 +22,7 @@ import {
   resetPathCache,
   type BrowserSession,
 } from '@yantra/core';
+import { COMMAND_REGISTRY } from '@yantra/protocol';
 import { assertRuntimeLinesAreSafe } from '@yantra/test-helpers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -1775,16 +1776,12 @@ describe('@no-llm task-fidelity eval', () => {
     if (outRoot) await rm(outRoot, { recursive: true, force: true });
   });
 
-  it('spells the model flags exactly as the CLI registers them', async () => {
-    const source = await readFile(
-      join(harnessDirectory, '..', '..', 'apps', 'cli', 'src', 'agent-options.ts'),
-      'utf8',
+  it('spells the model flags exactly as the CLI registers them', () => {
+    // FEAT-062: the CLI generates these flags from the registry's agent-model group.
+    const group = COMMAND_REGISTRY.option_groups.find(
+      (candidate) => candidate.id === 'agent-model',
     );
-    const registrar = /export function addAgentModelOptions[\s\S]*?\n}/.exec(source)?.[0] ?? '';
-    const registered = [...registrar.matchAll(/new Option\('(--[a-z-]+)/g)].map(
-      (match) => match[1],
-    );
-    expect(registered).toEqual([...MODEL_FLAGS]);
+    expect(group?.options.map((option) => option.long)).toEqual([...MODEL_FLAGS]);
   });
 
   it('accepts the shared model flags and its own options', () => {

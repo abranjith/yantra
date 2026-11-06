@@ -58,11 +58,9 @@ import {
   storageDirSources,
 } from '@yantra/core';
 import { PROTOCOL_VERSION } from '@yantra/protocol';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 
 import {
-  addAgentModelOptions,
-  addNoLlmOption,
   resolveAgentInvocation,
   type AgentInvocation,
   type AgentModelOptions,
@@ -71,6 +69,8 @@ import {
 import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
 import { noLlmReason, readGlobalFlags } from '../global-flags.js';
 import { loadEffectivePreferences } from '../preferences.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type {
@@ -133,111 +133,100 @@ const CHECK_TITLES: Record<string, string> = {
 };
 
 export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
+  return createRegisteredCommand('doctor', { doctor: makeDoctorHandler(runtime) });
+}
+
+/** The `doctor` handler over an injectable runtime, bound to the `doctor` registry entry. */
+export function makeDoctorHandler(runtime?: Partial<DoctorRuntime>): Handler {
   const resolved = doctorRuntime(runtime);
-  const cmd = new Command('doctor');
-
-  addNoLlmOption(addAgentModelOptions(cmd.description('Diagnose the local environment for Yantra')))
-    .option('--json', 'emit JSON output', false)
-    .option(
-      '--refresh',
-      're-probe the environment instead of reusing the cached probe (agent and configuration checks always run fresh)',
-      false,
-    )
-    .option(
-      '--agent-smoke',
-      'run a live agent provider smoke test instead of the offline checks',
-      false,
-    )
-    .action(async (options: DoctorOptions) => {
-      const preferences = await resolved.loadPreferences();
-      const flags = readGlobalFlags({
-        argv: process.argv,
-        env: resolved.env,
-        isTty: resolved.isTty,
-      });
-      const isJson = options.json === true || flags.json;
-      const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
-      const connector = new CLIConnectorIO(renderer);
-      const renderOpts = buildRenderOpts(
-        { ...flags, json: isJson },
-        { stdout: resolved.stdout, stderr: resolved.stderr },
-      );
-
-      if (options.agentSmoke === true) {
-        const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
-        if (agent.mode === 'no-llm') {
-          if (agent.reason === 'unavailable') {
-            const error = new AgentAuthUnavailableError(
-              agent.model.provider,
-              'managed store, provider environment, runtime-key reference',
-              'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
-            );
-            resolved.stderr.write(`${error.code}: ${error.message}\n`);
-            throw new CommanderError(3, error.code, error.message);
-          }
-          // Name the layer that actually selected the deterministic path;
-          // telling someone to remove a flag they never typed sends them
-          // looking for the wrong thing.
-          const message =
-            agent.reason === 'flag'
-              ? '`doctor --agent-smoke` requires an LLM; remove --no-llm.'
-              : '`doctor --agent-smoke` requires an LLM; unset LLM_PROVIDER=none.';
-          resolved.stderr.write(`${message}\n`);
-          throw new CommanderError(1, 'yantra.doctor.llm-required', message);
-        }
-        await runAgentSmokeCommand(agent, resolved, connector, renderOpts);
-        return;
-      }
-
-      // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
-      // the agent checks report that selection rather than silently probing
-      // for a model and credential that this invocation would never use.
-      const deterministic = noLlmReason(options, resolved.env);
-
-      try {
-        const [report, agentChecks, configChecks] = await Promise.all([
-          resolved.coreDoctor({ refresh: options.refresh === true }),
-          resolved.agentDiagnostics(resolved.env, preferences, {
-            ...options,
-            ...(deterministic === null ? {} : { noLlm: deterministic }),
-          }),
-          runConfigurationChecks(resolved),
-        ]);
-        const checks = [...report.checks, ...agentChecks, ...configChecks];
-
-        const result: DoctorRenderResult = {
-          checks: checks.map((check) => ({
-            id: check.id,
-            title: CHECK_TITLES[check.id] ?? check.id,
-            status: check.status === 'error' ? 'fail' : check.status,
-            summary: check.message,
-            ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
-          })),
-          overall: checks.some((check) => check.status === 'error')
-            ? 'fail'
-            : checks.some((check) => check.status === 'warn')
-              ? 'warn'
-              : 'ok',
-          version: PROTOCOL_VERSION,
-          platform: process.platform,
-          nodeVersion: process.versions.node,
-          ...browserProvenance(report.checks),
-          ...searchProvenance(configChecks),
-        };
-
-        connector.renderResult({ kind: 'doctor', result }, renderOpts);
-        if (result.overall === 'fail') {
-          throw new CommanderError(3, 'yantra.doctor.failed', 'Environment checks failed.');
-        }
-      } catch (err) {
-        if (err instanceof CommanderError) throw err;
-        const message = err instanceof Error ? err.message : String(err);
-        resolved.stderr.write(`Error: ${message}\n`);
-        throw new CommanderError(3, 'yantra.doctor.failed', message);
-      }
+  return handler(async (_args: HandlerArgs, options: DoctorOptions): Promise<void> => {
+    const preferences = await resolved.loadPreferences();
+    const flags = readGlobalFlags({
+      argv: process.argv,
+      env: resolved.env,
+      isTty: resolved.isTty,
     });
+    const isJson = options.json === true || flags.json;
+    const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
+    const connector = new CLIConnectorIO(renderer);
+    const renderOpts = buildRenderOpts(
+      { ...flags, json: isJson },
+      { stdout: resolved.stdout, stderr: resolved.stderr },
+    );
 
-  return cmd;
+    if (options.agentSmoke === true) {
+      const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
+      if (agent.mode === 'no-llm') {
+        if (agent.reason === 'unavailable') {
+          const error = new AgentAuthUnavailableError(
+            agent.model.provider,
+            'managed store, provider environment, runtime-key reference',
+            'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
+          );
+          resolved.stderr.write(`${error.code}: ${error.message}\n`);
+          throw new CommanderError(3, error.code, error.message);
+        }
+        // Name the layer that actually selected the deterministic path;
+        // telling someone to remove a flag they never typed sends them
+        // looking for the wrong thing.
+        const message =
+          agent.reason === 'flag'
+            ? '`doctor --agent-smoke` requires an LLM; remove --no-llm.'
+            : '`doctor --agent-smoke` requires an LLM; unset LLM_PROVIDER=none.';
+        resolved.stderr.write(`${message}\n`);
+        throw new CommanderError(1, 'yantra.doctor.llm-required', message);
+      }
+      await runAgentSmokeCommand(agent, resolved, connector, renderOpts);
+      return;
+    }
+
+    // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
+    // the agent checks report that selection rather than silently probing
+    // for a model and credential that this invocation would never use.
+    const deterministic = noLlmReason(options, resolved.env);
+
+    try {
+      const [report, agentChecks, configChecks] = await Promise.all([
+        resolved.coreDoctor({ refresh: options.refresh === true }),
+        resolved.agentDiagnostics(resolved.env, preferences, {
+          ...options,
+          ...(deterministic === null ? {} : { noLlm: deterministic }),
+        }),
+        runConfigurationChecks(resolved),
+      ]);
+      const checks = [...report.checks, ...agentChecks, ...configChecks];
+
+      const result: DoctorRenderResult = {
+        checks: checks.map((check) => ({
+          id: check.id,
+          title: CHECK_TITLES[check.id] ?? check.id,
+          status: check.status === 'error' ? 'fail' : check.status,
+          summary: check.message,
+          ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
+        })),
+        overall: checks.some((check) => check.status === 'error')
+          ? 'fail'
+          : checks.some((check) => check.status === 'warn')
+            ? 'warn'
+            : 'ok',
+        version: PROTOCOL_VERSION,
+        platform: process.platform,
+        nodeVersion: process.versions.node,
+        ...browserProvenance(report.checks),
+        ...searchProvenance(configChecks),
+      };
+
+      connector.renderResult({ kind: 'doctor', result }, renderOpts);
+      if (result.overall === 'fail') {
+        throw new CommanderError(3, 'yantra.doctor.failed', 'Environment checks failed.');
+      }
+    } catch (err) {
+      if (err instanceof CommanderError) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      resolved.stderr.write(`Error: ${message}\n`);
+      throw new CommanderError(3, 'yantra.doctor.failed', message);
+    }
+  });
 }
 
 type CompatibilityLabel = NonNullable<DoctorRenderResult['browser']>['compatibility'];

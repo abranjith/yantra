@@ -2403,6 +2403,27 @@ is commander-shaped, `(args, options, command)`, so FEAT-072 can swap the bindin
 worker adapters without touching the generator. `buildProgram(options, handlers)` accepts a
 substitute table, which the parse-parity tests use for recording stubs.
 
+The run-class commands (`ask`, `research`, `do`, `run`, `resume`) and `doctor` reference the
+groups in their registration order, so help order is unchanged: `do` is `agent-model`,
+`agent-budget`, `no-llm`, `screenshots`, `agent-turn`, `browser-selection`, then its own options.
+The hand-written registrars (`addAgentOptions` and its parts, `addNoBrowseOption`) are gone;
+`agent-options.ts` keeps only resolution (`resolveAgentInvocation`, `parseDuration`).
+Command-specific chains are declared where commands read preferences: `ask --detail` (preference
+`defaults.detail`, then `standard`), `--length` (`defaults.length`, then `medium`) and
+`--search-provider` (`defaults.search_provider`, then `auto`). `research` reads no preference for
+these; its commander defaults are the effective defaults, and the registry says so. `research
+--no-browse` resolves through `agent.research_browse`, and `--no-screenshots` only suppresses the
+stored `context.screenshots` grant. `tests/registry/precedence.spec.ts` drives every option with an
+`env` or `preference` step through the resolver its command calls and checks that the environment
+alone, the preference alone and the declared default each produce the declared result, that the
+environment outranks the preference, and that the flag overrides both; it also checks that the
+`YANTRA_AGENT_*`/`LLM_PROVIDER` names the registry declares are exactly those the resolver reads.
+Applicability is declared too: model, budget and turn options apply only in `llm` mode,
+`--pipeline-timeout` only on the deterministic path, and `--detail` only when `--format` is
+`terminal`. Relations record only what the CLI enforces: `--browser-path` with a `--browser` other
+than `system`, `--template` with `--no-llm` (on `ask` and `research`) and `report --open` with
+`--json`.
+
 To migrate a family: add its entries (TASK order: data first, kept honest by the agreement test),
 move each action body unchanged into an exported handler in the same module, bind it in
 `buildHandlers`, delete the inline commander calls, and remove the family from

@@ -1,13 +1,12 @@
 /**
- * The agentic option surface shared by every command that may open a provider
- * session. Registration and resolution live together so model, credential,
- * budget, and no-LLM vocabulary cannot drift between commands.
+ * Resolution of the agentic option surface shared by every command that may
+ * open a provider session.
  *
- * The surface is composed from named groups rather than registered wholesale:
- * every command spells a given flag identically, and registers only the groups
- * it can actually honor. A command that offers `--max-duration` must hand that
- * budget to the orchestrator; one that merely resolves a model registers
- * {@link addAgentModelOptions} alone.
+ * Registration lives in the command registry (`@yantra/protocol`, FEAT-062) as
+ * named option groups — `agent-model`, `agent-budget`, `agent-turn`, `no-llm`
+ * and `screenshots` — so every command spells a flag identically and
+ * registers only the groups it can honor. This module resolves what those
+ * groups parse.
  *
  * Values resolve in one order: explicit flag > `YANTRA_AGENT_*` environment >
  * `profile.yaml`/preference value > pinned constant. Deterministic selection is
@@ -33,13 +32,13 @@ import {
   preferenceValue,
   type EffectivePreferences,
 } from '@yantra/core';
-import { CommanderError, Option, type Command } from 'commander';
+import { CommanderError } from 'commander';
 
 import { noLlmReason } from './global-flags.js';
 
 export { DEFAULT_AGENT_MODEL, DEFAULT_AGENT_PROVIDER };
 
-/** Parsed values registered by {@link addAgentModelOptions}. */
+/** Parsed values of the registry's `agent-model` group. */
 export interface AgentModelOptions {
   readonly provider?: string;
   readonly model?: string;
@@ -47,7 +46,7 @@ export interface AgentModelOptions {
   readonly authSecret?: string;
 }
 
-/** Parsed values registered by {@link addAgentBudgetOptions}. */
+/** Parsed values of the `agent-budget` and `agent-turn` groups. */
 export interface AgentBudgetOptions {
   readonly maxDuration?: string;
   readonly turnTimeout?: string;
@@ -57,13 +56,13 @@ export interface AgentBudgetOptions {
   readonly confirmTimeout?: string;
 }
 
-/** Parsed values registered by {@link addNoLlmOption}. */
+/** Parsed value of the `no-llm` group. */
 export interface NoLlmOption {
   /** Commander stores `--no-llm` as `llm: false`. */
   readonly llm?: boolean;
 }
 
-/** Parsed values registered by {@link addAgentOptions}. */
+/** Parsed values of the groups a full agentic run registers. */
 export interface AgentOptions extends AgentModelOptions, AgentBudgetOptions, NoLlmOption {
   /** Commander stores `--no-screenshots` as `screenshots: false`. */
   readonly screenshots?: boolean;
@@ -106,64 +105,6 @@ export function parseDuration(raw: string, flag: string): number {
     AGENT_DURATION_PATTERN.test(raw.trim())
       ? `${flag} is too large to represent safely in milliseconds.`
       : `${flag} must be ${AGENT_DURATION_HINT}.`,
-  );
-}
-
-/**
- * Registers the model-selection vocabulary: which model answers, and with
- * which credential. Every command that resolves a model registers exactly
- * these four, spelled exactly this way.
- */
-export function addAgentModelOptions(command: Command): Command {
-  return command
-    .addOption(new Option('--provider <name>', 'agent model provider'))
-    .addOption(new Option('--model <id>', 'provider-scoped model id'))
-    .addOption(new Option('--thinking <level>', 'provider reasoning level'))
-    .addOption(new Option('--auth-secret <ref>', 'runtime model-key secret reference'));
-}
-
-/**
- * Registers the per-run budget vocabulary. Only for commands that actually
- * execute an agentic run and hand these to the orchestrator — a command that
- * cannot spend a budget must not offer to set one.
- */
-/** Register only on commands that enforce a thinking limit. */
-export function addAgentTurnOptions(command: Command): Command {
-  return command.addOption(
-    new Option('--turn-timeout <duration>', 'thinking time allowed in one provider turn'),
-  );
-}
-
-export function addAgentBudgetOptions(command: Command): Command {
-  return command
-    .addOption(new Option('--max-duration <duration>', 'whole-run wall-clock duration'))
-    .addOption(new Option('--max-tokens <n>', 'cumulative provider token ceiling'))
-    .addOption(new Option('--tool-timeout <duration>', 'timeout for one tool call'))
-    .addOption(new Option('--tool-retries <n>', 'retries after an identical tool failure'))
-    .addOption(new Option('--confirm-timeout <duration>', 'maximum live consent wait'));
-}
-
-/**
- * Registers the deterministic-path negation. Spelled in one place because
- * every command that can involve a model accepts it (memory §General).
- */
-export function addNoLlmOption(command: Command): Command {
-  return command.addOption(new Option('--no-llm', 'force the deterministic no-model path'));
-}
-
-/**
- * Registers the complete agentic-run option surface for commands that open a
- * provider session and spend a budget. Callers must not add Commander
- * defaults; resolution needs to distinguish an absent flag from an explicitly
- * supplied value.
- *
- * Commands that only *select* a model without running one compose the narrower
- * registrars instead — see {@link addAgentModelOptions}. Registering a flag a
- * command cannot honor is not consistency, it is a dead control.
- */
-export function addAgentOptions(command: Command): Command {
-  return addNoLlmOption(addAgentBudgetOptions(addAgentModelOptions(command))).addOption(
-    new Option('--no-screenshots', 'no screenshots this run (vision assist and saved captures)'),
   );
 }
 

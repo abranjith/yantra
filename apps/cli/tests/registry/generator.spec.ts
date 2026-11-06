@@ -13,6 +13,7 @@ import {
   type HandlerTable,
 } from '../../src/registry/build-command-tree.js';
 import { LEGACY_ONLY, handler } from '../../src/registry/handler.js';
+import type { UnmigratedCommand } from '../../src/registry/unmigrated.js';
 
 import { runCase } from './surface.js';
 
@@ -142,6 +143,9 @@ function testRegistry(): CommandRegistryInput {
 }
 
 const registry = validateCommandRegistry(testRegistry());
+const ASK_UNMIGRATED: readonly UnmigratedCommand[] = [
+  { path: 'ask', since: '2026-11-05', reason: 'test', owner: 'FEAT-070' },
+];
 const noop = (): void => undefined;
 const stubs: HandlerTable = { alpha: noop, 'beta.gamma': noop };
 
@@ -273,22 +277,26 @@ describe('@no-llm buildCommandTree ordering and legacy families', () => {
     const register = vi.fn((program: Command) => {
       program.addCommand(new Command('ask').description('legacy ask'));
     });
-    const program = buildCommandTree(root(), registry, stubs, [
-      { name: 'beta' },
-      { name: 'ask', register },
-      { name: 'alpha' },
-    ]);
+    const program = buildCommandTree(
+      root(),
+      registry,
+      stubs,
+      [{ name: 'beta' }, { name: 'ask', register }, { name: 'alpha' }],
+      ASK_UNMIGRATED,
+    );
     expect(register).toHaveBeenCalledTimes(1);
     expect(program.commands.map((command) => command.name())).toEqual(['beta', 'ask', 'alpha']);
   });
 
   it('rejects an unmigrated family without a factory', () => {
     expect(() =>
-      buildCommandTree(root(), registry, stubs, [
-        { name: 'beta' },
-        { name: 'alpha' },
-        { name: 'ask' },
-      ]),
+      buildCommandTree(
+        root(),
+        registry,
+        stubs,
+        [{ name: 'beta' }, { name: 'alpha' }, { name: 'ask' }],
+        ASK_UNMIGRATED,
+      ),
     ).toThrow(/unmigrated but has no factory/);
   });
 

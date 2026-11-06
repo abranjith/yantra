@@ -933,7 +933,7 @@ tests/commands/format.property.spec.ts` is green with every leaf covered. The te
 - [x] TASK-003: Option groups and read-class registry entries (M1), checked against the live tree
 - [x] TASK-004: Commander generator with path-bound handlers; migrate the wholly read-only families
       (M1)
-- [ ] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,
+- [x] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,
       `do`, `run`, `resume`, `doctor`
 - [ ] TASK-006: Settings families: `config`, `prefs`, `secret`, `model`, `sites`, `init`
 - [ ] TASK-007: Remaining families and registry completeness

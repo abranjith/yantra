@@ -4,6 +4,7 @@
  * commander tree from this data.
  */
 
+import { ask, doCommand, research } from './entries/agentic.js';
 import { browser, browserList } from './entries/browser.js';
 import { daemon, daemonStatus } from './entries/daemon.js';
 import { doctor } from './entries/doctor.js';
@@ -21,7 +22,7 @@ import {
   sitesList,
 } from './entries/settings.js';
 import { template, templateList, templateShow } from './entries/template.js';
-import { schedules } from './entries/workflow.js';
+import { resume, run, schedules } from './entries/workflow.js';
 import { OPTION_GROUP_INPUTS } from './groups.js';
 import {
   CommandRegistry,
@@ -31,11 +32,16 @@ import {
 } from './schema.js';
 
 const ENTRIES = [
+  ask,
+  research,
+  doCommand,
+  run,
   config,
   configPath,
   configList,
   configGet,
   configValidate,
+  resume,
   schedules,
   daemon,
   daemonStatus,

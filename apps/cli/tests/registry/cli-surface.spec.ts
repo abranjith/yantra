@@ -73,6 +73,11 @@ describe('@no-llm CLI surface characterization', () => {
     expect(invoked.map(([path]) => path)).toEqual([]);
   });
 
+  it('prints the do golden for the discover alias', async () => {
+    const outcome = await runCase(() => buildProgram(), ['discover', '--help'], 80);
+    expect(outcome.stdout).toBe(goldens.get('help/w80/do.txt'));
+  });
+
   it('stores goldens LF-only with no control bytes other than newline', () => {
     const offenders = [...goldens.entries()]
       .filter(([, content]) => [...content].some((char) => char < ' ' && char !== '\n'))

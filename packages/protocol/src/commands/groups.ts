@@ -161,7 +161,7 @@ const groups: OptionGroupInput[] = [
 ];
 
 /**
- * The option groups as registry input. `addAgentOptions` corresponds to
+ * The option groups as registry input. The former `addAgentOptions` registrar is
  * `agent-model`, `agent-budget`, `no-llm`, `screenshots`, in that order.
  */
 export const OPTION_GROUP_INPUTS: readonly OptionGroupInput[] = groups;

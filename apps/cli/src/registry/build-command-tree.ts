@@ -10,6 +10,7 @@
  */
 
 import {
+  COMMAND_REGISTRY,
   CommandRegistryError,
   expandOptions,
   type ArgumentSpec,
@@ -21,7 +22,7 @@ import {
 import { Command, Option } from 'commander';
 
 import { LEGACY_ONLY, type HandlerBinding } from './handler.js';
-import { UNMIGRATED_COMMANDS } from './unmigrated.js';
+import { UNMIGRATED_COMMANDS, type UnmigratedCommand } from './unmigrated.js';
 
 /** Leaf id → bound handler. A generated leaf must map to a function. */
 export type HandlerTable = Readonly<Record<string, HandlerBinding | undefined>>;
@@ -155,13 +156,30 @@ export function attachEntry(
 export function createRegisteredCommand(
   id: string,
   handlers: HandlerTable,
-  registry: CommandRegistry,
+  registry: CommandRegistry = COMMAND_REGISTRY,
 ): Command {
   const entry = registry.commands.find((candidate) => candidate.id === id);
   if (entry?.registration !== 'added') {
     throw new CommandRegistryError(id, 'missing-handler', 'is not an `added` registry entry');
   }
   return createCommand(null, entry, registry, handlers);
+}
+
+/**
+ * Generates the registry entry `id` under `parent`, honoring its registration
+ * style, for callers that register one family themselves.
+ */
+export function attachRegistered(
+  parent: Command,
+  id: string,
+  handlers: HandlerTable,
+  registry: CommandRegistry = COMMAND_REGISTRY,
+): Command {
+  const entry = registry.commands.find((candidate) => candidate.id === id);
+  if (entry === undefined) {
+    throw new CommandRegistryError(id, 'missing-handler', 'has no registry entry');
+  }
+  return attachEntry(parent, entry, registry, handlers);
 }
 
 /**
@@ -180,8 +198,9 @@ export function buildCommandTree(
   registry: CommandRegistry,
   handlers: HandlerTable,
   legacy: readonly LegacyCommand[] = [],
+  allowlist: readonly UnmigratedCommand[] = UNMIGRATED_COMMANDS,
 ): Command {
-  const unmigrated = new Set(UNMIGRATED_COMMANDS.map((item) => item.path));
+  const unmigrated = new Set(allowlist.map((item) => item.path));
   const topLevel = registry.commands.filter((entry) => entry.path.length === 1);
   const order = legacy.length > 0 ? legacy.map((item) => item.name) : topLevel.map((e) => e.id);
 

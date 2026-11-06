@@ -108,6 +108,69 @@ describe('@no-llm shipped command registry', () => {
   });
 });
 
+describe('@no-llm run-class entries', () => {
+  const facts = { options: {}, arguments: {}, explicit: [] };
+
+  it.each(['ask', 'research', 'do', 'run', 'resume'])('resolves %s to run', (id) => {
+    expect(executionClassFor(findLeaf([id])!, facts)).toBe('run');
+  });
+
+  it('records the --json result shape of each run-class command', () => {
+    expect(findLeaf(['ask'])!.json).toEqual({ flag: '--json', shape: 'document', schema: 'Brief' });
+    expect(findLeaf(['research'])!.json.schema).toBe('Brief');
+    expect(findLeaf(['do'])!.json).toEqual({
+      flag: '--json',
+      shape: 'ndjson',
+      schema: 'TaskEvent',
+    });
+    expect(findLeaf(['run'])!.json).toEqual({ flag: '--json', shape: 'envelope', schema: null });
+    expect(findLeaf(['resume'])!.json.shape).toBe('envelope');
+  });
+
+  it('marks resume --force as needing confirmation', () => {
+    const resume = findLeaf(['resume'])!;
+    const force = expandOptions(resume, COMMAND_REGISTRY.option_groups).find(
+      (option) => option.long === '--force',
+    );
+    expect(force?.danger?.level).toBe('confirm');
+  });
+
+  it('composes do from the groups in registration order, then its own options', () => {
+    const doEntry = findLeaf(['discover'])!;
+    expect(doEntry.id).toBe('do');
+    expect(doEntry.options.slice(0, 6)).toEqual([
+      { group: 'agent-model' },
+      { group: 'agent-budget' },
+      { group: 'no-llm' },
+      { group: 'screenshots' },
+      { group: 'agent-turn' },
+      { group: 'browser-selection' },
+    ]);
+  });
+
+  it('applies --detail only to terminal output and budgets only on the LLM path', () => {
+    const ask = findLeaf(['ask'])!;
+    const options = expandOptions(ask, COMMAND_REGISTRY.option_groups);
+    expect(options.find((o) => o.long === '--detail')?.applicability).toEqual([
+      { option: '--format', equals: 'terminal' },
+    ]);
+    expect(options.find((o) => o.long === '--max-tokens')?.applicability).toEqual([
+      { mode: 'llm' },
+    ]);
+  });
+
+  it('declares the browser-path relation on every command with the browser group', () => {
+    for (const entry of COMMAND_REGISTRY.commands) {
+      if (entry.kind !== 'leaf') continue;
+      const hasGroup = entry.options.some(
+        (ref) => 'group' in ref && ref.group === 'browser-selection',
+      );
+      const hasRelation = entry.relations.some((relation) => relation.option === '--browser-path');
+      expect({ id: entry.id, hasRelation }).toEqual({ id: entry.id, hasRelation: hasGroup });
+    }
+  });
+});
+
 describe('@no-llm findCommand', () => {
   it('finds groups and leaves by canonical path', () => {
     expect(findCommand(['config'])?.kind).toBe('group');

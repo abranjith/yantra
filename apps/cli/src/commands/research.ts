@@ -37,17 +37,15 @@ import {
   UserInputMarkerError,
 } from '@yantra/core';
 import { validateBrief, validateTemplatedReport } from '@yantra/protocol';
-import { CommanderError, Option, type Command } from 'commander';
+import { CommanderError, type Command } from 'commander';
 
 import {
-  addAgentOptions,
   parseDuration,
   resolveAgentInvocation,
   type AgentInvocation,
   type AgentOptions,
 } from '../agent-options.js';
 import {
-  addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
@@ -59,22 +57,19 @@ import {
   resolveAmbientContext,
   type ResolvedAmbientContext,
 } from '../preferences.js';
+import { attachRegistered } from '../registry/build-command-tree.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
 import {
-  addNoBrowseOption,
   resolveResearchBrowse,
   type NoBrowseOption,
   type ResearchBrowseResolution,
 } from '../research-browse.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
-import {
-  TEMPLATE_LLM_GUARD,
-  TEMPLATE_OPTION_DESCRIPTION,
-  resolveTemplateRef,
-} from '../template-ref.js';
+import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
 const noopLogger: Logger = {
   info: () => undefined,
@@ -132,61 +127,16 @@ export function registerResearchCommand(
   program: Command,
   runtime?: Partial<ResearchRuntime>,
 ): void {
-  const resolvedRuntime = runtimeWithDefaults(runtime);
+  attachRegistered(program, 'research', { research: makeResearchHandler(runtime) });
+}
 
-  const researchCommand = program
-    .command('research')
-    .description('Deep, multi-hop research on a topic, returned as a long-form Brief.')
-    .argument('<topic>', 'topic to research from web sources');
-  // Shared agent model-selection surface (`--provider`/`--model`/`--thinking`/
-  // `--auth-secret`), identical to `ask` and `do`. These bind the LLM provider;
-  // `--search-provider` below is the unrelated web-search backend.
-  // `--no-browse` is registered here only: `ask` never browses and `do`
-  // always does, so on either it would be a dead control.
-  addNoBrowseOption(addBrowserSelectionOptions(addAgentOptions(researchCommand)))
-    .addOption(new Option('--json', 'shorthand for --format json').default(false))
-    .addOption(
-      new Option('--depth <hops>', 'number of research hops (1-3)')
-        .choices(['1', '2', '3'])
-        .default('2'),
-    )
-    .addOption(new Option('--max-sources <n>', 'maximum sources to gather').default('24'))
-    .addOption(
-      new Option('--detail <level>', 'terminal disclosure level')
-        .choices(['overview', 'standard', 'full'])
-        .default('standard'),
-    )
-    .addOption(
-      new Option('--format <format>', 'output format sent to stdout')
-        .choices(['terminal', 'md', 'html', 'json'])
-        .default('terminal'),
-    )
-    .addOption(
-      new Option('--length <length>', 'final synthesis length budget')
-        .choices(['short', 'medium', 'long'])
-        .default('long'),
-    )
-    .addOption(new Option('--open', 'open the generated brief.html in the default browser'))
-    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addOption(new Option('--no-color', 'disable ANSI color output'))
-    .addOption(
-      new Option(
-        '--search-provider <provider>',
-        'search provider (default: auto walks tavily -> brave -> duckduckgo)',
-      ).choices(['auto', 'google', 'duckduckgo', 'brave', 'tavily']),
-    )
-    .addOption(new Option('--max-llm-calls <n>', 'maximum LLM calls across the deterministic run'))
-    .addOption(
-      new Option('--per-query-limit <n>', 'search results to consider per query').default('6'),
-    )
-    .addOption(new Option('--fetch-timeout <ms>', 'per-fetch timeout in ms').default('8000'))
-    .addOption(
-      new Option(
-        '--pipeline-timeout <duration>',
-        'deterministic loop wall-clock timeout (for example 3m)',
-      ).default('3m'),
-    )
-    .action(async (topicArg: string, options: ResearchCommandOptions, command: Command) => {
+/** The `research` handler over an injectable runtime, bound to the `research` registry entry. */
+export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler {
+  const resolvedRuntime = runtimeWithDefaults(runtime);
+  return handler(
+    async (args: HandlerArgs, options: ResearchCommandOptions, command: Command): Promise<void> => {
+      const [topicArg] = args as readonly [string];
+
       // A conflicting `--browser` pair is a validation failure, resolved before
       // any loop or provider session exists.
       const browserSelection = resolveBrowserSelectionOverride(options);
@@ -294,7 +244,8 @@ export function registerResearchCommand(
         resolvedRuntime.stderr.write(`research failed: ${message}\n`);
         throw new CommanderError(2, 'yantra.research.failed', message);
       }
-    });
+    },
+  );
 }
 
 /** Renders the Brief through the unified connector dispatch (same as `ask`). */

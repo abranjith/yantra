@@ -23,16 +23,10 @@ import {
   type EffectivePreferences,
 } from '@yantra/core';
 import { validateTemplatedReport } from '@yantra/protocol';
-import { CommanderError, Option, type Command } from 'commander';
+import { CommanderError, type Command } from 'commander';
 
+import { resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import {
-  addAgentTurnOptions,
-  addAgentOptions,
-  resolveAgentInvocation,
-  type AgentOptions,
-} from '../agent-options.js';
-import {
-  addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
@@ -40,16 +34,14 @@ import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';
+import { attachRegistered } from '../registry/build-command-tree.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
 import { runAgenticTaskWithRankSink } from '../runtime.js';
-import {
-  TEMPLATE_LLM_GUARD,
-  TEMPLATE_OPTION_DESCRIPTION,
-  resolveTemplateRef,
-} from '../template-ref.js';
+import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
 interface DoOptions extends AgentOptions, BrowserSelectionOptions {
   readonly json?: boolean;
@@ -76,35 +68,15 @@ export interface DoRuntime {
 
 /** Register `do`/`discover` without introducing any agent loop in the CLI. */
 export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>): void {
+  attachRegistered(program, 'do', { do: makeDoHandler(runtime) });
+}
+
+/** The `do` handler over an injectable runtime, bound to the `do` registry entry. */
+export function makeDoHandler(runtime?: Partial<DoRuntime>): Handler {
   const resolved = runtimeWithDefaults(runtime);
-  const command = program
-    .command('do')
-    .alias('discover')
-    .description('Run a multi-turn web agent that uses Yantra tools and publishes a Brief.')
-    .argument('<goal>', 'browser or web goal to accomplish');
-  addBrowserSelectionOptions(addAgentTurnOptions(addAgentOptions(command)))
-    .addOption(
-      new Option('--allow-host <host>', 'restrict outbound work to a host (repeatable)')
-        .argParser(collect)
-        .default([]),
-    )
-    .addOption(
-      new Option(
-        '--save-as <name>',
-        'on success, promote the browser trace into a saved, replayable workflow',
-      ),
-    )
-    .addOption(new Option('--json', 'emit progress and outcome as NDJSON').default(false))
-    .addOption(
-      new Option('--open', 'open the generated brief.html in the default browser').default(false),
-    )
-    .addOption(new Option('--template <name|tag|path>', TEMPLATE_OPTION_DESCRIPTION))
-    .addHelpText(
-      'after',
-      '\nProtect user-supplied values from the model with `@{value}` or `@password{value}`. ' +
-        'Malformed markers are validation errors (exit 1).\n',
-    )
-    .action((goal: string, options: DoOptions) => executeDo(goal, options, resolved));
+  return handler((args: HandlerArgs, options: DoOptions) =>
+    executeDo(args[0] as string, options, resolved),
+  );
 }
 
 /** Map a closed agentic result to the documented CLI contract. */
@@ -272,10 +244,6 @@ function normalizeHosts(hosts: readonly string[]): string[] {
     }
   }
   return [...new Set(normalized)].sort();
-}
-
-function collect(value: string, previous: string[]): string[] {
-  return [...previous, value];
 }
 
 function clean(value: string): string {

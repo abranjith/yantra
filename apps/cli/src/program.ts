@@ -1,21 +1,18 @@
 import { COMMAND_REGISTRY, PROTOCOL_VERSION } from '@yantra/protocol';
 import { Command } from 'commander';
 
-import { registerAskCommand, type AskRuntime } from './commands/ask.js';
+import type { AskRuntime } from './commands/ask.js';
 import { makeBrowserCommand } from './commands/browser.js';
 import { makeConfigCommand } from './commands/config.js';
 import { makeConfirmCommand } from './commands/confirm.js';
 import { makeDaemonCommand } from './commands/daemon.js';
-import { registerDoCommand, type DoRuntime } from './commands/do.js';
-import { makeDoctorCommand } from './commands/doctor.js';
+import type { DoRuntime } from './commands/do.js';
 import { makeInitCommand } from './commands/init.js';
 import { makeLintCommand } from './commands/lint.js';
 import { makeModelCommand } from './commands/model.js';
 import { makeOpenCommand } from './commands/open.js';
 import { makePrefsCommand } from './commands/prefs.js';
-import { registerResearchCommand, type ResearchRuntime } from './commands/research.js';
-import { makeResumeCommand } from './commands/resume.js';
-import { makeRunCommand } from './commands/run.js';
+import type { ResearchRuntime } from './commands/research.js';
 import { makeScheduleCommand, makeUnscheduleCommand } from './commands/schedule.js';
 import { makeSecretCommand } from './commands/secret.js';
 import { makeSitesCommand, type SitesRuntime } from './commands/sites.js';
@@ -48,17 +45,14 @@ function legacyCommands(options: CliRunOptions): readonly LegacyCommand[] {
       program.addCommand(factory());
     };
   return [
-    { name: 'ask', register: (program) => registerAskCommand(program, options.askRuntime) },
-    {
-      name: 'research',
-      register: (program) => registerResearchCommand(program, options.researchRuntime),
-    },
-    { name: 'do', register: (program) => registerDoCommand(program, options.doRuntime) },
-    { name: 'run', register: added(makeRunCommand) },
+    { name: 'ask' },
+    { name: 'research' },
+    { name: 'do' },
+    { name: 'run' },
     { name: 'confirm', register: added(makeConfirmCommand) },
     { name: 'config', register: added(makeConfigCommand) },
     { name: 'secret', register: added(makeSecretCommand) },
-    { name: 'resume', register: added(makeResumeCommand) },
+    { name: 'resume' },
     { name: 'schedule', register: added(makeScheduleCommand) },
     { name: 'schedules' },
     { name: 'unschedule', register: added(makeUnscheduleCommand) },
@@ -73,7 +67,7 @@ function legacyCommands(options: CliRunOptions): readonly LegacyCommand[] {
     { name: 'prefs', register: added(makePrefsCommand) },
     { name: 'sites', register: added(() => makeSitesCommand(options.sitesRuntime)) },
     { name: 'template', register: added(() => makeTemplateCommand(options.templateRuntime)) },
-    { name: 'doctor', register: added(makeDoctorCommand) },
+    { name: 'doctor' },
     { name: 'audit' },
     { name: 'report' },
     { name: 'init', register: added(makeInitCommand) },
