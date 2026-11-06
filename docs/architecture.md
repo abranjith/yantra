@@ -137,6 +137,31 @@ arguments). A root-level `--` before the path is kept at the front of `argv`, so
 re-parses identically. `apps/cli/tests/registry/parse-parity.spec.ts` checks agreement with the
 real tree for every leaf, 200 fast-check runs each over valid and near-valid argv.
 
+`formatInvocation(invocation, shell, { program })` (`format.ts`) is the CLI twin: the command line
+the app shows and copies. It is for display only; workers are spawned shell-free.
+`defaultShellFor(platform)` picks PowerShell on Windows and POSIX elsewhere. Each token is
+quoted for its shell:
+
+- **posix**: bare when it matches `[A-Za-z0-9_@%+=:,./-]+`, otherwise single-quoted with `'` as
+  `'\''`.
+- **powershell** (5.1): PowerShell passes a native argument unchanged unless it holds unquoted
+  whitespace, which it wraps in `"…"` without escaping anything, and it drops an empty string. So a
+  value is first encoded for the child's MSVCRT parse (`"` as `\"`, backslashes before a quote
+  doubled, trailing backslashes doubled when the value will be wrapped) and then written as a
+  single-quoted literal; an empty value becomes `'""'`, and `--`, `@…`, `,` and non-ASCII are
+  always quoted. A quoted program runs through the call operator, `& '<path>'`.
+- **cmd**: double-quoted when the token holds whitespace or `&|<>()^,;=`, with the same backslash
+  rule. A line break, `"`, `%` or a control character cannot be carried, so the result is
+  `{ ok: false, reason: 'shell_unrepresentable' }` with a detail naming the token and the reason.
+
+Whatever the shell, a value for a `secret-input` argument or option (today `secret set [value]`)
+is refused with `secret_input`; when a secret-taking command does not parse, the formatter refuses
+rather than guess where the value is. `tests/commands/format.property.spec.ts` round-trips valid
+argv for every leaf over an adversarial alphabet through reference models of each shell
+(`shell-tokenizers.ts`: POSIX word splitting; PowerShell's tokenizer, its legacy native-argument
+passing and the MSVCRT parse; cmd's caret and metacharacter pass, then MSVCRT) and asserts the
+re-parse equals the original.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:

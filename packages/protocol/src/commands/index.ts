@@ -51,6 +51,16 @@ export {
   type ParsedInvocation,
 } from './invocation.js';
 export {
+  defaultShellFor,
+  formatInvocation,
+  quoteCmd,
+  quotePosix,
+  quotePowerShell,
+  type FormatOptions,
+  type FormatResult,
+  type Shell,
+} from './format.js';
+export {
   COMMAND_REGISTRY,
   COMMAND_REGISTRY_INPUT,
   LEAF_COMMAND_IDS,

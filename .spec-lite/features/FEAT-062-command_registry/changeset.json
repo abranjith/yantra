@@ -2169,7 +2169,7 @@
     },
     {
       "path": "apps/cli/tests/registry/parse-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -2229,7 +2229,7 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/command-invocation.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -2330,6 +2330,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/src/commands/format.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/protocol/src/commands/groups.ts",
       "status": "A",
       "role": "implement",
@@ -2343,7 +2349,7 @@
     },
     {
       "path": "packages/protocol/src/commands/invocation.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -2379,7 +2385,7 @@
     },
     {
       "path": "packages/protocol/tests/commands/argv-arbitraries.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -2402,8 +2408,20 @@
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/tests/commands/invocation.spec.ts",
+      "path": "packages/protocol/tests/commands/format.property.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/tests/commands/format.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/tests/commands/invocation.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -2418,6 +2436,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/commands/shell-tokenizers.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     }
   ],
   "excluded": [
