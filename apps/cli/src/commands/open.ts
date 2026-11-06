@@ -2,10 +2,12 @@ import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { LocalRunStore } from '@yantra/core/workflow/replay';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 
 import { openHistory, type OpenHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 type Artifact = 'brief' | 'report' | 'audit' | 'dir';
@@ -22,18 +24,21 @@ export interface OpenRuntime {
 }
 
 export function makeOpenCommand(input?: Partial<OpenRuntime>): Command {
+  return createRegisteredCommand('open', openHandlers(input));
+}
+
+/** Handlers for `open`, bound by registry id; each is its former commander action, unchanged. */
+export function openHandlers(input?: Partial<OpenRuntime>) {
   const runtime: OpenRuntime = {
     createRunStore: input?.createRunStore ?? (() => new LocalRunStore()),
     openHistory: input?.openHistory ?? (() => openHistory()),
     launch: input?.launch ?? openArtifact,
   };
-  return new Command('open')
-    .description("Open a run's saved artifact")
-    .argument('[run-id]')
-    .option('--artifact <kind>', 'brief | report | audit | dir', 'brief')
-    .option('--print', 'print the resolved path without launching', false)
-    .option('--json', 'emit JSON without launching', false)
-    .action((runId: string | undefined, options: OpenOptions) => runOpen(runId, options, runtime));
+  return {
+    open: fromAction((runId: string | undefined, options: OpenOptions) =>
+      runOpen(runId, options, runtime),
+    ),
+  };
 }
 
 async function runOpen(

@@ -116,3 +116,127 @@ export const schedules = leaf({
   ],
   json: { flag: '--json', shape: 'document', schema: null },
 });
+
+export const confirm = leaf({
+  id: 'confirm',
+  description: 'Grant or deny a pending confirmation for a parked run',
+  registration: 'added',
+  arguments: [
+    argument('run-id', {
+      description: 'The run id with a pending confirmation',
+      required: true,
+      input: { kind: 'run-ref' },
+    }),
+    argument('decision', {
+      description: 'grant | deny',
+      required: true,
+      input: { kind: 'enum', choices: ['grant', 'deny'], enforced_by: 'handler' },
+    }),
+  ],
+  options: [jsonOption('Emit JSON summary to stdout'), debugOption('Verbose logging to stderr')],
+  execution: {
+    default: 'mutate',
+    adapter: {
+      id: 'confirm-inbox',
+      executes_as: 'mutate',
+      note: 'the Inbox answers through the shared consent service (D12)',
+    },
+  },
+  effect: 'local',
+  danger: { level: 'none' },
+  exit_codes: [
+    exit.ok('the decision was recorded'),
+    exit.validation(`${PARSE_ERRORS}, an invalid decision, or no pending confirmation`),
+  ],
+  json: { flag: '--json', shape: 'envelope', schema: null },
+});
+
+export const lint = leaf({
+  id: 'lint',
+  description: 'Lint a workflow YAML file for errors and best-practice violations',
+  registration: 'added',
+  arguments: [
+    argument('file', {
+      description: 'Path to the workflow YAML file',
+      required: true,
+      input: { kind: 'path', target: 'file' },
+    }),
+  ],
+  options: [
+    option('--strict', 'Promote warnings to errors', { default: false }),
+    jsonOption('Output lint report as JSON to stdout'),
+  ],
+  execution: { default: 'mutate' },
+  effect: 'none',
+  danger: { level: 'none' },
+  exit_codes: [
+    exit.ok('no errors (warnings allowed unless --strict)'),
+    exit.validation(`${PARSE_ERRORS}, an unreadable file, or lint errors`),
+  ],
+  json: { flag: '--json', shape: 'document', schema: null },
+});
+
+export const schedule = leaf({
+  id: 'schedule',
+  description: 'Register a recurring unattended run of a saved workflow',
+  registration: 'added',
+  arguments: [
+    argument('workflow-name', {
+      description: 'Name of the saved workflow to schedule',
+      required: true,
+      input: { kind: 'workflow-ref' },
+    }),
+  ],
+  options: [
+    option('--cron <expr>', 'Cron expression (e.g. "0 8 * * 1")', { mandatory: true }),
+    option('-p, --params <key=value...>', 'Workflow parameter (repeatable)', {
+      repeatable: true,
+      default: [],
+    }),
+    option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs', {
+      input: { kind: 'path', target: 'file' },
+    }),
+    option('--notify <target>', 'Notification sink: desktop | file | none', {
+      default: 'desktop',
+      input: { kind: 'enum', choices: ['desktop', 'file', 'none'], enforced_by: 'handler' },
+    }),
+    option('--on-confirm <policy>', 'Confirmation policy — only "pause-and-notify" is accepted', {
+      default: 'pause-and-notify',
+      input: { kind: 'enum', choices: ['pause-and-notify'], enforced_by: 'handler' },
+    }),
+    jsonOption('Emit JSON summary to stdout'),
+    debugOption('Verbose logging to stderr'),
+  ],
+  execution: { default: 'mutate' },
+  effect: 'local',
+  danger: { level: 'none' },
+  exit_codes: [
+    exit.ok(),
+    exit.validation(
+      `${PARSE_ERRORS}, an invalid cron, parameter, --notify or --on-confirm, or a workflow that cannot be scheduled`,
+    ),
+    exit.execution('the schedule store reported an error'),
+    exit.environment('the local index is unavailable'),
+  ],
+  json: { flag: '--json', shape: 'document', schema: null },
+});
+
+export const unschedule = leaf({
+  id: 'unschedule',
+  description: 'Remove a registered schedule',
+  registration: 'added',
+  arguments: [
+    argument('id', { description: 'Schedule id (from `yantra schedules`)', required: true }),
+  ],
+  options: [jsonOption('Emit JSON summary to stdout'), debugOption('Verbose logging to stderr')],
+  execution: { default: 'mutate' },
+  effect: 'local',
+  danger: { level: 'confirm', reason: 'removes the recurring schedule' },
+  exit_codes: [
+    exit.ok(),
+    exit.validation(`${PARSE_ERRORS}, or no schedule with that id`),
+    exit.execution('the schedule store reported an error'),
+    exit.environment('the local index is unavailable'),
+  ],
+  json: { flag: '--json', shape: 'document', schema: null },
+});

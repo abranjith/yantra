@@ -20,6 +20,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/browser-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/src/commands/ask.ts",
       "status": "M",
       "role": "implement",
@@ -32,10 +38,28 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/browser.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/src/commands/config.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/confirm.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/commands/daemon.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/commands/do.ts",
@@ -56,6 +80,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/commands/lint.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
@@ -66,6 +96,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/open.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/commands/prefs.ts",
@@ -128,6 +164,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/commands/template.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/src/commands/usage.ts",
       "status": "M",
       "role": "implement",
@@ -174,6 +216,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/browser-options.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/tests/commands/agent-options.spec.ts",
@@ -2094,6 +2142,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/registry/completeness.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/tests/registry/generator.spec.ts",

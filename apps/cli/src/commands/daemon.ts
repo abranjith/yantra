@@ -22,8 +22,10 @@ import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { FileDaemonLock } from '@yantra/core';
-import { Command } from 'commander';
+import { type Command } from 'commander';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
 
@@ -44,40 +46,26 @@ interface DaemonStatusOptions {
 }
 
 export function makeDaemonCommand(): Command {
-  const cmd = new Command('daemon');
-  cmd.description('Manage the local scheduler service');
+  return createRegisteredCommand('daemon', daemonHandlers());
+}
 
-  cmd
-    .command('start')
-    .description('Start the scheduler daemon')
-    .option('--foreground', 'Run in the foreground instead of detaching', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (options: DaemonStartOptions) => {
+/** Handlers for `daemon`, bound by registry id; each is its former commander action, unchanged. */
+export function daemonHandlers() {
+  return {
+    'daemon.start': fromAction(async (options: DaemonStartOptions) => {
       if (options.foreground === true) {
         await runForeground(options.debug === true);
         return;
       }
       await spawnDetached();
-    });
-
-  cmd
-    .command('stop')
-    .description('Stop the running scheduler daemon')
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (options: DaemonStopOptions) => {
+    }),
+    'daemon.stop': fromAction(async (options: DaemonStopOptions) => {
       await stopDaemon(options.debug === true);
-    });
-
-  cmd
-    .command('status')
-    .description('Report scheduler daemon status')
-    .option('--json', 'Emit JSON status to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (options: DaemonStatusOptions) => {
+    }),
+    'daemon.status': fromAction(async (options: DaemonStatusOptions) => {
       await reportStatus(options.json === true, options.debug === true);
-    });
-
-  return cmd;
+    }),
+  };
 }
 
 /** Runs the daemon in the foreground, blocking until SIGTERM/SIGINT. */

@@ -15,9 +15,11 @@ import {
   type TemplateSummary,
 } from '@yantra/core';
 import type { TemplateManifest, TemplateSlot } from '@yantra/protocol';
-import { CommanderError, Command, Option } from 'commander';
+import { CommanderError, type Command } from 'commander';
 import { stringify } from 'yaml';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 /** Injectable boundaries for template-command unit tests. */
@@ -38,40 +40,31 @@ interface JsonOption {
 
 /** Build the complete `template new|save|list|show|lint|remove` command group. */
 export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): Command {
+  return createRegisteredCommand('template', templateHandlers(runtime));
+}
+
+/** Handlers for `template`, bound by registry id; each is its former commander action, unchanged. */
+export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
   const resolved = withDefaults(runtime);
-  const command = new Command('template').description(
-    'Create, validate, save, inspect, and remove report templates.',
-  );
-
-  command
-    .command('new')
-    .description('Create a starter template covering every slot kind.')
-    .argument('<name>', 'saved template name')
-    .addOption(new Option('--tags <a,b>', 'comma-separated tags'))
-    .addOption(new Option('--force', 'overwrite an existing template').default(false))
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(async (rawName: string, options: JsonOption & { tags?: string; force?: boolean }) => {
-      const name = requireName(rawName, resolved);
-      const tags = normalizeTemplateTags(splitTags(options.tags));
-      const text = starterTemplate(name, tags);
-      try {
-        const path = await resolved.store.save(name, text, { force: options.force === true });
-        if (options.json === true) {
-          writeJson(resolved, { kind: 'template_new', name, path, tags });
-        } else {
-          resolved.stdout.write(`${path}\n`);
+  return {
+    'template.new': fromAction(
+      async (rawName: string, options: JsonOption & { tags?: string; force?: boolean }) => {
+        const name = requireName(rawName, resolved);
+        const tags = normalizeTemplateTags(splitTags(options.tags));
+        const text = starterTemplate(name, tags);
+        try {
+          const path = await resolved.store.save(name, text, { force: options.force === true });
+          if (options.json === true) {
+            writeJson(resolved, { kind: 'template_new', name, path, tags });
+          } else {
+            resolved.stdout.write(`${path}\n`);
+          }
+        } catch (error) {
+          fail(resolved, errorMessage(error), 'yantra.template.new');
         }
-      } catch (error) {
-        fail(resolved, errorMessage(error), 'yantra.template.new');
-      }
-    });
-
-  command
-    .command('lint')
-    .description('Parse a saved template or Markdown path and print its slot manifest.')
-    .argument('<name-or-path>', 'saved name or Markdown file path')
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(async (reference: string, options: JsonOption) => {
+      },
+    ),
+    'template.lint': fromAction(async (reference: string, options: JsonOption) => {
       try {
         const target = await readTarget(reference, resolved);
         const parsed = parseTemplate(target.text);
@@ -97,18 +90,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
         if (error instanceof CommanderError) throw error;
         fail(resolved, errorMessage(error), 'yantra.template.lint');
       }
-    });
-
-  command
-    .command('save')
-    .description('Validate and save a Markdown template in the local library.')
-    .argument('<path>', 'template Markdown path')
-    .addOption(new Option('--name <name>', 'saved name (defaults to frontmatter or filename)'))
-    .addOption(new Option('--tags <a,b>', 'replace frontmatter tags'))
-    .addOption(new Option('--description <text>', 'replace the frontmatter description'))
-    .addOption(new Option('--force', 'overwrite an existing template').default(false))
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(
+    }),
+    'template.save': fromAction(
       async (
         pathArg: string,
         options: JsonOption & {
@@ -173,14 +156,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
           fail(resolved, errorMessage(error), 'yantra.template.save');
         }
       },
-    );
-
-  command
-    .command('list')
-    .description('List valid saved report templates.')
-    .addOption(new Option('--tag <tag>', 'show only templates carrying this tag'))
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(async (options: JsonOption & { tag?: string }) => {
+    ),
+    'template.list': fromAction(async (options: JsonOption & { tag?: string }) => {
       const tag = options.tag === undefined ? null : normalizeTemplateSlug(options.tag);
       const all = await resolved.store.list();
       const items = (tag === null ? all : all.filter((item) => item.tags.includes(tag))).map(
@@ -198,14 +175,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
           );
         }
       }
-    });
-
-  command
-    .command('show')
-    .description('Print a saved template and its parsed slots.')
-    .argument('<name>', 'saved template name')
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(async (rawName: string, options: JsonOption) => {
+    }),
+    'template.show': fromAction(async (rawName: string, options: JsonOption) => {
       const name = requireName(rawName, resolved);
       if (!(await resolved.store.exists(name))) {
         const available = (await resolved.store.list()).map((item) => item.name);
@@ -245,14 +216,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
         if (documentGuidance !== null) resolved.stdout.write(`${documentGuidance}\n`);
         resolved.stdout.write(`${renderSlotTable(slots)}\n`);
       }
-    });
-
-  command
-    .command('remove')
-    .description('Delete a saved report template.')
-    .argument('<name>', 'saved template name')
-    .addOption(new Option('--json', 'emit a stable JSON envelope').default(false))
-    .action(async (rawName: string, options: JsonOption) => {
+    }),
+    'template.remove': fromAction(async (rawName: string, options: JsonOption) => {
       const name = requireName(rawName, resolved);
       if (!(await resolved.store.exists(name))) {
         fail(resolved, `Template "${name}" was not found.`, 'yantra.template.remove');
@@ -265,9 +230,8 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
       } catch (error) {
         fail(resolved, errorMessage(error), 'yantra.template.remove');
       }
-    });
-
-  return command;
+    }),
+  };
 }
 
 function withDefaults(runtime?: Partial<TemplateCommandRuntime>): TemplateCommandRuntime {

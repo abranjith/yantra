@@ -2436,11 +2436,25 @@ option-dependent case: `read` by default, `mutate` when the action is `set` or `
 `--forget` is present. Removals (`config unset`, `secret rm`, `model rm`, `sites remove`), `--force`,
 `--reset`, `--forget` and `config data-dir --no-move` carry `danger: confirm`.
 
-To migrate a family: add its entries (TASK order: data first, kept honest by the agreement test),
-move each action body unchanged into an exported handler in the same module, bind it in
-`buildHandlers`, delete the inline commander calls, and remove the family from
-`UNMIGRATED_COMMANDS`. A factory that other code still composes (for example `makeListCommand`)
-stays as a one-line wrapper around `createRegisteredCommand`, so it is generated as well.
+Every family is now generated: the registry holds all 59 command paths (7 groups, 52 leaves) and
+`UNMIGRATED_COMMANDS` is empty. The legacy path in `buildCommandTree` remains for a family that
+ever has to be built by hand again; such a family needs a dated allowlist entry with a reason, and
+the list may only shrink. `tests/registry/completeness.spec.ts` asserts both directions (every
+live path has an entry, every entry a live path, in the same order), that every leaf has an
+execution class, and, at runtime, that every leaf id is bound to a function. Families with several
+subcommands (`template`, `daemon`, `browser`) keep their former commander actions verbatim in a
+handler table (`templateHandlers`, …), adapted by `fromAction` from commander's positional
+`(…args, options, command)` form. The remaining classes: `browser install` and `browser update` are
+`exclusive` (`browser update --dry-run` is `read` through a rule), `browser check` is `run`,
+`browser use`, `template new|lint|save|remove`, `lint`, `schedule` and `unschedule` are `mutate`,
+`confirm` is `mutate` with the `confirm-inbox` adapter (D12), `open` uses `open-result-view`, and
+`daemon start|stop` use `daemon-control`, executing as `mutate`.
+
+To add or change a command: edit its entry first (the agreement test keeps data and tree honest),
+put the action body in an exported handler in the command's module, and bind it in
+`buildHandlers`. A factory that other code still composes (for example `makeListCommand` or
+`makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
+well.
 
 ### `packages/ui` (Drshya)
 

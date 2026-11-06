@@ -15,15 +15,9 @@ export interface UnmigratedCommand {
   readonly owner: 'FEAT-070';
 }
 
-const PENDING = 'registry entry and handler extraction scheduled for a later FEAT-062 task';
-
-export const UNMIGRATED_COMMANDS: readonly UnmigratedCommand[] = [
-  { path: 'confirm', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'schedule', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'unschedule', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'daemon', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'lint', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'open', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'template', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'browser', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-];
+/**
+ * Empty since FEAT-062 TASK-007: every family is generated from the registry.
+ * A family may be added back only with a dated entry and a reason, and the
+ * list may only shrink again.
+ */
+export const UNMIGRATED_COMMANDS: readonly UnmigratedCommand[] = [];

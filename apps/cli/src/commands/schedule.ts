@@ -20,8 +20,10 @@
 
 import { workflowsRoot, FileWorkflowStore, nextFireIso, type NotifyTarget } from '@yantra/core';
 import type { ParamArg } from '@yantra/core/workflow/replay';
-import { Command } from 'commander';
+import { type Command } from 'commander';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
@@ -50,10 +52,6 @@ interface UnscheduleOptions {
   readonly debug?: boolean;
 }
 
-function collect(value: string, previous: string[]): string[] {
-  return [...previous, value];
-}
-
 /** Parses `key=value` CLI pairs into ParamArgs (registration re-validates). */
 function parseParamArgs(raw: readonly string[] | undefined): ParamArg[] {
   const out: ParamArg[] = [];
@@ -69,28 +67,13 @@ function parseParamArgs(raw: readonly string[] | undefined): ParamArg[] {
 
 /** `yantra schedule <workflow> --cron "<expr>"` — register a recurring run. */
 export function makeScheduleCommand(): Command {
-  const cmd = new Command('schedule');
+  return createRegisteredCommand('schedule', scheduleHandlers());
+}
 
-  cmd
-    .description('Register a recurring unattended run of a saved workflow')
-    .argument('<workflow-name>', 'Name of the saved workflow to schedule')
-    .requiredOption('--cron <expr>', 'Cron expression (e.g. "0 8 * * 1")')
-    .option(
-      '-p, --params <key=value...>',
-      'Workflow parameter (repeatable)',
-      collect,
-      [] as string[],
-    )
-    .option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs')
-    .option('--notify <target>', 'Notification sink: desktop | file | none', 'desktop')
-    .option(
-      '--on-confirm <policy>',
-      'Confirmation policy — only "pause-and-notify" is accepted',
-      'pause-and-notify',
-    )
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (workflowName: string, options: ScheduleOptions) => {
+/** Handlers for `schedule`, bound by registry id; each is its former commander action, unchanged. */
+export function scheduleHandlers() {
+  return {
+    schedule: fromAction(async (workflowName: string, options: ScheduleOptions) => {
       const logger = makeStderrLogger(options.debug === true);
 
       // `--on-confirm` accepts only the safe value — reject anything else at
@@ -170,9 +153,8 @@ export function makeScheduleCommand(): Command {
       } finally {
         handle.close();
       }
-    });
-
-  return cmd;
+    }),
+  };
 }
 
 /** `yantra schedules [--json]` — list registered schedules with next fires (registry entry `schedules`). */
@@ -231,14 +213,13 @@ export async function schedulesHandler(
 
 /** `yantra unschedule <id>` — remove a schedule by id. */
 export function makeUnscheduleCommand(): Command {
-  const cmd = new Command('unschedule');
+  return createRegisteredCommand('unschedule', unscheduleHandlers());
+}
 
-  cmd
-    .description('Remove a registered schedule')
-    .argument('<id>', 'Schedule id (from `yantra schedules`)')
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (id: string, options: UnscheduleOptions) => {
+/** Handlers for `unschedule`, bound by registry id; each is its former commander action, unchanged. */
+export function unscheduleHandlers() {
+  return {
+    unschedule: fromAction(async (id: string, options: UnscheduleOptions) => {
       const logger = makeStderrLogger(options.debug === true);
 
       const handle = await openScheduleStore(logger);
@@ -275,9 +256,8 @@ export function makeUnscheduleCommand(): Command {
       } finally {
         handle.close();
       }
-    });
-
-  return cmd;
+    }),
+  };
 }
 
 interface ScheduleDisplayRow {

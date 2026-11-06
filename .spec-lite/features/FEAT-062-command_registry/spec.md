@@ -936,7 +936,7 @@ tests/commands/format.property.spec.ts` is green with every leaf covered. The te
 - [x] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,
       `do`, `run`, `resume`, `doctor`
 - [x] TASK-006: Settings families: `config`, `prefs`, `secret`, `model`, `sites`, `init`
-- [ ] TASK-007: Remaining families and registry completeness
+- [x] TASK-007: Remaining families and registry completeness
 - [ ] TASK-008: Registry integrity: option consumers, danger guard, group spelling
 - [ ] TASK-009: `CommandInvocation` and `parseInvocation`
 - [ ] TASK-010: Shell-aware `formatInvocation` and round-trip for every command

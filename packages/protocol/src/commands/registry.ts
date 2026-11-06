@@ -5,10 +5,17 @@
  */
 
 import { ask, doCommand, research } from './entries/agentic.js';
-import { browser, browserList } from './entries/browser.js';
-import { daemon, daemonStatus } from './entries/daemon.js';
+import {
+  browser,
+  browserCheck,
+  browserInstall,
+  browserList,
+  browserUpdate,
+  browserUse,
+} from './entries/browser.js';
+import { daemon, daemonStart, daemonStatus, daemonStop } from './entries/daemon.js';
 import { doctor } from './entries/doctor.js';
-import { audit, list, report, show, usage } from './entries/runs.js';
+import { audit, list, open, report, show, usage } from './entries/runs.js';
 import {
   config,
   configDataDir,
@@ -36,8 +43,16 @@ import {
   sitesList,
   sitesRemove,
 } from './entries/settings.js';
-import { template, templateList, templateShow } from './entries/template.js';
-import { resume, run, schedules } from './entries/workflow.js';
+import {
+  template,
+  templateLint,
+  templateList,
+  templateNew,
+  templateRemove,
+  templateSave,
+  templateShow,
+} from './entries/template.js';
+import { confirm, lint, resume, run, schedule, schedules, unschedule } from './entries/workflow.js';
 import { OPTION_GROUP_INPUTS } from './groups.js';
 import {
   CommandRegistry,
@@ -51,6 +66,7 @@ const ENTRIES = [
   research,
   doCommand,
   run,
+  confirm,
   config,
   configPath,
   configList,
@@ -65,15 +81,21 @@ const ENTRIES = [
   secretList,
   secretRm,
   resume,
+  schedule,
   schedules,
+  unschedule,
   daemon,
+  daemonStart,
+  daemonStop,
   daemonStatus,
+  lint,
   list,
   model,
   modelList,
   modelAdd,
   modelRm,
   modelDefault,
+  open,
   show,
   usage,
   profile,
@@ -83,14 +105,22 @@ const ENTRIES = [
   sitesAdd,
   sitesRemove,
   template,
+  templateNew,
+  templateLint,
+  templateSave,
   templateList,
   templateShow,
+  templateRemove,
   doctor,
   audit,
   report,
   init,
   browser,
+  browserInstall,
   browserList,
+  browserUse,
+  browserCheck,
+  browserUpdate,
 ] as const;
 
 /** The dotted id of every executable command in the registry. */

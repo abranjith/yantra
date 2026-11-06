@@ -125,3 +125,33 @@ export const report = leaf({
   ],
   json: { flag: '--json', shape: 'envelope', schema: null },
 });
+
+export const open = leaf({
+  id: 'open',
+  description: "Open a run's saved artifact",
+  registration: 'added',
+  arguments: [argument('run-id', { required: false, input: runRef })],
+  options: [
+    option('--artifact <kind>', 'brief | report | audit | dir', {
+      default: 'brief',
+      input: { kind: 'enum', choices: ['brief', 'report', 'audit', 'dir'], enforced_by: 'handler' },
+    }),
+    option('--print', 'print the resolved path without launching', { default: false }),
+    jsonOption('emit JSON without launching'),
+  ],
+  execution: {
+    default: 'adapter',
+    adapter: {
+      id: 'open-result-view',
+      note: 'the app shows the artifact in its result view; "Open in system app" runs open as a mutate worker',
+    },
+  },
+  effect: 'none',
+  danger: NO_DANGER,
+  exit_codes: [
+    exit.ok(),
+    exit.validation(`${PARSE_ERRORS}, an unknown artifact or run, or a missing artifact`),
+    exit.execution('the default application could not be launched'),
+  ],
+  json: { flag: '--json', shape: 'envelope', schema: null },
+});

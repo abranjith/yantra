@@ -217,6 +217,69 @@ describe('@no-llm settings entries', () => {
   });
 });
 
+describe('@no-llm remaining families', () => {
+  it('classifies browser update as exclusive, and read with --dry-run', () => {
+    const update = findLeaf(['browser', 'update'])!;
+    expect(executionClassFor(update, { options: {}, arguments: {}, explicit: [] })).toBe(
+      'exclusive',
+    );
+    expect(
+      executionClassFor(update, {
+        options: { dryRun: true },
+        arguments: {},
+        explicit: ['dryRun'],
+      }),
+    ).toBe('read');
+    expect(update.relations).toContainEqual(
+      expect.objectContaining({ kind: 'conflicts', option: '--dry-run', with: ['--yes'] }),
+    );
+  });
+
+  it.each([
+    ['browser.install', 'exclusive'],
+    ['browser.check', 'run'],
+    ['browser.use', 'mutate'],
+    ['template.new', 'mutate'],
+    ['template.remove', 'mutate'],
+    ['lint', 'mutate'],
+    ['schedule', 'mutate'],
+    ['unschedule', 'mutate'],
+    ['confirm', 'mutate'],
+    ['open', 'adapter'],
+    ['daemon.start', 'adapter'],
+    ['daemon.stop', 'adapter'],
+  ])('classifies %s as %s by default', (id, expected) => {
+    expect(findLeaf(id.split('.'))!.execution.default).toBe(expected);
+  });
+
+  it('routes confirm, open and the daemon through their adapters', () => {
+    expect(findLeaf(['confirm'])!.execution.adapter).toMatchObject({
+      id: 'confirm-inbox',
+      executes_as: 'mutate',
+    });
+    expect(findLeaf(['open'])!.execution.adapter?.id).toBe('open-result-view');
+    expect(findLeaf(['daemon', 'stop'])!.execution.adapter).toMatchObject({
+      id: 'daemon-control',
+      executes_as: 'mutate',
+    });
+    expect(findLeaf(['daemon', 'stop'])!.danger.level).toBe('confirm');
+  });
+
+  it('makes schedule --cron mandatory and --params repeatable with an empty default', () => {
+    const options = expandOptions(findLeaf(['schedule'])!, COMMAND_REGISTRY.option_groups);
+    expect(options.find((o) => o.long === '--cron')?.mandatory).toBe(true);
+    expect(options.find((o) => o.long === '--params')).toMatchObject({
+      repeatable: true,
+      default: [],
+    });
+  });
+
+  it('covers all 59 command paths: 7 groups and 52 leaves', () => {
+    expect(COMMAND_REGISTRY.commands).toHaveLength(59);
+    expect(COMMAND_REGISTRY.commands.filter((entry) => entry.kind === 'group')).toHaveLength(7);
+  });
+});
+
 describe('@no-llm findCommand', () => {
   it('finds groups and leaves by canonical path', () => {
     expect(findCommand(['config'])?.kind).toBe('group');

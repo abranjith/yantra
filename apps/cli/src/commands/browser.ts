@@ -45,14 +45,15 @@ import {
   type StableBuild,
   type UpdateComparison,
 } from '@yantra/core';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 import prompts from 'prompts';
 
 import {
-  addBrowserSelectionOptions,
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 interface InstallOptions {
@@ -101,6 +102,11 @@ const SOURCES: readonly BrowserSource[] = ['auto', 'managed', 'system'];
 
 /** Creates the `yantra browser` command group. */
 export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command {
+  return createRegisteredCommand('browser', browserHandlers(runtime));
+}
+
+/** Handlers for `browser`, bound by registry id; each is its former commander action, unchanged. */
+export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
   const stdout = runtime.stdout ?? process.stdout;
   const stderr = runtime.stderr ?? process.stderr;
   const isTty = runtime.isTty ?? (() => process.stdin.isTTY === true);
@@ -108,7 +114,6 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
   const destinationRoot = runtime.destinationRoot ?? managedBrowsersRoot;
   const now = runtime.now ?? (() => new Date());
   const writeSelection = runtime.writeSelection ?? writeBrowserSelectionToConfig;
-
   // Composed lazily: building the command must not construct the acquisition
   // graph, and `--help` must not read the filesystem.
   let composed: BrowserRuntimeServices | undefined = runtime.services;
@@ -119,292 +124,6 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
   const installService = (): ManagedInstallService => runtime.service ?? services().installService!;
   const updateService = (): ManagedUpdateService =>
     runtime.updateService ?? services().updateService!;
-
-  const browser = new Command('browser').description('Manage Yantra-owned browser installations');
-
-  browser
-    .command('install')
-    .description('Download current Chrome for Testing Stable into Yantra-managed storage')
-    .option('--yes', 'accept the download without prompting', false)
-    .option('--json', 'emit exactly one JSON outcome', false)
-    .action(async (options: InstallOptions) => {
-      const destination = destinationRoot();
-      if (options.yes !== true && (!isTty() || options.json === true)) {
-        const message =
-          '`yantra browser install --yes` is required for JSON or non-interactive use.';
-        stderr.write(`${message}\n`);
-        if (options.json)
-          writeInstallJson(stdout, destination, {
-            status: 'failed',
-            error: {
-              code: 'consent-required',
-              phase: 'preflight',
-              remediation: 'Pass --yes only after reviewing the download notice.',
-              detail: message,
-              retainedOrphan: null,
-            },
-          });
-        throw new CommanderError(1, 'yantra.browser.install.consent-required', message);
-      }
-
-      stderr.write(
-        `Chrome for Testing Stable will be downloaded to ${destination} (about 200 MB). Failed downloads restart from zero; external Chrome installations are untouched.\n`,
-      );
-      let granted = options.yes === true;
-      if (!granted) {
-        const answer = (await prompt({
-          type: 'confirm',
-          name: 'granted',
-          message: 'Download managed Chrome?',
-          initial: false,
-        })) as { granted?: boolean };
-        granted = answer.granted === true;
-      }
-      if (!granted) {
-        const outcome = { status: 'cancelled', at: 'preflight', retainedOrphan: null } as const;
-        if (options.json) writeInstallJson(stdout, destination, outcome);
-        stderr.write('Browser download was declined; no installation state changed.\n');
-        throw new CommanderError(
-          4,
-          'yantra.browser.install.declined',
-          'Browser download was declined.',
-        );
-      }
-
-      const outcome = await installService().install({
-        trigger: 'explicit-command',
-        consent: {
-          granted: true,
-          source: options.yes === true ? 'cli-accept-flag' : 'cli-prompt',
-          grantedAt: now().toISOString(),
-          destinationRoot: destination,
-          approximateBytes: APPROXIMATE_BYTES,
-          // A first install resolves Stable in-helper and replaces nothing.
-          // Only an update can name a build before it is acquired.
-          targetBuildId: null,
-          replaces: null,
-        },
-        onProgress: (event) =>
-          stderr.write(
-            `${event.phase}${event.percent === undefined ? '' : ` ${event.percent}%`}${event.interruptible ? '' : ' (finishing; cancellation pending)'}\n`,
-          ),
-      });
-
-      if (options.json) {
-        writeInstallJson(stdout, destination, outcome);
-        if (outcome.status === 'failed')
-          stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
-        if (outcome.status === 'cancelled')
-          stderr.write(`Browser installation was cancelled during ${outcome.at}.\n`);
-      } else renderInstallTerminal(stdout, stderr, outcome);
-      if (outcome.status === 'cancelled')
-        throw new CommanderError(
-          4,
-          'yantra.browser.install.cancelled',
-          'Browser installation was cancelled.',
-        );
-      if (outcome.status === 'failed')
-        throw new CommanderError(
-          exitCodeFor(outcome.error.code),
-          `yantra.browser.install.${outcome.error.code}`,
-          `${outcome.error.detail} ${outcome.error.remediation}`,
-        );
-    });
-
-  browser
-    .command('list')
-    .description(
-      'List the browsers Yantra can use on this machine, with the current selection. Local only: no network, launch, install, or update check',
-    )
-    .option('--json', 'emit the inventory as JSON', false)
-    .action(async (options: ListOptions) => {
-      const inventory = await readInventory(services());
-      if (options.json === true) {
-        stdout.write(`${JSON.stringify(browserListPayload(inventory))}\n`);
-        return;
-      }
-      renderInventoryTerminal(stdout, inventory);
-      // A broken selection is rendered as data and still exits 0: `list` is an
-      // inventory, and failing is the job of a launching command and of `check`.
-      if (inventory.effective.status === 'unavailable') {
-        stderr.write(`${inventory.effective.error.remediation}\n`);
-      }
-    });
-
-  browser
-    .command('use')
-    .description(
-      'Select which browser Yantra launches and persist it. Validates the path; never launches a browser or checks for updates',
-    )
-    .argument('<source>', 'auto, managed, or system')
-    .option('--path <absolute-executable>', 'custom external executable (only with `system`)')
-    .option('--json', 'emit the committed selection as JSON', false)
-    .action(async (rawSource: string, options: UseOptions) => {
-      const source = rawSource.trim().toLowerCase();
-      if (!SOURCES.includes(source as BrowserSource)) {
-        return failUse(
-          stderr,
-          'invalid-source',
-          `\`yantra browser use\` takes one of ${SOURCES.join(', ')}, not "${rawSource}".`,
-        );
-      }
-      if (options.path !== undefined && source !== 'system') {
-        return failUse(
-          stderr,
-          'path-not-allowed',
-          `\`--path\` names one specific executable, which is only meaningful with \`system\`; \`${source}\` describes how to find a browser instead.`,
-        );
-      }
-
-      let selection: BrowserSelection;
-      if (options.path === undefined) {
-        selection = { source: source as BrowserSource, executablePath: null };
-      } else {
-        // Resolvability, not compatibility: exists, regular file, readable, and
-        // executable. `browser check` is what answers "does it work?".
-        const validated = await validateSelectablePath(options.path);
-        if (validated.status === 'invalid') {
-          return failUse(
-            stderr,
-            `path-${validated.reason}`,
-            `${validated.detail} ${validated.remediation}`,
-          );
-        }
-        selection = { source: 'system', executablePath: validated.executablePath };
-      }
-
-      // Ownership and managed readiness come from the resolver, so `use` never
-      // re-derives containment: a custom path inside the managed root is
-      // managed-owned and has to be the exact ready executable.
-      const resolution = await services().resolver.resolve(selection);
-      if (resolution.status === 'unavailable' && source !== 'auto') {
-        return failUse(stderr, resolution.error.code, resolution.error.message);
-      }
-
-      await writeSelection(selection);
-
-      const installation = resolution.status === 'resolved' ? resolution.installation : null;
-      const evidence: CompatibilityEvidenceState =
-        installation === null
-          ? { state: 'unverified' }
-          : await services()
-              .compatibility.readCached(installation, 'automation')
-              .catch((): CompatibilityEvidenceState => ({ state: 'unverified' }));
-      const compatibility = pairingLabel(evidence);
-      const nextCommand = compatibility === 'unverified' ? checkCommandFor(selection) : null;
-
-      if (options.json === true) {
-        stdout.write(
-          `${JSON.stringify({
-            schemaVersion: CLI_JSON_SCHEMA_VERSION,
-            kind: 'browser_use',
-            status: 'set',
-            source: selection.source,
-            executablePath: installation?.canonicalPath ?? selection.executablePath,
-            ownership: installation?.ownership ?? null,
-            version: installation?.version ?? null,
-            compatibility,
-            nextCommand,
-          })}\n`,
-        );
-        return;
-      }
-
-      if (installation === null) {
-        stdout.write(`Browser selection is now ${selection.source}.\n`);
-        if (resolution.status === 'unavailable')
-          stderr.write(`No browser resolves yet: ${resolution.error.message}\n`);
-      } else {
-        stdout.write(
-          `Browser selection is now ${selection.source}: ${installation.ownership} Chrome ${installation.version} at ${installation.canonicalPath}.\n`,
-        );
-      }
-      stdout.write(`Compatibility: ${compatibility}.\n`);
-      if (nextCommand !== null) stdout.write(`Run \`${nextCommand}\` to test it locally.\n`);
-    });
-
-  addBrowserSelectionOptions(
-    browser
-      .command('check')
-      .description(
-        'Run a fresh local compatibility check against the selected browser, using isolated synthetic pages. No network: this does not look for a newer browser',
-      ),
-  )
-    .option('--json', 'emit the compatibility report as JSON', false)
-    .action(async (options: CheckOptions) => {
-      const override = resolveBrowserSelectionOverride(options);
-      const resolution = await services().resolver.resolve(override);
-      if (resolution.status === 'unavailable') {
-        stderr.write(`${resolution.error.message}\n`);
-        throw new CommanderError(
-          3,
-          `yantra.browser.check.${resolution.error.code}`,
-          resolution.error.message,
-        );
-      }
-      const installation = resolution.installation;
-
-      const profiles: ProbeProfile[] = ['automation', 'recorder'];
-      const results: CompatibilityResult[] = [];
-      for (const profile of profiles) {
-        // `fresh: true` is what makes this a diagnosis rather than a replay of
-        // whatever was cached.
-        results.push(await services().compatibility.check(installation, { profile, fresh: true }));
-      }
-
-      const report = buildCheckReport(installation, results);
-      if (options.json === true) {
-        stdout.write(
-          `${JSON.stringify({
-            schemaVersion: CLI_JSON_SCHEMA_VERSION,
-            kind: 'browser_check',
-            ...report,
-          })}\n`,
-        );
-      } else {
-        renderCheckTerminal(stdout, report);
-      }
-
-      const failure = results.find((result) => result.verdict.status === 'failed');
-      if (failure?.verdict.status === 'failed') {
-        stderr.write(`${failure.verdict.remediation}\n`);
-        throw new CommanderError(
-          3,
-          `yantra.browser.check.${failure.verdict.failureClass}`,
-          `This browser failed the required ${failure.profile} capabilities.`,
-        );
-      }
-    });
-
-  browser
-    .command('update')
-    .description(
-      'Replace the Yantra-managed browser with current Chrome for Testing Stable. This is the only command that checks whether a newer browser exists; use --dry-run to report availability and download nothing',
-    )
-    .option('--dry-run', 'report what is available without downloading or changing anything', false)
-    .option('--yes', 'accept the replacement without prompting', false)
-    .option('--json', 'emit exactly one JSON outcome', false)
-    .action(async (options: UpdateOptions) => {
-      // Two modes, not a mode plus a modifier. `--yes` accepts a replacement,
-      // and the availability report has no replacement to accept: an acceptance
-      // flag that changes nothing is a dead control, so it is refused rather
-      // than silently ignored.
-      if (options.dryRun === true && options.yes === true) {
-        const message =
-          '`--dry-run` reports availability and changes nothing, so there is nothing for `--yes` to accept. Use one or the other.';
-        stderr.write(`${message}\n`);
-        throw new CommanderError(1, 'yantra.browser.update.conflicting-modes', message);
-      }
-
-      if (options.dryRun === true) {
-        await runDryRun(options);
-        return;
-      }
-      await runReplacement(options);
-    });
-
-  return browser;
-
   // -------------------------------------------------------------------------
   // `browser update --dry-run`
   // -------------------------------------------------------------------------
@@ -437,7 +156,6 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
     // Every comparison state is a legitimate availability answer, including
     // "nothing is installed". Exit 0.
   }
-
   // -------------------------------------------------------------------------
   // `browser update`
   // -------------------------------------------------------------------------
@@ -584,7 +302,6 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
         `${outcome.error.detail} ${outcome.error.remediation}`,
       );
   }
-
   /** Renders a no-op verdict identically in both modes and exits 0. */
   function emitNoOp(
     options: UpdateOptions,
@@ -610,6 +327,249 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
         : `Managed Chrome ${installedBuildId} is newer than current Stable ${target.buildId}. Leaving it in place — Yantra never downgrades.\n`,
     );
   }
+  return {
+    'browser.install': fromAction(async (options: InstallOptions) => {
+      const destination = destinationRoot();
+      if (options.yes !== true && (!isTty() || options.json === true)) {
+        const message =
+          '`yantra browser install --yes` is required for JSON or non-interactive use.';
+        stderr.write(`${message}\n`);
+        if (options.json)
+          writeInstallJson(stdout, destination, {
+            status: 'failed',
+            error: {
+              code: 'consent-required',
+              phase: 'preflight',
+              remediation: 'Pass --yes only after reviewing the download notice.',
+              detail: message,
+              retainedOrphan: null,
+            },
+          });
+        throw new CommanderError(1, 'yantra.browser.install.consent-required', message);
+      }
+
+      stderr.write(
+        `Chrome for Testing Stable will be downloaded to ${destination} (about 200 MB). Failed downloads restart from zero; external Chrome installations are untouched.\n`,
+      );
+      let granted = options.yes === true;
+      if (!granted) {
+        const answer = (await prompt({
+          type: 'confirm',
+          name: 'granted',
+          message: 'Download managed Chrome?',
+          initial: false,
+        })) as { granted?: boolean };
+        granted = answer.granted === true;
+      }
+      if (!granted) {
+        const outcome = { status: 'cancelled', at: 'preflight', retainedOrphan: null } as const;
+        if (options.json) writeInstallJson(stdout, destination, outcome);
+        stderr.write('Browser download was declined; no installation state changed.\n');
+        throw new CommanderError(
+          4,
+          'yantra.browser.install.declined',
+          'Browser download was declined.',
+        );
+      }
+
+      const outcome = await installService().install({
+        trigger: 'explicit-command',
+        consent: {
+          granted: true,
+          source: options.yes === true ? 'cli-accept-flag' : 'cli-prompt',
+          grantedAt: now().toISOString(),
+          destinationRoot: destination,
+          approximateBytes: APPROXIMATE_BYTES,
+          // A first install resolves Stable in-helper and replaces nothing.
+          // Only an update can name a build before it is acquired.
+          targetBuildId: null,
+          replaces: null,
+        },
+        onProgress: (event) =>
+          stderr.write(
+            `${event.phase}${event.percent === undefined ? '' : ` ${event.percent}%`}${event.interruptible ? '' : ' (finishing; cancellation pending)'}\n`,
+          ),
+      });
+
+      if (options.json) {
+        writeInstallJson(stdout, destination, outcome);
+        if (outcome.status === 'failed')
+          stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
+        if (outcome.status === 'cancelled')
+          stderr.write(`Browser installation was cancelled during ${outcome.at}.\n`);
+      } else renderInstallTerminal(stdout, stderr, outcome);
+      if (outcome.status === 'cancelled')
+        throw new CommanderError(
+          4,
+          'yantra.browser.install.cancelled',
+          'Browser installation was cancelled.',
+        );
+      if (outcome.status === 'failed')
+        throw new CommanderError(
+          exitCodeFor(outcome.error.code),
+          `yantra.browser.install.${outcome.error.code}`,
+          `${outcome.error.detail} ${outcome.error.remediation}`,
+        );
+    }),
+    'browser.list': fromAction(async (options: ListOptions) => {
+      const inventory = await readInventory(services());
+      if (options.json === true) {
+        stdout.write(`${JSON.stringify(browserListPayload(inventory))}\n`);
+        return;
+      }
+      renderInventoryTerminal(stdout, inventory);
+      // A broken selection is rendered as data and still exits 0: `list` is an
+      // inventory, and failing is the job of a launching command and of `check`.
+      if (inventory.effective.status === 'unavailable') {
+        stderr.write(`${inventory.effective.error.remediation}\n`);
+      }
+    }),
+    'browser.use': fromAction(async (rawSource: string, options: UseOptions) => {
+      const source = rawSource.trim().toLowerCase();
+      if (!SOURCES.includes(source as BrowserSource)) {
+        return failUse(
+          stderr,
+          'invalid-source',
+          `\`yantra browser use\` takes one of ${SOURCES.join(', ')}, not "${rawSource}".`,
+        );
+      }
+      if (options.path !== undefined && source !== 'system') {
+        return failUse(
+          stderr,
+          'path-not-allowed',
+          `\`--path\` names one specific executable, which is only meaningful with \`system\`; \`${source}\` describes how to find a browser instead.`,
+        );
+      }
+
+      let selection: BrowserSelection;
+      if (options.path === undefined) {
+        selection = { source: source as BrowserSource, executablePath: null };
+      } else {
+        // Resolvability, not compatibility: exists, regular file, readable, and
+        // executable. `browser check` is what answers "does it work?".
+        const validated = await validateSelectablePath(options.path);
+        if (validated.status === 'invalid') {
+          return failUse(
+            stderr,
+            `path-${validated.reason}`,
+            `${validated.detail} ${validated.remediation}`,
+          );
+        }
+        selection = { source: 'system', executablePath: validated.executablePath };
+      }
+
+      // Ownership and managed readiness come from the resolver, so `use` never
+      // re-derives containment: a custom path inside the managed root is
+      // managed-owned and has to be the exact ready executable.
+      const resolution = await services().resolver.resolve(selection);
+      if (resolution.status === 'unavailable' && source !== 'auto') {
+        return failUse(stderr, resolution.error.code, resolution.error.message);
+      }
+
+      await writeSelection(selection);
+
+      const installation = resolution.status === 'resolved' ? resolution.installation : null;
+      const evidence: CompatibilityEvidenceState =
+        installation === null
+          ? { state: 'unverified' }
+          : await services()
+              .compatibility.readCached(installation, 'automation')
+              .catch((): CompatibilityEvidenceState => ({ state: 'unverified' }));
+      const compatibility = pairingLabel(evidence);
+      const nextCommand = compatibility === 'unverified' ? checkCommandFor(selection) : null;
+
+      if (options.json === true) {
+        stdout.write(
+          `${JSON.stringify({
+            schemaVersion: CLI_JSON_SCHEMA_VERSION,
+            kind: 'browser_use',
+            status: 'set',
+            source: selection.source,
+            executablePath: installation?.canonicalPath ?? selection.executablePath,
+            ownership: installation?.ownership ?? null,
+            version: installation?.version ?? null,
+            compatibility,
+            nextCommand,
+          })}\n`,
+        );
+        return;
+      }
+
+      if (installation === null) {
+        stdout.write(`Browser selection is now ${selection.source}.\n`);
+        if (resolution.status === 'unavailable')
+          stderr.write(`No browser resolves yet: ${resolution.error.message}\n`);
+      } else {
+        stdout.write(
+          `Browser selection is now ${selection.source}: ${installation.ownership} Chrome ${installation.version} at ${installation.canonicalPath}.\n`,
+        );
+      }
+      stdout.write(`Compatibility: ${compatibility}.\n`);
+      if (nextCommand !== null) stdout.write(`Run \`${nextCommand}\` to test it locally.\n`);
+    }),
+    'browser.check': fromAction(async (options: CheckOptions) => {
+      const override = resolveBrowserSelectionOverride(options);
+      const resolution = await services().resolver.resolve(override);
+      if (resolution.status === 'unavailable') {
+        stderr.write(`${resolution.error.message}\n`);
+        throw new CommanderError(
+          3,
+          `yantra.browser.check.${resolution.error.code}`,
+          resolution.error.message,
+        );
+      }
+      const installation = resolution.installation;
+
+      const profiles: ProbeProfile[] = ['automation', 'recorder'];
+      const results: CompatibilityResult[] = [];
+      for (const profile of profiles) {
+        // `fresh: true` is what makes this a diagnosis rather than a replay of
+        // whatever was cached.
+        results.push(await services().compatibility.check(installation, { profile, fresh: true }));
+      }
+
+      const report = buildCheckReport(installation, results);
+      if (options.json === true) {
+        stdout.write(
+          `${JSON.stringify({
+            schemaVersion: CLI_JSON_SCHEMA_VERSION,
+            kind: 'browser_check',
+            ...report,
+          })}\n`,
+        );
+      } else {
+        renderCheckTerminal(stdout, report);
+      }
+
+      const failure = results.find((result) => result.verdict.status === 'failed');
+      if (failure?.verdict.status === 'failed') {
+        stderr.write(`${failure.verdict.remediation}\n`);
+        throw new CommanderError(
+          3,
+          `yantra.browser.check.${failure.verdict.failureClass}`,
+          `This browser failed the required ${failure.profile} capabilities.`,
+        );
+      }
+    }),
+    'browser.update': fromAction(async (options: UpdateOptions) => {
+      // Two modes, not a mode plus a modifier. `--yes` accepts a replacement,
+      // and the availability report has no replacement to accept: an acceptance
+      // flag that changes nothing is a dead control, so it is refused rather
+      // than silently ignored.
+      if (options.dryRun === true && options.yes === true) {
+        const message =
+          '`--dry-run` reports availability and changes nothing, so there is nothing for `--yes` to accept. Use one or the other.';
+        stderr.write(`${message}\n`);
+        throw new CommanderError(1, 'yantra.browser.update.conflicting-modes', message);
+      }
+
+      if (options.dryRun === true) {
+        await runDryRun(options);
+        return;
+      }
+      await runReplacement(options);
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------

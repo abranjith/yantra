@@ -8,13 +8,11 @@
  * vocabulary.
  */
 
+import { COMMAND_REGISTRY_INPUT, validateCommandRegistry } from '@yantra/protocol';
 import { Command, CommanderError } from 'commander';
 import { describe, expect, it } from 'vitest';
 
-import {
-  addBrowserSelectionOptions,
-  resolveBrowserSelectionOverride,
-} from '../src/browser-options.js';
+import { resolveBrowserSelectionOverride } from '../src/browser-options.js';
 import { registerAskCommand } from '../src/commands/ask.js';
 import { makeBrowserCommand } from '../src/commands/browser.js';
 import { makeConfigCommand } from '../src/commands/config.js';
@@ -27,6 +25,7 @@ import { registerResearchCommand } from '../src/commands/research.js';
 import { makeResumeCommand } from '../src/commands/resume.js';
 import { makeRunCommand } from '../src/commands/run.js';
 import { makeScheduleCommand } from '../src/commands/schedule.js';
+import { createRegisteredCommand } from '../src/registry/build-command-tree.js';
 
 const CHROME = '/opt/google/chrome/chrome';
 
@@ -216,8 +215,29 @@ describe('@no-llm browser selection option group', () => {
       // An absent flag has to stay absent: a default would make "the user asked
       // for auto" indistinguishable from "the user said nothing", and only the
       // second falls through to the configured selection.
-      const command = addBrowserSelectionOptions(new Command('probe'));
-      command.action(() => undefined);
+      // FEAT-062: the group is registry data; probe it through a generated command.
+      const command = createRegisteredCommand(
+        'probe',
+        { probe: () => undefined },
+        validateCommandRegistry({
+          ...COMMAND_REGISTRY_INPUT,
+          commands: [
+            {
+              kind: 'leaf',
+              id: 'probe',
+              path: ['probe'],
+              description: '',
+              registration: 'added',
+              options: [{ group: 'browser-selection' }],
+              execution: { default: 'read' },
+              effect: 'none',
+              danger: { level: 'none' },
+              exit_codes: [{ code: 0, meaning: 'success' }],
+              json: { flag: null, shape: 'none', schema: null },
+            },
+          ],
+        }),
+      );
       command.parse([], { from: 'user' });
       const values = command.opts<Record<string, unknown>>();
       expect(values.browser).toBeUndefined();

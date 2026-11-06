@@ -28,6 +28,15 @@ export const LEGACY_ONLY: unique symbol = Symbol('legacy-only');
 export type HandlerBinding = Handler | typeof LEGACY_ONLY;
 
 /**
+ * Adapts a commander-style action, `(arg1, …, argN, options, command)`, into a
+ * {@link Handler}. Lets a migrated family keep its action bodies verbatim.
+ */
+export function fromAction(action: (...params: never[]) => Promise<void> | void): Handler {
+  const call = action as (...params: unknown[]) => Promise<void> | void;
+  return (args, options, command) => call(...args, options, command);
+}
+
+/**
  * Adapts a handler that declares its own options interface. Commander passes
  * `opts()` as a plain record; each command module names the fields it reads,
  * and this is the single place that bridges the two.

@@ -1,9 +1,10 @@
 /**
- * The shared browser-selection option group.
+ * Normalization of the shared browser-selection option group.
  *
- * Registration and normalization live together so `--browser` and
- * `--browser-path` cannot drift between commands, and so the rule that decides
- * what a given pair of flags *means* exists exactly once.
+ * Registration lives in the command registry (`@yantra/protocol`, FEAT-062)
+ * as the `browser-selection` group, so `--browser` and `--browser-path` cannot
+ * drift between commands; the rule that decides what a given pair of flags
+ * *means* exists exactly once, here.
  *
  * The group is registered only on commands that can actually launch a browser —
  * `run`, `resume`, `ask`, `research`, `do`, and `browser check`. A flag a
@@ -21,9 +22,9 @@
 import { isAbsolute, win32 } from 'node:path';
 
 import type { BrowserSelection, BrowserSource } from '@yantra/core';
-import { CommanderError, Option, type Command } from 'commander';
+import { CommanderError } from 'commander';
 
-/** Values registered by {@link addBrowserSelectionOptions}. */
+/** Values of the registry's `browser-selection` option group. */
 export interface BrowserSelectionOptions {
   /** `--browser` */
   readonly browser?: string;
@@ -32,26 +33,6 @@ export interface BrowserSelectionOptions {
 }
 
 const SOURCES: readonly BrowserSource[] = ['auto', 'managed', 'system'];
-
-/**
- * Registers `--browser` and `--browser-path`.
- *
- * No Commander default is attached: resolution has to distinguish "the user
- * asked for `auto`" from "the user said nothing", because only the second falls
- * through to the configured selection.
- */
-export function addBrowserSelectionOptions(command: Command): Command {
-  return command
-    .addOption(
-      new Option(
-        '--browser <source>',
-        'browser source for this invocation (auto, managed, or system)',
-      ),
-    )
-    .addOption(
-      new Option('--browser-path <path>', 'absolute path to a Chrome or Chromium executable'),
-    );
-}
 
 /**
  * Normalizes the flags into the one selection the resolver takes.

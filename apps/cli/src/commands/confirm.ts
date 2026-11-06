@@ -14,7 +14,10 @@
 
 import { runsRoot, createConfirmationStore } from '@yantra/core';
 import type { ConfirmationDecision } from '@yantra/protocol';
-import { Command } from 'commander';
+import { type Command } from 'commander';
+
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 
 interface ConfirmOptions {
   readonly json?: boolean;
@@ -22,15 +25,13 @@ interface ConfirmOptions {
 }
 
 export function makeConfirmCommand(): Command {
-  const cmd = new Command('confirm');
+  return createRegisteredCommand('confirm', confirmHandlers());
+}
 
-  cmd
-    .description('Grant or deny a pending confirmation for a parked run')
-    .argument('<run-id>', 'The run id with a pending confirmation')
-    .argument('<decision>', 'grant | deny')
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (runId: string, decisionArg: string, options: ConfirmOptions) => {
+/** Handlers for `confirm`, bound by registry id; each is its former commander action, unchanged. */
+export function confirmHandlers() {
+  return {
+    confirm: fromAction(async (runId: string, decisionArg: string, options: ConfirmOptions) => {
       try {
         if (decisionArg !== 'grant' && decisionArg !== 'deny') {
           process.stderr.write(`Invalid decision "${decisionArg}": expected "grant" or "deny"\n`);
@@ -95,7 +96,6 @@ export function makeConfirmCommand(): Command {
         process.stderr.write(`Error: ${message}\n`);
         process.exit(1);
       }
-    });
-
-  return cmd;
+    }),
+  };
 }
