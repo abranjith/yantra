@@ -116,6 +116,7 @@
     },
     {
       "name": "implementation-ready",
+      "enabled": false,
       "description": "After a feature is implemented, committed and its PR opened, offer a review in sdd-tracker.",
       "events": ["implement.post"],
       "type": "builtin",

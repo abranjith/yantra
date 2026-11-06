@@ -1,0 +1,15 @@
+Usage: yantra list [options] [target]
+
+List saved workflows or recent runs
+
+Arguments:
+  target             workflows | runs (default: "runs")
+
+Options:
+  --limit <n>        maximum number of entries to show (default: "20")
+  --workflow <name>  filter runs by workflow name
+  --status <s>       filter runs by status
+                     (running|completed|failed|aborted|paused)
+  --json             emit JSON instead of a terminal table (default: false)
+  --debug            verbose logging on stderr (default: false)
+  -h, --help         display help for command

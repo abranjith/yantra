@@ -1,0 +1,16 @@
+Usage: yantra schedule [options] <workflow-name>
+
+Register a recurring unattended run of a saved workflow
+
+Arguments:
+  workflow-name                Name of the saved workflow to schedule
+
+Options:
+  --cron <expr>                Cron expression (e.g. "0 8 * * 1")
+  -p, --params <key=value...>  Workflow parameter (repeatable) (default: [])
+  --params-file <path>         YAML/JSON file of parameter key-value pairs
+  --notify <target>            Notification sink: desktop | file | none (default: "desktop")
+  --on-confirm <policy>        Confirmation policy — only "pause-and-notify" is accepted (default: "pause-and-notify")
+  --json                       Emit JSON summary to stdout (default: false)
+  --debug                      Verbose logging to stderr (default: false)
+  -h, --help                   display help for command

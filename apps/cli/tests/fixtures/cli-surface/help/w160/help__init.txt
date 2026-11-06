@@ -1,0 +1,10 @@
+Usage: yantra init [options]
+
+Create or update ~/.yantra/config.yaml
+
+Options:
+  --provider <name>  default model provider: 'anthropic' | 'ollama' | 'none'
+  --reset            back up existing files and rewrite from defaults (default: false)
+  --json             emit a JSON status object after writing (default: false)
+  --yes              accept defaults without prompting (default: false)
+  -h, --help         display help for command

@@ -1,0 +1,8 @@
+Usage: yantra browser install [options]
+
+Download current Chrome for Testing Stable into Yantra-managed storage
+
+Options:
+  --yes       accept the download without prompting (default: false)
+  --json      emit exactly one JSON outcome (default: false)
+  -h, --help  display help for command

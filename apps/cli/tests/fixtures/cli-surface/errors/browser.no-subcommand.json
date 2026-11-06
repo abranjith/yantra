@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "browser"
+  ],
+  "exitCode": 1,
+  "code": "commander.help",
+  "stdout": "",
+  "stderr": "Usage: yantra browser [options] [command]\n\nManage Yantra-owned browser installations\n\nOptions:\n  -h, --help              display help for command\n\nCommands:\n  install [options]       Download current Chrome for Testing Stable into\n                          Yantra-managed storage\n  list [options]          List the browsers Yantra can use on this machine, with\n                          the current selection. Local only: no network, launch,\n                          install, or update check\n  use [options] <source>  Select which browser Yantra launches and persist it.\n                          Validates the path; never launches a browser or checks\n                          for updates\n  check [options]         Run a fresh local compatibility check against the\n                          selected browser, using isolated synthetic pages. No\n                          network: this does not look for a newer browser\n  update [options]        Replace the Yantra-managed browser with current Chrome\n                          for Testing Stable. This is the only command that\n                          checks whether a newer browser exists; use --dry-run\n                          to report availability and download nothing\n  help [command]          display help for command\n"
+}

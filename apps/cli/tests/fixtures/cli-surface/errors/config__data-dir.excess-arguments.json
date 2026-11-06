@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "config",
+    "data-dir",
+    "arg1",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'data-dir'. Expected 1 argument but got 2.\n"
+}

@@ -1,0 +1,12 @@
+Usage: yantra sites [options] [command]
+
+Inspect and curate local website ranks
+
+Options:
+  -h, --help                 display help for command
+
+Commands:
+  list [options]             List ranked domains
+  add [options] <domain>     Add or promote a user-curated domain
+  remove [options] <domain>  Remove a domain from local ranking
+  help [command]             display help for command

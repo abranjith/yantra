@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "template",
+    "lint"
+  ],
+  "exitCode": 1,
+  "code": "commander.missingArgument",
+  "stdout": "",
+  "stderr": "error: missing required argument 'name-or-path'\n"
+}

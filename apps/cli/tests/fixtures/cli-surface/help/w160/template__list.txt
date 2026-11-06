@@ -1,0 +1,8 @@
+Usage: yantra template list [options]
+
+List valid saved report templates.
+
+Options:
+  --tag <tag>  show only templates carrying this tag
+  --json       emit a stable JSON envelope (default: false)
+  -h, --help   display help for command

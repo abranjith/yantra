@@ -1,0 +1,13 @@
+Usage: yantra model [options] [command]
+
+Manage the installed model registry
+
+Options:
+  -h, --help              display help for command
+
+Commands:
+  list [options]
+  add [options] <id>
+  rm [options] <id>
+  default [options] <id>
+  help [command]          display help for command

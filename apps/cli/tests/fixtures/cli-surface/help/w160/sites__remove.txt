@@ -1,0 +1,11 @@
+Usage: yantra sites remove [options] <domain>
+
+Remove a domain from local ranking
+
+Arguments:
+  domain      hostname such as example.com
+
+Options:
+  --json      emit JSON (default: false)
+  --debug     verbose logging on stderr (default: false)
+  -h, --help  display help for command

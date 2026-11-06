@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "list",
+    "arg1",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'list'. Expected 1 argument but got 2.\n"
+}

@@ -1,0 +1,13 @@
+Usage: yantra show [options] <target>
+
+Display a saved workflow or run
+
+Arguments:
+  target        Workflow name OR run-id
+
+Options:
+  --workflow    force workflow lookup
+  --run         force run lookup
+  --events <n>  number of recent events to display for a run (default: "20")
+  --json        emit JSON instead of human-readable output (default: false)
+  -h, --help    display help for command

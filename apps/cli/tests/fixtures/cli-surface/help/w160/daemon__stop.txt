@@ -1,0 +1,7 @@
+Usage: yantra daemon stop [options]
+
+Stop the running scheduler daemon
+
+Options:
+  --debug     Verbose logging to stderr (default: false)
+  -h, --help  display help for command

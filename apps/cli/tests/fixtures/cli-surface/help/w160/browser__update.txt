@@ -1,0 +1,10 @@
+Usage: yantra browser update [options]
+
+Replace the Yantra-managed browser with current Chrome for Testing Stable. This is the only command that checks whether a newer browser exists; use --dry-run to
+report availability and download nothing
+
+Options:
+  --dry-run   report what is available without downloading or changing anything (default: false)
+  --yes       accept the replacement without prompting (default: false)
+  --json      emit exactly one JSON outcome (default: false)
+  -h, --help  display help for command

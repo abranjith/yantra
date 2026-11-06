@@ -1,0 +1,12 @@
+Usage: yantra template new [options] <name>
+
+Create a starter template covering every slot kind.
+
+Arguments:
+  name          saved template name
+
+Options:
+  --tags <a,b>  comma-separated tags
+  --force       overwrite an existing template (default: false)
+  --json        emit a stable JSON envelope (default: false)
+  -h, --help    display help for command

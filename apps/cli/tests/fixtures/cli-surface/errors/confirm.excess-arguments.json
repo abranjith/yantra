@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "confirm",
+    "arg1",
+    "arg2",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'confirm'. Expected 2 arguments but got 3.\n"
+}

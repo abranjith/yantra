@@ -1,0 +1,9 @@
+Usage: yantra open [options] [run-id]
+
+Open a run's saved artifact
+
+Options:
+  --artifact <kind>  brief | report | audit | dir (default: "brief")
+  --print            print the resolved path without launching (default: false)
+  --json             emit JSON without launching (default: false)
+  -h, --help         display help for command

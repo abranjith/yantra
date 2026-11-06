@@ -1,0 +1,14 @@
+Usage: yantra doctor [options]
+
+Diagnose the local environment for Yantra
+
+Options:
+  --provider <name>    agent model provider
+  --model <id>         provider-scoped model id
+  --thinking <level>   provider reasoning level
+  --auth-secret <ref>  runtime model-key secret reference
+  --no-llm             force the deterministic no-model path
+  --json               emit JSON output (default: false)
+  --refresh            re-probe the environment instead of reusing the cached probe (agent and configuration checks always run fresh) (default: false)
+  --agent-smoke        run a live agent provider smoke test instead of the offline checks (default: false)
+  -h, --help           display help for command

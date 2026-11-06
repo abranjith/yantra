@@ -1,0 +1,8 @@
+Usage: yantra browser list [options]
+
+List the browsers Yantra can use on this machine, with the current selection.
+Local only: no network, launch, install, or update check
+
+Options:
+  --json      emit the inventory as JSON (default: false)
+  -h, --help  display help for command

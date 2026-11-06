@@ -1,0 +1,8 @@
+Usage: yantra daemon status [options]
+
+Report scheduler daemon status
+
+Options:
+  --json      Emit JSON status to stdout (default: false)
+  --debug     Verbose logging to stderr (default: false)
+  -h, --help  display help for command

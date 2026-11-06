@@ -1,0 +1,6 @@
+Usage: yantra model rm [options] <id>
+
+Options:
+  --force     remove even when selected as default (default: false)
+  --json      emit JSON (default: false)
+  -h, --help  display help for command

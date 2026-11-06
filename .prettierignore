@@ -27,6 +27,10 @@ packages/core/tests/fixtures/puppeteer-migration-replay-baseline.json
 # Task-fidelity harness output (scorecards, run directories); gitignored.
 e2e/task-fidelity/.out/
 
+# CLI surface goldens (FEAT-062) are byte-compared commander output: `--help`
+# at fixed widths, parse-error stderr, and `--version`.
+apps/cli/tests/fixtures/cli-surface/
+
 # Task-fidelity goldens are byte-for-byte renderer/extractor output, and
 # baselines stay byte-identical to the `baseline.json` their eval run wrote.
 e2e/task-fidelity/golden/

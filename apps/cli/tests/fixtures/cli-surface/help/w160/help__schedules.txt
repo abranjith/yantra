@@ -1,0 +1,8 @@
+Usage: yantra schedules [options]
+
+List registered schedules
+
+Options:
+  --json      Emit JSON array to stdout (default: false)
+  --debug     Verbose logging to stderr (default: false)
+  -h, --help  display help for command

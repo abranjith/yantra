@@ -1,0 +1,8 @@
+Usage: yantra daemon start [options]
+
+Start the scheduler daemon
+
+Options:
+  --foreground  Run in the foreground instead of detaching (default: false)
+  --debug       Verbose logging to stderr (default: false)
+  -h, --help    display help for command
